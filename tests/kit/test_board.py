@@ -80,6 +80,9 @@ if sub == "create":
                                     "options": [{"id": "o1", "name": "Todo"}]},
                                    {"id": "F_ms", "name": "Milestone", "type": "ProjectV2Field"}],
                         "items": []}
+    if state.get("builtin_type"):  # brief #1240: GitHub's own Type field (issue types)
+        projects[number]["fields"].append({"id": "F_issue_type", "name": "Type",
+                                           "type": "ProjectV2IssueTypeField"})
     out({"number": int(number), "id": "PVT_" + number, "title": opt("--title")})
 number = args[2] if len(args) > 2 and args[2].isdigit() else None
 if sub == "copy":
@@ -114,6 +117,11 @@ if sub == "link":
 if sub == "field-list":
     out({"fields": p["fields"], "totalCount": len(p["fields"])})
 if sub == "field-create":
+    name = opt("--name")
+    if name == "Type" or name == state.get("fail_field"):  # brief #1240: as GitHub answers now
+        sys.stderr.write("GraphQL: Name cannot have a reserved value, Name has already been taken"
+                         " (createProjectV2Field)\n")
+        sys.exit(1)
     field = {"id": "F_" + opt("--name").replace(" ", "_"), "name": opt("--name")}
     if opt("--data-type") == "SINGLE_SELECT":
         field["type"] = "ProjectV2SingleSelectField"
@@ -412,7 +420,8 @@ TEMPLATE_FIELDS = [
 BUSINESS = ("Persona", "Requirement", "Screens", "Sign-off")
 VIEWS_LINE = (
     "make the three views once in GitHub's screen: Sign-off (a board by Status), Questions"
-    " (a table), Roadmap (by Milestone); or copy a template board with --template OWNER/NUMBER"
+    " (a table filtered to Card kind Question), Roadmap (by Milestone); or copy a template board"
+    " with --template OWNER/NUMBER"
 )
 
 
@@ -634,39 +643,41 @@ def question_issue(n: int) -> dict:
 
 def test_1196_c_the_board_adds_the_questions_with_type_question(world: World) -> None:
     """REQ-050: brief #1196 answer 2 and answer 5 (c): Type Question, Sign-off left empty; the
-    `Type` field is added once a question is there, and the briefs are Work."""
+    marker field (`Card kind` since brief #1240) is added once a question is there, and the briefs
+    are Work."""
     world.state["issues"] = [issue(11, "S", "2-4 hours"), question_issue(31)]
     world.save()
     dry = world.run()
     assert dry.returncode == 0, dry.stdout + dry.stderr
-    assert "would add field Type (single select Work, Question)" in dry.stdout
-    assert "would add #31 Type Question" in dry.stdout
+    assert "would add field Card kind (single select Work, Question)" in dry.stdout
+    assert "would add #31 Card kind Question" in dry.stdout
     assert "note: #31" not in dry.stdout
     proc = world.run("--yes")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     fields = {f["name"]: f for f in world.load()["projects"]["5"]["fields"]}
-    assert [o["name"] for o in fields["Type"]["options"]] == ["Work", "Question"]
+    assert [o["name"] for o in fields["Card kind"]["options"]] == ["Work", "Question"]
     values = item_values(world.state)
-    assert values[31] == {"F_Type": "opt_Question"}
-    assert values[11]["F_Type"] == "opt_Work" and values[11]["F_Sign-off"] == "opt_Pending"
-    assert "set #31 Type Question" in proc.stdout and "note: #31" not in proc.stdout
+    assert values[31] == {"F_Card_kind": "opt_Question"}
+    assert values[11]["F_Card_kind"] == "opt_Work" and values[11]["F_Sign-off"] == "opt_Pending"
+    assert "set #31 Card kind Question" in proc.stdout and "note: #31" not in proc.stdout
     assert proc.stdout.strip().splitlines()[-1] == "ok board: 2 added, 0 already there"
 
 
 def test_1196_c_a_later_question_fills_type_once_on_the_cards_there(world: World) -> None:
-    """REQ-050: brief #1196 answer 2, an old board gains `Type`; its brief cards are Work once."""
+    """REQ-050: brief #1196 answer 2, an old board gains the marker field; its brief cards are
+    Work once."""
     assert world.run("--yes").returncode == 0
-    assert "Type" not in field_creates(world.calls())
+    assert "Card kind" not in field_creates(world.calls())
     world.load()
     world.state["issues"].append(question_issue(31))
     world.save()
     before = len(world.calls())
     proc = world.run("--yes", "--project", "5")
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert field_creates(world.calls()[before:]) == ["Type"]
+    assert field_creates(world.calls()[before:]) == ["Card kind"]
     values = item_values(world.load())
-    assert {values[n]["F_Type"] for n in (11, 12, 13)} == {"opt_Work"}
-    assert values[31] == {"F_Type": "opt_Question"}
+    assert {values[n]["F_Card_kind"] for n in (11, 12, 13)} == {"opt_Work"}
+    assert values[31] == {"F_Card_kind": "opt_Question"}
     assert proc.stdout.strip().splitlines()[-1] == "ok board: 1 added, 3 already there"
     before = len(world.calls())
     assert world.run("--yes", "--project", "5").returncode == 0
@@ -683,3 +694,104 @@ def test_1196_c_a_closed_question_is_not_read(world: World) -> None:
         f"repos/{REPO}/issues?state=open&labels=agk-brief&per_page=100",
         f"repos/{REPO}/issues?state=open&labels={QUESTION_LABEL}&per_page=100",
     ]
+
+
+# --- brief #1240 (ADR-0526): GitHub's built-in Type field; the marker field is Card kind ---------
+
+
+def user_type_field() -> dict:
+    """The marker field of an older board: a user single select `Type` of Work and Question."""
+    return {
+        "id": "F_Type",
+        "name": "Type",
+        "type": "ProjectV2SingleSelectField",
+        "options": [{"id": "opt_Work", "name": "Work"}, {"id": "opt_Question", "name": "Question"}],
+    }
+
+
+@pytest.mark.parametrize("listed", [True, False])
+def test_1240_a_board_with_the_built_in_type_gets_card_kind_and_its_cards(
+    world: World, listed: bool
+) -> None:
+    """REQ-050: brief #1240 answer 1 and 4: GitHub refuses a field named Type, so the marker
+    field is `Card kind`; the built-in Type, listed by gh or not, is never created or written."""
+    world.state["issues"] = [issue(11, "S", "2-4 hours"), question_issue(31)]
+    world.state["builtin_type"] = listed
+    world.save()
+    dry = world.run()
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert "would add field Card kind (single select Work, Question)" in dry.stdout
+    assert "would add field Type" not in dry.stdout
+    proc = world.run("--yes")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "Type" not in field_creates(world.calls())
+    assert field_creates(world.calls()).count("Card kind") == 1
+    edits = [c for c in world.calls() if c[:2] == ["project", "item-edit"]]
+    assert not [c for c in edits if c[c.index("--field-id") + 1] == "F_issue_type"]
+    values = item_values(world.load())
+    assert values[31] == {"F_Card_kind": "opt_Question"}
+    assert values[11]["F_Card_kind"] == "opt_Work"
+    assert proc.stdout.strip().splitlines()[-1] == "ok board: 2 added, 0 already there"
+
+
+def test_1240_an_old_board_with_a_user_type_field_keeps_using_it(world: World) -> None:
+    """REQ-050: brief #1240 answer 1 and 4: a user `Type` of Work and Question is read and
+    written as before, and no `Card kind` is added beside it."""
+    assert world.run("--yes").returncode == 0
+    world.load()
+    world.state["projects"]["5"]["fields"].append(user_type_field())
+    world.state["issues"].append(question_issue(31))
+    world.save()
+    dry = world.run("--project", "5")
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert "would add field" not in dry.stdout
+    assert "would add #31 Type Question" in dry.stdout
+    before = len(world.calls())
+    proc = world.run("--yes", "--project", "5")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert field_creates(world.calls()[before:]) == []
+    assert item_values(world.load())[31] == {"F_Type": "opt_Question"}
+    assert "set #31 Type Question" in proc.stdout
+    assert "Card kind" not in proc.stdout
+
+
+def test_1240_a_failed_field_creation_is_printed_with_gh_s_message(world: World) -> None:
+    """REQ-050: brief #1240 answer 2 and 4: the field's name and gh's own message, exit 1, and
+    no card is added."""
+    world.state["issues"] = [issue(11), question_issue(31)]
+    world.state["fail_field"] = "Card kind"
+    world.save()
+    proc = world.run("--yes")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "failed: gh project field-create 5" in proc.stdout
+    assert (
+        "board: the field Card kind was not added; gh said: GraphQL: Name cannot have a reserved"
+        " value, Name has already been taken (createProjectV2Field)"
+    ) in proc.stdout
+    assert not [c for c in world.calls() if c[:2] == ["project", "item-add"]]
+
+
+def test_1240_a_rerun_after_the_failure_adds_every_card_once(world: World) -> None:
+    """REQ-050: brief #1240 answer 3 and 4: the board left with fields and no cards gets its
+    cards on the rerun, with no second copy of any field."""
+    world.state["issues"] = [issue(11), issue(12), question_issue(31)]
+    world.state["fail_field"] = "Card kind"
+    world.save()
+    assert world.run("--yes").returncode == 1
+    world.load()
+    assert world.state["projects"]["5"]["items"] == []
+    world.state.pop("fail_field")
+    world.save()
+    proc = world.run("--yes", "--project", "5")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    names = [f["name"] for f in world.load()["projects"]["5"]["fields"]]
+    assert len(names) == len(set(names))
+    adds = [c for c in world.calls() if c[:2] == ["project", "item-add"]]
+    assert sorted(c[c.index("--url") + 1].rsplit("/", 1)[1] for c in adds) == ["11", "12", "31"]
+    assert item_values(world.state)[31] == {"F_Card_kind": "opt_Question"}
+    assert proc.stdout.strip().splitlines()[-1] == "ok board: 3 added, 0 already there"
+    before = len(world.calls())
+    again = world.run("--yes", "--project", "5")
+    assert again.returncode == 0
+    new = world.calls()[before:]
+    assert not [c for c in new if c[:2] in (["project", "item-add"], ["project", "field-create"])]

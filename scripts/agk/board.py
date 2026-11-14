@@ -22,9 +22,13 @@ when missing, and adds each open brief issue not yet on the board with its `Size
 its `Expected:` range, its `Persona:`, `Advances:` and `Screens:` lines and `Sign-off` Pending. An
 item already on the board is never edited, except that a business field this run added to the board
 is filled on it once, and nothing is removed. Brief #1196 (ADR-0508): it also adds the open
-`agk-business-question` issues, with a single-select `Type` (Work, Question) set to Question and
-`Sign-off` left empty; `Type` is added once a question is there, and the cards already on the board
-get Work in that run.
+`agk-business-question` issues, with a single-select marker field (Work, Question) set to Question
+and `Sign-off` left empty; the marker field is added once a question is there, and the cards already
+on the board get Work in that run. Brief #1240 (ADR-0526): the marker field is `Card kind`, since
+GitHub Projects ship a built-in `Type` field and refuse a new field of that name; a board that
+already has a user single select `Type` of Work and Question keeps it, and a `Type` of any other
+kind is never created, renamed or written. A failed field creation prints the field's name and
+gh's own message.
 
 Exit 0 when done, after a dry run, in personal mode and when GraphQL is refused (a cloud session);
 1 when a `gh` command failed (it is printed); 2 when the `project` scope is missing or for a usage
@@ -70,7 +74,8 @@ TEXT_LINES = {  # brief #1195 answer 2: each text field from the issue's own lin
     REQUIREMENT_FIELD: re.compile(r"^Advances: (\S.*?)\s*$", re.MULTILINE),
     SCREENS_FIELD: re.compile(r"^Screens: (\S.*?)\s*$", re.MULTILINE),
 }
-TYPE_FIELD = "Type"  # brief #1196 answer 2: what a card is, so the Questions view lists them
+TYPE_FIELD = "Card kind"  # brief #1196 answer 2, named by brief #1240: what a card is
+OLD_TYPE_FIELD = "Type"  # brief #1240 answer 1: an older board's user field, kept when it is one
 TYPES = ("Work", "Question")
 WORK, QUESTION = TYPES
 BUSINESS = (*TEXT_LINES, SIGNOFF_FIELD)
@@ -92,7 +97,8 @@ TYPE_KIND = (
 )
 VIEWS = (
     "make the three views once in GitHub's screen: Sign-off (a board by Status), Questions"
-    " (a table), Roadmap (by Milestone); or copy a template board with --template OWNER/NUMBER"
+    " (a table filtered to Card kind Question), Roadmap (by Milestone); or copy a template board"
+    " with --template OWNER/NUMBER"
 )
 BAD_TEMPLATE = "board: the template is <owner>/<number> of a template board (option: --template)"
 LIMIT = "1000"
@@ -107,11 +113,13 @@ REFRESH = "board: the gh token lacks the project scope; run: gh auth refresh -s 
 
 
 class GhFailed(Exception):
-    """A `gh` command failed; `code` is the exit code the command ends with."""
+    """A `gh` command failed; `code` is the exit code the command ends with and `said` is gh's own
+    message (brief #1240 answer 2)."""
 
-    def __init__(self, message: str, code: int) -> None:
+    def __init__(self, message: str, code: int, said: str = "") -> None:
         super().__init__(message)
         self.code = code
+        self.said = said
 
 
 def gh(*args: str) -> Any:
@@ -128,7 +136,8 @@ def gh(*args: str) -> Any:
             raise GhFailed(NEEDS_MACHINE, 0)
         if SCOPE.search(said):
             raise GhFailed(REFRESH, 2)
-        raise GhFailed(f"failed: {shlex.join(['gh', *args])}", 1)
+        message = " ".join(proc.stderr.split()) or " ".join(proc.stdout.split())
+        raise GhFailed(f"failed: {shlex.join(['gh', *args])}", 1, message)
     text = proc.stdout.strip()
     try:
         return json.loads(text) if text else None
@@ -156,13 +165,24 @@ def business(body: object) -> list[tuple[str, str]]:
     return [*found, (SIGNOFF_FIELD, PENDING)]
 
 
-def card_fields(issue: dict, typed: bool) -> list[tuple[str, str]]:
-    """The business fields of a card: a question's only field is `Type` Question, its Sign-off
-    left empty (brief #1196 answer 2); a brief's are `business`, and `Type` Work on a board that
-    has the `Type` field (TYPED)."""
+def card_fields(issue: dict, kind: str | None) -> list[tuple[str, str]]:
+    """The business fields of a card: a question's only field is the marker field KIND set to
+    Question, its Sign-off left empty (brief #1196 answer 2); a brief's are `business`, and KIND
+    Work on a board that has the marker field (KIND is None on one that has not)."""
     if is_question(issue):
-        return [(TYPE_FIELD, QUESTION)]
-    return business(issue.get("body")) + ([(TYPE_FIELD, WORK)] if typed else [])
+        return [(kind or TYPE_FIELD, QUESTION)]
+    return business(issue.get("body")) + ([(kind, WORK)] if kind else [])
+
+
+def marker_name(fields: list[dict]) -> str:
+    """Brief #1240 answer 1: an older board's user single select `Type` with the options Work and
+    Question is the marker field; on every other board it is `Card kind`, so GitHub's built-in
+    `Type` field is never created, renamed or written."""
+    for field in fields:
+        options = {str(o.get("name")) for o in field.get("options") or [] if isinstance(o, dict)}
+        if field.get("name") == OLD_TYPE_FIELD and set(TYPES) <= options:
+            return OLD_TYPE_FIELD
+    return TYPE_FIELD
 
 
 def hours_text(hours: float) -> str:
@@ -190,9 +210,9 @@ def brief_issues(repo: str) -> list[dict]:
     return [found[n] for n in sorted(found)]
 
 
-def wants_type(issues: list[dict], names: set[str]) -> bool:
-    """Brief #1196: the `Type` field is on the board, or a question is there to need it."""
-    return TYPE_FIELD in names or any(is_question(i) for i in issues)
+def wants_type(issues: list[dict], names: set[str], kind: str = TYPE_FIELD) -> bool:
+    """Brief #1196: the marker field KIND is on the board, or a question is there to need it."""
+    return kind in names or any(is_question(i) for i in issues)
 
 
 def on_board(items: list[dict], repo: str) -> set[int]:
@@ -208,13 +228,13 @@ def on_board(items: list[dict], repo: str) -> set[int]:
     return seen
 
 
-def plan_lines(issue: dict, typed: bool = False) -> tuple[str, list[str]]:
+def plan_lines(issue: dict, kind: str | None = None) -> tuple[str, list[str]]:
     if is_question(issue):
-        return f"{TYPE_FIELD} {QUESTION}", []
+        return f"{kind or TYPE_FIELD} {QUESTION}", []
     size, hours = estimate(issue.get("body"))
     parts = [f"Size {size}"] if size else []
     parts += [f"{HOURS_FIELD} {hours_text(hours)}"] if hours is not None else []
-    parts += [f"{name} {value}" for name, value in card_fields(issue, typed)]
+    parts += [f"{name} {value}" for name, value in card_fields(issue, kind)]
     notes = [] if size else [f"note: #{issue['number']} has no Size line"]
     notes += [] if hours is not None else [f"note: #{issue['number']} has no Expected line"]
     return ", ".join(parts), notes
@@ -227,34 +247,36 @@ def split_template(template: str) -> tuple[str, int]:
 
 def dry_run(repo: str, owner: str, title: str, project: int | None, template: str | None) -> int:
     present: set[int] = set()
-    names: set[str] = set()
+    listed: list[dict] = []
     if project is None and template:
         source_owner, number = split_template(template)
-        names = {str(f.get("name")) for f in fields_of(number, source_owner)}
+        listed = fields_of(number, source_owner)
         print(f"would copy project {template} as '{title}' under {owner}")
     elif project is None:
         print(f"would create project '{title}' under {owner}")
         print(VIEWS)
     else:
-        names = {str(f.get("name")) for f in fields_of(project, owner)}
+        listed = fields_of(project, owner)
         items = items_of(project, owner)
         present = on_board(items, repo)
+    names = {str(f.get("name")) for f in listed}
     print(f"would link the project to {repo}")
     issues = brief_issues(repo)
-    typed = wants_type(issues, names)
-    kinds = FIELD_KINDS | ({TYPE_FIELD: TYPE_KIND} if typed else {})
+    marker = marker_name(listed)
+    kind = marker if wants_type(issues, names, marker) else None
+    kinds = FIELD_KINDS | ({kind: TYPE_KIND} if kind else {})
     missing = [name for name in kinds if name not in names]
     for name in missing:
         print(f"would add field {name} ({kinds[name][0]})")
     todo = [i for i in issues if int(i["number"]) not in present]
     for i in todo:
-        values, notes = plan_lines(i, typed)
+        values, notes = plan_lines(i, kind)
         print(f"would add #{i['number']}" + (f" {values}" if values else ""))
         for note in notes:
             print(note)
-    for i in issues if [n for n in missing if n in (*BUSINESS, TYPE_FIELD)] else []:
+    for i in issues if [n for n in missing if n in (*BUSINESS, marker)] else []:
         if int(i["number"]) in present:
-            fill = [f"{n} {v}" for n, v in card_fields(i, typed) if n in missing]
+            fill = [f"{n} {v}" for n, v in card_fields(i, kind) if n in missing]
             print(f"would fill #{i['number']} {', '.join(fill)}")
     print(
         f"ok board: {len(todo)} to add, {len(issues) - len(todo)} already there;"
@@ -287,30 +309,40 @@ def items_of(project: int, owner: str) -> list[dict]:
 
 def ensure_fields(
     project: int, owner: str, issues: list[dict]
-) -> tuple[dict[str, dict], list[str]]:
-    """The board's fields by name, each of FIELD_KINDS added when missing (and `Type` once a
-    question is there, brief #1196), and the names added."""
-    fields: dict[str, dict] = {str(f.get("name")): f for f in fields_of(project, owner)}
-    kinds = FIELD_KINDS | ({TYPE_FIELD: TYPE_KIND} if wants_type(issues, set(fields)) else {})
+) -> tuple[dict[str, dict], list[str], str | None]:
+    """The board's fields by name, each of FIELD_KINDS added when missing (and the marker field
+    once a question is there, brief #1196), the names added, and the marker field's name, or None
+    when the board has none (brief #1240). A failed creation names the field and gh's message."""
+    listed = fields_of(project, owner)
+    fields: dict[str, dict] = {str(f.get("name")): f for f in listed}
+    marker = marker_name(listed)
+    kind = marker if wants_type(issues, set(fields), marker) else None
+    kinds = FIELD_KINDS | ({kind: TYPE_KIND} if kind else {})
     added: list[str] = []
-    for name, (_, kind) in kinds.items():
+    for name, (_, args) in kinds.items():
         if name not in fields:
-            made = gh(
-                "project",
-                "field-create",
-                str(project),
-                "--owner",
-                owner,
-                "--name",
-                name,
-                *kind,
-                "--format",
-                "json",
-            )
+            try:
+                made = gh(
+                    "project",
+                    "field-create",
+                    str(project),
+                    "--owner",
+                    owner,
+                    "--name",
+                    name,
+                    *args,
+                    "--format",
+                    "json",
+                )
+            except GhFailed as exc:
+                if exc.code != 1:
+                    raise
+                said = f"; gh said: {exc.said}" if exc.said else ""
+                raise GhFailed(f"{exc}\nboard: the field {name} was not added{said}", 1) from None
             print(f"added field {name}")
             fields[name] = made or {}
             added.append(name)
-    return fields, added
+    return fields, added, kind
 
 
 def set_option(edit: list[str], field: dict, name: str, option: str, n: int) -> None:
@@ -322,14 +354,16 @@ def set_option(edit: list[str], field: dict, name: str, option: str, n: int) -> 
     print(f"set #{n} {name} {option}")
 
 
-def set_business(edit: list[str], fields: dict[str, dict], issue: dict, only: set[str]) -> None:
+def set_business(
+    edit: list[str], fields: dict[str, dict], issue: dict, only: set[str], kind: str | None
+) -> None:
     """Brief #1195 answer 2: Persona, Requirement and Screens as text, Sign-off Pending; brief
-    #1196: Type Work or Question where the board has the field."""
+    #1196: the marker field KIND Work or Question where the board has it."""
     n = int(issue["number"])
-    for name, value in card_fields(issue, TYPE_FIELD in fields):
-        if name not in only:
+    for name, value in card_fields(issue, kind if kind in fields else None):
+        if name not in only or name not in fields:
             continue
-        if name in (SIGNOFF_FIELD, TYPE_FIELD):
+        if name in (SIGNOFF_FIELD, kind):
             set_option(edit, fields[name], name, value, n)
         else:
             gh(*edit, "--field-id", str(fields[name]["id"]), "--text", value)
@@ -371,10 +405,10 @@ def apply(repo: str, owner: str, title: str, project: int | None, template: str 
     project_id = str((view or {})["id"])
     gh("project", "link", str(project), "--owner", owner, "--repo", repo)
     issues = brief_issues(repo)
-    fields, new_fields = ensure_fields(project, owner, issues)
+    fields, new_fields, kind = ensure_fields(project, owner, issues)
     items = items_of(project, owner)
     present = on_board(items, repo)
-    filled = set(new_fields) & {*BUSINESS, TYPE_FIELD}
+    filled = set(new_fields) & {*BUSINESS, *([kind] if kind else [])}
     if filled:  # an older board gained business fields: fill them once on its items
         by_number = {
             int(str((i.get("content") or {}).get("url") or "").rsplit("/", 1)[1]): str(i["id"])
@@ -387,7 +421,7 @@ def apply(repo: str, owner: str, title: str, project: int | None, template: str 
             n = int(i["number"])
             if n in by_number:
                 edit = ["project", "item-edit", "--id", by_number[n], "--project-id", project_id]
-                set_business(edit, fields, i, filled)
+                set_business(edit, fields, i, filled, kind)
     added = 0
     for i in issues:
         n = int(i["number"])
@@ -416,7 +450,7 @@ def apply(repo: str, owner: str, title: str, project: int | None, template: str 
         if hours is not None:
             gh(*edit, "--field-id", str(fields[HOURS_FIELD]["id"]), "--number", hours_text(hours))
             print(f"set #{n} {HOURS_FIELD} {hours_text(hours)}")
-        set_business(edit, fields, i, {*BUSINESS, TYPE_FIELD})
+        set_business(edit, fields, i, {*BUSINESS, *([kind] if kind else [])}, kind)
         for note in notes:
             print(note)
     print(f"ok board: {added} added, {len(issues) - added} already there")
