@@ -67,8 +67,7 @@ def accepted_adr(root: Path, name: re.Pattern[str], what: str) -> tuple[str, str
     status = next((m.group(1) for m in map(STATUS_LINE.match, text.splitlines()) if m), None)
     if status != "Accepted":
         raise CheckError(f"rule 2b: {rel}: the {what} ADR is not Accepted; nothing is written")
-    number = name.match(path.name).group(1)  # type: ignore[union-attr]
-    return f"ADR-{number}", rel, text
+    return f"ADR-{path.name[:4]}", rel, text
 
 
 def _header(source: str, kind: str, version: str, today: str | None) -> list[str]:

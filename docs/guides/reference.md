@@ -647,7 +647,8 @@ already there (a field the run added to the board is filled on it once), and end
 there`. A missing scope prints
 `gh auth refresh -s project` (exit 2); in a cloud session it prints one `board: needs a machine ...` line and exits 0.
 
-    python3 scripts/agk/design_import.py source --version i<n>|v<n> --slug <slug> [--root DIR]
+    python3 scripts/agk/design_import.py source --version i<n> --slug <slug> [--root DIR]
+    python3 scripts/agk/design_import.py source --version v<n> --slug <slug> [--root DIR]
     python3 scripts/agk/plan_sources.py vision|architecture [--root DIR]
     python3 scripts/agk/check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]
 
