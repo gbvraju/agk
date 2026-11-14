@@ -42,7 +42,7 @@ A Windows machine is told, in one doctor run, the exact command that fixes each 
 told to find admin rights; and an adopted project's CODEOWNERS names no owner nobody holds. SPEC-0006 rule 6 still reads
 `no-admin` for a refused ruleset read and a missing merge key; this ADR narrows that to a known non-admin, as brief
 #263 did with `forbidden`, and adds the reason class `admin-unknown` to rule 3's list; the spec lines are proposed in
-`docs/runs/proposed-spec-amendments-178.md` (amendment 178, reserved in the answer to Q-1223-1),, not applied here.
+`docs/runs/proposed-spec-amendments-178.md` (amendment 178, reserved in the answer to Q-1223-1), not applied here.
 Protected path classes changed: `scripts/agk/` (`doctor.py`, `reviewers.py`), `tests/kit/`
 (`test_doctor_windows.py`, new), `agk.toml` (the new test file added to the `[[testing.map]]` entries of
 `scripts/agk/doctor.py` and `scripts/agk/reviewers.py`, nothing else) and `docs/adr/` (this file).
