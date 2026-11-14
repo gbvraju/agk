@@ -643,7 +643,8 @@ def question_issue(n: int) -> dict:
 
 def test_1196_c_the_board_adds_the_questions_with_type_question(world: World) -> None:
     """REQ-050: brief #1196 answer 2 and answer 5 (c): Type Question, Sign-off left empty; the
-    marker field (`Card kind` since brief #1240) is added once a question is there, and the briefs are Work."""
+    marker field (`Card kind` since brief #1240) is added once a question is there, and the briefs
+    are Work."""
     world.state["issues"] = [issue(11, "S", "2-4 hours"), question_issue(31)]
     world.save()
     dry = world.run()
@@ -663,7 +664,8 @@ def test_1196_c_the_board_adds_the_questions_with_type_question(world: World) ->
 
 
 def test_1196_c_a_later_question_fills_type_once_on_the_cards_there(world: World) -> None:
-    """REQ-050: brief #1196 answer 2, an old board gains the marker field; its brief cards are Work once."""
+    """REQ-050: brief #1196 answer 2, an old board gains the marker field; its brief cards are
+    Work once."""
     assert world.run("--yes").returncode == 0
     assert "Card kind" not in field_creates(world.calls())
     world.load()

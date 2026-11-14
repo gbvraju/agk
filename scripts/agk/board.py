@@ -25,9 +25,10 @@ is filled on it once, and nothing is removed. Brief #1196 (ADR-0508): it also ad
 `agk-business-question` issues, with a single-select marker field (Work, Question) set to Question
 and `Sign-off` left empty; the marker field is added once a question is there, and the cards already
 on the board get Work in that run. Brief #1240 (ADR-0526): the marker field is `Card kind`, since
-GitHub Projects ship a built-in `Type` field and refuse a new field of that name; a board that already
-has a user single select `Type` of Work and Question keeps it, and a `Type` of any other kind is never
-created, renamed or written. A failed field creation prints the field's name and gh's own message.
+GitHub Projects ship a built-in `Type` field and refuse a new field of that name; a board that
+already has a user single select `Type` of Work and Question keeps it, and a `Type` of any other
+kind is never created, renamed or written. A failed field creation prints the field's name and
+gh's own message.
 
 Exit 0 when done, after a dry run, in personal mode and when GraphQL is refused (a cloud session);
 1 when a `gh` command failed (it is printed); 2 when the `project` scope is missing or for a usage
