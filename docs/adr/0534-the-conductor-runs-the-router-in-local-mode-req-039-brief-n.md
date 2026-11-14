@@ -1,6 +1,6 @@
 # ADR-0534: The conductor runs the router in local mode
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0030, SPEC-0032, SPEC-0039, ADR-0513, brief #1212, brief #1263, plan #661

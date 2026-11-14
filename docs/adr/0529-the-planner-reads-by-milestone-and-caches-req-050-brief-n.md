@@ -1,6 +1,6 @@
 # ADR-0529: The planner reads by milestone and caches
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0523, ADR-0153, SPEC-0034 rule 18, brief #1251, plan #661
