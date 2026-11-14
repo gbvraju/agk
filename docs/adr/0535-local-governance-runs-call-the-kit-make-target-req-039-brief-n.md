@@ -1,6 +1,6 @@
 # ADR-0535: Local governance runs call the kit's make target
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: brief #1264, plan #661, SPEC-0030 rule 6, SPEC-0039 rule 6, session rule 30

@@ -1,6 +1,6 @@
 # ADR-0539: The upgrade test skips a known-broken tag
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: brief #1273, brief #1257, issue #1256, PR #1258, SPEC-0028 rule 4

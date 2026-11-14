@@ -1,6 +1,6 @@
 # ADR-0530: Adapter-started builders run on their kind's model (REQ-052)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0525, ADR-0528, SPEC-0045, SPEC-0053, brief #1252, plan #661

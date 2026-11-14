@@ -1,6 +1,6 @@
 # ADR-0528: A fresh reviewer gives every gating verdict, in local mode too (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0430, ADR-0431, ADR-0432, ADR-0444, ADR-0298, ADR-0525, Q-1013-1, Q-1013-3, brief #1248, plan #661

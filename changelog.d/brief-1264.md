@@ -1,1 +1,0 @@
-- In local mode the conductor's own governance run and the guarded merge's run call the kit's `make -f agk.mk agk-governance`, so a project set up with adopt, which may have no `governance` target in its Makefile, can be reviewed and merged; the old `make -C <scratch> test|governance` forms stay allowed (brief #1264, ADR-0535)
