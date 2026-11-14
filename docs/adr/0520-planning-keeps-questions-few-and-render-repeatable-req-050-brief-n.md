@@ -53,3 +53,9 @@ second mode beside it, and the person's files stay the person's; the rule text i
 accepts `max_questions`) and `tests/kit/` (`test_plan_intake_questions.py` new; `test_plan_render.py`, whose list of
 written files gains the digest list; `test_plan_openspec.py`, whose two cross-reference tests now find notes, not
 questions). No workflow, ruleset, `.claude/` or `skills/` change.
+
+## Residual
+
+- 2026-11-14: SPEC-0043 rules 7 and 25 still read "a later render refuses to overwrite" and one issue per open
+  question; the amendment that names `render --again`, the grouping and `[plan] max_questions` is the maintainers' to
+  propose and number (`Q-1221-1`, due 2026-11-30).
