@@ -9,8 +9,30 @@ $prompt = [Console]::In.ReadToEnd()
 $repo = (git rev-parse --show-toplevel).Trim()
 $worktree = Join-Path (Split-Path $repo -Parent) "agk-$session"
 git -C $repo fetch --quiet origin
-git -C $repo worktree add --detach $worktree origin/main   # your default branch
-if ($LASTEXITCODE -ne 0) { throw 'git worktree add failed' }
+if (Test-Path -LiteralPath $worktree) {
+    # The folder is there from an earlier start (a session that ended or crashed): reuse it when it is a clean
+    # worktree of this repository, otherwise start nothing for this session.
+    function Get-FullPath([string]$Path) {
+        [IO.Path]::GetFullPath($Path).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    }
+    $ours = Get-FullPath (git -C $repo rev-parse --path-format=absolute --git-common-dir).Trim()
+    $common = git -C $worktree rev-parse --path-format=absolute --git-common-dir 2>$null
+    $top = git -C $worktree rev-parse --show-toplevel 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $common -or -not $top -or
+        (Get-FullPath $common.Trim()) -ne $ours -or (Get-FullPath $top.Trim()) -ne (Get-FullPath $worktree)) {
+        [Console]::Error.WriteLine("start-session-windows: $worktree exists and is not a worktree of this repository; nothing started"); exit 2
+    }
+    $changes = @(git -C $worktree status --porcelain --untracked-files=all | Where-Object { $_ -and $_ -notmatch '\.agk-session-exit$' })
+    if ($LASTEXITCODE -ne 0 -or $changes.Count -gt 0) {
+        [Console]::Error.WriteLine("start-session-windows: $worktree is not clean; nothing started"); exit 2
+    }
+    git -C $worktree fetch --quiet origin
+    git -C $worktree checkout --quiet --detach origin/main   # your default branch
+    if ($LASTEXITCODE -ne 0) { throw 'git checkout of origin/main failed' }
+} else {
+    git -C $repo worktree add --detach $worktree origin/main   # your default branch
+    if ($LASTEXITCODE -ne 0) { throw 'git worktree add failed' }
+}
 $deadline = (Get-Date).AddSeconds(30)
 while (-not (Test-Path -LiteralPath (Join-Path $worktree '.git'))) {
     if ((Get-Date) -gt $deadline) { throw 'the worktree folder did not appear' }
@@ -54,3 +76,4 @@ exit $code
 # 3. The tab, only now that the worktree exists.
 wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
     pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief
+

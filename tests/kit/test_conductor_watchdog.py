@@ -357,13 +357,21 @@ def test_the_windows_adapter_is_the_guides_example_unchanged():
     assert rendered.splitlines() == shown.splitlines()
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
-def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(tmp_path):
-    """REQ-039: brief #1237 answer 1 (the POSIX twin; `claude` is a test double, no terminal)."""
-    origin = tmp_path / "origin.git"
-    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)  # nosec B603 B607 - fixed argument list, no shell
-    work = tmp_path / "proj"
-    subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)  # nosec B603 B607 - fixed argument list, no shell
+def git_in(where: Path, *args: str) -> str:
+    done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=where, check=True, capture_output=True, text=True
+    )
+    return done.stdout
+
+
+@pytest.fixture
+def posix(tmp_path):
+    """A clone with an origin, the POSIX adapter in it, and a `claude` double on PATH."""
+    if shutil.which("bash") is None:
+        pytest.skip("needs bash")
+    origin, work = tmp_path / "origin.git", tmp_path / "proj"
+    git_in(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    git_in(tmp_path, "clone", "-q", str(origin), str(work))
     for args in (
         ["config", "user.email", "t@example.invalid"],
         ["config", "user.name", "t"],
@@ -371,15 +379,14 @@ def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(
         ["commit", "-q", "--allow-empty", "-m", "first"],
         ["push", "-q", "origin", "HEAD:main"],
     ):
-        subprocess.run(["git", *args], cwd=work, check=True, capture_output=True)  # nosec B603 B607 - fixed argument list, no shell
+        git_in(work, *args)
     template = (ROOT / "kit" / "templates" / "start-session-local.sh").read_text(encoding="utf-8")
-    script = work / "start-session-local.sh"
-    script.write_text(template, encoding="utf-8")
+    (work / "start-session-local.sh").write_text(template, encoding="utf-8")
     fake = tmp_path / "bin"
     fake.mkdir()
     claude = fake / "claude"
     claude.write_text(
-        '#!/usr/bin/env bash\nprintf "%s\\n" "$PWD" "$@" > "$CLAUDE_SEEN"\nexit 0\n',
+        '#!/usr/bin/env bash\nprintf "%s\\n" "$PWD" "$@" >> "$CLAUDE_SEEN"\nexit 0\n',
         encoding="utf-8",
     )
     claude.chmod(claude.stat().st_mode | stat.S_IXUSR)
@@ -390,28 +397,99 @@ def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(
         CLAUDE_SEEN=str(tmp_path / "seen.txt"),
         CLAUDE_CODE_CHILD_SESSION="1",
     )
-    done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["bash", str(script)], cwd=work, input="hello there", text=True, env=env,
-        capture_output=True, timeout=60,
+    return {"work": work, "env": env, "worktree": tmp_path / "agk-builder-x", "tmp": tmp_path}
+
+
+def start_posix(posix, prompt: str = "hello there"):
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["bash", str(posix["work"] / "start-session-local.sh")], cwd=posix["work"], input=prompt,
+        text=True, env=posix["env"], capture_output=True, timeout=60,
     )  # fmt: skip
-    assert done.returncode == 0, done.stderr
-    worktree = tmp_path / "agk-builder-x"
-    exit_file = worktree / ".agk-session-exit"
+
+
+def ended(posix) -> list[str]:
+    exit_file = posix["worktree"] / ".agk-session-exit"
     for _ in range(300):
         if exit_file.exists() and "ended_utc=" in exit_file.read_text(encoding="utf-8"):
             break
         time.sleep(0.1)
-    lines = exit_file.read_text(encoding="utf-8").splitlines()
+    return exit_file.read_text(encoding="utf-8").splitlines()
+
+
+def seen(posix) -> list[str]:
+    path = posix["tmp"] / "seen.txt"
+    return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
+def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(posix):
+    """REQ-039: brief #1237 answer 1 (the POSIX twin; `claude` is a test double, no terminal)."""
+    done = start_posix(posix)
+    assert done.returncode == 0, done.stderr
+    lines = ended(posix)
     assert lines[0] == "exit_code=0" and re.fullmatch(
         r"ended_utc=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", lines[1]
     )
-    seen = (tmp_path / "seen.txt").read_text(encoding="utf-8").splitlines()
-    assert Path(seen[0]).resolve() == worktree.resolve() and "hello there" in seen[1:]
-    status = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "status", "--porcelain", "--untracked-files=all"], cwd=worktree,
-        capture_output=True, text=True, check=True,
-    )  # fmt: skip
-    assert status.stdout == ""  # the exit file and the log stay out of git
+    got = seen(posix)
+    assert Path(got[0]).resolve() == posix["worktree"].resolve() and "hello there" in got[1:]
+    status = git_in(posix["worktree"], "status", "--porcelain", "--untracked-files=all")
+    assert status == ""  # the exit file and the log stay out of git
+
+
+def test_the_posix_adapter_reuses_a_clean_worktree_left_by_an_earlier_start(posix):
+    """REQ-039: brief #1237 answer 2 and the fix list on 9c496b9 (Q-1237-1): a restart after a
+    crash finds the old folder; a clean worktree of the repository is reused on the default
+    branch's newest commit."""
+    assert start_posix(posix, "first").returncode == 0
+    ended(posix)
+    (posix["worktree"] / ".agk-session-exit").unlink()
+    git_in(posix["work"], "commit", "-q", "--allow-empty", "-m", "second")
+    git_in(posix["work"], "push", "-q", "origin", "HEAD:main")
+    done = start_posix(posix, "again")
+    assert done.returncode == 0, done.stderr
+    assert ended(posix)[0] == "exit_code=0"
+    assert "again" in seen(posix)
+    head = git_in(posix["worktree"], "rev-parse", "HEAD").strip()
+    assert head == git_in(posix["work"], "rev-parse", "HEAD").strip()
+
+
+def test_the_posix_adapter_refuses_a_left_worktree_with_changes(posix):
+    """REQ-039: the fix list on 9c496b9 (a worktree that holds changes is never reused)."""
+    assert start_posix(posix, "first").returncode == 0
+    ended(posix)
+    before = seen(posix)
+    (posix["worktree"] / "notes.txt").write_text("work in progress\n", encoding="utf-8")
+    done = start_posix(posix, "again")
+    assert done.returncode == 2
+    assert f"{posix['worktree']} is not clean; nothing started" in done.stderr
+    time.sleep(0.5)
+    assert seen(posix) == before  # claude was not started again
+
+
+def test_the_posix_adapter_refuses_a_folder_that_is_not_a_worktree(posix):
+    """REQ-039: the fix list on 9c496b9 (a folder of another kind is left alone)."""
+    posix["worktree"].mkdir()
+    (posix["worktree"] / "keep.txt").write_text("x\n", encoding="utf-8")
+    done = start_posix(posix)
+    assert done.returncode == 2 and "is not a worktree of this repository" in done.stderr
+    assert seen(posix) == []
+
+
+def test_the_windows_adapter_is_this_repositorys_adapter_with_its_reuse():
+    """REQ-039: the fix list on 9c496b9 (the template reuses a clean worktree as this
+    repository's own script does, ADR-0439; a first start is `git worktree add` as before).
+    The two differ only in comment lines; no PowerShell runs here."""
+
+    def code(text: str) -> list[str]:
+        return [line for line in text.splitlines() if not line.strip().startswith("#")]
+
+    template = (ROOT / "kit" / "templates" / "start-session-windows.ps1").read_text(
+        encoding="utf-8"
+    )
+    own = (ROOT / "scripts" / "start-session-windows.ps1").read_text(encoding="utf-8")
+    assert code(template) == code(own)
+    assert "Test-Path -LiteralPath $worktree" in template
+    assert "is not clean; nothing started" in template
+    assert "worktree add --detach $worktree origin/main" in template
 
 
 def write_toml(root: Path, text: str) -> None:

@@ -18,12 +18,16 @@ project copied and tested by hand. Nothing restarted the conductor itself in loc
 
 1. The kit ships two launch adapters as templates (`kit/manifest.json`, `templates` and `adopt.templates`), written once by
    `init`, `adopt` or `upgrade` when absent and then the project's own: `scripts/start-session-windows.ps1` from
-   `kit/templates/start-session-windows.ps1`, the guide's Windows Terminal example unchanged, byte for byte (a test keeps it
-   equal to the guide's block, `origin/main` marked `# your default branch` as there), and its POSIX twin
+   `kit/templates/start-session-windows.ps1`, the guide's Windows Terminal example, and its POSIX twin
    `scripts/start-session-local.sh` from `kit/templates/start-session-local.sh`: a worktree `../agk-<session>` per session,
    `claude` with the prompt in a GNOME Terminal tab when a desktop is there and otherwise in the background (`claude -p`,
    output in `<worktree>/.agk-session.log`), and the exit file `<worktree>/.agk-session-exit`, both kept out of git by the
-   worktree's exclude file.
+   worktree's exclude file. A first start is the guide's, unchanged in behaviour (`git worktree add`). A restart finds the
+   folder of the session that ended or crashed (Q-1237-1, answered on the fix list): both adapters then reuse it when it is
+   a clean worktree of the repository (fetch, then the default branch checked out detached), as this repository's own
+   adapter does (ADR-0439), and otherwise start nothing, exiting 2 with one line naming the folder. The guide's block is
+   the Windows template, byte for byte, and a test keeps them equal; another keeps the template's code equal to this
+   repository's own script, which differ only in comments.
 2. `doctor.py` gains the information line `launch-adapter` (severity `warn`, never a failure of the run): while
    `auto_start` is on and `launch_adapter` is unset, or a word of it that names a file of the project (a path or a script
    suffix) is missing, it names the kit's adapter for the platform and the `launch_adapter` line to set. The project's own
@@ -63,6 +67,3 @@ templates and the comment of `templates/agk.toml`), `tests/kit/` (`test_conducto
 
 - 2026-11-14: the adapters were run only with test doubles (the POSIX one with a `claude` double and no desktop); neither a
   Windows Terminal tab, a GNOME Terminal tab, `schtasks` nor `cron` was run by the session that wrote this `(verify)`.
-- 2026-11-14: the Windows adapter, unchanged from the guide, refuses a second start of a session whose worktree folder is
-  still there (`git worktree add` fails), so a second restart of `conductor-local` needs that folder removed or the reuse
-  of ADR-0439 (Q-1237-1).
