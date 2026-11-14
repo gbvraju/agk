@@ -231,9 +231,12 @@ def test_a_correct_record_agrees_with_autocrlf_false(repo, outside):
 def test_the_worktree_is_added_with_the_committed_line_ends():
     """REQ-039: brief #1291 answer 2: the `git worktree add` of the evidence check overrides the
     person's line-ending settings."""
+    import evidence
+
+    assert evidence.CHECKOUT == ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
     text = (SCRIPTS / "evidence.py").read_text(encoding="utf-8")
     body = text.split("\ndef in_worktree(", 1)[1].split("\ndef ", 1)[0]
-    assert '"core.autocrlf=false"' in body and '"core.eol=lf"' in body
+    assert 'git(root, *CHECKOUT, "worktree", "add"' in body
 
 
 def test_governance_runs_with_the_conductors_environment(repo, outside, monkeypatch):

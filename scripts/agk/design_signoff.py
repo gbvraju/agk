@@ -18,8 +18,11 @@ names) is `check_final_clearance.py`'s question, not this module's; `parse_rows(
 same table from a text (the file at a commit). `frozen_problems(root)` fails each `design` row whose
 folder (`folder_of`) no longer has the row's digest (rule 9: a signed-off version changed,
 naming the version and
-never a digest), and `signed_off(root, version)` is rule 12's evidence reading (brief #459). Files
-only: no network, no model, nothing written.
+never a digest), and `signed_off(root, version)` is rule 12's evidence reading (brief #459). A file
+whose checkout changed only its line ends (`core.autocrlf=true` on Windows) is read as committed,
+through `common.committed_bytes` (a read of the index, brief #1291, ADR-0550), so a checkout's
+conversion never changes a digest; a file with no CRLF is read from disk as before. Files only: no
+network, no model, nothing written.
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError
+from common import CheckError, committed_bytes
 
 INVENTORY = "docs/design/inventory.md"
 PROTOTYPE = "docs/design/prototype"
@@ -52,12 +55,14 @@ def _file_hash(path: Path) -> str:
 
 
 def digest(root: Path, paths: list[str] | list[Path]) -> str:
-    """The SHA-256 of the sorted `<path> <SHA-256 of the file>` lines of PATHS (from ROOT)."""
-    lines = []
+    """The SHA-256 of the sorted `<path> <SHA-256 of the file>` lines of PATHS (from ROOT), each file
+    read as committed when a checkout changed only its line ends (`committed_bytes`, brief #1291)."""
+    found: dict[str, bytes] = {}
     for rel in paths:
         path = Path(rel) if Path(rel).is_absolute() else root / rel
-        name = path.relative_to(root).as_posix()
-        lines.append(f"{name} {_file_hash(path)}")
+        found[path.relative_to(root).as_posix()] = path.read_bytes()
+    found = committed_bytes(root, found)
+    lines = [f"{name} {hashlib.sha256(data).hexdigest()}" for name, data in found.items()]
     text = "".join(f"{line}\n" for line in sorted(lines))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 

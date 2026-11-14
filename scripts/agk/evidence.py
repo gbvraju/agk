@@ -13,8 +13,11 @@ never its value). The check reports, in this order:
   did not exit 0, or the record's `result` is not `passed`.
 
 Any of these is a difference and nothing is re-run. Otherwise it adds a detached worktree of the
-head in a new temporary folder, runs `make -f agk.mk agk-governance` there with `AGK_BASE` set to
-the record's `base`, and rebuilds from the head what prepush runs: each step it knows (`pr-body`,
+head in a new temporary folder, with `-c core.autocrlf=false -c core.eol=lf` so that it holds the
+committed bytes whatever the person's git configuration says, runs `make -f agk.mk agk-governance`
+there with the conductor's environment (`PATH`, a scratch `HOME` and `AGK_BASE` set to the record's
+`base`; brief #1291, ADR-0550), so that a correct record agrees with the conductor's own run, and
+rebuilds from the head what prepush runs: each step it knows (`pr-body`,
 `lint`, `governance`, `secret-scan`, `tests`) as prepush builds it, and the test runs from
 `test_plan.py --json` in the worktree (and the regression set of a `[testing]` table), matched to
 the recorded runs by name. A step or run whose name prepush does not know, or whose recorded argv,
@@ -490,6 +493,26 @@ def run_env(base: str) -> dict:
     return temp_env({**os.environ, "AGK_BASE": base})
 
 
+# What governance keeps of this process's environment besides PATH (brief #1291, ADR-0550): on
+# Windows only, what Python and the shell need to start; never a token, never HOME or git settings.
+WINDOWS_KEEP = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT")
+# The line ends of the worktree: the committed bytes, whatever the person's git configuration says.
+CHECKOUT = ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
+
+
+def governance_env(base: str, home: Path) -> dict:
+    """The environment of the governance run, the conductor's (`env -i PATH="$PATH" HOME=<scratch>
+    AGK_BASE=<base>`, the local-mode guide): `PATH`, a scratch `HOME` inside the temporary folder
+    and `AGK_BASE`; on Windows also `WINDOWS_KEEP`, `USERPROFILE` as that `HOME`, and the long
+    temporary folder in `TEMP`, `TMP` and `TMPDIR` (brief #508). The person's own `HOME`, git
+    configuration and tokens never reach it (brief #1291, ADR-0550)."""
+    env = {"PATH": os.environ.get("PATH", ""), "HOME": str(home), "AGK_BASE": base}
+    if WINDOWS:
+        env.update({k: os.environ[k] for k in WINDOWS_KEEP if k in os.environ})
+        env["USERPROFILE"] = str(home)
+    return temp_env(env)
+
+
 def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
     """Governance and the sample, in a detached worktree of `head`, under the heavy-step lock."""
     try:
@@ -502,7 +525,7 @@ def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
     taken = None
     previous = {sig: signal.signal(sig, heavy_lock.on_signal) for sig in stop_signals()}
     try:
-        made = git(root, "worktree", "add", "--detach", "-q", str(tree), head)
+        made = git(root, *CHECKOUT, "worktree", "add", "--detach", "-q", str(tree), head)
         if made.returncode != 0:
             raise Unreadable(
                 "evidence: the worktree of the head cannot be made (path class: TMPDIR)"
@@ -515,8 +538,10 @@ def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
             raise Unreadable(
                 f"evidence: lock {LOCK}: the lock folder cannot be written (setting: lock_dir)"
             ) from None
+        home = temp / "home"
+        home.mkdir()
+        code, out = governance(tree, governance_env(record["base"], home))
         env = run_env(record["base"])
-        code, out = governance(tree, env)
         try:
             limit = proof_timeout(tree)
         except CheckError as exc:
