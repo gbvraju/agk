@@ -77,7 +77,9 @@ def test_ac4_a_build_is_claimed_with_one_post_that_names_the_build(proj, stub):
     stub.serve(BRIEF, [took(1, "s-me", "b", "me")], nth=2)
     out = claim(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5 build (b)"
-    assert claim_posts(stub) == [["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (b)"]]]
+    assert claim_posts(stub) == [
+        ["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (b)\n\nWho: AGK"]]
+    ]
 
 
 def test_ac4_a_live_take_of_the_same_build_is_never_taken_twice(proj, stub):
@@ -107,7 +109,7 @@ def test_ac4_a_claim_without_a_build_claims_the_whole_brief(proj, stub):
     stub.serve(BRIEF, [took(1, "s-me", None, "me")], nth=2)
     out = claim(proj, stub, build=None)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5"
-    assert posts(stub)[0][2] == ["-f", f"body=taken: s-me {DAY}"]
+    assert posts(stub)[0][2] == ["-f", f"body=taken: s-me {DAY}\n\nWho: AGK"]
 
 
 def test_ac4_a_build_take_by_another_session_blocks_a_whole_brief_claim(proj, stub):
@@ -217,13 +219,17 @@ def test_ac5_assign_ends_with_assign_timeout_when_no_answer_comes(proj, stub):
     assert out.returncode == 0 and out.stdout.strip().splitlines()[-1] == "assign-timeout"
 
 
-def test_ac5_assign_needs_exactly_one_open_conductor_issue(proj, stub):
-    """REQ-041 AC5"""
+def test_ac5_assign_needs_an_open_conductor_issue_and_reads_the_newest(proj, stub):
+    """REQ-041 AC5, as brief #1251 answer 3c changed it (ADR-0548): with two open issues (a
+    roll-over's moment) the wait reads the newest."""
     stub.serve(CONDUCTOR, [])
     out = assign(proj, stub)
     assert out.returncode == 2 and "agk-conductor" in out.stdout
     stub.serve(CONDUCTOR, [CONDUCTOR_ISSUE, {"number": 205}])
-    assert assign(proj, stub).returncode == 2
+    stub.serve(f"{ISSUES}/205/comments", [], nth=1)
+    stub.serve(f"{ISSUES}/205/comments", [comment(30, "boss", "Assign: s-me #9")])
+    out = assign(proj, stub)
+    assert out.returncode == 0 and out.stdout.splitlines()[-1] == "assign #9", out.stdout
 
 
 def test_ac5_watch_takes_one_of_pr_merged_or_assign(proj, stub):

@@ -67,6 +67,9 @@ Without `--shadow` the conductor may also run exactly `python3 scripts/agk/sessi
 nothing unsaved and never a remote branch; any other form of `tidy` stays denied.
 Without `--shadow` the conductor may also re-plan at the end of a review pass (brief #331,
 ADR-0190): exactly `python3 scripts/agk/session.py plan --json` (read-only, as the queue commands),
+or the same with `--if-changed` (brief #1251 answer 6, ADR-0548: the last plan reused while nothing
+changed); and `python3 scripts/agk/session.py rollover` (brief #1251 answer 3c), which opens a new
+`agk-conductor` issue past 500 comments, links it from the old one and closes the old one;
 and `python3 scripts/agk/launch.py prompts --plan <file>`, the project's own regular `launch.py` and
 the plan a regular file of a scratch directory, which prints the prompts and starts nothing. The
 same command with `--adapter <command>` after it, which starts the planned sessions, is allowed only
@@ -234,6 +237,8 @@ QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), 
     ["review-queue", "--fingerprint"],
     ["queue", "--role", "conductor"],
     ["plan", "--json"],  # the re-plan at the end of a pass (brief #331)
+    ["plan", "--json", "--if-changed"],  # the same, reused while nothing changed (brief #1251)
+    ["rollover"],  # the `agk-conductor` issue past 500 comments (brief #1251 answer 3c)
     ["tidy", "--apply"],  # finished builders, at the start and after each merge (brief #548)
 )
 SESSION_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a session ID, never an option
@@ -549,7 +554,8 @@ def own_script(path: str, cwd: object, script: str) -> bool:
 
 def queue_allowed(words: list[str], cwd: object) -> bool:
     """`python3 scripts/agk/session.py review-queue [--all | --fingerprint]`, `... queue --role
-    conductor` or `... plan --json` (brief #331), where the script is the regular file of the
+    conductor`, `... plan --json [--if-changed]` (brief #331, brief #1251) or `... rollover`
+    (brief #1251 answer 3c), where the script is the regular file of the
     project directory itself (brief 284), or `... tell --session <id> --text <message>` (brief
     327)."""
     if len(words) < 2 or words[0] != "python3":

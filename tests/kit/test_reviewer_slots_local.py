@@ -144,7 +144,7 @@ def test_a_ready_head_starts_one_reviewer_through_the_adapter(world, capsys):
     assert f"review: started r1 for #7 {SHA[:12]}" in out
     posted = writes(world["stub"])
     assert [c[1] for c in posted] == [CONDUCTOR]  # the one `Review:` line, and no verdict
-    assert f"body=Review: r1 #7 {SHA}" in posted[0][2]
+    assert f"body=Review: r1 #7 {SHA}\n\nWho: AGK conductor" in posted[0][2]
 
 
 def test_while_the_reviewer_has_the_head_the_conductor_gives_no_verdict(world, capsys):

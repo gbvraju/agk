@@ -94,6 +94,8 @@ from common import (
     required_checks,
     utf8_output,
     verdict_problem,
+    who_fields,
+    without_who,
 )
 from merge_cleared import (
     PROTECTED,
@@ -207,7 +209,7 @@ class ReadOnly(Exception):
 def write(endpoint: str, *extra: str, method: str, what: str = "rule 2: a label") -> None:
     """One write with `gh api`; a 403 is `ReadOnly`, any other failure a CheckError."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["gh", "api", "--method", method, endpoint, *extra],
+        ["gh", "api", "--method", method, endpoint, *who_fields(endpoint, method, extra, "router")],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -894,7 +896,7 @@ def report_unreadable(
 ) -> None:
     """One comment `Unreadable: <rule>` for each line and rule, found again by its text. A line
     `correct_verdicts` already answers with `Correction needed:` gets no second comment."""
-    said = {str(c.get("body") or "") for c in comments}
+    said = {without_who(str(c.get("body") or "")) for c in comments}  # brief #1289
     for comment, problem in found:
         body = f"{UNREADABLE} {problem} (comment {comment.get('id')})"
         if body in said or verdict_problem(str(comment.get("body") or "").strip()):

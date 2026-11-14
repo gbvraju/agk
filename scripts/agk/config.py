@@ -45,6 +45,12 @@ more, is refused naming `setting: flow.brief_code_paths`, never the value.
 `stop_check_mode(root)` reads `stop_check` of the `[flow]` table (brief #1254, ADR-0531): `changed`
 (the default), `full` or `off`, the mode of the stop hook. Another value, or `off` while
 `review_mode` is `solo`, is refused naming `setting: flow.stop_check`, never the value.
+
+`owner_wait_settings(root)` reads three keys of the real `[flow]` table (brief #1282, ADR-0543):
+`owner_wait_minutes` (a whole number, 0 or more, 30 when unset; 0 parks at once),
+`owner_rest_hours` (empty when unset, else `"HH:MM-HH:MM"`, which may cross midnight) and
+`owner_utc_offset` (`"+00:00"` when unset, a fixed offset `"+HH:MM"` or `"-HH:MM"`, so no time-zone
+database is needed). A bad value is refused naming `setting: flow.<key>`, never the value.
 """
 
 from __future__ import annotations
@@ -529,6 +535,54 @@ def stop_check_mode(root: Path) -> str:
     return value
 
 
+# --- the owner's waits (brief #1282, ADR-0543) --------------------------------------------------
+
+OWNER_WAIT_MINUTES = 30
+OWNER_CLOCK = r"([01]\d|2[0-3]):([0-5]\d)"
+OWNER_REST = re.compile(f"{OWNER_CLOCK}-{OWNER_CLOCK}")
+OWNER_OFFSET = re.compile(r"([+-])(0\d|1[0-4]):([0-5]\d)")
+
+
+class OwnerWaitSettingError(CheckError):
+    """An owner-wait key of `[flow]` is refused, naming the setting and never the value."""
+
+
+def _refuse_owner(key: str) -> OwnerWaitSettingError:
+    return OwnerWaitSettingError(f"the setting is refused (setting: flow.{key})")
+
+
+def owner_wait_settings(root: Path) -> dict:
+    """`{"minutes": int, "rest": (start, end) | None, "offset": int}`: the wait in minutes, the rest
+    hours as minutes of the owner's day (the end not included) and the owner's offset from UTC in
+    minutes. Only the `[flow]` table is read: keys under a commented `# [flow]` are not in it."""
+    try:
+        flow = config_source(root).get("flow", {})
+    except (OSError, ValueError):
+        raise _refuse_owner("owner_wait_minutes") from None
+    flow = flow if isinstance(flow, dict) else {}
+    minutes = flow.get("owner_wait_minutes", OWNER_WAIT_MINUTES)
+    if type(minutes) is not int or minutes < 0:
+        raise _refuse_owner("owner_wait_minutes")
+    rest_text = flow.get("owner_rest_hours", "")
+    if not isinstance(rest_text, str):
+        raise _refuse_owner("owner_rest_hours")
+    rest = None
+    if rest_text.strip():
+        found = OWNER_REST.fullmatch(rest_text.strip())
+        if not found:
+            raise _refuse_owner("owner_rest_hours")
+        hours = [int(x) for x in found.groups()]
+        rest = (hours[0] * 60 + hours[1], hours[2] * 60 + hours[3])
+        if rest[0] == rest[1]:
+            raise _refuse_owner("owner_rest_hours")
+    offset_text = flow.get("owner_utc_offset", "+00:00")
+    found = OWNER_OFFSET.fullmatch(offset_text) if isinstance(offset_text, str) else None
+    if not found:
+        raise _refuse_owner("owner_utc_offset")
+    offset = (int(found.group(2)) * 60 + int(found.group(3))) * (-1 if found.group(1) == "-" else 1)
+    return {"minutes": minutes, "rest": rest, "offset": offset}
+
+
 # --- the [capacity] table (SPEC-0034 rule 1, brief #842 build (b), ADR-0409) ---------------
 
 CAPACITY_PROFILES = ("auto", "full", "balanced", "small", "fixed")
@@ -604,6 +658,9 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "merge_hours",
             "merge_queue",
             "min_free_memory_mb",
+            "owner_rest_hours",
+            "owner_utc_offset",
+            "owner_wait_minutes",
             "plan_issue",
             "reprove_paths",
             "review_minutes",

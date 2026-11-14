@@ -55,6 +55,14 @@ queue does, so a loop wakes the conductor only then. With `[flow] auto_merge = t
 default branch (brief #531, SPEC-0039 rule 9), a pull request that would be skipped for a verdict
 on its head, whose latest `Verdict:` comment is exactly `Verdict: cleared <its full head>`, is
 listed as `#N <head7> cleared, not merged`, and the conductor runs `merge_cleared.py` for it again.
+Brief #1251 build (b) (ADR-0548): every GET goes through a read cache, one file per repository in
+the temp folder (`AGK_READ_CACHE` names another folder, `off` turns it off), that sends the last
+ETag as `If-None-Match` and reuses the kept body on a 304, which GitHub does not count against its
+rate limit; the waits read comments `since` the newest seen, merged by id, and back off from
+`--interval` to 300 s while nothing changes; `plan --if-changed` reuses the last plan while the
+newest change on GitHub, the commit and `agk.toml` are the same (30 minutes at most); `rollover`
+moves the `agk-conductor` issue past 500 comments to a new one, linked `Continued in #<n>`, which a
+wait follows, and every reader takes the newest open issue with that label.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
 <id>` when it starts. `--assign` also takes at once the newest `Assign:` for the session posted
@@ -122,10 +130,19 @@ secret-scan deferral line of `prepush.py`, the session rules that bind a builder
 and the body lines of CLAUDE.md item 7 read from `config/core-rules.md` (a file without the item
 fails). `--follow-up TEXT` (one line, never a verdict) replaces the stop on an existing pull
 request with the follow-up for it. The title of a brief never goes into the prompt.
+
+Brief #1282 (ADR-0543): `watch --pr N` parks the pull request when its owner wait passed (a
+`Question:` for the maintainers, an `Owner needed:`, `agk:approve` or `agk:owner-merge` unanswered
+for `[flow] owner_wait_minutes`, or at once inside `owner_rest_hours` at `owner_utc_offset`): one
+label write `agk:parked`, one comment `Parked-by: wait <Q-id>`, and it prints `parked #<n> <Q-id>`
+and the `next:` line that names the builder's hand-over and `session.py after`. A parked pull
+request holds no builder slot, and `next` offers an unparked one (an `Unparked-by:` its author has
+not spoken after) before stalled pull requests and new briefs.
 """
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import hashlib
 import io
@@ -134,8 +151,10 @@ import os
 import re
 import secrets
 import shutil
+import stat
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 import time
 import tomllib
 from collections.abc import Callable
@@ -163,6 +182,8 @@ from common import (
     required_checks,
     show,
     utf8_output,
+    who_fields,
+    without_who,
 )
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
@@ -178,6 +199,7 @@ from config import (
     model_providers,
     model_routes,
     model_settings,
+    owner_wait_settings,
     route_of,
 )
 
@@ -193,10 +215,11 @@ USAGE = (
     "       session.py resume --pr N\n"
     "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
-    "       session.py plan [--json] [--record] | plan --what-if DIR\n"
+    "       session.py plan [--json] [--record] [--if-changed] | plan --what-if DIR\n"
     "       session.py push-check\n"
     "       session.py slot (--take | --renew | --release | --next) SLOT\n"
     "       session.py tell --session ID --text MESSAGE\n"
+    "       session.py rollover\n"
     "       session.py inbox --session ID\n"
     "       session.py mine --session ID (--pr N | --brief N)\n"
     "       session.py kind --brief N\n"
@@ -219,6 +242,7 @@ COMMANDS = (
     "push-check",
     "slot",
     "tell",
+    "rollover",
     "inbox",
     "mine",
     "kind",
@@ -229,7 +253,7 @@ COMMANDS = (
 )
 PAGE = 100
 PAUSED_EXIT = 5
-PAUSED_COMMANDS = frozenset({"claim", "next", "queue", "watch", "after", "slot"})
+PAUSED_COMMANDS = frozenset({"claim", "next", "queue", "watch", "after", "slot", "rollover"})
 PAUSED_REFUSAL = (
     f"{PAUSED_LINE} (setting: paused in agk.toml of the default branch): session.py claims, takes,"
     " lists and waits on nothing; remove the line `paused = true` to resume"
@@ -309,7 +333,7 @@ OVER_CAP = re.compile(r"Report: \S+ over cap (\d+(?:\.\d+)?)/\d+ (tokens|hours)\
 
 LAST_ERROR = ""  # what `gh` said about the last failed call (empty after a good one)
 CALLS = 0  # the `gh api` calls this run made (brief #1251 answer 5, ADR-0529)
-CACHED = 0  # of them, the ones answered from a cache (0 until brief #1251 build (b))
+CACHED = 0  # of them, the ones answered from the read cache (brief #1251 build (b))
 MEMO: dict | None = None  # within one plan run, each GET read once (ADR-0529 decision 2)
 RATE_LIMIT = re.compile(r"rate limit|HTTP 429", re.IGNORECASE)
 RATE_WAITS = 5  # rate limits waited out for one call before it counts as failed
@@ -335,27 +359,233 @@ def rate_reset() -> float | None:
         return None
 
 
+# --- the read cache with conditional requests (brief #1251 build (b) answer 3, ADR-0548) -------
+
+CACHE_ENV = "AGK_READ_CACHE"  # a folder for the cache, or `off`; else the temp folder's
+CACHE_DIR = "agk-read-cache"
+CACHE_KEPT = 4000  # entries kept per repository, the newest by the time they were read
+REPO_OF = re.compile(r"repos/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)(?:/|\?|$)")
+STATUS = re.compile(r"HTTP/[0-9.]+ (\d{3})")
+COMMENTS_OF = re.compile(r"repos/[^/]+/[^/]+/issues/(\d+)/comments\?")
+SKEW = 120  # seconds taken off a `since` stamp: the local clock and GitHub's may differ
+
+
+def private_folder(path: Path) -> bool:
+    """Whether a cache folder is safe to read bodies from: a real folder, not a link, and on POSIX
+    owned by this user and not writable by its group or others. The default folder sits in the
+    temp folder, which every user of the machine shares, so a folder another user made first, or
+    one opened to others, could hand this user bodies it never read (finding 2 on 729b5a8)."""
+    try:
+        found = path.lstat()
+    except OSError:
+        return False
+    if not stat.S_ISDIR(found.st_mode):
+        return False
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:  # Windows: the user's own temp folder, no POSIX owner to compare
+        return True
+    return found.st_uid == getuid() and not found.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+
+
+class ReadCache:
+    """Each GET's last body and ETag, in one file per repository in the user's temp folder (never
+    in the checkout): a request sends `If-None-Match` and a `304` reuses the cached body, which
+    GitHub does not count against the rate limit. A body without an ETag is never kept, so a
+    double or a forge that sends none reads as before. `unchanged` names, for one plan pass, the
+    issues whose comments a repository-wide `since` read showed unchanged: their cached comment
+    pages read with no request at all when they were read after that `since` stamp."""
+
+    def __init__(self) -> None:
+        self.files: dict[str, dict] = {}
+        self.dirty: set[tuple[str, str]] = set()
+        self.unchanged: tuple[float, set[int]] | None = None  # (since stamp, changed issues)
+        self.place: Any = UNSET  # the folder, once checked: a Path, or None for no cache
+
+    def folder(self) -> Path | None:
+        """The cache folder, made with mode 0700, or None (no cache, every GET asked as before)
+        when it is `off`, cannot be made, or is not this user's own (finding 2 on 729b5a8)."""
+        if self.place is UNSET:
+            named = os.environ.get(CACHE_ENV, "")
+            path = Path(named) if named else Path(tempfile.gettempdir()) / CACHE_DIR
+            made = named.lower() != "off"
+            try:
+                if made:
+                    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+            except OSError:
+                made = False
+            self.place = path if made and private_folder(path) else None
+        return self.place
+
+    def path(self, endpoint: str) -> Path | None:
+        found, folder = REPO_OF.match(endpoint), self.folder()
+        if found is None or folder is None:
+            return None
+        return folder / f"{found.group(1)}__{found.group(2)}.json"
+
+    def load(self, path: Path) -> dict:
+        key = str(path)
+        if key not in self.files:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                data = {}
+            self.files[key] = data if isinstance(data, dict) else {}
+            self.files[key].setdefault("entries", {})
+        return self.files[key]
+
+    def entry(self, endpoint: str) -> dict | None:
+        path = self.path(endpoint)
+        if path is None:
+            return None
+        found = self.load(path)["entries"].get(endpoint)
+        return found if isinstance(found, dict) and "etag" in found else None
+
+    def keep(self, endpoint: str, etag: str, body: Any) -> None:
+        path = self.path(endpoint)
+        if path is not None:
+            self.load(path)["entries"][endpoint] = {"etag": etag, "body": body, "at": time.time()}
+            self.dirty.add((str(path), endpoint))
+            self.save()
+
+    def confirm(self, endpoint: str) -> None:
+        """A 304: the cached body is current now."""
+        path, found = self.path(endpoint), self.entry(endpoint)
+        if path is not None and found is not None:
+            found["at"] = time.time()
+            self.dirty.add((str(path), endpoint))
+
+    def meta(self, endpoint: str, key: str) -> Any:
+        path = self.path(endpoint)
+        return None if path is None else self.load(path).get(key)
+
+    def set_meta(self, endpoint: str, key: str, value: Any) -> None:
+        """A note beside the entries (the last plan's stamp); kept only beside entries."""
+        path = self.path(endpoint)
+        if path is not None and self.load(path)["entries"]:
+            self.load(path)[key] = value
+            self.dirty.add((str(path), f"\0{key}"))
+            self.save()
+
+    def fresh(self, endpoint: str) -> Any:
+        """The cached body of an issue's comment page that the pass's `since` read showed
+        unchanged and that was read after its stamp, else UNSET (ADR-0548 decision 2)."""
+        found = COMMENTS_OF.match(endpoint)
+        if self.unchanged is None or found is None:
+            return UNSET
+        stamp, changed = self.unchanged
+        entry = self.entry(endpoint)
+        if int(found.group(1)) in changed or entry is None or entry.get("at", 0) < stamp:
+            return UNSET
+        return entry["body"]
+
+    def save(self) -> None:
+        """Write what changed, over what another run wrote meanwhile; a file that cannot be
+        written is left (the cache only saves calls, it never decides)."""
+        by_file: dict[str, list[str]] = {}
+        for path, key in self.dirty:
+            by_file.setdefault(path, []).append(key)
+        self.dirty = set()
+        for path, keys in by_file.items():
+            mine = self.files[path]
+            try:
+                theirs = json.loads(Path(path).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                theirs = {}
+            theirs = theirs if isinstance(theirs, dict) else {}
+            found = theirs.get("entries")
+            entries: dict = found if isinstance(found, dict) else {}
+            for key in keys:
+                if key.startswith("\0"):
+                    theirs[key[1:]] = mine.get(key[1:])
+                elif key in mine["entries"]:
+                    entries[key] = mine["entries"][key]
+            if len(entries) > CACHE_KEPT:
+                kept = sorted(entries, key=lambda k: entries[k].get("at", 0))[-CACHE_KEPT:]
+                entries = {k: entries[k] for k in kept}
+            theirs["entries"] = entries
+            self.files[path] = theirs
+            try:
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                handle, temp = tempfile.mkstemp(dir=Path(path).parent, suffix=".tmp")
+                with os.fdopen(handle, "w", encoding="utf-8") as out:
+                    json.dump(theirs, out)
+                os.replace(temp, path)
+            except OSError:
+                continue
+
+
+CACHE = ReadCache()
+atexit.register(CACHE.save)  # the 304s' new read times
+
+
+def split_response(text: str) -> tuple[int | None, dict[str, str], str]:
+    """`gh api -i` output: the status, the headers (lower-case names) and the body. Output that
+    does not start with a status line is all body (status None): what a `gh` without `-i`, or a
+    double, prints. `(verify)`: `gh api -i` prints `HTTP/<v> <code> <text>`, the headers and a
+    blank line before the body, and on a 304 prints them and exits non-zero with `HTTP 304`."""
+    found = STATUS.match(text)
+    if found is None:
+        return None, {}, text
+    for sep in ("\r\n\r\n", "\n\n"):
+        if sep in text:
+            head, body = text.split(sep, 1)
+            break
+    else:
+        head, body = text, ""
+    headers = {}
+    for line in head.splitlines()[1:]:
+        name, _, value = line.partition(":")
+        headers[name.strip().lower()] = value.strip()
+    return int(found.group(1)), headers, body
+
+
 def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     """One `gh api` call; a failed or unreadable call is None. A rate limit is not a failure
-    (brief #210 answer 6): the call waits until the reset time that GitHub reports and retries."""
-    global LAST_ERROR, CALLS
+    (brief #210 answer 6): the call waits until the reset time that GitHub reports and retries.
+    A GET goes through the read cache: `If-None-Match` with the last ETag, the cached body on a
+    304 (counted in CACHED), and no request at all for a comment page that the plan's `since` read
+    showed unchanged (brief #1251 build (b), ADR-0548)."""
+    global LAST_ERROR, CALLS, CACHED
     key = (endpoint, *extra)
     if MEMO is not None and method == "GET" and key in MEMO:
         return MEMO[key]
+    cacheable = method == "GET" and not extra
+    if cacheable and (kept := CACHE.fresh(endpoint)) is not UNSET:
+        CALLS += 1
+        CACHED += 1
+        if MEMO is not None:
+            MEMO[key] = kept
+        return kept
+    entry = CACHE.entry(endpoint) if cacheable else None
+    asked = ["-i"] if cacheable else []
+    if entry is not None:
+        asked += ["-H", f"If-None-Match: {entry['etag']}"]
+    fields = who_fields(endpoint, method, extra)  # a comment ends `Who: AGK` (ADR-0546)
     for attempt in range(RATE_WAITS + 1):
         CALLS += 1
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["gh", "api", "--method", method, endpoint, *extra],
+            ["gh", "api", "--method", method, endpoint, *fields, *asked],
             capture_output=True,
             text=True,
             encoding="utf-8",
         )
+        status, headers, text = split_response(proc.stdout) if cacheable else (None, {}, "")
+        if status == 304 and entry is not None:
+            LAST_ERROR = ""
+            CACHED += 1
+            CACHE.confirm(endpoint)
+            if MEMO is not None:
+                MEMO[key] = entry["body"]
+            return entry["body"]
         LAST_ERROR = proc.stderr if proc.returncode != 0 else ""
         if proc.returncode == 0:
+            text = text if cacheable else proc.stdout
             try:
-                found = json.loads(proc.stdout) if proc.stdout.strip() else {}
+                found = json.loads(text) if text.strip() else {}
             except ValueError:
                 return None
+            if cacheable and headers.get("etag"):
+                CACHE.keep(endpoint, headers["etag"], found)
             if MEMO is not None and method == "GET":
                 MEMO[key] = found
             return found
@@ -378,6 +608,42 @@ def pages(endpoint: str) -> list | None:
         if len(chunk) < PAGE:
             return found
         page += 1
+
+
+STAMP_NOTE = "plan_pass"  # the read cache's note of when the last plan began (ADR-0548)
+ISSUE_OF = re.compile(r"/issues/(\d+)$")
+
+
+def stamp_iso(seconds: float) -> str:
+    return datetime.fromtimestamp(seconds, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def changed_since_pass(repo: str) -> None:
+    """Brief #1251 build (b) answer 3: one repository-wide `issues/comments?since=<last plan>`
+    read names the issues whose comments changed since the last plan began; the comment pages of
+    every other issue, cached after that stamp, are then read with no request. Without a stamp,
+    or when the read fails, every page is asked as before (with its ETag)."""
+    CACHE.unchanged = None
+    stamp = CACHE.meta(f"repos/{repo}/", STAMP_NOTE)
+    if not isinstance(stamp, (int, float)):
+        return
+    since = stamp - SKEW
+    found = pages(f"repos/{repo}/issues/comments?since={stamp_iso(since)}")
+    if found is None:
+        return
+    changed = set()
+    for comment in found:
+        number = ISSUE_OF.search(str(comment.get("issue_url") or ""))
+        if number is None:
+            return  # a comment that names no issue: read every page
+        changed.add(int(number.group(1)))
+    CACHE.unchanged = (since, changed)
+
+
+def end_pass(repo: str, began: float) -> None:
+    """The plan's stamp for the next pass's `since` read; the pass's skips end with it."""
+    CACHE.unchanged = None
+    CACHE.set_meta(f"repos/{repo}/", STAMP_NOTE, began)
 
 
 def repo_name(root) -> str:
@@ -532,6 +798,63 @@ def local_head(root) -> str:
     return f"local head {head} {'pushed' if ahead == '0' else 'not pushed'}"
 
 
+BACKOFF_CAP = 300.0  # seconds: a quiet wait's longest poll interval (brief #1251 answer 3b)
+CONTINUED = re.compile(r"Continued in #([1-9]\d*)\b.*")  # the roll-over's link (answer 3c)
+
+
+def backoff(current: float, base: float, changed: bool) -> float:
+    """The next poll interval: the base after a change, else double, up to BACKOFF_CAP (never
+    under the base, never over it when the base is longer; brief #1251 answer 3b)."""
+    if changed:
+        return base
+    return min(max(base, BACKOFF_CAP), max(base, current * 2))
+
+
+class Thread:
+    """The comments of one issue or pull request as a wait reads them (brief #1251 answer 3b):
+    whole once, then only `since=<newest created_at seen>`, merged by id, so that a comment of the
+    same second is never missed and an edited one replaces its old text. Each read goes through
+    the read cache, so an unchanged poll is a 304. `tail` reads only the last page first, for a
+    wait that needs the newest id alone. `changed` says whether the last read found anything new."""
+
+    def __init__(self, path: str, tail: int | None = None) -> None:
+        self.path, self.tail = path, tail
+        self.items: dict[int, dict] | None = None
+        self.changed = False
+
+    def cursor(self) -> str | None:
+        times = [str(c.get("created_at") or "") for c in (self.items or {}).values()]
+        return max((t for t in times if t), default=None)
+
+    def read(self) -> list | None:
+        since = self.cursor() if self.items is not None else None
+        if self.items is None and self.tail:
+            last = max(1, -(-self.tail // PAGE))
+            found = gh(f"{self.path}?per_page={PAGE}&page={last}")
+            found = found if isinstance(found, list) and found else pages(self.path)
+        else:
+            found = pages(f"{self.path}?since={since}" if since else self.path)
+        if found is None:
+            return None
+        before = dict(self.items or {})
+        items = dict(before)
+        for comment in found:
+            if isinstance(comment, dict) and isinstance(comment.get("id"), int):
+                items[comment["id"]] = comment
+        self.changed = self.items is None or items != before
+        self.items = items
+        return [items[k] for k in sorted(items)]
+
+    def moved(self, seen: int, allowed: AbstractSet[str]) -> int | None:
+        """The issue a `Continued in #<n>` by a listed author newer than `seen` points to."""
+        items = self.items or {}
+        for cid in sorted(items):
+            match = CONTINUED.fullmatch(first_line(items[cid])) if cid > seen else None
+            if match and author_of(items[cid]) in allowed:
+                return int(match.group(1))
+        return None
+
+
 class Reads:
     """Polls in a row in which GitHub could not be read (brief #210): the fifth ends the wait, so
     a wait never goes silent; one failure is retried. When `gh` says it could not connect, the one
@@ -578,10 +901,14 @@ def watch(root, args: dict[str, str]) -> int:
     first = True
     floor = 0
     told = Told(root, repo, args["--session"], interval) if "--session" in args else None
+    waits = None if only_merge else owner_wait_settings(root)  # refused before any read (#1282)
     if told is not None and told.start() is not None:
         return EXIT_UNREADABLE
+    thread = Thread(f"repos/{repo}/issues/{number}/comments")
+    brief_thread: Thread | None = None
+    pause, last_state = interval, None
     if not only_merge:
-        while (found := newest(pages(f"repos/{repo}/issues/{number}/comments"))) is None:
+        while (found := newest(thread.read())) is None:
             if reads.failed(f"the comments of #{number}"):
                 return EXIT_UNREADABLE
             if late():
@@ -605,7 +932,7 @@ def watch(root, args: dict[str, str]) -> int:
             if pr.get("mergeable_state") == "dirty" and not only_merge:
                 print(f"conflict #{number}")
                 return 0
-            comments = None if only_merge else pages(f"repos/{repo}/issues/{number}/comments")
+            comments = None if only_merge else thread.read()
             if comments is None and not only_merge:
                 if reads.failed(f"the comments of #{number}"):
                     return EXIT_UNREADABLE
@@ -633,9 +960,15 @@ def watch(root, args: dict[str, str]) -> int:
                 if line:
                     print(line)
                     return 0
+                if waits is not None and (parked_line := owner_park(repo, pr, comments, waits,
+                                                                    root, args)):  # fmt: skip
+                    print(parked_line)
+                    return 0
                 brief = brief_number(pr)
                 if brief is not None:
-                    said = pages(f"repos/{repo}/issues/{brief}/comments")
+                    if brief_thread is None or not brief_thread.path.endswith(f"/{brief}/comments"):
+                        brief_thread = Thread(f"repos/{repo}/issues/{brief}/comments")
+                    said = brief_thread.read()
                     if said is not None and brief_seen is UNSET:
                         brief_seen = newest(said)
                         line = correction_line(said, floor, authors, brief)
@@ -659,7 +992,15 @@ def watch(root, args: dict[str, str]) -> int:
         if late():
             print("timeout")
             return 3
-        time.sleep(interval)
+        state = (
+            json.dumps(pr, sort_keys=True, default=str) if isinstance(pr, dict) else None,
+            thread.changed,
+            brief_thread is not None and brief_thread.changed,
+            told is not None and told.changed,
+        )
+        quiet = last_state is not None and state[0] == last_state[0] and not any(state[1:])
+        pause, last_state = backoff(pause, interval, not quiet), state
+        time.sleep(pause)
 
 
 class Told:
@@ -674,12 +1015,15 @@ class Told:
         self.allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
         self.reads = Reads(root)
         self.seen = 0
+        self.thread: Thread | None = None
+        self.changed = False
 
     def start(self) -> int | None:
-        """Find the one open `agk-conductor` issue and read its baseline: an unread baseline would
-        make an old line look new. A failed read is retried and the fifth in a row ends the watch
-        (session rule 21); without exactly one such issue the watch says so in one line and goes
-        on watching the pull request (the verdict on e90f60b, item 1)."""
+        """Find the open `agk-conductor` issue (the newest, when a roll-over left two; brief #1251
+        answer 3c) and read its baseline: an unread baseline would make an old line look new. Only
+        its last page is read (the newest id is all it needs); a failed read is retried and the
+        fifth in a row ends the watch (session rule 21); without such an issue the watch says so
+        in one line and goes on watching the pull request (the verdict on e90f60b, item 1)."""
         listing = f"repos/{self.repo}/issues?state=open&labels={ASSIGN_LABEL}"
         while (found := pages(listing)) is None:
             if self.reads.failed(f"the open issues labelled {ASSIGN_LABEL}"):
@@ -687,13 +1031,17 @@ class Told:
             time.sleep(self.interval)
         self.reads.good()
         issues = [i for i in found if "pull_request" not in i and isinstance(i.get("number"), int)]
-        if len(issues) != 1:
-            why = "no open issue" if not issues else "more than one open issue"
-            print(f"messages: not read ({why} labelled {ASSIGN_LABEL})", flush=True)
+        if not issues:
+            print(f"messages: not read (no open issue labelled {ASSIGN_LABEL})", flush=True)
             return None
-        self.issue = issues[0]["number"]
-        self.path = f"repos/{self.repo}/issues/{self.issue}/comments"
-        while (comments := pages(self.path)) is None:
+        chosen = max(issues, key=lambda i: i["number"])
+        self.issue = chosen["number"]
+        count = chosen.get("comments")
+        self.thread = Thread(
+            f"repos/{self.repo}/issues/{self.issue}/comments",
+            tail=count if isinstance(count, int) and count > 0 else None,
+        )
+        while (comments := self.thread.read()) is None:
             if self.reads.failed(f"the comments of #{self.issue}"):
                 return EXIT_UNREADABLE
             time.sleep(self.interval)
@@ -702,19 +1050,27 @@ class Told:
         return None
 
     def poll(self) -> int | None:
-        """0 after printing a new `tell` line, EXIT_UNREADABLE on five unread polls, or None."""
-        if self.issue is None:
+        """0 after printing a new `tell` line, EXIT_UNREADABLE on five unread polls, or None. A
+        `Continued in #<n>` by a listed author moves the reads to the new issue (answer 3c)."""
+        self.changed = False
+        if self.issue is None or self.thread is None:
             return None
-        comments = pages(self.path)
+        comments = self.thread.read()
         if comments is None:
             return EXIT_UNREADABLE if self.reads.failed(f"the comments of #{self.issue}") else None
         self.reads.good()
-        for comment in sorted(comments, key=lambda c: c.get("id", 0)):
+        self.changed = self.thread.changed
+        for comment in comments:
             line = tell_line(comment, self.me, self.allowed)
             match = TELL.fullmatch(line) if line and comment.get("id", 0) > self.seen else None
             if match:
                 print(f"tell {match.group(2)}", flush=True)
                 return 0
+        moved = self.thread.moved(self.seen, self.allowed)
+        if moved is not None and moved != self.issue:
+            self.issue, self.changed = moved, True
+            self.thread = Thread(f"repos/{self.repo}/issues/{moved}/comments")
+            return self.poll()
         return None
 
 
@@ -919,8 +1275,9 @@ def brief_number(pr: dict) -> int | None:
 
 def plain(body: str) -> str:
     """The body of a comment without the attribution footer that the server adds (`---` and a
-    `Generated by` line), so that a take or a release written alone on its lines is still read."""
-    return FOOTER.sub("", body).strip()
+    `Generated by` line) and without its last `Who:` line (brief #1289, ADR-0546), so that a take
+    or a release written alone on its lines is still read."""
+    return without_who(FOOTER.sub("", body)).strip()
 
 
 def all_takes(comments: list) -> list[tuple]:
@@ -1742,9 +2099,9 @@ def conductor_issue(repo: str) -> int:
     issues = [
         i for i in found or [] if "pull_request" not in i and isinstance(i.get("number"), int)
     ]
-    if len(issues) != 1:
-        raise CheckError(f"rule 12: exactly one open issue labelled {ASSIGN_LABEL} is needed")
-    return issues[0]["number"]
+    if not issues:
+        raise CheckError(f"rule 12: an open issue labelled {ASSIGN_LABEL} is needed")
+    return max(i["number"] for i in issues)  # the newest: a roll-over's (brief #1251 answer 3c)
 
 
 def assign_line(comment: dict, me: str, allowed: set[str]) -> re.Match | None:
@@ -1797,7 +2154,9 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
     renewed: float | None = None
     renew_reads = Reads(root)  # its own count, as `take_reads` below
     reads = Reads(root)
-    while (comments := pages(path)) is None:  # an unread baseline would make an old line look new
+    thread = Thread(path)  # whole once, then `since` the newest (brief #1251 answer 3b)
+    pause = interval
+    while (comments := thread.read()) is None:  # an unread baseline would make an old line look new
         if reads.failed(f"the comments of #{issue}"):
             return EXIT_UNREADABLE
         time.sleep(interval)
@@ -1859,8 +2218,14 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
         if time.monotonic() - started >= limit:
             print("no event" if slotted else "assign-timeout")
             return 0
-        time.sleep(interval)
-        found = pages(path)
+        moved = thread.moved(seen, allowed)
+        if moved is not None and moved != issue:  # a roll-over (brief #1251 answer 3c)
+            issue, thread = moved, Thread(f"repos/{repo}/issues/{moved}/comments")
+            found = thread.read()
+            continue
+        pause = backoff(pause, interval, thread.changed)
+        time.sleep(min(pause, max(interval, limit - (time.monotonic() - started))))
+        found = thread.read()
 
 
 # --- builder slots: the setting, the lease and the next step (brief #776, ADR-0362) ---------------
@@ -2065,8 +2430,8 @@ def owned_pulls(root, repo: str, name: str) -> list:
     owned = []
     for pull in sorted(prs, key=lambda p: p.get("number", 0)):
         brief = brief_number(pull)
-        if brief is None or pull.get("state") != "open":
-            continue
+        if brief is None or pull.get("state") != "open" or PARKED_LABEL in labels_of(pull):
+            continue  # a parked pull request holds no slot (brief #1282)
         comments = pages(f"repos/{repo}/issues/{brief}/comments")
         if comments is None:
             raise CheckError(f"slot: the comments of #{brief} cannot be read")
@@ -2394,6 +2759,68 @@ def tell(root, me: str, text: str) -> int:
     return 0
 
 
+ROLLOVER_AT = 500  # comments on the `agk-conductor` issue before it rolls over (answer 3c)
+
+
+def rollover(root) -> int:
+    """Brief #1251 answer 3c: when the newest open `agk-conductor` issue has more than
+    ROLLOVER_AT comments, open a new one with the same title and label, link it from the old one
+    with `Continued in #<new>` (which the waits follow) and close the old one. It waits, posting
+    nothing, while a `Request:` there has no `Assign:` or a slot's lease there is live, since both
+    are read on the newest issue."""
+    repo = repo_name(root)
+    found = pages(f"repos/{repo}/issues?state=open&labels={ASSIGN_LABEL}")
+    issues = [
+        i for i in found or [] if "pull_request" not in i and isinstance(i.get("number"), int)
+    ]
+    if found is None or not issues:
+        raise CheckError(f"rule 12: an open issue labelled {ASSIGN_LABEL} is needed")
+    old = max(issues, key=lambda i: i["number"])
+    count = old.get("comments") if isinstance(old.get("comments"), int) else 0
+    if count <= ROLLOVER_AT:
+        print(f"rollover: #{old['number']} has {count} comments, at most {ROLLOVER_AT}; no change")
+        return 0
+    authors = counted_authors(verdict_authors(root), None) or []
+    waiting, _ = waiting_requests(repo, authors)
+    comments = pages(f"repos/{repo}/issues/{old['number']}/comments")
+    if comments is None:
+        raise CheckError(f"rollover: the comments of #{old['number']} cannot be read")
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    now = datetime.now(UTC)
+    leases = [
+        m.group(3)
+        for c in comments
+        if (m := SLOT_LINE.fullmatch(first_line(c)))
+        and author_of(c) in allowed
+        and slot_holder((c, m), now)
+    ]
+    if waiting or leases:
+        why = "a Request: waits for its Assign:" if waiting else "a slot's lease is live"
+        print(f"rollover: not now, {why} on #{old['number']}")
+        return 0
+    title = str(old.get("title") or "Conductor: assignments")
+    made = gh(
+        f"repos/{repo}/issues",
+        "-f",
+        f"title={title}",
+        "-f",
+        f"labels[]={ASSIGN_LABEL}",
+        "-f",
+        f"body=Continues #{old['number']}.",
+        method="POST",
+    )
+    new = made.get("number") if isinstance(made, dict) else None
+    if not isinstance(new, int):
+        raise CheckError(f"rollover: the new issue labelled {ASSIGN_LABEL} could not be opened")
+    link = f"body=Continued in #{new}"
+    if gh(f"repos/{repo}/issues/{old['number']}/comments", "-f", link, method="POST") is None:
+        raise CheckError(f"rollover: the link on #{old['number']} could not be posted")
+    if gh(f"repos/{repo}/issues/{old['number']}", "-f", "state=closed", method="PATCH") is None:
+        raise CheckError(f"rollover: #{old['number']} could not be closed")
+    print(f"rolled over #{old['number']} to #{new}")
+    return 0
+
+
 def tell_line(comment: dict, me: str, allowed: set[str]) -> str | None:
     """The `Tell: <me> <message>` first line of a comment by a listed author, else None."""
     body = comment.get("body")
@@ -2487,8 +2914,9 @@ def next_brief(root, me: str, taking: bool = False) -> int:
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
     s = survey(root, repo, me, issues)
-    if len(s.builders) >= s.max_builders:
-        print(f"full {len(s.builders)}/{s.max_builders}")
+    running = running_builders(s.builders)  # a parked pull request holds no slot (brief #1282)
+    if len(running) >= s.max_builders:
+        print(f"full {len(running)}/{s.max_builders}")
         return 1
     # The plan's rules decide (brief #345, ADR-0195): a stale claim holds nothing, overlap is
     # judged by files, and a skip names the plan's reason.
@@ -2539,8 +2967,9 @@ def demand(root) -> int:
     """How many sessions a launcher may start (rule 6): min(ready, max - open), 0 when negative."""
     s = survey(root, repo_name(root), "")
     ready = sum(1 for brief in s.free if overlap(root, s, brief) is None)
-    start = max(0, min(ready, s.max_builders - len(s.builders)))
-    figures = {"ready": ready, "open": len(s.builders), "max": s.max_builders, "start": start}
+    running = len(running_builders(s.builders))  # a parked pull request holds no slot (#1282)
+    start = max(0, min(ready, s.max_builders - running))
+    figures = {"ready": ready, "open": running, "max": s.max_builders, "start": start}
     print(json.dumps(figures))
     return 0
 
@@ -3070,9 +3499,8 @@ def waiting_requests(repo: str, authors: list[str]) -> tuple[list[str], list]:
     open_ = labelled(found, ASSIGN_LABEL)
     if not open_:
         return [], []
-    if len(open_) > 1:
-        raise CheckError(f"rule 12: exactly one open issue labelled {ASSIGN_LABEL} is needed")
-    comments = pages(f"repos/{repo}/issues/{open_[0]['number']}/comments")
+    chosen = max(i["number"] for i in open_)  # the newest: a roll-over's (brief #1251 answer 3c)
+    comments = pages(f"repos/{repo}/issues/{chosen}/comments")
     if comments is None:
         raise CheckError(
             f"rule 3: the comments of the issue labelled {ASSIGN_LABEL} cannot be read"
@@ -3254,6 +3682,178 @@ def parked(root, repo: str, pr: dict, comments: list | None) -> bool:
     return float(found.group(1)) > cap[found.group(2)]
 
 
+# --- the owner's waits (brief #1282, ADR-0543) --------------------------------------------------
+
+PARKED_BY = re.compile(r"Parked-by: wait (\S+)")
+UNPARKED_BY = re.compile(r"Unparked-by: answer (\S+)")
+OWNER_NEEDED = "Owner needed:"
+OWNER_ANSWERS = ("Maintainer answer:", "Answer:", "Approve:", "Correction:")
+OWNER_LABELS = {"agk:approve": "approve", "agk:owner-merge": "owner-merge"}
+
+
+def resting(settings: dict, now: datetime) -> bool:
+    """Whether `now` is inside the owner's rest hours, read at the owner's fixed UTC offset; a
+    range whose start is after its end crosses midnight, and its end is not included."""
+    rest = settings.get("rest")
+    if not rest:
+        return False
+    local = now.astimezone(UTC) + timedelta(minutes=int(settings.get("offset") or 0))
+    minute = local.hour * 60 + local.minute
+    start, end = rest
+    return start <= minute < end if start < end else minute >= start or minute < end
+
+
+def labels_of(pr: dict) -> set[str]:
+    return {str(lab.get("name")) for lab in pr.get("labels") or [] if isinstance(lab, dict)}
+
+
+def in_order(comments: list) -> list:
+    return sorted(comments, key=lambda c: (moment(c.get("created_at")), c.get("id", 0)))
+
+
+def for_the_maintainers(line: str) -> bool:
+    """A `Question: Q-…` whose first line asks the maintainers (brief #1043, as route.py reads)."""
+    return line.startswith("Question: Q-") and "for the maintainers" in line
+
+
+def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str]):
+    """(key, since) of the newest open item that waits on the owner, or None: a `Question:` for
+    the maintainers (key: its Q id) until an `Answer:` naming that id, or a `Correction:` naming
+    it, by an answerer; an `Owner needed:` by a listed verdict author (key: its Q id, else
+    `owner-needed`) until such an answer; both until a `Maintainer answer:` or `Approve:` by an
+    answerer; and the router's `agk:approve` or `agk:owner-merge` (key: `approve` or
+    `owner-merge`), from the newest comment, or the pull request's creation without one."""
+    open_items: dict[str, datetime] = {}
+    ordered = in_order(comments)
+    for c in ordered:
+        line, who, when = first_line(c), author_of(c), moment(c.get("created_at"))
+        if for_the_maintainers(line):
+            found = QUESTION_ID.search(line)
+            open_items[found.group(0) if found else "question"] = when
+        elif line.startswith(OWNER_NEEDED) and who in listed:
+            found = QUESTION_ID.search(line)
+            open_items[found.group(0) if found else "owner-needed"] = when
+        elif who in answerers and line.startswith(("Maintainer answer:", "Approve:")):
+            open_items.clear()
+        elif who in answerers and (found := ANSWER_LINE.match(line)):
+            open_items.pop(found.group(1), None)
+        elif who in answerers and line.startswith("Correction:"):
+            for qid in QUESTION_ID.findall(str(c.get("body") or "")):
+                open_items.pop(qid, None)
+    names = labels_of(pr)
+    for label, key in OWNER_LABELS.items():
+        if label in names and key not in open_items:
+            newest_post = moment(ordered[-1].get("created_at")) if ordered else None
+            open_items[key] = newest_post or moment(pr.get("created_at"))
+    if not open_items:
+        return None
+    return max(open_items.items(), key=lambda kv: kv[1])
+
+
+def own_park(comments: list) -> tuple[str, dict] | None:
+    """(key, comment) of the newest `Parked-by: wait <key>` when no `Unparked-by:` is newer: the
+    `agk:parked` label is then this rule's; else None, a person's own hold (brief #1282)."""
+    ordered = in_order(comments)
+    parks = [
+        (i, m.group(1)) for i, c in enumerate(ordered) if (m := PARKED_BY.match(first_line(c)))
+    ]
+    if not parks:
+        return None
+    last = max((i for i, c in enumerate(ordered) if UNPARKED_BY.match(first_line(c))), default=-1)
+    index, key = parks[-1]
+    return (key, ordered[index]) if index > last else None
+
+
+def owner_step(
+    pr: dict, comments: list, settings: dict, now: datetime, listed: set[str], answerers: set[str]
+) -> tuple[str, str] | None:
+    """`("park", key)` when the newest owner item has waited `minutes` since its post, or at once
+    inside rest hours; `("unpark", key)` when this rule parked the pull request and an answerer has
+    posted an answer since; else None. A person's own `agk:parked` is never touched."""
+    if PARKED_LABEL in labels_of(pr):
+        found = own_park(comments)
+        if found is None:
+            return None
+        key, mark = found
+        after = (moment(mark.get("created_at")), mark.get("id", 0))
+        for c in comments:
+            if (moment(c.get("created_at")), c.get("id", 0)) <= after:
+                continue
+            if author_of(c) in answerers and first_line(c).startswith(OWNER_ANSWERS):
+                return ("unpark", key)
+        return None
+    item = owner_item(pr, comments, listed, answerers)
+    if item is None:
+        return None
+    key, since = item
+    waited = now - since >= timedelta(minutes=int(settings.get("minutes", 0)))
+    return ("park", key) if waited or resting(settings, now) else None
+
+
+def owner_people(root, pr: dict) -> tuple[set[str], set[str]]:
+    """(the listed verdict authors, the answerers: they and the spec approvers), lower case."""
+    listed = {a.lstrip("@").lower() for a in verdict_authors(root) or []}
+    return listed, listed | {a.lstrip("@").lower() for a in spec_approvers(root)}
+
+
+def owner_park(repo: str, pr: dict, comments: list, settings: dict, root, args: dict) -> str | None:
+    """`watch`'s park (brief #1282 answer 3): when the owner wait of the pull request has passed,
+    the label and the comment, then the two lines that name the builder's hand-over and
+    `session.py after`; None while it waits, or when the writes fail (the next poll retries)."""
+    number = int(args.get("--pr") or 0)
+    listed, answerers = owner_people(root, pr)
+    found = owner_step(pr, comments, settings, datetime.now(UTC), listed, answerers)
+    if found is None or found[0] != "park" or not park_pull(repo, number, found[1]):
+        return None
+    head = str((pr.get("head") or {}).get("sha") or "")[:7]
+    me = args.get("--session", "<ID>")
+    return (
+        f"parked #{number} {found[1]}\n"
+        f"next: post `Report: {head} handing over: blocked: {found[1]} waits for the owner`, "
+        f"then run python3 scripts/agk/session.py after --session {me}"
+    )
+
+
+def park_pull(repo: str, number: int, key: str) -> bool:
+    """The one label write and the one `Parked-by: wait <key>` comment (brief #1282 answer 3)."""
+    labelled = gh(f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={PARKED_LABEL}",
+                  method="POST")  # fmt: skip
+    if labelled is None:
+        return False
+    body = f"body=Parked-by: wait {key}"
+    return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
+
+
+def unpark_pull(repo: str, number: int, key: str) -> bool:
+    """The label removed and one `Unparked-by: answer <key>` comment, which marks the label as no
+    longer this rule's, so a person's later `agk:parked` is never read as one (answer 4)."""
+    label = quote(PARKED_LABEL, safe="")
+    if gh(f"repos/{repo}/issues/{number}/labels/{label}", method="DELETE") is None:
+        return False
+    body = f"body=Unparked-by: answer {key}"
+    return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
+
+
+def unparked_owed(pr: dict, comments: list) -> bool:
+    """An `Unparked-by:` newer than every comment of the pull request's author: the owner answered
+    and no builder has resumed it yet (brief #1282 answer 4)."""
+    me = str((pr.get("user") or {}).get("login") or "").lower()
+    ordered = in_order(comments)
+    marks = [i for i, c in enumerate(ordered) if UNPARKED_BY.match(first_line(c))]
+    spoke = [
+        i
+        for i, c in enumerate(ordered)
+        if author_of(c) == me and not PARKED_BY.match(first_line(c))
+        and not UNPARKED_BY.match(first_line(c))
+    ]  # fmt: skip
+    return bool(marks) and max(marks) > max(spoke, default=-1)
+
+
+def running_builders(builders: list) -> list:
+    """The builder pull requests that hold a slot: a parked one holds none (brief #1282)."""
+    return [p for p in builders if PARKED_LABEL not in labels_of(p)]
+
+
 def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
     """Offer the first stalled pull request and, with `taking`, take it over; None when there is
     none. Without `taking` it posts nothing and prints the command that takes it over (Q-440-1)."""
@@ -3262,19 +3862,35 @@ def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
     if prs is None:
         print("note: the open pull requests cannot be read", file=sys.stderr)
         return None
-    for pr in sorted(prs, key=lambda p: p.get("number", 0)):
+    ordered = sorted(prs, key=lambda p: p.get("number", 0))
+    answered: dict[int, list] = {}  # unparked by the owner's answer: first (brief #1282 answer 4)
+    for pr in ordered:
+        if PARKED_LABEL in labels_of(pr) or brief_number(pr) is None:
+            continue
+        said = pages(f"repos/{repo}/issues/{pr['number']}/comments")
+        if said is not None and unparked_owed(pr, said):
+            answered[pr["number"]] = said
+    for pr in [*(p for p in ordered if p["number"] in answered), *ordered]:
         names = {lab.get("name") for lab in pr.get("labels") or []}
-        if names & WAITING_LABELS or not (pr.get("draft") or names & BUILDER_LABELS):
-            continue
         number = pr["number"]
-        comments = pages(f"repos/{repo}/issues/{number}/comments")
-        changed = last_change(repo, pr, comments) if comments is not None else None
-        if changed is None or datetime.now(UTC) - changed < timedelta(hours=hours):
-            continue
-        if waits_for_a_person(root, pr, comments) or parked(root, repo, pr, comments):
-            continue
+        resumed = number in answered
+        if resumed:
+            comments = answered.pop(number)
+            changed = last_change(repo, pr, comments) or datetime.now(UTC)
+            kind = "unparked"
+        else:
+            if names & WAITING_LABELS or not (pr.get("draft") or names & BUILDER_LABELS):
+                continue
+            read = pages(f"repos/{repo}/issues/{number}/comments")
+            moved = last_change(repo, pr, read) if read is not None else None
+            if read is None or moved is None or datetime.now(UTC) - moved < timedelta(hours=hours):
+                continue
+            comments, changed = read, moved
+            if waits_for_a_person(root, pr, comments) or parked(root, repo, pr, comments):
+                continue
+            kind = "stalled"
         if not taking:
-            print(f"stalled #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
+            print(f"{kind} #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
             print(f"take it over with: session.py next --session {me} --take")
             return 0
         day = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -3286,7 +3902,7 @@ def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
         if lost:
             print(f"skip #{number}: lost the takeover to {lost}")
             continue
-        print(f"stalled #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
+        print(f"{kind} #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
         print(f"run: python3 scripts/agk/session.py resume --pr {number}")
         return 0
     return None
@@ -3592,7 +4208,7 @@ def main(argv: list[str] | None = None) -> int:
         flags = args[1:]
         what_if_dir = flags[1] if len(flags) == 2 and flags[0] == "--what-if" else None
         if what_if_dir is None and (
-            set(flags) - {"--json", "--record"} or len(set(flags)) != len(flags)
+            set(flags) - {"--json", "--record", "--if-changed"} or len(set(flags)) != len(flags)
         ):
             print(USAGE)
             return 2
@@ -3601,7 +4217,9 @@ def main(argv: list[str] | None = None) -> int:
 
             if what_if_dir is not None:
                 return what_if(repo_root(), what_if_dir)
-            return plan(repo_root(), "--json" in flags, "--record" in flags)
+            return plan(
+                repo_root(), "--json" in flags, "--record" in flags, "--if-changed" in flags
+            )
         except CheckError as exc:
             print(f"FAIL {NAME}: {exc}")
             return 2
@@ -3657,6 +4275,7 @@ def main(argv: list[str] | None = None) -> int:
         "push-check": set(),
         "slot": {"--take", "--renew", "--release", "--next"},
         "tell": {"--session", "--text"},
+        "rollover": set(),
         "inbox": {"--session"},
         "mine": {"--session", "--pr", "--brief"},
         "kind": {"--brief"},
@@ -3693,7 +4312,7 @@ def main(argv: list[str] | None = None) -> int:
         ok = ok and bool(SESSION_ID.fullmatch(opts.get("--build", "x")))
     elif cmd == "ids":
         ok = number_of(opts.get("--exclude-pr", "1"))
-    elif cmd in ("demand", "push-check"):
+    elif cmd in ("demand", "push-check", "rollover"):
         ok = True
     elif cmd == "slot":
         ok = len(opts) == 1 and all(SESSION_ID.fullmatch(v) for v in opts.values())
@@ -3743,6 +4362,8 @@ def main(argv: list[str] | None = None) -> int:
             return slot(root, *next(iter(opts.items())))
         if cmd == "tell":
             return tell(root, opts["--session"], opts["--text"])
+        if cmd == "rollover":
+            return rollover(root)
         if cmd == "inbox":
             return inbox(root, opts["--session"])
         if cmd == "kind":
