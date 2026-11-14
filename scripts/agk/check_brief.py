@@ -50,7 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_signoff
-from common import REQ_HEADER, CheckError, config_source, run
+from common import REQ_HEADER, CheckError, config_source, run, utf8_output
 from session import (
     advances_ids,
     brief_problems,
@@ -322,6 +322,7 @@ def wave_list(text: str | None) -> set[int] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     found = parsed(args)
     if found is None:

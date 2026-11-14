@@ -102,7 +102,7 @@ import check_plan
 import design_import
 import design_signoff
 import playbook_format
-from common import ESTIMATE_LINES, CheckError, plan_settings, repo_root, run
+from common import ESTIMATE_LINES, CheckError, plan_settings, repo_root, run, utf8_output
 
 NAME = "plan-intake"
 USAGE = (
@@ -1831,6 +1831,7 @@ def cmd_openspec(root: Path, slug: str, out_file: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     command, rest = (args[0], args[1:]) if args else ("", [])
     if command == "openspec-draft":  # amendment 166's name for `openspec` (ADR-0473)

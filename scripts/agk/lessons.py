@@ -39,6 +39,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+from common import utf8_output
+
 LEVELS = ["lesson", "rule", "test", "check", "workflow"]
 RULE_DAYS = 30
 LOG_GLOB = "*-catches-*.md"
@@ -230,6 +234,7 @@ def ladder(root: Path, today: date) -> tuple[list[str], int]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         root, today = parse_args(args)

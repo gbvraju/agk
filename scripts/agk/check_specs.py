@@ -53,6 +53,7 @@ from common import (
     run,
     show,
     status_flip_only,
+    utf8_output,
 )
 from reviewers import approval_shas, confirmed_comments, solo_person, spec_approvers
 
@@ -309,6 +310,7 @@ def in_history(root, sha) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     root = repo_root()
     body = body_arg(argv)
     mb = base_context(root, NAME, base_arg(argv))

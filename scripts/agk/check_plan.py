@@ -133,6 +133,7 @@ from common import (
     resolve_base,
     run,
     show,
+    utf8_output,
 )
 
 NAME = "plan"
@@ -1330,6 +1331,7 @@ OPTIONS = ("--root", "--facts", "--numbers", "--comments", "--base")
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     values: dict[str, str] = {}
     trace = False

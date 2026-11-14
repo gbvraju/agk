@@ -44,6 +44,7 @@ from common import (
     repo_root,
     resolve_base,
     run,
+    utf8_output,
 )
 
 NAME = "kit-tests"
@@ -216,6 +217,7 @@ def map_problems(root: Path, argv: list[str] | None) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     root = repo_root()
     path = root / MANIFEST
     if not path.is_file():

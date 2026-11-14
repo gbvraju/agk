@@ -20,6 +20,7 @@ from common import (
     parse_requirements,
     repo_root,
     run,
+    utf8_output,
 )
 
 NAME = "requirements"
@@ -37,6 +38,7 @@ def dirs_arg(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     argv = list(sys.argv[1:] if argv is None else argv)
     root = repo_root()
     path = root / PATH

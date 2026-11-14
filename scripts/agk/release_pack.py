@@ -60,6 +60,7 @@ from common import (
     repo_root,
     run,
     show,
+    utf8_output,
 )
 
 NAME = "pack"
@@ -687,6 +688,7 @@ def check(arg: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     pairs = list(zip(args[1::2], args[2::2], strict=False)) if len(args) % 2 else []
     options = dict(pairs)

@@ -48,6 +48,7 @@ from common import (
     proof_areas,
     proof_timeout,
     temp_env,
+    utf8_output,
 )
 from proof import area_command, execute, is_test_file
 
@@ -225,6 +226,7 @@ def edit(root: Path, ids: set[str]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     argv = list(sys.argv[1:] if argv is None else argv)
     try:
         opts = parse_args(argv)

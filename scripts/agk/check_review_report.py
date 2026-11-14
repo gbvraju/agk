@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, run
+from common import CheckError, run, utf8_output
 
 NAME = "review-report"
 USAGE = "usage: check_review_report.py --context FILE --report FILE"
@@ -199,6 +199,7 @@ def read(path: str, what: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     values: dict[str, str] = {}
     i = 0

@@ -162,6 +162,7 @@ from common import (
     repo_root,
     required_checks,
     show,
+    utf8_output,
 )
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
@@ -3441,6 +3442,7 @@ def fallback(root, kind: str, after: str | None) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["plan"]:
         flags = args[1:]

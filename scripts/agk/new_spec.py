@@ -22,6 +22,10 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+from common import utf8_output
+
 USAGE = (
     "usage: new_spec.py spec|requirement|brief TITLE [--req REQ-nnn]... "
     "[--issue N --issue-text FILE|-] [--root DIR] [--date YYYY-MM-DD]"
@@ -162,6 +166,7 @@ def parse(args: list[str]) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         opts = parse(list(sys.argv[1:] if argv is None else argv))
     except ValueError:

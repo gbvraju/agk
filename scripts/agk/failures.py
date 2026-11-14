@@ -73,7 +73,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import guard_logs
-from common import CheckError, execution, load_config, personal_table
+from common import CheckError, execution, load_config, personal_table, utf8_output
 from guard import scan_text
 from impact import junit_setting, report_files
 from local_mode import RECORD_TITLE, SESSION_SETTING
@@ -867,6 +867,7 @@ def command(args: list[str]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         if args[:1] == ["run"]:

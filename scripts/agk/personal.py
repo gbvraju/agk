@@ -43,7 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table  # noqa: E402
+from common import CheckError, personal_table, utf8_output  # noqa: E402
 from survey import INVENTORY, find_sidecar, write_private  # noqa: E402
 
 USAGE = (
@@ -377,6 +377,7 @@ def parse(args: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     options = parse(list(sys.argv[1:] if argv is None else argv))
     if options is None:
         print(USAGE, file=sys.stderr)

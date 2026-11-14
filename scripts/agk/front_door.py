@@ -84,6 +84,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import playbook_format
+from common import utf8_output
 from guard import scan_text
 from playbook_format import WORK_TYPES
 
@@ -1461,6 +1462,7 @@ def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parsed = parse(list(sys.argv[1:] if argv is None else argv))
     if parsed is None:
         print(USAGE, file=sys.stderr)

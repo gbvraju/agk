@@ -14,6 +14,10 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+from common import utf8_output
+
 SCHEMA = 1
 UNKNOWN = "unknown"
 OLD_PULL_REQUEST_DAYS = 7
@@ -1504,6 +1508,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = parse(sys.argv[1:] if argv is None else argv)
     try:
         doc = load(args.facts)

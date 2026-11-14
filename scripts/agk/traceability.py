@@ -8,12 +8,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from check_requirements import dirs_arg
-from common import CheckError, markers_for, parse_requirements, repo_root, run, untagged_test_files
+from common import (
+    CheckError,
+    markers_for,
+    parse_requirements,
+    repo_root,
+    run,
+    untagged_test_files,
+    utf8_output,
+)
 
 NAME = "traceability"
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     argv = list(sys.argv[1:] if argv is None else argv)
     root = repo_root()
     path = root / "docs" / "requirements.md"

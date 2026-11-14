@@ -17,6 +17,10 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+from common import utf8_output
+
 USAGE = "usage: pr_state.py --pull FILE [--event-draft true|false]"
 
 
@@ -32,6 +36,7 @@ def is_draft(pull_text: str, event_draft: str | None = None) -> bool:
 
 
 def main(argv: list[str]) -> int:
+    utf8_output()
     pull_file: str | None = None
     event_draft: str | None = None
     args = list(argv)

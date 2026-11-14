@@ -53,7 +53,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import DEFAULT_CONFIG, CheckError, config_source, load_config, repo_root, run, show
+from common import (
+    DEFAULT_CONFIG,
+    CheckError,
+    config_source,
+    load_config,
+    repo_root,
+    run,
+    show,
+    utf8_output,
+)
 
 NAME = "config"
 GUARD_LISTS = ("deny_paths", "deny_commands", "allowed_hosts")
@@ -544,6 +553,7 @@ def capacity_settings(root: Path) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) != 1:
         raise CheckError("usage: config.py KEY")

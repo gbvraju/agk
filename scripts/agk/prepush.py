@@ -139,6 +139,7 @@ from common import (
     proof_timeout,
     resolve_base,
     temp_env,
+    utf8_output,
 )
 from impact import (
     NAMED,
@@ -1117,6 +1118,7 @@ def retired_keys_line(root: Path) -> str | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
     except Usage as exc:

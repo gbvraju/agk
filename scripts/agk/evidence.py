@@ -57,7 +57,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import lock as heavy_lock
-from common import CheckError, long_temp_dir, proof_areas, proof_timeout, temp_env
+from common import CheckError, long_temp_dir, proof_areas, proof_timeout, temp_env, utf8_output
 from impact import impact
 from prepush import (
     LOCK,
@@ -587,6 +587,7 @@ def report(head: str, sha: str, found: list[str], ran: dict | None, as_json: boo
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
         top = git(Path.cwd(), "rev-parse", "--show-toplevel")

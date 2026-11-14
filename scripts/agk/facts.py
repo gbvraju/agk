@@ -46,6 +46,7 @@ from common import (
     parse_requirements,
     ruled_in,
     run,
+    utf8_output,
 )
 from minutes import estimate
 
@@ -1084,6 +1085,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = parse_args(list(sys.argv[1:] if argv is None else argv))
     root = Path(args.root)
     check_root(root)

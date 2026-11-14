@@ -59,7 +59,13 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import check_plan  # noqa: E402
-from common import ESTIMATE_LINES, CheckError, estimate_parts, plan_settings  # noqa: F401, E402
+from common import (  # noqa: F401, E402
+    ESTIMATE_LINES,
+    CheckError,
+    estimate_parts,
+    plan_settings,
+    utf8_output,
+)
 from facts import window_start  # noqa: E402
 from metrics import stamp, start_of  # noqa: E402
 
@@ -581,6 +587,7 @@ def deadline_fit(args: argparse.Namespace) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         args = parse_args(list(sys.argv[1:] if argv is None else argv))
         if args.deadline is not None:

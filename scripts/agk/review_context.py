@@ -30,6 +30,7 @@ from common import (
     resolve_base,
     run,
     show,
+    utf8_output,
 )
 
 NAME = "review-context"
@@ -412,6 +413,7 @@ def parse_args(args: list[str]) -> tuple[str | None, str] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parsed = parse_args(list(sys.argv[1:] if argv is None else argv))
     if parsed is None:
         print(USAGE, file=sys.stderr)

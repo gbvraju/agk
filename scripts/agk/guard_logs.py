@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from common import utf8_output
 from guard import scan_text
 
 import config
@@ -85,6 +86,7 @@ def redact(text: str, patterns) -> tuple[str, dict[str, int]]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         max_lines, source = parse(args)

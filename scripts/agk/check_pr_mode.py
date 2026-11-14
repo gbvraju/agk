@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, json_records, pr_mode, repo_root, run
+from common import CheckError, json_records, pr_mode, repo_root, run, utf8_output
 
 NAME = "pr-mode"
 USAGE = (
@@ -110,6 +110,7 @@ def check(root: Path, opts: dict[str, str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     listing = "--list-depends" in args
     rest = [a for a in args if a != "--list-depends"]

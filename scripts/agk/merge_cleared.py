@@ -201,6 +201,7 @@ from common import (  # noqa: E402
     final_records,
     show,
     status_flip_only,
+    utf8_output,
 )
 from reviewers import (  # noqa: E402
     CONFIG,
@@ -2406,6 +2407,7 @@ def guarded(root: Path, number: int, sha: str) -> tuple[str, int]:
 
 
 def main(argv: list[str] | None = None, root: Path | None = None) -> int:
+    utf8_output()
     argv = sys.argv[1:] if argv is None else argv
     job = job_args(argv)
     if job is not None:  # the merger job of GitHub mode (brief #765)

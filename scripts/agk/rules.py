@@ -41,7 +41,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, agent_apps, config_source, fix_items, item_tag, repo_root
+from common import (
+    CheckError,
+    agent_apps,
+    config_source,
+    fix_items,
+    item_tag,
+    repo_root,
+    utf8_output,
+)
 from metrics import ApiDir, Gh, author_of, origin_repo
 from reviewers import confirmed_comments, solo_person, verdict_authors
 
@@ -526,6 +534,7 @@ def consolidate_apply(root: Path, wanted: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     if not args or args[0] not in ("budget", "dropped", "consolidate"):
         print(USAGE)

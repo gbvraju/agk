@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, repo_root
+from common import CheckError, repo_root, utf8_output
 
 NAME = "ci-tools"
 PIN_FILE = "config/ci-tools.txt"
@@ -159,6 +159,7 @@ def options(args: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     opts = options(list(sys.argv[1:] if argv is None else argv))
     if opts is None:
         print(USAGE)

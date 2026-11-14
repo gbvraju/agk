@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git
+from common import CheckError, git, utf8_output
 from impact import (
     Impact,
     head_files,
@@ -215,6 +215,7 @@ def text(shown: Plan, base: str, head: str, found: Impact, levels=None) -> list[
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
         root = Path(options["root"])

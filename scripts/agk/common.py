@@ -35,6 +35,23 @@ GITLEAKS_INSTALL = (
 )
 
 
+def utf8_output() -> None:
+    """Reconfigure stdout and stderr to UTF-8 (`errors="replace"`) when they are text streams in
+    another encoding (brief #1233, ADR-0524). A Windows console writes in its code page (cp1252),
+    so the first non-ASCII character a check printed stopped it with `UnicodeEncodeError`. Every
+    installed script that prints calls this first; a stream already UTF-8, or one without
+    `reconfigure`, is left as it is."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
+        if reconfigure is None or encoding in ("utf-8", "utf8"):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
+
+
 class CheckError(Exception):
     """A check failed; the message names a setting or path class, never a value."""
 

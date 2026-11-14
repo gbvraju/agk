@@ -39,7 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, repo_root
+from common import CheckError, repo_root, utf8_output
 
 NAME = "flakes"
 LEDGER = "docs/runs/flakes.md"
@@ -373,6 +373,7 @@ def add_main(args: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     if args[:1] == ["add"]:
         return add_main(args[1:])

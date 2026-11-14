@@ -46,7 +46,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import lock as heavy_lock
-from common import CheckError, git, resolve_base
+from common import CheckError, git, resolve_base, utf8_output
 from prepush import digest, safe_arg, stop_signals, take_lock, versions, write_record
 
 USAGE = "usage: batch.py PR [PR...] [--command CMD] [--base REF] [--json] [--record FILE]"
@@ -232,6 +232,7 @@ def check_heads(
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
     except Usage as exc:

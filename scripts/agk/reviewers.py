@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, load_config, read_list, repo_root, review_mode, run
+from common import CheckError, load_config, read_list, repo_root, review_mode, run, utf8_output
 
 NAME = "reviewers"
 CONFIG = "config/reviewers.yaml"
@@ -747,6 +747,7 @@ def approver_problems(data: dict) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     argv = list(sys.argv[1:] if argv is None else argv)
     modes = (["--check"], ["--codeowners"], ["--codeowners", "--write"], ["--check-codeowners"])
     if argv not in modes:

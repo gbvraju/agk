@@ -10,13 +10,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import base_arg, base_context, changed_files, repo_root, run, show
+from common import base_arg, base_context, changed_files, repo_root, run, show, utf8_output
 
 NAME = "build-state"
 PATH = "docs/build-state.md"
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     root = repo_root()
     mb = base_context(root, NAME, base_arg(argv))
     if mb is None:

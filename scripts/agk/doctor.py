@@ -98,6 +98,7 @@ from common import (  # noqa: E402
     proof_timeout,
     router_names,
     router_wanted,
+    utf8_output,
     with_router_names,
 )
 from tree_walk import FRONTEND_PATTERNS, SKIP_DIRS, walked_dirs  # noqa: E402
@@ -2073,6 +2074,7 @@ def parse_args(args: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     options = parse_args(list(sys.argv[1:] if argv is None else argv))
     if options is None:
         print(USAGE, file=sys.stderr)

@@ -41,7 +41,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, load_config, repo_root, required_checks, run
+from common import CheckError, load_config, repo_root, required_checks, run, utf8_output
 
 NAME = "local-mode"
 USAGE = (
@@ -533,6 +533,7 @@ def parse_args(args: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     options = parse_args(list(sys.argv[1:] if argv is None else argv))
     if options is None:
         print(USAGE, file=sys.stderr)

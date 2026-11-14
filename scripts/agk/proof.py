@@ -60,6 +60,7 @@ from common import (
     proof_timeout,
     resolve_base,
     temp_env,
+    utf8_output,
 )
 
 USAGE = (
@@ -875,6 +876,7 @@ def write_manifest(path: str, text: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
         if options["queue"]:

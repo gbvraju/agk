@@ -43,7 +43,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, area_levels, git, load_config, proof_areas, repo_root, run
+from common import (
+    CheckError,
+    area_levels,
+    git,
+    load_config,
+    proof_areas,
+    repo_root,
+    run,
+    utf8_output,
+)
 from impact import MAP_FILE, generated_entries, is_doc, is_test_file, testing_table
 
 NAME = "test_map"
@@ -674,6 +683,7 @@ def refresh(root: Path, head: str = "HEAD") -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     given = len(args) == 3 and args[:2] == ["build", "--root"]
     if args != ["build"] and not (given and Path(args[2]).is_dir()):
