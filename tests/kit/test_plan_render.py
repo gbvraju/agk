@@ -32,6 +32,7 @@ LISTED = [
     "docs/plan/briefs/M1/B2.md",
     "docs/plan/milestones.md",
     "docs/plan/personas.md",  # amendment 164 item 2 (ADR-0462)
+    "docs/plan/render-digests.json",  # brief #1221 answer 2 (ADR-0520)
     "docs/plan/requirements-proposed.md",
     "docs/plan/scope.md",
     "docs/specs/0001-orders.md",

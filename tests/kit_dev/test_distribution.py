@@ -30,6 +30,7 @@ COMMANDS = [
     "review",
     "review-pass",
     "ruleset",
+    "scope-review",
     "spec",
     "stack",
     "start",
@@ -50,6 +51,7 @@ USER_ONLY = [
     "plan-intake",
     "review-pass",
     "ruleset",
+    "scope-review",
     "spec",
     "stack",
     "start",
@@ -148,6 +150,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "architect": {"playbook"},
         "start": {"playbook"},
         "board": {"board"},
+        "scope-review": {"plan_intake"},
         "workflow-apply": {"workflow_apply"},
     }
     for name, scripts in expected.items():

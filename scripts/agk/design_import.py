@@ -40,6 +40,14 @@ a missing or malformed `--slug` or `--version` with exit 2. `source_text(root, v
 the text and writes nothing. Pages are parsed as text by the standard library: nothing is run,
 opened or fetched.
 
+`source` also takes a kit version `--version v<n>` (SPEC-0043 rule 2a as amendment 174 item 1
+proposes; brief #1216, ADR-0515): it writes once `docs/sources/<slug>-prototype-v<n>.md`, header
+`Source: kit prototype v<n>`, `Kind: design`, `Version: v<n> <the version's sign-off digest>`,
+`Date:`, then one `## <screen>/<state>` heading per page `<screen>--<state>.html` of
+`docs/design/prototype/v<n>/`, in file-name order, with the page's visible text as above. It refuses
+with exit 1, writing nothing, a version that is not there, one that `design_signoff.signed_off`
+does not find signed off with the digest its folder has now, and one with no such page.
+
 `python3 design_import.py components --version i<n> --slug <slug> [--root DIR]` (SPEC-0037 rule 16
 as amendment 164 item 3 proposes, with its Q-1089-5 reading; brief #1091, ADR-0463) writes once,
 as a new file only, `docs/sources/<slug>-components-i<n>.md`: rule 1's header
@@ -70,6 +78,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_inventory
+import design_signoff
 from common import CheckError
 
 IMPORTED = "docs/design/imported"
@@ -451,7 +460,7 @@ INLINE = frozenset(
 FIELDS = frozenset({"input", "select", "textarea"})
 INPUT_BUTTONS = frozenset({"submit", "button", "reset"})
 MARKDOWN_LEAD = re.compile(r"^(#|```|~~~)")
-SOURCE_USAGE = "usage: design_import.py source --version i<n> --slug <slug> [--root DIR]"
+SOURCE_USAGE = "usage: design_import.py source --version i<n>|v<n> --slug <slug> [--root DIR]"
 
 
 class _VisibleText(HTMLParser):
@@ -533,8 +542,42 @@ def _version_problems(root: Path, version: str) -> list[str]:
     return [p for p in imported_problems(root) if own in p or not other.search(p)]
 
 
+def kit_source_text(root: Path, version: str, today: str | None = None) -> str:
+    """The source of a signed-off kit version `v<n>` (rule 2a, amendment 174 item 1)."""
+    folder = root / PROTOTYPE / version
+    if not KIT_VERSION.match(version) or not folder.is_dir():
+        raise CheckError(f"rule 2a: {version}: no such kit version; nothing is written")
+    if not design_signoff.signed_off(root, version):
+        raise CheckError(
+            f"rule 2a: {version}: the kit version is not signed off with the digest its folder has"
+            f" now ({design_signoff.SIGNOFFS}); nothing is written"
+        )
+    found = sorted(p for p in folder.glob("*--*.html") if p.is_file())
+    if not found:
+        raise CheckError(
+            f"rule 2a: {version}: the kit version has no page <screen>--<state>.html;"
+            " nothing is written"
+        )
+    date = today or datetime.now(UTC).date().isoformat()
+    out = [
+        f"Source: kit prototype {version}",
+        "Kind: design",
+        f"Version: {version} {design_signoff.version_digest(root, version)}",
+        f"Date: {date}",
+        "",
+    ]
+    for page in found:
+        screen, _, state = page.stem.partition("--")
+        out += [f"## {screen}/{state}", ""]
+        out += visible_text(_text(page.read_bytes()))
+        out.append("")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
 def source_text(root: Path, version: str, today: str | None = None) -> str:
     """The prototype source of VERSION (rule 2a); refuses a missing or failing version."""
+    if KIT_VERSION.match(version):
+        return kit_source_text(root, version, today)
     folder = root / IMPORTED / version
     if not VERSION.match(version) or version not in versions(root):
         raise CheckError(f"rule 2a: {version}: no such imported version; nothing is written")
@@ -762,7 +805,14 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    if not VERSION.match(opts.get("--version", "")):
+    given = opts.get("--version", "")
+    if command == "source" and not (VERSION.match(given) or KIT_VERSION.match(given)):
+        print(
+            "design_import: --version is required, an imported version i<n> or a kit version v<n>",
+            file=sys.stderr,
+        )
+        return 2
+    if command == "components" and not VERSION.match(given):
         print("design_import: --version is required, an imported version i<n>", file=sys.stderr)
         return 2
     from common import repo_root, run

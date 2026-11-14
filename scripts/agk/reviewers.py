@@ -666,8 +666,31 @@ def extract_block(text: str) -> str:
     return text[start:end]
 
 
+def placeholder_only(line: str) -> bool:
+    """A plain rule line (`path owner...`, not a comment) whose owners are all the installed
+    placeholder `@REPLACE-ME` (brief #1223 answer 3)."""
+    words = strip_owners_comment(line).split()
+    return len(words) >= 2 and all(w.lstrip("@").lower() == PLACEHOLDER for w in words[1:])
+
+
+def strip_owners_comment(line: str) -> str:
+    """A CODEOWNERS line without its comment: `#` starts one at the line start or after a space."""
+    if line.lstrip().startswith("#"):
+        return ""
+    return re.split(r"\s#", line, maxsplit=1)[0]
+
+
+def drop_placeholder_lines(text: str) -> str:
+    """The text without its placeholder-only rule lines; every other line is kept as it is."""
+    return "".join(
+        line for line in text.splitlines(keepends=True) if not placeholder_only(line.rstrip("\r\n"))
+    )
+
+
 def write_codeowners(root, rendered: str, adopt_mode: bool) -> str:
-    """Write CODEOWNERS (in adopt mode only the marked block) and say what changed."""
+    """Write CODEOWNERS (in adopt mode only the marked block) and say what changed. In adopt mode
+    the plain lines outside the block that name only the placeholder owner are removed, since they
+    name an owner nobody holds and would own each path the block leaves out (brief #1223)."""
     path = root / CODEOWNERS
     existing = path.read_text(encoding="utf-8") if path.is_file() else None
     if not adopt_mode or existing is None:
@@ -676,10 +699,13 @@ def write_codeowners(root, rendered: str, adopt_mode: bool) -> str:
         extract_block(existing)  # refuses a broken or duplicated block
         start = existing.index(BLOCK_BEGIN) + len(BLOCK_BEGIN)
         end = existing.index(BLOCK_END)
-        new, what = existing[:start] + rendered + existing[end:], f"agk block of {CODEOWNERS}"
+        before = drop_placeholder_lines(existing[: start - len(BLOCK_BEGIN)]) + BLOCK_BEGIN
+        after = BLOCK_END + drop_placeholder_lines(existing[end + len(BLOCK_END) :])
+        new, what = before + rendered + after, f"agk block of {CODEOWNERS}"
     else:
-        sep = "" if existing == "" or existing.endswith("\n") else "\n"
-        new = existing + sep + BLOCK_BEGIN + rendered + BLOCK_END
+        existing_kept = drop_placeholder_lines(existing)
+        sep = "" if existing_kept == "" or existing_kept.endswith("\n") else "\n"
+        new = existing_kept + sep + BLOCK_BEGIN + rendered + BLOCK_END
         what = f"agk block of {CODEOWNERS}"
     if existing == new:
         return f"unchanged {what}"
