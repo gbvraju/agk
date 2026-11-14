@@ -20,6 +20,7 @@ import merge_cleared  # noqa: E402
 SHA = "c0ffee0123456789abcdef0123456789abcdef01"
 BRIEF = 7
 PULL = 70
+WHO = "\n\nWho: AGK"  # the last line of each comment the kit posts (brief #1289, ADR-0546)
 ENDPOINT = f"repos/{REPO}/issues/{BRIEF}"
 BUILDS = "Builds: (a) the reader; (b) the writer\n"
 
@@ -37,7 +38,7 @@ def closed(writes: list[list[str]]) -> bool:
     targets = [w[w.index("--method") + 2] for w in writes]
     return (
         targets == [f"{ENDPOINT}/comments", ENDPOINT]
-        and comment_of(writes[0]) == f"All builds merged; last #{PULL} {SHA[:12]}"
+        and comment_of(writes[0]) == f"All builds merged; last #{PULL} {SHA[:12]}{WHO}"
         and "state=closed" in writes[1]
         and "state_reason=completed" in writes[1]
     )

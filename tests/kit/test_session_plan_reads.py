@@ -554,7 +554,7 @@ def test_rollover_opens_a_new_issue_links_it_and_closes_the_old(dproj, double):
         ["PATCH", f"{ISSUES}/204"],
     ]
     assert "labels[]=agk-conductor" in sent[0][2] and "title=Conductor: assignments" in sent[0][2]
-    assert "body=Continued in #300" in sent[1][2] and "state=closed" in sent[2][2]
+    assert "body=Continued in #300\n\nWho: AGK" in sent[1][2] and "state=closed" in sent[2][2]
 
 
 def test_rollover_waits_under_the_limit_and_while_a_request_waits(dproj, double):

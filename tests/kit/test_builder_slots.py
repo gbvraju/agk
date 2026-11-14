@@ -24,6 +24,7 @@ from test_session import (
     stub as session_stub,  # noqa: F401
 )
 
+WHO = "\n\nWho: AGK"  # the last line of each comment the kit posts (brief #1289, ADR-0546)
 COMMENTS = f"{ISSUES}/204/comments"
 PULLS = f"repos/{REPO}/pulls"
 ALL = f"{ISSUES}/comments"
@@ -156,7 +157,7 @@ def test_take_posts_one_marker_on_the_assignments_issue(proj, stub):
     done = posts(stub)
     assert len(done) == 1 and done[0][1] == COMMENTS
     assert done[0][2][1].startswith(f"body=Slot: active {DAY}") and done[0][2][1].endswith(
-        " s1 mine"
+        f" s1 mine{WHO}"
     )
 
 
@@ -166,7 +167,7 @@ def test_a_take_mints_a_run_name_kept_in_the_git_directory(proj, stub):
     stub.serve(COMMENTS, [marker(9, "other")], nth=2)
     out = slot(proj, stub, "--take")
     assert out.returncode == 3
-    run = posts(stub)[0][2][1].rsplit(" ", 1)[1]
+    run = posts(stub)[0][2][1].splitlines()[0].rsplit(" ", 1)[1]
     assert len(run) >= 8
     assert not (Path(proj.root) / ".git" / "agk" / "slot-s1").exists()
 
@@ -614,7 +615,7 @@ def test_an_idle_run_writes_its_decision_with_its_release_in_one_edit(proj, stub
     assert last(out) == "stop"
     done = writes(stub)
     assert len(done) == 1 and "Slot: released" in done[0][2][1]
-    assert done[0][2][1].endswith("\ndecided: stop")
+    assert done[0][2][1].endswith(f"\ndecided: stop{WHO}")
 
 
 def test_a_release_keeps_the_decision_and_closes_the_run(proj, stub):
@@ -641,7 +642,7 @@ def test_a_renewal_keeps_the_log_lines(proj, stub):
     stub.serve(COMMENTS, [comment(1, "boss", body)])
     stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
     assert slot(proj, stub, "--renew").returncode == 0
-    assert writes(stub)[0][2][1].endswith("\ndecided: assign #12")
+    assert writes(stub)[0][2][1].endswith(f"\ndecided: assign #12{WHO}")
 
 
 def began(marker_comment: dict) -> datetime:
@@ -833,7 +834,7 @@ def test_a_reviewer_slot_takes_its_lease_like_a_builder_slot(proj, stub):
     stub.serve(COMMENTS, [marker(9, "mine", slot="r1")], nth=2)
     out = slot(proj, stub, "--take", "r1")
     assert out.returncode == 0, out.stdout
-    assert posts(stub)[0][2][1].endswith(" r1 mine")
+    assert posts(stub)[0][2][1].endswith(f" r1 mine{WHO}")
 
 
 # --- a stale `Assign:` frees its slot (brief #1020, ADR-0402) --------------------------------

@@ -320,7 +320,9 @@ def test_ac3_next_takes_the_first_free_brief_with_the_one_post(proj, stub):
     assert "t5" in out.stdout and f"https://github.com/{REPO}/issues/5" in out.stdout
     assert 'Sentence: "A thing works."' in out.stdout
     day = datetime.now(UTC).strftime("%Y-%m-%d")
-    assert posts(stub) == [["POST", f"{ISSUES}/5/comments", ["-f", f"body=taken: s-me {day}"]]]
+    assert posts(stub) == [
+        ["POST", f"{ISSUES}/5/comments", ["-f", f"body=taken: s-me {day}\n\nWho: AGK"]]
+    ]
 
 
 def test_ac3_next_skips_a_bad_shape_an_open_dependence_and_a_live_take_with_reasons(proj, stub):
