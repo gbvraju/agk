@@ -1,1 +1,0 @@
-- In local mode the router moves the pull request state labels from the local evidence: `route.py --all` reads a builder's `Evidence:` line on its `Report:` for the checks that never reported, never leaves a pull request at `agk:ci-running`, and needs the verdict's `Evidence check: agrees` for `agk:merge-ready` (brief #1212, ADR-0513)
