@@ -1,6 +1,6 @@
 # ADR-0531: The stop hook runs only the checks a session's changes need
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: brief #1254, plan #661, ADR-0438 (brief #1029), session rule 31
