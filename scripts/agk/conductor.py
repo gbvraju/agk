@@ -1025,6 +1025,14 @@ def owner_lines(root, repo: str, pulls: list, settings: dict, authors, approvers
     return unparks + parks
 
 
+def main_folder_lines(root) -> list[str]:
+    """`MAIN-FOLDER: on <branch>, <n> untracked` when the main folder of a clone that several
+    sessions share is off the default branch or holds untracked files (brief #1301, ADR-0551);
+    the conductor's report lists it under `Needs a fix`. Local git only, never fails the sweep."""
+    line = common.main_folder_line(Path(root))
+    return [f"MAIN-FOLDER: {line}"] if line else []
+
+
 def sweep(root) -> int:
     repo = session.repo_name(root)
     authors, approvers = verdict_authors(root), spec_approvers(root)
@@ -1044,6 +1052,7 @@ def sweep(root) -> int:
     lines += [x for p in pulls if (x := held_verdict_line(root, repo, p, authors, now))]
     lines += [handover_line(repo, p, now) for p in pulls if session.label_of(p) == HANDOVER_LABEL]
     lines.append(branch_line(root, repo, branch))
+    lines += main_folder_lines(root)
     issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]
     wait = session.flow_int(root, SILENT[0], SILENT[1], 0)
