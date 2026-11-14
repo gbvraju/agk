@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-14
 - Deciders: maintainers
-- Related: SPEC-0043 rules 6, 7 and 25, ADR-0461, ADR-0465, ADR-0473, ADR-0508, brief #1221, plan #661
+- Related: SPEC-0043 rules 6, 7 and 25, amendment 179, ADR-0461, ADR-0465, ADR-0473, ADR-0508, brief #1221, plan #661
 - Requirements: REQ-050
 
 ## Context
@@ -47,15 +47,14 @@ rule 7, ADR-0461), so a second pass after a fix to the proposals had to be worke
 ## Consequences
 
 A large source set asks business few, readable questions, and a second pass after a fix needs no hand work, while a
-person's edit is never overwritten. SPEC-0043 rule 7 says a later render refuses to overwrite: `--again` is an explicit
-second mode beside it, and the person's files stay the person's; the rule text is the maintainers' to amend
-(`Q-1221-1`). Protected path classes changed: `scripts/agk/` (`plan_intake.py`; `common.py`, whose `plan_settings`
+person's edit is never overwritten. SPEC-0043 rule 7 says a later render refuses to overwrite, rule 25 files one issue
+per open question and amendment 166 makes a cross-reference gap a question: the lines that change them are proposed in
+`docs/runs/proposed-spec-amendments-179.md` (`Q-1221-1`, answered: amendment 179), without editing the spec. Protected path classes changed: `scripts/agk/` (`plan_intake.py`; `common.py`, whose `plan_settings`
 accepts `max_questions`) and `tests/kit/` (`test_plan_intake_questions.py` new; `test_plan_render.py`, whose list of
 written files gains the digest list; `test_plan_openspec.py`, whose two cross-reference tests now find notes, not
 questions). No workflow, ruleset, `.claude/` or `skills/` change.
 
 ## Residual
 
-- 2026-11-14: SPEC-0043 rules 7 and 25 still read "a later render refuses to overwrite" and one issue per open
-  question; the amendment that names `render --again`, the grouping and `[plan] max_questions` is the maintainers' to
-  propose and number (`Q-1221-1`, due 2026-11-30).
+- 2026-11-14: SPEC-0043 rules 6, 7 and 25 keep their present text until the maintainers apply amendment 179
+  (`docs/runs/proposed-spec-amendments-179.md`), due 2026-11-30.
