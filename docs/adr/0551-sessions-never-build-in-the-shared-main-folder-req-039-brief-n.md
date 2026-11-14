@@ -45,7 +45,9 @@ drift is reported at once by the stop hook and in the conductor's sweep; the pla
 In CI mode (each cloud session has its own clone) nothing is refused. In personal mode the session is warned only. Tests:
 `tests/kit/test_shared_main.py`. Protected path classes changed: `scripts/agk/` (`scripts/agk/common.py`,
 `scripts/agk/session.py`, `scripts/agk/session_plan.py`, `scripts/agk/prepush.py`, `scripts/agk/conductor.py`,
-`scripts/agk/doctor.py`), `.claude/` (`.claude/hooks/stop_check.py`) and `tests/kit/` (`tests/kit/test_shared_main.py`).
+`scripts/agk/doctor.py`), `.claude/` (`.claude/hooks/stop_check.py`), `tests/kit/` (`tests/kit/test_shared_main.py`) and `agk.toml` (the new test
+file added to the `[[testing.map]]` entries of `scripts/agk/session.py` and `scripts/agk/session_plan.py`, which
+`tests/kit/test_always_full_infra.py` requires).
 
 ## Residual
 
