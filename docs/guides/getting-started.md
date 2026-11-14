@@ -493,6 +493,15 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
 
    `"closeOnExit": "always"` closes the tab on any exit of the wrapper, a crash included. The terminal's default, `graceful`, closes a tab only after a clean exit and keeps it open on a bare shell or an error after a non-zero one; the setting belongs to this profile alone, so your other tabs keep their own. A builder's tab therefore closes by itself when its pull request is ready and the session ends, or when the session crashes; the exit file in the worktree then tells the two apart: `exit_code=0` for a session that ended, any other code for a crash, with the UTC time it ended. Try the adapter once by hand from the repository's folder before you turn `auto_start` on: `$env:AGK_SESSION = 'builder-x'; $env:AGK_BRIEF = '1'; 'hello' | pwsh -NoProfile -File scripts/start-session-windows.ps1`, then type `/exit` in the new tab, check that the tab closes and that `..\agk-builder-x\.agk-session-exit` reads `exit_code=0`, and remove the trial worktree with `git worktree remove ..\agk-builder-x`.
 
+**When work waits on the owner.** A pull request whose newest open item is a `Question: Q-… for the maintainers`, an `Owner needed:`, a spec waiting for `Approve:` or a merge only the owner may do waits `owner_wait_minutes` of the `[flow]` table (30 by default; 0 parks at once), and not at all during `owner_rest_hours`, read at the fixed offset `owner_utc_offset` (no time-zone database is needed). Then `session.py watch` or `conductor.py sweep` labels it `agk:parked` with one comment `Parked-by: wait <Q-id>`; its builder posts `Report: <head> handing over: blocked: <Q-id> waits for the owner` and runs `session.py after`, and the slot goes to the next brief. Nothing is closed. When the owner answers, the next sweep removes the label and prints the `resume --pr <n>` command, and `session.py next` offers that pull request before any new brief. A person's own `agk:parked` is never removed. For an owner who rests from 8 PM to 8 AM in India:
+
+```toml
+[flow]
+owner_wait_minutes = 30
+owner_rest_hours = "20:00-08:00"
+owner_utc_offset = "+05:30"
+```
+
 ## Working as a team
 
 Four people can work one repository from four laptops, each running two or three builders. Nothing runs between the laptops: every builder coordinates through GitHub, the one place all of them can read. A brief is an issue, a claim is one `taken:` comment on it, and a pull request is the work. The working rule of a session is still `config/session-rules.md`.

@@ -429,12 +429,16 @@ def test_rule5_session_posts_only_its_two_take_comments_and_the_checks_do_not_ca
     """REQ-037 AC2 and rule 5 (the take of SPEC-0030 and the takeover of SPEC-0033 rule 5)"""
     text = (SCRIPTS / "session.py").read_text(encoding="utf-8")
     # the take, the takeover, `tell` (brief #327), the slot marker (brief #776, ADR-0362) and
-    # the take label of `claim` (brief #1251, ADR-0529), and the new issue and its link of
-    # `rollover` (brief #1251 build (b) answer 3c, ADR-0548), which also closes the old issue
-    assert text.count('method="POST"') == 7
+    # the take label of `claim` (brief #1251, ADR-0529), the owner wait's park label, park
+    # comment and unpark comment, with the one label removal (brief #1282, ADR-0543), and the new
+    # issue and its link of `rollover` (brief #1251 build (b) answer 3c, ADR-0548)
+    assert text.count('method="POST"') == 10
+    assert text.count('method="DELETE"') == 1
     assert text.count('f"body=Continued in #') == 1
     assert text.count('f"body=taken: ') == 1 and text.count('f"body=taken over: ') == 1
     assert text.count('f"body=Tell: ') == 1
+    assert text.count('f"body=Parked-by: wait ') == 1
+    assert text.count('f"body=Unparked-by: answer ') == 1
     for name in ("check_final_clearance.py", "check_brief.py", "facts.py"):
         path = SCRIPTS / name
         if path.exists() and name != "facts.py":
