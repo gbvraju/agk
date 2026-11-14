@@ -252,6 +252,17 @@ change with an ADR in the same pull request.
    Run the conductor itself on the strongest model, because it reviews. `python3 scripts/agk/doctor.py` warns
    `model names: ...` when `auto_start` is on with a `launch_adapter` and the table is unset.
 
+## When work waits on the owner
+
+Local mode uses the same three `[flow]` settings, labels and comments as CI mode. A pull request that waits on the owner
+(a question for the maintainers, an `Owner needed:`, a spec approval or a merge only the owner may do) waits
+`owner_wait_minutes` (30 by default; 0 parks at once), or not at all inside `owner_rest_hours` read at `owner_utc_offset`.
+For example, `owner_rest_hours = "20:00-08:00"` and `owner_utc_offset = "+05:30"`. Then it is labelled `agk:parked`, its
+builder hands over and moves on, and the parked pull request no longer takes a builder slot. When the owner answers, the
+next `conductor.py sweep` unparks it and prints its `resume --pr <n>` command, before new briefs. A bad value is refused
+with a line naming the setting. In personal mode there are no pull requests, so nothing is
+parked.
+
 ## What is lost
 
 Say it plainly to everyone working on the project:

@@ -182,6 +182,7 @@ from session import (
     pull_files,
     repo_name,
     reservations,
+    running_builders,
     shared_patterns,
     survey,
     touches_of,
@@ -1906,7 +1907,7 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
     if record:
         record_holds(root, s, ready, chosen, now)
     waits = build_waits + waits
-    running = len(s.builders) + len(s.held)
+    running = len(running_builders(s.builders)) + len(s.held)  # parked: no slot (#1282)
     authors = verdict_authors(root)
     waiting_review = sum(1 for p in s.builders if waiting_for_verdict(s, p, authors))
     ceil = ceilings(root, s.max_builders)
