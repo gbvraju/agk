@@ -6,7 +6,7 @@
 - Related: brief #1276, brief #1251, ADR-0529, pull request #1261
 - Requirements: REQ-050
 
-Protected classes: `config/`, `tests/kit/`
+Protected classes: `config/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -23,7 +23,9 @@ label is added on the same path for a brief and for a build (`claim --build X`).
    of the rule changes.
 2. `tests/kit/test_rule18_claim.py` reads `TAKEN_LABEL` and the body of `claim` in `scripts/agk/session.py` and
    checks that rule 18 names that label exactly when `claim` adds it, and that the `claim --build X` sentence
-   names it exactly when a build's claim adds it too, so the rule and the code cannot drift apart again.
+   names it exactly when a build's claim adds it too, so the rule and the code cannot drift apart again. It
+   joins the test map of `scripts/agk/session.py` and of `config/session-rules.md` in `agk.toml`, and
+   `tests/kit/test_session_rules.py` records rule 5's merged text as reworded the same way.
 3. CI and local mode take a brief with the same `claim` and the same GitHub label. Personal mode files no
    issues, and nothing changes in it.
 
