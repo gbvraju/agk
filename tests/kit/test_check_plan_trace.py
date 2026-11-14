@@ -527,8 +527,7 @@ def openspec_plan(root: Path, *, prototype: bool = True) -> Path:
         "docs/requirements.md",
         "### REQ-007 Orders\n\nCriteria:\n\n"
         f"- Given no orders, when a buyer opens the list, then an empty note shows ({EMPTY})\n\n"
-        "- Source: docs/sources/sow.md:8\n"
-        f"- Source: {OPENSPEC_REL}#Order list\n",  # brief #1217: every source is cited
+        "- Source: docs/sources/sow.md:8\n",
     )
     write(root, "tests/test_orders.py", '"""REQ-007 AC1: orders."""\n')
     return root

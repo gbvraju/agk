@@ -183,3 +183,54 @@ def test_ac3_a_project_with_no_plan_is_not_checked(tmp_path):
     """REQ-050 AC3: rule 10, with no docs/plan/ an uncited source prints `ok plan (no plan)`."""
     write(tmp_path, "docs/sources/notes.md", NOTES)
     assert check(tmp_path) == (0, "ok plan (no plan)\n")
+
+
+# --- Q-1217-1 (maintainer answer): acceptance and component citations ----------------------------
+
+SPEC = (
+    "Source: Example OpenSpec\nKind: openspec\nVersion: sha256:abc123\nDate: 2026-10-04\n\n"
+    "## Requirement: Orders are listed\n\n"
+    "### Scenario: Orders show\n\n"
+    "- WHEN a buyer opens example.com/orders\n"
+    "- THEN each order shows\n"
+)
+ACCEPTED = (
+    REQS + "- Given orders, then each order shows (docs/sources/spec.md#Scenario: Orders show)\n"
+)
+COMPONENT_BRIEF = (
+    "Advances: orders-list\nTouches: app/nav.py\nPriority: 1\nSize: S\nMilestone: M1\n"
+    "Component: C1\nSource: `docs/sources/notes.md#Background`\n"
+)
+
+
+def test_ac3_an_openspec_acceptance_line_cites_its_file(tmp_path):
+    """REQ-050 AC3: Q-1217-1, a requirement's acceptance line ending with an OpenSpec location
+    cites that file, with no `Source:` line naming it."""
+    plan(tmp_path)
+    write(tmp_path, "docs/sources/spec.md", SPEC)
+    write(tmp_path, "docs/plan/requirements-proposed.md", ACCEPTED)
+    code, out = check(tmp_path, "--trace")
+    assert fails(out) == [FAIL_NOTES], out
+    assert "docs/sources/spec.md: 1 of 2 headings or rows cited" in out.splitlines()
+
+
+def test_ac3_an_acceptance_line_into_another_kind_cites_nothing(tmp_path):
+    """REQ-050 AC3: Q-1217-1 names OpenSpec acceptance citations only."""
+    reqs = REQS + "- Given orders, then each shows (docs/sources/notes.md#Background)\n"
+    code, out = check(plan(tmp_path, reqs=reqs))
+    assert code == 1, out
+    assert fails(out) == [FAIL_NOTES]
+
+
+def test_ac3_a_component_brief_cites_its_sources(tmp_path):
+    """REQ-050 AC3: Q-1217-1, the `Source:` lines of a brief with a `Component:` line cite their
+    file; the same line on a brief without one does not."""
+    plan(tmp_path)
+    write(tmp_path, "docs/plan/briefs/M1/nav.md", COMPONENT_BRIEF)
+    code, out = check(tmp_path, "--trace")
+    assert code == 0, out
+    assert "docs/sources/notes.md: 1 of 4 headings or rows cited" in out.splitlines()
+    write(tmp_path, "docs/plan/briefs/M1/nav.md", COMPONENT_BRIEF.replace("Component: C1\n", ""))
+    code, out = check(tmp_path)
+    assert code == 1, out
+    assert fails(out) == [FAIL_NOTES]
