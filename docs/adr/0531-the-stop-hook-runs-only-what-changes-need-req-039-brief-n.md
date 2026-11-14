@@ -6,7 +6,7 @@
 - Related: brief #1254, plan #661, ADR-0438 (brief #1029), session rule 31
 - Requirements: REQ-039
 
-Protected classes: `.claude/`, `agk.mk`, `scripts/agk/`, `tests/kit/`, `kit/`
+Protected classes: `.claude/`, `agk.mk`, `agk.toml`, `scripts/agk/`, `tests/kit/`, `kit/`
 
 ## Context
 
@@ -41,6 +41,9 @@ and 4 min 48 s for the conductor, which changes no file at all. Governance still
    or `stop check: <n> checks (changes not read), <s> s`; a blocking run puts the line first in its reason.
    Standard error, not standard output, because Claude Code reads a Stop hook's standard output as its JSON
    decision (verify).
+
+5. This repository's `[[testing.map]]` in `agk.toml` maps `scripts/agk/governance_map.py` to its tests, and
+   the `scripts/agk/config.py` entry also selects `tests/kit/test_stop_check_changed.py`.
 
 ## Consequences
 
