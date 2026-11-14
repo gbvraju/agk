@@ -79,7 +79,8 @@ a requirement's cross-reference gap is a `Note:` line of its block (`notes`), ne
 `validate` prints `warning: <n> open questions` above `[plan] max_questions` (60). `render` keeps
 `docs/plan/render-digests.json`, the digest of each file it wrote and the spec of each area;
 `render --again` rewrites only listed files whose bytes still have their digest, creates missing
-ones, names each file it keeps and writes a Draft spec only for an area not yet listed.
+ones, names each file it keeps and writes a Draft spec only for an area not yet listed. A brief key
+repeated across milestones is refused naming every milestone that holds it (`Q-1221-2`).
 """
 
 from __future__ import annotations
@@ -339,6 +340,16 @@ def plan_problems(root: Path, data: dict) -> list[str]:
                 out.append(f"rule 5: {label} {name}: {problem.removeprefix('rule 1: ')}")
     for label, keys in names.items():
         repeated = sorted({k for k in keys if keys.count(k) > 1})
+        if label == "briefs":  # Q-1221-2: say where, every milestone that holds the key
+            held = {
+                k: _unique([str(b["milestone"]) for b in data["briefs"] if b["key"] == k])
+                for k in repeated
+            }
+            out += [
+                f"rule 4: briefs {k}: the key is repeated in {', '.join(held[k])}"
+                for k in repeated
+            ]
+            continue
         out += [f"rule 4: {label} {k}: the key is repeated" for k in repeated]
     if out:
         return out

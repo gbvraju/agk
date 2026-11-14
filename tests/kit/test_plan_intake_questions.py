@@ -249,3 +249,35 @@ def test_1221_again_is_only_an_option_of_render(capsys) -> None:
     """REQ-050: brief #1221 answer 2, `--again` takes no value and belongs to render alone."""
     assert plan_intake.main(["validate", "--proposals", "p.json", "--again"]) == 2
     assert "render --proposals FILE [--again]" in capsys.readouterr().err
+
+
+# --- answer to Q-1221-2: a brief key repeated across milestones is refused, naming where ------
+
+
+def test_1221_a_brief_key_in_two_milestones_is_refused_by_validate_and_publish(
+    repo: Path,  # noqa: F811
+    capsys,
+) -> None:
+    """REQ-050: brief #1221 correction (Q-1221-2, reading (b)): `validate` (and so `render`)
+    names the key and every milestone that holds it; `publish` refuses two files of one key."""
+    from test_plan_intake import MILESTONE
+    from test_plan_publish import REVIEWERS, approved, numbered, publish
+
+    data = proposals()
+    data["milestones"].append(copy.deepcopy(MILESTONE) | {"id": "M2"})
+    data["briefs"][1] = copy.deepcopy(data["briefs"][0]) | {"milestone": "M2"}
+    code, out = validate(repo, data, capsys)
+    assert code == 1 and "rule 4: briefs B1: the key is repeated in M1, M2" in out, out
+    before = tree(repo)
+    code, out = render(repo, data, capsys)
+    assert code == 1 and "the key is repeated in M1, M2" in out and tree(repo) == before
+    write(repo, "config/reviewers.yaml", REVIEWERS)
+    assert render(repo, proposals(), capsys)[0] == 0
+    numbered(repo)
+    milestones = (repo / "docs/plan/milestones.md").read_text(encoding="utf-8")
+    write(repo, "docs/plan/milestones.md", milestones + "\n### M2 Second\n\nTarget: 2026-12-18\n")
+    one = (repo / "docs/plan/briefs/M1/B1.md").read_text(encoding="utf-8")
+    write(repo, "docs/plan/briefs/M2/B1.md", one.replace("Milestone: M1", "Milestone: M2"))
+    code, out = publish(repo, capsys, approved(), {"M1": 7, "M2": 8})
+    assert code == 1 and "rule 25: briefs B1: the key is repeated" in out, out
+    assert "repos/{owner}/{repo}/issues" not in out

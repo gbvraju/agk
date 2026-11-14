@@ -43,6 +43,10 @@ rule 7, ADR-0461), so a second pass after a fix to the proposals had to be worke
    (`kept <path>: a Draft spec is written once`), since a spec is the person's from its first render; an area not yet
    listed gets a new one. Without a readable list, `--again` refuses and writes nothing. Kept files keep their old
    digest, so a later pass still keeps them.
+6. A brief key repeated across milestones stays refused by `validate` (and so by `render`) and by `publish`, as on the
+   default branch; `validate`'s line now says where: `rule 4: briefs <key>: the key is repeated in M1, M2`, every
+   milestone that holds the key (the brief's correction, `Q-1221-2`, reading (b)). Allowing such a key and renaming it
+   `M<n>-<key>` on render is not decided here: it is the owner's to choose.
 
 ## Consequences
 
