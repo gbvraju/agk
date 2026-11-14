@@ -51,6 +51,14 @@ were pending or red before the run of the finished workflow that woke it) starts
 same way once for every open pull request labelled `agk:merge-ready`, under the same setting, and
 not twice for one that entered that state in the same run. A branch that stays green, stays red
 or still runs starts nothing, and `--branch` starts nothing.
+Brief #1212 (ADR-0513): while the one open local-mode record issue exists (`Local mode since ...`,
+the issue `merge_cleared.py` finds, read once per run), a required check of the head that never
+reported is satisfied when the newest `Report:` of the pull request's author on that head carries
+the `Evidence:` line of `prepush.py` naming the head, and failed when that report records a failed
+step (`prepush: stopped at ...` or `failed: step ...`); without such evidence the head is the
+builder's (`agk:build`), never `agk:ci-running`. A check that reported is judged as before.
+`agk:merge-ready` then also needs the verdict's `Local evidence:` and `Evidence check: agrees` for
+the head, read by `merge_cleared.local_evidence`; without them a cleared head is `agk:review`.
 While the checkout's agk.toml sets `paused = true` (brief #348, ADR-0196) it prints `agk paused`
 and reads and writes nothing, whatever it was asked to route.
 """
@@ -86,7 +94,15 @@ from common import (
     required_checks,
     verdict_problem,
 )
-from merge_cleared import PROTECTED, Nothing, github_mode
+from merge_cleared import (
+    PROTECTED,
+    RECORD_TITLE,
+    Held as EvidenceHeld,
+    Nothing,
+    github_mode,
+    local_evidence,
+    titled,
+)
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (
     APPROVE,
@@ -168,6 +184,12 @@ ASKED = re.compile(
     r"Approval: (SPEC-\d{4}) (\S+) Draft -> Approved, waiting for a person"
     r"(?:: post \"Approve: (SPEC-\d{4})\")?"
 )
+REPORT_HEAD = re.compile(r"Report: ([0-9a-f]{7,40})(?![0-9A-Za-z])")  # brief #1212
+EVIDENCE_LINE = re.compile(  # the line `prepush.py --record` prints (docs/guides/local-mode.md)
+    r"Evidence: prepush schema \d+, head ([0-9a-f]{12}), \d+ steps ok, record [0-9a-f]{12}\b"
+)
+FAILED_STEP = ("prepush: stopped at ", "failed: step ")  # a failed step of prepush or evidence.py
+RECORD_OPEN: dict[str, bool] = {}  # repo -> the local-mode record issue is open, once per run
 SUMMARY = re.compile(r"Summary: (\S.{0,118}\S|\S)")
 PIPELINE_COUNTS = ("review", "fix", "ci-red", "conflict", "approve", "ready")
 SPEC_TITLE = re.compile(r"# SPEC-\d{4}: (\S.*)")
@@ -224,6 +246,50 @@ def asked_for(body: str) -> set[str]:
     """The specs the conductor's `Approval:` lines of a verdict ask a person to approve."""
     found = map(ASKED.fullmatch, (x.strip() for x in body.splitlines()))
     return {m.group(1) for m in found if m and m.group(3) in (None, m.group(1))}
+
+
+def record_open(repo: str) -> bool:
+    """Whether a local-mode record issue is open, as `merge_cleared.local_mode` finds it (brief
+    #1212 answer 1); read once per run. Open issues that cannot be read count as no record issue:
+    the router then labels as it does in CI mode."""
+    if repo not in RECORD_OPEN:
+        issues = pages(f"repos/{repo}/issues?state=open")
+        RECORD_OPEN[repo] = isinstance(issues, list) and titled(issues, RECORD_TITLE)
+    return RECORD_OPEN[repo]
+
+
+def local_proof(f: dict, head: str) -> str:
+    """`failed`, `ok` or `none`: the local evidence of the newest `Report:` that the pull request's
+    author posted on HEAD (brief #1212 answer 1)."""
+    me = str(f.get("author") or "").lstrip("@").lower()
+    newest = None
+    for c in f.get("comments") or []:
+        match = REPORT_HEAD.match(first_line(c))
+        if match and me and login_of(c) == me and head.startswith(match.group(1)):
+            newest = c
+    if newest is None:
+        return "none"
+    lines = [x.strip() for x in str(newest.get("body") or "").splitlines()]
+    if any(x.startswith(FAILED_STEP) for x in lines):
+        return "failed"
+    named = any((m := EVIDENCE_LINE.match(x)) and m.group(1) == head[:12] for x in lines)
+    return "ok" if named and len(head) >= 12 else "none"
+
+
+def local_cleared(f: dict, comments: list[dict], authors: list[str] | None, head: str) -> bool:
+    """Whether the latest verdict carries the local evidence `merge_cleared.py` needs for HEAD
+    (`Local evidence:` and `Evidence check: agrees`, or `differs` with the accept answer)."""
+    allowed = {str(a).lstrip("@").lower() for a in authors or []}
+    body = latest_verdict_body(comments, authors)
+    found = [c for c in comments if login_of(c) in allowed and c.get("body") == body]
+    if not body or not found:
+        return False
+    approvers = [str(a).lstrip("@").lower() for a in f.get("approvers") or []]
+    try:
+        local_evidence(found[-1], comments, head, approvers)
+    except EvidenceHeld:
+        return False
+    return True
 
 
 def latest_runs(checks: list[dict]) -> list[dict]:
@@ -429,7 +495,9 @@ def base_state(f: dict) -> str:
     checks, statuses, missing = judged(
         f.get("checks") or [], f.get("statuses") or [], f.get("required")
     )
-    if missing or (not checks and not statuses):
+    unreported = missing or (not checks and not statuses)
+    local = bool(f.get("local"))  # brief #1212: the local-mode record issue is open
+    if unreported and not local:
         return "agk:ci-running"
     if any(c.get("status") != "completed" for c in checks) or any(
         s.get("state") == "pending" for s in statuses
@@ -439,6 +507,12 @@ def base_state(f: dict) -> str:
         s.get("state") in FAILED_STATUS for s in statuses
     ):
         return "agk:ci-red"
+    if unreported:  # local mode: the builder's evidence stands in for the checks never reported
+        proof = local_proof(f, head)
+        if proof == "failed":
+            return "agk:ci-red"
+        if proof != "ok":
+            return "agk:build"
     if f.get("unreadable"):  # brief #854 answer 2: the conductor sees it at its next pass
         return "agk:review"
     flipped = specs_approved_by(f.get("files") or [])
@@ -464,7 +538,11 @@ def base_state(f: dict) -> str:
             return "agk:approve"
         files = {str(x.get("filename") or "") for x in f.get("files") or []}
         owner = any(p.startswith(OWNER_PATHS) for p in files)
-        return "agk:owner-merge" if owner else "agk:merge-ready"
+        if owner:
+            return "agk:owner-merge"
+        if local and not local_cleared(f, comments, authors, head):
+            return "agk:review"  # brief #1212: the merger needs the verdict's local evidence
+        return "agk:merge-ready"
     return "agk:review"
 
 
@@ -544,6 +622,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "files": files,
         "draft_specs": draft_specs_of(repo, files, head),
         "commit": commit if isinstance(commit, dict) else {},
+        "local": record_open(repo),
     }
     facts["found"] = unreadable_lines(repo, n, facts)
     facts["unreadable"] = newest_is_unreadable(comments, facts["authors"], facts["found"])
@@ -1290,6 +1369,7 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE, file=sys.stderr)
         return 2
     root = repo_root()
+    RECORD_OPEN.clear()  # read once per run (brief #1212)
     try:
         if paused(root):  # brief #348 (ADR-0196): nothing is read and nothing is written
             print(PAUSED_LINE)
