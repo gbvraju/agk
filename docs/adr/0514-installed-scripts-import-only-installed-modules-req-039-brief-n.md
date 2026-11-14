@@ -32,7 +32,8 @@ the doctor, so local mode never saw it, and the kit's own CI has `adopt.py`.
 
 The governance job of an installed project passes its first step again. A later module-level import of a kit-only file
 fails the kit's own tests before a release. Protected path classes changed: `scripts/agk/` (`doctor.py`, `adopt.py`,
-`common.py`) and `tests/kit/` (`test_installed_imports.py`). No workflow, ruleset, `agk.toml` or `.claude/` change.
+`common.py`) and `tests/kit/` (`test_installed_imports.py`, and `test_doctor.py`, whose brief #997 test of the one
+shared walk now checks that `adopt.py`, `doctor.py` and `common.py` hold the same function and patches it in both users). No workflow, ruleset, `agk.toml` or `.claude/` change.
 
 ## Residual
 
