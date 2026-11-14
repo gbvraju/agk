@@ -78,3 +78,5 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" next-steps --brief <n|no
    pull request with the body file where the script prints one, as `/agk:start` step 6 says.
 
 Do not commit or push, and do not open a pull request: the person or their session runs the commands the script prints.
+
+Next on the path from an idea (`docs/guides/planning.md`, "From an idea"): once this charter is merged and Accepted, `/agk:design inventory`.

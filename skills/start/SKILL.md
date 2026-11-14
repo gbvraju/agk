@@ -61,3 +61,5 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" next-steps --brief <n|no
    repository's pull request template does not replace the body; offer it, and the person runs it.
 
 Do not commit or push, and do not open a pull request: the person or their session runs the commands the script prints.
+
+Next on the path from an idea (`docs/guides/planning.md`, "From an idea"): once this charter is merged and Accepted, `/agk:design inventory`.
