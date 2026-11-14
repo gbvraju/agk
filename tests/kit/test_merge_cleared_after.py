@@ -172,7 +172,8 @@ def test_governance_runs_once_on_the_merge_commit_in_a_removed_worktree(tmp_path
 
 
 def test_the_governance_run_gets_no_token_and_a_scratch_home(tmp_path, monkeypatch):
-    """REQ-046 AC6: SPEC-0039 rule 6 (`env -i PATH=... HOME=<scratch>`: no token reaches it)."""
+    """REQ-046 AC6: SPEC-0039 rule 6 (only PATH and HOME=<scratch> of this process, no token;
+    since brief #1290 through `lock.py run --only-env`, not `env -i`)."""
     for name in ("GH_TOKEN", "GITHUB_TOKEN", "AGK_LOCK_TOKEN", "AGK_SESSION"):
         monkeypatch.setenv(name, HIDDEN)
     proc, _, ran, _ = after_run(tmp_path)
@@ -384,12 +385,13 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
     argv = seen[0][0]
     lock_py = str(Path(merge_cleared.__file__).resolve().parent / "lock.py")
     assert argv[:10] == [sys.executable, lock_py, "run", "--name", "heavy", "--session",
-                         "merge-cleared", "--timeout", "1800", "--"]  # fmt: skip
-    assert argv[10:12] == ["env", "-i"] and argv[12].startswith("PATH=")
-    assert argv[13:] == [f"HOME={home}", f"AGK_PR_BODY={body}",
-                         f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}", "make", "-C",
-                         str(tree), "-f", "agk.mk", "agk-governance",
-                         f"AGK_BASE={BASE}"]  # fmt: skip
+                         "merge-cleared", "--timeout", "1800", "--only-env"]  # fmt: skip
+    cut = argv.index("--")
+    assert argv[9:cut:2] == ["--only-env"] * 4 and argv[10].startswith("PATH=")  # brief #1290
+    assert argv[12:cut:2] == [f"HOME={home}", f"AGK_PR_BODY={body}",
+                              f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}"]  # fmt: skip
+    assert argv[cut + 1 :] == ["make", "-C", str(tree), "-f", "agk.mk", "agk-governance",
+                               f"AGK_BASE={BASE}"]  # fmt: skip
     assert all(not kwargs.get("shell") for _, kwargs in seen)
 
 
@@ -478,9 +480,9 @@ def test_the_heavy_lock_wait_is_bounded_by_a_timeout_in_the_argument_list():
     """REQ-046 AC6: fix list item 1 (`lock.py run ... --timeout S`, never an endless wait)."""
     home = Path("home")
     argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
-    cut = argv.index("--")
-    assert argv[cut - 2 : cut] == ["--timeout", "1800"]
-    assert argv[cut + 1 : cut + 3] == ["env", "-i"]
+    at = argv.index("--timeout")
+    assert argv[at : at + 2] == ["--timeout", "1800"]
+    assert argv[at + 2] == "--only-env", "the clean environment follows (brief #1290)"
 
 
 @pytest.mark.parametrize(
@@ -884,7 +886,8 @@ def test_the_run_names_the_kit_make_file_and_its_governance_target():
     argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
     at = argv.index("make")
     assert argv[at:] == ["make", "-C", "tree", "-f", "agk.mk", "agk-governance", f"AGK_BASE={BASE}"]
-    assert argv[10:12] == ["env", "-i"] and argv[13:at] == [
+    cut = argv.index("--")
+    assert cut == at - 1 and argv[12:cut:2] == [
         f"HOME={home}",
         f"AGK_PR_BODY={home / 'pr-body.md'}",
         f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}",
@@ -945,7 +948,7 @@ def test_neither_run_starts_the_env_program():
 def test_the_environment_holds_exactly_the_kept_names_on_linux(monkeypatch):
     """REQ-039: brief #1290 test (b): PATH unchanged from this process, HOME the scratch home and
     the AGK_ names of today, nothing else of the parent's, and no Windows name on Linux."""
-    monkeypatch.setattr(merge_cleared.os, "name", "posix")
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
     for name in ("GH_TOKEN", "AGK_LOCK_TOKEN", "AGK_SESSION", *WINDOWS_NAMES):
         monkeypatch.setenv(name, HIDDEN)
     monkeypatch.setenv("PATH", "/usr/local/bin:/usr/bin")
@@ -967,9 +970,9 @@ def test_the_environment_holds_exactly_the_kept_names_on_linux(monkeypatch):
 
 
 def test_on_windows_the_path_is_kept_as_it_is_and_five_names_are_added(monkeypatch):
-    """REQ-039: brief #1290 test (c): with `os.name` faked to Windows and a `;`-separated PATH,
+    """REQ-039: brief #1290 test (c): with Windows faked (`merge_cleared.on_windows`) and a `;`-separated PATH,
     that PATH is passed unchanged and SystemRoot, ComSpec, PATHEXT, TEMP and TMP are added."""
-    monkeypatch.setattr(merge_cleared.os, "name", "nt")
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: True)
     path = r"C:\Program Files\Git\usr\bin;C:\tools\make\bin;C:\Windows\system32"
     monkeypatch.setenv("PATH", path)
     values = {name: rf"C:\example\{name.lower()}" for name in WINDOWS_NAMES}
@@ -988,7 +991,7 @@ def test_on_windows_the_path_is_kept_as_it_is_and_five_names_are_added(monkeypat
 
 def test_a_windows_name_that_is_not_set_is_left_out(monkeypatch):
     """REQ-039: brief #1290 answer 1: the five names are passed where set, none invented."""
-    monkeypatch.setattr(merge_cleared.os, "name", "nt")
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: True)
     for name in WINDOWS_NAMES:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("SystemRoot", r"C:\Windows")
@@ -1019,7 +1022,7 @@ def test_a_fake_make_on_a_temporary_path_is_found_and_run(tmp_path, monkeypatch,
     monkeypatch.setenv("TMPDIR", str(tmp_path / "temp"))  # lock.py's folder; never the command's
     (tmp_path / "temp").mkdir()
     monkeypatch.setenv("GH_TOKEN", HIDDEN)
-    monkeypatch.setattr(merge_cleared.os, "name", "posix")
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
     body = home / "pr-body.md"
     assert merge_cleared.run_governance(root, tree, home, body, BASE, 60.0) == step
     got = json.loads(seen.read_text(encoding="utf-8"))

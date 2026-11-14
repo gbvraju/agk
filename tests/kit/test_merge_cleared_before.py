@@ -468,7 +468,7 @@ def test_the_check_before_the_merge_starts_no_env_program(tmp_path):
 
 def test_the_pre_merge_test_run_hands_lock_py_only_the_kept_names(monkeypatch):
     """REQ-039: brief #1290 tests (a) and (b) for the pre-merge tests of brief #667."""
-    monkeypatch.setattr(merge_cleared.os, "name", "posix")
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
     monkeypatch.setenv("GH_TOKEN", "hidden-value-for-the-test")
     argv = merge_cleared.tests_argv(Path("tree"), Path("home"), ["tests/kit/test_x.py"], 60.0)
     cut = argv.index("--")

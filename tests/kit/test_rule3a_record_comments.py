@@ -43,14 +43,15 @@ def test_req028_the_after_merge_argument_list_carries_the_variable():
     """REQ-028: fix list item 1 (`AGK_RECORD_COMMENTS=<scratch>/home/record-comments.json`)."""
     home = Path("home")
     argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
-    cut = argv.index("make")
-    assert argv[cut - 4 : cut] == [
-        argv[cut - 4],
+    cut = argv.index("--")  # lock.py's `--only-env NAME=VALUE` pairs since brief #1290
+    assert argv[cut - 8 : cut : 2] == ["--only-env"] * 4
+    assert argv[cut - 7 : cut : 2] == [
+        argv[cut - 7],
         f"HOME={home}",
         f"AGK_PR_BODY={home / 'pr-body.md'}",
         f"{VARIABLE}={home / 'record-comments.json'}",
     ]
-    assert argv[cut - 4].startswith("PATH=") and argv[cut - 6 : cut - 4] == ["env", "-i"]
+    assert argv[cut - 7].startswith("PATH=") and argv[cut + 1] == "make" and "env" not in argv
 
 
 SEES_COMMENTS = """
