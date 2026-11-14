@@ -148,3 +148,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"
    is `Approve: inventory <full head ID>`, from an account listed in `spec_approvers`; a session never posts that line,
    and nothing is drawn before it is there. Do not commit or push, and do not open a pull request: the person or their
    session does.
+
+## Next on the path from an idea
+
+On the path from an idea (`docs/guides/planning.md`, "From an idea"): after `/agk:design inventory` is agreed, `/agk:design prototype`; after
+the prototype is signed off, `/agk:stack`.
