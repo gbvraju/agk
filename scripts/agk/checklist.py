@@ -752,8 +752,10 @@ def joined(point: Point, *more: str) -> Point:
 def plan_reads(path: Path | None) -> str | None:
     """The last `session.py plan`'s reads (brief #1251 answer 5, ADR-0529), from the file the plan
     writes in the git directory; None when there is none or it cannot be read. It sets no status."""
+    if path is None:
+        return None
     try:
-        found = json.loads(path.read_text(encoding="utf-8")) if path else None
+        found = json.loads(path.read_text(encoding="utf-8"))
         calls, cached, seconds = found["calls"], found["cached"], found["seconds"]
     except (OSError, ValueError, TypeError, KeyError):
         return None

@@ -1182,6 +1182,7 @@ def survey(
     issues = [i for i in issues if i["number"] in red] if red else issues
     # The red-branch brief goes before the capacity and the overlap, and no pull request is read.
     walk = None if red else walk
+    prs: list | None = []
     if red:
         prs = []
     elif walk is not None:

@@ -1048,7 +1048,7 @@ def history_of(s: Survey, number: int) -> list[dict]:
             source = event.get("source") if isinstance(event, dict) else None
             found = source.get("issue") if isinstance(source, dict) else None
             pull = found.get("pull_request") if isinstance(found, dict) else None
-            if isinstance(pull, dict):
+            if isinstance(found, dict) and isinstance(pull, dict):
                 out.append({**found, "merged_at": pull.get("merged_at")})
         return out
     if s.closed is None:
