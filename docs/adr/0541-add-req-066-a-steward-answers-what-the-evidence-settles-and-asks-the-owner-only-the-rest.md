@@ -20,8 +20,9 @@ and names every other decision for the maintainers; nothing else answers, and th
 keeps no memory past a compaction. One evening of a customer project in local mode showed most of the owner's questions
 settled by the kit's own code and state, a few that needed the owner, and three misses of the co-owner that evidence
 found. The owner's correction on the brief (comment 6881131563) ruled its three open questions and made the steward the
-owner's one entry point, a second (comment 6881233447) set a cost and speed budget and skills first, and a third (comment 6881300953) bounded
-every role's wait on the owner. The kit recognises `Answer:` and `Maintainer answer:` only by their prefixes, and the sessions and the owner post
+owner's one entry point, a second (comment 6881233447) set a cost and speed budget and skills first, a third (comment 6881300953) bounded
+every role's wait on the owner, and a fourth (comment 6881464547) set the steward's authority by stage and its
+structured notes. The kit recognises `Answer:` and `Maintainer answer:` only by their prefixes, and the sessions and the owner post
 as one login, so the login cannot show who wrote an owner's answer.
 
 ## Decision
@@ -31,7 +32,9 @@ as one login, so the login cannot show who wrote an owner's answer.
 2. A steward role, `.claude/agents/steward.md` on the `strongest` tier at `high`, is the owner's one entry point: it names
    the project's stage on SPEC-0048's path, drives it with the kit's existing skills and starts the conductor when the
    plan passes its checks; the conductor starts it when a `Question:` has waited one pass. It answers a question only when one source,
-   in SPEC-0059 rule 3's order, settles it, and posts the answer with its evidence and rule. Every other question, and
+   in SPEC-0059 rule 3's order, settles it, and posts the answer with its evidence and rule. Until building starts every
+   requirement question goes to the owner with the steward's recommendation; from then the steward answers one the
+   evidence settles, and a planning gap or a class the owner overrode twice in seven days goes to the owner. Every other question, and
    every one that changes scope, a date, a cost, the customer's sign-off or an earlier owner decision, goes to the owner
    as one plain business sentence with a recommendation.
 3. The owner's reply is posted as a `Maintainer answer:` with the owner's words and time quoted verbatim, and the role's
