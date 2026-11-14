@@ -4,6 +4,10 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.64.4 (2026-11-14)
+
+- #1249 `agk doctor` reports, as `misplaced-settings`, a setting that the kit reads from a table of `agk.toml` (`[flow]`, `[testing]`, `[capacity]`, `[plan]`, `[design]`, `[delivery]`) but that stands at the top level or in another table, naming the key and both tables, never its value; the template's flow block says the keys belong in the `[flow]` table (brief #1245, ADR-0527)
+
 ## 0.64.3 (2026-11-14)
 
 - #1239 In local mode a crashed conductor comes back by itself: the kit installs the launch adapters `scripts/start-session-windows.ps1` and `scripts/start-session-local.sh`, `doctor.py` names a missing one, and `python3 scripts/agk/conductor.py watchdog` (one pass; `--install` prints the scheduler line) starts the conductor when its lease is free and memory allows (brief #1237, ADR-0525)
