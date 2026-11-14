@@ -96,7 +96,7 @@ def test_step_2_is_started_by_the_person_and_writes_only_the_triage_file():
     assert "recommendation" in second
     assert "milestone of its area" in second
     paths = set(re.findall(r"`(docs/[^`]*)`", second))
-    written = {p for p in paths if re.search(rf"writes?[^.]*`{re.escape(p)}`", second)}
+    written = {p for p in paths if re.search(rf"writes?[^.]*`{re.escape(p)}`", second, re.I)}
     assert written == {"docs/plan/scope-triage.md"}, written
 
 
