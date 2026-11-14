@@ -101,6 +101,7 @@ from merge_cleared import (
     Nothing,
     github_mode,
     local_evidence,
+    local_mode,
     titled,
 )
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
@@ -190,7 +191,9 @@ EVIDENCE_LINE = re.compile(  # the line `prepush.py --record` prints (docs/guide
     r"Evidence: prepush schema \d+, head ([0-9a-f]{12}), \d+ steps ok, record [0-9a-f]{12}\b"
 )
 FAILED_STEP = ("prepush: stopped at ", "failed: step ")  # a failed step of prepush or evidence.py
-RECORD_OPEN: dict[str, bool] = {}  # repo -> the local-mode record issue is open, once per run
+RECORD_OPEN: dict[str, bool] = {}  # repo -> the project is in local mode, read once per run
+RECORD_SEARCH = 'repo:{repo} is:issue is:open in:title "{title}"'  # brief #1263 answer 6
+OPEN_PULLS: dict[str, list | None] = {}  # repo -> the open pull requests, read once per run
 SUMMARY = re.compile(r"Summary: (\S.{0,118}\S|\S)")
 PIPELINE_COUNTS = ("review", "fix", "ci-red", "conflict", "approve", "ready")
 SPEC_TITLE = re.compile(r"# SPEC-\d{4}: (\S.*)")
@@ -249,14 +252,82 @@ def asked_for(body: str) -> set[str]:
     return {m.group(1) for m in found if m and m.group(3) in (None, m.group(1))}
 
 
-def record_open(repo: str) -> bool:
-    """Whether a local-mode record issue is open, as `merge_cleared.local_mode` finds it (brief
-    #1212 answer 1); read once per run. Open issues that cannot be read count as no record issue:
-    the router then labels as it does in CI mode."""
+def search_once(endpoint: str) -> dict | None:
+    """One `gh api` GET of a search; None when it fails for any reason. A rate limit is a failed
+    search here, never a wait (brief #1263 answer 6b): the search limit is not the core limit
+    that `session.gh` waits for, and the caller falls back to paging at once."""
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["gh", "api", "--method", "GET", endpoint],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        found = json.loads(proc.stdout)
+    except ValueError:
+        return None
+    return found if isinstance(found, dict) else None
+
+
+def record_issues(repo: str) -> list[dict]:
+    """The open issues that may be the local-mode record issue: one search call (brief #1263
+    answer 6); when the search fails or is rate-limited, today's paging of every open issue
+    (answer 6b), never a failed search read as "no record issue". Issues that cannot be read
+    at all are none: the router then labels as it does in CI mode."""
+    query = RECORD_SEARCH.format(repo=repo, title=RECORD_TITLE)
+    found = search_once("search/issues?q=" + quote(query, safe=""))
+    items = found.get("items") if isinstance(found, dict) else None
+    if isinstance(items, list) and isinstance(found.get("total_count"), int):
+        return [x for x in items if isinstance(x, dict)]
+    issues = pages(f"repos/{repo}/issues?state=open")
+    return [x for x in issues if isinstance(x, dict)] if isinstance(issues, list) else []
+
+
+def checkout_settings(root: Path | None) -> dict:
+    """The checkout's agk.toml as written; {} when there is none or it cannot be read."""
+    if root is None:
+        return {}
+    try:
+        return config_source(root)
+    except (OSError, ValueError):
+        return {}
+
+
+def record_open(repo: str, root: Path | None = None) -> bool:
+    """Whether the project is in local mode, decided as `merge_cleared.local_mode` decides it
+    (brief #1212 answer 1, brief #1263 answer 6): `execution = "local"` in the checkout's agk.toml
+    answers without any issue read; only otherwise the record issue is looked for. Read once per
+    run; the conductor's guard reads it with this function (brief #1263 answer 1)."""
     if repo not in RECORD_OPEN:
-        issues = pages(f"repos/{repo}/issues?state=open")
-        RECORD_OPEN[repo] = isinstance(issues, list) and titled(issues, RECORD_TITLE)
+        data = checkout_settings(root)
+        RECORD_OPEN[repo] = local_mode(data, []) or local_mode(data, record_issues(repo))
     return RECORD_OPEN[repo]
+
+
+def open_pulls(repo: str) -> list | None:
+    """The open pull requests, read once per run and reused for every pull request, the sweep,
+    the merger's start and the pipeline document (brief #1263 answer 7); None when unreadable,
+    which is not kept, so a later step reads again."""
+    if OPEN_PULLS.get(repo) is None:
+        OPEN_PULLS[repo] = pages(f"repos/{repo}/pulls?state=open")
+    return OPEN_PULLS[repo]
+
+
+def note_label(repo: str, n: int, wanted: str | None) -> None:
+    """Keep the run's list of open pull requests true after pull request N was routed: its `agk:`
+    labels become WANTED, or it leaves the list when it is no longer open (None)."""
+    found = OPEN_PULLS.get(repo)
+    if not isinstance(found, list):
+        return
+    for pr in list(found):
+        if isinstance(pr, dict) and pr.get("number") == n:
+            if wanted is None:
+                found.remove(pr)
+                continue
+            kept = [x for x in pr.get("labels") or [] if str((x or {}).get("name")) not in LABELS]
+            pr["labels"] = [*kept, {"name": wanted}]
 
 
 def local_proof(f: dict, head: str) -> str:
@@ -623,7 +694,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "files": files,
         "draft_specs": draft_specs_of(repo, files, head),
         "commit": commit if isinstance(commit, dict) else {},
-        "local": record_open(repo),
+        "local": record_open(repo, root),
     }
     facts["found"] = unreadable_lines(repo, n, facts)
     facts["unreadable"] = newest_is_unreadable(comments, facts["authors"], facts["found"])
@@ -842,11 +913,13 @@ def route_one(
         raise CheckError(f"rule 2: the facts of pull request #{n} cannot be read")
     pr, facts = got
     if pr.get("state") != "open" or pr.get("merged_at"):
+        note_label(repo, n, None)
         return None
     wanted = decide(facts)
     current = [str(x.get("name")) for x in pr.get("labels") or []]
     if not dry:
         apply(repo, n, current, wanted, labels)
+        note_label(repo, n, wanted)
         correct_verdicts(repo, n, facts.get("comments") or [], facts.get("authors"))
         report_unreadable(repo, n, facts.get("comments") or [], facts.get("found") or [])
         correct_approvals(
@@ -932,7 +1005,7 @@ def finish_brief(repo: str, n: int, dry: bool) -> int | None:
 
 def stale_running(repo: str, done: set[int]) -> list[int]:
     """The open pull requests labelled `agk:ci-running`, other than DONE (brief #309 answer 2)."""
-    found = pages(f"repos/{repo}/pulls?state=open")
+    found = open_pulls(repo)
     if found is None:
         raise CheckError("rule 1: the open pull requests cannot be read for the sweep")
     return [
@@ -961,6 +1034,7 @@ def sweep_one(
     current = [str(x.get("name")) for x in pr.get("labels") or []]
     if not dry:
         apply(repo, n, current, wanted, labels)
+        note_label(repo, n, wanted)
     print(f"#{n} {wanted} (swept)")
     if entered is not None and not dry and entering_merge_ready(current, wanted):
         entered(n)
@@ -1159,7 +1233,7 @@ def route_branch(
 
 def merge_ready(repo: str) -> list[int]:
     """The open pull requests labelled `agk:merge-ready` (brief #1143 answer 1)."""
-    found = pages(f"repos/{repo}/pulls?state=open")
+    found = open_pulls(repo)
     if found is None:
         raise CheckError("rule 7: the open pull requests cannot be read for the merger")
     return [
@@ -1239,7 +1313,7 @@ def route_health(root: Path, repo: str, labels: Labels, dry: bool) -> None:
 
 
 def open_numbers(repo: str, head: str | None = None) -> list[int]:
-    found = pages(f"repos/{repo}/pulls?state=open") or []
+    found = open_pulls(repo) or []
     return [
         int(p["number"])
         for p in found
@@ -1322,9 +1396,10 @@ def approve_items(repo: str, pr: dict, root: Path) -> list[dict]:
 
 
 def pipeline_document(repo: str, root: Path) -> dict:
-    """What waits for a person, from a fresh read of the open pull requests."""
+    """What waits for a person, from the run's one read of the open pull requests with the labels
+    this run set (brief #1263 answer 7)."""
     now = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    found = pages(f"repos/{repo}/pulls?state=open")
+    found = open_pulls(repo)
     doc: dict = {"schema": 1, "as_of": now, "ready": [], "approve": []}
     if found is None:
         doc["counts"] = {k: "unknown" for k in PIPELINE_COUNTS}
@@ -1372,6 +1447,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     root = repo_root()
     RECORD_OPEN.clear()  # read once per run (brief #1212)
+    OPEN_PULLS.clear()  # read once per run (brief #1263 answer 7)
     try:
         if paused(root):  # brief #348 (ADR-0196): nothing is read and nothing is written
             print(PAUSED_LINE)

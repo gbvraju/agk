@@ -247,8 +247,8 @@ change with an ADR in the same pull request.
 Say it plainly to everyone working on the project:
 
 - **Router labels from the local evidence.** The router's job does not run, so `python3 scripts/agk/route.py --all` is run
-  once per review pass with a person's own `gh` (brief #1212, ADR-0513). Until the conductor's guard allows that command, a
-  guarded conductor cannot run it: a person, or a conductor session without the guard, runs it. While the one record
+  once per review pass with a person's own `gh` (brief #1212, ADR-0513). The conductor runs it on each pass (brief #1263,
+  ADR-0534); a person runs it only when no conductor is alive. While the one record
   issue is open, a required check that never reported on a head is read from the builder's newest `Report:` on that head: its
   `Evidence:` line naming the head counts as green, a `prepush: stopped at ...` or `failed: step ...` line in it as red
   (`agk:ci-red`), and no such line leaves the pull request with the builder (`agk:build`), never at `agk:ci-running`. A check

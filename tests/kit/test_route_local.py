@@ -254,7 +254,7 @@ os.execv(sys.executable, [sys.executable, os.path.join(os.path.dirname(__file__)
 
 def two_pulls(stub: RouteStub) -> None:
     for n in (7, 8):
-        stub.pull(n, labels=("agk:build",))
+        stub.pull(n, labels=("agk:review",))  # green checks reported: review in either mode
     stub.open_list([7, 8])
 
 
@@ -278,7 +278,7 @@ def test_f_execution_local_answers_without_any_issue_read(stub, proj, tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert reads_of_open_issues(stub) == 0
     assert searches(stub) == 0
-    assert "#7 agk:build" in result.stdout and "#8 agk:build" in result.stdout
+    assert "#7 agk:review" in result.stdout and "#8 agk:review" in result.stdout
 
 
 def test_f_the_reading_reuses_merge_cleared_local_mode(monkeypatch, tmp_path):
@@ -301,7 +301,8 @@ def test_g_without_execution_one_search_call_decides(stub, proj, tmp_path):
     assert searches(stub) == 1
     assert reads_of_open_issues(stub) == 0
     query = next(e for e in endpoints(stub) if e.startswith(SEARCH))
-    for part in ("repo%3Ao%2Fr", "is%3Aissue", "is%3Aopen", "in%3Atitle", "Local%20mode%20since"):
+    owner, name = REPO.split("/")
+    for part in (f"repo%3A{owner}%2F{name}", "is%3Aissue", "is%3Aopen", "in%3Atitle", "Local%20mode%20since"):
         assert part in query
 
 
