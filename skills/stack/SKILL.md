@@ -97,3 +97,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-next-steps --brief 
 ```
 
 Do not commit or push, and do not open a pull request: the person or their session does.
+
+Next on the path from an idea (`docs/guides/planning.md`, "From an idea"): once an option is accepted, the planning sources:
+`python3 scripts/agk/design_import.py source --version v<n> --slug <slug>`, `python3 scripts/agk/plan_sources.py vision`
+and `python3 scripts/agk/plan_sources.py architecture`, then `/agk:plan-intake <path outside docs/>`.

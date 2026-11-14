@@ -106,6 +106,38 @@ checkout; the other scripts are installed under `scripts/agk/`.
    - **The formal gate.** The board's `Sign-off` is a reading aid, not a record: the plan's gate stays the owner's
      `Approve: plan <full head ID>` line of step 8.
 
+## From an idea
+
+A project that starts from an idea, with no customer prototype, reaches the same published plan: its vision, its charter,
+its signed-off kit design and its accepted stack become the planning sources (SPEC-0043 rules 2a and 2b as amendment 174
+proposes; brief #1216, ADR-0515). Each step is its own pull request, merged by you before the next.
+
+1. **Vision and charter.** `/agk:start "<problem statement>"` or `/agk:vision "<idea>"` writes `constitution/vision.md`
+   and the charter ADR `docs/adr/<n>-project-charter.md`; you review and merge it, and the charter ADR is Accepted.
+2. **Design inventory.** `/agk:design inventory` lists every screen and state; you agree it with
+   `Approve: inventory <full head ID>`.
+3. **Prototype and sign-off.** `/agk:design prototype` draws the kit version `docs/design/prototype/v<n>/`; you sign it
+   off with `Approve: design v<n> <full head ID>`, and its `design` row is appended to `docs/design/signoffs.md`.
+4. **Stack and architect.** `/agk:stack` writes the stack ADR `docs/adr/<n>-stack-options.md` with its options; the
+   architect accepts one option, which sets the ADR `Accepted`.
+5. **The design source.** `python3 scripts/agk/design_import.py source --version v<n> --slug <slug>` writes once
+   `docs/sources/<slug>-prototype-v<n>.md`, one `## <screen>/<state>` heading per page `<screen>--<state>.html` with its
+   visible text. It refuses a version that is not signed off with the digest its folder has now.
+6. **The vision and architecture sources.** `python3 scripts/agk/plan_sources.py vision` writes once
+   `docs/sources/vision.md` (`Kind: charter`) from the vision and the Accepted charter ADR, and
+   `python3 scripts/agk/plan_sources.py architecture` writes once `docs/sources/architecture.md` (`Kind: other`) from
+   the Accepted stack ADR, each text unchanged with every heading kept. Each refuses an ADR that is not Accepted and an
+   existing file. Commit the three sources in one pull request.
+7. **Draft the proposals.** `/agk:plan-intake <path outside docs/>`, as in step 4 of the path above.
+8. **Validate.** `python3 scripts/agk/plan_intake.py validate --proposals FILE`, as in step 5.
+9. **Render.** `python3 scripts/agk/plan_intake.py render --proposals FILE`, as in step 6.
+10. **Trace.** `python3 scripts/agk/check_plan.py --trace`, as in step 7.
+11. **Review the scope, then approve.** First run `/agk:scope-review <report path outside docs/>` in a fresh session
+    and read its report (ADR-0517); then an account of `spec_approvers` posts `Approve: plan <full head ID>`, as in
+    step 8.
+12. **Publish.** `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]`, as in step 9.
+13. **Board.** `/agk:board --yes` on your own machine, as in step 9.
+
 ## From a prototype and an OpenSpec file
 
 When the customer gives a click-through prototype and an OpenSpec functional file (capabilities, each `Requirement:` with

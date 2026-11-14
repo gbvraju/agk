@@ -630,6 +630,9 @@ tests = [
   "tests/kit_dev/test_plan_intake_skill.py",
 ]
 [[testing.map]]
+code = "scripts/agk/plan_sources.py"
+tests = ["tests/kit/test_plan_sources.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/plan_ceremony.py"
 tests = ["tests/kit/test_plan_ceremony.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
