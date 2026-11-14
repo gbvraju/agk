@@ -46,7 +46,7 @@ without milestones see no change. SPEC-0034 rule 15 says nothing of the order; t
 `docs/runs/proposed-spec-amendments-181.md` (amendment 181, the conductor's correction on brief #1232), not applied
 here. Protected path classes changed: `scripts/agk/` (`session_plan.py`, `common.py` for the `[plan]` key),
 `tests/kit/` (`test_session_plan_milestones.py`, new) and `agk.toml` (the new test file added to the
-`[[testing.map]]` entry of `scripts/agk/session_plan.py`, nothing else).
+`[[testing.map]]` entries of `scripts/agk/session_plan.py` and `scripts/agk/session.py`, nothing else).
 
 ## Residual
 
