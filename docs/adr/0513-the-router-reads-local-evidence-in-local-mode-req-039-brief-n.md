@@ -1,6 +1,6 @@
 # ADR-0513: The router reads local evidence in local mode
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0032, SPEC-0039, ADR-0182, ADR-0385, brief #1212, plan #661
