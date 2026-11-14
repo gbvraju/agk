@@ -1262,6 +1262,118 @@ def paused(root: Path, ref: str | None = None) -> bool:
     return value
 
 
+# --- the shared main folder (brief #1301, ADR-0551) ----------------------------------------------
+
+MAIN_FOLDER_TEXT = (
+    "this is the main folder that other sessions read; start in your own worktree "
+    "(git worktree add ../agk-<session> origin/<default branch>)"
+)
+REMOTE_RUNTIME = "CLAUDE_CODE_REMOTE"  # set to "true" in Claude Code on the web (verify)
+
+
+def _git_text(root: Path, *args: str) -> str | None:
+    """The stripped output of a read-only git command in ROOT, or None when it fails."""
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
+        )
+    except OSError:
+        return None
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def worktree_paths(root: Path) -> list[Path]:
+    """The clone's worktrees, the main folder first; empty outside git."""
+    text = _git_text(root, "worktree", "list", "--porcelain")
+    if text is None:
+        return []
+    return [Path(x[len("worktree ") :]) for x in text.splitlines() if x.startswith("worktree ")]
+
+
+def is_main_worktree(root: Path) -> bool:
+    """True when ROOT is the clone's main folder: its git directory is the common directory."""
+    found = _git_text(root, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+    parts = (found or "").splitlines()
+    return len(parts) == 2 and Path(parts[0]).resolve() == Path(parts[1]).resolve()
+
+
+def clone_shared_by(root: Path) -> str | None:
+    """What makes ROOT's clone one that several sessions share, named as a setting, or None:
+    `execution = "local"`; a `[flow] launch_adapter`, except in a cloud session, whose clone is
+    its own (brief #1301 mode check CI, Q-1301-1); another worktree whose folder is `agk-*`."""
+    try:
+        settings = config_source(root)
+    except (OSError, ValueError, tomllib.TOMLDecodeError):
+        settings = {}
+    if settings.get("execution") == "local":
+        return "setting: execution"
+    flow = settings.get("flow")
+    adapter = flow.get("launch_adapter") if isinstance(flow, dict) else None
+    if isinstance(adapter, str) and adapter.strip() and os.environ.get(REMOTE_RUNTIME) != "true":
+        return "setting: [flow] launch_adapter"
+    if any(p.name.startswith("agk-") for p in worktree_paths(root)[1:]):
+        return "found: another agk-* worktree"
+    return None
+
+
+def shared_main(root: Path) -> bool:
+    """True when ROOT is the main folder of a clone that several sessions share (brief #1301)."""
+    return is_main_worktree(root) and clone_shared_by(root) is not None
+
+
+def _default_branch_of(root: Path) -> str:
+    try:
+        return str(load_config(root).get("default_branch") or "main")
+    except (CheckError, OSError, ValueError, tomllib.TOMLDecodeError):
+        return "main"
+
+
+def main_folder_refusal(root: Path, push: bool = False) -> tuple[str, bool] | None:
+    """None when a session may build here; else (line, refused). From the shared main folder
+    `claim` and `next --take` are refused, and a push (PUSH) unless the folder is on the default
+    branch; in personal mode (a `[personal]` table) the line is a warning and nothing is refused.
+    The line names what made the clone shared, never a value."""
+    if not is_main_worktree(root):
+        return None
+    by = clone_shared_by(root)
+    if by is None:
+        return None
+    if push and _git_text(root, "symbolic-ref", "--short", "-q", "HEAD") == _default_branch_of(
+        root
+    ):
+        return None
+    try:
+        personal = isinstance(config_source(root).get(PERSONAL_TABLE), dict)
+    except (OSError, ValueError, tomllib.TOMLDecodeError):
+        personal = False
+    if personal:
+        return f"warning: {MAIN_FOLDER_TEXT} ({by})", False
+    return f"refused: {MAIN_FOLDER_TEXT} ({by})", True
+
+
+def main_folder_state(root: Path) -> tuple[str, int, str] | None:
+    """(branch, untracked files, default branch) of the main folder of ROOT's clone when that
+    clone is shared and the folder is off the default branch or holds untracked files outside
+    the ignored paths; None otherwise, also outside git."""
+    trees = worktree_paths(root)
+    if not trees or clone_shared_by(root) is None:
+        return None
+    main = trees[0]
+    default = _default_branch_of(root)
+    branch = _git_text(main, "symbolic-ref", "--short", "-q", "HEAD") or "a detached head"
+    others = _git_text(main, "ls-files", "--others", "--exclude-standard", "-z")
+    untracked = len([x for x in (others or "").split("\0") if x])
+    if branch == default and not untracked:
+        return None
+    return branch, untracked, default
+
+
+def main_folder_line(root: Path) -> str | None:
+    """`on <branch>, <n> untracked` for `main_folder_state`, or None."""
+    state = main_folder_state(root)
+    return None if state is None else f"on {state[0]}, {state[1]} untracked"
+
+
 def json_records(path: Path, label: str) -> list[dict]:
     """The objects in a file written by `gh api`: an array, arrays, pages or one object a line."""
     try:
