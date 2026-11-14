@@ -14,6 +14,7 @@ it prints today. Fixture repository in `tmp_path` (two lanes, three briefs, one 
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from test_session import REPO, Stub, issue, listing, posts
@@ -111,6 +112,7 @@ TODAY_KEYS = {
     "conflicts",
     "default_branch",
     "stale_commits",
+    "reads",  # ADR-0529: what the plan read
 }
 
 
@@ -152,8 +154,11 @@ def three(stub: Stub) -> None:
 
 
 def lines_of(out) -> list[str]:
+    """The plan's lines but its last, `reads: ...` (ADR-0529), which every plan ends with."""
     assert out.returncode == 0, out.stdout + out.stderr
-    return out.stdout.splitlines()
+    lines = out.stdout.splitlines()
+    assert re.fullmatch(r"reads: \d+ calls \(\d+ from cache\), [\d.]+ s", lines[-1])
+    return lines[:-1]
 
 
 # --- rule 5 and rule 8: without a declaration the plan prints exactly what it prints today --------

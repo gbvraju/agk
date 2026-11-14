@@ -17,7 +17,9 @@ run of a pull request in a scratch worktree (SPEC-0030 rule 6, amendment 53):
 `env -i PATH="$PATH" HOME=<scratch>` (the run's own scratch directory, so that neither an
 environment token nor the home directory's stored credentials reach the code) and, optionally, one
 `AGK_BASE=<sha>` right after it, as CI sets it,
-`make -C <scratch> test` or `governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`.
+`make -C <scratch> test` or `governance`, `make -C <scratch> -f agk.mk agk-governance` or
+`agk-project-test` (the kit's own file, present in a project set up with init or adopt, brief
+#1264) and `python3 -I <scratch>/scripts/agk/<name>.py ...`.
 A scratch directory is `agk-conductor-<name>` directly in the system temp directory and outside
 the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
@@ -98,6 +100,15 @@ prints an explicit `allow` decision, so that the `ask` entries that hold builder
 `.claude/settings.json` do not stop the conductor `(verify: a PreToolUse hook's allow lifts a
 settings ask rule)`. `gh pr merge`, `gh api` with `PUT`, another copy, a link, another form and any
 extra option stay denied.
+Without `--shadow` the conductor may also move the pull request labels in local mode (brief #1263,
+ADR-0534): exactly `python3|python scripts/agk/route.py --all` or `... route.py --pr <n>` (digits
+only), the project's own regular file, and only while the project is in local mode as `route.py`
+itself decides it (`route.record_open`, reused, no copy): `execution = "local"` in the checkout's
+agk.toml, read with no network call, else the one open local-mode record issue, found with one
+search call (or, when the search fails, by paging the open issues), the other network read of this
+guard. In CI mode the command is refused with a message naming the setting, because the router
+workflow moves the labels there; `--dry-run`, `--branch`, `--health`, another option and another
+copy stay denied.
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -105,7 +116,7 @@ A comment `POST` whose `body=@` file is not an absolute path is refused with a m
 the likely cause (a backslash path loses its backslashes in a POSIX shell such as Git Bash), so
 that the conductor writes the forward-slash form; nothing more is allowed by it.
 The message names the rule, never the command or the path. Standard library only; no network but
-the reads of `check-verdict` named above.
+the reads of `check-verdict` and of the router's local mode named above.
 """
 
 from __future__ import annotations
@@ -162,6 +173,8 @@ except ImportError:  # without it nothing merges
     AUTO_MERGE = None
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
+KIT_MAKEFILE = "agk.mk"  # the kit's make file, in every project (brief #1264)
+KIT_TARGETS = ("agk-governance", "agk-project-test")  # its two targets a scratch run may call
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
 SCRATCH_NAME = re.compile(r"agk-conductor-[A-Za-z0-9._-]+")
 SHA = re.compile(r"[0-9a-f]{7,40}")
@@ -183,6 +196,11 @@ SESSION_SCRIPT = os.path.join("scripts", "agk", "session.py")
 LAUNCH_SCRIPT = os.path.join("scripts", "agk", "launch.py")
 MERGE_SCRIPT = os.path.join("scripts", "agk", "merge_cleared.py")
 CONDUCTOR_SCRIPT = os.path.join("scripts", "agk", "conductor.py")
+ROUTE_SCRIPT = os.path.join("scripts", "agk", "route.py")
+ROUTE_RULE = (  # brief #1263 (ADR-0534): the setting, never a value
+    "conductor guard rule 6: the router runs from its workflow unless the project is in local"
+    " mode (setting: execution, or the one local-mode record issue)"
+)
 ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MERGE_PR = re.compile(r"[1-9][0-9]{0,9}")
 MERGE_SHA = re.compile(r"[0-9a-f]{40}")
@@ -253,14 +271,17 @@ def on_origin_branch(sha: str) -> bool:
 
 
 def run_allowed(words: list[str], home: str) -> bool:
-    """`make -C <scratch> test|governance` or `python3 -I <scratch>/scripts/agk/<name>.py ...`,
-    where <scratch> is `home`, the HOME of the clean environment."""
+    """`make -C <scratch> test|governance`, `make -C <scratch> -f agk.mk agk-governance` or
+    `agk-project-test` (the kit's own file, present in a project set up with init or adopt, brief
+    #1264) or
+    `python3 -I <scratch>/scripts/agk/<name>.py ...`, where <scratch> is `home`, the HOME of the
+    clean environment."""
     if words[0] == "make":
-        return (
-            len(words) == 4
-            and words[1] == "-C"
-            and words[3] in ("test", "governance")
-            and words[2] == home
+        if len(words) < 3 or words[1] != "-C" or words[2] != home:
+            return False
+        rest = words[3:]
+        return rest in (["test"], ["governance"]) or rest in (
+            ["-f", KIT_MAKEFILE, target] for target in KIT_TARGETS
         )
     if words[0] == "python3" and len(words) > 2 and words[1] == "-I":
         head, name = os.path.split(words[2])
@@ -578,6 +599,39 @@ def routine_form(rest: list[str]) -> bool:
     return False
 
 
+def route_form(words: list[str], cwd: object) -> bool:
+    """`python3|python scripts/agk/route.py --all` or `... --pr <n>`, the project's own regular
+    file (brief #1263 answer 1); the mode is judged by `route_allowed`."""
+    if len(words) not in (3, 4) or words[0] not in ("python3", "python"):
+        return False
+    rest = words[2:]
+    if rest != ["--all"] and not (
+        len(rest) == 2 and rest[0] == "--pr" and bool(MERGE_PR.fullmatch(rest[1]))
+    ):
+        return False
+    return own_script(words[1], cwd, ROUTE_SCRIPT)
+
+
+def local_mode_here() -> bool:
+    """The project is in local mode as `route.py` decides it (`route.record_open`, reused); a
+    reading that fails is CI mode, so the command stays refused."""
+    root = project_root()
+    repo = origin_repo(root)
+    if repo is None:
+        return False
+    try:
+        import route  # read only for this command: it imports most of the kit
+
+        return route.record_open(repo, Path(root)) is True
+    except Exception:  # noqa: BLE001 - any failure of the reading fails closed
+        return False
+
+
+def route_allowed(words: list[str], cwd: object) -> bool:
+    """The router's two forms while the project is in local mode (brief #1263, ADR-0534)."""
+    return route_form(words, cwd) and local_mode_here()
+
+
 def configured_adapter() -> str | None:
     """`launch_adapter` when the flow table of agk.toml sets it and `auto_start = true` both in the
     checkout and at `origin/<default_branch>` (as last fetched, with no network call here), with
@@ -702,6 +756,7 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
             or routine_allowed(words, cwd)
             or launch_allowed(words, cwd)
             or merge_allowed(words, cwd)
+            or route_allowed(words, cwd)
         )
     return False
 
@@ -723,6 +778,9 @@ def decide(payload: dict, shadow: bool = False) -> str | None:
         command = data.get("command")
         if bash_allowed(command, shadow, payload.get("cwd")):
             return None
+        words = tokens_of(command) if isinstance(command, str) else None
+        if not shadow and words and route_form(words, payload.get("cwd")):
+            return ROUTE_RULE  # the form is right, the mode is not (brief #1263 (c))
         return PATH_RULE if body_path_not_absolute(command) else BASH_RULE
     return None
 

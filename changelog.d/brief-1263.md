@@ -1,0 +1,1 @@
+- In local mode the conductor moves the pull request labels on each review pass (`route.py --all`, allowed by its guard only in local mode), and the router decides local mode from `execution = "local"` or one search call instead of paging every open issue, reading the open pull requests once per run (brief #1263, ADR-0534)

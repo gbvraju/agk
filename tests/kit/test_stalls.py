@@ -351,11 +351,12 @@ def test_idle_capacity_not_when_the_plan_starts_nobody(proj, stub):
     assert kinds(proj, stub) == []
 
 
-def test_idle_capacity_a_dependence_that_cannot_be_read_exits_1(proj, stub):
-    """The verdict on b0b3ef3, item 1: `GOOD` depends on #3, whose read fails."""
+def test_idle_capacity_a_brief_that_cannot_be_read_exits_1(proj, stub):
+    """The verdict on b0b3ef3, item 1: a read of the plan fails. The plan judges a dependency from
+    its listings with no GET (ADR-0529), so the read that fails is the brief's comments."""
     stub.serve(ISSUES, [issue(5)])
-    stub.serve(f"{ISSUES}/5/comments", [])
-    stub.serve(f"{ISSUES}/3", "FAIL")
+    stub.serve(f"{ISSUES}/5/comments", [], nth=1)  # the claim-no-pr read
+    stub.serve(f"{ISSUES}/5/comments", "FAIL", nth=2)  # the plan's read
     out = stalls(proj, stub)
     assert out.returncode == 1, out.stdout + out.stderr
     assert "rule 2 (idle-capacity): the plan cannot be read" in out.stdout

@@ -683,10 +683,16 @@ def upgrade_cli(target: Path, *args: str):
     )
 
 
+# Released tags known to refuse their own install from a stale file table (issue #1256, ADR-0539).
+KNOWN_BROKEN_TAGS = ("0.64.3",)
+
+
 @pytest.mark.parametrize("mode", ["init", "adopt"])
 @pytest.mark.parametrize("version", [v for v in real_versions() if v not in ("0.1.0", "0.2.0")])
 def test_ac1_a_real_old_install_upgrades_with_no_conflict(tmp_path, version, mode):
     """REQ-014 AC5: rules 7, 13 and 21 against the real kit and the real table."""
+    if version in KNOWN_BROKEN_TAGS:
+        pytest.skip(f"kit {version} is a known-broken tag (issue #1256)")
     target = old_install(tmp_path, version, mode)
     if target is None:
         pytest.skip(f"kit {version} has no {mode}")

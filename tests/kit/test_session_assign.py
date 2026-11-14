@@ -18,6 +18,7 @@ from test_session import (
     FREE,
     ISSUES,
     REPO,
+    claim_posts,
     comment,
     iso,
     issue,
@@ -76,7 +77,7 @@ def test_ac4_a_build_is_claimed_with_one_post_that_names_the_build(proj, stub):
     stub.serve(BRIEF, [took(1, "s-me", "b", "me")], nth=2)
     out = claim(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5 build (b)"
-    assert posts(stub) == [["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (b)"]]]
+    assert claim_posts(stub) == [["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (b)"]]]
 
 
 def test_ac4_a_live_take_of_the_same_build_is_never_taken_twice(proj, stub):
@@ -91,7 +92,7 @@ def test_ac4_another_build_of_the_same_brief_is_free(proj, stub):
     stub.serve(BRIEF, [took(1, "s-other", "a")], nth=1)
     stub.serve(BRIEF, [took(1, "s-other", "a"), took(2, "s-me", "b", "me")], nth=2)
     out = claim(proj, stub)
-    assert out.returncode == 0 and len(posts(stub)) == 1
+    assert out.returncode == 0 and len(claim_posts(stub)) == 1
 
 
 def test_ac4_a_whole_brief_take_by_another_session_blocks_every_build(proj, stub):
