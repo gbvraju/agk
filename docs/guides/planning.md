@@ -31,6 +31,8 @@ checkout; the other scripts are installed under `scripts/agk/`.
    `docs/design/imported/i<n>/map.md`: one row per page, `<file> -> <screen>/<state>` with a screen and state of
    `docs/design/inventory.md`, or `<file> -> out: <reason>`. Every state the inventory marks `yes` must be covered by a
    row or a kit version.
+   Of the kit versions `docs/design/prototype/v<n>/`, only the latest must cover the inventory: a signed-off older
+   version that predates a screen added later is not failed for it (brief #1208, ADR-0512).
 2. **Turn the prototype into a source** (SPEC-0043 rule 2a).
    `python3 scripts/agk/design_import.py source --version i<n> --slug <slug>` writes once
    `docs/sources/<slug>-prototype-i<n>.md`: a `Kind: design` source with one `## <screen>/<state>` heading per mapped row

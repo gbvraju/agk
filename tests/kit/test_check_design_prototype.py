@@ -773,7 +773,7 @@ def test_ac4_a_signed_off_v1_is_not_checked_for_states_added_after_it(tmp_path):
 
 
 def test_ac4_the_latest_version_missing_a_state_still_fails(tmp_path):
-    """REQ-044 AC4: SPEC-0037 rule 7 amendment (b): the latest version without a `yes` state fails."""
+    """REQ-044 AC4: SPEC-0037 rule 7 amendment (b): the latest version lacking a state fails."""
     version(tmp_path)
     sign_off(tmp_path, VERSION)
     grow(tmp_path, draw=False)
@@ -824,7 +824,7 @@ def test_ac4_an_older_unsigned_version_with_a_removed_screen_still_fails(tmp_pat
 
 
 def test_ac4_an_older_signed_off_version_with_a_removed_screen_passes(tmp_path):
-    """REQ-044 AC4: amendment (d): a frozen older version is not failed for a screen removed later."""
+    """REQ-044 AC4: amendment (d): a frozen older version passes with a removed screen."""
     version(tmp_path)
     put(
         tmp_path,
@@ -832,7 +832,7 @@ def test_ac4_an_older_signed_off_version_with_a_removed_screen_passes(tmp_path):
         page("book-gone", "default", ("default",), "book-list--default.html"),
     )
     sign_off(tmp_path, VERSION)
-    grow(tmp_path)
+    (grow(tmp_path) / "book-gone--default.html").unlink()  # v2 drops the removed screen
     assert design_prototype_check.version_problems(tmp_path, VERSION) == []
     proc = check(tmp_path)
     assert proc.returncode == 0, proc.stdout

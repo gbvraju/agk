@@ -7,7 +7,10 @@ Installed: `kit/manifest.json` lists it in `verbatim`, and `check_design.py` cal
 file such as `theme.css` stands where the screen is):
 
 - rule 7: a screen and state marked `yes` in the inventory with no page, or a page for none (an
-  `n/a:` state needs no page);
+  `n/a:` state needs no page). Only the latest kit version, the highest-numbered, must cover the
+  inventory (brief #1208, ADR-0512): an older version is not failed for a state with no page, and a
+  page of it for no screen fails only while it is not signed off (a signed-off version is frozen,
+  SPEC-0037 rule 9); `predates(root, version)` is true for an older version that lacks a page;
 - rule 7: a link or a loaded file (`href`, `src`, `srcset`, `poster`, `data`, `action`) that does
   not resolve to a file of the same folder;
 - rule 5: an inline script, an event handler attribute, a `javascript:` link, a script element
@@ -41,6 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_inventory
+import design_signoff
 import design_standard
 
 PROTOTYPE = "docs/design/prototype"
@@ -89,6 +93,21 @@ def versions(root: Path) -> list[str]:
         and any(p.iterdir())  # an empty folder is no version
     ]
     return sorted(found, key=lambda name: int(name[1:]))
+
+
+def is_latest(root: Path, version: str) -> bool:
+    """Whether VERSION is the highest-numbered kit version, the one checked for coverage."""
+    found = versions(root)
+    return not found or found[-1] == version
+
+
+def predates(root: Path, version: str) -> bool:
+    """True for an older kit version that lacks a page of a `yes` state (information only)."""
+    expected = expected_pages(root)
+    if expected is None or is_latest(root, version):
+        return False
+    folder = root / PROTOTYPE / version
+    return bool(expected - {p.stem for p in folder.glob("*.html") if p.is_file()})
 
 
 def expected_pages(root: Path) -> set[str] | None:
@@ -523,9 +542,13 @@ def version_problems(root: Path, version: str) -> list[str]:
     if expected is None:
         out.append(f"rule 7: {rel}: there is no inventory to check the pages against")
     else:
-        for name in sorted(expected - set(pages)):
+        latest = is_latest(root, version)  # only the latest version covers the inventory
+        for name in sorted(expected - set(pages)) if latest else []:
             out.append(f"rule 7: {rel}/{name}: the state has no page")
-        for name in sorted(set(pages) - expected - {"index"}):
+        stray = sorted(set(pages) - expected - {"index"})
+        if not latest and design_signoff.signed_off(root, version):
+            stray = []  # a frozen older version keeps a screen the inventory removed later
+        for name in stray:
             out.append(
                 f"rule 7: {rel}/{name}: the page is for no screen and state of the inventory"
             )
