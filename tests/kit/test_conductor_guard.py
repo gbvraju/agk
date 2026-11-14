@@ -740,3 +740,193 @@ def test_d_the_agent_and_the_review_pass_name_the_command_once_each():
     assert skill.count(command) == 1
     guide = (REPO_ROOT / "docs" / "guides" / "local-mode.md").read_text(encoding="utf-8")
     assert "Until the conductor's guard allows that command" not in guide
+
+
+# --- brief #1281 (ADR-0542): the conductor checks a local evidence record -----------------------
+
+EVIDENCE_SCRIPT = "scripts/agk/evidence.py"
+HEX = "0123456789abcdef0123456789abcdef01234567"
+
+
+class Evidence(Work):
+    """A real clone with the project's own evidence.py, a scratch record and a shared record."""
+
+    def __init__(self, root: Path) -> None:
+        super().__init__(root)
+        (self.root / "scripts" / "agk").mkdir(parents=True)
+        (self.root / EVIDENCE_SCRIPT).write_text("print('x')\n", encoding="utf-8")
+        (self.root / "agk.toml").write_text('execution = "local"\n', encoding="utf-8")
+        self.scratch.mkdir()
+        self.record = self.scratch / "record.json"
+        self.record.write_text("{}\n", encoding="utf-8")
+        shared = self.root / ".git" / "agk-evidence"
+        shared.mkdir()
+        self.shared = shared / f"{HEX}.json"
+        self.shared.write_text("{}\n", encoding="utf-8")
+
+    def decide(self, command: str, *args: str):
+        payload = bash_of(command, self.root)
+        proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+            [sys.executable, str(HOOK), *args],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            env={
+                "PATH": "/usr/bin:/bin",
+                "CLAUDE_PROJECT_DIR": str(self.root),
+                "TMPDIR": str(self.tmp),
+            },
+        )
+        return denial(proc.stdout)
+
+
+@pytest.fixture
+def ev(tmp_path: Path) -> Evidence:
+    return Evidence(tmp_path)
+
+
+EVIDENCE_OK = [
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX}",
+    f"python {EVIDENCE_SCRIPT} check --head abc1234",
+    f"python3 {EVIDENCE_SCRIPT} check --head abc1234 --sample 3 --json",
+    f"python3 {EVIDENCE_SCRIPT} check --json --head abc1234",
+    f"python3 ./{EVIDENCE_SCRIPT} check --head abc1234",
+    f"python3 {EVIDENCE_SCRIPT} check {{record}} --head abc1234",
+    f"python3 {EVIDENCE_SCRIPT} check {{record}} --head {HEX} --sample 2 --json",
+    f"python3 {EVIDENCE_SCRIPT} check {{shared}} --head {HEX}",
+]
+
+
+@pytest.mark.parametrize("command", EVIDENCE_OK)
+def test_a_both_forms_of_the_evidence_check_are_allowed(ev, command):
+    """REQ-039: brief #1281 answer 3 (a): no record, or one of a scratch or the shared folder."""
+    found = ev.decide(command.format(record=ev.record, shared=ev.shared))
+    assert found is None, command
+
+
+def test_a_the_full_path_of_the_projects_own_script_is_allowed(ev):
+    """REQ-039: brief #1281 answer 1, the project's own regular file named by its full path."""
+    assert ev.decide(f"python3 {ev.root / EVIDENCE_SCRIPT} check --head {HEX}") is None
+
+
+EVIDENCE_NO = [
+    f"python3 {EVIDENCE_SCRIPT} check",
+    f"python3 {EVIDENCE_SCRIPT} check {{record}}",
+    f"python3 {EVIDENCE_SCRIPT}",
+    f"python3 {EVIDENCE_SCRIPT} --help",
+    f"python3 {EVIDENCE_SCRIPT} rerun --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --write",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --record x",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --json --json",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --sample 2 --sample 3",
+    f"python3 {EVIDENCE_SCRIPT} check --head abc123",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX}0",
+    f"python3 {EVIDENCE_SCRIPT} check --head HEAD",
+    f"python3 {EVIDENCE_SCRIPT} check --head",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --sample 0",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --sample x",
+    f"python3 {EVIDENCE_SCRIPT} check --head={HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check {{record}} {{shared}} --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check {{inside}} --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check {{missing}} --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check {{folder}} --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check record.json --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check /etc/hostname --head {HEX}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX}; rm -rf x",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} && date -u",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} > out.txt",
+    f"python3 {EVIDENCE_SCRIPT} check --head $(git rev-parse HEAD)",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} | tee x",
+    f"python3 -I {EVIDENCE_SCRIPT} check --head {HEX}",
+    f"python3 other/evidence.py check --head {HEX}",
+    f"python3 {{scratch}}/scripts/agk/evidence.py check --head {HEX}",
+    f"bash {EVIDENCE_SCRIPT} check --head {HEX}",
+    f"python3 scripts/agk/prepush.py check --head {HEX}",
+]
+
+
+@pytest.mark.parametrize("command", EVIDENCE_NO)
+def test_b_every_other_form_option_shell_character_or_copy_is_refused(ev, command):
+    """REQ-039: brief #1281 answer 3 (b), naming the guard's rule."""
+    inside = ev.root / "record.json"
+    inside.write_text("{}\n", encoding="utf-8")
+    copy = ev.scratch / "scripts" / "agk"
+    copy.mkdir(parents=True, exist_ok=True)
+    (copy / "evidence.py").write_text("print('x')\n", encoding="utf-8")
+    text = command.format(
+        record=ev.record,
+        shared=ev.shared,
+        inside=inside,
+        missing=ev.scratch / "none.json",
+        folder=ev.scratch,
+        scratch=ev.scratch,
+    )
+    found = ev.decide(text)
+    assert found is not None and found["permissionDecision"] == "deny", text
+    assert MARK in found["permissionDecisionReason"]
+
+
+def test_b_a_record_that_links_out_of_the_scratch_directory_is_refused(ev):
+    """REQ-039: brief #1281 answer 1, RECORD a regular file of the scratch, never a link."""
+    outside = ev.tmp / "elsewhere.json"
+    outside.write_text("{}\n", encoding="utf-8")
+    link = ev.scratch / "link.json"
+    link.symlink_to(outside)
+    assert ev.decide(f"python3 {EVIDENCE_SCRIPT} check {link} --head {HEX}") is not None
+
+
+def test_b_a_link_to_the_script_is_refused(ev):
+    """REQ-039: brief #1281 answer 1, the project's own script, never through a link."""
+    elsewhere = ev.tmp / "evidence.py"
+    elsewhere.write_text("print('x')\n", encoding="utf-8")
+    (ev.root / EVIDENCE_SCRIPT).unlink()
+    (ev.root / EVIDENCE_SCRIPT).symlink_to(elsewhere)
+    assert ev.decide(f"python3 {EVIDENCE_SCRIPT} check --head {HEX}") is not None
+
+
+def test_b_the_shadow_never_runs_the_evidence_check(ev):
+    """REQ-039: brief #1281, the shadow reviewer gets no new command."""
+    assert ev.decide(f"python3 {EVIDENCE_SCRIPT} check --head {HEX}", "--shadow") is not None
+
+
+def test_the_agent_names_the_check_before_a_clearing_verdict_and_in_the_guard_list():
+    """REQ-039: brief #1281 answer 2, the local-mode paragraph and the guard's list."""
+    agent = (REPO_ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
+    local = next(p for p in agent.split("\n\n") if p.startswith("Local mode."))
+    assert "python3 scripts/agk/evidence.py check --head <sha>" in local
+    assert "before a clearing verdict" in local
+    never = next(line for line in agent.splitlines() if line.startswith("- Edit a file"))
+    assert "`evidence.py check`" in never
+
+
+EVIDENCE_MARK = "setting: execution"
+
+
+@pytest.mark.parametrize("issues", [[], None])
+def test_a_the_evidence_check_is_refused_in_ci_mode_naming_the_setting(ev, tmp_path, issues):
+    """REQ-039: brief #1281, the Verdict on 09f9127: the check runs the head's code, so local mode
+    only; in CI mode it is refused naming the setting, never a value."""
+    (ev.root / "agk.toml").write_text('execution = "github"\n', encoding="utf-8")
+    found, _ = run_route_hook(
+        ev.root, f"python3 {EVIDENCE_SCRIPT} check --head {HEX}", issues, tmp_path
+    )
+    assert found is not None and found["permissionDecision"] == "deny"
+    reason = found["permissionDecisionReason"]
+    assert MARK in reason and EVIDENCE_MARK in reason and "evidence check" in reason
+
+
+def test_a_the_evidence_check_is_allowed_while_the_record_issue_is_open(ev, tmp_path):
+    """REQ-039: brief #1281, local mode as route.py reads it (one search call)."""
+    (ev.root / "agk.toml").write_text('execution = "github"\n', encoding="utf-8")
+    command = f"python3 {EVIDENCE_SCRIPT} check --head {HEX}"
+    found, calls = run_route_hook(ev.root, command, [RECORD_ISSUE], tmp_path)
+    assert found is None
+    assert len(calls) == 1 and any(a.startswith("search/issues") for a in calls[0])
+
+
+def test_b_a_wrong_form_in_ci_mode_gets_the_general_rule(ev, tmp_path):
+    """REQ-039: brief #1281, only the right form is told about the setting."""
+    (ev.root / "agk.toml").write_text('execution = "github"\n', encoding="utf-8")
+    found, _ = run_route_hook(ev.root, f"python3 {EVIDENCE_SCRIPT} check", [], tmp_path)
+    assert found is not None and EVIDENCE_MARK not in found["permissionDecisionReason"]
