@@ -3557,25 +3557,68 @@ def brief_question(comments: list, allowed: set[str]) -> dict | None:
     return max(asked, key=lambda c: (stamp(c), c.get("id") or 0), default=None)
 
 
+QUIET_NOTE = "quiet_briefs"  # the read cache's note of briefs read with no question (ADR-0553)
+
+
+def quiet_briefs(repo: str, allowed: set[str]) -> dict:
+    """Brief #1309 answer 1: the `updated_at` of each open brief that the last pass read and found
+    with no unanswered question, kept beside the read cache; empty when the cache is off, holds
+    none, or was kept for other verdict authors (what counts as an answer changed)."""
+    note = CACHE.meta(f"repos/{repo}/", QUIET_NOTE)
+    if not isinstance(note, dict) or note.get("authors") != sorted(allowed):
+        return {}
+    briefs = note.get("briefs")
+    return briefs if isinstance(briefs, dict) else {}
+
+
+def keep_quiet(repo: str, allowed: set[str], quiet: dict[str, str]) -> None:
+    CACHE.set_meta(f"repos/{repo}/", QUIET_NOTE, {"authors": sorted(allowed), "briefs": quiet})
+
+
+def in_play(issue: dict, kept: dict) -> bool | None:
+    """Brief #1309 answer 1, ADR-0553: whether a brief's comments must be read to find a live take
+    with an unanswered question. None: its listing shows no comment, so it holds neither. True:
+    it carries the take label, or its listing does not show the count or a time, or its time is
+    not the one kept from a read that found no question. False: unchanged since that read."""
+    count = issue.get("comments")
+    if isinstance(count, int) and not isinstance(count, bool) and count == 0:
+        return None
+    if has_label(issue, TAKEN_LABEL) or not isinstance(count, int):
+        return True
+    seen = issue.get("updated_at")
+    return not (isinstance(seen, str) and kept.get(str(issue["number"])) == seen)
+
+
 def brief_questions(root, repo: str, authors: list[str], prs: list) -> tuple[list[str], list]:
     """Brief 408 answer 1: each open `agk-brief` issue with a live `taken:`, no open pull request
     with its `Brief: #n` line and an unanswered `Question:`, as a line and as a fact. A brief with
     an open pull request is left to that pull request's own rules (a draft's question is listed
-    there)."""
+    there). Only the comments of a brief in play are read (brief #1309, ADR-0553, `in_play`)."""
     found = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     if found is None:
         raise CheckError(f"rule 3: the open issues labelled {LABEL} cannot be read")
     named = {brief_number(p) for p in prs}
     allowed = {a.lstrip("@").lower() for a in authors}
+    kept = quiet_briefs(repo, allowed)
+    quiet: dict[str, str] = {}
     asked = []
     for issue in sorted(labelled(found, LABEL), key=lambda i: i["number"]):
         if issue["number"] in named:
+            continue
+        play = in_play(issue, kept)
+        if play is None:
+            continue
+        if play is False:  # unchanged since a read that found no question: still none
+            quiet[str(issue["number"])] = issue["updated_at"]
             continue
         comments = pages(f"repos/{repo}/issues/{issue['number']}/comments")
         if comments is None:
             raise CheckError("rule 3: the comments of an open brief cannot be read")
         if (question := brief_question(comments, allowed)) is not None:
             asked.append((issue["number"], comments, question))
+        elif not has_label(issue, TAKEN_LABEL) and isinstance(issue.get("updated_at"), str):
+            quiet[str(issue["number"])] = issue["updated_at"]
+    keep_quiet(repo, allowed, quiet)
     if not asked:
         return [], []
     every = pages(f"repos/{repo}/pulls?state=all")  # a merged pull request keeps a take live
