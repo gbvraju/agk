@@ -847,16 +847,16 @@ def adr_text(number: int, plan: Plan, classes: list[str], today: str) -> str:
             "",
             "## Context",
             "",
-            f"`agk upgrade` brings this project's kit from {old} to {new}. It writes {writes} files, "
-            f"deletes {gone} and {stamp}. The changed paths lie in protected classes, so the "
-            "project's `check_protected_changes` needs an ADR in the same pull request that names "
-            "each class.",
+            f"`agk upgrade` brings this project's kit from {old} to {new}. It writes {writes} "
+            f"files, deletes {gone} and {stamp}. The changed paths lie in protected classes, "
+            "so the project's `check_protected_changes` needs an ADR in the same pull request "
+            "that names each class.",
             "",
             "## Decision",
             "",
-            f"Take agk {new} as released: the kit's files of {new} replace those of {old} unchanged. "
-            f"The protected classes the upgrade changes are {named}. Files the project owns are "
-            "not rewritten.",
+            f"Take agk {new} as released: the kit's files of {new} replace those of {old} "
+            f"unchanged. The protected classes the upgrade changes are {named}. Files the "
+            "project owns are not rewritten.",
             "",
             "## Consequences",
             "",

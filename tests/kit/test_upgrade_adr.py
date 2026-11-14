@@ -1,4 +1,4 @@
-"""An upgrade arrives as one ready pull request with a complete ADR (brief #1222, ADR-0521, REQ-014).
+"""An upgrade arrives as one ready pull request with a full ADR (brief #1222, ADR-0521, REQ-014).
 
 Answer 1: `upgrade.py TARGET --write-adr` writes `docs/adr/<next>-upgrade-agk-to-<version>.md` with
 every field and section `check_adrs.py` requires, naming each protected class the upgrade changed,
