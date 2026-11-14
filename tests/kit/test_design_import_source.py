@@ -297,9 +297,10 @@ def test_a_missing_or_malformed_slug_exits_2_naming_slug(tmp_path, args):
     assert not (root / "docs" / "sources").exists()
 
 
-@pytest.mark.parametrize("args", [["--slug", "shop"], ["--slug", "shop", "--version", "v1"]])
+@pytest.mark.parametrize("args", [["--slug", "shop"], ["--slug", "shop", "--version", "x1"]])
 def test_a_missing_or_malformed_version_exits_2_naming_version(tmp_path, args):
-    """REQ-050 AC1: rule 2a, `--version` names an imported version `i<n>`."""
+    """REQ-050 AC1: rule 2a, `--version` names an imported version `i<n>` or a kit version `v<n>`
+    (amendment 174 item 1, brief #1216)."""
     root = imported(tmp_path)
     proc = source(root, *args)
     assert proc.returncode == 2
@@ -338,3 +339,104 @@ def test_source_text_returns_the_text_and_writes_nothing(tmp_path):
     text = di.source_text(root, "i1", today="2026-11-12")
     assert text.splitlines()[3] == "Date: 2026-11-12"
     assert tree(root) == before
+
+
+# --- a signed-off kit version (amendment 174 item 1, brief #1216, ADR-0515) -----------------------
+
+V1 = "docs/design/prototype/v1"
+KIT_TARGET = "docs/sources/shop-prototype-v1.md"
+HEAD = "0123456789abcdef0123456789abcdef01234567"
+LINK = "https://example.com/acme/shop/pull/12#issuecomment-345"
+
+
+def kit_version(tmp_path: Path, sign: bool = True) -> Path:
+    """A project with an invented kit version v1 (pages `<screen>--<state>.html`), signed off."""
+    import design_signoff as ds
+
+    root = tmp_path / "proj"
+    folder = root / V1
+    (folder / "screenshots").mkdir(parents=True)
+    (root / "docs" / "design" / "inventory.md").write_text(INVENTORY, encoding="utf-8")
+    (folder / "index.html").write_text("<title>Index</title><p>index text</p>\n", encoding="utf-8")
+    (folder / "standard.css").write_text("body { margin: 0 }\n", encoding="utf-8")
+    (folder / "orders--default.html").write_text(ORDERS, encoding="utf-8")
+    (folder / "orders--empty.html").write_text(EMPTY, encoding="utf-8")
+    (folder / "orders--error.html").write_text(ERROR, encoding="utf-8")
+    (folder / "signin--default.html").write_text(SIGNIN, encoding="utf-8")
+    (folder / "screenshots" / "reflow.json").write_text("{}\n", encoding="utf-8")
+    rows = "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n|---|---|---|---|---|---|\n"
+    if sign:
+        rows += f"| design | v1 | {ds.version_digest(root, 'v1')} | {HEAD} | 2026-11-10 | {LINK} |\n"
+    (root / ds.SIGNOFFS).write_text(rows, encoding="utf-8")
+    return root
+
+
+def test_a_signed_off_kit_version_becomes_a_design_source(tmp_path):
+    """REQ-050 AC1: amendment 174 item 1, one `## <screen>/<state>` per page, with its text."""
+    import design_signoff as ds
+
+    root = kit_version(tmp_path)
+    proc = source(root, "--version", "v1", "--slug", "shop")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout == f"wrote {KIT_TARGET} (4 headings)\n"
+    text = (root / KIT_TARGET).read_text(encoding="utf-8")
+    lines = text.splitlines()
+    assert lines[:3] == [
+        "Source: kit prototype v1",
+        "Kind: design",
+        f"Version: v1 {ds.version_digest(root, 'v1')}",
+    ]
+    assert re.fullmatch(r"Date: \d{4}-\d{2}-\d{2}", lines[3]) and lines[4] == ""
+    headings = [line[3:] for line in lines if line.startswith("## ")]
+    assert headings == ["orders/default", "orders/empty", "orders/error", "signin/default"]
+    assert "Your orders" in section(text, "orders/default")
+    assert "script text" not in text and "index text" not in text
+    assert section(text, "signin/default") == ["Sign in", "email", "you@example.com", "Sign in"]
+    assert check_plan.source_problems(root) == []
+    assert check_plan.location_problem(root, f"{KIT_TARGET}#orders/empty") is None
+
+
+def test_a_kit_version_that_is_not_signed_off_is_refused_writing_nothing(tmp_path):
+    """REQ-050 AC1: amendment 174 item 1, only a signed-off kit version is a source."""
+    root = kit_version(tmp_path, sign=False)
+    proc = source(root, "--version", "v1", "--slug", "shop")
+    assert proc.returncode == 1
+    assert "rule 2a" in proc.stdout and "v1" in proc.stdout and "signed off" in proc.stdout
+    assert not (root / "docs" / "sources").exists()
+
+
+def test_a_kit_version_changed_after_its_sign_off_is_refused(tmp_path):
+    """REQ-050 AC1: amendment 174 item 1, the sign-off row must carry the folder's digest now."""
+    root = kit_version(tmp_path)
+    (root / V1 / "orders--default.html").write_text("<h1>changed</h1>\n", encoding="utf-8")
+    proc = source(root, "--version", "v1", "--slug", "shop")
+    assert proc.returncode == 1
+    assert "signed off" in proc.stdout
+    assert not (root / "docs" / "sources").exists()
+
+
+def test_a_kit_version_not_on_the_branch_is_refused(tmp_path):
+    """REQ-050 AC1: amendment 174 item 1, the version must exist."""
+    root = kit_version(tmp_path)
+    proc = source(root, "--version", "v2", "--slug", "shop")
+    assert proc.returncode == 1
+    assert "rule 2a" in proc.stdout and "v2" in proc.stdout
+    assert not (root / "docs" / "sources").exists()
+
+
+def test_a_second_kit_source_run_refuses_the_existing_file(tmp_path):
+    """REQ-050 AC1: amendment 174 item 1, never over an existing file."""
+    root = kit_version(tmp_path)
+    assert source(root, "--version", "v1", "--slug", "shop").returncode == 0
+    before = (root / KIT_TARGET).read_bytes()
+    proc = source(root, "--version", "v1", "--slug", "shop")
+    assert proc.returncode == 1 and KIT_TARGET in proc.stdout
+    assert (root / KIT_TARGET).read_bytes() == before
+
+
+def test_components_still_takes_an_imported_version_only(tmp_path):
+    """REQ-050 AC1: amendment 174 item 1 changes `source` only; `components` keeps rule 16."""
+    root = kit_version(tmp_path)
+    proc = run(str(IMPORT), "components", "--root", str(root), "--version", "v1", "--slug", "shop")
+    assert proc.returncode == 2
+    assert "--version" in proc.stderr
