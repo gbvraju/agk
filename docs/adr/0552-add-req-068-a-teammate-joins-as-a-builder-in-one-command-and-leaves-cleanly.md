@@ -28,7 +28,10 @@ main folder confusing the conductor (#1301), and every start and stop needing th
    the requirement as a proposal; the spec stays `Draft` until the owner's own `Approve:` line approves it.
 2. A teammate joins with one command, `builder.py --name <member>`, a loop with no model that joins, requests, builds,
    reports and leaves, and starts one `claude --agent builder` session per brief on the tier of the brief's kind
-   (SPEC-0061 rules 2, 6 and 7).
+   (SPEC-0061 rules 2, 6 and 7). By the maintainers' correction on #1306, that session lives for the life of its pull
+   request, through fix lists, merges of main and CI fixes, waits on events only (brief #1310), keeps one working
+   summary comment, and a resumed session reads that summary, the newest verdict and the diff since its head; every
+   way it stops early leaves one hand-over line (rule 17). No session spans two briefs.
 3. A member slot is a new slot name form; its count is the members present, not a setting, and the conductor's capacity
    is the live member slots plus its own adapter builders under `max_builders` as a ceiling (rules 3, 4 and 9).
 4. The one conductor assigns: members post `Request:` and act on `Assign:` lines whatever `[flow] assign` says, and a
