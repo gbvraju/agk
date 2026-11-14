@@ -198,4 +198,5 @@ def test_ac12_the_usage_names_the_new_forms():
     """REQ-057 AC12, AC13: the usage line."""
     import session
 
-    assert "session.py plan [--json] [--record] [--if-changed] | plan --what-if DIR" in session.USAGE
+    form = "session.py plan [--json] [--record] [--if-changed] | plan --what-if DIR"
+    assert form in session.USAGE
