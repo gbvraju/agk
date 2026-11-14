@@ -17255,7 +17255,7 @@
     "constitution/principles.md": ["aff1db2adbe084000b496d563b34225c0dac7ea5df345e25f6edfb8a0e5c0797"],
     "docs/adr/TEMPLATE.md": ["f8dab6f1061dc7a703756431cb5d4ffed9127156281134547aaa7c35f292af94"],
     "docs/briefs/TEMPLATE.md": ["1f1713e583e82975b474fe72d558f16ad07fc7ee3919d74e505f02a4422329d4"],
-    "docs/guides/local-mode.md": ["bf18da8ec0733e00aac1f907f09191b8139aaab437e7be079ce3986779150dc7"],
+    "docs/guides/local-mode.md": ["5d9a84eb4104671c852b6b9504ab3f2c003ae18f46c71f64c31789e22aa61eb5"],
     "docs/runbooks/actions-blocked.md": ["e21cc1221f73194d0f4c619ea89db191c81736865096373404c928697b816b45"],
     "docs/runbooks/leaked-secret.md": ["3f15b9599b3cbf5e0eda2f8031a64f315245ae2c4c63a2cd6f0dba46424cc1c9"],
     "docs/runbooks/red-default-branch.md": ["3d7cd80f70a0bcdb28fb74d6c7bb11bed3a5b11fd29ba3ad64a48527033f31e1"],
@@ -17290,7 +17290,7 @@
     "scripts/agk/design_prototype_check.py": ["0081e484a6a9dfa72cf86a24e1ed9720fe57194a7dab035f7ca900827c7f4b38"],
     "scripts/agk/design_signoff.py": ["e7625d467b882cf14a59bbc21352650942dcc41a9d472c478ab5893bbc27e024"],
     "scripts/agk/design_standard.py": ["2a3605bd7e554e52dd82631c9bf9f259537e61de5a476331c6a869eec9a01bbe"],
-    "scripts/agk/doctor.py": ["ad8335a3aefc58a96bbcd674c3976377a4db9ca3495cc88346bcddb6b5c34456"],
+    "scripts/agk/doctor.py": ["28e52cdc09cdf3d74eae580b637f7c8df7a707086d325c8b63fa51105a45d06a"],
     "scripts/agk/drift_audit.py": ["f21d7ccc831c7f48836b2f13b35a25cdf1a3a5a6c3574156461653eb1de3c801"],
     "scripts/agk/evidence.py": ["efa8eb1d9cd81024b649f1b8f6ed4af3cefaaf91b6f09ad12a4783fafb79480d"],
     "scripts/agk/execution.py": ["701a7f729f47e90fe95fe00bd64f22eb2f3038e7987e80b29a7d886e3ffb2806"],
@@ -17372,8 +17372,8 @@
     "kit/templates/residuals.md": ["d6c193d571fbbcbf191e48c269ed88ae657aae2274cc18c0de4882533c6d3c53"],
     "kit/templates/reviewers.adopt.yaml": ["a21c37a9bac541aece5448ae1dc5faf1d0ed9e2337b939613f0be815c875ce92"],
     "kit/templates/reviewers.yaml": ["1f649586e7a6834720c9bcc939a794a9241b754331486110990bf41db851169a"],
-    "kit/templates/start-session-local.sh": ["88fd37dc838d192e1d5ad47c270aa1ba1e4c8527473bcd8a68596b24f836cf7b"],
-    "kit/templates/start-session-windows.ps1": ["e0acc96f715b5b01801309eb374dedd5ebb54143aa13d68303addf9e6a9910e2"],
+    "kit/templates/start-session-local.sh": ["a2525c05b63aac6b9a0c2967df2d8712068499ff0b17be9b732c941890cf6f90"],
+    "kit/templates/start-session-windows.ps1": ["42e10d4e0bb50a7ae94d25db39dde60ab8a1d8573d96c36c20f680de06670fbe"],
     "kit/templates/vision.md": ["b9d6320d6a2beef6941d3e4eec39d6e2a9018355ac84d65d19614f7837c52838"]
    }
   }
