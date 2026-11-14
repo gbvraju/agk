@@ -26,8 +26,8 @@ that cannot be read prints one line naming the option. Neither changes the exit 
 SPEC-0044 rules 9 and 10 (brief #997): beside it, for any record whose `full` run and `head` are
 there, one line suggests `proof_timeout` as ceil(n * 1.5 / 60) * 60, the formula of prepush's
 warning (ADR-0258); and when the configured `test_dirs` and `test_patterns` match no test file
-while `adopt.FRONTEND_PATTERNS` match some outside `adopt.py`'s skipped folders, one line names
-`test_dirs`. Both are information lines: they write nothing and change no exit code.
+while `tree_walk.FRONTEND_PATTERNS` match some outside the test walk's skipped folders, one line
+names `test_dirs`. Both are information lines: they write nothing and change no exit code.
 Brief #1154 (ADR-0490): when files that look like tests sit outside every `test_dirs` folder and
 match no `test_patterns`, one information line names up to three of their topmost folders and the
 fix.
@@ -73,10 +73,10 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-# The kit scripts the doctor imports: the router's list is read as upgrade.py writes it, and
+# The kit scripts the doctor imports, each one a project installs, never a kit-only file such as
+# `adopt.py` (brief #1214, ADR-0514): the router's list is read as upgrade.py writes it, and
 # the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
 # minutes.py prints it (brief #370).
-import adopt  # noqa: E402
 import design_import  # noqa: E402
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
@@ -100,6 +100,7 @@ from common import (  # noqa: E402
     router_wanted,
     with_router_names,
 )
+from tree_walk import FRONTEND_PATTERNS, SKIP_DIRS, walked_dirs  # noqa: E402
 
 import config as models  # noqa: E402
 
@@ -1684,7 +1685,7 @@ def configured_test_found(root: Path, dirs: list[str], patterns: list[str]) -> b
             continue
         for _here, dirnames, filenames in os.walk(base):
             dirnames[:] = [
-                d for d in dirnames if not d.startswith(".") and d not in adopt.SKIP_DIRS
+                d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS
             ]
             if any(fnmatch.fnmatch(n, p) for n in filenames for p in patterns):
                 return True
@@ -1692,13 +1693,13 @@ def configured_test_found(root: Path, dirs: list[str], patterns: list[str]) -> b
 
 
 def frontend_count(root: Path) -> int:
-    """The files matching `adopt.FRONTEND_PATTERNS` outside the folders `adopt.py` skips."""
+    """The files matching `FRONTEND_PATTERNS` outside the folders a test walk skips (tree_walk)."""
     count = 0
     for here, dirnames, filenames in os.walk(root):
         rel_here = Path(here).relative_to(root).as_posix()
-        dirnames[:] = adopt.walked_dirs("" if rel_here == "." else rel_here, dirnames)
+        dirnames[:] = walked_dirs("" if rel_here == "." else rel_here, dirnames)
         count += sum(
-            1 for n in filenames if any(fnmatch.fnmatch(n, p) for p in adopt.FRONTEND_PATTERNS)
+            1 for n in filenames if any(fnmatch.fnmatch(n, p) for p in FRONTEND_PATTERNS)
         )
     return count
 
@@ -1755,7 +1756,7 @@ def outside_test_dirs_lines(root: Path) -> list[str]:
         if any(rel_here == d or rel_here.startswith(d + "/") for d in inside):
             dirnames[:] = []
             continue
-        dirnames[:] = [d for d in adopt.walked_dirs(rel_here, dirnames) if d not in OUTSIDE_SKIPPED]
+        dirnames[:] = [d for d in walked_dirs(rel_here, dirnames) if d not in OUTSIDE_SKIPPED]
         for name in filenames:
             if not any(fnmatch.fnmatchcase(name, p) for p in TEST_LOOKING):
                 continue

@@ -945,9 +945,11 @@ def test_rule10_unfound_front_end_tests_are_named(tmp_path, files, lines):
 
 def test_rule10_both_walks_skip_the_same_folders(tmp_path, monkeypatch):
     """REQ-051: SPEC-0044 rule 10 (brief #997 answer 3): the front-end walk of `doctor.py` and
-    `adopt.detect_tests` skip the same folders through one function of `adopt.py`, never a copy."""
+    `adopt.detect_tests` skip the same folders through one function, never a copy; since brief
+    #1214 (ADR-0514) that function is `tree_walk.walked_dirs`, since a project has no `adopt.py`."""
     import adopt
     import doctor as module
+    import tree_walk
 
     kept = "src/app/__tests__/cart.test.tsx"
     skipped = [
@@ -960,7 +962,10 @@ def test_rule10_both_walks_skip_the_same_folders(tmp_path, monkeypatch):
     assert adopt.detect_tests(root)[0] == ["src/app/__tests__"]
     assert module.frontend_count(root) == 1
     assert not hasattr(module, "kept_dirs")
-    monkeypatch.setattr(adopt, "walked_dirs", lambda _rel_here, dirnames: list(dirnames))
+    assert adopt.walked_dirs is tree_walk.walked_dirs is module.walked_dirs
+    assert adopt.FRONTEND_PATTERNS is tree_walk.FRONTEND_PATTERNS is module.FRONTEND_PATTERNS
+    for owner in (adopt, module):
+        monkeypatch.setattr(owner, "walked_dirs", lambda _rel_here, dirnames: list(dirnames))
     assert adopt.detect_tests(root)[0] == [
         ".hidden",
         "node_modules/pkg",
