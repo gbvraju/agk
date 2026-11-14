@@ -301,6 +301,11 @@ def posts(stub: Stub) -> list[list]:
     return [call for call in stub.calls() if call[0] == "POST"]
 
 
+def claim_posts(stub: Stub) -> list[list]:
+    """The posts but the `agk:taken` label that `claim` adds after its take (ADR-0529)."""
+    return [c for c in posts(stub) if "labels[]=agk:taken" not in c[2]]
+
+
 def test_ac3_next_takes_the_first_free_brief_with_the_one_post(proj, stub):
     """REQ-037 AC3"""
     listing(stub, [issue(9), issue(5)])

@@ -8,7 +8,7 @@ makes an overlap. A `gh` stub serves saved JSON copies of the GitHub responses; 
 from __future__ import annotations
 
 import pytest
-from test_session import ISSUES, REPO, Stub, comment, issue, listing, posts, session
+from test_session import ISSUES, claim_posts, REPO, Stub, comment, issue, listing, posts, session
 from test_session_flow import DAY, PULLS, brief, flow, pr
 from test_session_next_plan import THREE
 from test_session_plan import changed, data, free, plan
@@ -91,7 +91,7 @@ def test_claim_is_not_refused_by_a_pull_request_that_only_adds_another_file(proj
     free(stub, 6)
     out = claim(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #6", out.stdout + out.stderr
-    assert [p[1] for p in posts(stub)] == [f"{ISSUES}/6/comments"]
+    assert [p[1] for p in claim_posts(stub)] == [f"{ISSUES}/6/comments"]
 
 
 def test_another_build_of_the_same_brief_is_not_a_rival(proj, stub):
@@ -104,7 +104,7 @@ def test_another_build_of_the_same_brief_is_not_a_rival(proj, stub):
     out = claim(proj, stub, 5, "b")
     assert out.returncode == 0, out.stdout + out.stderr
     assert out.stdout.strip() == "claimed #5 build (b)"
-    assert len(posts(stub)) == 1
+    assert len(claim_posts(stub)) == 1
 
 
 def test_claim_still_takes_a_brief_that_overlaps_nothing(proj, stub):
@@ -265,7 +265,7 @@ def test_1052_b_claim_takes_the_fix_brief_without_the_overlap(proj, stub):
     out = claim(proj, stub)
     assert out.returncode == 0, out.stdout + out.stderr
     assert out.stdout.strip() == "claimed #6"
-    assert [p[1] for p in posts(stub)] == [f"{ISSUES}/6/comments"]
+    assert [p[1] for p in claim_posts(stub)] == [f"{ISSUES}/6/comments"]
     assert posts(stub)[0][2][1].startswith(f"body=taken: s-me {DAY}")
 
 

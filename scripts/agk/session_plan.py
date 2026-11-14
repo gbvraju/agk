@@ -1076,6 +1076,10 @@ def unplaced(
         if brief["number"] not in seen:
             out.append((brief["number"], why))
             seen.add(brief["number"])
+    for number in s.unread:  # ADR-0529: passed the listing, not read since no slot was left
+        if number not in seen:
+            out.append((number, why))
+            seen.add(number)
     for number in sorted(s.briefs):
         if number not in seen:
             out.append((number, "every build is taken or in progress"))
@@ -1806,16 +1810,19 @@ def build(root, record: bool = False) -> dict:
     in reading order until the free slots are filled, more only while a slot stays free and a
     brief is left unread; each GET is made once in the run. It carries `reads`."""
     began = time.monotonic()
-    reads.MEMO = {} if reads.MEMO is None else reads.MEMO
+    reads.MEMO = {}  # this run's reads only, never a previous run's
     first = reads.CALLS, reads.CACHED
     want = flow_int(root, "max_builders", reads.MAX_BUILDERS, RULE)
-    while True:
-        found, more = plan_pass(root, False, want)
-        if not more:
-            break
-        want *= 2
-    if record:
-        found, _ = plan_pass(root, True, want)
+    try:
+        while True:
+            found, more = plan_pass(root, False, want)
+            if not more:
+                break
+            want *= 2
+        if record:
+            found, _ = plan_pass(root, True, want)
+    finally:
+        reads.MEMO = None
     found["reads"] = {
         "calls": reads.CALLS - first[0],
         "cached": reads.CACHED - first[1],
@@ -1823,6 +1830,30 @@ def build(root, record: bool = False) -> dict:
     }
     save_reads(root, found["reads"])
     return found
+
+
+def ahead(
+    s: Survey, pb: dict | None, ready: list[dict], started: list[dict], active: list[str] | None
+) -> bool:
+    """Whether a brief left unread would come before a start in the plan's order, as a ready
+    brief: then the plan reads further, so that it starts what a full read starts."""
+    if not started:
+        return False
+    unblocks = unblocked_hours(list(s.briefs.values()))
+    unread = [s.briefs[n] for n in s.unread if n in s.briefs]
+    unread = [b for b in unread if active is None or milestone_title(b) in active]
+    order = [b["number"] for b in milestone_order(pb, [*ready, *unread], unblocks)]
+    last = max(order.index(b["number"]) for b in started if b["number"] in order)
+    return any(n in s.unread for n in order[:last])
+
+
+def with_unread(
+    s: Survey, pb: dict | None, ready: list[dict], active: list[str] | None, hours: dict
+) -> list[dict]:
+    """The ready briefs and, in the plan's order, those the walk left unread (ADR-0529)."""
+    unread = [s.briefs[n] for n in s.unread if n in s.briefs]
+    unread = [b for b in unread if active is None or milestone_title(b) in active]
+    return milestone_order(pb, [*ready, *unread], hours) if unread else ready
 
 
 def save_reads(root, figures: dict) -> None:
@@ -1935,7 +1966,7 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
         {
             "playbook": {
                 "work_type": pb["work_type"],
-                "lanes": lanes_of(pb, ready),
+                "lanes": lanes_of(pb, with_unread(s, pb, ready, active, unblocks)),
                 "heavy_steps": pb["heavy_steps"],
             }
         }
@@ -2016,7 +2047,7 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
         found["held"] = held
     if ignored_holds:
         found["ignored_holds"] = ignored_holds
-    return found, bool(s.unread) and count < fillable
+    return found, bool(s.unread) and (count < fillable or ahead(s, pb, ready, chosen[:count], active))
 
 
 def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
