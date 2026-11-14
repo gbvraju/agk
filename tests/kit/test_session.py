@@ -430,7 +430,7 @@ def test_rule5_session_posts_only_its_two_take_comments_and_the_checks_do_not_ca
     text = (SCRIPTS / "session.py").read_text(encoding="utf-8")
     # the take, the takeover, `tell` (brief #327), the slot marker (brief #776, ADR-0362) and
     # the take label of `claim` (brief #1251, ADR-0529), and the new issue and its link of
-    # `rollover` (brief #1251 build (b) answer 3c), which also closes the old issue (one PATCH)
+    # `rollover` (brief #1251 build (b) answer 3c, ADR-0548), which also closes the old issue
     assert text.count('method="POST"') == 7
     assert text.count('f"body=Continued in #') == 1
     assert text.count('f"body=taken: ') == 1 and text.count('f"body=taken over: ') == 1

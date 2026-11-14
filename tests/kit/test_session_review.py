@@ -571,7 +571,7 @@ def test_an_unreadable_issue_list_or_comments_fail_and_never_read_as_empty(proj,
 
 
 def test_two_open_conductor_issues_read_the_newest(proj, stub):
-    """REQ-037: brief #408 (Q-408-2), as brief #1251 answer 3c changed it (ADR-0529): a
+    """REQ-037: brief #408 (Q-408-2), as brief #1251 answer 3c changed it (ADR-0548): a
     roll-over leaves two open issues for a moment, and the newest is read."""
     asks(stub)
     issues(stub, [], extra=[{**CONDUCTOR, "number": 51}])

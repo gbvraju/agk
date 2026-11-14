@@ -295,7 +295,7 @@ def test_watch_pr_with_a_session_and_no_conductor_issue_says_so_and_still_waits(
 
 
 def test_watch_pr_with_a_session_and_two_conductor_issues_reads_the_newest(proj, stub):
-    """REQ-040: brief #368 answer 1, as brief #1251 answer 3c changed it (ADR-0529): a roll-over
+    """REQ-040: brief #368 answer 1, as brief #1251 answer 3c changed it (ADR-0548): a roll-over
     leaves two open issues for a moment, and readers take the newest open one."""
     stub.serve(CONDUCTOR, [CONDUCTOR_ISSUE, {"number": 205, "title": "another"}])
     stub.serve(f"{ISSUES}/205/comments", [], nth=1)

@@ -256,7 +256,7 @@ def test_the_checklist_reports_the_last_plans_reads(tmp_path):
 
 
 # --- build (b): the cache with conditional requests, the waits and the roll-over ----------------
-# Brief #1251 build (b), answers 3, 3b, 3c and 6 (Covered-by: ADR-0529). The double below answers
+# Brief #1251 build (b), answers 3, 3b, 3c and 6 (ADR-0548). The double below answers
 # as GitHub does: each body carries an ETag, a request whose `If-None-Match` names it gets a 304
 # with no body (which GitHub does not count against the rate limit), `since` keeps the items
 # created or updated at or after it, and `page`/`per_page` page a list. A fixture `.N.json` serves
@@ -597,3 +597,53 @@ def test_the_re_plan_reuses_the_last_plan_until_something_changes(dproj, double)
     third = dplan(dproj, double, "--if-changed")
     assert "unchanged" not in third
     assert any(c[1].startswith(f"{ISSUES}?state=open") for c in double.calls())
+
+
+# --- the cache folder is this user's own (finding 2 on 729b5a8) --------------------------------
+
+
+@pytest.mark.skipif(not hasattr(__import__("os"), "getuid"), reason="POSIX owners and modes")
+def test_a_cache_folder_of_another_owner_or_open_to_others_is_not_used(tmp_path, monkeypatch):
+    """REQ-050"""
+    import os
+
+    import session
+
+    own = tmp_path / "own"
+    own.mkdir(mode=0o700)
+    assert session.private_folder(own)
+    opened = tmp_path / "opened"
+    opened.mkdir()
+    opened.chmod(0o777)
+    assert not session.private_folder(opened)
+    link = tmp_path / "link"
+    link.symlink_to(own, target_is_directory=True)
+    assert not session.private_folder(link)
+    monkeypatch.setattr(os, "getuid", lambda: own.stat().st_uid + 1)
+    assert not session.private_folder(own)  # another user made it first
+
+
+@pytest.mark.skipif(not hasattr(__import__("os"), "getuid"), reason="POSIX owners and modes")
+def test_a_cache_folder_open_to_others_reads_without_the_cache(dproj, double):
+    """REQ-050"""
+    double.cache.mkdir()
+    double.cache.chmod(0o777)
+    double.serve(ISSUES, [at(5, brief("a/**"), MILESTONES[0])])
+    double.serve(PULLS, [])
+    double.serve(f"{ISSUES}/5/comments", [])
+    dplan(dproj, double)
+    double.forget()
+    dplan(dproj, double)
+    assert not any(a.startswith("If-None-Match") for c in double.calls() for a in c[2])
+    assert list(double.cache.iterdir()) == []
+
+
+def test_a_new_cache_folder_is_made_private(dproj, double):
+    """REQ-050"""
+    double.serve(ISSUES, [at(5, brief("a/**"), MILESTONES[0])])
+    double.serve(PULLS, [])
+    double.serve(f"{ISSUES}/5/comments", [])
+    dplan(dproj, double)
+    assert double.cache.is_dir() and any(double.cache.iterdir())
+    if hasattr(__import__("os"), "getuid"):
+        assert double.cache.stat().st_mode & 0o077 == 0

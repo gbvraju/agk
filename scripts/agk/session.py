@@ -55,7 +55,7 @@ queue does, so a loop wakes the conductor only then. With `[flow] auto_merge = t
 default branch (brief #531, SPEC-0039 rule 9), a pull request that would be skipped for a verdict
 on its head, whose latest `Verdict:` comment is exactly `Verdict: cleared <its full head>`, is
 listed as `#N <head7> cleared, not merged`, and the conductor runs `merge_cleared.py` for it again.
-Brief #1251 build (b) (ADR-0529): every GET goes through a read cache, one file per repository in
+Brief #1251 build (b) (ADR-0548): every GET goes through a read cache, one file per repository in
 the temp folder (`AGK_READ_CACHE` names another folder, `off` turns it off), that sends the last
 ETag as `If-None-Match` and reuses the kept body on a 304, which GitHub does not count against its
 rate limit; the waits read comments `since` the newest seen, merged by id, and back off from
@@ -143,6 +143,7 @@ import os
 import re
 import secrets
 import shutil
+import stat
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
@@ -347,7 +348,7 @@ def rate_reset() -> float | None:
         return None
 
 
-# --- the read cache with conditional requests (brief #1251 build (b) answer 3, ADR-0529) -------
+# --- the read cache with conditional requests (brief #1251 build (b) answer 3, ADR-0548) -------
 
 CACHE_ENV = "AGK_READ_CACHE"  # a folder for the cache, or `off`; else the temp folder's
 CACHE_DIR = "agk-read-cache"
@@ -356,6 +357,23 @@ REPO_OF = re.compile(r"repos/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)(?:/|\?|$)")
 STATUS = re.compile(r"HTTP/[0-9.]+ (\d{3})")
 COMMENTS_OF = re.compile(r"repos/[^/]+/[^/]+/issues/(\d+)/comments\?")
 SKEW = 120  # seconds taken off a `since` stamp: the local clock and GitHub's may differ
+
+
+def private_folder(path: Path) -> bool:
+    """Whether a cache folder is safe to read bodies from: a real folder, not a link, and on POSIX
+    owned by this user and not writable by its group or others. The default folder sits in the
+    temp folder, which every user of the machine shares, so a folder another user made first, or
+    one opened to others, could hand this user bodies it never read (finding 2 on 729b5a8)."""
+    try:
+        found = path.lstat()
+    except OSError:
+        return False
+    if not stat.S_ISDIR(found.st_mode):
+        return False
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:  # Windows: the user's own temp folder, no POSIX owner to compare
+        return True
+    return found.st_uid == getuid() and not found.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
 
 
 class ReadCache:
@@ -370,13 +388,22 @@ class ReadCache:
         self.files: dict[str, dict] = {}
         self.dirty: set[tuple[str, str]] = set()
         self.unchanged: tuple[float, set[int]] | None = None  # (since stamp, changed issues)
+        self.place: Any = UNSET  # the folder, once checked: a Path, or None for no cache
 
-    @staticmethod
-    def folder() -> Path | None:
-        named = os.environ.get(CACHE_ENV, "")
-        if named.lower() == "off":
-            return None
-        return Path(named) if named else Path(tempfile.gettempdir()) / CACHE_DIR
+    def folder(self) -> Path | None:
+        """The cache folder, made with mode 0700, or None (no cache, every GET asked as before)
+        when it is `off`, cannot be made, or is not this user's own (finding 2 on 729b5a8)."""
+        if self.place is UNSET:
+            named = os.environ.get(CACHE_ENV, "")
+            path = Path(named) if named else Path(tempfile.gettempdir()) / CACHE_DIR
+            made = named.lower() != "off"
+            try:
+                if made:
+                    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+            except OSError:
+                made = False
+            self.place = path if made and private_folder(path) else None
+        return self.place
 
     def path(self, endpoint: str) -> Path | None:
         found, folder = REPO_OF.match(endpoint), self.folder()
@@ -430,7 +457,7 @@ class ReadCache:
 
     def fresh(self, endpoint: str) -> Any:
         """The cached body of an issue's comment page that the pass's `since` read showed
-        unchanged and that was read after its stamp, else UNSET (ADR-0529, build (b))."""
+        unchanged and that was read after its stamp, else UNSET (ADR-0548 decision 2)."""
         found = COMMENTS_OF.match(endpoint)
         if self.unchanged is None or found is None:
             return UNSET
@@ -506,7 +533,7 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     (brief #210 answer 6): the call waits until the reset time that GitHub reports and retries.
     A GET goes through the read cache: `If-None-Match` with the last ETag, the cached body on a
     304 (counted in CACHED), and no request at all for a comment page that the plan's `since` read
-    showed unchanged (brief #1251 build (b), ADR-0529)."""
+    showed unchanged (brief #1251 build (b), ADR-0548)."""
     global LAST_ERROR, CALLS, CACHED
     key = (endpoint, *extra)
     if MEMO is not None and method == "GET" and key in MEMO:
@@ -571,7 +598,7 @@ def pages(endpoint: str) -> list | None:
         page += 1
 
 
-STAMP_NOTE = "plan_pass"  # the read cache's note of when the last plan began (ADR-0529)
+STAMP_NOTE = "plan_pass"  # the read cache's note of when the last plan began (ADR-0548)
 ISSUE_OF = re.compile(r"/issues/(\d+)$")
 
 

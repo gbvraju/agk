@@ -67,7 +67,7 @@ Without `--shadow` the conductor may also run exactly `python3 scripts/agk/sessi
 nothing unsaved and never a remote branch; any other form of `tidy` stays denied.
 Without `--shadow` the conductor may also re-plan at the end of a review pass (brief #331,
 ADR-0190): exactly `python3 scripts/agk/session.py plan --json` (read-only, as the queue commands),
-or the same with `--if-changed` (brief #1251 answer 6, ADR-0529: the last plan reused while nothing
+or the same with `--if-changed` (brief #1251 answer 6, ADR-0548: the last plan reused while nothing
 changed); and `python3 scripts/agk/session.py rollover` (brief #1251 answer 3c), which opens a new
 `agk-conductor` issue past 500 comments, links it from the old one and closes the old one;
 and `python3 scripts/agk/launch.py prompts --plan <file>`, the project's own regular `launch.py` and

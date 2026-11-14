@@ -218,7 +218,7 @@ def test_ac5_assign_ends_with_assign_timeout_when_no_answer_comes(proj, stub):
 
 
 def test_ac5_assign_needs_an_open_conductor_issue_and_reads_the_newest(proj, stub):
-    """REQ-041 AC5, as brief #1251 answer 3c changed it (ADR-0529): with two open issues (a
+    """REQ-041 AC5, as brief #1251 answer 3c changed it (ADR-0548): with two open issues (a
     roll-over's moment) the wait reads the newest."""
     stub.serve(CONDUCTOR, [])
     out = assign(proj, stub)
