@@ -22,10 +22,6 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
-
-from common import utf8_output
-
 USAGE = (
     "usage: new_spec.py spec|requirement|brief TITLE [--req REQ-nnn]... "
     "[--issue N --issue-text FILE|-] [--root DIR] [--date YYYY-MM-DD]"
@@ -163,6 +159,21 @@ def parse(args: list[str]) -> dict:
         raise ValueError("expected a kind and a title")
     opts["kind"], opts["title"] = positional
     return opts
+
+
+def utf8_output() -> None:
+    """`common.utf8_output` (brief #1233, ADR-0524), kept here: the script imports only the
+    standard library. Reconfigures stdout and stderr to UTF-8 when they are text streams in
+    another encoding."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
+        if reconfigure is None or encoding in ("utf-8", "utf8"):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
 
 
 def main(argv: list[str] | None = None) -> int:

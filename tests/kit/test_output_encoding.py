@@ -22,6 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 AGK = ROOT / "scripts" / "agk"
 ARROW = "→"
 HELPER = "utf8_output"
+MANIFEST = ROOT / "kit" / "manifest.json"
+# They must run without `common` (their own tests say why), so each keeps a copy of the helper.
+COPIES = ("front_door.py", "new_spec.py", "product_report.py")
 
 
 def console_env(cp1252: bool) -> dict[str, str]:
@@ -44,7 +47,9 @@ def run(args: list[str], cwd: Path, cp1252: bool) -> subprocess.CompletedProcess
 def printing_scripts() -> list[str]:
     """The installed scripts under scripts/agk/ that print and run as a program (a library that
     has no `__main__` prints only under its caller's `main`, which calls the helper)."""
-    manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    if not MANIFEST.is_file():  # a copy of the kit's tests without the kit (test_agk_mk.py)
+        return []
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     found = []
     for key in ("verbatim", "experimental"):
         for rel in manifest.get(key) or []:
@@ -173,6 +178,8 @@ def calls_helper_first(tree: ast.Module) -> bool:
 def test_every_installed_script_that_prints_calls_the_helper_first():
     """REQ-014: the first statement of `main` (after its docstring), or a module-level call for a
     script without `main`, is `utf8_output()`."""
+    if not MANIFEST.is_file():
+        pytest.skip("a copy of the kit's tests without kit/manifest.json")
     assert len(printing_scripts()) > 50
     missing = [
         rel
@@ -182,13 +189,15 @@ def test_every_installed_script_that_prints_calls_the_helper_first():
     assert missing == []
 
 
-def test_the_product_reports_own_copy_is_the_helper():
-    """REQ-014: `product_report.py` imports no module of the kit (its rule 13), so it keeps its own
-    `utf8_output`; its body, without the docstring, is the helper's."""
+@pytest.mark.parametrize("name", COPIES)
+def test_each_own_copy_is_the_helper(name):
+    """REQ-014: `product_report.py` imports no module of the kit (its rule 13), `new_spec.py` only
+    the standard library, and `front_door.py` runs copied without `common`; each keeps its own
+    `utf8_output`, whose body, without the docstring, is the helper's."""
 
     def body(path: Path) -> list[str]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == HELPER)
         return [ast.dump(stmt) for stmt in func.body[1:]]
 
-    assert body(AGK / "product_report.py") == body(AGK / "common.py")
+    assert body(AGK / name) == body(AGK / "common.py")
