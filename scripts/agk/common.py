@@ -265,10 +265,10 @@ def committed_bytes(root: Path, files: Mapping[str, bytes]) -> dict[str, bytes]:
             return out
         blobs: dict[str, str] = {}
         for entry in listed.stdout.split(b"\0"):
-            head, _, name = entry.partition(b"\t")
-            fields = head.split()
-            if len(fields) == 3 and fields[2] == b"0":
-                blobs[name.decode("utf-8", errors="surrogateescape")] = fields[1].decode("ascii")
+            head, _, raw = entry.partition(b"\t")
+            parts = head.split()
+            if len(parts) == 3 and parts[2] == b"0":
+                blobs[raw.decode("utf-8", errors="surrogateescape")] = parts[1].decode("ascii")
         names = [name for name in sorted(wanted) if name in blobs]
         if not names:
             return out

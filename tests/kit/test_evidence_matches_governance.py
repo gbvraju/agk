@@ -58,7 +58,7 @@ LINK = "https://example.com/acme/books/pull/12#issuecomment-345"
 GOVERNANCE = f'agk-governance:\n\t@"{sys.executable}" "{CHECK}"\n'
 
 
-# --- the fixture -----------------------------------------------------------------------------------
+# --- the fixture ---------------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -122,7 +122,8 @@ def change_signed_off_page(repo) -> None:
 
 def conductor_run(repo, outside: Path, name: str) -> tuple[int, list[str]]:
     """The conductor's run of the local-mode guide: `git worktree add <scratch> <sha>`, then
-    `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base> make -C <scratch> -f agk.mk agk-governance`."""
+    `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base> make -C <scratch> -f agk.mk
+    agk-governance`."""
     scratch = outside / f"conductor-{name}"
     home = outside / f"conductor-home-{name}"
     home.mkdir()
@@ -204,7 +205,7 @@ def crlf_checkout(repo, outside: Path, name: str) -> Path:
     return tree
 
 
-# --- (a) a correct record agrees with autocrlf=true -------------------------------------------------
+# --- (a) a correct record agrees with autocrlf=true ----------------------------------------------
 
 
 def test_a_correct_record_agrees_with_autocrlf_true(repo, outside):
@@ -250,7 +251,9 @@ def test_governance_runs_with_the_conductors_environment(repo, outside, monkeypa
     path = hand_record(repo, outside)
     proc = evidence(repo, outside, path, env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    names = dict(line.split("=", 1) for line in seen.read_text(encoding="utf-8").splitlines() if "=" in line)
+    names = dict(
+        line.split("=", 1) for line in seen.read_text(encoding="utf-8").splitlines() if "=" in line
+    )
     assert "AGK_EXAMPLE_TOKEN" not in names
     assert "GIT_CONFIG_GLOBAL" not in names
     assert names["AGK_BASE"] == repo.git("rev-parse", "main").strip()
@@ -258,7 +261,7 @@ def test_governance_runs_with_the_conductors_environment(repo, outside, monkeypa
     assert not Path(names["HOME"]).exists()  # the scratch home goes with the worktree
 
 
-# --- (b) a really changed signed-off file still fails rule 9 in both runs -------------------------
+# --- (b) a really changed signed-off file still fails rule 9 in both runs ------------------------
 
 
 @pytest.mark.parametrize("autocrlf", ["true", "false"])
@@ -276,7 +279,7 @@ def test_a_really_changed_signed_off_file_fails_rule_9_in_both_runs(repo, outsid
     assert "rule 9: docs/design/prototype/v1: a signed-off version changed" in proc.stdout
 
 
-# --- (c) the same check_design result in both runs ---------------------------------------------------
+# --- (c) the same check_design result in both runs -----------------------------------------------
 
 
 @pytest.mark.parametrize("autocrlf", ["true", "false"])
@@ -299,7 +302,7 @@ def test_the_conductors_run_and_the_evidence_run_give_the_same_result(
         assert design_lines(proc.stdout) == lines
 
 
-# --- the digests of rules 9 and 15 read committed bytes --------------------------------------------
+# --- the digests of rules 9 and 15 read committed bytes ------------------------------------------
 
 
 def test_a_crlf_checkout_gives_the_committed_digest(repo, outside):
@@ -330,7 +333,10 @@ def test_a_crlf_checkout_still_sees_a_real_change(repo, outside):
     page.write_bytes(page.read_bytes().replace(b"</h1>", b" today</h1>", 1))
     found = tree / I1 / "files" / "index.html"
     found.write_bytes(found.read_bytes() + b"<p>more</p>\r\n")
-    assert any(p.startswith("rule 9: docs/design/prototype/v1") for p in design_signoff.frozen_problems(tree))
+    assert any(
+        p.startswith("rule 9: docs/design/prototype/v1")
+        for p in design_signoff.frozen_problems(tree)
+    )
     assert any("files/index.html" in p for p in design_import.imported_problems(tree))
 
 

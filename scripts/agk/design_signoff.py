@@ -55,8 +55,9 @@ def _file_hash(path: Path) -> str:
 
 
 def digest(root: Path, paths: list[str] | list[Path]) -> str:
-    """The SHA-256 of the sorted `<path> <SHA-256 of the file>` lines of PATHS (from ROOT), each file
-    read as committed when a checkout changed only its line ends (`committed_bytes`, brief #1291)."""
+    """The SHA-256 of the sorted `<path> <SHA-256 of the file>` lines of PATHS (from ROOT), each
+    file read as committed when a checkout changed only its line ends (`committed_bytes`, brief
+    #1291)."""
     found: dict[str, bytes] = {}
     for rel in paths:
         path = Path(rel) if Path(rel).is_absolute() else root / rel
