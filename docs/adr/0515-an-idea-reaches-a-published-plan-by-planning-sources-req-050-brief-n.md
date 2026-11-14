@@ -1,6 +1,6 @@
 # ADR-0515: An idea reaches a published plan by planning sources
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0037, SPEC-0013, ADR-0458, brief #1216, plan #661

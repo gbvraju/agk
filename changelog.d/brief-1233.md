@@ -1,1 +1,0 @@
-- Every installed check writes UTF-8, so governance runs on a Windows console without `PYTHONUTF8`: `common.utf8_output()` reconfigures stdout and stderr, and every installed script that prints calls it first (brief #1233, ADR-0524)

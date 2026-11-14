@@ -1,6 +1,6 @@
 # ADR-0521: A kit upgrade arrives as one ready pull request with a complete ADR
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0008 rules 16 and 17, ADR-0018, brief #273, brief #1222, plan #661

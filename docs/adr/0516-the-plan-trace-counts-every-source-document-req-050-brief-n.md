@@ -1,6 +1,6 @@
 # ADR-0516: The plan trace counts every source document
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0043 rules 9 to 11, amendment 175, ADR-0457, ADR-0502, brief #1217, plan #661
