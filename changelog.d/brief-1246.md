@@ -1,0 +1,1 @@
+- The getting-started guide says once more, in its item on automatic starts, that "The kit installs neither of the two short examples below", the sentence its test expects (brief #1246, fix for #1244)
