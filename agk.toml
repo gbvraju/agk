@@ -813,8 +813,8 @@ tests = [
   "tests/kit/test_route_red.py", "tests/kit/test_session.py", "tests/kit/test_session_flow.py",
   "tests/kit/test_session_kind.py", "tests/kit/test_session_next_plan.py", "tests/kit/test_session_parked.py",
   "tests/kit/test_session_paused.py", "tests/kit/test_session_plan.py", "tests/kit/test_session_plan_lanes.py",
-  "tests/kit/test_session_plan_malformed.py", "tests/kit/test_session_plan_overlap.py",
-  "tests/kit/test_session_prompt.py", "tests/kit/test_session_resume.py", "tests/kit/test_session_review.py",
+  "tests/kit/test_session_plan_malformed.py", "tests/kit/test_session_plan_milestones.py",
+  "tests/kit/test_session_plan_overlap.py", "tests/kit/test_session_prompt.py", "tests/kit/test_session_resume.py", "tests/kit/test_session_review.py",
   "tests/kit/test_session_rules.py", "tests/kit/test_session_silent.py", "tests/kit/test_session_tell.py",
   "tests/kit/test_session_tidy.py", "tests/kit/test_shadow_guard.py", "tests/kit/test_stalls.py", "tests/kit_dev/test_guide_loop.py",
   "tests/kit_dev/test_intake.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_launcher_guide.py",
@@ -830,7 +830,7 @@ tests = [
   "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_plan_questions.py",
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
   "tests/kit/test_session_claim_overlap.py", "tests/kit/test_builder_slots.py",
-  "tests/kit/test_light_reprove.py",
+  "tests/kit/test_light_reprove.py", "tests/kit/test_session_plan_milestones.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
