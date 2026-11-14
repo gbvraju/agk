@@ -109,6 +109,14 @@ search call (or, when the search fails, by paging the open issues), the other ne
 guard. In CI mode the command is refused with a message naming the setting, because the router
 workflow moves the labels there; `--dry-run`, `--branch`, `--health`, another option and another
 copy stay denied.
+Without `--shadow` the conductor may also check a builder's local evidence record (brief #1281,
+ADR-0542): exactly `python3|python scripts/agk/evidence.py check --head <7 to 40 lower-case hex>`
+or `... check <RECORD> --head <hex>`, with `--sample <n>` and `--json` allowed too, each option at
+most once and in any order, the project's own regular file; RECORD is an existing regular file,
+named by its absolute path with no link, of a scratch directory or directly in the clone's shared
+evidence folder (`<git common dir>/agk-evidence`, found with one `git rev-parse --git-common-dir`).
+Both forms only read, so they are allowed in CI mode too. Another subcommand or option, a second
+RECORD, a record elsewhere and another copy of the script stay denied.
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -197,6 +205,9 @@ LAUNCH_SCRIPT = os.path.join("scripts", "agk", "launch.py")
 MERGE_SCRIPT = os.path.join("scripts", "agk", "merge_cleared.py")
 CONDUCTOR_SCRIPT = os.path.join("scripts", "agk", "conductor.py")
 ROUTE_SCRIPT = os.path.join("scripts", "agk", "route.py")
+EVIDENCE_SCRIPT = os.path.join("scripts", "agk", "evidence.py")  # brief #1281 (ADR-0542)
+EVIDENCE_FOLDER = "agk-evidence"  # the clone's shared record folder in the git common dir (ADR-0536)
+EVIDENCE_VALUES = {"--head": SHA, "--sample": re.compile(r"[1-9][0-9]{0,5}")}
 ROUTE_RULE = (  # brief #1263 (ADR-0534): the setting, never a value
     "conductor guard rule 6: the router runs from its workflow unless the project is in local"
     " mode (setting: execution, or the one local-mode record issue)"
@@ -612,6 +623,70 @@ def route_form(words: list[str], cwd: object) -> bool:
     return own_script(words[1], cwd, ROUTE_SCRIPT)
 
 
+def shared_evidence_folder() -> str | None:
+    """The real path of `<git common dir>/agk-evidence` of the project's clone, or None."""
+    root = project_root()
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", root, "rev-parse", "--git-common-dir"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    common = proc.stdout.strip()
+    if proc.returncode != 0 or not common:
+        return None
+    return os.path.realpath(os.path.join(root, common, EVIDENCE_FOLDER))
+
+
+def evidence_record_ok(path: str) -> bool:
+    """RECORD is an existing regular file of a scratch directory or directly in the clone's shared
+    evidence folder, named by its absolute path with no link and no `..` on the way."""
+    if not path or "\0" in path or not os.path.isabs(path):
+        return False
+    if os.path.realpath(path) != os.path.normpath(path) or not os.path.isfile(path):
+        return False
+    if scratch_dir(path) is not None:
+        return True
+    folder = shared_evidence_folder()
+    return folder is not None and os.path.dirname(os.path.normpath(path)) == folder
+
+
+def evidence_form(args: list[str]) -> bool:
+    """`check [RECORD] --head <7 to 40 hex> [--sample <n>] [--json]`, each option at most once and
+    in any order, RECORD at most one (brief #1281 answer 1); both forms only read."""
+    if not args or args[0] != "check":
+        return False
+    seen: set[str] = set()
+    records: list[str] = []
+    i = 1
+    while i < len(args):
+        arg = args[i]
+        if arg in seen:
+            return False
+        if arg in EVIDENCE_VALUES:
+            if i + 1 >= len(args) or not EVIDENCE_VALUES[arg].fullmatch(args[i + 1]):
+                return False
+            seen.add(arg)
+            i += 2
+        elif arg == "--json":
+            seen.add(arg)
+            i += 1
+        elif arg.startswith("-") or records:
+            return False
+        else:
+            records.append(arg)
+            i += 1
+    return "--head" in seen and all(evidence_record_ok(r) for r in records)
+
+
+def evidence_allowed(words: list[str], cwd: object) -> bool:
+    """`python3|python scripts/agk/evidence.py check ...`, the project's own regular file, in the
+    two forms of `evidence_form`; in CI mode as in local mode, since it writes nothing."""
+    if len(words) < 3 or words[0] not in ("python3", "python"):
+        return False
+    return evidence_form(words[2:]) and own_script(words[1], cwd, EVIDENCE_SCRIPT)
+
+
 def local_mode_here() -> bool:
     """The project is in local mode as `route.py` decides it (`route.record_open`, reused); a
     reading that fails is CI mode, so the command stays refused."""
@@ -757,6 +832,7 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
             or launch_allowed(words, cwd)
             or merge_allowed(words, cwd)
             or route_allowed(words, cwd)
+            or evidence_allowed(words, cwd)
         )
     return False
 
