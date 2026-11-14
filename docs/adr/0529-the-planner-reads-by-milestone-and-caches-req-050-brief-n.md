@@ -61,6 +61,7 @@ Protected path classes changed: `scripts/agk/` (`session.py`, `session_plan.py`,
 ## Residual
 
 - 2026-11-14: Q-1251-1 (the listing read whole, not milestone by milestone) and Q-1251-2 (session rule 18's
-  wording) are this session's conservative readings, for the maintainers.
+  wording) were this session's conservative readings; the maintainers answered both on pull request #1261: keep the
+  whole listing with the early stop on the per-brief reads, and keep the label (the owner updates session rule 18).
 - 2026-11-14: a dependency that is an open issue without the `agk-brief` label and not a pull request is read as
   closed, as answer 1 says; such a `Depends-on` is not a shape the kit files.
