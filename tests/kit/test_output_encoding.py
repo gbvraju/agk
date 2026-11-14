@@ -22,8 +22,6 @@ ROOT = Path(__file__).resolve().parents[2]
 AGK = ROOT / "scripts" / "agk"
 ARROW = "→"
 HELPER = "utf8_output"
-# Imported by other scripts only; they print under the caller's main, which calls the helper.
-LIBRARIES = frozenset({"scripts/agk/common.py", "scripts/agk/session_plan.py"})
 
 
 def console_env(cp1252: bool) -> dict[str, str]:
@@ -44,12 +42,13 @@ def run(args: list[str], cwd: Path, cp1252: bool) -> subprocess.CompletedProcess
 
 
 def printing_scripts() -> list[str]:
-    """The installed scripts under scripts/agk/ that print and run as a program."""
+    """The installed scripts under scripts/agk/ that print and run as a program (a library that
+    has no `__main__` prints only under its caller's `main`, which calls the helper)."""
     manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     found = []
     for key in ("verbatim", "experimental"):
         for rel in manifest.get(key) or []:
-            if not (rel.startswith("scripts/agk/") and rel.endswith(".py")) or rel in LIBRARIES:
+            if not (rel.startswith("scripts/agk/") and rel.endswith(".py")):
                 continue
             text = (ROOT / rel).read_text(encoding="utf-8")
             prints = "print(" in text or "sys.stdout.write" in text or "sys.stderr.write" in text
@@ -181,3 +180,15 @@ def test_every_installed_script_that_prints_calls_the_helper_first():
         if not calls_helper_first(ast.parse((ROOT / rel).read_text(encoding="utf-8")))
     ]
     assert missing == []
+
+
+def test_the_product_reports_own_copy_is_the_helper():
+    """REQ-014: `product_report.py` imports no module of the kit (its rule 13), so it keeps its own
+    `utf8_output`; its body, without the docstring, is the helper's."""
+
+    def body(path: Path) -> list[str]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == HELPER)
+        return [ast.dump(stmt) for stmt in func.body[1:]]
+
+    assert body(AGK / "product_report.py") == body(AGK / "common.py")

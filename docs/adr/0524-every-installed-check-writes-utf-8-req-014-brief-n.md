@@ -22,13 +22,14 @@ made it write UTF-8. The same failure reproduces on Linux with `PYTHONIOENCODING
 2. Every installed script under `scripts/agk/` that prints and runs as a program (`kit/manifest.json`, `verbatim` or
    `experimental`) calls it as the first statement of its `main`, after the docstring. `common.py` and
    `session_plan.py` are libraries that print only under their caller's `main` and do not call it. The scripts that
-   did not import `common` (`guard_logs.py`, `lessons.py`, `new_spec.py`, `parity.py`, `pr_state.py`,
-   `product_report.py`, `usage.py`) import the helper alone, after the line that puts their folder on `sys.path`.
-   Nothing else they print changes.
+   did not import `common` (`guard_logs.py`, `lessons.py`, `new_spec.py`, `parity.py`, `pr_state.py`, `usage.py`)
+   import the helper alone, after the line that puts their folder on `sys.path`. `product_report.py` imports no module
+   of the kit (its rule 13: `common` imports `os` and `subprocess`), so it keeps its own copy of the helper, which a
+   test keeps equal to `common`'s. Nothing else they print changes.
 3. `tests/kit/test_output_encoding.py` proves it: the helper under the simulated console; `check_plan.py` and
    `config.py` printing an arrow exit and print as on a UTF-8 console; every such script, given an option it refuses,
    exits as on a UTF-8 console and lets an arrow written after its start reach the console; and every such script calls
-   the helper first.
+   the helper first, and that `product_report.py`'s copy is the helper.
 
 ## Consequences
 

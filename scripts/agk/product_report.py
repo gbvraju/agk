@@ -14,10 +14,6 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
-
-from common import utf8_output
-
 SCHEMA = 1
 UNKNOWN = "unknown"
 OLD_PULL_REQUEST_DAYS = 7
@@ -1505,6 +1501,21 @@ def parse(argv: list[str]) -> argparse.Namespace:
     if args.json is not None and (args.inbox or args.print_action):
         parser.error("--json takes the report only")
     return args
+
+
+def utf8_output() -> None:
+    """`common.utf8_output` (brief #1233, ADR-0524), kept here: the renderer imports no module of
+    the kit (rule 13, `common` imports `os` and `subprocess`). Reconfigures stdout and stderr to
+    UTF-8 when they are text streams in another encoding."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
+        if reconfigure is None or encoding in ("utf-8", "utf8"):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
 
 
 def main(argv: list[str] | None = None) -> int:
