@@ -32,7 +32,8 @@ pull request may change only its release files, so it is built here.
 
 ## Consequences
 
-On b097acc the check now fails with one line naming 0.64.3 and `scripts/agk/doctor.py`. The repository's own table
+On b097acc the check now fails with two lines naming 0.64.3, one for `scripts/agk/config.py` and one for
+`scripts/agk/doctor.py`. The repository's own table
 passes. No workflow changes; governance runs the check as before. Projects do not run it (the script is kit-only).
 
 ## Residual
