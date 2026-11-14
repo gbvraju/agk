@@ -3469,10 +3469,11 @@ def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
         else:
             if names & WAITING_LABELS or not (pr.get("draft") or names & BUILDER_LABELS):
                 continue
-            comments = pages(f"repos/{repo}/issues/{number}/comments")
-            changed = last_change(repo, pr, comments) if comments is not None else None
-            if changed is None or datetime.now(UTC) - changed < timedelta(hours=hours):
+            read = pages(f"repos/{repo}/issues/{number}/comments")
+            moved = last_change(repo, pr, read) if read is not None else None
+            if read is None or moved is None or datetime.now(UTC) - moved < timedelta(hours=hours):
                 continue
+            comments, changed = read, moved
             if waits_for_a_person(root, pr, comments) or parked(root, repo, pr, comments):
                 continue
             kind = "stalled"

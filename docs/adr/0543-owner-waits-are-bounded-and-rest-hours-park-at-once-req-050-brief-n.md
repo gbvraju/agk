@@ -6,7 +6,7 @@
 - Related: brief #1282, brief #1277, brief #1245, brief #1043, brief #615, ADR-0301, ADR-0442, ADR-0453
 - Requirements: REQ-050
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`, `config/`
 
 ## Context
 
@@ -46,7 +46,9 @@ configurable number of minutes, or at once during the owner's configured rest ho
    <key>` before its `START` lines. It lists each park once, by its comment's id, kept in the `parked` mark
    beside the conductor's lease mark. `session.py next` offers an unparked pull request whose author has not
    spoken since the `Unparked-by:` first, before stalled pull requests and new briefs.
-7. Personal mode has no pull requests: the wait applies only to a brief's question, which is printed, and
+7. `tests/kit/test_owner_wait.py` joins the test map of `scripts/agk/session.py` in `agk.toml`, and the mypy
+   baseline of `session.py` (`config/mypy-baseline.txt`) goes down by the one `arg-type` error the change removes.
+8. Personal mode has no pull requests: the wait applies only to a brief's question, which is printed, and
    nothing is parked.
 
 ## Consequences
