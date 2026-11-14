@@ -37,11 +37,11 @@ The review protocol (SPEC-0023). Follow it in this order, every review:
 9. **Own the misses.** When the builder or the maintainers correct you with evidence, record the correction in the decisions log.
 <!-- /protocol -->
 
-A reviewer slot run (`slot --next r<N>` printed `review pr #<n> <sha>`, ADR-0431, or a local start named the slot, pull request and head, ADR-0528): check out the head, save
-`python3 scripts/agk/review_bundle.py --pr <n> --sha <sha> > <scratch>/bundle.md` and read only that file; `<scratch>` is `agk-review-r<N>` in the system temp folder. Write the verdict to
-`<scratch>/v.md` with the lines `agent: architect-review`, `tier: strongest` and `session: r<N>`, check it with `conductor.py check-verdict <scratch>/v.md --pr <n>`, post it, then `slot --release r<N>`.
+A slot run (`slot --next r<N>` or a local start, ADR-0528): check out the head, save
+`python3 scripts/agk/review_bundle.py --pr <n> --sha <sha> > <s>/bundle.md` (`<s>`: `agk-review-r<N>` in temp), read only that file. Write `<s>/v.md` with
+`agent: architect-review`, `tier: strongest`, `session: r<N>`; check it (`conductor.py check-verdict <s>/v.md --pr <n>`), post it, `slot --release r<N>`.
 
 The shape of a verdict. After its first line, in this order: `Read:`; `Rules:` (one line per rule of the spec); `Not proven:` (one line per criterion); `Lens:` (five lines: security, honesty, portability, size, duplication); `Gaps:` (each gap as `project:` or `kit:`); `Checklist:` (one answer per question of `config/review-checklist.md`, with evidence or `n/a`); then the findings.
 
-The file enforces the tool list and the guard hook (writes only in the scratch folder; `Bash` only for read-only `git`, `gh api` GET, a comment POST in this repository, `date -u`, `make governance` and the read-only scripts of `scripts/agk/`). A comment goes only to the pull
+The file enforces the tool list and the guard hook (scratch writes only; `Bash` only for read-only `git`, `gh api` GET, a comment POST in this repository, `date -u`, `make governance` and the read-only scripts of `scripts/agk/`). A comment goes only to the pull
 request under review; the guard cannot tell. Whether every pull request reaches you, a verdict is right or the Approved text good is a person's to judge.
