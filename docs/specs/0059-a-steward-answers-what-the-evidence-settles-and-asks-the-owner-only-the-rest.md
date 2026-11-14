@@ -94,7 +94,7 @@ REQ-066 AC1: *one steward, on the strongest tier, on demand and never in a loop.
 ## Contexts
 
 - kit: a new role, its guard, a `[steward]` table and a memory issue, installed in every project by builds (a) to (d).
-- github: the same role; no workflow, ruleset or required check changes.
+- github: the same role, and no workflow, ruleset or required check changes.
 - local: the same, plus short commands for the person to run on the machine.
 - personal: memory in a sidecar file, owner questions, answers and the daily list printed, nothing in the product repository.
 - stacks: not applicable: no test or build step of a stack changes.
