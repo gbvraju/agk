@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from test_session import ISSUES, REPO, Stub, comment, iso, issue, posts, session
-from test_session_flow import DAY, PULLS, brief, merged, pr
+from test_session_flow import DAY, PULLS, brief, merged
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "agk"))

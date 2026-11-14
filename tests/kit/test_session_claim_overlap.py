@@ -8,7 +8,7 @@ makes an overlap. A `gh` stub serves saved JSON copies of the GitHub responses; 
 from __future__ import annotations
 
 import pytest
-from test_session import ISSUES, claim_posts, REPO, Stub, comment, issue, listing, posts, session
+from test_session import ISSUES, REPO, Stub, claim_posts, comment, issue, listing, posts, session
 from test_session_flow import DAY, PULLS, brief, flow, pr
 from test_session_next_plan import THREE
 from test_session_plan import changed, data, free, plan

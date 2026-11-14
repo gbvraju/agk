@@ -615,9 +615,7 @@ def watch(root, args: dict[str, str]) -> int:
                 own = (pr.get("user") or {}).get("login")
                 authors = counted_authors(verdict_authors(root), own)
                 approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
-                answerers = approvers | {
-                    a.lstrip("@").lower() for a in verdict_authors(root) or []
-                }
+                answerers = approvers | {a.lstrip("@").lower() for a in verdict_authors(root) or []}
                 head = str((pr.get("head") or {}).get("sha") or "")
                 if first:  # what landed after the last Report: and before this watch started
                     first = False
@@ -1730,7 +1728,9 @@ def claim(root, me: str, number: int, build: str | None) -> int:
         print(f"skip #{number}: {why}")
         return 1
     print(f"claimed #{number}" + (f" build ({build})" if build else ""))
-    label = gh(f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={TAKEN_LABEL}", method="POST")
+    label = gh(
+        f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={TAKEN_LABEL}", method="POST"
+    )
     if label is None:  # ADR-0529 decision 3: a hint only; the take comment decides
         print(f"note: the label {TAKEN_LABEL} could not be added; the take stands", file=sys.stderr)
     return 0

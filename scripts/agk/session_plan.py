@@ -134,14 +134,15 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 import tomllib
-from datetime import UTC, datetime, timedelta
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import common
 import playbook_format
+import session as reads  # the one copy whose `gh` the plan's reads go through
 from common import ESTIMATE_LINES, CheckError, estimate_parts, matches, plan_settings, read_list
 from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
 from reviewers import verdict_authors
@@ -189,7 +190,6 @@ from session import (
 from session import kind_of as task_kind  # SPEC-0045 rule 4; kind_of below is the lane's
 
 import config
-import session as reads  # the one copy whose `gh` the plan's reads go through
 
 BUILDS_LINE = re.compile(r"Builds: (.+)")
 BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")
@@ -1004,7 +1004,9 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
     if s.recent and len(merged) < len(builds) and all_takes(s.comments.get(number) or []):
         older = history_of(s, number)  # ADR-0529 decision 4: a build merged before the window
         merged |= {
-            n for n, _ in builds if any(p.get("merged_at") and names_build(p, number, n) for p in older)
+            n
+            for n, _ in builds
+            if any(p.get("merged_at") and names_build(p, number, n) for p in older)
         }
     if whole := next((t for t in takes if t[5] is None), None):
         pending = [n for n, _ in builds if n not in merged]
@@ -1870,8 +1872,7 @@ def save_reads(root, figures: dict) -> None:
 
 def reads_line(figures: dict) -> str:
     return (
-        f"reads: {figures['calls']} calls ({figures['cached']} from cache), "
-        f"{figures['seconds']} s"
+        f"reads: {figures['calls']} calls ({figures['cached']} from cache), {figures['seconds']} s"
     )
 
 
@@ -2047,7 +2048,9 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
         found["held"] = held
     if ignored_holds:
         found["ignored_holds"] = ignored_holds
-    return found, bool(s.unread) and (count < fillable or ahead(s, pb, ready, chosen[:count], active))
+    return found, bool(s.unread) and (
+        count < fillable or ahead(s, pb, ready, chosen[:count], active)
+    )
 
 
 def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:

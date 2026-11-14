@@ -11,7 +11,18 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from test_session import ISSUES, claim_posts, REPO, Stub, comment, iso, issue, listing, posts, session
+from test_session import (
+    ISSUES,
+    REPO,
+    Stub,
+    claim_posts,
+    comment,
+    iso,
+    issue,
+    listing,
+    posts,
+    session,
+)
 from test_session_flow import DAY, PULLS, base, brief, flow, merged
 from test_session_plan import changed, data, free, labelled
 
@@ -188,7 +199,9 @@ def test_claim_takes_a_build_whose_old_take_is_stale(proj, stub):
     assert [c["session"] for c in got["stale_claims"]] == ["builder-f"]
     out = claim(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5 build (c)", out.stdout
-    assert claim_posts(stub) == [["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (c) retakes"]]]
+    assert claim_posts(stub) == [
+        ["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (c) retakes"]]
+    ]
 
 
 def test_claim_still_refuses_a_build_that_a_fresh_take_holds(proj, stub):
