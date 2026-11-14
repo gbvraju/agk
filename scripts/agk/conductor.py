@@ -151,6 +151,13 @@ Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
 one), so the launcher restarts a builder for exactly those.
 
+Brief #1282 (ADR-0543): before its `START` lines `sweep` parks each open pull request whose
+owner wait passed (`[flow] owner_wait_minutes`, or at once inside `owner_rest_hours`), with one
+label write and one `Parked-by: wait <Q-id>` comment, and unparks one it parked once the owner
+answered, with the label removed and one `Unparked-by: answer <Q-id>` comment; it prints
+`UNPARKED #<n> <Q-id>; run: python3 scripts/agk/session.py resume --pr <n>` and, once per park,
+`PARKED #<n> <Q-id>`. A person's own `agk:parked` is never removed.
+
 Brief #1237 (ADR-0525): local mode restarts the conductor unattended.
 
     python3 conductor.py watchdog [--session NAME] [--install]
@@ -453,7 +460,7 @@ def held_lines(root, repo: str) -> list[str]:
     return lines
 
 
-def write_held(mark: Path, marks: dict) -> None:
+def write_held(mark: Path, marks: dict | list) -> None:
     with contextlib.suppress(OSError):  # an unwritten mark only makes the next check come sooner
         mark.parent.mkdir(parents=True, exist_ok=True)
         mark.write_text(json.dumps(marks, sort_keys=True), encoding="utf-8")
@@ -966,6 +973,58 @@ def proof_lines(root, repo: str, pulls: list, branch: str) -> list[str]:
     return overlap + reprove + behind
 
 
+# --- the owner's waits (brief #1282, ADR-0543) --------------------------------------------------
+
+
+def parked_mark(root) -> Path | None:
+    """The file of the git directory that holds the parks `sweep` has listed (never tracked)."""
+    try:
+        found = lease_mark(root)
+    except OSError:
+        return None
+    return found.with_name("parked") if found else None
+
+
+def owner_lines(root, repo: str, pulls: list, settings: dict, authors, approvers, now) -> list:
+    """The owner-wait lines of `sweep` (brief #1282 answers 3 and 4): it parks each open pull
+    request whose owner wait has passed (`session.park_pull`) and unparks each one this rule parked
+    once the owner answered (`session.unpark_pull`), then prints `PARKED #<n> <key>` once per park,
+    by its `Parked-by:` comment, and `UNPARKED #<n> <key>; run: ... resume --pr <n>`."""
+    listed = {a.lstrip("@").lower() for a in authors or []}
+    answerers = listed | {a.lstrip("@").lower() for a in approvers or []}
+    mark = parked_mark(root)
+    try:
+        said = json.loads(mark.read_text(encoding="utf-8")) if mark else []
+    except (OSError, ValueError):
+        said = []
+    said = [x for x in said if isinstance(x, int)] if isinstance(said, list) else []
+    parks: list[str] = []
+    unparks: list[str] = []
+    listed_now: list[int] = []
+    for pull in sorted(pulls, key=lambda p: p["number"]):
+        number = pull["number"]
+        comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+        found = session.owner_step(pull, comments, settings, now, listed, answerers)
+        if found and found[0] == "unpark" and session.unpark_pull(repo, number, found[1]):
+            unparks.append(
+                f"UNPARKED #{number} {found[1]}; run: python3 scripts/agk/session.py resume "
+                f"--pr {number}"
+            )
+            continue
+        if found and found[0] == "park" and session.park_pull(repo, number, found[1]):
+            comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+            pull = {**pull, "labels": [*(pull.get("labels") or []), {"name": "agk:parked"}]}
+        own = session.own_park(comments) if "agk:parked" in session.labels_of(pull) else None
+        if own is not None:
+            cid = int(own[1].get("id") or 0)
+            listed_now.append(cid)
+            if cid not in said:
+                parks.append(f"PARKED #{number} {own[0]}")
+    if mark is not None:
+        write_held(mark, sorted(set(listed_now)))
+    return unparks + parks
+
+
 def sweep(root) -> int:
     repo = session.repo_name(root)
     authors, approvers = verdict_authors(root), spec_approvers(root)
@@ -1001,6 +1060,12 @@ def sweep(root) -> int:
     lines += slot_lines(root, repo, issues, every, now)
     lines += stall_report(root, repo)
     lines += unacted_lines(root, repo, now, issues, pulls)
+    try:  # a bad value is refused in one line naming the setting; every other line still prints
+        waits = session.owner_wait_settings(Path(root))
+    except CheckError as refused:
+        lines.append(f"owner waits: {refused}")
+    else:
+        lines += owner_lines(root, repo, pulls, waits, authors, approvers, now)  # before new briefs
     lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
     print("\n".join(lines))
     return 0
