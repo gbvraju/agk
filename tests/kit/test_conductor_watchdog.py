@@ -18,6 +18,7 @@ import shutil
 import stat
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -361,9 +362,9 @@ def test_the_windows_adapter_is_the_guides_example_unchanged():
 def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(tmp_path):
     """REQ-039: brief #1237 answer 1 (the POSIX twin; `claude` is a test double, no terminal)."""
     origin = tmp_path / "origin.git"
-    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)  # nosec B603 B607
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)  # nosec B603 B607 - fixed argument list, no shell
     work = tmp_path / "proj"
-    subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)  # nosec B603 B607
+    subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)  # nosec B603 B607 - fixed argument list, no shell
     for args in (
         ["config", "user.email", "t@example.invalid"],
         ["config", "user.name", "t"],
@@ -371,7 +372,7 @@ def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(
         ["commit", "-q", "--allow-empty", "-m", "first"],
         ["push", "-q", "origin", "HEAD:main"],
     ):
-        subprocess.run(["git", *args], cwd=work, check=True, capture_output=True)  # nosec B603 B607
+        subprocess.run(["git", *args], cwd=work, check=True, capture_output=True)  # nosec B603 B607 - fixed argument list, no shell
     template = (ROOT / "kit" / "templates" / "start-session-local.sh").read_text(encoding="utf-8")
     script = work / "start-session-local.sh"
     script.write_text(template.replace("{{default_branch}}", "main"), encoding="utf-8")
@@ -400,7 +401,7 @@ def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(
     for _ in range(300):
         if exit_file.exists() and "ended_utc=" in exit_file.read_text(encoding="utf-8"):
             break
-        subprocess.run(["sleep", "0.1"], check=False)  # nosec B603 B607
+        time.sleep(0.1)
     lines = exit_file.read_text(encoding="utf-8").splitlines()
     assert lines[0] == "exit_code=0" and re.fullmatch(
         r"ended_utc=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", lines[1]
