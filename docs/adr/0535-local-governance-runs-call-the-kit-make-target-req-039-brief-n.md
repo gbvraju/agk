@@ -31,6 +31,8 @@ In such a project in local mode no pull request could be cleared or merged.
 3. `.claude/agents/conductor.md` and `docs/guides/local-mode.md` name the `-f agk.mk agk-governance` form wherever
    they named `make -C <scratch> governance`, with the reason: `agk.mk` is the kit's own file, in every project.
 4. CI mode and personal mode do not change; no workflow changes.
+5. `tests/kit_dev/test_local_mode_guide.py` checks a `make -f agk.mk <target>` the guide names against `agk.mk`, and
+   every other `make <target>` against the `Makefile` as before.
 
 ## Consequences
 
