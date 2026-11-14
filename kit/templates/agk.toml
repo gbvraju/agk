@@ -83,6 +83,7 @@ review_mode = "team"
 # two keys from this file as committed on the default branch of the remote, never from a pull request's head, and `agk doctor` prints
 # `auto-merge: off` or `auto-merge: on, method squash`. Off (false) by default and when absent; any other value merges nothing. Turning
 # it on is the owner's change: an ADR in the same pull request (agk.toml is a protected path).
+# These keys belong in the [flow] table: uncomment the [flow] line with them, or `agk doctor` reports them (misplaced-settings).
 # [flow]
 # claim_stale_hours = 24
 # builder_memory_gb = 6

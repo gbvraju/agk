@@ -52,6 +52,9 @@ imported version `docs/design/imported/i<n>/`, `design import: i<n> manifest mat
 problems|cannot be read; map complete|<n> problems|absent|not checked (<n> pages)`, the counts of
 `design_import`'s own checks, never a file name or a value; the JSON report carries them as
 `design_import`. A project with no imported version prints none, and no line changes the exit code.
+Brief #1245 (ADR-0527): `misplaced-settings` names each key that the kit reads from a table of
+agk.toml (`config.TABLE_KEYS`) but that stands at the top level or in another table, with the
+table it is in and the table it belongs to, never its value.
 """
 
 from __future__ import annotations
@@ -451,6 +454,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "launch adapter: ",
         "install the kit's adapter (python3 scripts/agk/upgrade.py writes a missing template) and "
         "set launch_adapter in the flow table of agk.toml to the line above (a protected path)",
+    ),
+    "misplaced-settings": (  # brief #1245 (ADR-0527): a table key written outside its table
+        "warn",
+        "every setting the kit reads from a table of agk.toml is in that table",
+        "agk.toml: ",
+        "move each named setting into the table it belongs to (a change to agk.toml needs an ADR "
+        "in the same pull request)",
     ),
     "engines-keys": (
         "warn",
@@ -1230,6 +1240,20 @@ def reviewer_slots_result(root: Path) -> Result:
     return Result("ok")
 
 
+def misplaced_settings_result(config: dict) -> Result:
+    """Brief #1245 (ADR-0527): each key the kit reads from a table (`config.TABLE_KEYS`) that is
+    at the top level or in another table, with where it is and where it belongs; never a value."""
+    found = models.misplaced_settings(config)
+    if not found:
+        return Result("ok")
+    parts = [
+        f"{key} is {'at the top level' if where == models.TOP_LEVEL else f'in [{where}]'}, "
+        f"it belongs in {' or '.join(f'[{t}]' for t in homes)}"
+        for key, where, homes in found
+    ]
+    return Result("fail", message="; ".join(parts))
+
+
 def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
     """With `auto_start` on, the kit's adapter for the platform and the `launch_adapter` line,
     when that setting is unset or a script file it names is missing (brief #1237, ADR-0525).
@@ -1723,6 +1747,7 @@ def run_checks(
     results["capacity"] = capacity_result(root, measure=api_dir is None)
     results["reviewer-slots"] = reviewer_slots_result(root)
     results["launch-adapter"] = launch_adapter_result(root)
+    results["misplaced-settings"] = misplaced_settings_result(config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]

@@ -51,6 +51,10 @@ build writes its own (session rule 36), with the brief's `Reserved:` number.
 5. `.claude/agents/architect-review.md` names the scratch folder, the marker lines and the local start.
 6. `agk.toml`'s `[[testing.map]]` entries of `scripts/agk/session.py` and `scripts/agk/conductor.py` list
    `tests/kit/test_reviewer_slots_local.py` (the map rule of `test_always_full_infra.py`).
+7. `config.TABLE_KEYS["flow"]` (ADR-0527) lists `reviewer_slots` and `review_minutes`, so `doctor.py`'s
+   `misplaced-settings` never reports them in `[flow]`; `review_minutes` is at home in `[flow]` and `[capacity]` alike
+   (`scripts/agk/config.py`, outside the brief's `Touches:`, changed for the merge with brief #1245 by the correction on
+   18d45a3).
 
 ## Consequences
 

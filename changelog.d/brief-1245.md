@@ -1,0 +1,1 @@
+- `agk doctor` reports, as `misplaced-settings`, a setting that the kit reads from a table of `agk.toml` (`[flow]`, `[testing]`, `[capacity]`, `[plan]`, `[design]`, `[delivery]`) but that stands at the top level or in another table, naming the key and both tables, never its value; the template's flow block says the keys belong in the `[flow]` table (brief #1245, ADR-0527)

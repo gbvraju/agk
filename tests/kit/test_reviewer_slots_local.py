@@ -434,3 +434,18 @@ def test_the_checklist_names_the_reviewer_slots_setting():
     assert checklist.slots_alive(View()) == "reviewer slots alive 0 of 2 (reviewer_slots)"
     View.flow = {}
     assert checklist.slots_alive(View()) == "reviewer slots alive 0"
+
+
+# --- the merge with brief #1245 (ADR-0527): both settings are at home in `[flow]` -------------
+
+
+def test_the_flow_settings_are_not_reported_as_misplaced():
+    """REQ-046: brief #1248 answer 1 (the correction on 18d45a3: `config.TABLE_KEYS["flow"]`)."""
+    import tomllib
+
+    import config
+
+    text = "[flow]\nreviewer_slots = 1\nreview_minutes = 10\n[capacity]\nreview_minutes = 5\n"
+    assert config.misplaced_settings(tomllib.loads(text)) == []
+    found = config.misplaced_settings(tomllib.loads("reviewer_slots = 1\n"))
+    assert [(key, homes) for key, _, homes in found] == [("reviewer_slots", ("flow",))]
