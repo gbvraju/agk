@@ -209,7 +209,7 @@ def test_the_skill_names_a_print_command_and_never_installs_a_browser() -> None:
     # REQ-050: brief #1219 answer 3, a PDF is optional and no browser is installed.
     text = SKILL.read_text(encoding="utf-8")
     assert "--print-to-pdf" in text
-    assert "never install" in text
+    assert "never installs a browser" in " ".join(text.split())
     for verb in ("pip install", "npm install", "apt-get", "brew install", "winget"):
         assert verb not in text, verb
 

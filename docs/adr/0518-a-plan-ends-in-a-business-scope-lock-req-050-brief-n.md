@@ -41,10 +41,11 @@ reached the business text twice before they were removed.
 
 A plan can end in a scope lock that business can read, and the check keeps the team's terms out of it in every
 governance run. The check reads words, not meaning: a technical term outside the four kinds is the person's to remove.
-`tests/kit/test_scope_lock.py` checks a clean scope lock (passes), a plan without one (as before), each kind failing with
-the rule and the line number and never the text, several kinds on one line, words that only look alike, and the skill's
-text and listings. Protected path classes changed: `scripts/agk/` (`check_plan.py`), `tests/kit/` (the tests),
-`tests/kit_dev/` (the plugin's command list in `test_distribution.py`) and `skills/` (the new skill). No workflow changes.
+`tests/kit/test_scope_lock.py` checks a clean scope lock (passes), a plan without one (as before), each kind failing
+with the rule and the line number and never the text, several kinds on one line, words that only look alike, and the
+skill's text and listings. Protected path classes changed: `scripts/agk/` (`check_plan.py`), `tests/kit/` (the tests),
+`tests/kit_dev/` (the plugin's command list in `test_distribution.py`) and `skills/` (the new skill). No workflow
+changes.
 
 ## Residual
 
