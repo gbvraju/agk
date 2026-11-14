@@ -1,0 +1,1 @@
+- In local mode `prepush.py --record` with no FILE keeps the evidence record in the clone's shared folder (`<git common dir>/agk-evidence/<head>.json`), and `evidence.py check --head <sha>` finds it from the head alone, so the guarded merge is no longer held for a record nobody can locate (brief #1269, ADR-0536)

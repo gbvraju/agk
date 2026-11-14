@@ -89,14 +89,17 @@ stands alone, so the lines can be run one by one, as an agent runs them:
     python3 scripts/agk/lock.py run --name heavy --session <id> -- make test
     python3 scripts/agk/lock.py run --name heavy --session <id> -- python3 scripts/agk/proof.py --base "$base" --head HEAD
     python3 scripts/agk/check_pr_body.py --draft false body.md
-    python3 scripts/agk/lock.py run --name heavy --session <id> -- python3 scripts/agk/prepush.py --body body.md --record <record file>
+    python3 scripts/agk/lock.py run --name heavy --session <id> -- python3 scripts/agk/prepush.py --body body.md --record
 
-The last line is the record the conductor checks. `prepush.py --record <file>` (brief #374) runs the body check, lint,
+The last line is the record the conductor checks. `prepush.py --record` (brief #374) runs the body check, lint,
 governance, the secret scan and the selected tests, in that order, and writes one JSON record of what ran: the head and
 base, whether the work tree was clean, and each step's command, exit code and a digest of its output, never the output
-itself. Keep the record file outside the repository (a
-record inside it makes the tree dirty) and where the conductor can read it, on a machine you share. Run it on a clean tree:
-a record of a dirty tree is reported as such.
+itself. With no FILE after `--record` the record goes to one fixed place (brief #1269, ADR-0536):
+`<git common dir>/agk-evidence/<40-hex head>.json`, in the folder `git rev-parse --git-common-dir` names, which every worktree
+of the clone shares, so every session on the machine can read it and the conductor finds it from the head alone. It is never
+tracked and never makes the tree dirty. A session on another machine still passes a FILE (`--record <record file>`), kept
+outside the repository (a record inside it makes the tree dirty), and gives that file to the conductor. Run it on a clean
+tree: a record of a dirty tree is reported as such.
 
 In PowerShell write `$base = git merge-base HEAD origin/main` and `python` where `python3` is not on the path; the `lock.py`
 lines are the same (`make governance AGK_BASE=$base` gives the base to the checks as an environment variable on every platform). While another session holds the lock, `lock.py` prints one line at once and then one a
@@ -143,7 +146,11 @@ Step 1 of the conductor's protocol (CI first) has nothing to read in local mode,
    reported on that head: a red check still blocks a clearing verdict.
 2. Check the builder's record against the head with one command (brief #434):
 
-       python3 scripts/agk/evidence.py check <record file> --head <sha>
+       python3 scripts/agk/evidence.py check --head <sha>
+
+   With no record file it reads the clone's shared record of that head, and when there is none it exits 3 with
+   `evidence: no record for this head in the shared evidence folder (option: --record)`: ask the builder to run
+   `prepush.py --record` on that head. For a record file from another machine, run `check <record file> --head <sha>`.
 
    It reports `stale` when the record names another head, `dirty` when the builder's tree was not clean and `failed` when a
    recorded step failed; otherwise it adds a detached worktree of the head in a temporary folder, runs governance there with

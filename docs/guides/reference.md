@@ -337,8 +337,10 @@ run once, through `sh -c`, when the lock of a run whose process no longer runs i
 age, whose run may still go on, nor for one that names no session. The locked command gets `AGK_LOCK_SESSION`, so a project can
 label what it starts, for example containers, by session (ADR-0231).
 
-A builder in local mode records its run with `python3 scripts/agk/prepush.py --record FILE` (ADR-0208), and the conductor checks
-that record before its verdict with `python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]`: `stale`,
+A builder in local mode records its run with `python3 scripts/agk/prepush.py --record` (ADR-0208; with no FILE the record goes
+to `<git common dir>/agk-evidence/<head>.json`, the clone's shared folder, ADR-0536), and the conductor checks that record
+before its verdict with `python3 scripts/agk/evidence.py check --head SHA [--sample N] [--json]`, or `check RECORD [--head SHA]`
+for a record file passed from another machine: `stale`,
 `dirty` or `failed` when the record names another head, an unclean tree or a failed step; otherwise, in a temporary worktree of
 the head under the heavy-step lock, governance runs and a sample of the steps (one by default, chosen from the head sha) re-runs
 as prepush builds them from the head, never as the record writes them, exit codes compared; a recorded command that is not what

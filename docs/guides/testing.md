@@ -142,7 +142,7 @@ files. With `--json` the same section is the `regression` object: `table`, `prof
 ## The pre-push gate
 
 ```
-python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]
+python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record [FILE]]
 ```
 
 With a `[testing]` table, the `tests` step of the pre-push gate first runs the pull request's own test files, as proof plans

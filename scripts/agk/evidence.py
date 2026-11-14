@@ -1,6 +1,7 @@
 """Check a local evidence record against the head and re-run a sample of it (brief #434, ADR-0233).
 
     python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]
+    python3 scripts/agk/evidence.py check --head SHA [--sample N] [--json]
 
 RECORD is the file that `prepush.py --record` wrote (schema 1, brief #374, ADR-0208). A record of
 another schema, or one whose fields are not those of schema 1, is refused (exit 2, naming the field,
@@ -36,6 +37,13 @@ One line per finding (`evidence: ...`), then one line for the conductor to quote
 `Evidence check: agrees|differs, head <sha12>, record <sha12 of the file>, governance <outcome>,
 sample <k> of <m> same exit`. `--json` prints one JSON object instead.
 
+Brief #1269 (ADR-0536): RECORD is optional when `--head` is given. Without it the check reads
+`<git common dir>/agk-evidence/<40-hex head>.json`, the clone's shared evidence folder that
+`prepush.py --record` with no FILE writes, shared by every worktree of the clone. When that file is
+missing it exits 3 with `evidence: no record for this head in the shared evidence folder (option:
+--record)`, naming the option, never a path. Without RECORD and without `--head` it is a usage
+error.
+
 Exit 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O
 error (a record that cannot be read, a worktree that cannot be made, make not installed). It posts
 nothing, needs no network and changes nothing in the repository but the worktree it removes.
@@ -66,13 +74,15 @@ from prepush import (
     safe_command,
     safe_cwd,
     selected_workers,
+    shared_record,
     stop_signals,
     take_lock,
 )
 from proof import WINDOWS, kill_tree, popen_options
 
 HERE = Path(__file__).resolve().parent
-USAGE = "usage: evidence.py check RECORD [--head SHA] [--sample N] [--json]"
+USAGE = "usage: evidence.py check RECORD [--head SHA] [--sample N] [--json] | check --head SHA ..."
+NO_SHARED = "evidence: no record for this head in the shared evidence folder (option: --record)"
 SCHEMA = 1
 DEFAULT_SAMPLE = 1
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -115,7 +125,7 @@ def parse_args(args: list[str]) -> dict:
             i += 1
         else:
             raise Usage(USAGE)
-    if options["record"] is None:
+    if options["record"] is None and options["head"] is None:
         raise Usage(USAGE)
     return options
 
@@ -210,6 +220,15 @@ def load(path: Path) -> tuple[dict, str]:
     if record.get("result") not in RESULTS:
         raise bad("result")
     return record, hashlib.sha256(data).hexdigest()
+
+
+def load_shared(root: Path, head: str) -> tuple[dict, str]:
+    """The record of HEAD in the clone's shared evidence folder (brief #1269), as `load` reads it;
+    Unreadable naming the option when it is missing."""
+    path = shared_record(root, head)
+    if path is None or not path.is_file():
+        raise Unreadable(NO_SHARED)
+    return load(path)
 
 
 def resolve(root: Path, ref: str | None, given: bool) -> str:
@@ -594,8 +613,11 @@ def main(argv: list[str] | None = None) -> int:
         if top.returncode != 0:
             raise Usage("evidence: not inside a git work tree (path class: root)")
         root = Path(top.stdout.strip())
-        record, sha = load(Path(options["record"]))
         head = resolve(root, options["head"], options["head"] is not None)
+        if options["record"] is not None:
+            record, sha = load(Path(options["record"]))
+        else:
+            record, sha = load_shared(root, head)
         found = problems(record, head)
         ran = None if found else in_worktree(root, record, head, options["sample"])
         return report(head, sha, found, ran, options["json"])
