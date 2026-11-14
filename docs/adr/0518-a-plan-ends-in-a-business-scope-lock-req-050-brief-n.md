@@ -1,6 +1,6 @@
 # ADR-0518: A plan ends in a business scope lock
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0043, amendment 176, brief #1219, plan #661

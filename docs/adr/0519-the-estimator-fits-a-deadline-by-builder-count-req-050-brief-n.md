@@ -1,6 +1,6 @@
 # ADR-0519: The estimator fits a deadline by builder count before history exists
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0043 rules 13, 14 and 26, ADR-0269, ADR-0465, brief #1220, plan #661, amendment 177

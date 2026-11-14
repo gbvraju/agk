@@ -1,6 +1,6 @@
 # ADR-0523: Builders take ready work milestone by milestone, the most-unblocking brief first
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0034 rule 15, amendment 181, ADR-0153, ADR-0318, ADR-0465, brief #1232, plan #661
