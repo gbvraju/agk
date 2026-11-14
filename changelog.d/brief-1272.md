@@ -1,1 +1,0 @@
-- A router run by hand in local mode writes its pipeline document to the git-ignored `.agk-pipeline.json` in the repository root, so it leaves no untracked `pipeline.json` to commit; CI's path is unchanged (brief #1272, ADR-0538)
