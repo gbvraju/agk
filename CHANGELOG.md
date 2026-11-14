@@ -4,6 +4,11 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.64.3 (2026-11-14)
+
+- #1239 In local mode a crashed conductor comes back by itself: the kit installs the launch adapters `scripts/start-session-windows.ps1` and `scripts/start-session-local.sh`, `doctor.py` names a missing one, and `python3 scripts/agk/conductor.py watchdog` (one pass; `--install` prints the scheduler line) starts the conductor when its lease is free and memory allows (brief #1237, ADR-0525)
+- #1241 `/agk:board --yes` finishes on a GitHub Project that has the built-in `Type` field: the marker field of Work and Question is now `Card kind` (an older board's own `Type` field of Work and Question is kept), and a field gh refuses to add is printed with its name and gh's own message (brief #1240, ADR-0526)
+
 ## 0.64.2 (2026-11-14)
 
 - #1224 The plan check now fails a source document under `docs/sources/` that no requirement's `Source:` line cites, unless `docs/plan/scope.md` lists it under `Out of scope` with a reason, and `check_plan.py --trace` prints one `<file>: <a> of <b> headings or rows cited` line per source, so an uncited document can no longer pass as covered; an OpenSpec acceptance line and a shared component's brief, whose `Component:` line and sources `plan_intake.py render` now writes, also cite their file (brief #1217, ADR-0516)
