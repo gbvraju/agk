@@ -72,8 +72,8 @@ review_mode = "team"
 # auto_start = true and launch_adapter set to the project's own command (split into words, run without a shell, once per session with
 # the prompt on its standard input), it starts the sessions the plan names through that command while the default branch says the same,
 # never more than the plan's capacity or max_builders;
-# with auto_start = false (the default) it prints their ready-to-paste prompts. The kit installs no adapter; the getting-started guide
-# shows two examples. Each is a protected change: an ADR in the same pull request (agk.toml is a protected path).
+# with auto_start = false (the default) it prints their ready-to-paste prompts. The kit installs two adapters, scripts/start-session-local.sh
+# and scripts/start-session-windows.ps1 (brief #1237); the local-mode guide, "Running unattended", says which line to set. Each is a protected change: an ADR in the same pull request (agk.toml is a protected path).
 # builder_memory_gb (brief #409): the memory, in whole GB (GiB), that one builder needs, with its containers. When set, the plan
 # starts no more builders than the machine's available memory divided by it (rounded down; at least 1 while none runs) and names the limit that
 # applied (max_builders, reviews or memory); when the memory cannot be read it says "memory: unknown" and keeps its other limits.

@@ -163,6 +163,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/conductor.py rerun --pr N [--apply]
     python3 scripts/agk/conductor.py check-verdict FILE [--pr N]
     python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
+    python3 scripts/agk/conductor.py watchdog [--session NAME] [--install]
     python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
     python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT
 
@@ -191,6 +192,8 @@ waits once for the default branch's run on the last merge (`full_run.covered`, p
 `stopped: <branch> red at <sha12> after the batch #a #b` (exit 1); in local mode there is no run to wait for. `--dry-run` prints
 the order and merges nothing. It posts nothing; the guard allows the dry run always and a run that merges only with `auto_merge`
 on in the checkout and on the default branch, and builders are asked first (`.claude/settings.json`).
+
+`watchdog` (brief #1237, ADR-0525) is one pass, for local mode: when no live conductor holds the lease on the plan issue, `auto_start` and `launch_adapter` are set in the checkout and on the default branch, the project is not paused and the machine's free memory holds one builder (`builder_memory_gb`), it starts one conductor through the adapter (`conductor-local`, or `--session NAME`), which takes the lease itself; otherwise it prints why and starts nothing. It posts nothing. `--install` prints the one scheduler line that runs it every 30 minutes (`schtasks` on Windows, a crontab line elsewhere) and runs nothing; the person runs that line. It is not a command of the conductor's session, and its guard does not allow it. [Local mode, "Running unattended"](local-mode.md#running-unattended) says how to set it up.
 
 The last private routines (brief #700, ADR-0330). `rerun --pr N` reads the pull request and the `pull_request` runs of its head and
 prints one line per cancelled run; `--apply` reruns them (catch log row 18). When every run of the head skipped (a push to a ready
