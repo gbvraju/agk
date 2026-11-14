@@ -875,8 +875,7 @@ def adr_step(target: Path, plan: Plan, today: str, dry_run: bool) -> str:
     """Brief #1222: write (or, in a dry run, name) the upgrade's ADR; the line that says so."""
     kept = written_upgrade_adr(target, plan.kit_version)
     if kept is not None:
-        number = kept.name[:4]
-        return f"adr: kept {kept.relative_to(target).as_posix()} (ADR-{number})"
+        return f"adr: kept {kept.relative_to(target).as_posix()} (ADR-{kept.name[:4]})"
     number, path = next_adr_path(target, plan.kit_version)
     rel = path.relative_to(target).as_posix()
     if dry_run:
@@ -954,13 +953,13 @@ def main(argv: list[str] | None = None) -> int:
     dry_run = "--dry-run" in args
     write_adr = "--write-adr" in args
     rest = [a for a in args if a not in ("--dry-run", "--write-adr")]
-    today: str | None = None
+    given: str | None = None
     if "--date" in rest:
         at = rest.index("--date")
         if not write_adr or at + 1 >= len(rest):
             print(USAGE, file=sys.stderr)
             return 2
-        today = rest.pop(at + 1)
+        given = rest.pop(at + 1)
         rest.pop(at)
     if len(rest) != 1 or rest[0].startswith("-"):
         print(USAGE, file=sys.stderr)
@@ -969,7 +968,7 @@ def main(argv: list[str] | None = None) -> int:
         problem = check_interpreter(tuple(sys.version_info[:3]))
         if problem:
             raise Refusal(problem)
-        today = today or datetime.now(UTC).date().isoformat()
+        today = given or datetime.now(UTC).date().isoformat()
         if write_adr and not DATE_RE.match(today):
             raise Refusal("the date is not YYYY-MM-DD (option --date)")
         target = Path(rest[0])
