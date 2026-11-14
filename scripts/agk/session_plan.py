@@ -63,6 +63,22 @@ The plan, in the order it is decided:
    waves, the capacity, the merge queue and the safe merge set are decided as above, so a lane never
    lets two overlapping briefs run together; no lock setting changes. Without a declaration the plan
    prints exactly what it printed before.
+8. **The milestone order** (brief #1232, ADR-0523). Each ready brief's milestone is the GitHub
+   milestone of its issue, ordered by `due_on` (a milestone with none after those with one), then
+   its number; a brief without one comes last. The ready briefs are ordered by milestone first, so
+   the waves and the slots fill from the earliest milestone that has a ready, non-overlapping brief
+   and reach a later one only when the earlier ones have none. Within a milestone: the brief whose
+   dependants (every open brief whose `Depends-on: #n` names it, directly or further down, each
+   counted once) carry the most hours first, then priority, then the smaller own hours, then
+   number; a brief's hours are the mid point of its `Expected:` range, else its `Size:` (S 3
+   hours, M 6 hours), else none (0 for a dependant, last for its own). With a playbook the lane
+   order of item 7 applies inside each milestone, this order breaking its ties. `[plan]
+   active_milestones` (a list of titles) leaves every brief outside them unstarted, listed as
+   skipped; without it every milestone is active. The plan prints `#<n> <milestone>: unblocks <h>
+   h.` for each start and `idle: no ready brief in <milestones>[; first wait: <wait>].` for each
+   free slot it cannot fill (none while the merge queue holds the starts), and `milestones` in
+   the data; with no milestone on any open brief and no `active_milestones`, neither (Q-1232-2),
+   so such a plan prints what it printed before.
 
 The re-prove state (SPEC-0050 rule 6, build (b), brief #727, ADR-0339): `reprove_files` names, from
 local git only, the files a pull request's head changes since its merge base with the default
@@ -124,7 +140,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import common
 import playbook_format
-from common import CheckError, matches, read_list
+from common import ESTIMATE_LINES, CheckError, estimate_parts, matches, plan_settings, read_list
 from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
 from reviewers import verdict_authors
 from session import (
@@ -142,6 +158,7 @@ from session import (
     brief_shape,
     builder_slots,
     builder_start,
+    depends_on,
     first_line,
     flow_int,
     flow_value,
@@ -1204,7 +1221,8 @@ def lane_of(pb: dict, kind: str | None) -> str | None:
 
 def lane_order(pb: dict | None, ready: list[dict]) -> list[dict]:
     """The ready briefs in the lane order (ADR-0318 decision 3): priority, then phase rank, then one
-    brief per lane in turn (the playbook's lane order, then none), then number. A brief without a
+    brief per lane in turn (the playbook's lane order, then none), then the order given (by number
+    from `candidates`; the milestone order's within a milestone, ADR-0523). A brief without a
     kind, or with a kind the playbook does not know, belongs to no phase and follows the kinded
     briefs of its priority (Q-665-2). Without a playbook the order is as given."""
     if pb is None:
@@ -1223,7 +1241,7 @@ def lane_order(pb: dict | None, ready: list[dict]) -> list[dict]:
     out: list[dict] = []
     for key in sorted({group(b) for b in ready}):
         queues: dict[int, list[dict]] = {}
-        for brief in sorted((b for b in ready if group(b) == key), key=lambda b: b["number"]):
+        for brief in (b for b in ready if group(b) == key):  # the order given (ADR-0523)
             queues.setdefault(lane_index(brief), []).append(brief)
         while any(queues.values()):
             for index in sorted(queues):
@@ -1252,6 +1270,123 @@ def playbook_lines(plan: dict) -> list[str]:
     steps = "; ".join(pb["heavy_steps"])
     heavy = f"{steps}; {HEAVY_LOCK}." if steps else "none."
     return [f"Lanes ({kind}): {lanes}.", f"Heavy steps ({kind}): {heavy}"]
+
+
+# --- the milestone order (brief #1232, ADR-0523) ------------------------------------------------
+
+SIZE_HOURS = {"S": 3.0, "M": 6.0}  # a brief with no `Expected:` line (answer 2)
+NO_MILESTONE = "no milestone"
+INACTIVE = "not in an active milestone (setting: [plan] active_milestones)"
+
+
+def own_hours(body: object) -> float | None:
+    """The mid point of the brief's `Expected:` range, else its size's hours, else None."""
+    size, expected = estimate_parts(body)
+    found = ESTIMATE_LINES["Expected"].fullmatch(expected)
+    if found:
+        return (float(found.group(1)) + float(found.group(2))) / 2
+    return SIZE_HOURS.get(size)
+
+
+def milestone_of(brief: dict) -> dict | None:
+    found = brief.get("milestone")
+    title = found.get("title") if isinstance(found, dict) else None
+    return found if isinstance(title, str) and title else None
+
+
+def milestone_title(brief: dict) -> str:
+    found = milestone_of(brief)
+    return found["title"] if found else NO_MILESTONE
+
+
+def milestone_rank(brief: dict) -> tuple:
+    """Earlier `due_on` first, a milestone without one after, then its number; none last."""
+    found = milestone_of(brief)
+    if found is None:
+        return (2, "", 0)
+    due = found.get("due_on")
+    number = found.get("number")
+    number = number if isinstance(number, int) and not isinstance(number, bool) else 0
+    return (0, due, number) if isinstance(due, str) and due else (1, "", number)
+
+
+def unblocked_hours(issues: list) -> dict[int, float]:
+    """Each open brief's dependants' hours: every open brief that waits on it by `Depends-on`,
+    directly or further down, counted once (a cycle ends), each by `own_hours` or 0."""
+    briefs = {
+        i["number"]: i
+        for i in issues
+        if isinstance(i, dict) and isinstance(i.get("number"), int) and "pull_request" not in i
+    }
+    waiters: dict[int, set[int]] = {}
+    for number, brief in briefs.items():
+        for named in depends_on(str(brief.get("body") or "")):
+            if named in briefs and named != number:
+                waiters.setdefault(named, set()).add(number)
+    out: dict[int, float] = {}
+    for number in briefs:
+        seen: set[int] = set()
+        stack = list(waiters.get(number, ()))
+        while stack:
+            other = stack.pop()
+            if other in seen or other == number:
+                continue
+            seen.add(other)
+            stack += waiters.get(other, ())
+        out[number] = sum(own_hours(briefs[n].get("body")) or 0.0 for n in seen)
+    return out
+
+
+def active_milestones(root) -> list[str] | None:
+    """`[plan] active_milestones`, or None when it is not set (every milestone is active)."""
+    return plan_settings(Path(root)).get("active_milestones")
+
+
+def milestone_order(pb: dict | None, ready: list[dict], hours: dict[int, float]) -> list[dict]:
+    """The ready briefs by milestone, then (answer 2) the hours they unblock, priority, the
+    smaller own hours and number; with a playbook, its lane order inside each milestone."""
+
+    def key(brief: dict) -> tuple:
+        own = own_hours(brief.get("body"))
+        return (
+            -hours.get(brief["number"], 0.0),
+            priority_of(brief["body"]),
+            own is None,
+            own or 0.0,
+            brief["number"],
+        )
+
+    out: list[dict] = []
+    for rank in sorted({milestone_rank(b) for b in ready}):
+        group = sorted((b for b in ready if milestone_rank(b) == rank), key=key)
+        out += lane_order(pb, group)
+    return out
+
+
+def _whole(value: float) -> float | int:
+    return int(value) if float(value).is_integer() else value
+
+
+def idle_lines(issues: list, active: list[str] | None, waits: list[dict], skipped: list, n: int):
+    """One `idle:` line for each of `n` free slots the plan cannot fill (answer 4)."""
+    if n <= 0:
+        return []
+    briefs = [i for i in issues if isinstance(i, dict) and "pull_request" not in i]
+    if active is not None:
+        briefs = [b for b in briefs if milestone_title(b) in active]
+    ranks = {b["number"]: milestone_rank(b) for b in briefs}
+    titles: list[str] = []
+    for brief in sorted(briefs, key=lambda b: (milestone_rank(b), b["number"])):
+        if milestone_title(brief) not in titles:
+            titles.append(milestone_title(brief))
+    blocked = [(w["brief"], f"#{w['brief']} {wait_text(w)}") for w in waits if "brief" in w]
+    blocked += [(b, f"#{b} {why}") for b, why in skipped if str(why).startswith("waits for")]
+    blocked = [x for x in blocked if x[0] in ranks]
+    line = "idle: no ready brief in " + (", ".join(titles) if titles else "any milestone")
+    if blocked:
+        first = min(range(len(blocked)), key=lambda i: (ranks[blocked[i][0]], i))
+        line += f"; first wait: {blocked[first][1]}"
+    return [line + "."] * n
 
 
 def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -1634,7 +1769,11 @@ def build(root, record: bool = False) -> dict:
     ready = [b for b in ready if b["number"] not in {w["brief"] for w in fixed}]
     build_waits = fixed + build_waits
     pb = playbook_of(root)
-    ready = lane_order(pb, ready)
+    active = active_milestones(root)
+    inactive = [] if active is None else [b for b in ready if milestone_title(b) not in active]
+    ready = [b for b in ready if b not in inactive]
+    unblocks = unblocked_hours(issues)
+    ready = milestone_order(pb, ready, unblocks)
     chosen, waits = waves(root, s, ready)
     ranked = holders(root, s, [b for b in ready if b not in chosen], now)
     if record:
@@ -1712,6 +1851,19 @@ def build(root, record: bool = False) -> dict:
     held, ignored_holds = holds_of(root, s)
     held_rows = [row for row in s.skipped if row[1].startswith(HELD_PREFIX)]
     entries = [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])]
+    fillable = 0 if hold else (min(slots, len(free)) if assigning else slots)
+    milestones = {
+        "active": active,
+        "starts": [
+            {
+                "brief": b["number"],
+                "milestone": milestone_title(b),
+                "unblocks": _whole(unblocks.get(b["number"], 0.0)),
+            }
+            for b in chosen[:count]
+        ],
+        "idle": idle_lines(issues, active, waits, s.skipped, fillable - count),
+    }
     found = {
         "start": [] if assigning else entries,
         "running": running_sessions(s),
@@ -1719,7 +1871,12 @@ def build(root, record: bool = False) -> dict:
         "holders": ranked,
         "skipped": [
             {"brief": n, "why": why}
-            for n, why in [*s.skipped, *build_skips, *unplanned]
+            for n, why in [
+                *s.skipped,
+                *build_skips,
+                *unplanned,
+                *((b["number"], INACTIVE) for b in inactive),
+            ]
             if (n, why) not in malformed_rows and (n, why) not in held_rows
         ],
         "malformed": [
@@ -1756,6 +1913,8 @@ def build(root, record: bool = False) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     } | playbook
+    if active is not None or any(milestone_of(i) for i in issues if isinstance(i, dict)):
+        found["milestones"] = milestones  # Q-1232-2: with no milestone the plan is as before
     if assigning:
         found["assign"] = [e | {"line": assign_line_of(e)} for e in entries]
     if held:
@@ -2021,6 +2180,12 @@ def words(plan: dict) -> str:
     if "adapt" in plan["capacity"]:
         got = plan["capacity"]["adapt"]
         lines.append(f"Adapt: {got['count']} of {got['highest']} ({got['why']}).")
+    found = plan.get("milestones") or {}
+    lines += [
+        f"#{x['brief']} {x['milestone']}: unblocks {x['unblocks']:g} h."
+        for x in found.get("starts", [])
+    ]
+    lines += list(found.get("idle", []))
     lines += playbook_lines(plan)
     for w in plan["waits"]:
         lines.append(f"#{w['brief']} {wait_text(w)}.")

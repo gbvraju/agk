@@ -1358,7 +1358,8 @@ def plan_settings(root: Path) -> dict:
     `iteration_days` (1 to 30, 10 by default), `calibration_min` (a positive whole number, 10)
     and `default_hours` (a table of `S`, `M` and `L` to `"<low>-<high>"`, empty), and `board` (the
     plan's Project number, a positive whole number, absent by default; ADR-0506) and
-    `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507).
+    `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507)
+    and `active_milestones` (a list of milestone titles, absent by default; ADR-0523).
     Any other key or value is a refusal that names the setting, never the value."""
     table = config_source(root).get(PLAN_TABLE)
     found = {**PLAN_DEFAULTS, "default_hours": {}}
@@ -1379,6 +1380,14 @@ def plan_settings(root: Path) -> dict:
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise CheckError("board must be a positive whole number (setting: [plan] board)")
             found[key] = value
+            continue
+        if key == "active_milestones":  # brief #1232, ADR-0523: the milestones builders start
+            if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
+                raise CheckError(
+                    "active_milestones must be a list of milestone titles"
+                    " (setting: [plan] active_milestones)"
+                )
+            found[key] = list(value)
             continue
         if key not in PLAN_DEFAULTS:
             raise CheckError(f"[plan] holds only the plan's settings (setting: [plan] {key})")

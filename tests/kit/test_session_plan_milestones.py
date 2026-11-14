@@ -1,4 +1,4 @@
-"""session.py plan: builders take ready work milestone by milestone, the most-unblocking brief first.
+"""session.py plan: builders take ready work milestone by milestone, most-unblocking first.
 
 Brief #1232, ADR-0523; REQ-050. The earliest milestone (its GitHub milestone, by `due_on` and then
 number; a brief without one last) fills the free slots first, and a later milestone only when the
@@ -120,7 +120,7 @@ def test_with_none_ready_in_the_earliest_milestone_the_next_fills_the_slot(proj,
     assert got[0] == "Start 1: builder-a takes #5."
     assert "#5 M2 second demo: unblocks 0 h." in got
     idle = (
-        "idle: no ready brief in M1 first demo; "
+        "idle: no ready brief in M1 first demo, M2 second demo; "
         "first wait: #6 waits for pull request #20 (it changes a/x.py)."
     )
     assert got.count(idle) == 1  # three builders, one running, one started: one slot is idle
@@ -186,7 +186,9 @@ def test_a_dependant_is_counted_once_and_a_cycle_ends(proj, stub):
     for n in (5, 6, 7):
         state(stub, n, "open")
     got = data(proj, stub)
-    assert got["milestones"]["starts"] == [{"brief": 5, "milestone": "M1 first demo", "unblocks": 6}]
+    assert got["milestones"]["starts"] == [
+        {"brief": 5, "milestone": "M1 first demo", "unblocks": 6}
+    ]
 
 
 # --- answer 3: `[plan] active_milestones` ----------------------------------------------------
@@ -232,7 +234,7 @@ def test_each_slot_it_cannot_fill_says_idle_with_the_milestones(proj, stub):
 
 
 def test_no_open_brief_says_idle_in_any_milestone(proj, stub):
-    toml(proj, "[flow]\nmax_builders = 1\n")
+    toml(proj, '[flow]\nmax_builders = 1\n[plan]\nactive_milestones = ["M1 first demo"]\n')
     listing(stub, [])
     got = lines(proj, stub)
     assert got[0] == "Start 0: no brief is ready."
@@ -250,6 +252,15 @@ def test_a_merge_hold_is_no_idle_slot(proj, stub):
     got = data(proj, stub)
     assert got["merge"]["hold"] is True and got["start"] == []
     assert got["milestones"]["idle"] == []
+
+
+def test_with_no_milestone_and_no_setting_the_plan_prints_as_before(proj, stub):
+    """Q-1232-2: a project that uses no milestone sees no new line and no new key."""
+    listing(stub, [at(5, brief("a/"), None), issue(6, brief("b/"))])
+    free(stub, 5, 6)
+    got = lines(proj, stub)
+    assert not [x for x in got if "unblocks" in x or x.startswith("idle:")]
+    assert "milestones" not in data(proj, stub)
 
 
 # --- the guide -------------------------------------------------------------------------------
