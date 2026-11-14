@@ -133,6 +133,7 @@
     "scripts/agk/test_map.py",
     "scripts/agk/test_plan.py",
     "scripts/agk/traceability.py",
+    "scripts/agk/tree_walk.py",
     "scripts/agk/usage.py"
   ],
   "experimental": [
