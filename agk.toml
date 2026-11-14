@@ -780,7 +780,7 @@ tests = [
   "tests/kit/test_runbook_pointers.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_parked.py",
   "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py", "tests/kit/test_stalls.py",
   "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_merger_trigger.py", "tests/kit_dev/test_uninstall.py",
-  "tests/kit/test_route_local.py",
+  "tests/kit/test_route_local.py", "tests/kit/test_conductor_guard.py",
 ]
 [[testing.map]]
 code = "scripts/agk/rules.py"
