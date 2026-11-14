@@ -1,6 +1,6 @@
 # ADR-0525: Local mode restarts builders and the conductor unattended
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0182, ADR-0190, ADR-0298, ADR-0368, ADR-0409, ADR-0439, ADR-0453, ADR-0477, brief #1237, plan #661
