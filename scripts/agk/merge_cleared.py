@@ -36,9 +36,9 @@ posts one comment `Auto merge: #<n> <merge sha> <UTC time> <verdict link>` there
 default branch, adds a detached worktree of the merge commit in a temporary folder outside the
 checkout and runs `lock.py run --name heavy --session merge-cleared --only-env PATH=<PATH>
 --only-env HOME=<scratch> --only-env AGK_PR_BODY=<scratch>/pr-body.md --only-env
-AGK_RECORD_COMMENTS=<scratch>/record-comments.json -- make -C <worktree> -f agk.mk agk-governance AGK_BASE=<parent of the merge commit>` (the kit's
-`agk.mk` target, which a project set up with adopt has without a Makefile, brief #1264), the body
-file holding the pull
+AGK_RECORD_COMMENTS=<scratch>/record-comments.json -- make -C <worktree> -f agk.mk
+agk-governance AGK_BASE=<parent of the merge commit>` (the kit's `agk.mk` target, which a
+project set up with adopt has without a Makefile, brief #1264), the body file holding the pull
 request body read before the merge (brief #576, so that a `Covered-by:` build is not reported red)
 and the comments file the Final comment of each rule 3a record in the merge commit's history, one
 GET each as the workflow's `Record comments` step makes them, an unreadable one left out

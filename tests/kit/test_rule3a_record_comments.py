@@ -43,7 +43,7 @@ def test_req028_the_after_merge_argument_list_carries_the_variable():
     """REQ-028: fix list item 1 (`AGK_RECORD_COMMENTS=<scratch>/home/record-comments.json`)."""
     home = Path("home")
     argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
-    cut = argv.index("--")  # lock.py's `--only-env NAME=VALUE` pairs since brief #1290
+    cut = argv.index("--")  # the `--only-env NAME=VALUE` pairs since brief #1290
     assert argv[cut - 8 : cut : 2] == ["--only-env"] * 4
     assert argv[cut - 7 : cut : 2] == [
         argv[cut - 7],

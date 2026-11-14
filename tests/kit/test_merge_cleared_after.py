@@ -376,6 +376,7 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
             return ("", None)
 
     monkeypatch.setattr(merge_cleared.subprocess, "Popen", fake_run)
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)  # brief #1290: no extra names
     root, tree, home = Path("checkout"), Path("tree"), Path("home")
     body = home / "pr-body.md"
     for platform in ("linux", "win32"):
@@ -970,8 +971,9 @@ def test_the_environment_holds_exactly_the_kept_names_on_linux(monkeypatch):
 
 
 def test_on_windows_the_path_is_kept_as_it_is_and_five_names_are_added(monkeypatch):
-    """REQ-039: brief #1290 test (c): with Windows faked (`merge_cleared.on_windows`) and a `;`-separated PATH,
-    that PATH is passed unchanged and SystemRoot, ComSpec, PATHEXT, TEMP and TMP are added."""
+    """REQ-039: brief #1290 test (c): with Windows faked (`merge_cleared.on_windows`) and a
+    `;`-separated PATH, that PATH is passed unchanged and SystemRoot, ComSpec, PATHEXT, TEMP
+    and TMP are added."""
     monkeypatch.setattr(merge_cleared, "on_windows", lambda: True)
     path = r"C:\Program Files\Git\usr\bin;C:\tools\make\bin;C:\Windows\system32"
     monkeypatch.setenv("PATH", path)
