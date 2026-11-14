@@ -8,6 +8,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 - #1239 In local mode a crashed conductor comes back by itself: the kit installs the launch adapters `scripts/start-session-windows.ps1` and `scripts/start-session-local.sh`, `doctor.py` names a missing one, and `python3 scripts/agk/conductor.py watchdog` (one pass; `--install` prints the scheduler line) starts the conductor when its lease is free and memory allows (brief #1237, ADR-0525)
 - #1241 `/agk:board --yes` finishes on a GitHub Project that has the built-in `Type` field: the marker field of Work and Question is now `Card kind` (an older board's own `Type` field of Work and Question is kept), and a field gh refuses to add is printed with its name and gh's own message (brief #1240, ADR-0526)
+- #1247 The getting-started guide says once more, in its item on automatic starts, that "The kit installs neither of the two short examples below", the sentence its test expects (brief #1246, fix for #1244)
 
 ## 0.64.2 (2026-11-14)
 
