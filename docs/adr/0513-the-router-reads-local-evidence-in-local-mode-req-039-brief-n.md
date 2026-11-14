@@ -27,8 +27,8 @@ merge already reads local evidence: the verdict's `Local evidence: <sha>` and `E
    `merge_cleared.local_evidence` itself (its two patterns and the `Maintainer answer: accept <sha>` exception, no copy);
    without it a cleared head is `agk:review`. `agk:owner-merge` and every other state and their order are unchanged.
 3. `route.py --all` and `--pr N` work in local mode with the person's own `gh`; `docs/guides/local-mode.md` replaces "No
-   router labels" with one paragraph: the conductor runs `route.py --all` once per review pass, and step 3 (the unfreeze)
-   is needed only with an older kit.
+   router labels" with one paragraph: `route.py --all` is run once per review pass (by a person, or a conductor session
+   without the guard, until the guard allows it; see Residual), and step 3 (the unfreeze) is needed only with an older kit.
 4. Without an open record issue nothing changes.
 
 ## Consequences
@@ -46,4 +46,8 @@ Labels follow the local evidence, so the owner and the business see each pull re
 
 - 2026-11-14: the router reads the `Evidence:` line from the builder's `Report:`, not from the record file; the conductor's
   `evidence.py check` stays the proof behind `agk:merge-ready`. Whether the builder evidence should also be read from the
-  pull request body is left to the maintainers (Q-1212-1, due 2026-12-31).
+  pull request body is left to the maintainers (due 2026-12-31).
+- 2026-11-14: the conductor's guard (`.claude/hooks/conductor_guard.py`) does not allow `python3 scripts/agk/route.py --all`,
+  so until it does a guarded conductor cannot relabel in local mode, and a person (or a conductor session without the guard)
+  runs the command once per review pass. The guard allowance is a follow-up brief for the maintainers, since this brief keeps
+  `.claude/` out of scope (due 2026-12-15).
