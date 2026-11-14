@@ -217,13 +217,17 @@ def test_ac5_assign_ends_with_assign_timeout_when_no_answer_comes(proj, stub):
     assert out.returncode == 0 and out.stdout.strip().splitlines()[-1] == "assign-timeout"
 
 
-def test_ac5_assign_needs_exactly_one_open_conductor_issue(proj, stub):
-    """REQ-041 AC5"""
+def test_ac5_assign_needs_an_open_conductor_issue_and_reads_the_newest(proj, stub):
+    """REQ-041 AC5, as brief #1251 answer 3c changed it (ADR-0548): with two open issues (a
+    roll-over's moment) the wait reads the newest."""
     stub.serve(CONDUCTOR, [])
     out = assign(proj, stub)
     assert out.returncode == 2 and "agk-conductor" in out.stdout
     stub.serve(CONDUCTOR, [CONDUCTOR_ISSUE, {"number": 205}])
-    assert assign(proj, stub).returncode == 2
+    stub.serve(f"{ISSUES}/205/comments", [], nth=1)
+    stub.serve(f"{ISSUES}/205/comments", [comment(30, "boss", "Assign: s-me #9")])
+    out = assign(proj, stub)
+    assert out.returncode == 0 and out.stdout.splitlines()[-1] == "assign #9", out.stdout
 
 
 def test_ac5_watch_takes_one_of_pr_merged_or_assign(proj, stub):

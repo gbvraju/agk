@@ -294,15 +294,17 @@ def test_watch_pr_with_a_session_and_no_conductor_issue_says_so_and_still_waits(
     assert not any("issues/204" in c[1] for c in stub.calls())
 
 
-def test_watch_pr_with_a_session_and_two_conductor_issues_says_so_and_still_waits(proj, stub):
-    """REQ-040: brief #368 answer 1 (the verdict on e90f60b, item 1: not exactly one issue)."""
+def test_watch_pr_with_a_session_and_two_conductor_issues_reads_the_newest(proj, stub):
+    """REQ-040: brief #368 answer 1, as brief #1251 answer 3c changed it (ADR-0548): a roll-over
+    leaves two open issues for a moment, and readers take the newest open one."""
     stub.serve(CONDUCTOR, [CONDUCTOR_ISSUE, {"number": 205, "title": "another"}])
-    watching(stub, [(pull(), []), (pull("closed"), [])])
+    stub.serve(f"{ISSUES}/205/comments", [], nth=1)
+    stub.serve(f"{ISSUES}/205/comments", [told(9, "Tell: s-me #52 merged, rebase")])
+    watching(stub, [(pull(), [])] * 3)
     out = session(proj, stub, *WATCH_ME, "--timeout", "5")
-    assert out.stdout.splitlines() == [
-        "messages: not read (more than one open issue labelled agk-conductor)",
-        "closed #7",
-    ]
+    assert out.returncode == 0, out.stdout
+    assert out.stdout.splitlines() == ["tell #52 merged, rebase"]
+    assert not any(c[1].startswith(COMMENTS) for c in stub.calls())
 
 
 def test_watch_pr_with_a_session_retries_a_failed_listing_of_the_conductor_issue(proj, stub):
