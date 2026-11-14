@@ -325,7 +325,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
-  "tests/kit/test_conductor_wakes.py",
+  "tests/kit/test_conductor_wakes.py", "tests/kit/test_reviewer_slots_local.py",
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
   "tests/kit/test_conductor_start_wake.py",
@@ -803,7 +803,7 @@ tests = [
   "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py", "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py", "tests/kit/test_plan_questions.py",
   "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",
-  "tests/kit/test_builder_slots.py",
+  "tests/kit/test_builder_slots.py", "tests/kit/test_reviewer_slots_local.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
   "tests/kit/test_conductor_guard_tell.py", "tests/kit/test_conductor_sweep_late_line.py",
   "tests/kit/test_draft_and_progress.py", "tests/kit/test_flow_rules.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_guide_team.py",

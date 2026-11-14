@@ -6,7 +6,7 @@
 - Related: ADR-0430, ADR-0431, ADR-0432, ADR-0444, ADR-0298, ADR-0525, Q-1013-1, Q-1013-3, brief #1248, plan #661
 - Requirements: REQ-046
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`, `agk.toml`
 
 ## Context
 
@@ -49,6 +49,8 @@ build writes its own (session rule 36), with the brief's `Reserved:` number.
    folder, never in the checkout); every other redirect, write and command stays refused. With ADR-0444's verdict file
    and `check-verdict` step this settles Q-1013-3.
 5. `.claude/agents/architect-review.md` names the scratch folder, the marker lines and the local start.
+6. `agk.toml`'s `[[testing.map]]` entries of `scripts/agk/session.py` and `scripts/agk/conductor.py` list
+   `tests/kit/test_reviewer_slots_local.py` (the map rule of `test_always_full_infra.py`).
 
 ## Consequences
 
