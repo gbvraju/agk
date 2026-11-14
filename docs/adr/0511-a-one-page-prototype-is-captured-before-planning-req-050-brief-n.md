@@ -1,6 +1,6 @@
 # ADR-0511: A one-page prototype is captured before planning
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: SPEC-0037, SPEC-0043, ADR-0472, ADR-0473, brief #1204, plan #661
