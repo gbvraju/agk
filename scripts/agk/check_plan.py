@@ -97,6 +97,14 @@ already holds the whole approved block unchanged (approved on the pull request t
 brief #1166, ADR-0496). The governance job passes the saved comments on a pull request event; a
 push and a local run read the `Approved:` line alone.
 
+Brief #1219, amendment 176 (ADR-0518): when `docs/plan/scope-lock.md` exists, rule 10 also fails
+each of its lines, once per kind, that holds a requirement number (`REQ-` and digits), a file path
+(a word holding `/` whose last part has a file extension, or one starting `./`, `../`, `~/` or a
+repository folder; a link holding `://` is not one), a brief key (a brief file's name under
+`docs/plan/briefs/`, as a whole word) or a builder or pull request figure (`builder`, `pull
+request`, `PR rate`, whole words, any case, plurals too), as `rule 10: <file>:<line>: <kind>`,
+never the text.
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
@@ -946,6 +954,62 @@ def scope_problems(root: Path, comments: list | None = None, base: str | None = 
     return problems
 
 
+# --- brief #1219, amendment 176 (ADR-0518): the business scope lock ---------------------------
+
+SCOPE_LOCK = f"{PLAN}/scope-lock.md"
+LOCK_REQ = re.compile(r"\bREQ-\d+")
+LOCK_FIGURE = re.compile(r"\b(?:builders?|pull[\s-]+requests?|PR\s+rates?)\b", re.I)
+LOCK_ROOTS = (
+    "docs", "src", "app", "lib", "scripts", "tests", "test", "skills", "config", "kit",
+    ".github", ".claude",
+)  # fmt: skip
+LOCK_EXTENSION = re.compile(r"[A-Za-z0-9_-]\.[A-Za-z0-9]{1,6}$")
+LOCK_STRIP = "`'\"()[]<>{}.,;:!?*"
+LOCK_WORD = "[A-Za-z0-9._-]"
+
+
+def _is_path(word: str) -> bool:
+    """A file path of the scope lock: a word holding `/` whose last part has a file extension, or
+    one starting `./`, `../`, `~/` or a repository folder; a link (`://`) is not a path."""
+    word = word.strip(LOCK_STRIP)
+    if "://" in word:
+        return False
+    if re.match(r"^[A-Za-z]:\\", word):
+        return True
+    if "/" not in word:
+        return False
+    if word.startswith(("./", "../", "~/")):
+        return True
+    parts = [p for p in word.split("/") if p]
+    if not parts:
+        return False
+    return parts[0] in LOCK_ROOTS or LOCK_EXTENSION.search(parts[-1]) is not None
+
+
+def scope_lock_problems(root: Path) -> list[str]:
+    """Rule 10 with amendment 176: each line of `docs/plan/scope-lock.md` that holds a
+    requirement number, a file path, a brief key or a builder or pull request figure, once per
+    kind, naming the line and never its text. Nothing when the file does not exist."""
+    text = _read(root / SCOPE_LOCK)
+    if text is None:
+        return []
+    keys = [key for key, _, _ in briefs(root)]
+    key_pattern = None
+    if keys:
+        alternatives = "|".join(map(re.escape, keys))
+        key_pattern = re.compile(rf"(?<!{LOCK_WORD})(?:{alternatives})(?![A-Za-z0-9_-]|\.\w)")
+    out: list[str] = []
+    for n, line in enumerate(text.splitlines(), start=1):
+        kinds = [
+            ("a requirement number", LOCK_REQ.search(line) is not None),
+            ("a file path", any(_is_path(word) for word in line.split())),
+            ("a brief key", key_pattern is not None and key_pattern.search(line) is not None),
+            ("a builder or pull request figure", LOCK_FIGURE.search(line) is not None),
+        ]
+        out += [f"rule 10: {SCOPE_LOCK}:{n}: {kind}" for kind, found in kinds if found]
+    return out
+
+
 def _cell(values: list[str]) -> str:
     return ", ".join(dict.fromkeys(values)) or "none"
 
@@ -1246,7 +1310,7 @@ def cmd_check(
         lines = plan.trace(facts is not None) + plan.file_lines() + plan.screen_lines()
         lines += plan.rule_lines(facts is not None) + plan.access_lines(facts is not None)
         print("\n".join(lines))
-    problems += plan.problems() + scope_problems(root, comments, base)
+    problems += plan.problems() + scope_lock_problems(root) + scope_problems(root, comments, base)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     for line in plan.unmatched():
