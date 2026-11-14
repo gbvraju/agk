@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -134,3 +138,61 @@ def test_the_approval_line_with_the_approve_instruction_gives_an_item(proj, stub
     _, out = route(proj, stub, tmp_path, [listed(7, "agk:approve")], comments=comments)
     (item,) = json.loads(out.read_text())["approve"]
     assert (item["spec"], item["spec_title"]) == ("SPEC-0036", "A plain title")
+
+
+# --- brief #1272: a local run writes an ignored file (REQ-039, ADR-0538) ------------------------
+
+LOCAL = ".agk-pipeline.json"
+KIT = Path(__file__).resolve().parents[2]
+
+
+def test_a_local_run_writes_the_ignored_file_in_the_repository_root(proj, stub, tmp_path):
+    """REQ-039: brief #1272 answers 1 and 3 (a) (no `AGK_PIPELINE_FILE`: `.agk-pipeline.json` in
+    the repository root, and no `pipeline.json`)."""
+    stub.fixtures[f"repos/{REPO}/pulls"] = [listed(7, "agk:ready", "Summary: One.\n")]
+    stub.pull(7, labels=["agk:ready"])
+    stub.serve("issues/7/comments", [])
+    proc = run_router(proj, stub, tmp_path, "push", EVENT, AGK_PIPELINE_FILE="")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    doc = json.loads((proj / LOCAL).read_text(encoding="utf-8"))
+    assert doc["schema"] == 1 and [r["number"] for r in doc["ready"]] == [7]
+    assert not (proj / "pipeline.json").exists()
+
+
+def test_a_set_path_is_unchanged_for_ci(proj, stub, tmp_path):
+    """REQ-039: brief #1272 answer 3 (b) (`AGK_PIPELINE_FILE` set, as the workflow sets it)."""
+    _, out = route(proj, stub, tmp_path, [listed(7, "agk:fix")])
+    assert json.loads(out.read_text(encoding="utf-8"))["counts"]["fix"] == 1
+    assert not (proj / LOCAL).exists() and not (proj / "pipeline.json").exists()
+
+
+def _install(tmp_path: Path, script: str) -> Path:
+    target = tmp_path / script.removesuffix(".py")
+    target.mkdir()
+    who = ["-c", "user.name=Example", "-c", "user.email=dev@example.com"]
+    git = ["git", *who]
+    subprocess.run([*git, "init", "-q", "-b", "main"], cwd=target, check=True)  # nosec B603 B607
+    (target / "README.md").write_text("An example project, example.com.\n", encoding="utf-8")
+    subprocess.run([*git, "add", "-A"], cwd=target, check=True)  # nosec B603 B607
+    subprocess.run([*git, "commit", "-qm", "one"], cwd=target, check=True)  # nosec B603 B607
+    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
+    done = subprocess.run(  # nosec B603 - fixed argument list from sys.executable, no shell
+        [sys.executable, str(KIT / "scripts" / "agk" / script), str(target), "--unreleased"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    return target
+
+
+@pytest.mark.parametrize("script", ["init.py", "adopt.py"])
+def test_the_installed_ignore_block_ignores_the_local_document(tmp_path, script):
+    """REQ-039: brief #1272 answers 2 and 3 (c) (`git check-ignore` matches in an install)."""
+    target = _install(tmp_path, script)
+    (target / LOCAL).write_text('{"schema": 1}\n', encoding="utf-8")
+    done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "check-ignore", "-q", LOCAL], cwd=target, check=False
+    )
+    assert done.returncode == 0
