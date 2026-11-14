@@ -1,6 +1,6 @@
 # ADR-0526: The board names its marker field Card kind
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0506, ADR-0507, ADR-0508, brief #1240, plan #661
