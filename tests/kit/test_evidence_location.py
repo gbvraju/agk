@@ -19,7 +19,6 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import Repo
 from test_evidence import LINE, check, project, worktrees
 from test_prepush import path_with, scanner
 
@@ -42,11 +41,11 @@ def shared(repo) -> Path:
     return (repo.root / common).resolve() / "agk-evidence"
 
 
-def second_worktree(repo, outside: Path) -> Repo:
-    """A second worktree of the same clone, detached at the head."""
+def second_worktree(repo, outside: Path):
+    """A second worktree of the same clone, detached at the head, as a fixture repository."""
     path = outside / "wt"
     repo.git("worktree", "add", "-q", "--detach", str(path), "HEAD")
-    return Repo(path)
+    return type(repo)(path)
 
 
 @pytest.mark.parametrize("args", [["--record"], ["--record", "auto"], ["--record", "--no-lock"]])

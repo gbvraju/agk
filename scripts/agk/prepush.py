@@ -1,7 +1,7 @@
 """The fast checks before a push (brief #326, ADR-0186).
 
-    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record [FILE]]
-        [--queue]
+    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock]
+        [--record [FILE]] [--queue]
 
 Runs, in order, the checks CI would fail a pull request on first, and stops at the first failure
 with that step's own output:
