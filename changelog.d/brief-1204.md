@@ -1,1 +1,0 @@
-- A prototype drawn by script on one page is flagged at `/agk:design import` with a `notice:` line, the planning guide's new step 0 captures each screen and state as its own page first, and the plan is approved only after `check_plan.py --trace` has shown its `unmatched screen:` lines (brief #1204, ADR-0511)
