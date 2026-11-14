@@ -79,7 +79,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_inventory
 import design_signoff
-from common import CheckError, utf8_output
+from common import CheckError, committed_bytes, utf8_output
 
 IMPORTED = "docs/design/imported"
 DESIGN = "docs/design"
@@ -120,13 +120,19 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _files(folder: Path) -> dict[str, bytes]:
-    """{relative path: bytes} of every regular file under FOLDER, symbolic links left out."""
+def _files(folder: Path, root: Path | None = None) -> dict[str, bytes]:
+    """{relative path: bytes} of every regular file under FOLDER, symbolic links left out. With
+    ROOT (the project root; the check of rule 15), a file whose checkout changed only its line ends
+    is read as committed (`common.committed_bytes`, brief #1291, ADR-0550)."""
     found: dict[str, bytes] = {}
     for path in sorted(folder.rglob("*")):
         if path.is_file() and not path.is_symlink():
             found[path.relative_to(folder).as_posix()] = path.read_bytes()
-    return found
+    if root is None:
+        return found
+    prefix = folder.relative_to(root).as_posix()
+    read = committed_bytes(root, {f"{prefix}/{name}": data for name, data in found.items()})
+    return {name: read[f"{prefix}/{name}"] for name in found}
 
 
 def _text(data: bytes) -> str:
@@ -311,10 +317,12 @@ def inventory_states(root: Path) -> dict[tuple[str, str], str] | None:
     return found
 
 
-def _record_problems(folder: Path, rel: str) -> tuple[list[str], list[str] | None]:
+def _record_problems(
+    folder: Path, rel: str, root: Path | None = None
+) -> tuple[list[str], list[str] | None]:
     """(problems, the manifest's pages or None) of the files against the records."""
     out: list[str] = []
-    files = _files(folder / FILES)
+    files = _files(folder / FILES, root)
     try:
         record = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))
         entries = {e["path"]: e for e in record["files"]}
@@ -432,7 +440,7 @@ def imported_problems(root: Path) -> list[str]:
     out: list[str] = []
     for version in found:
         rel = f"{IMPORTED}/{version}"
-        problems, listed = _record_problems(root / rel, rel)
+        problems, listed = _record_problems(root / rel, rel, root)
         out += problems
         if listed is not None:
             out += _map_problems(root / rel, rel, listed, states, covered)

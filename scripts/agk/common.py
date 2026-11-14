@@ -241,6 +241,63 @@ def repo_root() -> Path:
     return Path(proc.stdout.strip())
 
 
+def committed_bytes(root: Path, files: Mapping[str, bytes]) -> dict[str, bytes]:
+    """FILES ({path from ROOT with `/`: the bytes on disk}) with each file whose bytes on disk hold
+    a CRLF replaced by its index blob, when that blob equals those bytes with every CRLF turned to
+    LF: the file is committed as it is and only the checkout changed its line ends
+    (`core.autocrlf=true`; brief #1291, ADR-0550). Every other file keeps its bytes on disk: one
+    with no CRLF (so an LF checkout reads as before and runs no git), one that is not tracked, one
+    whose change goes beyond the line ends, one committed with CRLF, and every file when git cannot
+    be read here. Read only: `git ls-files -s` and `git cat-file --batch` in ROOT, nothing written,
+    no network."""
+    out = dict(files)
+    wanted = {name: data for name, data in files.items() if b"\r\n" in data}
+    if not wanted:
+        return out
+    try:
+        listed = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "--literal-pathspecs", "ls-files", "-s", "-z", "--", *sorted(wanted)],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        if listed.returncode != 0:
+            return out
+        blobs: dict[str, str] = {}
+        for entry in listed.stdout.split(b"\0"):
+            head, _, raw = entry.partition(b"\t")
+            parts = head.split()
+            if len(parts) == 3 and parts[2] == b"0":
+                blobs[raw.decode("utf-8", errors="surrogateescape")] = parts[1].decode("ascii")
+        names = [name for name in sorted(wanted) if name in blobs]
+        if not names:
+            return out
+        batch = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "cat-file", "--batch"],
+            cwd=root,
+            input="".join(f"{blobs[name]}\n" for name in names).encode("ascii"),
+            capture_output=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return out
+    if batch.returncode != 0:
+        return out
+    data = batch.stdout
+    at = 0
+    for name in names:
+        end = data.find(b"\n", at)
+        fields = data[at:end].split() if end >= 0 else []
+        if len(fields) != 3 or fields[1] != b"blob" or not fields[2].isdigit():
+            return out
+        size = int(fields[2])
+        blob = data[end + 1 : end + 1 + size]
+        at = end + 1 + size + 1
+        if blob == wanted[name].replace(b"\r\n", b"\n"):
+            out[name] = blob
+    return out
+
+
 def _verify(root: Path, ref: str) -> str | None:
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "rev-parse", "--verify", "-q", f"{ref}^{{commit}}"],
