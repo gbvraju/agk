@@ -7,8 +7,15 @@ version, so a locally edited file is told from an outdated one. An edited file s
 nothing is written. Files the user owns are never rewritten; only the `version = "..."` line of
 `agk.toml` is set, as the last write.
 
-    python3 scripts/agk/upgrade.py TARGET [--dry-run]
+    python3 scripts/agk/upgrade.py TARGET [--dry-run] [--write-adr [--date D]]
     python3 scripts/agk/upgrade.py TARGET --next-steps [--brief N|none] [--issues FILE] [--date D]
+
+`--write-adr` (brief #1222, ADR-0521), after a written upgrade that changed anything, writes the
+upgrade's ADR `docs/adr/<next>-upgrade-agk-to-<version>.md`: every field and section that
+`check_adrs.py` requires, the protected classes the upgrade changed, Status Proposed, the
+`Requirements:` line `REQ-001` (protected paths change only with an ADR). An ADR already titled for
+this upgrade's version is kept; an upgrade with no change writes none; with `--dry-run` it names
+the file and writes nothing.
 
 `--next-steps` (brief #273), once the upgrade is written and the person wrote its ADR (titled
 `Upgrade agk from X to Y`, with a `Requirements:` line), prints the commit message and a pull
@@ -61,11 +68,13 @@ from init import (
 from init import KIT_ROOT as KIT_ROOT  # noqa: PLC0414 - tests point it at an older kit fixture
 
 USAGE = (
-    "usage: upgrade.py TARGET [--dry-run] | "
+    "usage: upgrade.py TARGET [--dry-run] [--write-adr [--date D]] | "
     "TARGET --next-steps [--brief N|none] [--issues FILE] [--date D]"
 )
 NEXT_FLAGS = ("--brief", "--issues", "--date")
 UPGRADE_TITLE = re.compile(r"^# ADR-(\d{4}): Upgrade agk from (\S+) to (\S+)\s*$")
+ADR_FILE = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")  # check_adrs.py's file name
+ADR_REQUIREMENT = "REQ-001"  # protected paths change only with an ADR (every install's list)
 TABLE = "kit/hashes.json"
 CHANGELOG = "CHANGELOG.md"  # the kit's own, read for the opt-in features of the newer releases
 KIT_ONLY = ("kit/", "tests/kit_dev/")
@@ -663,7 +672,7 @@ def report(plan: Plan, dry_run: bool) -> list[str]:
         lines += [
             f"Protected classes: {', '.join(f'`{c}`' for c in classes)}",
             "The target's check needs an ADR in the same pull request that names each class. "
-            "Skeleton (write the ADR yourself; the upgrade writes none):",
+            "`--write-adr` writes it; skeleton:",
             f"# ADR-NNNN: Upgrade agk from {plan.version} to {plan.kit_version}",
             "- Status: Proposed",
             "- Date: YYYY-MM-DD",
@@ -673,6 +682,8 @@ def report(plan: Plan, dry_run: bool) -> list[str]:
             f"Protected classes: {', '.join(f'`{c}`' for c in classes)}",
             "## Context",
             "## Decision",
+            "## Consequences",
+            "## Residual",
         ]
     touched = {i.rel for i in plan.writes}
     changes = bool(count or stamp or gone)  # never after `nothing to do` (brief #254, Q-254-3)
@@ -777,9 +788,105 @@ def upgrade_adr(target: Path, kit_version: str) -> tuple[str, str, str]:
             raise Refusal("the upgrade ADR names no requirement on its Requirements line")
         return f"ADR-{title.group(1)}", title.group(2), reqs
     raise Refusal(
-        "write the upgrade ADR first, titled from the skeleton the upgrade printed "
-        "(path class docs/adr/)"
+        "write the upgrade ADR first: run the upgrade with --write-adr, or title it from the "
+        "skeleton the upgrade printed (path class docs/adr/)"
     )
+
+
+def written_upgrade_adr(target: Path, kit_version: str) -> Path | None:
+    """The ADR already titled `Upgrade agk from X to KIT_VERSION`, if any."""
+    for path in sorted((target / "docs" / "adr").glob("*.md")):
+        try:
+            first = path.read_text(encoding="utf-8").partition("\n")[0]
+        except (OSError, UnicodeDecodeError):
+            continue
+        title = UPGRADE_TITLE.match(first)
+        if title and title.group(3) == kit_version:
+            return path
+    return None
+
+
+def next_adr_path(target: Path, kit_version: str) -> tuple[int, Path]:
+    """(number, path) of the upgrade's ADR: one past the highest numbered ADR file."""
+    folder = target / "docs" / "adr"
+    numbers = [int(m.group(1)) for p in folder.glob("*.md") if (m := ADR_FILE.match(p.name))]
+    number = max(numbers, default=0) + 1
+    if number > 9999:
+        raise Refusal("no ADR number is left (path class docs/adr/)")
+    version = re.sub(r"[^a-z0-9]+", "-", kit_version.lower()).strip("-") or "unknown"
+    return number, folder / f"{number:04d}-upgrade-agk-to-{version}.md"
+
+
+def adr_text(number: int, plan: Plan, classes: list[str], today: str) -> str:
+    """Brief #1222 answer 1: the upgrade's ADR, with every field and section check_adrs.py needs."""
+    named = ", ".join(f"`{c}`" for c in classes) if classes else "none"
+    old, new = plan.version, plan.kit_version
+    writes, gone = len(plan.writes), len(plan.deletions)
+    if plan.legacy:
+        stamp = f"creates `agk.toml` with version {new}"
+    elif plan.stamp:
+        stamp = f"sets the `version` line of `agk.toml` to {new}"
+    else:
+        stamp = "leaves the `version` line of `agk.toml` unchanged"
+    held = (
+        "- The pull request raises `version` in `agk.toml`, so it is held for the owner's merge."
+        if plan.stamp
+        else "- The pull request is merged by the owner after review."
+    )
+    return "\n".join(
+        [
+            f"# ADR-{number:04d}: Upgrade agk from {old} to {new}",
+            "",
+            "- Status: Proposed",
+            f"- Date: {today}",
+            "- Deciders: maintainers",
+            "- Related: none",
+            f"- Requirements: {ADR_REQUIREMENT}",
+            "",
+            f"Protected classes: {named}",
+            "",
+            "## Context",
+            "",
+            f"`agk upgrade` brings this project's kit from {old} to {new}. It writes {writes} files, "
+            f"deletes {gone} and {stamp}. The changed paths lie in protected classes, so the "
+            "project's `check_protected_changes` needs an ADR in the same pull request that names "
+            "each class.",
+            "",
+            "## Decision",
+            "",
+            f"Take agk {new} as released: the kit's files of {new} replace those of {old} unchanged. "
+            f"The protected classes the upgrade changes are {named}. Files the project owns are "
+            "not rewritten.",
+            "",
+            "## Consequences",
+            "",
+            f"- The project's checks, hooks and kit scripts are those of agk {new}.",
+            held,
+            "",
+            "## Residual",
+            "",
+            f"- {today}: none; the maintainers review the upgrade's changes before the merge.",
+            "",
+        ]
+    )
+
+
+def adr_step(target: Path, plan: Plan, today: str, dry_run: bool) -> str:
+    """Brief #1222: write (or, in a dry run, name) the upgrade's ADR; the line that says so."""
+    kept = written_upgrade_adr(target, plan.kit_version)
+    if kept is not None:
+        number = kept.name[:4]
+        return f"adr: kept {kept.relative_to(target).as_posix()} (ADR-{number})"
+    number, path = next_adr_path(target, plan.kit_version)
+    rel = path.relative_to(target).as_posix()
+    if dry_run:
+        return f"adr: would write {rel} (ADR-{number:04d}, Proposed)"
+    text = adr_text(number, plan, protected_classes(plan), today)
+    try:
+        write_atomic(path, text.encode("utf-8"))
+    except OSError:
+        return f"error: cannot write {rel} (path class docs/adr/)"
+    return f"adr: wrote {rel} (ADR-{number:04d}, Proposed)"
 
 
 def next_steps(target: Path, kit_root: Path, opts: dict[str, str]) -> int:
@@ -845,7 +952,16 @@ def main(argv: list[str] | None = None) -> int:
             print("error: cannot read the target or the kit sources (path class: the target root)")
             return 3
     dry_run = "--dry-run" in args
-    rest = [a for a in args if a != "--dry-run"]
+    write_adr = "--write-adr" in args
+    rest = [a for a in args if a not in ("--dry-run", "--write-adr")]
+    today: str | None = None
+    if "--date" in rest:
+        at = rest.index("--date")
+        if not write_adr or at + 1 >= len(rest):
+            print(USAGE, file=sys.stderr)
+            return 2
+        today = rest.pop(at + 1)
+        rest.pop(at)
     if len(rest) != 1 or rest[0].startswith("-"):
         print(USAGE, file=sys.stderr)
         return 2
@@ -853,6 +969,9 @@ def main(argv: list[str] | None = None) -> int:
         problem = check_interpreter(tuple(sys.version_info[:3]))
         if problem:
             raise Refusal(problem)
+        today = today or datetime.now(UTC).date().isoformat()
+        if write_adr and not DATE_RE.match(today):
+            raise Refusal("the date is not YYYY-MM-DD (option --date)")
         target = Path(rest[0])
         if not target.is_dir():
             raise Refusal("TARGET is not an existing directory (path class: the target root)")
@@ -874,7 +993,11 @@ def main(argv: list[str] | None = None) -> int:
         print(line)
     if plan.conflicts:
         return 1
-    if dry_run or (not plan.writes and not plan.deletions and not plan.stamp):
+    if not plan.writes and not plan.deletions and not plan.stamp:
+        return 0  # an upgrade with no change writes no ADR (brief #1222 answer 3)
+    if dry_run:
+        if write_adr:
+            print(adr_step(target, plan, today, dry_run=True))
         return 0
     ok, done = apply(target, plan)
     if not ok:
@@ -882,6 +1005,11 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     for line in opt_in_lines(kit_root, plan.version, plan.kit_version):
         print(line)
+    if write_adr:
+        line = adr_step(target, plan, today, dry_run=False)
+        print(line)
+        if line.startswith("error:"):
+            return 3
     return 0
 
 
