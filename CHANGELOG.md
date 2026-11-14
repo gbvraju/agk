@@ -13,6 +13,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 - #1261 `session.py plan` reads only what a pass needs: it judges the open briefs from their listing (a `Depends-on` brief no open listing holds is closed, no GET each), reads the comments of the briefs that pass in milestone order only until the free slots are filled, reads the open and recently closed pull requests instead of every pull request, and ends with `reads: <n> calls (<m> from cache), <s> s` (`reads` in `--json`, point 8 of `checklist.py`); `session.py claim` labels its brief `agk:taken` (brief #1251 build (a), ADR-0529 Proposed)
 - #1265 In local mode the conductor's own governance run and the guarded merge's run call the kit's `make -f agk.mk agk-governance`, so a project set up with adopt, which may have no `governance` target in its Makefile, can be reviewed and merged; the old `make -C <scratch> test|governance` forms stay allowed (brief #1264, ADR-0535)
 - #1268 In local mode the conductor moves the pull request labels on each review pass (`route.py --all`, allowed by its guard only in local mode), and the router decides local mode from `execution = "local"` or one search call instead of paging every open issue, reading the open pull requests once per run (brief #1263, ADR-0534)
+- #1274 A router run by hand in local mode writes its pipeline document to the git-ignored `.agk-pipeline.json` in the repository root, so it leaves no untracked `pipeline.json` to commit; CI's path is unchanged (brief #1272, ADR-0538)
 
 ## 0.64.3 (2026-11-14)
 
