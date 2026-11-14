@@ -26,8 +26,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/board.py" [--title TEXT] [--owner LOG
    `Requirement` and `Screens`, text; `Sign-off`, a single select of Pending, Signed off and Changes asked), and one
    `would add #<n> Size M, Expected hours 8, Persona P1 ..., Requirement REQ-..., Sign-off Pending` line for each open
    `agk-brief` issue not yet on the board. Without a template it also prints the three views to make once in GitHub
-   (Sign-off, a board by Status; Questions, a table; Roadmap, by Milestone). It changes nothing. Show the person the
-   lines.
+   (Sign-off, a board by Status; Questions, a table filtered to `Card kind` Question; Roadmap, by Milestone). Once an
+   open `agk-business-question` issue is there it also adds `Card kind`, a single select of Work and Question that
+   marks each card (GitHub's own `Type` field is never created or written; an older board's own `Type` field of Work
+   and Question is kept). It changes nothing. Show the person the lines.
 
 2. **Ask.** Ask the person whether to make exactly these changes. Stop on anything but a clear yes.
 
@@ -48,6 +50,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/board.py" [--title TEXT] [--owner LOG
 
 4. **When it cannot finish.** Tell the person what the last line says and do nothing else. A missing `project` scope
    prints `gh auth refresh -s project` (exit 2): the person runs it and then this command again. Any other failure
-   prints `failed: <the command>` (exit 1); running the command again with the printed board number finishes the rest.
+   prints `failed: <the command>` (exit 1), and a field it could not add also prints
+   `board: the field <name> was not added; gh said: <gh's message>`; running the command again with the printed board
+   number finishes the rest.
    In a cloud session it prints `board: needs a machine with your own gh (cloud sessions cannot reach GitHub Projects)`
    and exits 0. In personal mode there are no GitHub issues, and it says so.

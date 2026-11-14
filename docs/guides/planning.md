@@ -98,13 +98,15 @@ checkout; the other scripts are installed under `scripts/agk/`.
    `Persona: <key> <name>` line, the persona of the requirement it advances, and the board is one business can sign
    off from (ADR-0507):
    - **The template board, made once.** In GitHub, make one Project (your template) with three views: `Sign-off`, a
-     board grouped by Status; `Questions`, a table; and `Roadmap`, a roadmap by Milestone. Then put its
-     `<owner>/<number>` in `[plan] board_template` of `agk.toml` (or pass `--template OWNER/NUMBER`): each project's
-     first `/agk:board --yes` copies it, with its views and columns. Without a template the command creates an empty
-     board and prints the three views to make once.
-   - **The fields.** The command adds `Persona`, `Requirement` (the `REQ-n` numbers), `Screens` and `Sign-off`
-     (Pending, Signed off, Changes asked) when the board lacks them, fills them on each new card from the brief issue
-     and sets `Sign-off` to Pending; it never changes a value a person set.
+     board grouped by Status; `Questions`, a table filtered to `Card kind` Question; and `Roadmap`, a roadmap by
+     Milestone. Then put its `<owner>/<number>` in `[plan] board_template` of `agk.toml` (or pass `--template
+     OWNER/NUMBER`): each project's first `/agk:board --yes` copies it, with its views and columns. Without a template
+     the command creates an empty board and prints the three views to make once.
+   - **The fields.** The command adds `Persona`, `Requirement` (the `REQ-n` numbers), `Screens` and `Sign-off` (Pending,
+     Signed off, Changes asked) when the board lacks them, fills them on each new card from the brief issue and sets
+     `Sign-off` to Pending; it never changes a value a person set. Once a question is there it also adds `Card kind`
+     (Work, Question), which marks each card; GitHub's own `Type` field is never created or written, and an older
+     board's own `Type` field of Work and Question is kept.
    - **How business signs off.** The business reader opens a card, reads its `What`, `Acceptance`, persona and screens
      in plain words, and sets `Sign-off` to Signed off, or to Changes asked with a comment on the issue. An open
      question is an issue of its own, so it shows in the `Questions` view.

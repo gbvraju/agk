@@ -420,7 +420,8 @@ TEMPLATE_FIELDS = [
 BUSINESS = ("Persona", "Requirement", "Screens", "Sign-off")
 VIEWS_LINE = (
     "make the three views once in GitHub's screen: Sign-off (a board by Status), Questions"
-    " (a table), Roadmap (by Milestone); or copy a template board with --template OWNER/NUMBER"
+    " (a table filtered to Card kind Question), Roadmap (by Milestone); or copy a template board"
+    " with --template OWNER/NUMBER"
 )
 
 

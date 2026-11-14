@@ -1,0 +1,1 @@
+- `/agk:board --yes` finishes on a GitHub Project that has the built-in `Type` field: the marker field of Work and Question is now `Card kind` (an older board's own `Type` field of Work and Question is kept), and a field gh refuses to add is printed with its name and gh's own message (brief #1240, ADR-0526)
