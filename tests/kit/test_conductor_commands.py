@@ -853,7 +853,7 @@ def test_lease_release_by_the_holder_marks_the_comment_released(proj, stub):
     made = posts(stub)
     assert made[0][:2] == ["PATCH", f"repos/{REPO}/issues/comments/5"]
     body = made[0][2][made[0][2].index("-f") + 1]
-    assert body.startswith("body=Conductor: released 20") and body.endswith(" c1")
+    assert body.startswith("body=Conductor: released 20") and body.endswith(" c1\n\nWho: AGK conductor")
 
 
 def test_lease_release_by_another_name_is_refused_and_a_free_lease_needs_no_write(proj, stub):

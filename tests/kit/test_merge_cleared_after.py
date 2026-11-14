@@ -53,9 +53,10 @@ MERGED = f"merge-cleared #7 {SHA12}: merged {MERGE12}"
 STOPPED = "merge-cleared: stopped: default branch red after #7"
 RED_TITLE = "The default branch is red"
 LOCAL_RECORD = {"number": 40, "title": "Local mode since 2026-11-01", "body": "Actions is blocked."}
+WHO = "\n\nWho: AGK"  # the last line of each comment the kit posts (brief #1289, ADR-0546)
 RECORD = re.compile(
     rf"Auto merge: #7 {MERGE} \d{{4}}-\d\d-\d\dT\d\d:\d\d:\d\dZ "
-    rf"https://github\.com/{REPO}/pull/7#issuecomment-1005"
+    rf"https://github\.com/{REPO}/pull/7#issuecomment-1005\n\nWho: AGK"  # brief #1289
 )
 
 
@@ -785,7 +786,7 @@ def test_an_issue_the_body_closes_still_open_gets_one_note(monkeypatch):
     assert f"repos/{REPO}/issues/614/comments" in writes[0]
     assert (
         comment_of(writes[0])
-        == f"Not closed by merge {SHA[:12]} of #7; close it if the work is done"
+        == f"Not closed by merge {SHA[:12]} of #7; close it if the work is done{WHO}"
     )
 
 
@@ -797,7 +798,7 @@ def test_a_one_build_brief_is_closed_after_its_merge(monkeypatch):
     writes, _ = after_close(monkeypatch, replies, body)
     endpoint = f"repos/{REPO}/issues/{CLOSE_BRIEF}"
     assert [w[w.index("--method") + 2] for w in writes] == [f"{endpoint}/comments", endpoint]
-    assert comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}"
+    assert comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}{WHO}"
     assert "state=closed" in writes[1] and "state_reason=completed" in writes[1]
 
 
@@ -812,7 +813,7 @@ def test_a_brief_with_every_build_merged_is_closed(monkeypatch):
     }
     title = f"Example writer (brief #{CLOSE_BRIEF} build (b))"
     writes, _ = after_close(monkeypatch, replies, f"Brief: #{CLOSE_BRIEF}\n", title)
-    assert len(writes) == 2 and comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}"
+    assert len(writes) == 2 and comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}{WHO}"
 
 
 def test_a_brief_with_build_b_unmerged_stays_open_with_no_comment(monkeypatch):
@@ -874,7 +875,7 @@ def test_the_merge_command_closes_a_finished_brief_after_its_record_line(tmp_pat
     targets = [c[c.index("--method") + 2] for c in posts]
     assert targets[0] == f"repos/{REPO}/issues/{AUTO_ISSUE['number']}/comments"
     assert targets[1:3] == [f"repos/{REPO}/issues/500/comments", f"repos/{REPO}/issues/500"]
-    assert comment_of(posts[1]) == f"All builds merged; last #7 {MERGE12}"
+    assert comment_of(posts[1]) == f"All builds merged; last #7 {MERGE12}{WHO}"
 
 
 # --- brief #1264: the run calls the kit's own make file -----------------------------------------

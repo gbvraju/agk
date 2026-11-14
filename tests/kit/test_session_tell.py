@@ -52,7 +52,7 @@ def test_tell_posts_one_comment_on_the_conductor_issue(proj, stub):
     assert out.returncode == 0, out.stdout
     assert out.stdout.strip() == "told builder-b on #204"
     assert posts(stub) == [
-        ["POST", COMMENTS, ["-f", "body=Tell: builder-b #336 merged; merge main and push"]]
+        ["POST", COMMENTS, ["-f", "body=Tell: builder-b #336 merged; merge main and push\n\nWho: AGK"]]
     ]
 
 

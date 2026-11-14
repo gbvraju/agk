@@ -305,7 +305,7 @@ def test_rule4_next_reserves_the_numbers_its_advances_implies_in_the_one_take(
     listing(stub, [issue(5, brief(advances=advances))])
     reads(stub, 5, [])
     assert nxt(proj, stub).returncode == 0
-    assert posts(stub)[-1][2][1] == f"body=taken: s-me {DAY} reserves {reserves}"
+    assert posts(stub)[-1][2][1] == f"body=taken: s-me {DAY} reserves {reserves}\n\nWho: AGK"
 
 
 # --- rule 5: the claims (REQ-041 AC5) --------------------------------------------------------
@@ -320,7 +320,7 @@ def test_rule5_an_expired_take_is_retaken_and_the_new_comment_says_retakes(proj,
     reads(stub, 5, [old])
     out = nxt(proj, stub)
     assert out.returncode == 0 and out.stdout.startswith("brief #5")
-    assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} retakes reserves ADR-0004"
+    assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} retakes reserves ADR-0004\n\nWho: AGK"
 
 
 def test_rule5_a_young_take_and_a_take_with_a_builder_pull_request_stay_live(proj, stub):
@@ -350,7 +350,7 @@ def test_rule5_merged_pull_requests_keep_a_take_live_only_for_claim_hours_after_
     out = nxt(proj, stub)
     assert any(x.startswith("skip #6: taken by s-other ") for x in out.stdout.splitlines())
     assert "brief #5" in out.stdout.splitlines()
-    assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} retakes reserves ADR-0004"
+    assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} retakes reserves ADR-0004\n\nWho: AGK"
 
 
 def test_rule5_claim_hours_sets_the_expiry(proj, stub):
@@ -373,7 +373,7 @@ def test_rule5_a_released_brief_is_free_at_once_and_is_not_a_retake(proj, stub):
     reads(stub, 5, [taken, released])
     out = nxt(proj, stub)
     assert out.returncode == 0 and out.stdout.startswith("brief #5")
-    assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} reserves ADR-0004"
+    assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} reserves ADR-0004\n\nWho: AGK"
 
 
 # --- rule 6: the demand (REQ-041 AC6) --------------------------------------------------------
