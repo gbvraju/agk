@@ -91,8 +91,16 @@ def test_answer1_the_report_entry_carries_the_fix_and_prints_it():
 # --- answer 2: the admin read ------------------------------------------------------------------
 
 
-REFUSED = {"message": "Not Found", "documentation_url": "https://docs.github.com/rest", "status": "404"}
-FORBIDDEN = {"message": "Forbidden", "documentation_url": "https://docs.github.com/rest", "status": "403"}
+REFUSED = {
+    "message": "Not Found",
+    "documentation_url": "https://docs.github.com/rest",
+    "status": "404",
+}
+FORBIDDEN = {
+    "message": "Forbidden",
+    "documentation_url": "https://docs.github.com/rest",
+    "status": "403",
+}
 ADMIN_MESSAGE = {"message": "Must have admin rights to Repository.", "status": "403"}
 CONFIG = {"default_branch": "main"}
 RULESET_CHECKS = ["ruleset-missing", *doctor.RULESET_IDS]
@@ -109,7 +117,7 @@ def repo_json(admin: object = True, keys: bool = True) -> dict:
 
 def remote(tmp_path: Path, repo: dict, rulesets: object) -> dict:
     api = tmp_path / "api"
-    api.mkdir()
+    api.mkdir(parents=True)
     (api / "repo.json").write_text(json.dumps(repo), encoding="utf-8")
     (api / "rulesets.json").write_text(json.dumps(rulesets), encoding="utf-8")
     reads = doctor.Reads("example-owner/x", api)
@@ -206,7 +214,9 @@ def codeowners(tmp_path: Path, text: str) -> Path:
 
 def test_answer3_placeholder_lines_are_removed_and_real_owner_lines_kept(tmp_path):
     """REQ-014: brief #1223 answer 3 (outside the marked block)."""
-    before = "\n".join(TEMPLATE_LINES) + "\n" + reviewers.BLOCK_BEGIN + "old\n" + reviewers.BLOCK_END
+    before = (
+        "\n".join(TEMPLATE_LINES) + "\n" + reviewers.BLOCK_BEGIN + "old\n" + reviewers.BLOCK_END
+    )
     path = codeowners(tmp_path, before)
     reviewers.write_codeowners(tmp_path, RENDERED, adopt_mode=True)
     lines = path.read_text(encoding="utf-8").splitlines()
