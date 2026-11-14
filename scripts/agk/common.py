@@ -1358,8 +1358,7 @@ def plan_settings(root: Path) -> dict:
     `iteration_days` (1 to 30, 10 by default), `calibration_min` (a positive whole number, 10)
     and `default_hours` (a table of `S`, `M` and `L` to `"<low>-<high>"`, empty), and `board` (the
     plan's Project number, a positive whole number, absent by default; ADR-0506) and
-    `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507)
-    and `active_milestones` (a list of milestone titles, absent by default; ADR-0523).
+    `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507).
     Any other key or value is a refusal that names the setting, never the value."""
     table = config_source(root).get(PLAN_TABLE)
     found = {**PLAN_DEFAULTS, "default_hours": {}}
