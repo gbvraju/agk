@@ -172,7 +172,8 @@ def test_governance_runs_once_on_the_merge_commit_in_a_removed_worktree(tmp_path
 
 
 def test_the_governance_run_gets_no_token_and_a_scratch_home(tmp_path, monkeypatch):
-    """REQ-046 AC6: SPEC-0039 rule 6 (`env -i PATH=... HOME=<scratch>`: no token reaches it)."""
+    """REQ-046 AC6: SPEC-0039 rule 6 (only PATH and HOME=<scratch> of this process, no token;
+    since brief #1290 through `lock.py run --only-env`, not `env -i`)."""
     for name in ("GH_TOKEN", "GITHUB_TOKEN", "AGK_LOCK_TOKEN", "AGK_SESSION"):
         monkeypatch.setenv(name, HIDDEN)
     proc, _, ran, _ = after_run(tmp_path)
@@ -375,6 +376,7 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
             return ("", None)
 
     monkeypatch.setattr(merge_cleared.subprocess, "Popen", fake_run)
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)  # brief #1290: no extra names
     root, tree, home = Path("checkout"), Path("tree"), Path("home")
     body = home / "pr-body.md"
     for platform in ("linux", "win32"):
@@ -384,12 +386,13 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
     argv = seen[0][0]
     lock_py = str(Path(merge_cleared.__file__).resolve().parent / "lock.py")
     assert argv[:10] == [sys.executable, lock_py, "run", "--name", "heavy", "--session",
-                         "merge-cleared", "--timeout", "1800", "--"]  # fmt: skip
-    assert argv[10:12] == ["env", "-i"] and argv[12].startswith("PATH=")
-    assert argv[13:] == [f"HOME={home}", f"AGK_PR_BODY={body}",
-                         f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}", "make", "-C",
-                         str(tree), "-f", "agk.mk", "agk-governance",
-                         f"AGK_BASE={BASE}"]  # fmt: skip
+                         "merge-cleared", "--timeout", "1800", "--only-env"]  # fmt: skip
+    cut = argv.index("--")
+    assert argv[9:cut:2] == ["--only-env"] * 4 and argv[10].startswith("PATH=")  # brief #1290
+    assert argv[12:cut:2] == [f"HOME={home}", f"AGK_PR_BODY={body}",
+                              f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}"]  # fmt: skip
+    assert argv[cut + 1 :] == ["make", "-C", str(tree), "-f", "agk.mk", "agk-governance",
+                               f"AGK_BASE={BASE}"]  # fmt: skip
     assert all(not kwargs.get("shell") for _, kwargs in seen)
 
 
@@ -478,9 +481,9 @@ def test_the_heavy_lock_wait_is_bounded_by_a_timeout_in_the_argument_list():
     """REQ-046 AC6: fix list item 1 (`lock.py run ... --timeout S`, never an endless wait)."""
     home = Path("home")
     argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
-    cut = argv.index("--")
-    assert argv[cut - 2 : cut] == ["--timeout", "1800"]
-    assert argv[cut + 1 : cut + 3] == ["env", "-i"]
+    at = argv.index("--timeout")
+    assert argv[at : at + 2] == ["--timeout", "1800"]
+    assert argv[at + 2] == "--only-env", "the clean environment follows (brief #1290)"
 
 
 @pytest.mark.parametrize(
@@ -884,7 +887,8 @@ def test_the_run_names_the_kit_make_file_and_its_governance_target():
     argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
     at = argv.index("make")
     assert argv[at:] == ["make", "-C", "tree", "-f", "agk.mk", "agk-governance", f"AGK_BASE={BASE}"]
-    assert argv[10:12] == ["env", "-i"] and argv[13:at] == [
+    cut = argv.index("--")
+    assert cut == at - 1 and argv[12:cut:2] == [
         f"HOME={home}",
         f"AGK_PR_BODY={home / 'pr-body.md'}",
         f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}",
@@ -909,3 +913,165 @@ def test_an_adopted_project_with_agk_mk_and_no_makefile_reaches_the_target(tmp_p
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert seen.read_text(encoding="utf-8").strip() == f"reached {BASE}"
+
+
+# --- brief #1290: a clean environment without the `env` program -------------------------------
+
+WINDOWS_NAMES = ("SystemRoot", "ComSpec", "PATHEXT", "TEMP", "TMP")
+
+
+def only_env(argv: list[str]) -> dict[str, str]:
+    """The environment that ARGV hands lock.py for its command: its `--only-env NAME=VALUE`
+    options before `--`."""
+    cut = argv.index("--")
+    found: dict[str, str] = {}
+    for at, arg in enumerate(argv[:cut]):
+        if arg == "--only-env":
+            name, _, value = argv[at + 1].partition("=")
+            found[name] = value
+    return found
+
+
+def test_neither_run_starts_the_env_program():
+    """REQ-039: brief #1290 answer 1 and test (a): no `env` and no `-i` in either argument list;
+    lock.py's own options carry the environment and `make` (or pytest) follows `--` at once."""
+    home = Path("home")
+    gov = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
+    tests = merge_cleared.tests_argv(Path("tree"), home, ["tests/kit/test_x.py"], 1800.0)
+    for argv in (gov, tests):
+        assert "env" not in argv and "-i" not in argv, argv
+    assert gov[gov.index("--") + 1 :] == [
+        "make", "-C", "tree", "-f", "agk.mk", "agk-governance", f"AGK_BASE={BASE}",
+    ]  # fmt: skip
+    assert tests[tests.index("--") + 1 : tests.index("--") + 4] == [sys.executable, "-m", "pytest"]
+
+
+def test_the_environment_holds_exactly_the_kept_names_on_linux(monkeypatch):
+    """REQ-039: brief #1290 test (b): PATH unchanged from this process, HOME the scratch home and
+    the AGK_ names of today, nothing else of the parent's, and no Windows name on Linux."""
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
+    for name in ("GH_TOKEN", "AGK_LOCK_TOKEN", "AGK_SESSION", *WINDOWS_NAMES):
+        monkeypatch.setenv(name, HIDDEN)
+    monkeypatch.setenv("PATH", "/usr/local/bin:/usr/bin")
+    home = Path("home")
+    gov = only_env(merge_cleared.governance_argv(Path("t"), home, home / "pr-body.md", BASE, 9.0))
+    assert gov == {
+        "PATH": "/usr/local/bin:/usr/bin",
+        "HOME": str(home),
+        "AGK_PR_BODY": str(home / "pr-body.md"),
+        "AGK_RECORD_COMMENTS": str(home / "record-comments.json"),
+    }
+    tests = only_env(merge_cleared.tests_argv(Path("t"), home, ["a.py"], 9.0))
+    assert tests == {
+        "PATH": "/usr/local/bin:/usr/bin",
+        "HOME": str(home),
+        "AGK_KIT_TESTS": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+
+
+def test_on_windows_the_path_is_kept_as_it_is_and_five_names_are_added(monkeypatch):
+    """REQ-039: brief #1290 test (c): with Windows faked (`merge_cleared.on_windows`) and a
+    `;`-separated PATH, that PATH is passed unchanged and SystemRoot, ComSpec, PATHEXT, TEMP
+    and TMP are added."""
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: True)
+    path = r"C:\Program Files\Git\usr\bin;C:\tools\make\bin;C:\Windows\system32"
+    monkeypatch.setenv("PATH", path)
+    values = {name: rf"C:\example\{name.lower()}" for name in WINDOWS_NAMES}
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("GH_TOKEN", HIDDEN)
+    home = Path("home")
+    gov = only_env(merge_cleared.governance_argv(Path("t"), home, home / "pr-body.md", BASE, 9.0))
+    assert gov["PATH"] == path
+    assert {name: gov[name] for name in WINDOWS_NAMES} == values
+    assert set(gov) == {"PATH", "HOME", "AGK_PR_BODY", "AGK_RECORD_COMMENTS", *WINDOWS_NAMES}
+    tests = only_env(merge_cleared.tests_argv(Path("t"), home, ["a.py"], 9.0))
+    assert tests["PATH"] == path and set(WINDOWS_NAMES) <= set(tests)
+    assert HIDDEN not in json.dumps([gov, tests])
+
+
+def test_a_windows_name_that_is_not_set_is_left_out(monkeypatch):
+    """REQ-039: brief #1290 answer 1: the five names are passed where set, none invented."""
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: True)
+    for name in WINDOWS_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    home = Path("home")
+    gov = only_env(merge_cleared.governance_argv(Path("t"), home, home / "pr-body.md", BASE, 9.0))
+    assert [n for n in WINDOWS_NAMES if n in gov] == ["SystemRoot"]
+
+
+@pytest.mark.parametrize(("code", "step"), [(0, None), (2, "make governance")])
+def test_a_fake_make_on_a_temporary_path_is_found_and_run(tmp_path, monkeypatch, code, step):
+    """REQ-039: brief #1290 test (d): the real lock.py starts a fake `make` found on a temporary
+    PATH with exactly the kept environment; exit 0 is green and exit 2 is `make governance`."""
+    if os.name == "nt":
+        pytest.skip("the fake make is a script with a #! line")
+    bin_dir, root, tree, home = (tmp_path / n for n in ("bin", "root", "tree", "home"))
+    for folder in (bin_dir, root, tree, home):
+        folder.mkdir()
+    seen = tmp_path / "seen.json"
+    make = bin_dir / "make"
+    make.write_text(
+        f"#!{sys.executable}\nimport json, os, sys\n"
+        f"open({str(seen)!r}, 'w').write(json.dumps({{'args': sys.argv[1:], "
+        f"'env': dict(os.environ)}}))\nsys.exit({code})\n",
+        encoding="utf-8",
+    )
+    make.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "temp"))  # lock.py's folder; never the command's
+    (tmp_path / "temp").mkdir()
+    monkeypatch.setenv("GH_TOKEN", HIDDEN)
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
+    body = home / "pr-body.md"
+    assert merge_cleared.run_governance(root, tree, home, body, BASE, 60.0) == step
+    got = json.loads(seen.read_text(encoding="utf-8"))
+    assert got["args"] == ["-C", str(tree), "-f", "agk.mk", "agk-governance", f"AGK_BASE={BASE}"]
+    names = {"PATH", "HOME", "AGK_PR_BODY", "AGK_RECORD_COMMENTS"}
+    # LC_CTYPE is set by the fake make's own Python (PEP 538), not passed by the command
+    assert set(got["env"]) - {"LC_CTYPE"} == names, sorted(got["env"])
+    assert got["env"]["PATH"] == os.environ["PATH"]
+    assert not any(name.startswith("AGK_LOCK_") for name in got["env"]), "no slot token"
+    assert (tmp_path / "temp" / "agk-lock-heavy").exists() is False, "released after the run"
+
+
+def lock_run(tmp_path: Path, options: list[str], code: str) -> subprocess.CompletedProcess:
+    env = {**os.environ, "TMPDIR": str(tmp_path), "TEMP": str(tmp_path), "TMP": str(tmp_path),
+           "GH_TOKEN": HIDDEN}  # fmt: skip
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(LOCK_PY), "run", "--name", "heavy", *options, "--",
+         sys.executable, "-c", code],
+        cwd=tmp_path, env=env, capture_output=True, text=True,
+    )  # fmt: skip
+
+
+DUMP = "import json, os; print(json.dumps(dict(os.environ)))"
+
+
+def test_lock_py_only_env_gives_the_command_exactly_those_names(tmp_path):
+    """REQ-039: brief #1290 answer 2: `lock.py run --only-env NAME=VALUE ...` starts the command
+    with exactly those variables: none of lock.py's own and no AGK_LOCK_ slot names."""
+    proc = lock_run(tmp_path, ["--only-env", f"PATH={os.environ['PATH']}", "--only-env",
+                               "HOME=/home/example", "--only-env", "AGK_X=a=b"], DUMP)  # fmt: skip
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    env = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert set(env) - {"LC_CTYPE"} == {"PATH", "HOME", "AGK_X"}, sorted(env)
+    assert env["HOME"] == "/home/example" and env["AGK_X"] == "a=b"
+
+
+def test_lock_py_without_only_env_still_passes_its_environment_and_the_slot(tmp_path):
+    """REQ-039: brief #1290 answer 2: without the option the command gets lock.py's environment
+    and AGK_LOCK_TOKEN as before (brief #505)."""
+    proc = lock_run(tmp_path, [], DUMP)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    env = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert env["GH_TOKEN"] == HIDDEN and env["AGK_LOCK_NAME"] == "heavy" and env["AGK_LOCK_TOKEN"]
+
+
+@pytest.mark.parametrize("value", ["NOEQUALS", "=x", "1A=x", "A B=x", ""])
+def test_lock_py_refuses_a_bad_only_env_value(tmp_path, value):
+    """REQ-039: brief #1290 answer 2: a value that is not NAME=VALUE is a usage error (exit 2)."""
+    proc = lock_run(tmp_path, ["--only-env", value], "pass")
+    assert proc.returncode == 2 and "usage: lock.py run" in proc.stderr
