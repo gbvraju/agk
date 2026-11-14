@@ -1,0 +1,1 @@
+- The kit's file-table check fails a release row with no commits and a row whose fingerprint does not match the file its commit ships.
