@@ -36,7 +36,7 @@ NOTES = (
     "\n"
     "```\n# not a heading\n```\n"
 )
-SECRET_TEXT = "sells tea"  # a source's text; never printed
+SOURCE_TEXT = "sells tea"  # a source's text; never printed
 HANDOFF = (
     "Source: Example handoff\nKind: other\nVersion: 1\nDate: 2026-10-03\n\nOne line of text.\n"
 )
@@ -92,7 +92,7 @@ def test_ac3_a_source_no_requirement_cites_fails_naming_the_file(tmp_path):
     code, out = check(plan(tmp_path))
     assert code == 1, out
     assert fails(out) == [FAIL_NOTES]
-    assert SECRET_TEXT not in out
+    assert SOURCE_TEXT not in out
     assert out.splitlines()[-1].startswith(
         "plan: 1 of 1 in-scope source lines have a requirement, "
     )
