@@ -25,15 +25,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import (  # the test-walk names live there since brief #1214
-    FRONTEND_PATTERNS,
+from common import (
     block_source,
     detect_default_branch,
     experimental_enabled,
     lf,
     matches,
     read_list,
-    walked_dirs,
 )
 from init import (
     CREATE_ONLY,
@@ -57,6 +55,7 @@ from init import (
     slug,
 )
 from reviewers import parse, render_codeowners
+from tree_walk import FRONTEND_PATTERNS, walked_dirs  # installed, unlike this file (brief #1214)
 
 TEST_PATTERNS = ("*_test.py", "test_*.py")
 MARKERS = {

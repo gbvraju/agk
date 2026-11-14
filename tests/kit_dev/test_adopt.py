@@ -166,16 +166,18 @@ def test_ac2_interpreter_refusal_below_3_11():
 
 
 def test_ac2_adopt_has_no_network_or_process_imports():
-    """REQ-010 AC2: rules 1-2 (stdlib only, no git/gh/network)."""
-    tree = ast.parse(ADOPT.read_text(encoding="utf-8"))
-    names = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            names |= {a.name.split(".")[0] for a in node.names}
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            names.add(node.module.split(".")[0])
-    assert not names & {"subprocess", "socket", "urllib", "http", "ftplib", "smtplib", "ssl"}
-    assert names <= set(sys.stdlib_module_names) | {"common", "reviewers", "init"}
+    """REQ-010 AC2: rules 1-2 (stdlib only, no git/gh/network); `tree_walk.py`, which holds the
+    test-walk names since brief #1214, is held to the same rule."""
+    for path in (ADOPT, ADOPT.parent / "tree_walk.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names |= {a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names.add(node.module.split(".")[0])
+        assert not names & {"subprocess", "socket", "urllib", "http", "ftplib", "smtplib", "ssl"}
+        assert names <= set(sys.stdlib_module_names) | {"common", "reviewers", "init", "tree_walk"}
 
 
 def test_ac2_target_files_are_never_executed_or_imported():

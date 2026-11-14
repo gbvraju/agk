@@ -26,8 +26,8 @@ that cannot be read prints one line naming the option. Neither changes the exit 
 SPEC-0044 rules 9 and 10 (brief #997): beside it, for any record whose `full` run and `head` are
 there, one line suggests `proof_timeout` as ceil(n * 1.5 / 60) * 60, the formula of prepush's
 warning (ADR-0258); and when the configured `test_dirs` and `test_patterns` match no test file
-while `common.FRONTEND_PATTERNS` match some outside the test walk's skipped folders, one line names
-`test_dirs`. Both are information lines: they write nothing and change no exit code.
+while `tree_walk.FRONTEND_PATTERNS` match some outside the test walk's skipped folders, one line
+names `test_dirs`. Both are information lines: they write nothing and change no exit code.
 Brief #1154 (ADR-0490): when files that look like tests sit outside every `test_dirs` folder and
 match no `test_patterns`, one information line names up to three of their topmost folders and the
 fix.
@@ -85,12 +85,10 @@ import playbook_format  # noqa: E402
 import session  # noqa: E402
 import session_plan  # noqa: E402
 from common import (  # noqa: E402
-    FRONTEND_PATTERNS,
     GITLEAKS_INSTALL,
     GITLEAKS_PIN,
     PAUSED_LINE,
     ROUTER_WORKFLOW,
-    SKIP_DIRS,
     CheckError,
     jobs_of,
     load_config,
@@ -100,9 +98,9 @@ from common import (  # noqa: E402
     proof_timeout,
     router_names,
     router_wanted,
-    walked_dirs,
     with_router_names,
 )
+from tree_walk import FRONTEND_PATTERNS, SKIP_DIRS, walked_dirs  # noqa: E402
 
 import config as models  # noqa: E402
 
@@ -1695,7 +1693,7 @@ def configured_test_found(root: Path, dirs: list[str], patterns: list[str]) -> b
 
 
 def frontend_count(root: Path) -> int:
-    """The files matching `FRONTEND_PATTERNS` outside the folders a test walk skips (common.py)."""
+    """The files matching `FRONTEND_PATTERNS` outside the folders a test walk skips (tree_walk)."""
     count = 0
     for here, dirnames, filenames in os.walk(root):
         rel_here = Path(here).relative_to(root).as_posix()
