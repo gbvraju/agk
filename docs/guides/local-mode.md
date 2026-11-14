@@ -162,8 +162,8 @@ Step 1 of the conductor's protocol (CI first) has nothing to read in local mode,
 Without a record (a builder on a kit older than brief #374), re-run governance by hand as before: `git worktree add <scratch>
 <sha>`, then `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base sha> make -C <scratch> -f agk.mk agk-governance`, then
 remove the worktree. Use the `-f agk.mk agk-governance` form: `agk.mk` is the kit's own file, present in every project set up
-with init or adopt, while a project set up with adopt may have no Makefile with a `governance` target; `make -C <scratch>
-governance` still works where the project's Makefile has it (brief #1264).
+with init or adopt, while a project set up with adopt may have no Makefile with a `governance` target; the older
+`make -C <scratch> governance` still works where the project's Makefile has that target (brief #1264).
 
 A verdict in local mode that clears a head without that line clears nothing.
 

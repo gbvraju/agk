@@ -6,7 +6,7 @@
 - Related: brief #1264, plan #661, SPEC-0030 rule 6, SPEC-0039 rule 6, session rule 30
 - Requirements: REQ-039
 
-Protected classes: `.claude/`, `scripts/agk/`, `tests/kit/`
+Protected classes: `.claude/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
