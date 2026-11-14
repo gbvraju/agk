@@ -60,6 +60,11 @@ and one line `#<brief> question on a brief` per waiting question, or `empty`; wi
    `Correction:` and `Maintainer answer:` that the reason names in the verdict itself. For a `question on a draft`, answer
    the question in a verdict on the draft's head whose numbered items are the answers, and do not review the draft's code:
    it is not finished, and its checks may still be running.
+   **Write it short** (brief #1270, ADR-0537): the verdict lists only the failing and not-proven items, one line each, and one
+   line `Passed: <n> rules` for the rest; its `Read:` line is the count, `Read: <n> files` (or `all`), never each file; a
+   re-review verdict names only what changed since the last verdict on that pull request. Every line the merger and the router
+   parse keeps its name and form: `Verdict:`, `Final:`, `Local evidence:`, `Evidence check:`, `Checklist:`,
+   `Playbook evidence:` and `Approval:`.
    **Answer each request and each question on a brief**, after the pull requests, with no review:
    - a `request <session> ...` line: post one comment on the `agk-conductor` issue whose first line is
      `Assign: <session> #<brief>` (with ` build (<x>)` after a brief built in parts) when the start list of

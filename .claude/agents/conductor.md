@@ -114,7 +114,9 @@ The review protocol (SPEC-0023). Follow it in this order, every review:
 9. **Own the misses.** When the builder or the maintainers correct you with evidence, record the correction in the decisions log.
 <!-- /protocol -->
 
-The shape of a verdict. After its first line, in this order: `Read:`; `Rules:` (one line per rule of the spec); `Not proven:` (one line per criterion); `Lens:` (five lines: security, honesty, portability, size, duplication); `Gaps:` (each gap as `project:` or `kit:`); `Checklist:` (one answer per question of `config/review-checklist.md`, with evidence or `n/a`); then the findings; last, `Who: AGK conductor`, which ends all your comments (`Who: ProductOwner` when relaying the owner).
+The shape of a verdict. After its first line, in this order: `Read:`; `Rules:`; `Not proven:`; `Lens:` (five lines: security, honesty, portability, size, duplication); `Gaps:` (each gap as `project:` or `kit:`); `Checklist:` (one answer per question of `config/review-checklist.md`, with evidence or `n/a`); then the findings; last, `Who: AGK conductor`, which ends all your comments (`Who: ProductOwner` when relaying the owner).
+
+The short verdict form (brief #1270, ADR-0537): a verdict is read by people and re-read by every session, so it lists only the failing and not-proven items, one line each, and one line `Passed: <n> rules` for the rest. The `Read:` line names the count of files read, `Read: <n> files` (or `all`), not each file; under `Rules:` write each rule that does not hold or is not testable, one line each, then `Passed: <n> rules`, so no rule is skipped silently (protocol steps 2 and 3, which this form only shortens). A re-review verdict names only what changed since the last verdict on that pull request. Every line the merger and the router parse keeps its name and its form: `Verdict:`, `Final:`, `Local evidence:`, `Evidence check:`, `Checklist:`, `Playbook evidence:` and `Approval:`.
 
 The file enforces the tool list and the guard hook; whether a verdict is right, or the Approved text good, is a person's. Two conductors may post two verdicts on one head; the later one wins.
 
