@@ -176,10 +176,12 @@ from common import (
     covered_fix_list,
     git,
     load_config,
+    main_folder_refusal,
     next_free_ids,
     paused,
     repo_root,
     required_checks,
+    shared_main,
     show,
     utf8_output,
     who_fields,
@@ -1472,7 +1474,8 @@ def brief_shape(root, repo: str) -> Callable:
     """What this repository refuses in a brief body: rule 4, and the wave with a plan issue."""
     from session_plan import touch_problems, touch_rules  # the plan builds on this module
 
-    rules = touch_rules(root)
+    # The default branch's files, never the main folder's (brief #1301, ADR-0551).
+    rules = touch_rules(root, f"origin/{load_config(Path(root))['default_branch']}")
     known = plan_waves(repo) if plan_issue_set(root) else None
     waves = plan_issue_set(root)
     limits = brief_code_paths(root)
@@ -2055,7 +2058,19 @@ def red_fix(root, s: Survey, number: int) -> bool:
     return number in fix_briefs(root, issues, comments, pulls)
 
 
+def main_folder_guard(root) -> bool:
+    """True when this session may take work here; prints the refusal or warning line otherwise
+    (brief #1301, ADR-0551: `shared_main`, the main folder of a clone other sessions share)."""
+    found = main_folder_refusal(Path(root)) if shared_main(Path(root)) else None
+    if found is None:
+        return True
+    print(found[0])
+    return not found[1]
+
+
 def claim(root, me: str, number: int, build: str | None) -> int:
+    if not main_folder_guard(root):
+        return 1
     repo = repo_name(root)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
     prs = pages(f"repos/{repo}/pulls?state=all")
@@ -2905,7 +2920,10 @@ def is_red(item: dict) -> bool:
 def next_brief(root, me: str, taking: bool = False) -> int:
     """The work `next` would hand this session, with the same choice and reasons either way.
     Without `taking` it only shows it and posts nothing, with the command that takes it; with
-    `taking` (`next --take`, and `after`) it takes it as before (brief #440, ADR-0236)."""
+    `taking` (`next --take`, and `after`) it takes it as before (brief #440, ADR-0236); taking is
+    refused from the shared main folder (brief #1301)."""
+    if taking and not main_folder_guard(root):
+        return 1
     repo = repo_name(root)
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     red = [i for i in issues or [] if is_red(i)]

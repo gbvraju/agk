@@ -19,6 +19,11 @@ When `AGK_PR_BODY` is unset, the hook reads the body of the open pull request wh
 checkout's branch (one GET through `gh api`), writes it to a temporary file and runs governance
 with `AGK_PR_BODY` naming it, so `check_protected_changes.py` sees its `Covered-by:` line
 (brief #1029, ADR-0438). Any failure to read runs governance as before; the file is removed.
+
+Brief #1301 (ADR-0551): in a clone that several sessions share (`common.clone_shared_by`), when
+the main folder is off the default branch or holds untracked files outside the ignored paths, the
+hook first prints one line `main folder: on <branch>, <n> untracked; switch back with git checkout
+<default branch>` on standard error, information only: what the hook decides is unchanged.
 """
 
 from __future__ import annotations
@@ -171,6 +176,23 @@ def run_commands(root: str, env: dict, commands: list[tuple[str, ...]] | None):
     return 0, "", ""
 
 
+def main_folder_note(root: str) -> None:
+    """Print the main folder's state when it drifted (brief #1301); never fails the hook."""
+    try:
+        import common
+
+        state = common.main_folder_state(Path(root))
+    except Exception:  # noqa: BLE001 - a note must never stop the hook
+        return
+    if state is not None:
+        branch, untracked, default = state
+        print(
+            f"main folder: on {branch}, {untracked} untracked; switch back with git checkout "
+            f"{default}",
+            file=sys.stderr,
+        )
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -181,6 +203,7 @@ def main() -> int:
     if payload.get("stop_hook_active"):
         return 0
     root = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
+    main_folder_note(root)
     mode, branch, refusal = settings(root)
     if refusal:
         print(refusal, file=sys.stderr)
