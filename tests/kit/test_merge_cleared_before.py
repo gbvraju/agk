@@ -127,7 +127,7 @@ def test_a_green_merge_check_merges_and_governance_runs_again_after(tmp_path):
     assert len(merges(made)) == 1
     assert [r["args"][-1] for r in ran] == [PRE_BASE, AFTER_BASE], "before, then after"
     first = ran[0]["args"]
-    assert first[0] == "-C" and first[2:] == ["governance", PRE_BASE]
+    assert first[0] == "-C" and first[2:] == ["-f", "agk.mk", "agk-governance", PRE_BASE]
     tree = Path(first[1])
     assert not tree.is_relative_to(root), "the worktree is outside the checkout"
     assert not tree.exists() and worktrees(root) == [str(root)]
