@@ -56,8 +56,8 @@ The decision of ADR-0439 and of the guide's tests that the kit installs no adapt
 said so (`tests/kit_dev/test_windows_launcher.py`, `tests/kit/test_guide_windows_adapter.py`) now say the kit installs it as
 a template, and this repository keeps its own `scripts/start-session-windows.ps1`, which a template never overwrites.
 Protected path classes changed: `scripts/agk/` (`conductor.py`, `doctor.py`), `kit/` (`manifest.json`, the two new adapter
-templates and the comment of `templates/agk.toml`), `tests/kit/` (`test_conductor_watchdog.py`, new; `test_doctor.py`, its
-counts; `test_guide_windows_adapter.py`), `tests/kit_dev/` (`test_windows_launcher.py`) and `docs/adr/` (this file).
+templates and the comment of `templates/agk.toml`), `tests/kit/` (`test_conductor_watchdog.py`, new; `test_doctor.py` and
+`test_delivery_declaration.py`, their counts; `test_guide_windows_adapter.py`), `tests/kit_dev/` (`test_windows_launcher.py`) and `docs/adr/` (this file).
 
 ## Residual
 
