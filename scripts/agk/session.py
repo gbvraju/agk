@@ -122,6 +122,14 @@ secret-scan deferral line of `prepush.py`, the session rules that bind a builder
 and the body lines of CLAUDE.md item 7 read from `config/core-rules.md` (a file without the item
 fails). `--follow-up TEXT` (one line, never a verdict) replaces the stop on an existing pull
 request with the follow-up for it. The title of a brief never goes into the prompt.
+
+Brief #1282 (ADR-0543): `watch --pr N` parks the pull request when its owner wait passed (a
+`Question:` for the maintainers, an `Owner needed:`, `agk:approve` or `agk:owner-merge` unanswered
+for `[flow] owner_wait_minutes`, or at once inside `owner_rest_hours` at `owner_utc_offset`): one
+label write `agk:parked`, one comment `Parked-by: wait <Q-id>`, and it prints `parked #<n> <Q-id>`
+and the `next:` line that names the builder's hand-over and `session.py after`. A parked pull
+request holds no builder slot, and `next` offers an unparked one (an `Unparked-by:` its author has
+not spoken after) before stalled pull requests and new briefs.
 """
 
 from __future__ import annotations
@@ -178,6 +186,7 @@ from config import (
     model_providers,
     model_routes,
     model_settings,
+    owner_wait_settings,
     route_of,
 )
 
@@ -578,6 +587,7 @@ def watch(root, args: dict[str, str]) -> int:
     first = True
     floor = 0
     told = Told(root, repo, args["--session"], interval) if "--session" in args else None
+    waits = None if only_merge else owner_wait_settings(root)  # refused before any read (#1282)
     if told is not None and told.start() is not None:
         return EXIT_UNREADABLE
     if not only_merge:
@@ -632,6 +642,10 @@ def watch(root, args: dict[str, str]) -> int:
                 line = line or approve_line(comments, max(seen, since), head, approvers)
                 if line:
                     print(line)
+                    return 0
+                if waits is not None and (parked_line := owner_park(repo, pr, comments, waits,
+                                                                    root, args)):  # fmt: skip
+                    print(parked_line)
                     return 0
                 brief = brief_number(pr)
                 if brief is not None:
@@ -2065,8 +2079,8 @@ def owned_pulls(root, repo: str, name: str) -> list:
     owned = []
     for pull in sorted(prs, key=lambda p: p.get("number", 0)):
         brief = brief_number(pull)
-        if brief is None or pull.get("state") != "open":
-            continue
+        if brief is None or pull.get("state") != "open" or PARKED_LABEL in labels_of(pull):
+            continue  # a parked pull request holds no slot (brief #1282)
         comments = pages(f"repos/{repo}/issues/{brief}/comments")
         if comments is None:
             raise CheckError(f"slot: the comments of #{brief} cannot be read")
@@ -2487,8 +2501,9 @@ def next_brief(root, me: str, taking: bool = False) -> int:
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
     s = survey(root, repo, me, issues)
-    if len(s.builders) >= s.max_builders:
-        print(f"full {len(s.builders)}/{s.max_builders}")
+    running = running_builders(s.builders)  # a parked pull request holds no slot (brief #1282)
+    if len(running) >= s.max_builders:
+        print(f"full {len(running)}/{s.max_builders}")
         return 1
     # The plan's rules decide (brief #345, ADR-0195): a stale claim holds nothing, overlap is
     # judged by files, and a skip names the plan's reason.
@@ -2539,8 +2554,9 @@ def demand(root) -> int:
     """How many sessions a launcher may start (rule 6): min(ready, max - open), 0 when negative."""
     s = survey(root, repo_name(root), "")
     ready = sum(1 for brief in s.free if overlap(root, s, brief) is None)
-    start = max(0, min(ready, s.max_builders - len(s.builders)))
-    figures = {"ready": ready, "open": len(s.builders), "max": s.max_builders, "start": start}
+    running = len(running_builders(s.builders))  # a parked pull request holds no slot (#1282)
+    start = max(0, min(ready, s.max_builders - running))
+    figures = {"ready": ready, "open": running, "max": s.max_builders, "start": start}
     print(json.dumps(figures))
     return 0
 
@@ -3254,6 +3270,178 @@ def parked(root, repo: str, pr: dict, comments: list | None) -> bool:
     return float(found.group(1)) > cap[found.group(2)]
 
 
+# --- the owner's waits (brief #1282, ADR-0543) --------------------------------------------------
+
+PARKED_BY = re.compile(r"Parked-by: wait (\S+)")
+UNPARKED_BY = re.compile(r"Unparked-by: answer (\S+)")
+OWNER_NEEDED = "Owner needed:"
+OWNER_ANSWERS = ("Maintainer answer:", "Answer:", "Approve:", "Correction:")
+OWNER_LABELS = {"agk:approve": "approve", "agk:owner-merge": "owner-merge"}
+
+
+def resting(settings: dict, now: datetime) -> bool:
+    """Whether `now` is inside the owner's rest hours, read at the owner's fixed UTC offset; a
+    range whose start is after its end crosses midnight, and its end is not included."""
+    rest = settings.get("rest")
+    if not rest:
+        return False
+    local = now.astimezone(UTC) + timedelta(minutes=int(settings.get("offset") or 0))
+    minute = local.hour * 60 + local.minute
+    start, end = rest
+    return start <= minute < end if start < end else minute >= start or minute < end
+
+
+def labels_of(pr: dict) -> set[str]:
+    return {str(lab.get("name")) for lab in pr.get("labels") or [] if isinstance(lab, dict)}
+
+
+def in_order(comments: list) -> list:
+    return sorted(comments, key=lambda c: (moment(c.get("created_at")), c.get("id", 0)))
+
+
+def for_the_maintainers(line: str) -> bool:
+    """A `Question: Q-…` whose first line asks the maintainers (brief #1043, as route.py reads)."""
+    return line.startswith("Question: Q-") and "for the maintainers" in line
+
+
+def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str]):
+    """(key, since) of the newest open item that waits on the owner, or None: a `Question:` for
+    the maintainers (key: its Q id) until an `Answer:` naming that id, or a `Correction:` naming
+    it, by an answerer; an `Owner needed:` by a listed verdict author (key: its Q id, else
+    `owner-needed`) until such an answer; both until a `Maintainer answer:` or `Approve:` by an
+    answerer; and the router's `agk:approve` or `agk:owner-merge` (key: `approve` or
+    `owner-merge`), from the newest comment, or the pull request's creation without one."""
+    open_items: dict[str, datetime] = {}
+    ordered = in_order(comments)
+    for c in ordered:
+        line, who, when = first_line(c), author_of(c), moment(c.get("created_at"))
+        if for_the_maintainers(line):
+            found = QUESTION_ID.search(line)
+            open_items[found.group(0) if found else "question"] = when
+        elif line.startswith(OWNER_NEEDED) and who in listed:
+            found = QUESTION_ID.search(line)
+            open_items[found.group(0) if found else "owner-needed"] = when
+        elif who in answerers and line.startswith(("Maintainer answer:", "Approve:")):
+            open_items.clear()
+        elif who in answerers and (found := ANSWER_LINE.match(line)):
+            open_items.pop(found.group(1), None)
+        elif who in answerers and line.startswith("Correction:"):
+            for qid in QUESTION_ID.findall(str(c.get("body") or "")):
+                open_items.pop(qid, None)
+    names = labels_of(pr)
+    for label, key in OWNER_LABELS.items():
+        if label in names and key not in open_items:
+            newest_post = moment(ordered[-1].get("created_at")) if ordered else None
+            open_items[key] = newest_post or moment(pr.get("created_at"))
+    if not open_items:
+        return None
+    return max(open_items.items(), key=lambda kv: kv[1])
+
+
+def own_park(comments: list) -> tuple[str, dict] | None:
+    """(key, comment) of the newest `Parked-by: wait <key>` when no `Unparked-by:` is newer: the
+    `agk:parked` label is then this rule's; else None, a person's own hold (brief #1282)."""
+    ordered = in_order(comments)
+    parks = [
+        (i, m.group(1)) for i, c in enumerate(ordered) if (m := PARKED_BY.match(first_line(c)))
+    ]
+    if not parks:
+        return None
+    last = max((i for i, c in enumerate(ordered) if UNPARKED_BY.match(first_line(c))), default=-1)
+    index, key = parks[-1]
+    return (key, ordered[index]) if index > last else None
+
+
+def owner_step(
+    pr: dict, comments: list, settings: dict, now: datetime, listed: set[str], answerers: set[str]
+) -> tuple[str, str] | None:
+    """`("park", key)` when the newest owner item has waited `minutes` since its post, or at once
+    inside rest hours; `("unpark", key)` when this rule parked the pull request and an answerer has
+    posted an answer since; else None. A person's own `agk:parked` is never touched."""
+    if PARKED_LABEL in labels_of(pr):
+        found = own_park(comments)
+        if found is None:
+            return None
+        key, mark = found
+        after = (moment(mark.get("created_at")), mark.get("id", 0))
+        for c in comments:
+            if (moment(c.get("created_at")), c.get("id", 0)) <= after:
+                continue
+            if author_of(c) in answerers and first_line(c).startswith(OWNER_ANSWERS):
+                return ("unpark", key)
+        return None
+    item = owner_item(pr, comments, listed, answerers)
+    if item is None:
+        return None
+    key, since = item
+    waited = now - since >= timedelta(minutes=int(settings.get("minutes", 0)))
+    return ("park", key) if waited or resting(settings, now) else None
+
+
+def owner_people(root, pr: dict) -> tuple[set[str], set[str]]:
+    """(the listed verdict authors, the answerers: they and the spec approvers), lower case."""
+    listed = {a.lstrip("@").lower() for a in verdict_authors(root) or []}
+    return listed, listed | {a.lstrip("@").lower() for a in spec_approvers(root)}
+
+
+def owner_park(repo: str, pr: dict, comments: list, settings: dict, root, args: dict) -> str | None:
+    """`watch`'s park (brief #1282 answer 3): when the owner wait of the pull request has passed,
+    the label and the comment, then the two lines that name the builder's hand-over and
+    `session.py after`; None while it waits, or when the writes fail (the next poll retries)."""
+    number = int(args.get("--pr") or 0)
+    listed, answerers = owner_people(root, pr)
+    found = owner_step(pr, comments, settings, datetime.now(UTC), listed, answerers)
+    if found is None or found[0] != "park" or not park_pull(repo, number, found[1]):
+        return None
+    head = str((pr.get("head") or {}).get("sha") or "")[:7]
+    me = args.get("--session", "<ID>")
+    return (
+        f"parked #{number} {found[1]}\n"
+        f"next: post `Report: {head} handing over: blocked: {found[1]} waits for the owner`, "
+        f"then run python3 scripts/agk/session.py after --session {me}"
+    )
+
+
+def park_pull(repo: str, number: int, key: str) -> bool:
+    """The one label write and the one `Parked-by: wait <key>` comment (brief #1282 answer 3)."""
+    labelled = gh(f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={PARKED_LABEL}",
+                  method="POST")  # fmt: skip
+    if labelled is None:
+        return False
+    body = f"body=Parked-by: wait {key}"
+    return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
+
+
+def unpark_pull(repo: str, number: int, key: str) -> bool:
+    """The label removed and one `Unparked-by: answer <key>` comment, which marks the label as no
+    longer this rule's, so a person's later `agk:parked` is never read as one (answer 4)."""
+    label = quote(PARKED_LABEL, safe="")
+    if gh(f"repos/{repo}/issues/{number}/labels/{label}", method="DELETE") is None:
+        return False
+    body = f"body=Unparked-by: answer {key}"
+    return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
+
+
+def unparked_owed(pr: dict, comments: list) -> bool:
+    """An `Unparked-by:` newer than every comment of the pull request's author: the owner answered
+    and no builder has resumed it yet (brief #1282 answer 4)."""
+    me = str((pr.get("user") or {}).get("login") or "").lower()
+    ordered = in_order(comments)
+    marks = [i for i, c in enumerate(ordered) if UNPARKED_BY.match(first_line(c))]
+    spoke = [
+        i
+        for i, c in enumerate(ordered)
+        if author_of(c) == me and not PARKED_BY.match(first_line(c))
+        and not UNPARKED_BY.match(first_line(c))
+    ]  # fmt: skip
+    return bool(marks) and max(marks) > max(spoke, default=-1)
+
+
+def running_builders(builders: list) -> list:
+    """The builder pull requests that hold a slot: a parked one holds none (brief #1282)."""
+    return [p for p in builders if PARKED_LABEL not in labels_of(p)]
+
+
 def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
     """Offer the first stalled pull request and, with `taking`, take it over; None when there is
     none. Without `taking` it posts nothing and prints the command that takes it over (Q-440-1)."""
@@ -3262,19 +3450,34 @@ def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
     if prs is None:
         print("note: the open pull requests cannot be read", file=sys.stderr)
         return None
-    for pr in sorted(prs, key=lambda p: p.get("number", 0)):
+    ordered = sorted(prs, key=lambda p: p.get("number", 0))
+    answered: dict[int, list] = {}  # unparked by the owner's answer: first (brief #1282 answer 4)
+    for pr in ordered:
+        if PARKED_LABEL in labels_of(pr) or brief_number(pr) is None:
+            continue
+        said = pages(f"repos/{repo}/issues/{pr['number']}/comments")
+        if said is not None and unparked_owed(pr, said):
+            answered[pr["number"]] = said
+    for pr in [*(p for p in ordered if p["number"] in answered), *ordered]:
         names = {lab.get("name") for lab in pr.get("labels") or []}
-        if names & WAITING_LABELS or not (pr.get("draft") or names & BUILDER_LABELS):
-            continue
         number = pr["number"]
-        comments = pages(f"repos/{repo}/issues/{number}/comments")
-        changed = last_change(repo, pr, comments) if comments is not None else None
-        if changed is None or datetime.now(UTC) - changed < timedelta(hours=hours):
-            continue
-        if waits_for_a_person(root, pr, comments) or parked(root, repo, pr, comments):
-            continue
+        resumed = number in answered
+        if resumed:
+            comments = answered.pop(number)
+            changed = last_change(repo, pr, comments) or datetime.now(UTC)
+            kind = "unparked"
+        else:
+            if names & WAITING_LABELS or not (pr.get("draft") or names & BUILDER_LABELS):
+                continue
+            comments = pages(f"repos/{repo}/issues/{number}/comments")
+            changed = last_change(repo, pr, comments) if comments is not None else None
+            if changed is None or datetime.now(UTC) - changed < timedelta(hours=hours):
+                continue
+            if waits_for_a_person(root, pr, comments) or parked(root, repo, pr, comments):
+                continue
+            kind = "stalled"
         if not taking:
-            print(f"stalled #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
+            print(f"{kind} #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
             print(f"take it over with: session.py next --session {me} --take")
             return 0
         day = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -3286,7 +3489,7 @@ def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
         if lost:
             print(f"skip #{number}: lost the takeover to {lost}")
             continue
-        print(f"stalled #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
+        print(f"{kind} #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
         print(f"run: python3 scripts/agk/session.py resume --pr {number}")
         return 0
     return None

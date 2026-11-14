@@ -21,8 +21,9 @@ from test_session import SHA, Stub, comment, iso, pull, session, watching
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
 
 import conductor  # noqa: E402
-import config  # noqa: E402
 import session as session_mod  # noqa: E402
+
+import config  # noqa: E402
 
 REPO = "acme/widgets"
 NOW = datetime(2026, 11, 14, 9, 0, tzinfo=UTC)  # 14:30 at +05:30, outside 20:00-08:00
@@ -82,13 +83,17 @@ def test_1282a_a_question_unanswered_for_the_wait_parks_the_pull_request():
 def test_1282a_watch_parks_and_names_session_after_as_the_next_command(proj, stub):
     """REQ-050: brief #1282 answer 3 and test (a): one label write, one comment, then `after`."""
     question = comment(
-        10, "builder", "Question: Q-7-1 for the maintainers: which runtime?", iso(-timedelta(hours=1))
+        10,
+        "builder",
+        "Question: Q-7-1 for the maintainers: which runtime?",
+        iso(-timedelta(hours=1)),
     )
     watching(stub, [(pull(), [question])], base=[question])
+    stub.serve(f"repos/{REPO}/issues", [])  # no `agk-conductor` issue: messages are not read
     out = session(proj, stub, *WATCH)
     assert out.returncode == 0, out.stdout + out.stderr
     lines = out.stdout.strip().splitlines()
-    assert lines[0] == "parked #7 Q-7-1"
+    assert lines[-2] == "parked #7 Q-7-1"
     assert lines[-1] == (
         f"next: post `Report: {SHA[:7]} handing over: blocked: Q-7-1 waits for the owner`, "
         "then run python3 scripts/agk/session.py after --session s-me"
@@ -212,12 +217,12 @@ def test_1282d_sweep_parks_lists_once_and_unparks_with_the_resume_command(monkey
 
 def test_1282d_next_offers_the_unparked_pull_request_before_a_new_brief(proj, stub):
     """REQ-050: brief #1282 answer 4 and test (d): `session.py next` resumes it first."""
-    from test_session import issue, listing
+    from test_session import FREE, issue, listing
     from test_session_plan import free
 
-    listing(stub, [issue(5)])
+    listing(stub, [issue(5, FREE)])
     free(stub, 5)
-    unparked = {**pull(), "number": 7, "draft": True, "title": "t", "html_url": "u"}
+    unparked = {**pull(), "number": 7, "draft": True, "title": "t", "body": "Brief: #4\n"}
     stub.serve(f"repos/{REPO}/pulls", [unparked])
     said = [
         comment(10, "builder", "Question: Q-7-1 for the maintainers: which runtime?"),
@@ -307,7 +312,7 @@ def test_1282g_keys_under_a_commented_flow_header_are_not_read(tmp_path):
     """REQ-050: brief #1282 answer 1 and test (g) (#1245)."""
     text = '# [flow]\nowner_wait_minutes = 0\nowner_rest_hours = "late"\n'
     assert settings(tmp_path, text) == {"minutes": 30, "rest": None, "offset": 0}
-    text = '[other]\n# [flow]\nowner_wait_minutes = -5\n'
+    text = "[other]\n# [flow]\nowner_wait_minutes = -5\n"
     assert settings(tmp_path, text) == {"minutes": 30, "rest": None, "offset": 0}
     assert {"owner_wait_minutes", "owner_rest_hours", "owner_utc_offset"} <= config.TABLE_KEYS[
         "flow"
