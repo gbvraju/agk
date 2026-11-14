@@ -4,6 +4,17 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.64.5 (2026-11-14)
+
+- #1271 In local mode `prepush.py --record` with no FILE keeps the evidence record in the clone's shared folder (`<git common dir>/agk-evidence/<head>.json`), and `evidence.py check --head <sha>` finds it from the head alone, so the guarded merge is no longer held for a record nobody can locate (brief #1269, ADR-0536)
+- #1285 The kit's file-table check fails a release row with no commits and a row whose fingerprint does not match the file its commit ships.
+- #1286 The kit's GitHub reads reuse what has not changed: each GET sends the last ETag and a 304 reuses the body kept in a per-repository cache in the temp folder (`AGK_READ_CACHE` names another folder or `off`); the plan asks again only the comments that one repository-wide `since` read shows changed; `session.py watch --pr` and `--assign` read comments `since` the newest seen and back off from 60 s to 300 s while nothing changes; `plan --if-changed` reuses the last plan while nothing changed (the conductor's re-plan); `session.py rollover` moves the `agk-conductor` issue to a new one past 500 comments, readers take the newest open one and the waits follow its `Continued in #<n>` link (brief #1251 build (b), ADR-0548 Proposed)
+- #1287 Work that waits on the owner (a question for the maintainers, an `Owner needed:`, a spec approval or an owner-only merge) waits `owner_wait_minutes` of `[flow]` (30), or not at all inside `owner_rest_hours` at `owner_utc_offset`. Then `session.py watch` or `conductor.py sweep` parks it with `agk:parked` and `Parked-by: wait <Q-id>`, the builder hands over and moves on, the parked pull request frees its slot, and the owner's answer unparks it and resumes it before new briefs (brief #1282, ADR-0543)
+- #1288 In local mode the conductor's guard allows `evidence.py check --head <sha>` (and `check <RECORD> --head <sha>` with RECORD in a scratch directory or the clone's shared evidence folder), so a guarded conductor writes the `Evidence check:` line the guarded merge reads (brief #1281, ADR-0542)
+- #1292 The guarded merge no longer starts the `env` program: `lock.py run --only-env NAME=VALUE` starts `make` (and the pre-merge pytest) with exactly the kept variables, PATH unchanged, and on Windows also SystemRoot, ComSpec, PATHEXT, TEMP and TMP, so a cleared pull request merges on Windows as on Linux (brief #1290, ADR-0549)
+- #1293 The local evidence check adds its worktree with the committed line ends (`-c core.autocrlf=false -c core.eol=lf`) and runs governance with the conductor's environment (PATH, a scratch HOME, AGK_BASE), and the design digests of rules 9 and 15 read a file's committed bytes when a checkout changed only its line ends, so a correct record agrees on Windows (brief #1291, ADR-0550)
+- #1300 Every comment the kit posts through `session.py`, `conductor.py`, `route.py` and `merge_cleared.py` ends with one last line `Who: AGK` (with the role where known), so the history tells AGK from the owner under one login; a marker, not a rule: nothing reads or requires it (brief #1289, ADR-0546)
+
 ## 0.64.4 (2026-11-14)
 
 - #1249 `agk doctor` reports, as `misplaced-settings`, a setting that the kit reads from a table of `agk.toml` (`[flow]`, `[testing]`, `[capacity]`, `[plan]`, `[design]`, `[delivery]`) but that stands at the top level or in another table, naming the key and both tables, never its value; the template's flow block says the keys belong in the `[flow]` table (brief #1245, ADR-0527)
