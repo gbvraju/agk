@@ -71,7 +71,10 @@ with no line or heading) and gives a reason (text beside its spans), with one li
 `--trace`, after the matrix, one line per source file `<file>: <a> of <b> headings or rows cited`:
 the units are a Markdown file's headings (outside fences) and table rows (after a separator line),
 or a text file's non-blank lines after its header, each cited by `<file>#<heading>` or by
-`<file>:<line>` of its line. Rule 11's coverage line is unchanged.
+`<file>:<line>` of its line. Rule 11's coverage line is unchanged. With the maintainers' answer to
+`Q-1217-1`, two more locations cite a source: a requirement's acceptance line ending with
+` (<location>)` into a `Kind: openspec` source, and a `Source:` line of a brief file that carries a
+`Component:` line (the brief of a shared component, which `plan_intake.py render` writes).
 
 Build (g), rules 20 to 22 (brief #1095, ADR-0467), when `docs/plan/` exists: rule 20 fails a
 `docs/plan/baseline.json` that is not `schema` 1 with a full `head`, a real `date`, an `https://`
@@ -626,6 +629,27 @@ def source_units(text: str, markdown: bool) -> list[tuple[int, str | None]]:
     return out
 
 
+def other_citations(root: Path) -> set[str]:
+    """Q-1217-1 (maintainer answer): the locations that cite a source outside a requirement's
+    `Source:` line: an acceptance line's ` (<location>)` into a `Kind: openspec` source, and the
+    `Source:` lines of a brief file that carries a `Component:` line (a component's brief)."""
+    out: set[str] = set()
+    for location in acceptance_lines(root):
+        rel = location.partition("#")[0] if "#" in location else location.rpartition(":")[0]
+        text = _read(root / rel) if rel.startswith(f"{SOURCES}/") else None
+        if text is not None and (header(text) or {}).get("Kind") == OPENSPEC:
+            out.add(location)
+    folder = root / BRIEFS
+    for path in sorted(folder.rglob("*.md")) if folder.is_dir() else []:
+        text = _read(path) or ""
+        if _line_value(text, "Component") is None:
+            continue
+        for line in text.splitlines():
+            if source := SOURCE_LINE.match(line):
+                out.add(source.group(1).strip("`"))
+    return out
+
+
 def kit_requirement(rel: str, req: str, sources: list[str]) -> bool:
     """Brief #1183 (ADR-0502): a block of `docs/requirements.md` numbered REQ-001 to REQ-099, the
     range that file reserves for the kit, with no `Source:` line: it has no project source."""
@@ -948,6 +972,7 @@ class Plan:
             for source in sources:
                 self.cited.setdefault(source, []).append(req)
         self.resolved = {s for s in self.cited if location_problem(root, s) is None}
+        self.resolved |= {s for s in other_citations(root) if location_problem(root, s) is None}
         pulls = (facts or {}).get("pull_requests")
         self.merged: dict[int, list[int]] | None = None
         if isinstance(pulls, list):

@@ -28,9 +28,15 @@ Read in the code by this session on `origin/main` (76fcd1b):
    `<file>: <a> of <b> headings or rows cited`: the headings outside fences and the table rows after a separator line of
    a Markdown file, or the non-blank lines after the header of a text file, a unit cited by `<file>#<heading>` or by
    `<file>:<line>` of its line. The line is information."
-3. **No other change.** Rule 11's coverage line, rules 1, 2 and 20 to 22 and every workflow stay as they are.
-4. **Tests.** `tests/kit/test_check_plan_uncited.py`, invented files in `tmp_path`, no network: an uncited source fails
+3. **Rules 7 and 10, the kit's other citations (`Q-1217-1`, maintainers' answer on #1224).** "For items 1 and 2 a
+   source is also cited by a line of a requirement block ending with ` (<location>)` into a `Kind: openspec` source, and
+   by a `Source:` line of a brief file that carries a `Component: C<n>` line; `render` writes that line on the brief of
+   each shared component and the component's `sources` as the brief's first `Source:` lines."
+4. **No other change.** Rule 11's coverage line, rules 1, 2 and 20 to 22 and every workflow stay as they are.
+5. **Tests.** `tests/kit/test_check_plan_uncited.py`, invented files in `tmp_path`, no network: an uncited source fails
    naming the file, never its text, and each uncited source fails once; listing it out of scope with a reason passes;
    a line without a reason, or an out-of-scope location of one line, does not; one resolving citation passes and the
    trace line shows `1 of 4`; a heading cited by name and by line counts once; a citation that does not resolve counts
-   nothing; a project with no plan is not checked.
+   nothing; a project with no plan is not checked; an OpenSpec acceptance line cites its file and one into another kind
+   does not; a component's brief cites its sources and the same line without `Component:` does not; and, in
+   `tests/kit/test_plan_slices.py`, `render` writes the component's lines and the rendered plan passes.

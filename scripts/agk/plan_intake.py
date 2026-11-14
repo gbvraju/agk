@@ -24,9 +24,11 @@ with a `name`, non-empty `goals` and `sources`), and each requirement names its 
 checked (`Q-1089-4`). Build (r): the proposals may hold `components` (`C1`, `C2`, ... in order, each
 with two or more inventory `screens`, a `pattern` or null, and exactly one brief in `M1 Foundation`
 whose `component` names it); a brief whose `screens` use a component names that brief in
-`depends_on`. While a `Kind: design` source has a `<screen>/<state>` heading, every milestone after
-`M1` has `screens`, its `exit` names `design_compare.py`, `match` and a signed-off version, and
-every such heading is in a milestone's `screens`. Rule 7: `render` runs `validate` first, prints
+`depends_on`; `render` writes that brief's `Component: C<n>` line and the component's `sources` as
+its first `Source:` lines (brief #1217, `Q-1217-1`). While a `Kind: design` source has a
+`<screen>/<state>` heading, every milestone after `M1` has `screens`, its `exit` names
+`design_compare.py`, `match` and a signed-off version, and every such heading is in a milestone's
+`screens`. Rule 7: `render` runs `validate` first, prints
 every conflict under `Conflicts for the person` and then every open question under `Open questions
 for the person`, and writes, as new files only and all or nothing, `docs/plan/scope.md`,
 `docs/plan/personas.md`, `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md` (each block
@@ -751,7 +753,12 @@ def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
         out.append(f"Screens: {version} {', '.join(b['screens'])}")
     out += [f"Depends-on: {key}" for key in b["depends_on"]]
     out.append("Contexts: " + "; ".join(f"{c}: {VERIFY} for the person to state" for c in CONTEXTS))
-    return "\n".join([*out, *_sources(b["sources"])]) + "\n"
+    sources = list(b["sources"])
+    if b.get("component"):  # Q-1217-1: the component's brief carries its key and its sources
+        part: dict = next((c for c in data.get(COMPONENTS, []) if c["key"] == b["component"]), {})
+        out.append(f"Component: {b['component']}")
+        sources = list(dict.fromkeys([*part.get("sources", []), *sources]))
+    return "\n".join([*out, *_sources(sources)]) + "\n"
 
 
 def render_problems(data: dict) -> list[str]:

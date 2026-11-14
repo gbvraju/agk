@@ -28,17 +28,24 @@ an independent review found about 570 gaps the trace had called covered.
    file are its non-blank lines after the header. A unit counts in `<a>` when a resolving `Source:` location is
    `<file>#<heading>` of it or `<file>:<line>` of its line. The line is information and never fails the plan.
 3. Rule 11's coverage line is unchanged.
+4. With the maintainers' answer to `Q-1217-1` ("count the components' and the OpenSpec acceptance citations as citing
+   their file"), two more resolving locations cite a source, for items 1 and 2: a line of a requirement block ending
+   with ` (<location>)` whose file is a `Kind: openspec` source (amendment 166's acceptance line), and a `Source:` line
+   of a brief file under `docs/plan/briefs/` that carries a `Component:` line. `scripts/agk/plan_intake.py render`
+   writes `Component: C<n>` on the one brief whose `component` names a shared component, and the component's `sources`
+   as that brief's first `Source:` lines, so a plan rendered from an imported prototype cites its components file.
 
 ## Consequences
 
 A plan whose requirements leave a whole source document uncited no longer passes as covered: the person cites it or
-lists it out of scope with a reason, and a thinly cited document is visible in the trace. A citation elsewhere (an
-acceptance line's location, a component's or a milestone's sources) does not count, as the brief's answer 1 names the
-`Source:` line only (`Q-1217-1`). Four existing test fixtures gained a citation or an `Out of scope` line so that their
-plans cite every source. Protected path classes changed: `scripts/agk/` (`check_plan.py`), `tests/kit/`
-(`test_check_plan_uncited.py` new; `test_check_plan_sources.py`, `test_check_plan_trace.py`, `test_plan_slices.py`
-fixtures) and `agk.toml` (the test map's `check_plan.py` entry).
+lists it out of scope with a reason, and a thinly cited document is visible in the trace. A plan rendered from an
+imported prototype or an OpenSpec file passes as before, since the kit's own citations count (decision 4); an acceptance
+line into another kind of source, a milestone's sources and a brief's `Source:` line without a `Component:` line do not.
+Two existing tests, whose plans held only a `docs/plan/` folder and one source, gained an `Out of scope` line for it.
+Protected path classes changed: `scripts/agk/` (`check_plan.py`, `plan_intake.py`), `tests/kit/`
+(`test_check_plan_uncited.py` new; `test_check_plan_sources.py` and `test_check_plan_trace.py` fixtures;
+`test_plan_slices.py` asserts the component's brief lines) and `agk.toml` (the test map's `check_plan.py` entry).
 
 ## Residual
 
-- 2026-11-14: `Q-1217-1`, whether a citation other than a `Source:` line counts.
+- 2026-11-14: none (`Q-1217-1` answered by the maintainers on #1224).
