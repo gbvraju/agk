@@ -577,6 +577,8 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "min_free_memory_mb",
             "plan_issue",
             "reprove_paths",
+            "review_minutes",
+            "reviewer_slots",
             "reviews_in_flight",
             "shared_indexes",
             "slot_seen_minutes",

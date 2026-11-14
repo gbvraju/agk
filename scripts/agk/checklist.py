@@ -687,7 +687,8 @@ def window_verdicts(view: View) -> list[tuple] | None:
 
 def slots_alive(view: View) -> str:
     """The `r<N>` lease markers by a listed author on the conductor issue whose time is within
-    `slot_seen_minutes` of the saved time (ADR-0412's window)."""
+    `slot_seen_minutes` of the saved time (ADR-0412's window), out of `[flow] reviewer_slots` when
+    that is 1 or more (ADR-0528 decision 1)."""
     if view.comments is None or view.authors is None or view.conductor_issues is None:
         return f"reviewer slots alive {UNKNOWN}"
     window = view.flow.get("slot_seen_minutes", SLOT_SEEN_MINUTES)
@@ -705,6 +706,9 @@ def slots_alive(view: View) -> str:
             and issue_of(comment) in view.conductor_issues
         ):
             names.add(match[2])
+    count = view.flow.get("reviewer_slots", 0)  # brief #1248 answer 4: the count beside it
+    if isinstance(count, int) and not isinstance(count, bool) and count >= 1:
+        return f"reviewer slots alive {len(names)} of {count} (reviewer_slots)"
     return f"reviewer slots alive {len(names)}"
 
 

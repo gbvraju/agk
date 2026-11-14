@@ -172,6 +172,24 @@ It posts nothing and takes no lease: the started conductor takes its own, and th
 from running. `--install` reads nothing and runs nothing: it prints the one scheduler line for the
 platform, `schtasks /Create /SC MINUTE /MO 30 ...` on Windows and a crontab line elsewhere, each a
 `git fetch` of the checkout and then this pass, for the person to run.
+
+Brief #1248 (ADR-0528): a fresh reviewer gives the gating verdict, in local mode too.
+
+    python3 conductor.py review --pr N [--start]
+
+With `[flow] reviewer_slots` 0 or unset it prints `review: off` and nothing changes. With 1 or more
+it reads the pull request, its comments and the `Review: r<k> #<n> <head>` lines by a listed verdict
+author on the one open `agk-conductor` issue, and prints one line: the head has its verdict; a slot
+has it (`with r<k> since <time>`, the conductor gives no verdict until `review_minutes` pass); the
+fallback is due (no reviewer verdict within `review_minutes`); no slot is free; or `review: ask
+Review: r<k> #<n> <head>` for a head nobody was asked about. `--start` (local mode: `auto_start` and
+`launch_adapter` set in the checkout and on the default branch, not paused, above `[flow]
+min_free_memory_mb`) posts that line and calls the adapter once, with `AGK_SESSION=r<k>`,
+`AGK_ROLE=reviewer`, `AGK_AGENT=architect-review`, `AGK_TIER=strongest`, `AGK_PR` and `AGK_SHA`,
+and a prompt naming only the slot, the pull request and the head. With slots counted,
+`check-verdict --pr N` refuses a verdict without the slot's marker lines (`agent:`, `tier:`,
+`session:`) unless it ends `(conductor fallback)`, and a fallback while a slot has the head, after
+its verdict, or with no `Review:` line for the head.
 """
 
 from __future__ import annotations
@@ -217,7 +235,8 @@ USAGE = (
     "conductor.py merge-queue [--dry-run] [--max-batch N] | "
     "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] | "
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N | "
-    "conductor.py reprove --pr N [--apply] | conductor.py watchdog [--session NAME] [--install]"
+    "conductor.py reprove --pr N [--apply] | conductor.py watchdog [--session NAME] [--install] | "
+    "conductor.py review --pr N [--start]"
 )
 REPROVE_REPORT = "merge of main (light re-prove, SPEC-0050 amendment 171)"
 REPROVE_WAITS = 10  # reads of the pull request for the new head after update-branch
@@ -1705,9 +1724,10 @@ def head_problem(
     return None if any(adr_is_proposed(repo, path, head) for path in adrs) else NO_ITEMS
 
 
-def full_problem(repo: str, number: int, body: str) -> str | None:
+def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
     """`line_problem`, then for a verdict the reads of pull request NUMBER: the check that
-    `check-verdict --pr` and the guard run before a post. A read that fails is a CheckError."""
+    `check-verdict --pr` and the guard run before a post, the reviewer's gate last (ADR-0528). A
+    read that fails is a CheckError."""
     problem = line_problem(body)
     if problem or not body.strip().startswith("Verdict:"):
         return problem
@@ -1718,7 +1738,7 @@ def full_problem(repo: str, number: int, body: str) -> str | None:
     named = session.VERDICT.fullmatch(body.strip().splitlines()[0].strip())
     if named is None or not head.startswith(named.group(2)):
         return OTHER_HEAD
-    return head_problem(repo, number, body, head)
+    return head_problem(repo, number, body, head) or gate_problem(root, repo, number, head, body)
 
 
 def check_verdict(path: str, root=None, number: int | None = None) -> int:
@@ -1729,7 +1749,7 @@ def check_verdict(path: str, root=None, number: int | None = None) -> int:
     problem = (
         line_problem(body)
         if number is None
-        else full_problem(session.repo_name(root), number, body)
+        else full_problem(session.repo_name(root), number, body, root)
     )
     print("ok" if problem is None else problem)
     return 0 if problem is None else 1
@@ -1969,6 +1989,233 @@ def watchdog(root, name: str) -> int:
     return 0
 
 
+# --- the reviewer at the gate (brief #1248, ADR-0528) ---------------------------------------
+
+REVIEW_AGENT = "architect-review"
+FULL_HEAD = re.compile(r"[0-9a-f]{40}")
+FALLBACK_END = " (conductor fallback)"
+SLOTS_SETTING = "(setting: reviewer_slots in the flow table of agk.toml)"
+WAIT_SETTING = "(setting: review_minutes in the flow table of agk.toml)"
+REVIEW_START_SETTINGS = (
+    "(settings: auto_start and launch_adapter in the flow table of agk.toml, for a reviewer start)"
+)
+MARKER = re.compile(r"(agent|tier|session): (\S+)")
+GATE_MARKERS = (
+    "with reviewer slots counted, a gating verdict carries the slot's marker lines (agent:, tier:, "
+    f"session:) or ends (conductor fallback) {SLOTS_SETTING}"
+)
+GATE_UNASKED = f"no reviewer slot was asked for this head, so no fallback yet {SLOTS_SETTING}"
+GATE_WAIT = (
+    f"a reviewer slot has this head; the conductor gives no verdict meanwhile {WAIT_SETTING}"
+)
+GATE_ANSWERED = f"a reviewer slot gave this head's verdict; no fallback {SLOTS_SETTING}"
+REVIEW_PROMPT = (
+    "You are reviewer slot {slot} of repository {repo}, started by `python3 "
+    "scripts/agk/conductor.py review --start` for one head: pull request #{pr} at {sha}. "
+    "You are the `architect-review` agent (`.claude/agents/architect-review.md`); read it, "
+    "`CLAUDE.md` and `constitution/principles.md` first and follow them. You never saw the "
+    "build. Run `git fetch origin` and `git checkout --detach {sha}`, save the bundle with "
+    "`python3 scripts/agk/review_bundle.py --pr {pr} --sha {sha} > <scratch>/bundle.md`, "
+    "where <scratch> is the folder `agk-review-{slot}` in the system temp folder, and read "
+    "only that file. Write the verdict to `<scratch>/v.md` with the marker lines "
+    "`agent: architect-review`, `tier: strongest` and `session: {slot}`, check it with "
+    "`python3 scripts/agk/conductor.py check-verdict <scratch>/v.md --pr {pr}`, post it on "
+    "pull request #{pr}, then run `python3 scripts/agk/session.py slot --release {slot}` and "
+    "end. Review nothing else.\n"
+)
+
+
+def review_args(args: list[str]) -> tuple[int, bool] | None:
+    """(number, `--start` given) for `review --pr N [--start]`; None otherwise."""
+    if args[:2] == ["review", "--pr"] and len(args) in (3, 4) and PR_NUMBER.fullmatch(args[2]):
+        if args[3:] in ([], ["--start"]):
+            return int(args[2]), args[3:] == ["--start"]
+    return None
+
+
+def listed(root) -> set[str]:
+    return {
+        a.lstrip("@").lower() for a in session.counted_authors(verdict_authors(root), None) or []
+    }
+
+
+def review_asks(repo: str, allowed: set[str]) -> list[tuple[datetime, str, int, str]]:
+    """(time, slot, pull request, head) of each `Review:` line by a listed author on the one open
+    `agk-conductor` issue, oldest first."""
+    issue = session.conductor_issue(repo)
+    found = []
+    for c in read(f"repos/{repo}/issues/{issue}/comments", "the conductor issue"):
+        match = session.REVIEW.fullmatch(session.first_line(c))
+        if match and session.author_of(c) in allowed:
+            when_ = session.moment(c.get("created_at"))
+            found.append((when_, match.group(1), int(match.group(2)), match.group(3)))
+    return sorted(found)
+
+
+def verdicts_on(comments: list, head: str, allowed: set[str]) -> list[str]:
+    """The bodies of the verdicts by a listed author that name HEAD."""
+    return [
+        str(c.get("body") or "")
+        for c in comments
+        if session.author_of(c) in allowed
+        and (v := session.VERDICT.fullmatch(session.first_line(c)))
+        and head.startswith(v.group(2))
+    ]
+
+
+def marked(body: str, count: int) -> bool:
+    """Whether BODY carries the reviewer slot's marker lines once each: `agent: architect-review`,
+    `tier: strongest` and `session: r<k>` with k from 1 to COUNT (ADR-0528 decision 2)."""
+    lines = [m for m in map(MARKER.fullmatch, (x.strip() for x in body.splitlines())) if m]
+    found: dict[str, list[str]] = {}
+    for m in lines:
+        found.setdefault(m.group(1), []).append(m.group(2))
+    slot = found.get("session", [""])
+    return (
+        found.get("agent") == [REVIEW_AGENT]
+        and found.get("tier") == ["strongest"]
+        and len(slot) == 1
+        and bool(session.REVIEWER_NAME.fullmatch(slot[0]))
+        and int(slot[0][1:]) <= count
+    )
+
+
+def gate_problem(root, repo: str, number: int, head: str, body: str) -> str | None:
+    """The reviewer's gate of ADR-0528 decision 2, or None: off while `reviewer_slots` is 0 (or no
+    checkout is found, which has no agk.toml to set it)."""
+    if root is None:
+        try:
+            root = repo_root()
+        except CheckError:
+            return None
+    count = session.reviewer_slots(root)
+    if not count:
+        return None
+    first = body.strip().splitlines()[0].strip()
+    if not first.endswith(FALLBACK_END):
+        return None if marked(body, count) else GATE_MARKERS
+    allowed = listed(root)
+    said = read(f"repos/{repo}/issues/{number}/comments", "the comments of the pull request")
+    if any(marked(b, count) for b in verdicts_on(said, head, allowed)):
+        return GATE_ANSWERED
+    asks = [a for a in review_asks(repo, allowed) if a[2] == number and a[3] == head]
+    if not asks:
+        return GATE_UNASKED
+    if datetime.now(UTC) - asks[-1][0] < timedelta(minutes=session.review_minutes(root)):
+        return GATE_WAIT
+    return None
+
+
+def free_slot(repo: str, asks: list, count: int, minutes: int, allowed: set[str]) -> str | None:
+    """The first of `r1` to `r<count>` whose newest `Review:` line is past MINUTES or names a head
+    that has its verdict; None when every slot has a head."""
+    now = datetime.now(UTC)
+    newest = {slot: (n, sha, t) for t, slot, n, sha in asks}
+    for k in range(1, count + 1):
+        held = newest.get(f"r{k}")
+        if held is None or now - held[2] >= timedelta(minutes=minutes):
+            return f"r{k}"
+        said = read(f"repos/{repo}/issues/{held[0]}/comments", "the comments of a pull request")
+        if verdicts_on(said, held[1], allowed):
+            return f"r{k}"
+    return None
+
+
+def start_reviewer(root, repo: str, slot: str, number: int, head: str) -> int:
+    """Call the adapter once for one reviewer session, as `launch.py` does (no shell)."""
+    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
+    env.update(
+        AGK_SESSION=slot,
+        AGK_ROLE="reviewer",
+        AGK_AGENT=REVIEW_AGENT,
+        AGK_TIER="strongest",
+        AGK_PR=str(number),
+        AGK_SHA=head,
+    )
+    adapter = launch.launch_settings(root)[1] or ""
+    try:
+        done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
+            shlex.split(adapter),
+            input=REVIEW_PROMPT.format(slot=slot, repo=repo, pr=number, sha=head),
+            text=True,
+            encoding="utf-8",
+            env=env,
+            capture_output=True,
+            cwd=root,
+        )
+    except OSError:
+        print(f"FAIL conductor: the adapter cannot be run for {slot}", file=sys.stderr)
+        return 1
+    if done.returncode != 0:
+        print(f"FAIL conductor: the adapter failed for {slot}", file=sys.stderr)
+        return 1
+    print(f"review: started {slot} for #{number} {head[:12]}")
+    return 0
+
+
+def review(root, number: int, start: bool) -> int:
+    """`review --pr N [--start]` (ADR-0528 decision 3): one line on who gives the head's verdict;
+    with `--start` in local mode, the `Review:` line and one reviewer session by the adapter."""
+    count = session.reviewer_slots(root)
+    if not count:
+        print(f"review: off {SLOTS_SETTING}; the conductor gives the verdict as before")
+        return 0
+    minutes = session.review_minutes(root)
+    repo = session.repo_name(root)
+    pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
+    head = str((pull.get("head") or {}).get("sha") or "")
+    if not FULL_HEAD.fullmatch(head):
+        raise CheckError("the pull request cannot be read")
+    allowed = listed(root)
+    said = read(f"repos/{repo}/issues/{number}/comments", "the comments of the pull request")
+    lead = f"review: #{number} {head[:12]}"
+    if verdicts_on(said, head, allowed):
+        print(f"{lead} has its verdict")
+        return 0
+    asks = review_asks(repo, allowed)
+    mine = [a for a in asks if a[2] == number and a[3] == head]
+    if mine:
+        since = mine[-1][0]
+        until = since + timedelta(minutes=minutes)
+        if datetime.now(UTC) < until:
+            print(
+                f"{lead} with {mine[-1][1]} since {stamp_of(since)}; the conductor gives no "
+                f"verdict until {stamp_of(until)}"
+            )
+        else:
+            print(
+                f"{lead} fallback: no reviewer verdict within review_minutes; the conductor may "
+                f"post its verdict ending (conductor fallback) {WAIT_SETTING}"
+            )
+        return 0
+    slot = free_slot(repo, asks, count, minutes, allowed)
+    if slot is None:
+        print(f"{lead} waits: no reviewer slot is free {SLOTS_SETTING}")
+        return 0
+    line = f"Review: {slot} #{number} {head}"
+    if not start:
+        print(f"review: ask {line}")
+        return 0
+    if session.paused_default(root):
+        print("review: agk paused; nothing started")
+        return 0
+    branch = launch.default_branch(root)
+    here = launch.launch_settings(root)
+    if not (here[0] and here[1]) or here != launch.launch_settings(root, f"origin/{branch}"):
+        print(f"review: nothing started: no adapter to start a reviewer {REVIEW_START_SETTINGS}")
+        return 1
+    if not launch.memory_allows(root):
+        return 1
+    issue = session.conductor_issue(repo)
+    post(
+        f"repos/{repo}/issues/{issue}/comments",
+        "the Review: line was refused",
+        "-f",
+        f"body={line}",
+    )
+    return start_reviewer(root, repo, slot, number, head)
+
+
 def routine_args(args: list[str]) -> tuple | None:
     """(`rerun`, number, apply), (`check-verdict`, path) or (`lease`, mode, name) for the forms
     of brief #700; None for any other form."""
@@ -2020,10 +2267,11 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     routine = routine_args(args)
     plain = args in (["sweep"], ["watch"], ["watch", "--once"])
     guard = watchdog_args(args) if args[:1] == ["watchdog"] else None
+    gate = review_args(args)
     if guard is not None and guard[1]:
         print(install_line(root or repo_root(), guard[0], sys.platform))
         return 0
-    if queue is None and routine is None and guard is None and not plain:
+    if queue is None and routine is None and guard is None and gate is None and not plain:
         print(USAGE, file=sys.stderr)
         return 2
     try:
@@ -2042,6 +2290,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             return lease(root, routine[1], routine[2])
         if guard is not None:
             return watchdog(root, guard[0])
+        if gate is not None:
+            return review(root, *gate)
         if args == ["sweep"]:
             return sweep(root)
         return watch(root, since, args[1:] == ["--once"])

@@ -216,7 +216,8 @@ def test_ac2_doctor_without_a_declaration_adds_only_the_none_line(tmp_path):
     lines = proc.stdout.splitlines()
     assert proc.returncode == 0, proc.stdout
     assert lines.count(NONE_LINE) == 1
-    assert lines[-2:] == [NONE_LINE, "summary: 47 ok, 0 fail, 0 cannot-check"]  # ADR-0525, ADR-0527
+    # ADR-0385, ADR-0525, ADR-0527, ADR-0528
+    assert lines[-2:] == [NONE_LINE, "summary: 48 ok, 0 fail, 0 cannot-check"]
     # Without the line, the report is the one the default branch renders from the same checks
     # (with its secret scan line, ADR-0306).
     root = dirs["tree"].resolve()

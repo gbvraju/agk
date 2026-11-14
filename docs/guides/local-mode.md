@@ -171,7 +171,7 @@ prints the same as JSON. The conductor runs `tidy --apply` at its start and afte
 ## Running unattended
 
 In local mode nothing in the cloud starts a session: the launcher tasks of the cloud need Actions and cloud sessions. So that a
-night is not lost when a builder or the conductor dies of a crash or a memory hit while nobody is watching, set up these four
+night is not lost when a builder or the conductor dies of a crash or a memory hit while nobody is watching, set up these
 things on the machine that runs the sessions, in this order (brief #1237, ADR-0525). Each change to `agk.toml` is a protected
 change with an ADR in the same pull request.
 
@@ -208,6 +208,15 @@ change with an ADR in the same pull request.
    (add it with `crontab -e`). Each runs `git fetch` in the checkout and then the pass `(verify: a scheduled task and a cron
    job start with a short PATH; check that python, git, gh and the adapter's terminal are found, and that the task runs
    while you are signed in, which a terminal tab needs)`.
+5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
+   `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
+   is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then
+   runs `python3 scripts/agk/conductor.py review --pr <n> --start`: it posts one `Review: r1 #<n> <head>` line on the
+   conductor issue and starts one reviewer session through the same adapter (`AGK_SESSION=r1`, `AGK_ROLE=reviewer`,
+   `AGK_AGENT=architect-review`), held back by `[flow] min_free_memory_mb` as builders are. That session reads only the
+   bundle, posts the verdict, releases its slot and ends, so no reviewer stays in memory between heads. Meanwhile the
+   conductor gives no verdict of its own; only when no reviewer verdict comes within `[flow] review_minutes` (15 by default)
+   does it post one ending `(conductor fallback)`. With `reviewer_slots = 0`, the default, the conductor reviews as before.
 
 ## What is lost
 

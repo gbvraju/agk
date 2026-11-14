@@ -18,7 +18,9 @@ the repository: its worktree is a temporary folder it removes; and the steps of 
 `git checkout --detach <sha>`, the sha 7 to 40 lower-case hex characters and on a branch of origin
 (a fork's head is on none; the conductor guard's `on_origin_branch`, imported for that one step,
 runs the one `git branch -r --contains`);
-`python3 scripts/agk/conductor.py check-verdict <file> --pr <n>`; a comment `POST` to this
+`python3 scripts/agk/conductor.py check-verdict <file> --pr <n>`; the bundle saved with one `>`,
+`python3 scripts/agk/review_bundle.py --pr <n> --sha <40-hex> [--base <ref>] > <file>` (brief
+#1248, ADR-0528: the one redirect allowed); a comment `POST` to this
 repository's issue comments with the one field `-F body=@<file>` whose first
 line is a `Verdict:` line; and `python3 scripts/agk/session.py slot (--next | --release) r<N>`, a
 reviewer slot (`session.REVIEWER_NAME`) only. Each file there is an existing regular file of a
@@ -339,6 +341,8 @@ def evidence_check_allowed(args: list[str]) -> bool:
 def bash_allowed(command: object, review: bool = False) -> bool:
     if not isinstance(command, str):
         return False
+    if review and bundle_save_allowed(command):
+        return True
     words = tokens_of(command)
     if not words:
         return False
@@ -432,6 +436,33 @@ def verdict_post_ok(words: list[str]) -> bool:
         return False
     first = review_file(value[len("body=@") :])
     return first is not None and first.startswith("Verdict:")
+
+
+BUNDLE_WORD = re.compile(r"(?:\./)?scripts/agk/review_bundle\.py")
+FULL_SHA = re.compile(r"[0-9a-f]{40}")
+BUNDLE_BASE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+PLAIN_PATH = re.compile(r"/[A-Za-z0-9._/-]+")
+
+
+def bundle_save_allowed(command: str) -> bool:
+    """`python3 scripts/agk/review_bundle.py --pr <n> --sha <40-hex> [--base <ref>] > <file>`, one
+    `>` to a regular file of a review scratch directory, written plainly (brief #1248 answer 2,
+    ADR-0528); the bundle's own arguments in its documented order, nothing else."""
+    if command.count(">") != 1:
+        return False
+    left, right = command.split(">", 1)
+    target = right.strip()
+    words = tokens_of(left)
+    if not words or not PLAIN_PATH.fullmatch(target) or not review_write_ok(target):
+        return False
+    if words[:2] != ["python3", words[1]] or not BUNDLE_WORD.fullmatch(words[1]):
+        return False
+    rest = words[2:]
+    if len(rest) not in (4, 6) or rest[0] != "--pr" or rest[2] != "--sha":
+        return False
+    if not PR_NUMBER.fullmatch(rest[1]) or not FULL_SHA.fullmatch(rest[3]):
+        return False
+    return len(rest) == 4 or (rest[4] == "--base" and bool(BUNDLE_BASE.fullmatch(rest[5])))
 
 
 def review_step_allowed(words: list[str]) -> bool:
