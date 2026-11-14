@@ -267,3 +267,92 @@ def test_ac1_a_block_is_hashed_from_its_block_source(tmp_path):
     want = hashlib.sha256(b"scripts/agk/** linguist-generated=true\n").hexdigest()
     assert snap["blocks"] == {".gitattributes": want}
     assert ".gitattributes" not in files  # the repository itself carries no such file
+
+
+# --- brief #1259 (ADR-0532): a release row is checked against the files its commit ships -------
+
+
+def rewrite_table(root: Path, edit) -> None:
+    path = root / "kit" / "hashes.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    edit(data["releases"])
+    path.write_text(kit_hashes.dump(data), encoding="utf-8")
+
+
+def released_kit(tmp_path: Path, flow: bool = False) -> Path:
+    """The fake kit with 1.0.0 released and 1.1.0 the current version (its release committed)."""
+    root = fake_kit(tmp_path)
+    if flow:
+        (root / "agk.toml").write_text('pr_mode = "flow"\n', encoding="utf-8")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", "flow mode")
+    write_kit(root, "1.1.0", "a changed\n")
+    (root / "kit" / "hashes.json").write_text(
+        kit_hashes.dump(kit_hashes.build_table(root, "HEAD")), encoding="utf-8"
+    )
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "release 1.1.0")
+    return root
+
+
+def test_ac1_an_older_row_with_no_commits_fails_naming_its_version(tmp_path):
+    """REQ-038: brief #1259 answer 1 (ADR-0532 decision 1)."""
+    root = released_kit(tmp_path)
+    assert kit_hashes.problems(root, "HEAD") == []
+    rewrite_table(root, lambda rows: rows["1.0.0"].update(commits=[]))
+    found = kit_hashes.problems(root, "HEAD")
+    assert "kit/hashes.json: row 1.0.0 lists no commits" in found
+    assert not any("row 1.1.0 lists no commits" in line for line in found)
+
+
+def test_ac1_the_current_row_with_no_commits_passes(tmp_path):
+    """REQ-038: brief #1259 answer 1 (the current version's row may list no commits)."""
+    for flow in (False, True):
+        where = tmp_path / ("flow" if flow else "strict")
+        where.mkdir()
+        root = released_kit(where, flow=flow)
+        rows = json.loads((root / "kit" / "hashes.json").read_text(encoding="utf-8"))["releases"]
+        assert rows["1.1.0"]["commits"] == []
+        assert kit_hashes.problems(root, "HEAD") == []
+
+
+def test_ac1_an_older_fingerprint_that_differs_from_its_commit_fails(tmp_path):
+    """REQ-038: brief #1259 answer 2 (one line naming the version and the file, never a value)."""
+    root = released_kit(tmp_path)
+    stale = "f" * 64
+    rewrite_table(root, lambda rows: rows["1.0.0"]["verbatim"].update({"a.txt": [stale]}))
+    found = kit_hashes.problems(root, "HEAD")
+    line = "kit/hashes.json: row 1.0.0: a.txt does not match its file at the row's commit"
+    assert found.count(line) == 1
+    assert not any(stale[:8] in f for f in found)
+
+
+def test_ac1_the_just_released_row_is_checked_against_its_release_commit(tmp_path):
+    """REQ-038: brief #1259 Measured (0.64.3 on b097acc): between two releases in flow mode the
+    current row, with no commits, is checked against its release commit (ADR-0532 decision 3)."""
+    root = released_kit(tmp_path, flow=True)
+    old = kit_hashes.snapshot_commit(root, kit_hashes.Blobs(root), "HEAD~1")
+    assert old is not None
+    stale = old[1]["verbatim"]["a.txt"]  # the 1.0.0 file, as 0.64.3 kept doctor.py's old digest
+    rewrite_table(root, lambda rows: rows["1.1.0"]["verbatim"].update({"a.txt": [stale]}))
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--amend", "--no-edit")
+    found = kit_hashes.problems(root, "HEAD")
+    assert found == [
+        "kit/hashes.json: row 1.1.0: a.txt does not match its file at the row's commit"
+    ]
+
+
+def test_ac1_a_build_after_the_release_leaves_the_release_row_valid(tmp_path):
+    """REQ-038: ADR-0532 decision 3 (the working tree is not the release commit's files)."""
+    root = released_kit(tmp_path, flow=True)
+    (root / "a.txt").write_text("a built after the release\n", encoding="utf-8")
+    (root / "changelog.d").mkdir()
+    (root / "changelog.d" / "a-build.md").write_text("- a build\n", encoding="utf-8")
+    assert kit_hashes.problems(root, "HEAD") == []
+
+
+def test_ac1_the_repository_table_matches_every_row_commit():
+    """REQ-038: brief #1259 answer 3 (the repository's own table passes the new check)."""
+    assert kit_hashes.problems(KIT_ROOT) == []
+    assert kit_hashes.commit_problems(KIT_ROOT, kit_hashes.base_of(KIT_ROOT)) == []
