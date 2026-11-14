@@ -136,8 +136,11 @@ def test_every_kit_script_and_make_target_the_guide_calls_exists():
     for name in sorted(scripts):
         assert (KIT_ROOT / "scripts" / "agk" / name).is_file(), name
     makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
-    for target in set(re.findall(r"make (?:-C <scratch> )?([a-z-]+)", text)):
+    for target in set(re.findall(r"make (?:-C <scratch> )?(?!-)([a-z-]+)", text)):
         assert re.search(rf"(?m)^{re.escape(target)}:", makefile), target
+    kit_mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")  # the `-f agk.mk` form, brief #1264
+    for target in set(re.findall(r"make (?:-C <scratch> )?-f agk\.mk ([a-z-]+)", text)):
+        assert re.search(rf"(?m)^{re.escape(target)}:", kit_mk), target
     session = (KIT_ROOT / "scripts" / "agk" / "session.py").read_text(encoding="utf-8")
     for sub in set(re.findall(r"scripts/agk/session\.py ([a-z-]+)", text)):
         assert f'"{sub}"' in session, sub
