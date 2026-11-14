@@ -121,7 +121,8 @@ def test_the_windows_adapter_hands_the_model_and_effort_to_its_tab():
     model and effort travel as arguments of the wrapper, as the session and brief do)."""
     script = WINDOWS.read_text(encoding="utf-8")
     wrapper = wrapper_of(script)
-    assert wrapper.splitlines()[0] == "param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)"
+    params = "param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)"
+    assert wrapper.splitlines()[0] == params
     assert "& claude @flags $prompt" in wrapper
     assert "& claude $prompt" not in wrapper
     tab = script[script.find("wt -w 0 new-tab") :]
