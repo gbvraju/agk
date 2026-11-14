@@ -590,3 +590,153 @@ def test_principle_2_and_session_rule_2_each_gain_exactly_the_one_sentence():
     assert numbered(REPO_ROOT / "config" / "session-rules.md", 2) == SESSION_RULE_2
     rules = [x for x in principles.read_text(encoding="utf-8").splitlines() if x[:1].isdigit()]
     assert len(rules) == 12
+
+
+# --- brief #1263 (ADR-0534): the conductor runs the router in local mode -------------------------
+
+ROUTE_SCRIPT = "scripts/agk/route.py"
+ROUTE_MARK = "setting: execution"
+RECORD_ISSUE = {"number": 90, "title": "Local mode since 2026-11-14"}
+SEARCH_GH = """#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+with open(os.environ["GH_LOG"], "a") as log:
+    log.write(json.dumps(args) + "\\n")
+endpoint = next(a for a in args if not a.startswith("-") and a not in ("api", "GET"))
+answer = json.loads(os.environ["GH_ANSWER"])
+if endpoint.startswith("search/issues") and answer is not None:
+    print(json.dumps({"total_count": len(answer), "items": answer}))
+    sys.exit(0)
+if endpoint.startswith("repos/o/r/issues") and answer is not None:
+    print(json.dumps(answer))
+    sys.exit(0)
+sys.exit(1)
+"""
+
+
+def route_project(project: Path, execution: str | None = None) -> Path:
+    (project / "scripts" / "agk").mkdir(parents=True, exist_ok=True)
+    (project / ROUTE_SCRIPT).write_text("print('x')\n", encoding="utf-8")
+    if execution is not None:
+        (project / "agk.toml").write_text(f'execution = "{execution}"\n', encoding="utf-8")
+    return project
+
+
+def run_route_hook(project: Path, command: str, issues: list | None, tmp: Path):
+    """The hook with a recorded `gh` on PATH that answers the search with ISSUES (None: fails)."""
+    bin_dir = tmp / "ghbin"
+    bin_dir.mkdir(exist_ok=True)
+    gh = bin_dir / "gh"
+    gh.write_text(SEARCH_GH, encoding="utf-8")
+    gh.chmod(0o755)
+    log = tmp / "gh.log"
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "CLAUDE_PROJECT_DIR": str(project),
+        "GH_LOG": str(log),
+        "GH_ANSWER": json.dumps(issues),
+    }
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(HOOK)],
+        input=json.dumps(bash_of(command, project)),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    calls = [json.loads(x) for x in log.read_text().splitlines()] if log.exists() else []
+    return denial(proc.stdout), calls
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"python3 {ROUTE_SCRIPT} --all",
+        f"python {ROUTE_SCRIPT} --all",
+        f"python3 {ROUTE_SCRIPT} --pr 12",
+    ],
+)
+def test_a_the_router_is_allowed_while_the_record_issue_is_open(project, tmp_path, command):
+    """REQ-039: brief #1263 (a), local mode as route.py reads it (one search call)."""
+    root = route_project(project)
+    found, calls = run_route_hook(root, command, [RECORD_ISSUE], tmp_path)
+    assert found is None
+    assert len(calls) == 1 and any(a.startswith("search/issues") for a in calls[0])
+
+
+def test_a_execution_local_allows_the_router_without_reading_github(project, tmp_path):
+    """REQ-039: brief #1263 answer 6, `execution = "local"` answers without any issue read."""
+    root = route_project(project, "local")
+    found, calls = run_route_hook(root, f"python3 {ROUTE_SCRIPT} --all", None, tmp_path)
+    assert found is None and calls == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"python3 {ROUTE_SCRIPT} --all --dry-run",
+        f"python3 {ROUTE_SCRIPT} --pr 12;x",
+        f"python3 {ROUTE_SCRIPT} --pr 12x",
+        f"python3 {ROUTE_SCRIPT} --pr",
+        f"python3 {ROUTE_SCRIPT} --branch",
+        f"python3 {ROUTE_SCRIPT} --health",
+        f"python3 {ROUTE_SCRIPT}",
+        f"python3 {ROUTE_SCRIPT} --all --pr 12",
+        "python3 other/route.py --all",
+        "python3 scripts/agk/merge_cleared.py --all",
+        f"python3 -I {ROUTE_SCRIPT} --all",
+        f"bash {ROUTE_SCRIPT} --all",
+    ],
+)
+def test_b_every_other_form_path_or_script_is_refused(project, tmp_path, command):
+    """REQ-039: brief #1263 (b), exactly the two forms, the project's own route.py."""
+    root = route_project(project, "local")
+    found, _ = run_route_hook(root, command, [RECORD_ISSUE], tmp_path)
+    assert found is not None and found["permissionDecision"] == "deny"
+    assert MARK in found["permissionDecisionReason"]
+
+
+def test_b_a_link_to_the_router_is_refused(project, tmp_path):
+    """REQ-039: brief #1263 (b), never through a link."""
+    root = route_project(project, "local")
+    elsewhere = tmp_path / "route.py"
+    elsewhere.write_text("print('x')\n", encoding="utf-8")
+    (root / ROUTE_SCRIPT).unlink()
+    (root / ROUTE_SCRIPT).symlink_to(elsewhere)
+    found, _ = run_route_hook(root, f"python3 {ROUTE_SCRIPT} --all", None, tmp_path)
+    assert found is not None
+
+
+@pytest.mark.parametrize("issues", [[], None])
+def test_c_no_record_issue_is_refused_naming_the_setting(project, tmp_path, issues):
+    """REQ-039: brief #1263 (c), CI mode: the router workflow moves the labels there."""
+    root = route_project(project, "github")
+    found, _ = run_route_hook(root, f"python3 {ROUTE_SCRIPT} --all", issues, tmp_path)
+    assert found is not None and found["permissionDecision"] == "deny"
+    reason = found["permissionDecisionReason"]
+    assert MARK in reason and ROUTE_MARK in reason
+    assert "Local mode since" not in reason  # the setting, never a value
+
+
+def test_c_the_shadow_never_runs_the_router(project, tmp_path):
+    """REQ-039: brief #1263, the shadow reviewer gets no new command."""
+    root = route_project(project, "local")
+    payload = bash_of(f"python3 {ROUTE_SCRIPT} --all", root)
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(HOOK), "--shadow"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(root)},
+    )
+    assert denial(proc.stdout) is not None
+
+
+def test_d_the_agent_and_the_review_pass_name_the_command_once_each():
+    """REQ-039: brief #1263 (d), the conductor's pass runs the router in local mode."""
+    command = "python3 scripts/agk/route.py --all"
+    agent = (REPO_ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
+    skill = (REPO_ROOT / "skills" / "review-pass" / "SKILL.md").read_text(encoding="utf-8")
+    assert agent.count(command) == 1
+    assert skill.count(command) == 1
+    guide = (REPO_ROOT / "docs" / "guides" / "local-mode.md").read_text(encoding="utf-8")
+    assert "Until the conductor's guard allows that command" not in guide
