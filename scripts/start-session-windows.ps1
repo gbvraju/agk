@@ -69,7 +69,7 @@ $env:AGK_SESSION = $Session
 $env:AGK_BRIEF = $Brief
 Set-Location -LiteralPath $Worktree
 $prompt = Get-Content -LiteralPath $PromptFile -Raw
-# The tier's model name and effort (brief #1252, ADR-0530): no flag without a model (verify: the flags are claude's).
+# The tier's model name and effort: no flag without a model (verify: the flags are claude's).
 $flags = @()
 if ($Model) { $flags += '--model', $Model; if ($Effort) { $flags += '--effort', $Effort } }
 try { & claude @flags $prompt; $code = $LASTEXITCODE } catch { $code = 1 }

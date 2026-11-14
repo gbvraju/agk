@@ -6,7 +6,7 @@
 # otherwise in the background with its output in <worktree>/.agk-session.log (verify: the terminal's options and
 # claude's print mode, -p, are the terminal's and the runtime's, and were not run by the session that wrote this).
 # When claude exits, <worktree>/.agk-session-exit holds exit_code=<code> and ended_utc=<UTC time>.
-# With AGK_MODEL set (the tier's name from [models.names], brief #1252, ADR-0530) claude gets --model AGK_MODEL, and
+# With AGK_MODEL set (the tier's name from [models.names]) claude gets --model AGK_MODEL, and
 # --effort AGK_EFFORT beside it when that is set; without AGK_MODEL it gets no flag (verify: the flags are claude's).
 set -euo pipefail
 session="${AGK_SESSION:?AGK_SESSION is not set}"

@@ -232,7 +232,7 @@ change with an ADR in the same pull request.
 6. **The model for each kind** (brief #1252, ADR-0530). `[models.names]` is the one setting that routes builders by kind:
    `launch.py` gives each builder the tier of its brief's kind (design and build on `strongest`, small and mechanical on
    `mid`; a stopped builder resumes one tier up) and hands the adapter that tier's name as `AGK_MODEL`, which both adapters
-   pass to `claude` as `--model`, with `--effort` beside it. Without the table every builder runs on the default model of
+   pass to the session command as `--model`, with `--effort` beside it. Without the table every builder runs on the default model of
    the person's runtime whatever its kind. Write the project's own names in place of the placeholders:
 
        [models.names]
