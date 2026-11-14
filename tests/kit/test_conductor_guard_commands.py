@@ -11,16 +11,16 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_conductor_guard import (  # noqa: F401 - work is a fixture
+from test_conductor_guard import (
     FLOW_OFF,
     FLOW_ON,
     MARK,
     REPO_ROOT,
+    Work,
     allows_merge,
     env,
     merge_decision,
     merge_project,
-    work,
 )
 from test_conductor_guard_queue import RULE, reason, run_hook
 
@@ -202,6 +202,12 @@ def test_the_shadow_reviewer_runs_none_of_the_new_routines(project):
 # --- brief #1264: the kit's own make file in a scratch run ---------------------------------------
 
 
+@pytest.fixture
+def work(tmp_path) -> Work:
+    """A real checkout with a scratch directory, as test_conductor_guard.py builds it."""
+    return Work(tmp_path)
+
+
 def test_the_kit_make_file_forms_are_allowed_beside_the_old_ones(work):
     """REQ-039: brief #1264 answer 2 (a) and (c): `make -C <scratch> -f agk.mk agk-governance` and
     `... agk-project-test`, with or without AGK_BASE, and the old `test` and `governance` forms."""
@@ -234,7 +240,7 @@ def test_another_make_file_target_or_argument_is_denied(work):
         f"make -C {s} --file=agk.mk agk-governance",
         f"make -C {s} -fagk.mk agk-governance",
         f"make -f agk.mk -C {s} agk-governance",
-        f"make -f agk.mk agk-governance",
+        "make -f agk.mk agk-governance",
         f"make -C {root} -f agk.mk agk-governance",
         f"make -C {s} -f agk.mk agk-governance; rm x",
     ):
