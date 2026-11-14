@@ -157,12 +157,13 @@ def test_a_record_line_github_refuses_leaves_the_merge_and_exits_1(tmp_path):
 
 
 def test_governance_runs_once_on_the_merge_commit_in_a_removed_worktree(tmp_path):
-    """REQ-046 AC6: SPEC-0039 rule 6 (`make -C <worktree> governance AGK_BASE=<parent>`)."""
+    """REQ-046 AC6: SPEC-0039 rule 6 (`make -C <worktree> -f agk.mk agk-governance
+    AGK_BASE=<parent>`, the kit's target since brief #1264)."""
     proc, _, ran, root = after_run(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert len(after_runs(ran)) == 1
     args = after_runs(ran)[0]["args"]
-    assert args[0] == "-C" and args[2:] == ["governance", f"AGK_BASE={BASE}"]
+    assert args[0] == "-C" and args[2:] == ["-f", "agk.mk", "agk-governance", f"AGK_BASE={BASE}"]
     tree = Path(args[1])
     assert not tree.is_relative_to(root), "the worktree is outside the checkout"
     assert not tree.exists(), "the worktree is removed afterwards"
@@ -387,7 +388,8 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
     assert argv[10:12] == ["env", "-i"] and argv[12].startswith("PATH=")
     assert argv[13:] == [f"HOME={home}", f"AGK_PR_BODY={body}",
                          f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}", "make", "-C",
-                         str(tree), "governance", f"AGK_BASE={BASE}"]  # fmt: skip
+                         str(tree), "-f", "agk.mk", "agk-governance",
+                         f"AGK_BASE={BASE}"]  # fmt: skip
     assert all(not kwargs.get("shell") for _, kwargs in seen)
 
 
@@ -902,6 +904,8 @@ def test_an_adopted_project_with_agk_mk_and_no_makefile_reaches_the_target(tmp_p
     assert not (tree / "Makefile").exists()
     argv = merge_cleared.governance_argv(tree, home, home / "pr-body.md", BASE, 60.0)
     clean = argv[argv.index("--") + 1 :]  # the command lock.py runs, without the lock
-    proc = subprocess.run(clean, capture_output=True, text=True)  # nosec B603 - fixed list, no shell
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        clean, capture_output=True, text=True
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert seen.read_text(encoding="utf-8").strip() == f"reached {BASE}"

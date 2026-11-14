@@ -17,7 +17,9 @@ run of a pull request in a scratch worktree (SPEC-0030 rule 6, amendment 53):
 `env -i PATH="$PATH" HOME=<scratch>` (the run's own scratch directory, so that neither an
 environment token nor the home directory's stored credentials reach the code) and, optionally, one
 `AGK_BASE=<sha>` right after it, as CI sets it,
-`make -C <scratch> test` or `governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`.
+`make -C <scratch> test` or `governance`, `make -C <scratch> -f agk.mk agk-governance` or
+`agk-project-test` (the kit's own file, present in a project set up with init or adopt, brief
+#1264) and `python3 -I <scratch>/scripts/agk/<name>.py ...`.
 A scratch directory is `agk-conductor-<name>` directly in the system temp directory and outside
 the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
@@ -162,6 +164,8 @@ except ImportError:  # without it nothing merges
     AUTO_MERGE = None
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
+KIT_MAKEFILE = "agk.mk"  # the kit's make file, in every project (brief #1264)
+KIT_TARGETS = ("agk-governance", "agk-project-test")  # its two targets a scratch run may call
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
 SCRATCH_NAME = re.compile(r"agk-conductor-[A-Za-z0-9._-]+")
 SHA = re.compile(r"[0-9a-f]{7,40}")
@@ -253,14 +257,17 @@ def on_origin_branch(sha: str) -> bool:
 
 
 def run_allowed(words: list[str], home: str) -> bool:
-    """`make -C <scratch> test|governance` or `python3 -I <scratch>/scripts/agk/<name>.py ...`,
-    where <scratch> is `home`, the HOME of the clean environment."""
+    """`make -C <scratch> test|governance`, `make -C <scratch> -f agk.mk agk-governance` or
+    `agk-project-test` (the kit's own file, present in a project set up with init or adopt, brief
+    #1264) or
+    `python3 -I <scratch>/scripts/agk/<name>.py ...`, where <scratch> is `home`, the HOME of the
+    clean environment."""
     if words[0] == "make":
-        return (
-            len(words) == 4
-            and words[1] == "-C"
-            and words[3] in ("test", "governance")
-            and words[2] == home
+        if len(words) < 3 or words[1] != "-C" or words[2] != home:
+            return False
+        rest = words[3:]
+        return rest in (["test"], ["governance"]) or rest in (
+            ["-f", KIT_MAKEFILE, target] for target in KIT_TARGETS
         )
     if words[0] == "python3" and len(words) > 2 and words[1] == "-I":
         head, name = os.path.split(words[2])
