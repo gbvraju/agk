@@ -16785,7 +16785,7 @@
     "scripts/agk/design_prototype_check.py": ["0081e484a6a9dfa72cf86a24e1ed9720fe57194a7dab035f7ca900827c7f4b38"],
     "scripts/agk/design_signoff.py": ["e7625d467b882cf14a59bbc21352650942dcc41a9d472c478ab5893bbc27e024"],
     "scripts/agk/design_standard.py": ["2a3605bd7e554e52dd82631c9bf9f259537e61de5a476331c6a869eec9a01bbe"],
-    "scripts/agk/doctor.py": ["ac55cf4ad41e4087316eca0f8902bbca71bd313e539e47aaa88274dd19b50b41"],
+    "scripts/agk/doctor.py": ["bc6812d811f1f4c07322c3f08827b17245a6e4fd10a8675f3bc630b810efbb7a"],
     "scripts/agk/drift_audit.py": ["e34163bac920dd796de44cba0b90abc4a402abafaadb155f93d27ebbd07e5cc6"],
     "scripts/agk/evidence.py": ["dfb080f66407ff7b725500209b7a250fe648e53d2cd4429711d0dab19b6aaee0"],
     "scripts/agk/execution.py": ["40cd566eb45894b42adf4660dbbb7899ef20d519a1dbdb8750519d967a1b3b56"],
@@ -16839,6 +16839,7 @@
     "scripts/agk/test_map.py": ["fd997c6416f304f82c34f91e8789e5ef8bcc90cd6a88d4e562e4a783d8af2e05"],
     "scripts/agk/test_plan.py": ["b856e669e9f039630b12192680b75e51909fae827d0d47549ff31d31d3ab4341"],
     "scripts/agk/traceability.py": ["eac1d0fa253685780f5f8925d6cd45d5a1fc0052beb22a51719e546c63322ab3"],
+    "scripts/agk/tree_walk.py": ["88b9fe96f8218b51f8a7d2fc2a5aee88412cfc3eac2c2e6588c1db1ba0a877c6"],
     "scripts/agk/usage.py": ["f3843a4683898950f537bc298b3ff6baed0c77a9928692879e19ca1b1558dcba"]
    },
    "blocks": {
