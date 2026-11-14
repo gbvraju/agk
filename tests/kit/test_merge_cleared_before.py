@@ -453,3 +453,25 @@ def test_dep_the_merge_and_the_mode_check_agree(dep_world, tmp_path, body, expec
     """REQ-046: brief #991 answer 3, test (d)."""
     assert dep_held(body) is expected
     assert dep_mode_check_holds(body, tmp_path) is expected
+
+
+def test_the_check_before_the_merge_starts_no_env_program(tmp_path):
+    """REQ-039: brief #1290 tests (a), (b) and (e): the run before the merge reaches `make` with
+    exactly the kept names, as after it, with no `env` program in between."""
+    pull = pull_with("Brief: #500\nAdvances: REQ-046\nCovered-by: ADR-0261\n")
+    proc, _, ran, _ = after_run(tmp_path, pull=pull)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    first = before(ran)[0]
+    assert first["args"][0] == "-C" and "env" not in first["args"]
+    assert not any(name.startswith("AGK_LOCK_") for name in first["env"]), "no slot token"
+
+
+def test_the_pre_merge_test_run_hands_lock_py_only_the_kept_names(monkeypatch):
+    """REQ-039: brief #1290 tests (a) and (b) for the pre-merge tests of brief #667."""
+    monkeypatch.setattr(merge_cleared.os, "name", "posix")
+    monkeypatch.setenv("GH_TOKEN", "hidden-value-for-the-test")
+    argv = merge_cleared.tests_argv(Path("tree"), Path("home"), ["tests/kit/test_x.py"], 60.0)
+    cut = argv.index("--")
+    names = [argv[i + 1].split("=", 1)[0] for i in range(cut) if argv[i] == "--only-env"]
+    assert names == ["PATH", "HOME", "AGK_KIT_TESTS", "PYTHONDONTWRITEBYTECODE"]
+    assert "hidden-value-for-the-test" not in " ".join(argv)
