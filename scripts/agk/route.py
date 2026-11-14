@@ -97,12 +97,12 @@ from common import (
 from merge_cleared import (
     PROTECTED,
     RECORD_TITLE,
-    Held as EvidenceHeld,
     Nothing,
     github_mode,
     local_evidence,
     titled,
 )
+from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (
     APPROVE,

@@ -65,7 +65,9 @@ def local(comments: list[dict], checks: list[dict] | None = None, on: bool = Tru
     return f
 
 
-AGREES = f"Evidence check: agrees, head {HEAD[:12]}, record abcdefabcdef, governance ok, sample 1 of 6"
+AGREES = (
+    f"Evidence check: agrees, head {HEAD[:12]}, record abcdefabcdef, governance ok, sample 1 of 6"
+)
 LOCAL_LINE = f"Local evidence: {HEAD} Evidence check: agrees (conductor's run); tests 9 passed"
 
 
