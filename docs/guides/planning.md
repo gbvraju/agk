@@ -111,6 +111,14 @@ checkout; the other scripts are installed under `scripts/agk/`.
    - **The formal gate.** The board's `Sign-off` is a reading aid, not a record: the plan's gate stays the owner's
      `Approve: plan <full head ID>` line of step 8.
 
+10. **Lock the scope for business.** `/agk:scope-lock` writes `docs/plan/scope-lock.md` from the plan in plain words for
+   readers who are not technical: per milestone the screens it makes work, what a person can do there, its dates and
+   estimated hours; the go-live date; what comes after go-live; what is not included, and why; the decisions; the
+   questions with the date each is needed by; and the risks with their answers (brief #1219, ADR-0518). It prints the
+   text of a scope lock issue in the same words and creates no issue; a PDF is optional, printed with a browser you
+   already have. While the file exists, `check_plan.py` fails each of its lines that holds a requirement number, a file
+   path, a brief key or a builder or pull request figure, naming the line, never the text.
+
 ## From an idea
 
 A project that starts from an idea, with no customer prototype, reaches the same published plan: its vision, its charter,
@@ -141,7 +149,8 @@ proposes; brief #1216, ADR-0515). Each step is its own pull request, merged by y
     and read its report (ADR-0517); then an account of `spec_approvers` posts `Approve: plan <full head ID>`, as in
     step 8.
 12. **Publish.** `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]`, as in step 9.
-13. **Board.** `/agk:board --yes` on your own machine, as in step 9.
+13. **Lock the scope for business.** `/agk:scope-lock` writes `docs/plan/scope-lock.md`, as in step 10 (brief #1219).
+14. **Board.** `/agk:board --yes` on your own machine, as in step 9.
 
 ## From a prototype and an OpenSpec file
 
