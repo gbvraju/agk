@@ -438,17 +438,19 @@ def plan_briefs(plan: Path, text: str, defaults: dict, review: Decimal) -> tuple
     from session import glob_regex, literal, shared_patterns, touches_of  # noqa: PLC0415
 
     shared = [glob_regex(p) for p in shared_patterns(Path("."))]
-    raw, counts = [], {"owner": 0, "missing": 0, "outside": 0, "sizes": []}
+    raw: list[tuple[str, str, Decimal, list[str], list[str]]] = []
+    sizes: list[str] = []
+    owner = missing = outside = 0
     for milestone, _ in HEADING.findall(text):
         for path in sorted((plan / "briefs" / milestone).glob("*.md"), key=lambda f: f.stem):
             body = path.read_text(encoding="utf-8")
             size, expected = estimate_parts(body)
-            counts["sizes"].append(size)
+            sizes.append(size)
             found = RANGE.fullmatch(expected) if expected != UNKNOWN else None
             if found is None and size in defaults:
-                found, counts["owner"] = RANGE.fullmatch(defaults[size]), counts["owner"] + 1
+                found, owner = RANGE.fullmatch(defaults[size]), owner + 1
             if found is None:
-                counts["missing"] += 1
+                missing += 1
             mid = (Decimal(found[1]) + Decimal(found[2])) / 2 if found else Decimal(0)
             deps = [d.strip() for line in DEPENDS.findall(body) for d in line.split(",")]
             touches = [
@@ -463,9 +465,9 @@ def plan_briefs(plan: Path, text: str, defaults: dict, review: Decimal) -> tuple
     items = []
     for ident, _, hours, deps, touches in raw:
         inside = {keys[d] for d in deps if d in keys}
-        counts["outside"] += sum(1 for d in deps if d and d not in keys)
+        outside += sum(1 for d in deps if d and d not in keys)
         items.append((ident, hours, frozenset(inside), touches))
-    return items, counts
+    return items, {"owner": owner, "missing": missing, "outside": outside, "sizes": sizes}
 
 
 def overlaps(mine: list[str], theirs: list[str]) -> bool:
@@ -475,7 +477,9 @@ def overlaps(mine: list[str], theirs: list[str]) -> bool:
 def makespan(items: list, lanes: int) -> Decimal | None:
     """The hours a list schedule of `lanes` builders takes, or None when briefs wait for each
     other forever (a `Depends-on` cycle)."""
-    pending, running, done, now = list(items), [], set(), Decimal(0)
+    running: list[tuple[Decimal, tuple]] = []
+    done: set[str] = set()
+    pending, now = list(items), Decimal(0)
     while pending or running:
         for item in list(pending):
             if len(running) >= lanes:
