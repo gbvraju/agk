@@ -160,7 +160,10 @@ Step 1 of the conductor's protocol (CI first) has nothing to read in local mode,
        Local evidence: <head sha> Evidence check: agrees, ... (conductor's run); proof <outcome>, tests <n> passed (builder's line)
 
 Without a record (a builder on a kit older than brief #374), re-run governance by hand as before: `git worktree add <scratch>
-<sha>`, then `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base sha> make -C <scratch> governance`, then remove the worktree.
+<sha>`, then `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base sha> make -C <scratch> -f agk.mk agk-governance`, then
+remove the worktree. Use the `-f agk.mk agk-governance` form: `agk.mk` is the kit's own file, present in every project set up
+with init or adopt, while a project set up with adopt may have no Makefile with a `governance` target; `make -C <scratch>
+governance` still works where the project's Makefile has it (brief #1264).
 
 A verdict in local mode that clears a head without that line clears nothing.
 
