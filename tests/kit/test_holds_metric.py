@@ -78,8 +78,10 @@ def test_ac13_without_the_flag_nothing_is_written(proj, stub, extra):
 def test_ac13_the_output_of_a_recorded_pass_is_the_plan(proj, stub):
     """REQ-057 AC13: `--record` changes the file and nothing that is printed."""
     held_by_pull(stub)
-    before = plan(proj, stub).stdout
-    assert plan(proj, stub, "--record").stdout == before
+    before = plan(proj, stub).stdout.splitlines()
+    after = plan(proj, stub, "--record").stdout.splitlines()
+    assert after[:-1] == before[:-1]  # the last line counts the run's own reads (ADR-0529)
+    assert before[-1].startswith("reads: ") and after[-1].startswith("reads: ")
 
 
 def test_ac13_minutes_count_from_the_first_record_of_the_pair(proj, stub):

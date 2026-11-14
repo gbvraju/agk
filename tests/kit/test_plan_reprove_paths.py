@@ -74,7 +74,7 @@ def test_ac9_prose_of_a_taken_brief_holds_nothing(proj, stub):
     assert started(data(proj, stub)) == [6]
     out = session(proj, stub, "claim", "--session", "s-me", "--brief", "6")
     assert out.returncode == 0, out.stdout + out.stderr
-    assert len(posts(stub)) == 1
+    assert len([c for c in posts(stub) if c[1].endswith("/comments")]) == 1  # and the label
 
 
 def test_ac9_a_set_list_replaces_the_default(proj, stub):

@@ -1399,6 +1399,9 @@ def approve_items(repo: str, pr: dict, root: Path) -> list[dict]:
     ] or unread
 
 
+LOCAL_PIPELINE = ".agk-pipeline.json"
+
+
 def pipeline_document(repo: str, root: Path) -> dict:
     """What waits for a person, from the open pull requests: the run's one read of them when it
     changed no label (brief #1263 answer 7), else a fresh read that shows the labels it wrote."""
@@ -1432,8 +1435,11 @@ def pipeline_document(repo: str, root: Path) -> dict:
 
 
 def write_pipeline(repo: str, root: Path) -> None:
-    """Write `pipeline.json` (rule 2); a failure is reported and fails no routing (rule 4)."""
-    target = Path(os.environ.get("AGK_PIPELINE_FILE") or "pipeline.json")
+    """Write the pipeline document (rule 2); a failure is reported and fails no routing (rule 4).
+
+    The path is `AGK_PIPELINE_FILE` (CI sets it), else the git-ignored `.agk-pipeline.json` in the
+    repository root, so a run by hand leaves no untracked file (brief #1272, ADR-0538)."""
+    target = Path(os.environ.get("AGK_PIPELINE_FILE") or root / LOCAL_PIPELINE)
     try:
         doc = pipeline_document(repo, root)
         target.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")

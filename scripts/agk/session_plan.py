@@ -132,7 +132,9 @@ import shutil
 import string
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import time
 import tomllib
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -140,6 +142,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import common
 import playbook_format
+import session as reads  # the one copy whose `gh` the plan's reads go through
 from common import ESTIMATE_LINES, CheckError, estimate_parts, matches, plan_settings, read_list
 from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
 from reviewers import verdict_authors
@@ -153,6 +156,7 @@ from session import (
     RELEASED,
     TOUCHES,
     Survey,
+    Walk,
     all_takes,
     brief_number,
     brief_shape,
@@ -997,6 +1001,13 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
     merged = {
         n for n, _ in builds if any(p.get("merged_at") and names_build(p, number, n) for p in s.prs)
     }
+    if s.recent and len(merged) < len(builds) and all_takes(s.comments.get(number) or []):
+        older = history_of(s, number)  # ADR-0529 decision 4: a build merged before the window
+        merged |= {
+            n
+            for n, _ in builds
+            if any(p.get("merged_at") and names_build(p, number, n) for p in older)
+        }
     if whole := next((t for t in takes if t[5] is None), None):
         pending = [n for n, _ in builds if n not in merged]
         if not pending:
@@ -1027,6 +1038,24 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
     return None, [], None
 
 
+def history_of(s: Survey, number: int) -> list[dict]:
+    """The pull requests that name a brief, from its timeline (one read), each with its
+    `merged_at`; when the timeline cannot be read, every closed pull request, read once."""
+    events = pages(f"repos/{s.repo}/issues/{number}/timeline")
+    if events is not None:
+        out: list[dict] = []
+        for event in events:
+            source = event.get("source") if isinstance(event, dict) else None
+            found = source.get("issue") if isinstance(source, dict) else None
+            pull = found.get("pull_request") if isinstance(found, dict) else None
+            if isinstance(found, dict) and isinstance(pull, dict):
+                out.append({**found, "merged_at": pull.get("merged_at")})
+        return out
+    if s.closed is None:
+        s.closed = pages(f"repos/{s.repo}/pulls?state=closed") or []
+    return s.closed
+
+
 def unplaced(
     s: Survey,
     started: list[dict],
@@ -1049,6 +1078,10 @@ def unplaced(
         if brief["number"] not in seen:
             out.append((brief["number"], why))
             seen.add(brief["number"])
+    for number in s.unread:  # ADR-0529: passed the listing, not read since no slot was left
+        if number not in seen:
+            out.append((number, why))
+            seen.add(number)
     for number in sorted(s.briefs):
         if number not in seen:
             out.append((number, "every build is taken or in progress"))
@@ -1752,14 +1785,108 @@ def red_fixes(root, s: Survey, issues: list, ready: list[dict]) -> list[dict]:
     ]
 
 
+READS_FILE = "agk-plan-reads.json"  # in the checkout's git directory (ADR-0529 decision 5)
+
+
+def walk_key(issues: list, active: list[str] | None, hours: dict[int, float]) -> Callable:
+    """The order in which the plan reads the briefs (ADR-0529 decision 2): an active milestone
+    first, then the milestone order and the within-milestone order of ADR-0523."""
+
+    def key(brief: dict) -> tuple:
+        own = own_hours(brief.get("body"))
+        return (
+            active is not None and milestone_title(brief) not in active,
+            milestone_rank(brief),
+            -hours.get(brief["number"], 0.0),
+            priority_of(str(brief.get("body") or "")),
+            own is None,
+            own or 0.0,
+            brief["number"],
+        )
+
+    return key
+
+
 def build(root, record: bool = False) -> dict:
+    """The plan, reading only what it needs (brief #1251, ADR-0529): the comments of the briefs
+    in reading order until the free slots are filled, more only while a slot stays free and a
+    brief is left unread; each GET is made once in the run. It carries `reads`."""
+    began = time.monotonic()
+    reads.MEMO = {}  # this run's reads only, never a previous run's
+    first = reads.CALLS, reads.CACHED
+    want = flow_int(root, "max_builders", reads.MAX_BUILDERS, RULE)
+    try:
+        while True:
+            found, more = plan_pass(root, False, want)
+            if not more:
+                break
+            want *= 2
+        if record:
+            found, _ = plan_pass(root, True, want)
+    finally:
+        reads.MEMO = None
+    found["reads"] = {
+        "calls": reads.CALLS - first[0],
+        "cached": reads.CACHED - first[1],
+        "seconds": round(time.monotonic() - began, 1),
+    }
+    save_reads(root, found["reads"])
+    return found
+
+
+def ahead(
+    s: Survey, pb: dict | None, ready: list[dict], started: list[dict], active: list[str] | None
+) -> bool:
+    """Whether a brief left unread would come before a start in the plan's order, as a ready
+    brief: then the plan reads further, so that it starts what a full read starts."""
+    if not started:
+        return False
+    unblocks = unblocked_hours(list(s.briefs.values()))
+    unread = [s.briefs[n] for n in s.unread if n in s.briefs]
+    unread = [b for b in unread if active is None or milestone_title(b) in active]
+    order = [b["number"] for b in milestone_order(pb, [*ready, *unread], unblocks)]
+    last = max(order.index(b["number"]) for b in started if b["number"] in order)
+    return any(n in s.unread for n in order[:last])
+
+
+def with_unread(
+    s: Survey, pb: dict | None, ready: list[dict], active: list[str] | None, hours: dict
+) -> list[dict]:
+    """The ready briefs and, in the plan's order, those the walk left unread (ADR-0529)."""
+    unread = [s.briefs[n] for n in s.unread if n in s.briefs]
+    unread = [b for b in unread if active is None or milestone_title(b) in active]
+    return milestone_order(pb, [*ready, *unread], hours) if unread else ready
+
+
+def save_reads(root, figures: dict) -> None:
+    """The last plan's reads, for `checklist.py`; a file that cannot be written is left."""
+    common_dir = _git(root, "rev-parse", "--git-common-dir")
+    if not common_dir:
+        return
+    try:
+        target = Path(root) / common_dir.strip() / READS_FILE
+        target.write_text(json.dumps(figures, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError:
+        return
+
+
+def reads_line(figures: dict) -> str:
+    return (
+        f"reads: {figures['calls']} calls ({figures['cached']} from cache), {figures['seconds']} s"
+    )
+
+
+def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
+    """One plan from at most `want` free briefs read; and whether reading more could start more."""
     repo = repo_name(root)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
-    s = survey(root, repo, "", issues)
+    window = max(WINDOW_DAYS * 24, flow_int(root, "claim_hours", reads.CLAIM_HOURS, RULE))
+    key = walk_key(issues, active_milestones(root), unblocked_hours(issues))
+    s = survey(root, repo, "", issues, Walk(key, want, window))
     default = _default_branch(root)
     now = datetime.now(UTC)
     read_gone(root, s, now)
@@ -1840,7 +1967,7 @@ def build(root, record: bool = False) -> dict:
         {
             "playbook": {
                 "work_type": pb["work_type"],
-                "lanes": lanes_of(pb, ready),
+                "lanes": lanes_of(pb, with_unread(s, pb, ready, active, unblocks)),
                 "heavy_steps": pb["heavy_steps"],
             }
         }
@@ -1921,7 +2048,9 @@ def build(root, record: bool = False) -> dict:
         found["held"] = held
     if ignored_holds:
         found["ignored_holds"] = ignored_holds
-    return found
+    return found, bool(s.unread) and (
+        count < fillable or ahead(s, pb, ready, chosen[:count], active)
+    )
 
 
 def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
@@ -2240,6 +2369,8 @@ def words(plan: dict) -> str:
             f"Your merge rate is unknown (no pull request merged in the last {WINDOW_DAYS} days): "
             "the merge queue limit does not apply."
         )
+    if "reads" in plan:
+        lines.append(reads_line(plan["reads"]))
     return "\n".join(lines) + "\n"
 
 

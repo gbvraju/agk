@@ -6,5 +6,6 @@ traceability*.txt
 *.whl
 .agk-test-map.toml
 .agk-failures/
+.agk-pipeline.json
 # A person's own Claude Code permissions, never committed (brief #1029, ADR-0438).
 .claude/settings.local.json
