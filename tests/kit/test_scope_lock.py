@@ -121,7 +121,7 @@ def test_a_requirement_number_fails_naming_the_rule_and_line(tmp_path: Path, cap
 def test_a_file_path_fails(tmp_path: Path, capsys) -> None:
     # REQ-050: brief #1219 answers 2 and 4, a file path fails; the text is never printed.
     for n, text in enumerate(
-        ("- See docs/plan/scope.md for more.", "- Built in `app/list.py`.", "- Run ./setup.sh first.")
+        ("- See docs/plan/scope.md for more.", "- Built in `app/list.py`.", "- Run ./setup.sh.")
     ):
         root = project(tmp_path / str(n), with_line(text))
         code, lines = check(root, capsys)
@@ -149,7 +149,8 @@ def test_a_builder_or_pull_request_figure_fails(tmp_path: Path, capsys) -> None:
         root = project(tmp_path / str(n), with_line(text))
         code, lines = check(root, capsys)
         assert code == 1, text
-        assert failures(lines) == [f"FAIL plan: rule 10: {LOCK}:7: a builder or pull request figure"]
+        figure = f"FAIL plan: rule 10: {LOCK}:7: a builder or pull request figure"
+        assert failures(lines) == [figure]
         assert text not in "\n".join(lines)
 
 
@@ -182,7 +183,7 @@ def frontmatter(text: str) -> dict[str, str]:
 
 
 def test_the_skill_is_run_by_the_person_and_writes_the_scope_lock() -> None:
-    # REQ-050: brief #1219 answer 1, `/agk:scope-lock` writes docs/plan/scope-lock.md, run by the person.
+    # REQ-050: brief #1219 answer 1, `/agk:scope-lock` writes the scope lock, run by the person.
     text = SKILL.read_text(encoding="utf-8")
     head = frontmatter(text)
     assert head["name"] == "scope-lock"
@@ -215,7 +216,8 @@ def test_the_skill_names_a_print_command_and_never_installs_a_browser() -> None:
 
 def test_the_skill_is_listed_in_the_reference_commands_and_the_guide() -> None:
     # REQ-050: brief #1219 answer 4, the reference's plugin table and the planning guide name it.
-    rows = [x for x in REFERENCE.read_text(encoding="utf-8").splitlines() if "`/agk:scope-lock`" in x]
+    lines = REFERENCE.read_text(encoding="utf-8").splitlines()
+    rows = [x for x in lines if "`/agk:scope-lock`" in x]
     assert len(rows) == 1 and rows[0].startswith("| `/agk:scope-lock` |")
     assert "docs/plan/scope-lock.md" in rows[0]
     assert "/agk:scope-lock" in GUIDE.read_text(encoding="utf-8")
