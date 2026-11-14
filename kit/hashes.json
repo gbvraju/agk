@@ -17233,7 +17233,7 @@
     ".github/workflows/metrics.yml": ["4024de6ae92d8dfba30249b2f5571831d9ce30f39ec0cc2ae566215d8d6b942e"],
     ".github/workflows/product-report.yml": ["06f28c3ac990427c2f7b69394882623c8e7d5b849493de0cfd576370de38df4f"],
     ".github/workflows/proof.yml": ["80a30b99a4ea9839dd4b97d0c4df512ea176be106ec947b66dc5fb30d5ee9dfb"],
-    ".gitignore": ["2df04bd3c633a2515a6a7efd3f7f54b6b3f5704e1b8a422a2b0bbfa81571f284"],
+    ".gitignore": ["e8729d850bc5697b479b426e468ebef97889834c23052a6df8276861037a5617"],
     "CLAUDE.md": ["6bf23a7168f49d3b83a0c60e0e1778ba16dd2468d0b1c43c726f5f334bf8116c"],
     "Makefile": ["6f13313b3d6dfc1ad82d50d45e695fc1f8e95acb139efacc921fb18eb2abe581"],
     "agk.mk": ["de0f374f24185da1002af19935cd18f6fb3015f56dd64f7b04a56927c253244f"],
@@ -17332,7 +17332,7 @@
     "scripts/agk/review_bundle.py": ["055d6408eaebabc07b81a602da505bef7c6cd2931a21c0e98f4c46c931d3e301"],
     "scripts/agk/review_context.py": ["93e7896da0d021aaac68c024ea87387bcb82311801b8a87f526f470e328944de"],
     "scripts/agk/reviewers.py": ["171f47f98e4c9d081dadb7dfce48b69e9964884c7120497a8dbea15665db58f0"],
-    "scripts/agk/route.py": ["5f2daffc2f9822288dfb89d901580867151332e553ef2a9eb9d3bd86dae7d22a"],
+    "scripts/agk/route.py": ["a25018c11c40a169f6d2873cf7a0ce47d5b6d2e5b7c79f23838c275dd1e4fca0"],
     "scripts/agk/rules.py": ["ed97802619ca6af15231eeda1d10e75b9b9bd0b2e202cf6556b379ef543683b1"],
     "scripts/agk/sbom.py": ["1621b091a7779407a32c846a4a6f1e9b12a3808ef87c2eee5d49493bcc33af50"],
     "scripts/agk/scorecard.py": ["3b03f9ec84ed34f3eed6d28a66ff48be20ca94d15ac45b3515f63175d5b4e101"],
@@ -17352,7 +17352,7 @@
    "blocks": {
     ".gitattributes": ["dc648292b095ab204015ddc50a490de95a8f2af4d67f2b687e80ec862d83e45c"],
     ".github/PULL_REQUEST_TEMPLATE.md": ["1d398dd7fe940b4ae5874d5b7ec50f32728f71a9e65df04035349b709d2eb061"],
-    ".gitignore": ["6cddf9ea67a45dcff0ca862d73ef4bfb8b052028300be1f199d728188ac5a104"],
+    ".gitignore": ["b443a08933b09a48bd10ca99afb1ad53a21c82f182d12cfd7fa75fd963f83a66"],
     "CLAUDE.md": ["6bf23a7168f49d3b83a0c60e0e1778ba16dd2468d0b1c43c726f5f334bf8116c"]
    },
    "templates": {
