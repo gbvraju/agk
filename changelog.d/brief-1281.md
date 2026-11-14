@@ -1,0 +1,1 @@
+- In local mode the conductor's guard allows `evidence.py check --head <sha>` (and `check <RECORD> --head <sha>` with RECORD in a scratch directory or the clone's shared evidence folder), so a guarded conductor writes the `Evidence check:` line the guarded merge reads (brief #1281, ADR-0542)
