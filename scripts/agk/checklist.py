@@ -29,6 +29,7 @@ from common import CheckError, config_source, git, personal_table, run, utf8_out
 
 NAME = "checklist"
 SAVED_NAME = "agk-checklist.json"
+PLAN_READS = "agk-plan-reads.json"  # session_plan.READS_FILE
 UNKNOWN = "unknown"
 USAGE = "usage: checklist.py [--root DIR] [--days N] [--saved FILE]"
 NAMES = (
@@ -748,8 +749,27 @@ def joined(point: Point, *more: str) -> Point:
     return point[0], "; ".join([point[1], *more])
 
 
+def plan_reads(path: Path | None) -> str | None:
+    """The last `session.py plan`'s reads (brief #1251 answer 5, ADR-0529), from the file the plan
+    writes in the git directory; None when there is none or it cannot be read. It sets no status."""
+    if path is None:
+        return None
+    try:
+        found = json.loads(path.read_text(encoding="utf-8"))
+        calls, cached, seconds = found["calls"], found["cached"], found["seconds"]
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+    return f"plan reads {calls} calls ({cached} from cache), {seconds} s"
+
+
+def plan_reads_file(root: Path) -> Path | None:
+    saved = default_saved(root)
+    return saved.with_name(PLAN_READS) if saved is not None else None
+
+
 def points_of(root: Path, view: View) -> list[Point]:
     gate = (latency(view), rounds(view), red_mains(view), catch_rate(view))
+    measured = plan_reads(plan_reads_file(root))
     return [
         capacity(view),
         joined(conductor_starts(view), slots_alive(view), fallback_share(view)),
@@ -758,7 +778,7 @@ def points_of(root: Path, view: View) -> list[Point]:
         joined(auto_merge(view), *gate),
         models(),
         conflicts(root, view),
-        assignment(view),
+        joined(assignment(view), measured) if measured else assignment(view),
         joined(cost(view), review_tokens(view)),
     ]
 

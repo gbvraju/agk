@@ -11,7 +11,18 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from test_session import ISSUES, REPO, Stub, comment, iso, issue, listing, posts, session
+from test_session import (
+    ISSUES,
+    REPO,
+    Stub,
+    claim_posts,
+    comment,
+    iso,
+    issue,
+    listing,
+    posts,
+    session,
+)
 from test_session_flow import DAY, PULLS, base, brief, flow, merged
 from test_session_plan import changed, data, free, labelled
 
@@ -188,7 +199,9 @@ def test_claim_takes_a_build_whose_old_take_is_stale(proj, stub):
     assert [c["session"] for c in got["stale_claims"]] == ["builder-f"]
     out = claim(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5 build (c)", out.stdout
-    assert posts(stub) == [["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (c) retakes"]]]
+    assert claim_posts(stub) == [
+        ["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (c) retakes"]]
+    ]
 
 
 def test_claim_still_refuses_a_build_that_a_fresh_take_holds(proj, stub):
@@ -291,7 +304,7 @@ def test_440_the_printed_claim_command_takes_the_same_brief(proj, stub):
     out = session(proj, stub, *words[1:])
     assert out.returncode == 0 and out.stdout.strip() == "claimed #6", out.stdout + out.stderr
     body = f"body=taken: s-me {DAY} reserves ADR-0004"
-    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", body]]]
+    assert claim_posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", body]]]
 
 
 @pytest.mark.parametrize(
@@ -310,7 +323,7 @@ def test_440_claim_of_a_whole_brief_reserves_past_the_numbers_in_use(
     out = session(proj, stub, "claim", "--session", "s-me", "--brief", "5")
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5", out.stdout + out.stderr
     body = f"body=taken: s-me {DAY} reserves {reserves}"
-    assert posts(stub) == [["POST", f"{ISSUES}/5/comments", ["-f", body]]]
+    assert claim_posts(stub) == [["POST", f"{ISSUES}/5/comments", ["-f", body]]]
 
 
 def test_440_next_shows_a_stalled_pull_request_without_taking_it_over(proj, stub):
