@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-14
 - Deciders: maintainers
-- Related: SPEC-0006 rules 3 and 6, ADR-0160, brief #263, brief #1223, plan #661
+- Related: SPEC-0006 rules 3 and 6, amendment 178, ADR-0160, brief #263, brief #1223, plan #661
 - Requirements: REQ-014
 
 ## Context
@@ -41,8 +41,9 @@ the marked block.
 A Windows machine is told, in one doctor run, the exact command that fixes each missing tool; an admin is no longer
 told to find admin rights; and an adopted project's CODEOWNERS names no owner nobody holds. SPEC-0006 rule 6 still reads
 `no-admin` for a refused ruleset read and a missing merge key; this ADR narrows that to a known non-admin, as brief
-#263 did with `forbidden`, and adds the reason class `admin-unknown` to rule 3's list; the spec text is not amended here
-(Q-1223-1). Protected path classes changed: `scripts/agk/` (`doctor.py`, `reviewers.py`), `tests/kit/`
+#263 did with `forbidden`, and adds the reason class `admin-unknown` to rule 3's list; the spec lines are proposed in
+`docs/runs/proposed-spec-amendments-178.md` (amendment 178, reserved in the answer to Q-1223-1),, not applied here.
+Protected path classes changed: `scripts/agk/` (`doctor.py`, `reviewers.py`), `tests/kit/`
 (`test_doctor_windows.py`, new), `agk.toml` (the new test file added to the `[[testing.map]]` entries of
 `scripts/agk/doctor.py` and `scripts/agk/reviewers.py`, nothing else) and `docs/adr/` (this file).
 
@@ -50,4 +51,4 @@ told to find admin rights; and an adopted project's CODEOWNERS names no owner no
 
 - 2026-11-14: the winget ids `ezwinports.make` and `gitleaks.gitleaks` and the App execution aliases path are the
   brief's, not run on Windows by the session that wrote this `(verify)`.
-- 2026-11-14: whether SPEC-0006 rules 3 and 6 take an amendment naming `admin-unknown` (Q-1223-1).
+- 2026-11-14: amendment 178 (SPEC-0006 rules 3 and 6) waits for the maintainers' decision.
