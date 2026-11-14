@@ -65,7 +65,8 @@ A person with admin on the repository does this once, in a terminal on their own
    `gh api` fills `{owner}/{repo}` from the checkout. Keep exactly one such issue open; the conductor and the builders find it
    by its title.
 
-3. **Unfreeze the labels.** The router's `agk:ci-running` label stays on every pull request that had it when Actions stopped,
+3. **Unfreeze the labels** (only with a kit before brief #1212; from it on `route.py --all` relabels them, see What is
+   lost). The router's `agk:ci-running` label stays on every pull request that had it when Actions stopped,
    and `review-queue` skips such a pull request as "checks running". Remove it from each open pull request that carries it, one
    line per pull request:
 
@@ -171,8 +172,15 @@ prints the same as JSON. The conductor runs `tidy --apply` at its start and afte
 
 Say it plainly to everyone working on the project:
 
-- **No router labels.** The router does not run, so no `agk:` label moves and `session.py watch` ends only on a verdict, a merge,
-  a close or a conflict. The conductor finds its work with `review-queue`, not with labels.
+- **Router labels from the local evidence.** The router's job does not run, so the conductor runs
+  `python3 scripts/agk/route.py --all` once per review pass, with its own `gh` (brief #1212, ADR-0513). While the one record
+  issue is open, a required check that never reported on a head is read from the builder's newest `Report:` on that head: its
+  `Evidence:` line naming the head counts as green, a `prepush: stopped at ...` or `failed: step ...` line in it as red
+  (`agk:ci-red`), and no such line leaves the pull request with the builder (`agk:build`), never at `agk:ci-running`. A check
+  that did report is read as before. `agk:merge-ready` also needs the verdict's `Local evidence:` and `Evidence check: agrees`
+  for the head, as the guarded merge reads them. `session.py watch` then also ends on a label change, and step 3 of Enter
+  local mode (the unfreeze) is no longer needed. So that the labels move, a builder puts the `Evidence:` line in its
+  `Report:` as well as in the body.
 - **No server-side proof.** Governance, the tests and proof ran on the builder's and the conductor's machines, not on a clean
   runner that nobody controls. Nothing GitHub records shows that they ran.
 - **No scheduled runs.** The drift audit, the metrics and the weekly report do not run until local mode ends.
