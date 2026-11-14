@@ -35,19 +35,25 @@ the pipeline document. In CI mode the router workflow pays the same paging on ev
    for). When it fails or is limited (403, 422, 429 or any other failure), that run falls back to today's paging of the open
    issues; a failed search is never read as "no record issue" or as "record issue open". The search index can lag a
    just-opened issue by a few minutes; that is accepted, because a project going local sets `execution = "local"`.
-6. One run reads the open pull request list once and reuses it for `--all`, the sweep, the merger's start and the pipeline
-   document, keeping it true with the labels the run sets; the label list is read once, as before (`Labels`).
+6. One run reads the open pull request list once and reuses it for `--all`, the sweep, the merger's start and the
+   pipeline document, keeping it true with the labels the run sets; the label list is read once, as before (`Labels`).
+   A run that changed a label reads the list once more for the pipeline document, so what it shows a person carries the
+   labels as GitHub now has them.
 
 No workflow file, ruleset or `constitution/` file changes; CI labels are judged from check runs exactly as before.
 
 ## Consequences
 
 In local mode the labels move on every review pass without a person, and `route.py --all` over two pull requests makes 16
-GitHub calls in the recorded double (test (h) bounds it at 18) instead of paging every open issue. Tests:
+GitHub calls in the recorded double (test (h) bounds it at 18) instead of paging every open issue. The conductor role file stays at its rule budget (4499 words, 37
+rules): the new sentence is paid for by dropping the list of review reasons that `skills/review-pass/SKILL.md` already
+gives. Tests:
 `tests/kit/test_conductor_guard.py` (a) to (d) and `tests/kit/test_route_local.py` (f) to (j); the two older unit tests of
 `record_open` now make the search fail (no network) and so test the fallback. Protected path classes changed: `.claude/`
 (`.claude/hooks/conductor_guard.py`, `.claude/agents/conductor.md`), `skills/` (`skills/review-pass/SKILL.md`),
-`scripts/agk/` (`route.py`) and `tests/kit/` (`test_conductor_guard.py`, `test_route_local.py`).
+`scripts/agk/` (`route.py`), `tests/kit/` (`test_conductor_guard.py`, `test_route_local.py`) and `agk.toml`
+(`tests/kit/test_conductor_guard.py` joins the test map of `route.py`, which it now names, as
+`tests/kit/test_always_full_infra.py` requires).
 
 ## Residual
 

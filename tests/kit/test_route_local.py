@@ -248,7 +248,8 @@ if endpoint.startswith("search/"):
         log.write('["GET", "search/issues", []]\\n')
     sys.stderr.write("gh: API rate limit exceeded (HTTP 403)\\n")
     sys.exit(1)
-os.execv(sys.executable, [sys.executable, os.path.join(os.path.dirname(__file__), "gh-real")] + args)
+real = os.path.join(os.path.dirname(__file__), "gh-real")
+os.execv(sys.executable, [sys.executable, real] + args)
 """
 
 
@@ -302,7 +303,13 @@ def test_g_without_execution_one_search_call_decides(stub, proj, tmp_path):
     assert reads_of_open_issues(stub) == 0
     query = next(e for e in endpoints(stub) if e.startswith(SEARCH))
     owner, name = REPO.split("/")
-    for part in (f"repo%3A{owner}%2F{name}", "is%3Aissue", "is%3Aopen", "in%3Atitle", "Local%20mode%20since"):
+    for part in (
+        f"repo%3A{owner}%2F{name}",
+        "is%3Aissue",
+        "is%3Aopen",
+        "in%3Atitle",
+        "Local%20mode%20since",
+    ):
         assert part in query
 
 

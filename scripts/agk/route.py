@@ -102,7 +102,6 @@ from merge_cleared import (
     github_mode,
     local_evidence,
     local_mode,
-    titled,
 )
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
@@ -194,6 +193,7 @@ FAILED_STEP = ("prepush: stopped at ", "failed: step ")  # a failed step of prep
 RECORD_OPEN: dict[str, bool] = {}  # repo -> the project is in local mode, read once per run
 RECORD_SEARCH = 'repo:{repo} is:issue is:open in:title "{title}"'  # brief #1263 answer 6
 OPEN_PULLS: dict[str, list | None] = {}  # repo -> the open pull requests, read once per run
+WROTE_LABELS: set[str] = set()  # repos whose pull request labels this run changed
 SUMMARY = re.compile(r"Summary: (\S.{0,118}\S|\S)")
 PIPELINE_COUNTS = ("review", "fix", "ci-red", "conflict", "approve", "ready")
 SPEC_TITLE = re.compile(r"# SPEC-\d{4}: (\S.*)")
@@ -279,7 +279,8 @@ def record_issues(repo: str) -> list[dict]:
     query = RECORD_SEARCH.format(repo=repo, title=RECORD_TITLE)
     found = search_once("search/issues?q=" + quote(query, safe=""))
     items = found.get("items") if isinstance(found, dict) else None
-    if isinstance(items, list) and isinstance(found.get("total_count"), int):
+    total = found.get("total_count") if isinstance(found, dict) else None
+    if isinstance(items, list) and isinstance(total, int):
         return [x for x in items if isinstance(x, dict)]
     issues = pages(f"repos/{repo}/issues?state=open")
     return [x for x in issues if isinstance(x, dict)] if isinstance(issues, list) else []
@@ -307,8 +308,9 @@ def record_open(repo: str, root: Path | None = None) -> bool:
 
 
 def open_pulls(repo: str) -> list | None:
-    """The open pull requests, read once per run and reused for every pull request, the sweep,
-    the merger's start and the pipeline document (brief #1263 answer 7); None when unreadable,
+    """The open pull requests, read once per run and reused for every pull request, the sweep, the
+    merger's start and, when the run changed no label, the pipeline document (brief #1263 answer
+    7); None when unreadable,
     which is not kept, so a later step reads again."""
     if OPEN_PULLS.get(repo) is None:
         OPEN_PULLS[repo] = pages(f"repos/{repo}/pulls?state=open")
@@ -727,6 +729,8 @@ class Labels:
 
 
 def apply(repo: str, n: int, current: list[str], wanted: str, labels: Labels) -> None:
+    if wanted not in current or any(x in LABELS and x != wanted for x in current):
+        WROTE_LABELS.add(repo)
     if wanted not in current:
         labels.ensure(wanted)
         write(f"repos/{repo}/issues/{n}/labels", "-f", f"labels[]={wanted}", method="POST")
@@ -1396,10 +1400,11 @@ def approve_items(repo: str, pr: dict, root: Path) -> list[dict]:
 
 
 def pipeline_document(repo: str, root: Path) -> dict:
-    """What waits for a person, from the run's one read of the open pull requests with the labels
-    this run set (brief #1263 answer 7)."""
+    """What waits for a person, from the open pull requests: the run's one read of them when it
+    changed no label (brief #1263 answer 7), else a fresh read that shows the labels it wrote."""
     now = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    found = open_pulls(repo)
+    fresh = repo in WROTE_LABELS or OPEN_PULLS.get(repo) is None
+    found = pages(f"repos/{repo}/pulls?state=open") if fresh else open_pulls(repo)
     doc: dict = {"schema": 1, "as_of": now, "ready": [], "approve": []}
     if found is None:
         doc["counts"] = {k: "unknown" for k in PIPELINE_COUNTS}
@@ -1448,6 +1453,7 @@ def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     RECORD_OPEN.clear()  # read once per run (brief #1212)
     OPEN_PULLS.clear()  # read once per run (brief #1263 answer 7)
+    WROTE_LABELS.clear()
     try:
         if paused(root):  # brief #348 (ADR-0196): nothing is read and nothing is written
             print(PAUSED_LINE)
