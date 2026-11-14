@@ -1,6 +1,6 @@
 # ADR-0527: A misplaced agk.toml setting is reported, never silently ignored
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0190, ADR-0298, ADR-0409, ADR-0525, brief #1245, plan #661
