@@ -14,6 +14,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 - #1292 The guarded merge no longer starts the `env` program: `lock.py run --only-env NAME=VALUE` starts `make` (and the pre-merge pytest) with exactly the kept variables, PATH unchanged, and on Windows also SystemRoot, ComSpec, PATHEXT, TEMP and TMP, so a cleared pull request merges on Windows as on Linux (brief #1290, ADR-0549)
 - #1293 The local evidence check adds its worktree with the committed line ends (`-c core.autocrlf=false -c core.eol=lf`) and runs governance with the conductor's environment (PATH, a scratch HOME, AGK_BASE), and the design digests of rules 9 and 15 read a file's committed bytes when a checkout changed only its line ends, so a correct record agrees on Windows (brief #1291, ADR-0550)
 - #1300 Every comment the kit posts through `session.py`, `conductor.py`, `route.py` and `merge_cleared.py` ends with one last line `Who: AGK` (with the role where known), so the history tells AGK from the owner under one login; a marker, not a rule: nothing reads or requires it (brief #1289, ADR-0546)
+- #1305 In a clone that several sessions share, `session.py claim`, `next --take` and `prepush.py` refuse from the main folder (personal mode warns), the stop hook, `conductor.py sweep` and `doctor.py` report when the main folder leaves the default branch or gains untracked files, and the plan's `Adds:` check reads `origin/<default branch>` (brief #1301, ADR-0551)
 
 ## 0.64.4 (2026-11-14)
 
