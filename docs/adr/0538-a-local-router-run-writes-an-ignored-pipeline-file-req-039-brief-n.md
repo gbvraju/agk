@@ -1,6 +1,6 @@
 # ADR-0538: A local router run writes an ignored pipeline file
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0036, amendment 182, ADR-0141, ADR-0534, brief #1263, brief #1272, plan #661

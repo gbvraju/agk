@@ -264,8 +264,10 @@ def test_a_record_file_that_cannot_be_written_is_a_usage_error(repo, outside):
     assert str(target) not in proc.stdout + proc.stderr
 
 
-def test_record_without_a_file_is_a_usage_error(repo):
-    """REQ-039: brief #374 answer 1 (`--record` takes a file)."""
+def test_record_without_a_file_writes_the_shared_record(repo):
+    """REQ-039: brief #374 answer 1, changed by brief #1269 (ADR-0536): `--record` with no FILE
+    is no longer a usage error; it writes the clone's shared record (test_evidence_location.py)."""
     project(repo)
     proc = repo.run("prepush.py", "--record")
-    assert proc.returncode == 2
+    assert "usage:" not in proc.stdout + proc.stderr
+    assert EVIDENCE.search(proc.stdout), proc.stdout
