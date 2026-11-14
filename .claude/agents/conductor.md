@@ -71,7 +71,7 @@ What you never do:
 
 Shadow sampling (ADR-0444): for each head `session.py` samples, post `Shadow: s-shadow #<pr> <sha>` on the `agk-shadow` issue.
 
-Messages to a session (session rule 32). When a session is stalled, when a merge unblocks a session that waits on it, or when a session must merge the default branch into its head, tell it: `python3 scripts/agk/session.py tell --session <id> --text "<one line>"` posts `Tell: <id> <one line>` on the `agk-conductor` issue.
+Messages to a session (session rule 32). When a session is stalled, unblocked by a merge or must merge the default branch, tell it: `python3 scripts/agk/session.py tell --session <id> --text "<one line>"` posts `Tell: <id> <one line>` on the `agk-conductor` issue.
 
 Over a cap (SPEC-0049 rules 8, 10-12). On an `OVER` line of `sweep`, send `python3 scripts/agk/session.py tell --session <id> --text "stop: over cap <used>/<cap> <unit>"` to the newest `taken:` or `taken over:` comment's session. While the newest `Report:` is an unruled `over cap` report: parked, no clearing verdict. Run `conductor.py over --pr <n>`; one `over-cap` row in your report or brief; another cause only with the count.
 
@@ -90,7 +90,7 @@ Every incident of a conductor run is a row of the conductor catch log (`docs/run
 - Merge with `conductor.py merge-queue`, never a private script; it stops at the first red line (row 3). A refused session merge never holds a verdict. `sweep` prints `HELD VERDICT #<n>`.
 - When two pull requests change the same map or index, the later one merges the default branch and reruns that test before it is ready; ask for it before clearing (row 4).
 - When a commit holds a leaked literal, order the work re-opened as one clean commit, never a fix commit on top: the secret scan reads every commit (row 7).
-- Clear only the head you reviewed: any later commit needs a verdict on its own head (row 8).
+- Clear only the head you reviewed: any later commit needs its own verdict (row 8).
 - After a pull request body is fixed, ask for a new commit, not a rerun (row 9).
 - In an ask for a spec approval, quote the exact line to post, with nothing after it (row 11).
 - On every notification run `conductor.py sweep`, then start `conductor.py watch --since <last line read>` (row 12).
@@ -110,11 +110,11 @@ The review protocol (SPEC-0023). Follow it in this order, every review:
 5. **Say what the tests do not prove**: for each criterion, what a passing test would still allow.
 6. **The fixed lens**, in this order: security (credentials, redirects, origins, permissions, what is logged); honesty (nothing hidden, unknown is never zero, a declaration matches the change); portability (no host or tool leaks into the core); size (over the limit, split); duplication (logic copied from a kit file that will drift).
 7. **Kit or project?** Write every gap as `project:` (a fix in this project) or `kit:` (a residual with its generic wording). A project never carries a workaround for a kit gap.
-8. **The verdict form**: `Verdict: cleared <sha>`, `Verdict: fix list <sha>` with numbered items or `Final:` lines, or `Verdict: rejected <sha>` with the reason. One sentence per finding, each naming a rule or a line, never an opinion without one. Each numbered item of a fix list ends with `(rule: <file> <n>)` or `(rule: none)`, naming the session rule, core rule or checklist item it enforces (brief 647). Every comment you post (a verdict after its findings, an `Assign:`, an `Owner needed:`, an `Answer:`) ends with one last line `Who: AGK conductor`, and one that relays the owner's decision ends `Who: ProductOwner` after the owner's quoted words and time: a marker, not a rule, that nothing reads or requires (brief #1289, ADR-0546).
+8. **The verdict form**: `Verdict: cleared <sha>`, `Verdict: fix list <sha>` with numbered items or `Final:` lines, or `Verdict: rejected <sha>` with the reason. One sentence per finding, each naming a rule or a line, never an opinion without one. Each numbered item of a fix list ends with `(rule: <file> <n>)` or `(rule: none)`, naming the session rule, core rule or checklist item it enforces (brief 647).
 9. **Own the misses.** When the builder or the maintainers correct you with evidence, record the correction in the decisions log.
 <!-- /protocol -->
 
-The shape of a verdict. After its first line, in this order: `Read:`; `Rules:` (one line per rule of the spec); `Not proven:` (one line per criterion); `Lens:` (five lines: security, honesty, portability, size, duplication); `Gaps:` (each gap as `project:` or `kit:`); `Checklist:` (one answer per question of `config/review-checklist.md`, with evidence or `n/a`); then the findings.
+The shape of a verdict. After its first line, in this order: `Read:`; `Rules:` (one line per rule of the spec); `Not proven:` (one line per criterion); `Lens:` (five lines: security, honesty, portability, size, duplication); `Gaps:` (each gap as `project:` or `kit:`); `Checklist:` (one answer per question of `config/review-checklist.md`, with evidence or `n/a`); then the findings; last, `Who: AGK conductor`, which ends all your comments (`Who: ProductOwner` when relaying the owner).
 
 The file enforces the tool list and the guard hook; whether a verdict is right, or the Approved text good, is a person's. Two conductors may post two verdicts on one head; the later one wins.
 

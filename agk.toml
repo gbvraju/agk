@@ -325,6 +325,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_who_line.py",
   "tests/kit/test_conductor_wakes.py", "tests/kit/test_reviewer_slots_local.py",
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
@@ -572,6 +573,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_who_line.py",
   "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_approval_same_text.py", "tests/kit/test_approved_spec_not_draft.py",
   "tests/kit/test_auto_merge_guide.py",
@@ -769,6 +771,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_who_line.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_route_owner_ask.py",
   "tests/kit/test_agent_apps.py", "tests/kit/test_approve_short.py", "tests/kit/test_approved_spec_not_draft.py",
   "tests/kit/test_ci_saving.py", "tests/kit/test_conductor_guard_launch.py",
@@ -803,6 +806,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_who_line.py",
   "tests/kit/test_owner_wait.py", "tests/kit/test_session_watch_answers.py", "tests/kit/test_conductor_start_wake.py", "tests/kit/test_check_brief.py",
   "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py", "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py", "tests/kit/test_plan_questions.py",

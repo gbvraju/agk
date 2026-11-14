@@ -28,8 +28,10 @@ rule: `Who: AGK` on AGK's posts, `Who: ProductOwner` on a post that relays an ow
    (the record line, the brief and issue notes, the green-again note and the merger's lines: `Who: AGK`). The rare
    posters (`local_mode.py`, `plan_intake.py`, `scorecard.py`, `workflow_apply.py`) are unchanged for now; labels,
    issue bodies, statuses and merge messages are not marked.
-3. The texts that sessions copy for their own posts say it once: `.claude/agents/conductor.md` (item 8 of the review
-   protocol: every comment the conductor posts ends `Who: AGK conductor`, a relayed owner decision `Who: ProductOwner`)
+3. The texts that sessions copy for their own posts say it once: `.claude/agents/conductor.md` (the shape of a verdict:
+   last, `Who: AGK conductor`, which ends all the conductor's comments, `Who: ProductOwner` when relaying the owner;
+   the protocol block, shared with the architect, is unchanged, and the messages paragraph and the row 8 lesson are
+   said in fewer words with the same meaning, so the file keeps its rule budget of 4496 words and 37 rule lines)
    and `docs/guides/getting-started.md` (`Who posted it.` under item 4 of running the loop, with the builder's
    `Who: AGK builder`). `config/session-rules.md` shows first-line forms only, not whole comments, so it is unchanged.
 4. It is a marker, not a rule: no check, guard, router or merge step requires or reads it. Every first line is
@@ -46,7 +48,8 @@ no stack's test or build step changes. Tests: `tests/kit/test_who_line.py` (with
 first-line and whole-body readers with and without the line; nothing refuses a body without it), and the existing
 post assertions of `tests/kit/` now name the line. Protected path classes changed: `scripts/agk/`
 (`scripts/agk/common.py`, `scripts/agk/session.py`, `scripts/agk/conductor.py`, `scripts/agk/route.py`,
-`scripts/agk/merge_cleared.py`), `.claude/` (`.claude/agents/conductor.md`) and `tests/kit/` (`tests/kit/test_who_line.py`
+`scripts/agk/merge_cleared.py`), `.claude/` (`.claude/agents/conductor.md`), `agk.toml` (the new test file in the `[testing]` map entries of the four
+scripts) and `tests/kit/` (`tests/kit/test_who_line.py`
 and the post assertions of the existing tests).
 
 ## Residual
