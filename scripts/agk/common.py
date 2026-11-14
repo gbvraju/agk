@@ -41,6 +41,38 @@ class CheckError(Exception):
 
 EXPERIMENTAL_KEY = "experimental_reviewer"
 
+# The folders and names of a test walk, read by `adopt.py` (`detect_tests`) and by `doctor.py`,
+# which every project installs while `adopt.py` is kit-only (brief #1214, ADR-0514; brief #997).
+# Front-end test runners' file names (SPEC-0044 rule 10); their topmost folders are found the same
+# way, `__tests__/`, `e2e/` and `cypress/` among them, always as folder prefixes, never as globs.
+FRONTEND_PATTERNS = ("*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx")
+SKIP_DIRS = {
+    "node_modules",
+    "__pycache__",
+    "venv",
+    "env",
+    "build",
+    "dist",
+    "site-packages",
+    "tox",
+}
+KIT_DIRS = ("tests/kit", "scripts/agk")
+
+
+def walked_dirs(rel_here: str, dirnames: list[str]) -> list[str]:
+    """The folders under `rel_here` that a test walk enters: no dot folder, none of `SKIP_DIRS`
+    and none of `KIT_DIRS`. `adopt.detect_tests` and `doctor.py` both call it (brief #997)."""
+    return [
+        d
+        for d in dirnames
+        if not d.startswith(".")
+        and d not in SKIP_DIRS
+        and not any(
+            f"{rel_here}/{d}".lstrip("/") == k or f"{rel_here}/{d}".lstrip("/").startswith(k + "/")
+            for k in KIT_DIRS
+        )
+    ]
+
 
 def block_source(manifest: dict, rel: str) -> str:
     """The kit file whose text is the marked block of `rel` in an adopt install.

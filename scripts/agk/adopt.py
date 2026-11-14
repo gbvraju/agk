@@ -25,13 +25,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import (
+from common import (  # the test-walk names live there since brief #1214
+    FRONTEND_PATTERNS,
     block_source,
     detect_default_branch,
     experimental_enabled,
     lf,
     matches,
     read_list,
+    walked_dirs,
 )
 from init import (
     CREATE_ONLY,
@@ -57,20 +59,6 @@ from init import (
 from reviewers import parse, render_codeowners
 
 TEST_PATTERNS = ("*_test.py", "test_*.py")
-# Front-end test runners' file names (SPEC-0044 rule 10); their topmost folders are found the same
-# way, `__tests__/`, `e2e/` and `cypress/` among them, always as folder prefixes, never as globs.
-FRONTEND_PATTERNS = ("*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx")
-SKIP_DIRS = {
-    "node_modules",
-    "__pycache__",
-    "venv",
-    "env",
-    "build",
-    "dist",
-    "site-packages",
-    "tox",
-}
-KIT_DIRS = ("tests/kit", "scripts/agk")
 MARKERS = {
     "hash": ("# >>> agk", "# <<< agk"),
     "html": ("<!-- >>> agk -->", "<!-- <<< agk -->"),
@@ -80,21 +68,6 @@ ABSENT_AS_BLOCK = {".gitignore", ".gitattributes"}
 
 def toml_list(items: list[str]) -> str:
     return "[" + ", ".join(json.dumps(i) for i in items) + "]"
-
-
-def walked_dirs(rel_here: str, dirnames: list[str]) -> list[str]:
-    """The folders under `rel_here` that a test walk enters: no dot folder, none of `SKIP_DIRS`
-    and none of `KIT_DIRS`. `detect_tests` and `doctor.py` both call it (brief #997)."""
-    return [
-        d
-        for d in dirnames
-        if not d.startswith(".")
-        and d not in SKIP_DIRS
-        and not any(
-            f"{rel_here}/{d}".lstrip("/") == k or f"{rel_here}/{d}".lstrip("/").startswith(k + "/")
-            for k in KIT_DIRS
-        )
-    ]
 
 
 def detect_tests(root: Path) -> tuple[list[str], list[str]]:
