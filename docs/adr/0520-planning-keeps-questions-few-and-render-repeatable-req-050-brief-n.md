@@ -1,6 +1,6 @@
 # ADR-0520: Planning keeps open questions few and its render repeatable
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0043 rules 6, 7 and 25, amendment 179, ADR-0461, ADR-0465, ADR-0473, ADR-0508, brief #1221, plan #661

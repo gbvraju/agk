@@ -1,6 +1,6 @@
 # ADR-0524: Every installed check writes UTF-8
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0160, ADR-0200, ADR-0522, brief #263, brief #1223, brief #1233, plan #661

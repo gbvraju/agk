@@ -1,6 +1,6 @@
 # ADR-0517: An independent scope review runs before plan approval
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0459, brief #1218, plan #661

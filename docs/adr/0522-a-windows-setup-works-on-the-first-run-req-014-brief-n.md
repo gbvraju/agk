@@ -1,6 +1,6 @@
 # ADR-0522: A Windows setup works on the first run
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0006 rules 3 and 6, amendment 178, ADR-0160, brief #263, brief #1223, plan #661
