@@ -65,6 +65,32 @@ review_mode = "team"
 # stack = "<skill name>"
 # design = "<skill name>"
 # review = "<skill name>"
+# Optional settings of the session plan (session.py plan), off the defaults only when set. claim_stale_hours: the hours after which a
+# claim (a taken: comment) whose session has posted nothing and has no open pull request no longer holds its brief (24 by default);
+# the plan lists it as a stale claim. A change needs an ADR in the same pull request (agk.toml is a protected path).
+# auto_start and launch_adapter (brief #331): at the end of each review pass the conductor re-plans (session.py plan --json); with
+# auto_start = true and launch_adapter set to the project's own command (split into words, run without a shell, once per session with
+# the prompt on its standard input), it starts the sessions the plan names through that command while the default branch says the same,
+# never more than the plan's capacity or max_builders;
+# with auto_start = false (the default) it prints their ready-to-paste prompts. The kit installs two adapters, scripts/start-session-local.sh
+# and scripts/start-session-windows.ps1 (brief #1237); the local-mode guide, "Running unattended", says which line to set. Each is a protected change: an ADR in the same pull request (agk.toml is a protected path).
+# builder_memory_gb (brief #409): the memory, in whole GB (GiB), that one builder needs, with its containers. When set, the plan
+# starts no more builders than the machine's available memory divided by it (rounded down; at least 1 while none runs) and names the limit that
+# applied (max_builders, reviews or memory); when the memory cannot be read it says "memory: unknown" and keeps its other limits.
+# Unset by default. A change needs an ADR in the same pull request (agk.toml is a protected path).
+# auto_merge and auto_merge_method (SPEC-0039 rule 1): with auto_merge = true and auto_merge_method = "squash" (the only accepted
+# method), the conductor runs `python3 scripts/agk/merge_cleared.py --pr <n> --sha <sha>` in the act of clearing; the command reads the
+# two keys from this file as committed on the default branch of the remote, never from a pull request's head, and `agk doctor` prints
+# `auto-merge: off` or `auto-merge: on, method squash`. Off (false) by default and when absent; any other value merges nothing. Turning
+# it on is the owner's change: an ADR in the same pull request (agk.toml is a protected path).
+# These keys belong in the [flow] table: uncomment the [flow] line with them, or `agk doctor` reports them (misplaced-settings).
+# [flow]
+# claim_stale_hours = 24
+# builder_memory_gb = 6
+# auto_start = false
+# launch_adapter = ""
+# auto_merge = false
+# auto_merge_method = "squash"
 # Optional (brief #373): which tests guard which code. `python3 scripts/agk/test_plan.py` shows, as its regression section, the tests a
 # change selects and the rule that chose each; `prepush.py` runs the selected regression tests, and proof runs them only with
 # `proof_regression = true` (off by default). profile: "fast" (an unmapped file is only listed), "balanced" (the default: an unmapped
@@ -138,29 +164,3 @@ review_mode = "team"
 # [models.routes]
 # strongest = { task = "builder-strongest" }
 # mid = { task = "builder-mid" }
-# Optional settings of the session plan (session.py plan), off the defaults only when set. claim_stale_hours: the hours after which a
-# claim (a taken: comment) whose session has posted nothing and has no open pull request no longer holds its brief (24 by default);
-# the plan lists it as a stale claim. A change needs an ADR in the same pull request (agk.toml is a protected path).
-# auto_start and launch_adapter (brief #331): at the end of each review pass the conductor re-plans (session.py plan --json); with
-# auto_start = true and launch_adapter set to the project's own command (split into words, run without a shell, once per session with
-# the prompt on its standard input), it starts the sessions the plan names through that command while the default branch says the same,
-# never more than the plan's capacity or max_builders;
-# with auto_start = false (the default) it prints their ready-to-paste prompts. The kit installs two adapters, scripts/start-session-local.sh
-# and scripts/start-session-windows.ps1 (brief #1237); the local-mode guide, "Running unattended", says which line to set. Each is a protected change: an ADR in the same pull request (agk.toml is a protected path).
-# builder_memory_gb (brief #409): the memory, in whole GB (GiB), that one builder needs, with its containers. When set, the plan
-# starts no more builders than the machine's available memory divided by it (rounded down; at least 1 while none runs) and names the limit that
-# applied (max_builders, reviews or memory); when the memory cannot be read it says "memory: unknown" and keeps its other limits.
-# Unset by default. A change needs an ADR in the same pull request (agk.toml is a protected path).
-# auto_merge and auto_merge_method (SPEC-0039 rule 1): with auto_merge = true and auto_merge_method = "squash" (the only accepted
-# method), the conductor runs `python3 scripts/agk/merge_cleared.py --pr <n> --sha <sha>` in the act of clearing; the command reads the
-# two keys from this file as committed on the default branch of the remote, never from a pull request's head, and `agk doctor` prints
-# `auto-merge: off` or `auto-merge: on, method squash`. Off (false) by default and when absent; any other value merges nothing. Turning
-# it on is the owner's change: an ADR in the same pull request (agk.toml is a protected path).
-# The [flow] table is the last table of this file, so a key uncommented below it is read from [flow] (brief #1245).
-[flow]
-# claim_stale_hours = 24
-# builder_memory_gb = 6
-# auto_start = false
-# launch_adapter = ""
-# auto_merge = false
-# auto_merge_method = "squash"

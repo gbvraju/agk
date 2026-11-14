@@ -141,32 +141,42 @@ def test_the_check_is_a_line_of_the_doctor_report(tmp_path):
 # --- answer 3: the template -------------------------------------------------------------------
 
 
-def uncommented_flow(text: str) -> str:
-    """The template with every commented flow key line of its flow block uncommented where it
-    stands: each `# <key> = <value>` line of a flow key under the template's `[flow]` line."""
+def uncommented_flow(text: str, header: bool = True) -> str:
+    """The template with the lines of its commented flow block uncommented where they stand: each
+    `# <key> = <value>` line of a flow key after the `# [flow]` line, and that line with HEADER."""
     keys = config.TABLE_KEYS["flow"]
     out, block = [], False
     for line in text.splitlines():
-        block = block or line == "[flow]"
+        if line == "# [flow]":
+            block = True
+            out.append("[flow]" if header else line)
+            continue
         body = line[2:] if block and line.startswith("# ") else None
         if body is not None and body.split(" = ", 1)[0] in keys and " = " in body:
             out.append(body)
         else:
+            block = False
             out.append(line)
     return "\n".join(out) + "\n"
 
 
-def test_the_template_has_a_real_flow_table_and_sets_nothing_in_it():
-    """REQ-039: brief #1245 answer 3."""
-    text = TEMPLATE.read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
-    data = tomllib.loads(text)
-    assert data["flow"] == {}
+def template_text() -> str:
+    return TEMPLATE.read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
+
+
+def test_the_template_says_where_the_flow_keys_go_and_sets_nothing():
+    """REQ-039: brief #1245 answer 3 (the comment block says the keys go in the [flow] table)."""
+    text = template_text()
+    lines = text.splitlines()
+    note = lines[lines.index("# [flow]") - 1]
+    assert "[flow] table" in note and "misplaced-settings" in note
+    assert "flow" not in tomllib.loads(text)
     assert found(text) == []
 
 
-def test_the_template_flow_keys_uncommented_in_place_read_from_flow(tmp_path):
-    """REQ-039: brief #1245 answer 4 (uncommenting a flow key puts it in `[flow]`)."""
-    text = uncommented_flow(TEMPLATE.read_text(encoding="utf-8").replace("{{", "").replace("}}", ""))
+def test_the_template_flow_block_uncommented_in_place_reads_from_flow(tmp_path):
+    """REQ-039: brief #1245 answer 4 (uncommenting the flow block puts its keys in `[flow]`)."""
+    text = uncommented_flow(template_text())
     data = tomllib.loads(text)
     assert "auto_start" in data["flow"] and "launch_adapter" in data["flow"]
     assert found(text) == []
@@ -174,3 +184,13 @@ def test_the_template_flow_keys_uncommented_in_place_read_from_flow(tmp_path):
     text = text.replace("auto_start = false", "auto_start = true")
     (tmp_path / "agk.toml").write_text(text, encoding="utf-8")
     assert launch.launch_settings(tmp_path) == (True, "sh scripts/run.sh")
+
+
+def test_the_flow_keys_uncommented_without_the_table_line_are_reported():
+    """REQ-039: brief #1245 answers 1 and 4 (the rehearsal: the keys alone, never silent)."""
+    text = uncommented_flow(template_text(), header=False)
+    named = {key for key, where, homes in found(text)}
+    assert {"auto_start", "launch_adapter"} <= named
+    assert all("flow" in homes for _, _, homes in found(text))
+    res = doctor.misplaced_settings_result(tomllib.loads(text))
+    assert res.status == "fail" and "auto_start is at the top level" in res.message
