@@ -132,7 +132,9 @@ proposes; brief #1216, ADR-0515). Each step is its own pull request, merged by y
 8. **Validate.** `python3 scripts/agk/plan_intake.py validate --proposals FILE`, as in step 5.
 9. **Render.** `python3 scripts/agk/plan_intake.py render --proposals FILE`, as in step 6.
 10. **Trace.** `python3 scripts/agk/check_plan.py --trace`, as in step 7.
-11. **Approve.** An account of `spec_approvers` posts `Approve: plan <full head ID>`, as in step 8.
+11. **Review the scope, then approve.** First run `/agk:scope-review <report path outside docs/>` in a fresh session
+    and read its report (ADR-0517); then an account of `spec_approvers` posts `Approve: plan <full head ID>`, as in
+    step 8.
 12. **Publish.** `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]`, as in step 9.
 13. **Board.** `/agk:board --yes` on your own machine, as in step 9.
 
