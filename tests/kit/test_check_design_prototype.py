@@ -711,3 +711,139 @@ def test_ac4_the_module_is_installed_verbatim():
     """REQ-044 AC4: SPEC-0037 rule 14 (a module the installed check imports is in `verbatim`)."""
     manifest = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert "scripts/agk/design_prototype_check.py" in manifest["verbatim"]
+
+
+# --- rule 7: only the latest kit version covers the inventory (brief #1208, ADR-0512) ------------
+
+SHELF = screen_section("book-shelf", "book-list", ("default",))
+V2 = "v2"
+REL2 = f"docs/design/prototype/{V2}"
+
+
+def sign_off(root: Path, name: str) -> None:
+    """Append one invented `design` row of version NAME with the digest its folder has now."""
+    import design_signoff
+
+    path = root / "docs/design/signoffs.md"
+    if not path.is_file():
+        put(root, "docs/design/signoffs.md", SIGNOFFS_TEMPLATE.read_text(encoding="utf-8"))
+    row = (
+        f"| design | {name} | {design_signoff.version_digest(root, name)} | {HEAD} | 2026-11-02 "
+        "| https://example.com/review/2 |\n"
+    )
+    path.write_text(path.read_text(encoding="utf-8") + row, encoding="utf-8")
+
+
+def grow(root: Path, *, draw: bool = True) -> Path:
+    """The inventory gains `book-shelf` after v1; v2 copies v1 and, with DRAW, draws the shelf."""
+    edit(
+        root,
+        "docs/design/inventory.md",
+        "book-list, book-detail",
+        "book-list, book-detail, book-shelf",
+    )
+    path = root / "docs/design/inventory.md"
+    path.write_text(path.read_text(encoding="utf-8") + "\n" + SHELF, encoding="utf-8")
+    first, second = root / REL, root / REL2
+    second.mkdir(parents=True)
+    for item in first.iterdir():
+        if item.is_file():
+            (second / item.name).write_bytes(item.read_bytes())
+    if draw:
+        put(
+            root,
+            f"{REL2}/book-shelf--default.html",
+            page("book-shelf", "default", ("default",), "book-list--default.html"),
+        )
+    return second
+
+
+def test_ac4_a_signed_off_v1_is_not_checked_for_states_added_after_it(tmp_path):
+    """REQ-044 AC4: SPEC-0037 rule 7 amendment (a): only the latest version covers the inventory."""
+    version(tmp_path)
+    sign_off(tmp_path, VERSION)
+    grow(tmp_path)
+    assert design_prototype_check.version_problems(tmp_path, VERSION) == []
+    assert design_prototype_check.version_problems(tmp_path, V2) == []
+    proc = check(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "ok design" in proc.stdout
+    line = f"design: {VERSION} predates the inventory; {V2} is the version checked for coverage"
+    assert proc.stdout.count(line) == 1, proc.stdout
+
+
+def test_ac4_the_latest_version_missing_a_state_still_fails(tmp_path):
+    """REQ-044 AC4: SPEC-0037 rule 7 amendment (b): the latest version lacking a state fails."""
+    version(tmp_path)
+    sign_off(tmp_path, VERSION)
+    grow(tmp_path, draw=False)
+    assert design_prototype_check.version_problems(tmp_path, VERSION) == []
+    proc = check(tmp_path)
+    assert proc.returncode == 1, proc.stdout
+    assert f"FAIL design: rule 7: {REL2}/book-shelf--default: the state has no page" in proc.stdout
+    assert f"FAIL design: rule 7: {REL}/book-shelf--default: " not in proc.stdout
+
+
+def test_ac4_a_single_version_is_checked_for_coverage_as_before(tmp_path):
+    """REQ-044 AC4: SPEC-0037 rule 7 amendment (c): one version is the latest and prints no note."""
+    folder = version(tmp_path)
+    (folder / "book-list--empty.html").unlink()
+    proc = check(tmp_path)
+    assert proc.returncode == 1, proc.stdout
+    assert f"FAIL design: rule 7: {REL}/book-list--empty: the state has no page" in proc.stdout
+    assert "predates the inventory" not in proc.stdout
+
+
+def test_ac4_an_older_complete_version_prints_no_note(tmp_path):
+    """REQ-044 AC4: the note names only an older version that is not complete."""
+    version(tmp_path)
+    grow(tmp_path, draw=True)
+    put(
+        tmp_path,
+        f"{REL}/book-shelf--default.html",
+        page("book-shelf", "default", ("default",), "book-list--default.html"),
+    )
+    proc = check(tmp_path)
+    assert proc.returncode == 0, proc.stdout
+    assert "predates the inventory" not in proc.stdout
+
+
+def test_ac4_an_older_unsigned_version_with_a_removed_screen_still_fails(tmp_path):
+    """REQ-044 AC4: amendment (d): an older page for no screen fails while it is not signed off."""
+    version(tmp_path)
+    grow(tmp_path)
+    put(
+        tmp_path,
+        f"{REL}/book-gone--default.html",
+        page("book-gone", "default", ("default",), "book-list--default.html"),
+    )
+    proc = check(tmp_path)
+    assert proc.returncode == 1, proc.stdout
+    expected = f"rule 7: {REL}/book-gone--default: the page is for no screen and state"
+    assert f"FAIL design: {expected}" in proc.stdout
+
+
+def test_ac4_an_older_signed_off_version_with_a_removed_screen_passes(tmp_path):
+    """REQ-044 AC4: amendment (d): a frozen older version passes with a removed screen."""
+    version(tmp_path)
+    put(
+        tmp_path,
+        f"{REL}/book-gone--default.html",
+        page("book-gone", "default", ("default",), "book-list--default.html"),
+    )
+    sign_off(tmp_path, VERSION)
+    (grow(tmp_path) / "book-gone--default.html").unlink()  # v2 drops the removed screen
+    assert design_prototype_check.version_problems(tmp_path, VERSION) == []
+    proc = check(tmp_path)
+    assert proc.returncode == 0, proc.stdout
+
+
+def test_ac4_a_signed_off_older_version_still_freezes(tmp_path):
+    """REQ-044 AC4: amendment (d): the frozen digest of rule 9 still holds an older version."""
+    version(tmp_path)
+    sign_off(tmp_path, VERSION)
+    grow(tmp_path)
+    put(tmp_path, f"{REL}/demo.md", "# Demo paths of v1, changed\n")
+    proc = check(tmp_path)
+    assert proc.returncode == 1, proc.stdout
+    assert f"FAIL design: rule 9: {REL}: a signed-off version changed" in proc.stdout

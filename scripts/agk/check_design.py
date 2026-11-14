@@ -14,7 +14,10 @@ or a missing state fails naming the rule and the screen. Each prototype version 
 8): its pages against the inventory, its links, the kit's hashed runtime as its one script, its two
 stylesheets, its colours and contrast, placeholders, fixture data, the accessibility and layout
 basics, and the reflow record, which reads `design: reflow not run (<version>)` when it is absent
-or incomplete, information and never `ok`. A theme with the line
+or incomplete, information and never `ok`. Only the latest kit version must cover the inventory
+(brief #1208, ADR-0512); an older version that lacks a state reads
+`design: v<n> predates the inventory; v<m> is the version checked for coverage`, information only.
+A theme with the line
 `Standard: agk design standard <n>` is on the kit's standard (SPEC-0037 rule 2): it may set only its
 theme block and its layout block, and its contrast is computed on the standard's colour roles after
 its overrides, in light and dark; a theme without the line is checked as before. A version
@@ -298,6 +301,11 @@ def cmd_check(root: Path) -> int:
         problems += design_prototype_check.version_problems(root, version)
         if design_prototype_check.reflow_not_run(root, version):
             print(f"design: reflow not run ({version})")
+        if design_prototype_check.predates(root, version):
+            print(
+                f"design: {version} predates the inventory; "
+                f"{versions[-1]} is the version checked for coverage"
+            )
     problems += design_import.imported_problems(root)  # rule 15: rules 5 to 7 do not apply
     problems += design_signoff.frozen_problems(root)  # rule 9: a signed-off version is frozen
     for line in notes if not problems else []:
