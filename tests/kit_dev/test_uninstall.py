@@ -23,6 +23,7 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 import common  # noqa: E402
 import kit_hashes  # noqa: E402
 import uninstall  # noqa: E402
+from test_upgrade import KNOWN_BROKEN_TAGS  # noqa: E402  (the one list, ADR-0539)
 
 REVIEWERS = (
     "version: 1\n"
@@ -845,8 +846,20 @@ def test_the_github_list_ends_with_the_order(tmp_path, kit, capsys):
 
 def newest_with_commit() -> str:
     rows = uninstall.load_table(KIT_ROOT)["releases"]
-    named = [v for v, row in rows.items() if row.get("commits")]
+    named = [v for v, row in rows.items() if row.get("commits") and v not in KNOWN_BROKEN_TAGS]
     return max(named, key=lambda v: tuple(int(p) for p in v.split(".")))
+
+
+def test_newest_with_commit_skips_every_known_broken_tag(monkeypatch):
+    """REQ-038: brief #1278, the release the round trip installs is never one of the one list."""
+    rows = uninstall.load_table(KIT_ROOT)["releases"]
+    newest = max(
+        (v for v, row in rows.items() if row.get("commits")),
+        key=lambda v: tuple(int(p) for p in v.split(".")),
+    )
+    assert newest_with_commit() not in KNOWN_BROKEN_TAGS
+    monkeypatch.setattr(sys.modules[__name__], "KNOWN_BROKEN_TAGS", (newest,))
+    assert newest_with_commit() != newest
 
 
 def test_a_released_install_round_trip_lists_every_kit_file_delete(tmp_path, capsys):
