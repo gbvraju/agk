@@ -27,12 +27,12 @@ from test_session import REPO, SCRIPTS, Stub, comment, iso
 ROOT = SCRIPTS.parents[1]
 GIB = 1024**3
 PLAN = f"repos/{REPO}/issues/61/comments"
-ADAPTER = '''import json, os, sys
+ADAPTER = """import json, os, sys
 with open(sys.argv[1], "a", encoding="utf-8") as log:
     env = {k: os.environ.get(k) for k in ("AGK_SESSION", "AGK_ROLE", "AGK_BRIEF", "AGK_TIER")}
     log.write(json.dumps({**env, "prompt": sys.stdin.read()}) + "\\n")
 sys.exit(int(os.environ.get("ADAPTER_EXIT", "0")))
-'''
+"""
 
 
 @pytest.fixture
@@ -352,8 +352,8 @@ def test_the_windows_adapter_is_the_guides_example_unchanged():
         encoding="utf-8"
     )
     rendered = template.replace("{{default_branch}}", "main").rstrip("\n")
-    shown = guide_block("# scripts/start-session-windows.ps1: one Windows Terminal tab per session, in its own worktree.")
-    assert rendered.splitlines()[1:] == shown.splitlines()[1:]
+    shown = guide_block(rendered.splitlines()[0])
+    assert rendered.splitlines() == shown.splitlines()
     assert "{{default_branch}}" in template
 
 
@@ -402,7 +402,9 @@ def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(
             break
         subprocess.run(["sleep", "0.1"], check=False)  # nosec B603 B607
     lines = exit_file.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == "exit_code=0" and re.fullmatch(r"ended_utc=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", lines[1])
+    assert lines[0] == "exit_code=0" and re.fullmatch(
+        r"ended_utc=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", lines[1]
+    )
     seen = (tmp_path / "seen.txt").read_text(encoding="utf-8").splitlines()
     assert Path(seen[0]).resolve() == worktree.resolve() and "hello there" in seen[1:]
     status = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell

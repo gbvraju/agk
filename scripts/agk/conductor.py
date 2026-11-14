@@ -150,6 +150,28 @@ main (light re-prove, SPEC-0050 amendment 171)`; any other re-prove file or a co
 Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
 one), so the launcher restarts a builder for exactly those.
+
+Brief #1237 (ADR-0525): local mode restarts the conductor unattended.
+
+    python3 conductor.py watchdog [--session NAME] [--install]
+
+`watchdog` is one pass, never a loop. It reads, in order: the pause of the default branch
+(`agk paused; nothing started`, exit 0); `auto_start` and `launch_adapter` of the `[flow]` table,
+which must be on and set in the checkout and on `origin/<default branch>` alike, as for the review
+pass's starts (else nothing starts, exit 1, naming the settings); the lease on the plan issue (off:
+nothing starts, exit 1; held by a live conductor: `lease held by <name> until <time>; nothing
+started`, exit 0); and the machine's free memory (`common.available_memory`) against
+`builder_memory_gb`, the smaller of the `[flow]` and `[capacity]` values as the plan reads it,
+printed as `watchdog: memory <n> GB available, builder_memory_gb <g>|unset`. Below one builder it
+starts nothing and says so (exit 1); memory that cannot be read prints `memory unknown` and the
+start goes ahead, as `launch.py`'s floor does. Otherwise it calls the adapter once, as
+`launch.py` does (split into words, no shell, the prompt on standard input), with `AGK_SESSION`
+NAME (`conductor-local` by default), `AGK_ROLE=conductor` and `AGK_TIER=strongest`, and no
+`AGK_BRIEF`; the prompt names the conductor role and tells it to take the lease under NAME first.
+It posts nothing and takes no lease: the started conductor takes its own, and the lease keeps two
+from running. `--install` reads nothing and runs nothing: it prints the one scheduler line for the
+platform, `schtasks /Create /SC MINUTE /MO 30 ...` on Windows and a crontab line elsewhere, each a
+`git fetch` of the checkout and then this pass, for the person to run.
 """
 
 from __future__ import annotations
@@ -158,7 +180,9 @@ import base64
 import contextlib
 import io
 import json
+import os
 import re
+import shlex
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
@@ -171,6 +195,8 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import caps
+import common
+import launch
 import merge_cleared
 import session
 import session_plan
@@ -191,7 +217,7 @@ USAGE = (
     "conductor.py merge-queue [--dry-run] [--max-batch N] | "
     "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] | "
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N | "
-    "conductor.py reprove --pr N [--apply]"
+    "conductor.py reprove --pr N [--apply] | conductor.py watchdog [--session NAME] [--install]"
 )
 REPROVE_REPORT = "merge of main (light re-prove, SPEC-0050 amendment 171)"
 REPROVE_WAITS = 10  # reads of the pull request for the new head after update-branch
@@ -1827,6 +1853,122 @@ def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
     return 0
 
 
+# --- watchdog (brief #1237, ADR-0525) ---------------------------------------------------------
+
+WATCHDOG_NAME = "conductor-local"
+WATCHDOG_TASK = "AGK conductor watchdog"
+WATCHDOG_MINUTES = 30
+WATCHDOG_SETTINGS = "(settings: auto_start and launch_adapter in the flow table of agk.toml)"
+WATCHDOG_PROMPT = (
+    "You are the AGK conductor {name} for repository {repo}, started by the local watchdog "
+    "(`python3 scripts/agk/conductor.py watchdog`) because no conductor held the lease. Your role "
+    "is `.claude/agents/conductor.md` on the default branch: read it, `CLAUDE.md`, "
+    "`constitution/principles.md` and `config/session-rules.md` first and follow them exactly. "
+    "Take the lease first with `python3 scripts/agk/conductor.py lease --take {name}`; when it "
+    "is refused another conductor holds it, so end at once. Renew it and release it as the role "
+    "says, and run `python3 scripts/agk/session.py queue --role conductor` before anything else "
+    "(session rule 11).\n"
+)
+
+
+def watchdog_args(args: list[str]) -> tuple[str, bool] | None:
+    """(NAME, `--install` given) for `watchdog [--session NAME] [--install]`; None otherwise."""
+    rest, name, install = args[1:], WATCHDOG_NAME, False
+    while rest:
+        if rest[0] == "--install" and not install:
+            install, rest = True, rest[1:]
+        elif rest[0] == "--session" and len(rest) > 1 and NAME.fullmatch(rest[1]):
+            name, rest = rest[1], rest[2:]
+        else:
+            return None
+    return name, install
+
+
+def install_line(root, name: str, platform: str) -> str:
+    """The one scheduler line that runs a watchdog pass every 30 minutes; printed, never run."""
+    named = "" if name == WATCHDOG_NAME else f" --session {name}"
+    folder = str(Path(root).resolve())
+    if platform == "win32":
+        run = (
+            f'cmd /c cd /d \\"{folder}\\" && git fetch -q origin && '
+            f"python scripts\\agk\\conductor.py watchdog{named}"
+        )
+        return (
+            f'schtasks /Create /SC MINUTE /MO {WATCHDOG_MINUTES} /TN "{WATCHDOG_TASK}" '
+            f'/TR "{run}" /F'
+        )
+    return (
+        f"*/{WATCHDOG_MINUTES} * * * * cd {shlex.quote(folder)} && git fetch -q origin && "
+        f"python3 scripts/agk/conductor.py watchdog{named}"
+    )
+
+
+def builder_memory(root) -> int | None:
+    """`builder_memory_gb` as the plan reads it: the smaller of `[flow]` and `[capacity]`."""
+    flow_max = session.flow_int(root, "max_builders", session.MAX_BUILDERS, 1)
+    return session_plan.ceilings(root, flow_max)["builder_memory_gb"]
+
+
+def memory_line(root) -> tuple[str, bool]:
+    """(the printed line, whether the memory allows one more session)."""
+    per = builder_memory(root)
+    free = common.available_memory()
+    shown = "unknown" if free is None else f"{free // session_plan.GIB} GB available"
+    line = f"watchdog: memory {shown}, builder_memory_gb {per if per else 'unset'}"
+    return line, not (per and free is not None and free < per * session_plan.GIB)
+
+
+def watchdog(root, name: str) -> int:
+    """One pass: start the conductor through the adapter when its lease is free or expired."""
+    if session.paused_default(root):
+        print("watchdog: agk paused; nothing started")
+        return 0
+    branch = launch.default_branch(root)
+    here = launch.launch_settings(root)
+    main_ = launch.launch_settings(root, f"origin/{branch}")
+    if not (here[0] and here[1]) or here != main_:
+        print(f"watchdog: nothing started: no adapter to start a conductor {WATCHDOG_SETTINGS}")
+        return 1
+    issue = plan_issue(root)
+    if issue is None:
+        print(f"watchdog: nothing started: {LEASE_OFF}")
+        return 1
+    repo = session.repo_name(root)
+    holder = lease_holder(plan_comments(repo, issue), verdict_authors(root), datetime.now(UTC))
+    if holder is not None:
+        print(f"watchdog: lease held by {holder[0]} until {stamp_of(holder[1])}; nothing started")
+        return 0
+    print("watchdog: lease free")
+    line, allowed = memory_line(root)
+    print(line)
+    if not allowed:
+        print(
+            "watchdog: nothing started: free memory is below one builder "
+            "(setting: builder_memory_gb)"
+        )
+        return 1
+    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
+    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
+    try:
+        done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
+            shlex.split(here[1]),
+            input=WATCHDOG_PROMPT.format(name=name, repo=repo),
+            text=True,
+            encoding="utf-8",
+            env=env,
+            capture_output=True,
+            cwd=root,
+        )
+    except OSError:
+        print(f"FAIL conductor: the adapter cannot be run for {name}", file=sys.stderr)
+        return 1
+    if done.returncode != 0:
+        print(f"FAIL conductor: the adapter failed for {name}", file=sys.stderr)
+        return 1
+    print(f"watchdog: started {name}")
+    return 0
+
+
 def routine_args(args: list[str]) -> tuple | None:
     """(`rerun`, number, apply), (`check-verdict`, path) or (`lease`, mode, name) for the forms
     of brief #700; None for any other form."""
@@ -1877,7 +2019,11 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     queue = queue_args(args) if args[:1] == ["merge-queue"] else None
     routine = routine_args(args)
     plain = args in (["sweep"], ["watch"], ["watch", "--once"])
-    if queue is None and routine is None and not plain:
+    guard = watchdog_args(args) if args[:1] == ["watchdog"] else None
+    if guard is not None and guard[1]:
+        print(install_line(root or repo_root(), guard[0], sys.platform))
+        return 0
+    if queue is None and routine is None and guard is None and not plain:
         print(USAGE, file=sys.stderr)
         return 2
     try:
@@ -1894,6 +2040,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             if routine[0] == "reprove":
                 return reprove(root, routine[1], routine[2])
             return lease(root, routine[1], routine[2])
+        if guard is not None:
+            return watchdog(root, guard[0])
         if args == ["sweep"]:
             return sweep(root)
         return watch(root, since, args[1:] == ["--once"])
