@@ -757,9 +757,11 @@ def plan_reads(path: Path | None) -> str | None:
     try:
         found = json.loads(path.read_text(encoding="utf-8"))
         calls, cached, seconds = found["calls"], found["cached"], found["seconds"]
-    except (OSError, ValueError, TypeError, KeyError):
+        writes = found.get("writes")
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
         return None
-    return f"plan reads {calls} calls ({cached} from cache), {seconds} s"
+    line = f"plan reads {calls} calls ({cached} from cache), {seconds} s"
+    return f"{line}, writes {writes}" if isinstance(writes, int) and writes > 0 else line
 
 
 def plan_reads_file(root: Path) -> Path | None:
