@@ -113,7 +113,7 @@ def test_req066_remotes_that_cannot_be_read_refuse(tmp_path):
     root = tmp_path / "plain"
     (root / "config").mkdir(parents=True)
     (root / "config" / "neutrality.txt").write_text("", encoding="utf-8")
-    lines = outbound.check(CLEAN, root, remotes=None, git_dir_required=True)
+    lines = outbound.check(CLEAN, root)
     assert lines and "cannot check" in lines[0] and "git remotes" in lines[0]
 
 
