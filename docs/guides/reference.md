@@ -188,7 +188,7 @@ recommendation and a `Gap:` to record (exit 3); `answer` posts that one comment 
 requirement answer goes to the owner with its recommendation until build (d)'s re-check. A finding file is JSON: `id`,
 `triage` (`kit brief`, `kit correction`, `kit question`, `project brief` or `owner question`), `why`, `text`, optional
 `cause` and `reproduced`; `triage` prints `file`, `draft` (a kit filing from a project, until build (e)) or `ask` and the
-`Triage:` note, or refuses (exit 2) a text without its `Modes:` line, failing `check_brief.py` or the neutrality list, an
+`Triage:` note, or refuses (exit 2) a text without its `Modes:` line, failing the brief shape or the neutrality list, an
 unreproduced cause, or a filing above `[steward] auto_file` without an `Owner said` line. `skill` prints the step's skill
 from the agent file's table, or `no skill:` (exit 3). A failed GitHub call exits 4.
 

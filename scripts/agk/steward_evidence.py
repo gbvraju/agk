@@ -67,10 +67,10 @@ def building(stage: str) -> bool:
 
 
 def stage_of(root: Path, today: date, conductor_open: bool) -> str:
-    """Rule 2 and Q-S0059-10: the newest stage whose record is on disk; build once a conductor runs."""
+    """Rule 2, Q-S0059-10: the newest stage whose record is on disk; build once a conductor runs."""
     from front_door import phase_of
 
-    exists = (lambda rel: (root / rel).is_file())  # noqa: E731
+    exists = lambda rel: (root / rel).is_file()  # noqa: E731
     if conductor_open:
         return "build"
     if exists("docs/plan/milestones.md") or exists("docs/plan/scope-lock.md"):
@@ -92,7 +92,9 @@ def checked(question: object) -> dict:
     if question.get("class") not in CLASSES:
         raise CheckError("the question is refused (field: class)")
     for item in question.get("findings", []):
-        if not (isinstance(item, dict) and item.get("source") in range(1, 6) and item.get("answer")):
+        if not (
+            isinstance(item, dict) and item.get("source") in range(1, 6) and item.get("answer")
+        ):
             raise CheckError("the question is refused (field: findings)")
     return question
 
@@ -102,7 +104,7 @@ def one_line(text: object) -> str:
 
 
 def settle(question: dict, stage: str) -> dict:
-    """Rule 3: the first source that answers wins; rule 3's negative cases and authority by stage."""
+    """Rule 3: the first source that answers wins; its negative cases and authority by stage."""
     question = checked(question)
     qid, cls, findings = question["id"], question["class"], question.get("findings", [])
     findings = sorted(findings, key=lambda f: f["source"])
@@ -115,7 +117,7 @@ def settle(question: dict, stage: str) -> dict:
     if win:
         place = f"{SOURCES[win['source'] - 1]} {one_line(win.get('place', ''))}"
         if len(answers) > 1:
-            place += f"; ranking {one_line(ranking.get('place', ''))}"
+            place += f"; ranking {one_line((ranking or {}).get('place', ''))}"
         out["evidence"] = place
         out["recommendation"] = one_line(win["answer"])
     requirement = cls == "requirement" or (win is not None and win["source"] in (2, 3, 4))
@@ -169,8 +171,12 @@ def answer(root: Path, question: dict, number: int, gh, today: date) -> tuple[in
     found = settle(question, stage_of(root, today, conductor_open(root, gh)))
     if found["to"] != "answer":
         return 3, owner_lines(found)
-    posted = gh("POST", f"repos/{{owner}}/{{repo}}/issues/{number}/comments", {"body": answer_body(found)})
-    return (0, [found["line"]]) if posted is not None else (4, ["error: comments cannot be written"])
+    posted = gh(
+        "POST", f"repos/{{owner}}/{{repo}}/issues/{number}/comments", {"body": answer_body(found)}
+    )
+    return (
+        (0, [found["line"]]) if posted is not None else (4, ["error: comments cannot be written"])
+    )
 
 
 def neutral(text: str, root: Path) -> str | None:
@@ -197,7 +203,9 @@ def triage(item: dict, root: Path) -> dict:
     if choice == "owner question":
         return {"action": "ask", "lines": ["ask: the owner, in one plain sentence"], "entry": entry}
     if not MODES.search(text):
-        return refused("no `Modes: github <effect>; local <effect>; personal <effect>` line (rule 7)")
+        return refused(
+            "no `Modes: github <effect>; local <effect>; personal <effect>` line (rule 7)"
+        )
     if item.get("cause") and not str(item.get("reproduced", "")).strip():
         return refused("the cause is not reproduced on the default branch (rule 7)")
     kit = choice.startswith("kit")
@@ -214,16 +222,24 @@ def triage(item: dict, root: Path) -> dict:
     auto = steward_settings(root)["auto_file"]
     within = priority and auto is not False and int(priority[1]) <= auto
     if not within and not OWNER_LINE.search(text):
-        return refused("filing needs the owner's word above [steward] auto_file (setting: steward.auto_file)")
+        return refused(
+            "filing needs the owner's word above [steward] auto_file (setting: steward.auto_file)"
+        )
     if kit and not (root / "kit" / "manifest.json").is_file():
         line = "draft: for the owner; nothing goes to the kit from a project before build (e)"
         return {"action": "draft", "lines": [line], "entry": entry}
-    return {"action": "file", "lines": [f"file: {choice} (skill: `brief` or `issue`)"], "entry": entry}
+    return {
+        "action": "file",
+        "lines": [f"file: {choice} (skill: `brief` or `issue`)"],
+        "entry": entry,
+    }
 
 
 def skills(root: Path) -> dict[str, str]:
     """Rule 19: the stage-to-skill table of the agent file, the one copy."""
-    rows = re.findall(r"^\| ([^|`][^|]*?) \| (`[^|]+?) \|$", (root / AGENT).read_text("utf-8"), re.M)
+    rows = re.findall(
+        r"^\| ([^|`][^|]*?) \| (`[^|]+?) \|$", (root / AGENT).read_text("utf-8"), re.M
+    )
     return {step: skill for step, skill in rows}
 
 
@@ -236,7 +252,9 @@ def skill_line(root: Path, step: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="steward_evidence.py", description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(
+        prog="steward_evidence.py", description=__doc__.split("\n\n")[0]
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("stage").add_argument("--date")
     settle_p = sub.add_parser("settle")
@@ -262,7 +280,11 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if opts.command == "triage":
             found = triage(json.loads(opts.finding.read_text(encoding="utf-8")), root)
-            print("\n".join(found["lines"] + ([f"record: {found['entry']}"] if found["entry"] else [])))
+            print(
+                "\n".join(
+                    found["lines"] + ([f"record: {found['entry']}"] if found["entry"] else [])
+                )
+            )
             return 2 if found["action"] == "refused" else 0
         question = json.loads(opts.question.read_text(encoding="utf-8"))
         if opts.command == "answer":
