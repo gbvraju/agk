@@ -1,6 +1,6 @@
 # SPEC-0060: A local GitHub cache with publish and subscribe on each laptop, nothing hosted
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-067
 
