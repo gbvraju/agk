@@ -201,7 +201,8 @@ The steward's first start (SPEC-0059 rule 20, ADR-0562). With no `Onboarded:` no
 point: `day 0` (no Approved spec, no `agk-brief` issue; stage `start`, nothing harvested), `execution` (an open
 `agk-conductor` issue, or `docs/plan/scope-lock.md` and a closed brief) or `planning` (the stage of `steward_evidence.py
 stage`). Planning and execution harvest, by list pages only: the first lines of the repository's comments
-(`Maintainer answer:`, `Answer:`, `Question:`, `Owner needed:`), the open `agk:parked` issues, Accepted ADRs,
+(`Maintainer answer:`, `Answer:`, `Question:`, `Owner needed:`; an answer or `Owner needed:` only from a listed verdict
+author or spec approver of `config/reviewers.yaml`), the open `agk:parked` issues, Accepted ADRs,
 `docs/runs/decisions/`, Approved specs, `docs/requirements.md` statuses, `docs/design/signoffs.md` and the last line of
 `check_plan.py --trace`. The notes are marked `harvested`, each line with its source: `Decision:` (at most 50 lines a
 note), one `Owner question:` per open question and per question whose answers disagree, `Risk:` for parked work and

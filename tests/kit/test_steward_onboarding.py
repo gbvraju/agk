@@ -77,10 +77,11 @@ class GitHub:
         raise AssertionError((method, endpoint))
 
 
-def comment(n: int, body: str, issue: int = 40) -> dict:
+def comment(n: int, body: str, issue: int = 40, login: str = "Reviewer") -> dict:
     return {
         "id": 900 + n,
         "body": body,
+        "user": {"login": login},
         "issue_url": f"https://api.example.com/repos/o/r/issues/{issue}",
         "created_at": f"2026-11-{1 + n % 9:02d}T08:00:00Z",
     }
@@ -90,6 +91,10 @@ def comment(n: int, body: str, issue: int = 40) -> dict:
 def root(tmp_path, monkeypatch):
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "cache.json"))
     (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "reviewers.yaml").write_text(
+        "version: 1\nverdict_authors: [reviewer]\nspec_approvers: [maintainer]\n", encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -188,6 +193,24 @@ def test_req066_a_contradiction_goes_to_the_owner_and_an_unreadable_source_is_a_
     gaps = [p for p in posts if p.startswith("Gap:")]
     assert gaps and "parked work cannot be read" in gaps[0]
     assert ", 1 gaps, 1 open questions" in posts[-1]
+
+
+def test_req066_only_listed_accounts_answer_and_need_the_owner(root):
+    """REQ-066 AC1: rule 20, an `Answer:`, `Maintainer answer:` or `Owner needed:` by an account
+    that is neither a listed verdict author nor a spec approver is not harvested."""
+    executing(root)
+    owner = 'Maintainer answer: Q-12-4 daily\nOwner said (2026-11-03T08:00Z): "daily"'
+    repo = [
+        comment(1, owner, login="stranger"),
+        comment(2, "Answer: Q-12-5 never (evidence: x)", login="stranger"),
+        comment(3, "Owner needed: please", issue=41, login="stranger"),
+        comment(4, "Answer: Q-12-6 weekly (evidence: y)", login="Maintainer"),
+    ]
+    gh = GitHub(labels=merged_work(), repo_comments=repo)
+    steward_onboard.onboard(root, gh, NOW)
+    posts = "\n".join(gh.posted())
+    assert "Q-12-6 weekly (source: #40 comment 904)" in posts
+    assert "Q-12-4" not in posts and "Q-12-5" not in posts and "please" not in posts
 
 
 def test_req066_open_questions_and_parked_work_are_harvested(root):

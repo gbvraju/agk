@@ -7,18 +7,19 @@ Usage: python3 scripts/agk/steward_onboard.py onboard [--again]
 A first start (a memory with no `Onboarded:` entry) finds its entry point: day 0 (stage `start`, no
 Approved spec and no `agk-brief` issue), execution (an open `agk-conductor` issue, or a locked plan
 and a closed brief) or planning (the stage `steward_evidence.py stage` names). Day 0 harvests
-nothing. Planning and execution read, by list pages only and never one read per item
-(Q-S0059-15): the repository's issue and pull request comments (`Maintainer answer:`, `Answer:`,
-`Question:` and `Owner needed:` first lines), the open `agk:parked` issues, and the files: Accepted
-ADRs, `docs/runs/decisions/`, Approved specs, the statuses of `docs/requirements.md`, the signed-off
+nothing. Planning and execution read, by list pages only and never one read per item (Q-S0059-15):
+the repository's issue and pull request comments (`Maintainer answer:`, `Answer:`, `Question:` and
+`Owner needed:` first lines; an answer or `Owner needed:` only from a listed verdict author or spec
+approver of `config/reviewers.yaml`), the open `agk:parked` issues, and the files: Accepted ADRs,
+`docs/runs/decisions/`, Approved specs, the statuses of `docs/requirements.md`, the signed-off
 prototype versions and the last line of `check_plan.py --trace`. It writes them as memory notes
 marked `harvested`, each line citing its source: `Decision:` notes of at most 50 lines, one `Owner
-question:` per open question and per question two answers contradict (never a decision), `Risk:`
-for parked work and `Gap:` for each source it could not read. A line the data guard matches is
-withheld, naming the class. It ends with `Onboarded: <stage> <date>, <n> decisions, <n> gaps, <n>
-open questions` and prints the summary for the owner. A memory already onboarded writes nothing;
-`--again` harvests again and writes only lines no note holds. Personal mode reads the files only
-and writes the sidecar file. Exit 4: the memory or the stage cannot be read.
+question:` per open question and per question two answers contradict (never a decision), `Risk:` for
+parked work and `Gap:` for each source it could not read. A line the data guard matches is withheld,
+naming the class. It ends with `Onboarded: <stage> <date>, <n> decisions, <n> gaps, <n> open
+questions` and prints the summary for the owner. A memory already onboarded writes nothing;
+`--again` harvests again and writes only lines no note holds. Personal mode reads the files only and
+writes the sidecar file. Exit 4: the memory or the stage cannot be read.
 """
 
 from __future__ import annotations
@@ -96,13 +97,18 @@ def _approved(path: Path) -> bool:
     return found is not None and found[1] == "Approved"
 
 
-def from_comments(items: list[dict]) -> tuple[list, list]:
-    """(decisions, owner questions) from the first lines of the repository's comments."""
+def from_comments(items: list[dict], listed: set[str]) -> tuple[list, list]:
+    """(decisions, owner questions) from the first lines of the repository's comments; an answer
+    or an `Owner needed:` counts only from a listed verdict author or spec approver."""
+    from reviewers import login_of
+
     answers: dict[str, list[tuple[str, str]]] = {}
     asked, needed, decided_on = [], [], set()
     for item in sorted(items, key=lambda c: (c.get("created_at") or "", c.get("id", 0))):
         first = (item.get("body") or "").strip().splitlines()[:1]
         line = first[0] if first else ""
+        if login_of(item) not in listed and not line.startswith("Question:"):
+            continue
         if line.startswith("Owner needed:"):
             needed.append((short(line), place(item), place(item).split()[0]))
         elif line.startswith("Maintainer answer:"):
@@ -185,7 +191,10 @@ def harvest(root: Path, gh) -> dict:
         if items is None:
             gaps.append("the comments of issues and pull requests cannot be read")
         else:
-            decisions, owner = from_comments(items)
+            from reviewers import spec_approvers, verdict_authors
+
+            answerers = set(verdict_authors(root)) | set(spec_approvers(root))
+            decisions, owner = from_comments(items, answerers)
         parked = gh("GET", labelled("agk:parked", "open"))
         if parked is None:
             gaps.append("parked work cannot be read (source: issues labelled agk:parked)")

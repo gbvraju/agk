@@ -24,7 +24,10 @@ This ADR covers build (f): rule 20, with rule 18's budget as `Q-S0059-15` reads 
    issue; nothing is harvested. Otherwise planning, under the stage `steward_evidence.py stage` names.
 3. **The harvest** (planning and execution) reads by list pages only, never one read per item: the repository's
    issue and pull request comments (`issues/comments`, a hundred a page), the open `agk:parked` issues, and the files.
-   It reads each comment's first line: a `Maintainer answer:` or `Answer:` is a decision of its Q id; two that disagree
+   It reads each comment's first line. An answer or an `Owner needed:` counts only from a listed verdict author or
+   spec approver of `config/reviewers.yaml` (as the conductor reads its answerers), so a stranger's comment never
+   becomes the steward's memory; a `Question:` counts from any account, since asking the owner is the conservative
+   side. A `Maintainer answer:` or `Answer:` is a decision of its Q id; two that disagree
    on one Q id are an owner question naming both sources, never a decision; a `Question:` with no answer and an
    `Owner needed:` with no later `Maintainer answer:` on its issue are open questions. From the files: Accepted ADRs,
    the rows of `docs/runs/decisions/`, Approved specs, the statuses of `docs/requirements.md`, the `design` rows of
@@ -45,7 +48,8 @@ This ADR covers build (f): rule 20, with rule 18's budget as `Q-S0059-15` reads 
 
 A steward joining a running project has the project's decisions in its memory before it answers, at a bounded cost:
 in the recorded double, 150 comments are read in 2 pages and the first onboarding makes 6 reads and 6 posts. Protected
-path classes changed: `.claude/` (`agents/steward.md`, its words held at 645), `scripts/agk/` (`steward_onboard.py`,
+path classes changed: `.claude/` (`agents/steward.md`, its words held at 645 by shortening its sentences, with no
+instruction removed), `scripts/agk/` (`steward_onboard.py`,
 `steward.py`), `agk.toml` (the `[[testing.map]]` entries), `tests/kit/` (one new test file) and `kit/`
 (`manifest.json`).
 
