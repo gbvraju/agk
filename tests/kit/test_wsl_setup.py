@@ -177,7 +177,7 @@ def test_script_never_handles_a_token_or_password(pattern):
 def test_every_powershell_step_has_its_skip_check():
     """REQ-050: brief #1376 answer 2: every step checks first and skips what is done."""
     text = ps1_text()
-    calls = re.findall(r"^\s*Invoke-Step\b(.*)$", text, flags=re.M)
+    calls = re.findall(r"(?<!function )\bInvoke-Step\s+(-Name.*)$", text, flags=re.M)
     assert len(calls) >= 8
     for call in calls:
         assert "-Name" in call and "-Done" in call and "-Do" in call, call
@@ -322,7 +322,8 @@ def test_pull_request_to_wsl(tmp_path):
     for section in ("## Context", "## Decision", "## Consequences", "## Residual"):
         assert section in text
     body = Path(re.search(r"^body: (.+)$", done.stdout, flags=re.M).group(1)).read_text("utf-8")
-    for field in ("Brief: none", "Advances:", "Summary:", "Build-state row: 2026-11-15",
+    assert "Brief:" not in body  # `--brief none`: the repository has no open brief
+    for field in ("Advances:", "Summary:", "Build-state row: 2026-11-15",
                   "Decisions taken:", "Questions: none", "Verified:"):
         assert field in body, field
     assert "ADR-0008" in body
@@ -341,6 +342,17 @@ def test_pull_request_back_and_refusals(tmp_path):
     assert back.returncode == 0, back.stderr
     assert WINDOWS in (root / "agk.toml").read_text("utf-8")
     assert (root / "docs" / "adr" / "0008-the-workforce-runs-on-windows-again.md").is_file()
+
+
+def test_pull_request_names_its_brief(tmp_path):
+    """REQ-050: brief #1376 answer 3: `--brief N` gives the body its `Brief: #N` line."""
+    root = project(tmp_path)
+    gh = Gh(tmp_path, "")
+    done = gh.run(root, "pr", "--to", "wsl", "--brief", "12", "--date", "2026-11-15")
+    assert done.returncode == 0, done.stderr
+    assert "\nBrief: #12\n" in "\n" + done.stdout + "\n"
+    bad = gh.run(root, "pr", "--to", "linux", "--date", "2026-11-15")
+    assert bad.returncode == 2
 
 
 def test_pull_request_adds_an_unset_adapter(tmp_path):
