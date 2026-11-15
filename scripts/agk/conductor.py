@@ -322,16 +322,35 @@ def wakes(comment: dict, approvers: AbstractSet[str]) -> bool:
     return bool(session.ANSWER_LINE.match(first))
 
 
-def new_lines(repo: str, since: datetime, approvers: AbstractSet[str] = frozenset()) -> list[str]:
+READS = ["full"]  # `github_reads` of this run, set once by `watch` (brief #1314, ADR-0555)
+
+
+def new_lines(
+    repo: str, since: datetime, approvers: AbstractSet[str] = frozenset(), reads: str = ""
+) -> list[str]:
+    """The waking lines of the open briefs and pull requests since `since`. With `reads` delta
+    (brief #1314, ADR-0555 decision 2) one `changed_comments` read stands for every issue's pages:
+    a comment created after `since` was updated after it, so the lines are the same; a delta that
+    cannot be read reads every page as before."""
     briefs = session.labelled(
         read(f"repos/{repo}/issues?state=open&labels={session.LABEL}", "the open briefs"),
         session.LABEL,
     )
     pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
     numbers = sorted({i["number"] for i in briefs} | {p["number"] for p in pulls}, reverse=True)
+    delta = None
+    if (reads or READS[0]) == "delta":
+        delta = session.changed_comments(repo, since.timestamp())
+    by_issue: dict[int, list] = {}
+    for c in delta or []:
+        by_issue.setdefault(session.issue_of(c), []).append(c)
     lines = []
     for number in numbers:
-        comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+        comments = (
+            by_issue.get(number, [])
+            if delta is not None
+            else read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+        )
         for c in sorted(comments, key=lambda c: c.get("id") or 0):
             first = session.first_line(c)
             if wakes(c, approvers) and session.moment(c.get("created_at")) > since:
@@ -388,6 +407,8 @@ def sweep_late(root, repo: str) -> list[str]:
 def watch(root, since: datetime, once: bool) -> int:
     repo = session.repo_name(root)
     interval = session.flow_int(root, POLL[0], POLL[1], 0)
+    READS[0] = session.github_reads(root)
+    print(f"reads: {READS[0]}", file=sys.stderr, flush=True)  # once (brief #1314 answer 5)
     started = time.monotonic()
     renewed: float | None = None
     while True:
