@@ -248,3 +248,48 @@ def test_another_make_file_target_or_argument_is_denied(work):
         assert found is not None and MARK in found["permissionDecisionReason"], tail
     found = work.bash(f"make -C {s} -f agk.mk agk-governance")  # no clean environment
     assert found is not None and MARK in found["permissionDecisionReason"]
+
+
+# --- brief #1355 answer 4 (ADR-0568): two read-only checks of a stuck builder ------------------
+
+LOCK = "scripts/agk/lock.py"
+
+
+@pytest.fixture
+def locked(project):
+    (project / LOCK).write_text("print('the project lock script')\n", encoding="utf-8")
+    return project
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh api rate_limit",
+        "gh api rate_limit --jq .resources.core",
+        f"python3 {LOCK} status",
+        f"python {LOCK} status",
+        f"python3 {LOCK} status --name heavy",
+    ],
+)
+def test_the_two_read_only_checks_are_allowed(locked, command):
+    """REQ-050: brief #1355 answer 4."""
+    result = run_hook(command, locked)
+    assert result.returncode == 0 and result.stdout == "", result.stdout
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh api -X POST rate_limit",
+        "gh api rate_limit -f x=1",
+        "gh api rate_limit --jq",
+        f"python3 {LOCK} release --name heavy",
+        f"python3 {LOCK} run --name heavy -- make test",
+        f"python3 {LOCK} status --name",
+        f"python3 {LOCK} status --all",
+        "python3 /elsewhere/scripts/agk/lock.py status",
+    ],
+)
+def test_the_neighbours_of_the_two_checks_stay_denied(locked, command):
+    """REQ-050: brief #1355 answer 4 (every other `lock.py` subcommand and `rate_limit` form)."""
+    assert reason(run_hook(command, locked).stdout) is not None
