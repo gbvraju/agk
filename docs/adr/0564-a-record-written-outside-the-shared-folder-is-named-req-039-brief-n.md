@@ -36,3 +36,8 @@ outside the repository, and `docs/guides/getting-started.md` told the builder of
 A record that the conductor on the same machine cannot read is named at the run that writes it. A record in the
 conductor's scratch folder also gets the line, since prepush cannot know that folder; the line is advice and fails
 nothing. Protected path classes changed: `scripts/agk/` (`prepush.py`) and `tests/kit/` (`test_prepush_record.py`).
+
+## Residual
+
+- 2026-11-15: a record copied into the conductor's scratch folder by hand still gets the line at the run that wrote
+  it elsewhere; the guide says to copy it, and no check reads the line.

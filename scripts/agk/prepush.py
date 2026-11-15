@@ -1155,7 +1155,8 @@ def record_file(root: Path, option: str | None) -> Path | None:
 
 
 def outside_shared(root: Path, path: Path) -> bool:
-    """True when the record PATH is not directly in the clone's shared evidence folder (brief #1329)."""
+    """True when the record PATH is not directly in the clone's shared evidence folder
+    (brief #1329, ADR-0564)."""
     shared = shared_record(root, "x")
     return shared is None or path.resolve().parent != shared.parent
 
