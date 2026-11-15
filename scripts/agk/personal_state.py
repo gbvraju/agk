@@ -49,7 +49,7 @@ HOME_SETTING = "AGK_HOME"
 REGISTRY = "registry.toml"
 PROJECTS = "projects"
 READ_ONLY = ("config", "rev-parse", "rev-list")
-LOGIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}")
+LOGIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,38}")  # a GitHub login, managed ones too (ADR-0563)
 ATTACH_SUBJECT = "personal: attach"
 EXPORT_LINE = (
     "detach: the records stay in the state folder; `personal.py export` takes them to team mode"
