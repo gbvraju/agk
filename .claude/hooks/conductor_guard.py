@@ -78,6 +78,9 @@ both in the checkout and at `origin/<default_branch>` as last fetched (no networ
 same adapter, and the one word after `--adapter` equals `launch_adapter` exactly; an agk.toml that
 cannot be read, either setting of the wrong kind or a default branch git cannot read allows no
 adapter.
+Brief #1322 (SPEC-0059 rule 2, ADR-0559): exactly `python3 scripts/agk/launch.py role --role steward
+--session <ID>`, which prints the steward's prompt, and the same with `--adapter <command>` after it
+under the same condition as the adapter above; no other role.
 Without `--shadow` the conductor may also run its read-only routines (brief #643, ADR-0308):
 exactly `python3 scripts/agk/conductor.py sweep` and `python3 scripts/agk/conductor.py watch`,
 with `--since <YYYY-MM-DDTHH:MM:SSZ>`, then `--once`, or both in that order, the project's own
@@ -759,6 +762,22 @@ def launch_allowed(words: list[str], cwd: object) -> bool:
     return words[5] == "--adapter" and adapter is not None and words[6] == adapter
 
 
+def role_allowed(words: list[str], cwd: object) -> bool:
+    """`python3 scripts/agk/launch.py role --role steward --session <ID>`, with `--adapter
+    <command>` after it only when that command is the configured `launch_adapter`: the conductor's
+    one start of the steward (SPEC-0059 rule 2, brief #1322, ADR-0559); never another role."""
+    if len(words) not in (7, 9) or words[0] != "python3" or words[2:6] != [
+        "role", "--role", "steward", "--session"
+    ]:  # fmt: skip
+        return False
+    if not SESSION_NAME.fullmatch(words[6]) or not own_script(words[1], cwd, LAUNCH_SCRIPT):
+        return False
+    if len(words) == 7:
+        return True
+    adapter = configured_adapter()
+    return words[7] == "--adapter" and adapter is not None and words[8] == adapter
+
+
 def auto_merge_on_both() -> bool:
     """`[flow] auto_merge` reads `on` in the checkout's agk.toml and at `origin/<default_branch>`
     as last fetched (no network call here); anything that cannot be read is off (brief #531)."""
@@ -850,6 +869,7 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
             queue_allowed(words, cwd)
             or routine_allowed(words, cwd)
             or launch_allowed(words, cwd)
+            or role_allowed(words, cwd)
             or merge_allowed(words, cwd)
             or route_allowed(words, cwd)
             or evidence_allowed(words, cwd)
