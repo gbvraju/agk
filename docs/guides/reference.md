@@ -169,6 +169,24 @@ steward's marker is live (60 minutes, no `Ended:`); at 500 comments it opens a n
 questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). A failed
 GitHub call exits 4. In personal mode the notes are `docs/runs/steward/memory.md` of the sidecar and nothing is posted.
 
+## Steward and the owner
+
+    python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
+    python3 scripts/agk/steward_owner.py relay --qid Q --on N --answer TEXT --said FILE --at TIME [--conductor ID]
+    python3 scripts/agk/steward_owner.py park --pr N [--conductor ID]
+    python3 scripts/agk/steward_owner.py ready --plan FILE --trace FILE --session ID [--start]
+    python3 scripts/agk/launch.py role --role steward|conductor --session ID [--adapter COMMAND]
+
+The owner's question and its relay (SPEC-0059 rules 2, 5, 10 and 14, ADR-0559). `ask` takes one plain business sentence
+with its choices and `I recommend` and no kit term, records it as an `Owner question:` note, prints it for the chat and
+posts `Question: <Q> for the maintainers: <sentence>`. `relay` posts the owner's reply as `Maintainer answer:`, `Owner
+said (<UTC time>): "<words>"` and `Who: ProductOwner`, refuses it without a well-formed quote, then removes the owner
+wait's `agk:parked` and tells the conductor `parked #<n> answered <Q>`. `park` is the steward's pass of the owner wait on
+one pull request. `ready` starts the conductor through `launch.py role` only when the plan check's trace ends `ok plan`,
+no brief is malformed, the scope is locked and no open owner question blocks the first milestone; else `not ready:`
+lines, exit 1. In personal mode everything is printed and nothing is parked. `launch.py role` prints a role's prompt or
+calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
+
 ## Conductor routines
 
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]

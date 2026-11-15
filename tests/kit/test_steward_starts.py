@@ -202,7 +202,7 @@ def test_req066_the_agent_files_name_the_two_starts():
     conductor_text = (ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     steward_text = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
     assert "launch.py role --role steward" in conductor_text and "stuck:" in conductor_text
-    assert "where a steward runs" in conductor_text
+    assert "where a steward runs" in conductor_text.lower()
     for command in ("steward_owner.py ask", "steward_owner.py relay", "steward_owner.py park",
                     "steward_owner.py ready"):  # fmt: skip
         assert command in steward_text
