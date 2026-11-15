@@ -192,6 +192,17 @@ requirement answer goes to the owner with its recommendation until build (d)'s r
 unreproduced cause, or a filing above `[steward] auto_file` without an `Owner said` line. `skill` prints the step's skill
 from the agent file's table, or `no skill:` (exit 3). A failed GitHub call exits 4.
 
+## Outbound data guard
+
+    python3 scripts/agk/steward_outbound.py check (--text TEXT | --file FILE) [--root DIR]
+
+Checks a text bound for the kit repository from a project (SPEC-0059 rule 6, ADR-0561), fail closed: the tokens of
+`config/neutrality.txt` (and `kit/templates/neutrality.txt` where present), the data guard's detectors with the
+`[guard] patterns`, URLs and names of the hosts of the project's git remotes, and repository names other than the
+kit's. A match prints one line per class naming the setting, never the value, and exits 2; so does a list or the
+remotes that cannot be read. A clean text prints `ok outbound` (exit 0). The steward's guard denies a post to the kit
+repository that this check refuses.
+
 ## Conductor routines
 
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
