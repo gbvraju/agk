@@ -257,6 +257,21 @@ change with an ADR in the same pull request.
    starts no second one (`watchdog: job <name> still running; nothing started`). `watchdog --install --pass` prints the line that runs it every 10 minutes.
    The sessions the watchdog and `launch.py` start get the runtime's variable that turns its idle recaps off
    `(verify)`; your own session is untouched.
+
+   **The watchdog keeps builders too** (brief #1355, ADR-0568). Each adapter writes `<worktree>/.agk-session-pid` (the
+   session, its process id, the UTC start time and the brief) before the session's first turn, kept out of git as the exit
+   file is. After its conductor checks, each pass reads every builder with that record and a live take, and prints
+   `watchdog: builder <name> #<brief> ended|idle|live -> restarted|left|held (<reason>)`: an ended builder is restarted under
+   its name with the resume prompt. A builder is idle only when every sign of work has been quiet for `[flow]
+   idle_minutes` (60 by default, never below `silent_minutes`): it owes the next move and posted and pushed nothing, its
+   runtime transcript was not written `(verify)`, no local commit and no file change in its worktree, no lock of
+   `lock.py` with a fresh heartbeat, and two reads of its process tree 5 to 30 minutes apart (one per pass) show the
+   same processes and the same CPU time; any one sign makes it live, so a heavy step of any length is never stopped,
+   and until the two reads agree the line says `held (working)`. An idle one is
+   stopped and restarted only when its worktree is clean and pushed, a parked or handed-over one is never restarted, and a
+   session is restarted at most once an hour; a held one is a `NEEDS-YOU:` line of the next sweep. `launch.py` never
+   starts a second session of a name whose process is still there. Install the scheduled task on the machine that runs
+   the sessions, `python3 scripts/agk/conductor.py watchdog --install --pass`, and run the line it prints.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then

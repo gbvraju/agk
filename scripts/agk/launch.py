@@ -52,6 +52,12 @@ conductor (the steward's start when the plan is ready). It prints the role's pro
 `--adapter` calls the adapter once as above, with `AGK_SESSION`, `AGK_ROLE`, `AGK_AGENT`, the
 `design` kind, tier and effort, and no `AGK_BRIEF`. A start that the adapter or the memory floor
 refuses prints `stuck: <role> <session> not started (<why>)`, never silent (exit 1).
+
+Brief #1355 (ADR-0568): both adapters write `<worktree>/.agk-session-pid` (`session=`, `pid=`,
+`started_utc=`, `brief=`) before the session's first turn, beside the exit file. Before each
+adapter call a session whose record shows a live process is refused, naming the session and never
+a path: `launch: not started: session <name> is still running (one session per name)` (exit 1).
+`read_record`, `exited`, `process_alive` and `stop_tree` are the watchdog's reads of that record.
 """
 
 from __future__ import annotations
@@ -60,9 +66,11 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess  # nosec B404 - fixed argument lists, no shell
 import sys
 import tomllib
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -402,6 +410,162 @@ def prompt_for(session: str, brief: int, build: str | None = None, run: Run = DE
     )
 
 
+# --- one session per name (brief #1355, ADR-0568) -----------------------------------------
+
+RECORD_FILE = ".agk-session-pid"  # written by the adapter before the first turn; never tracked
+EXIT_FILE = ".agk-session-exit"
+STILL_RUNNING = "launch: not started: session {name} is still running (one session per name)"
+
+
+def worktree_of(root: Path, session: str) -> Path:
+    """The adapters' worktree of a session: `agk-<session>` beside the checkout."""
+    return Path(root).resolve().parent / f"agk-{session}"
+
+
+def utc_of(text: object) -> datetime | None:
+    try:
+        return datetime.strptime(str(text), "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+
+
+def fields_of(path: Path) -> dict[str, str]:
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return {}
+    return dict(x.strip().split("=", 1) for x in lines if "=" in x)
+
+
+def read_record(worktree: Path) -> dict | None:
+    """The process record of a worktree, or None when there is none or it cannot be read."""
+    found = fields_of(Path(worktree) / RECORD_FILE)
+    pid, brief = found.get("pid", ""), found.get("brief", "")
+    name = found.get("session", "")
+    if not (pid.isdigit() and SESSION_ID.fullmatch(name) and utc_of(found.get("started_utc"))):
+        return None
+    return {
+        "session": name,
+        "pid": int(pid),
+        "started_utc": found["started_utc"],
+        "brief": int(brief) if brief.isdigit() else None,
+    }
+
+
+def exited(worktree: Path, record: dict) -> bool:
+    """Whether the exit file is not older than the record: the recorded session ended."""
+    ended = utc_of(fields_of(Path(worktree) / EXIT_FILE).get("ended_utc"))
+    started = utc_of(record.get("started_utc"))
+    return ended is not None and started is not None and ended >= started
+
+
+def process_alive(pid: int) -> bool:
+    """Whether a process of that id exists (verify: an id can be reused after its process ends)."""
+    if pid < 1:
+        return False
+    if sys.platform == "win32":
+        done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )  # fmt: skip
+        return f'"{pid}"' in done.stdout
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def has_process(worktree: Path) -> bool:
+    """The worktree's record names a process that is there and has not written its exit file."""
+    record = read_record(worktree)
+    return record is not None and not exited(worktree, record) and process_alive(record["pid"])
+
+
+WINDOWS_TABLE = (
+    "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, "
+    "$_.ParentProcessId, [int64](($_.KernelModeTime + $_.UserModeTime) / 10000000) }"
+)
+
+
+def cpu_seconds(text: str) -> int | None:
+    """Whole CPU seconds of `[[dd-]hh:]mm:ss[.cc]` (ps) or of a bare count (Windows)."""
+    days, _, clock = text.rpartition("-")
+    parts = clock.split(":")
+    if (days and not days.isdigit()) or len(parts) > 3:
+        return None
+    try:
+        total = 0.0
+        for part in parts:
+            total = total * 60 + float(part)
+    except ValueError:
+        return None
+    return int(total) + int(days or 0) * 86400
+
+
+def process_table(run=subprocess.run, platform: str | None = None) -> dict | None:
+    """{pid: (parent pid, CPU seconds)} of every process, or None when it cannot be read (verify:
+    `ps -o time=` on POSIX, `Get-CimInstance Win32_Process` through PowerShell on Windows)."""
+    if (platform or sys.platform) == "win32":
+        words = ["powershell", "-NoProfile", "-Command", WINDOWS_TABLE]
+    else:
+        words = ["ps", "-A", "-o", "pid=,ppid=,time="]
+    try:
+        done = run(words, capture_output=True, text=True, encoding="utf-8")
+    except OSError:
+        return None
+    if done.returncode != 0:
+        return None
+    table = {}
+    for line in done.stdout.splitlines():
+        parts = line.split()
+        cpu = cpu_seconds(parts[2]) if len(parts) == 3 else None
+        if cpu is not None and parts[0].isdigit() and parts[1].isdigit():
+            table[int(parts[0])] = (int(parts[1]), cpu)
+    return table
+
+
+def tree_cpu(pid: int, table: dict) -> dict[int, int]:
+    """{pid: CPU seconds} of PID and every process below it in TABLE."""
+    found: dict[int, int] = {}
+    todo = [pid]
+    while todo:
+        current = todo.pop()
+        if current in table and current not in found:
+            found[current] = table[current][1]
+            todo += [p for p, (parent, _) in table.items() if parent == current]
+    return found
+
+
+def stop_tree(pid: int, run=subprocess.run, platform: str | None = None) -> None:
+    """Stop the process PID and every process below it, and nothing else (ADR-0568 decision 3)."""
+    if (platform or sys.platform) == "win32":
+        run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True, text=True, encoding="utf-8",
+        )  # fmt: skip
+        return
+    table = run(
+        ["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True, encoding="utf-8"
+    ).stdout
+    children: dict[int, list[int]] = {}
+    for line in table.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            children.setdefault(int(parts[1]), []).append(int(parts[0]))
+    tree, todo = [], [pid]
+    while todo:
+        tree.append(todo.pop())
+        todo += [c for c in children.get(tree[-1], []) if c not in tree]
+    for found in tree:
+        try:
+            os.kill(found, signal.SIGTERM)
+        except OSError:
+            continue
+
+
 def work_text(session: str, brief: int, build: str | None) -> str:
     return f"{session} #{brief}" + (f" build ({build})" if build else "")
 
@@ -417,14 +581,21 @@ def start_with(
     found: list[tuple[str, int, str | None]],
     prompts: list[str] | None = None,
     runs: list[Run] | None = None,
+    root: Path | None = None,
 ) -> int:
-    """Call the adapter once for each session; stop at the first one that fails. PROMPTS, when
+    """Call the adapter once for each session; stop at the first one that fails; a session whose
+    record shows a live process is refused and the others still start (brief #1355). PROMPTS, when
     given, are the prompts of the sessions in order (the resume prompts of brief 402); RUNS are
     their kinds, tiers, efforts and model names (brief 709), `design` when not given."""
     words = shlex.split(adapter)
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
+    refused = 0
     for index, (session, brief, build) in enumerate(found):
+        if has_process(worktree_of(root or Path.cwd(), session)):
+            print(STILL_RUNNING.format(name=session), file=sys.stderr)
+            refused = 1
+            continue
         env = {**os.environ, **QUIET, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
         if build:
             env["AGK_BUILD"] = build
@@ -441,6 +612,7 @@ def start_with(
                 encoding="utf-8",
                 env=env,
                 capture_output=True,
+                cwd=root,
             )
         except OSError:
             print(f"FAIL {NAME}: the adapter cannot be run for {session}", file=sys.stderr)
@@ -451,7 +623,7 @@ def start_with(
             not_started(found[index + 1 :])
             return 1
         print(f"started {work_text(session, brief, build)}")
-    return 0
+    return refused
 
 
 ROLES = ("steward", "conductor")
@@ -492,6 +664,9 @@ def role_main(args: list[str]) -> int:
         allowed = False
     if not allowed:
         print(f"{stuck} (setting: flow.min_free_memory_mb)")
+        return 1
+    if has_process(worktree_of(Path.cwd(), session)):
+        print(f"{stuck} (one session per name)")
         return 1
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
     env.update(QUIET, AGK_SESSION=session, AGK_ROLE=role, AGK_AGENT=role)

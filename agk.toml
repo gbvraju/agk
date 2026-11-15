@@ -328,6 +328,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_owner_question.py",
   "tests/kit/test_steward_starts.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_read_budget.py",
@@ -557,6 +558,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_starts.py",
   "tests/kit/test_wait_until_event.py",
   "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_launch.py", "tests/kit/test_launch_auto_start.py",
@@ -571,6 +573,7 @@ tests = ["tests/kit/test_local_mode.py", "tests/kit_dev/test_local_mode_guide.py
 [[testing.map]]
 code = "scripts/agk/lock.py"
 tests = [
+  "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_evidence.py", "tests/kit/test_lock.py", "tests/kit/test_lock_heartbeat.py",
   "tests/kit/test_lock_queue_runner.py", "tests/kit/test_lock_queue_submit.py", "tests/kit/test_lock_slots.py",
   "tests/kit/test_merge_cleared_after.py", "tests/kit/test_merge_cleared_run.py",
