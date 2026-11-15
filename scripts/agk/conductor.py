@@ -160,10 +160,10 @@ answered, with the label removed and one `Unparked-by: answer <Q-id>` comment; i
 
 Brief #1322 (SPEC-0059 rule 2, ADR-0559): from the same comments, `sweep` then prints one line
 `STEWARD: #<n> <Q-id>, ... waited one pass unanswered; run: python3 scripts/agk/launch.py role
---role steward --session steward-<UTC minute>` (with `--adapter <launch_adapter>` when `auto_start`
-is on in the checkout and on the default branch) when a `Question:` that an earlier sweep saw still
-has no `Answer:`, `Maintainer answer:` or `Correction:` by a listed author after it; once per
-question, kept in `<git dir>/agk/steward-starts` (never tracked).
+--role steward --session steward-<comment id>` (with `--adapter <launch_adapter>` when `auto_start`
+is on in the checkout and on the default branch) when a `Question:` has waited one conductor pass
+(25 minutes) with no `Answer:`, `Maintainer answer:` or `Correction:` by a listed author and no
+steward post (ending `Who: AGK steward`) after it. It is read from the comments alone.
 
 Brief #1237 (ADR-0525): local mode restarts the conductor unattended.
 
@@ -1074,45 +1074,44 @@ def owner_lines(
     return unparks + parks
 
 
+STEWARD_PASS = timedelta(minutes=25)  # one conductor pass: its wake-up timer is at most 25 minutes
+STEWARD_WHO = "Who: AGK steward"
+
+
 def waiting_questions(comments: list, answerers: set[str]) -> list[tuple[str, int]]:
     """(Q id, comment id) of each `Question: Q-...` with no `Answer:`, `Maintainer answer:` or
-    `Correction:` by an answerer after it that names its Q id or names none (SPEC-0059 rule 2)."""
+    `Correction:` by an answerer after it that names its Q id or names none, and no steward post
+    (one ending `Who: AGK steward`) after it: the steward has taken it (SPEC-0059 rule 2)."""
     open_items: dict[str, int] = {}
     for c in session.in_order(comments):
-        line = session.first_line(c)
+        line, body = session.first_line(c), str(c.get("body") or "")
         if line.startswith("Question: ") and (found := session.QUESTION_ID.search(line)):
             open_items[found.group(0)] = int(c.get("id") or 0)
         elif session.author_of(c) in answerers and line.startswith(
             ("Answer:", "Maintainer answer:", "Correction:")
         ):
-            named = session.QUESTION_ID.findall(str(c.get("body") or ""))
-            for qid in named or list(open_items):
+            for qid in session.QUESTION_ID.findall(body) or list(open_items):
                 open_items.pop(qid, None)
+        if STEWARD_WHO in (x.strip() for x in body.splitlines()):
+            open_items.clear()
     return sorted(open_items.items(), key=lambda kv: kv[1])
 
 
 def steward_lines(root, kept: dict, answerers: set[str], now) -> list[str]:
-    """One `STEWARD:` line when a question has waited one whole pass unanswered and no start was
-    made for it yet (SPEC-0059 rule 2, brief #1322): the next pass after the one that first saw
-    it, read from a file of the git directory (never tracked)."""
-    found = lease_mark(root)
-    mark = found.with_name("steward-starts") if found else None
-    try:
-        marks = json.loads(mark.read_text(encoding="utf-8")) if mark else {}
-    except (OSError, ValueError):
-        marks = {}
-    marks = marks if isinstance(marks, dict) else {}
-    seen, started = set(marks.get("seen") or []), set(marks.get("started") or [])
-    waiting = [(n, q, cid) for n, c in sorted(kept.items()) for q, cid in waiting_questions(
-        c, answerers)]  # fmt: skip
-    due = [(n, q, cid) for n, q, cid in waiting if cid in seen and cid not in started]
-    if mark is not None:
-        write_held(mark, {"seen": sorted(c for *_, c in waiting),
-                          "started": sorted(started | {c for *_, c in due})})  # fmt: skip
+    """One `STEWARD:` line when a question has waited one conductor pass (`STEWARD_PASS`) with no
+    answer and no steward post after it (SPEC-0059 rule 2, brief #1322). Read from the comments
+    alone, so every sweep of the same comments prints the same line; the session is named by the
+    oldest waiting question, and a second start of a running steward writes nothing (ADR-0557)."""
+    due = []
+    for number, comments in sorted(kept.items()):
+        when = {int(c.get("id") or 0): session.moment(c.get("created_at")) for c in comments}
+        for qid, cid in waiting_questions(comments, answerers):
+            if when.get(cid) is not None and now - when[cid] >= STEWARD_PASS:
+                due.append((number, qid, cid))
     if not due:
         return []
     asks = ", ".join(f"#{n} {q}" for n, q, _ in due)
-    name = f"steward-{now.strftime('%Y%m%d%H%M')}"
+    name = f"steward-{min(c for *_, c in due)}"
     adapter = configured_start_adapter(root)
     run = f"python3 scripts/agk/launch.py role --role steward --session {name}"
     run += f" --adapter {shlex.quote(adapter)}" if adapter else ""
@@ -1125,7 +1124,7 @@ def configured_start_adapter(root) -> str | None:
     try:
         here = launch.launch_settings(Path(root))
         there = launch.launch_settings(Path(root), f"origin/{launch.default_branch(Path(root))}")
-    except CheckError:
+    except (CheckError, OSError):
         return None
     return here[1] if here == there and here[0] is True and here[1] else None
 

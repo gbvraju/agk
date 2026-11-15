@@ -35,11 +35,13 @@ since #1287 (ADR-0543). This build adds only what the steward needs on top of th
    wait's park, the steward runs `session.py tell` with `parked #<n> answered <Q>`. With no steward, the conductor's
    sweep parks and resumes as today.
 4. **The conductor's start of the steward.** `conductor.py sweep` reads the comments it already read for the owner
-   waits and prints one `STEWARD:` line when a `Question:` that an earlier sweep saw still has no `Answer:`,
-   `Maintainer answer:` or `Correction:` by a listed verdict author or spec approver that names its Q id (or names
-   none); once per question, kept in `<git dir>/agk/steward-starts`. The line names
-   `python3 scripts/agk/launch.py role --role steward --session steward-<UTC minute>`, with `--adapter` only when
-   `auto_start` and `launch_adapter` are set in the checkout and on the default branch. `conductor_guard.py` allows
+   waits and prints one `STEWARD:` line when a `Question:` has waited one conductor pass (25 minutes, the longest
+   gap of the conductor's wake-up timer) with no `Answer:`, `Maintainer answer:` or `Correction:` by a listed
+   verdict author or spec approver that names its Q id (or names none), and no steward post (a comment with the
+   line `Who: AGK steward`) after it: once the steward has taken a thread, the sweep starts no other. It keeps no
+   state, so every sweep of the same comments prints the same line (brief #1314's read modes). The line names
+   `python3 scripts/agk/launch.py role --role steward --session steward-<oldest waiting comment id>`, with
+   `--adapter` only when `auto_start` and `launch_adapter` are set in the checkout and on the default branch. `conductor_guard.py` allows
    that one form and no other role. `launch.py role` prints the role's prompt or calls the adapter once on the
    `design` kind's tier and effort, with `AGK_ROLE` and `AGK_AGENT` and no `AGK_BRIEF`; a refused start prints
    `stuck: <role> <session> not started (<why>)` and exits 1, which the conductor lists under `Needs a fix`. A
@@ -51,9 +53,10 @@ since #1287 (ADR-0543). This build adds only what the steward needs on top of th
    blocks). Any failure prints its `not ready:` line and starts nothing; with `--start` and every check passed it
    calls `launch.py role --role conductor` (verify: the adapter's start of a conductor).
 6. **The conductor's text.** `.claude/agents/conductor.md` leaves the answers from the rules to a running steward,
-   names the one steward start and the `stuck:` line, and reads a steward's `Tell:` as a resume. The rule budget
-   (`config/rule-budget.txt`, ADR-0310) raises the word counts of the two agent files by the words added; no rule
-   line is added.
+   and names the one steward start and the `stuck:` line, within the role file's cap of 4,538 words
+   (`tests/kit/test_conductor_playbook_evidence.py`); a steward's `Tell:` is read as any `Tell:`, and the resume is
+   the sweep's `UNPARKED` line as today. The rule budget (`config/rule-budget.txt`, ADR-0310) raises the word
+   counts of the two agent files by the words added; no rule line is added.
 7. **Personal mode.** `ask` and `relay` print what they would post; `park` parks nothing.
 
 ## Consequences

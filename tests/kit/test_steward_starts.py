@@ -61,24 +61,33 @@ def test_req066_a_question_is_waiting_until_an_answer_names_it():
 
 @pytest.fixture
 def marks(tmp_path, monkeypatch):
-    monkeypatch.setattr(conductor, "lease_mark", lambda root: tmp_path / "agk" / "lease")
     monkeypatch.setattr(conductor, "configured_start_adapter", lambda root: None)
     return tmp_path
 
 
-def test_req066_a_question_waiting_one_pass_starts_the_steward_once(marks):
-    """REQ-066 AC1: rule 2, the first pass that sees a question starts nothing; the next pass
-    names the steward's start through launch.py, once; an answered question starts nothing."""
-    kept = {7: [ASKED]}
-    assert conductor.steward_lines(marks, kept, ANSWERERS, NOW) == []
-    lines = conductor.steward_lines(marks, kept, ANSWERERS, NOW)
-    assert lines == [
+def test_req066_a_question_waiting_one_pass_starts_the_steward_until_it_takes_it(marks):
+    """REQ-066 AC1: rule 2, a question younger than one conductor pass starts nothing; one that
+    waited a pass names the steward's start through launch.py, the same line on every sweep of
+    the same comments; a steward post, or an answer, after it starts nothing."""
+    young = {7: [ASKED]}
+    assert conductor.steward_lines(marks, young, ANSWERERS, NOW) == []
+    kept = {7: [at(11, "builder1", "Question: Q-7-1 which runtime for the export?", 26)]}
+    line = (
         "STEWARD: #7 Q-7-1 waited one pass unanswered; run: python3 scripts/agk/launch.py role "
-        "--role steward --session steward-202611151300"
-    ]
-    assert conductor.steward_lines(marks, kept, ANSWERERS, NOW) == []  # once per question
+        "--role steward --session steward-11"
+    )
+    assert conductor.steward_lines(marks, kept, ANSWERERS, NOW) == [line]
+    assert conductor.steward_lines(marks, kept, ANSWERERS, NOW) == [line]  # no hidden state
+    kept[7].append(
+        at(
+            12,
+            "boss",
+            "Question: Q-7-1 for the maintainers: Friday or later?\n\nWho: AGK steward",
+            5,
+        )
+    )
+    assert conductor.steward_lines(marks, kept, ANSWERERS, NOW) == []  # the steward took it
     answered = {8: [at(21, "builder2", "Question: Q-8-1 which date?", 30)]}
-    assert conductor.steward_lines(marks, answered, ANSWERERS, NOW) == []
     answered[8].append(at(22, "boss", "Answer: Q-8-1 the first of the month", 1))
     assert conductor.steward_lines(marks, answered, ANSWERERS, NOW) == []
 
@@ -86,11 +95,9 @@ def test_req066_a_question_waiting_one_pass_starts_the_steward_once(marks):
 def test_req066_the_start_names_the_configured_adapter(marks, monkeypatch):
     """REQ-066 AC1: rule 2, with `auto_start` on the line carries `--adapter <launch_adapter>`."""
     monkeypatch.setattr(conductor, "configured_start_adapter", lambda root: ADAPTER)
-    conductor.steward_lines(marks, {7: [ASKED]}, ANSWERERS, NOW)
-    (line,) = conductor.steward_lines(marks, {7: [ASKED]}, ANSWERERS, NOW)
-    assert line.endswith(
-        "--session steward-202611151300 --adapter 'scripts/start-session.sh --cloud'"
-    )
+    kept = {7: [at(11, "builder1", "Question: Q-7-1 which runtime?", 40)]}
+    (line,) = conductor.steward_lines(marks, kept, ANSWERERS, NOW)
+    assert line.endswith("--session steward-11 --adapter 'scripts/start-session.sh --cloud'")
 
 
 def adapter_file(tmp_path: Path, code: int) -> str:
