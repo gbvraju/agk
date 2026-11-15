@@ -1,6 +1,6 @@
 # SPEC-0059: A steward answers what the evidence settles and asks the owner only the rest
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-066
 
