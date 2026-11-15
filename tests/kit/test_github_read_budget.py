@@ -116,10 +116,14 @@ class World:
             double.serve(f"{PULLS}/{p['number']}", self.pull(p))
             double.serve(f"{ISSUES}/{p['number']}/events", [])
 
-    def edit(self, n: int, cid: int, body: str, minutes: float = 1) -> None:
+    def edit(self, n: int, cid: int, body: str) -> None:
+        """An edit made now, by the wall clock: GitHub stamps `updated_at` when the edit lands,
+        never before a store read that missed it. NOW is when the module loaded, and a slow run
+        can pass the delta's 120 s margin since then (CI on 269b6b1, build (b))."""
+        edited = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         for c in self.comments[n]:
             if c["id"] == cid:
-                c["body"], c["updated_at"] = body, at(minutes)
+                c["body"], c["updated_at"] = body, edited
 
     def delete(self, n: int, cid: int) -> None:
         self.comments[n] = [c for c in self.comments[n] if c["id"] != cid]
