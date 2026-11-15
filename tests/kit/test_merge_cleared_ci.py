@@ -111,9 +111,15 @@ def test_all_green_merges_and_reads_runs_and_status_over_rest(tmp_path):
     assert one_line(proc) == MERGED and proc.returncode == 0
     reads = [c for c in made if any("/commits/" in a for a in c)]
     assert reads == [
-        ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1"],
-        ["api", "--method", "GET", STATUS_READ],
-    ]
+        [
+            "api",
+            "--method",
+            "GET",
+            f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1",
+            "-i",
+        ],
+        ["api", "--method", "GET", STATUS_READ, "-i"],
+    ]  # brief #1336: `-i`, the shared reader's headers (ADR-0566 decision 5)
     assert not any("graphql" in a for c in made for a in c)
 
 
