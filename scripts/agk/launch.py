@@ -68,7 +68,7 @@ NAME = "launch"
 USAGE = "usage: launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND]"
 SEPARATOR = "-" * 72
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
-LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")  # a GitHub login (its letters, at most 39)
+LOGIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,38}")  # a GitHub login, managed ones too (ADR-0563)
 
 FULL_READING = "Read CLAUDE.md and config/session-rules.md first and follow them in full."
 LEAN_READING = (
