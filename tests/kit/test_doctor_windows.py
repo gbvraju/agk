@@ -12,6 +12,7 @@ owner. The platform, the paths and every GitHub answer are simulated: no Windows
 from __future__ import annotations
 
 import json
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
 
 import doctor
@@ -254,14 +255,14 @@ EOL_LINE = (
 )
 
 
-def crlf_repo(tmp_path: Path, autocrlf: str | None, attributes: str | None) -> Path:
-    import subprocess  # noqa: PLC0415 # nosec B404 - fixed argument lists only, no shell
+def git(*args: str) -> None:
+    subprocess.run(["git", *args], check=True, capture_output=True)  # nosec B603 B607 - fixed list
 
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # nosec B603 B607
+
+def crlf_repo(tmp_path: Path, autocrlf: str | None, attributes: str | None) -> Path:
+    git("init", "-q", str(tmp_path))
     if autocrlf is not None:
-        subprocess.run(  # nosec B603 B607 - fixed argument list
-            ["git", "-C", str(tmp_path), "config", "core.autocrlf", autocrlf], check=True
-        )
+        git("-C", str(tmp_path), "config", "core.autocrlf", autocrlf)
     if attributes is not None:
         (tmp_path / ".gitattributes").write_text(attributes, encoding="utf-8")
     return tmp_path
