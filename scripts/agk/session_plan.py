@@ -1829,7 +1829,7 @@ def build(root, record: bool = False) -> dict:
     brief is left unread; each GET is made once in the run. It carries `reads`."""
     began, wall = time.monotonic(), time.time()
     reads.MEMO = {}  # this run's reads only, never a previous run's
-    first = reads.CALLS, reads.CACHED
+    first = reads.CALLS, reads.CACHED, reads.WRITES
     want = flow_int(root, "max_builders", reads.MAX_BUILDERS, RULE)
     repo = reads.repo_name(root)
     reads.changed_since_pass(repo)  # build (b): unchanged comment pages need no request
@@ -1849,6 +1849,7 @@ def build(root, record: bool = False) -> dict:
         "calls": reads.CALLS - first[0],
         "cached": reads.CACHED - first[1],
         "seconds": round(time.monotonic() - began, 1),
+        **({"writes": n} if (n := reads.WRITES - first[2]) else {}),  # brief #1335 answer 3
     }
     save_reads(root, found["reads"])
     return found
@@ -1891,9 +1892,8 @@ def save_reads(root, figures: dict) -> None:
 
 
 def reads_line(figures: dict) -> str:
-    return (
-        f"reads: {figures['calls']} calls ({figures['cached']} from cache), {figures['seconds']} s"
-    )
+    line = f"reads: {figures['calls']} calls ({figures['cached']} from cache), {figures['seconds']} s"
+    return f"{line}, writes: {figures['writes']}" if figures.get("writes") else line
 
 
 def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
@@ -2599,7 +2599,7 @@ def plan(root, as_json: bool, record: bool = False, if_changed: bool = False) ->
     found = None
     if if_changed:
         began = time.monotonic()
-        first = reads.CALLS, reads.CACHED
+        first = reads.CALLS, reads.CACHED, reads.WRITES
         repo = reads.repo_name(root)
         mark = newest_change(repo)
         found = unchanged_plan(root, repo, record, mark)
@@ -2613,6 +2613,7 @@ def plan(root, as_json: bool, record: bool = False, if_changed: bool = False) ->
             "calls": reads.CALLS - first[0],
             "cached": reads.CACHED - first[1],
             "seconds": round(time.monotonic() - began, 1),
+            **({"writes": n} if (n := reads.WRITES - first[2]) else {}),  # brief #1335
         }
         save_reads(root, found["reads"])
     found = found or build(root, record)

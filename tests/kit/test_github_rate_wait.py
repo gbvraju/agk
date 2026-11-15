@@ -177,7 +177,7 @@ def test_a_cached_read_during_a_wait_is_answered_from_the_cache(monkeypatch, clo
 
 def test_two_writes_are_one_second_apart_and_reads_are_not_delayed(monkeypatch, clock):
     """REQ-050"""
-    double = Double(ok({}), ok(), ok({}))
+    double = Double(ok({}, headers=False), ok(), ok({}, headers=False))
     run(monkeypatch, double, "-f", "body=a", method="POST")
     clock.now += 0.25
     run(monkeypatch, double)  # a read between them: no pause
@@ -186,14 +186,22 @@ def test_two_writes_are_one_second_apart_and_reads_are_not_delayed(monkeypatch, 
     assert clock.slept == [pytest.approx(0.75)]
     clock.now += 5
     clock.slept.clear()
-    double.answers.append(ok({}))
+    double.answers.append(ok({}, headers=False))
     run(monkeypatch, double, method="DELETE")
     assert clock.slept == []
 
 
+def test_a_limited_write_waits_as_rate_limit_reports(monkeypatch, clock):
+    """REQ-050: a write carries no `-i`, so its limit's kind comes from `GET rate_limit`."""
+    double = Double(limited(None), ok({"id": 1}, headers=False), rate={"remaining": 9, "reset": 1})
+    assert run(monkeypatch, double, "-f", "body=a", method="POST") == {"id": 1}
+    assert clock.slept == [60.0]
+    assert "-i" not in double.calls[0]
+
+
 def test_a_run_counts_its_writes_and_the_reads_line_ends_with_them(monkeypatch, clock, tmp_path):
     """REQ-050"""
-    double = Double(ok({}), ok(), ok({}))
+    double = Double(ok({}, headers=False), ok(), ok({}, headers=False))
     run(monkeypatch, double, "-f", "body=a", method="POST")
     run(monkeypatch, double)
     run(monkeypatch, double, method="PUT")
