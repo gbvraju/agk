@@ -35,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table, read_list, repo_root  # noqa: E402
+from common import CheckError, personal_table, read_list, repo_root, utf8_output  # noqa: E402
 
 SOURCES = (
     "owner decision",
@@ -275,6 +275,7 @@ def skill_line(root: Path, step: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parser = argparse.ArgumentParser(
         prog="steward_evidence.py", description=__doc__.split("\n\n")[0]
     )
