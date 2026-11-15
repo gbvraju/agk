@@ -32,7 +32,9 @@ answer the same `Question:` and both may roll the memory issue over.
    `maintainers`' user handle, and `spec_approvers`; a team handle lists nobody). A steward starts only when the login
    `gh` is signed in with on its machine is listed, read once with `gh api user` and kept for the run; otherwise it
    prints one line naming the file and the settings, never the login, and stops. Several reviewers may each run one;
-   a second live start of the same login stands by.
+   a second live start of the same login stands by. A steward that the conductor starts through `launch.py` carries
+   `AGK_STEWARD_START=conductor` in its environment, and its guard denies it `Approve:` and `Maintainer answer:`, so a
+   login shared by sessions and a reviewer cannot approve or relay through a conductor's start.
 4. A steward takes a question with one `Taking: Q-<id> <login> <UTC time>` comment and a re-read; the earliest by
    GitHub's comment order holds it, a later one withdraws, a `Taking:` lapses after `[flow] owner_wait_minutes`, and a
    posted answer ends the question for all. The memory roll-over and the daily list are done once, after a
