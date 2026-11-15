@@ -322,8 +322,11 @@ def wakes(comment: dict, approvers: AbstractSet[str]) -> bool:
     return bool(session.ANSWER_LINE.match(first))
 
 
+READS = ["full"]  # `github_reads` of this run, set once by `watch` (brief #1314, ADR-0555)
+
+
 def new_lines(
-    repo: str, since: datetime, approvers: AbstractSet[str] = frozenset(), reads: str = "full"
+    repo: str, since: datetime, approvers: AbstractSet[str] = frozenset(), reads: str = ""
 ) -> list[str]:
     """The waking lines of the open briefs and pull requests since `since`. With `reads` delta
     (brief #1314, ADR-0555 decision 2) one `changed_comments` read stands for every issue's pages:
@@ -335,7 +338,9 @@ def new_lines(
     )
     pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
     numbers = sorted({i["number"] for i in briefs} | {p["number"] for p in pulls}, reverse=True)
-    delta = session.changed_comments(repo, since.timestamp()) if reads == "delta" else None
+    delta = None
+    if (reads or READS[0]) == "delta":
+        delta = session.changed_comments(repo, since.timestamp())
     by_issue: dict[int, list] = {}
     for c in delta or []:
         by_issue.setdefault(int(session.ISSUE_OF.search(c["issue_url"]).group(1)), []).append(c)
@@ -402,8 +407,8 @@ def sweep_late(root, repo: str) -> list[str]:
 def watch(root, since: datetime, once: bool) -> int:
     repo = session.repo_name(root)
     interval = session.flow_int(root, POLL[0], POLL[1], 0)
-    reads = session.github_reads(root)
-    print(f"reads: {reads}", file=sys.stderr, flush=True)  # once (brief #1314 answer 5)
+    READS[0] = session.github_reads(root)
+    print(f"reads: {READS[0]}", file=sys.stderr, flush=True)  # once (brief #1314 answer 5)
     started = time.monotonic()
     renewed: float | None = None
     while True:
@@ -414,7 +419,7 @@ def watch(root, since: datetime, once: bool) -> int:
                     return code
                 renewed = time.monotonic()
             approvers = {a.lstrip("@").lower() for a in spec_approvers(Path(root))}
-            lines = new_lines(repo, since, approvers, reads) + green_lines(root, repo, since)
+            lines = new_lines(repo, since, approvers) + green_lines(root, repo, since)
             lines = lines or held_lines(root, repo)
             lines = lines + start_lines(root, repo)  # with every return (brief #1179, ADR-0500)
         except CheckError as exc:

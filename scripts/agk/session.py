@@ -627,7 +627,7 @@ STORE = CommentStore()
 
 def github_reads(root) -> str:
     """`github_reads` of the flow table (ADR-0555 decision 4): `delta`, the default, or `full`."""
-    value = flow_value(root, "github_reads", "delta", 1)
+    value = flow_value(Path(root), "github_reads", "delta", 1)
     if value not in READS_MODES:
         raise CheckError("rule 1: github_reads of the [flow] table must be delta or full")
     return value
