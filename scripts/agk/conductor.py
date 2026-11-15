@@ -186,9 +186,13 @@ takes or renews the lease under NAME (another live holder starts nothing, exit 0
 through the adapter only when the fingerprint or the sweep's lines (without their ages and times)
 differ from those of the last job, the plan's `Start` line starts a brief, or no job ran for 24
 hours; otherwise it prints `watchdog: nothing changed; no job started`. The job does one pass and
-leaves the lease to the script. What the last job saw is kept in `<git dir>/agk/watchdog.json` only
-after the adapter succeeded, so a failed job is tried again. `--install --pass` prints the
-scheduler line every 10 minutes. The watchdog, the reviewer starts and `launch.py` set
+leaves the lease to the script. Under `--pass` the lease no longer keeps two jobs apart, since the
+script and its job share the name: the pass starts nothing, printing `watchdog: job <name> still
+running; nothing started`, within the first lease window of its last job or while the lease was
+renewed since the script's own last take (the job renews it first and as it works). What the
+last job saw is kept in `<git dir>/agk/watchdog.json` only after the adapter succeeded, so a failed
+job is tried again. `--install --pass` prints the scheduler line every 10 minutes. The
+watchdog, the reviewer starts and `launch.py` set
 `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` for the sessions they start (verify).
 
 Brief #1248 (ADR-0528): a fresh reviewer gives the gating verdict, in local mode too.
@@ -2117,10 +2121,11 @@ JOB_PROMPT = (
     "scripted pass (`python3 scripts/agk/conductor.py watchdog --pass`) because {why}. Your role "
     "is `.claude/agents/conductor.md` on the default branch: read it, `CLAUDE.md`, "
     "`constitution/principles.md` and `config/session-rules.md` first and follow them exactly. "
-    "The watchdog holds the lease under {name} between passes: renew it with "
-    "`python3 scripts/agk/conductor.py lease --take {name}` before a step that may pass 10 "
-    "minutes and do not release it. Do one pass: `python3 scripts/agk/session.py queue --role "
-    "conductor`, then `python3 scripts/agk/session.py review-queue --all` and the pass on its "
+    "The watchdog holds the lease under {name} between passes: renew it first with "
+    "`python3 scripts/agk/conductor.py lease --take {name}`, again before a step that may pass 10 "
+    "minutes, and do not release it: while you renew it the watchdog starts no other job. "
+    "Do one pass: `python3 scripts/agk/session.py queue --role conductor`, then "
+    "`python3 scripts/agk/session.py review-queue --all` and the pass on its "
     "lines, then the plan's starts and the sweep's lines; schedule no wake, start no loop, and "
     "end when the pass is done.\n"
 )
@@ -2159,18 +2164,57 @@ def pass_facts(root) -> tuple[str, bool, str]:
     return said.split()[1], starts, digest
 
 
+def keep_state(root, state: dict) -> None:
+    found = pass_state_file(root)
+    if found is not None:
+        found.parent.mkdir(parents=True, exist_ok=True)
+        found.write_text(json.dumps(state) + "\n", encoding="utf-8")
+
+
+def job_running(root, repo: str, name: str, state: dict, now: datetime) -> bool:
+    """Whether the last job may still run (fix list 6889113783 item 2): within its first lease
+    window, or while the lease under its name was renewed since the script's own last take (the job
+    renews it as it works and never releases it; it lapses `LEASE_MINUTES` after the job ends)."""
+    start = when(str(state.get("job_at") or ""))
+    if start is None:
+        return False
+    if now < start + timedelta(minutes=LEASE_MINUTES):
+        return True
+    issue = plan_issue(root)
+    holder = (
+        None
+        if issue is None
+        else lease_holder(plan_comments(repo, issue), verdict_authors(root), now)
+    )
+    return (
+        holder is not None and holder[0] == name and stamp_of(holder[1]) != state.get("own_until")
+    )
+
+
 def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
-    """Hold the lease, run the scripts of the pass, start one conductor job only when needed."""
+    """Hold the lease, run the scripts of the pass, start one conductor job only when needed and
+    never a second one while the last may still run."""
+    state, now = pass_state(root), datetime.now(UTC)
+    if job_running(root, repo, name, state, now):
+        print(f"watchdog: job {name} still running; nothing started")
+        return 0
     code, said = session.quietly(lease, root, "--take", name, False)
     if code:
         print(f"watchdog: {said}; nothing started")
         return 0 if code == merge_cleared.EXIT_HELD else 1
+    issue = plan_issue(root)
+    holder = (
+        None
+        if issue is None
+        else lease_holder(plan_comments(repo, issue), verdict_authors(root), now)
+    )
+    state["own_until"] = stamp_of(holder[1]) if holder else None  # the script's own take
+    keep_state(root, state)
     try:
         fingerprint, starts, swept = pass_facts(root)
     except CheckError as exc:
         print(f"watchdog: nothing started: {exc}")
         return 1
-    state, now = pass_state(root), datetime.now(UTC)
     last = when(str(state.get("job_at") or ""))
     why = [
         text
@@ -2212,11 +2256,8 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     if done.returncode != 0:  # the state stays, so the next pass tries again
         print(f"FAIL conductor: the adapter failed for {name}", file=sys.stderr)
         return 1
-    found = pass_state_file(root)
-    if found is not None:
-        found.parent.mkdir(parents=True, exist_ok=True)
-        kept = {"fingerprint": fingerprint, "sweep": swept, "job_at": stamp_of(now)}
-        found.write_text(json.dumps(kept) + "\n", encoding="utf-8")
+    state.update(fingerprint=fingerprint, sweep=swept, job_at=stamp_of(now))
+    keep_state(root, state)
     print(f"watchdog: job started {name}: {', '.join(why)}")
     return 0
 

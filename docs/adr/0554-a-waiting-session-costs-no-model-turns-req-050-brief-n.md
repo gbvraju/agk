@@ -44,7 +44,11 @@ session read everything again, so a builder still lives until its pull request m
    `watchdog: nothing changed; no job started`. The job does one pass and ends, and leaves the lease to the script. The
    fingerprint and the time of the last job are kept in `<git dir>/agk/watchdog.json`, beside the lease mark, only after a job started without error,
    so a job that fails is tried again on the next pass. `--install --pass` prints the scheduler line every 10 minutes.
-   An interactive conductor with `/loop` is unchanged. Session rule 18's wait for an `Assign:` is `watch --assign ID
+   One job runs at a time: since the script and its job share the lease's name, the lease no longer keeps them apart,
+   so the pass starts nothing (`watchdog: job <name> still running; nothing started`) within the first lease window
+   (`LEASE_MINUTES`) after its last job started, or while the lease under that name was renewed since the script's own
+   last take (kept as `own_until`); the job renews it first and as it works, never releases it, and it lapses
+   `LEASE_MINUTES` after the job ends. An interactive conductor with `/loop` is unchanged. Session rule 18's wait for an `Assign:` is `watch --assign ID
    --until-event`.
 4. Recaps are off for agent sessions: the watchdog and `launch.py` start every adapter with
    `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` `(verify: https://code.claude.com/docs/en/env-vars, read by a helper agent of the

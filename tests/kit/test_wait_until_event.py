@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ import session as session_script  # noqa: E402
 WAKE = 110 * 60
 LIMIT = 2 * 3600  # the runtime's longest background command (verify)
 OTHER = "f" * 40
+TAKEN = datetime(2026, 11, 15, 10, 0, tzinfo=UTC)
 
 
 class Clock:
@@ -424,6 +426,7 @@ def local(repo, tmp_path, monkeypatch):
     monkeypatch.delenv("ADAPTER_EXIT", raising=False)
     monkeypatch.setattr(common, "available_memory", lambda: None)
     facts = {"fingerprint": "fingerprint aaa", "plan": "Start 0: nothing ready.", "sweep": "x 5m"}
+    facts["holder"] = ("conductor-local", TAKEN)  # the lease as the script's own take left it
     leases: list[str] = []
 
     def lease(root, mode, name, takeover=True):
@@ -432,6 +435,8 @@ def local(repo, tmp_path, monkeypatch):
         return 0
 
     monkeypatch.setattr(conductor, "lease", lease)
+    monkeypatch.setattr(conductor, "plan_comments", lambda repo, issue: [])
+    monkeypatch.setattr(conductor, "lease_holder", lambda comments, authors, now: facts["holder"])
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
     monkeypatch.setattr(
         conductor.session, "review_queue", lambda root, m: print(facts["fingerprint"]) or 0
@@ -441,7 +446,15 @@ def local(repo, tmp_path, monkeypatch):
     return {"repo": repo, "log": log, "facts": facts, "leases": leases}
 
 
-def passed(local, capsys) -> tuple[int, str]:
+def passed(local, capsys, later: bool = True) -> tuple[int, str]:
+    """One scheduled pass; `later` puts it past the first lease window of the last job."""
+    state = conductor.pass_state_file(local["repo"].root)
+    if later and state.exists():
+        kept = json.loads(state.read_text())
+        if kept.get("job_at"):
+            start = datetime.strptime(kept["job_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+            kept["job_at"] = conductor.stamp_of(start - timedelta(minutes=11))
+            state.write_text(json.dumps(kept))
     code = conductor.main(["watchdog", "--pass"], root=local["repo"].root)
     return code, capsys.readouterr().out
 
@@ -523,6 +536,27 @@ def test_1310f_another_holder_of_the_lease_starts_nothing(local, capsys, monkeyp
     code, out = passed(local, capsys)
     assert code == 0 and "held by c1" in out and "nothing started" in out
     assert jobs(local) == []
+
+
+def test_1310f_no_second_job_starts_while_the_last_one_runs(local, capsys):
+    """REQ-050: fix list 6889113783 item 2: one job at a time, with a live job."""
+    passed(local, capsys)
+    local["facts"]["fingerprint"] = "fingerprint bbb"  # the job's own verdicts change the queue
+    code, out = passed(local, capsys, later=False)  # within the job's first lease window
+    assert code == 0 and "watchdog: job conductor-local still running; nothing started" in out
+    local["facts"]["holder"] = ("conductor-local", TAKEN + timedelta(minutes=7))  # it renewed
+    code, out = passed(local, capsys)
+    assert code == 0 and "still running; nothing started" in out
+    assert len(jobs(local)) == 1 and len(local["leases"]) == 1  # the script took nothing more
+    local["facts"]["holder"] = None  # the job ended and its lease lapsed
+    code, out = passed(local, capsys)
+    assert code == 0 and "job started" in out and len(jobs(local)) == 2
+
+
+def test_1310f_the_job_is_told_to_renew_first(local, capsys):
+    """REQ-050: fix list 6889113783 item 2 (the renewal is what marks the job live)."""
+    passed(local, capsys)
+    assert "renew it first" in jobs(local)[0]["prompt"]
 
 
 def test_1310f_install_with_pass_prints_a_ten_minute_line(local, capsys, monkeypatch):

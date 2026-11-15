@@ -249,7 +249,8 @@ change with an ADR in the same pull request.
    starts one conductor job through the adapter only when the fingerprint or the sweep's lines (without their ages) differ
    from those of the last job, the plan's `Start` line starts a brief, or no job ran for 24 hours; otherwise it prints
    `watchdog: nothing changed; no job started`. The job does one pass and ends, and leaves the lease to the script; a job
-   that fails is tried again on the next pass. `watchdog --install --pass` prints the line that runs it every 10 minutes.
+   that fails is tried again on the next pass, and while a job still runs (it renews the lease as it works) the pass
+   starts no second one (`watchdog: job <name> still running; nothing started`). `watchdog --install --pass` prints the line that runs it every 10 minutes.
    The sessions the watchdog and `launch.py` start get the runtime's variable that turns its idle recaps off
    `(verify)`; your own session is untouched.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
