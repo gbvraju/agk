@@ -73,7 +73,7 @@ REQ-067 AC1: *one cache per clone, shared by its worktrees, never tracked and ne
 
 ## Open questions
 
-Each is a point the brief leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules.
+Each is a point the brief leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules. `Q-S0060-1` to `Q-S0060-11` are ruled as read by the maintainer's answer on #1353 (comment 6899833634), one file each under `docs/runs/decisions/`, and the rules above hold their readings. No question is open.
 
 - Q-S0060-1: how often does the publisher poll? Reading: `[cache] poll_seconds = 15`, the brief's default (rule 3).
 - Q-S0060-2: does a publisher start with the conductor or on its own? Reading: with the conductor, or with the first reader that finds no live lease when no conductor runs (rule 3).
