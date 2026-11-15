@@ -39,9 +39,10 @@ session read everything again, so a builder still lives until its pull request m
    the watchdog does, takes or renews the conductor lease under its NAME (another live holder, an interactive conductor,
    starts nothing), and runs `review-queue --fingerprint`, the plan's `Start` line and `sweep` in the script. It starts one
    conductor job through `[flow] launch_adapter` only when the fingerprint differs from the one of the last job, the plan
-   starts at least one brief, `sweep` printed a line, or no job ran for 24 hours (the daily report); otherwise it prints
+   starts at least one brief, the lines `sweep` printed, without their ages and times, differ from those of the last
+   job, or no job ran for 24 hours (the daily report); otherwise it prints
    `watchdog: nothing changed; no job started`. The job does one pass and ends, and leaves the lease to the script. The
-   fingerprint and the time of the last job are kept in `.git/agk-watchdog.json` only after a job started without error,
+   fingerprint and the time of the last job are kept in `<git dir>/agk/watchdog.json`, beside the lease mark, only after a job started without error,
    so a job that fails is tried again on the next pass. `--install --pass` prints the scheduler line every 10 minutes.
    An interactive conductor with `/loop` is unchanged.
 4. Recaps are off for agent sessions: the watchdog and `launch.py` start every adapter with
@@ -54,9 +55,10 @@ session read everything again, so a builder still lives until its pull request m
 
 In the recorded double a quiet hour makes no return of `watch --until-event` before `wake_minutes` and renews a slot's
 lease every 240 s, and `watchdog --pass` starts no job on an unchanged fingerprint. Protected path classes changed:
-`scripts/agk/` (`session.py`, `conductor.py`, `launch.py`), `tests/kit/` (`test_wait_until_event.py`), `kit/`
-(`kit/templates/runtime/builder.txt`, `kit/hashes.json`), `config/` (`config/session-rules.md` rule 18) and `.claude/`
-(`.claude/agents/conductor.md`).
+`scripts/agk/` (`session.py`, `conductor.py`, `launch.py`, `config.py` for the two new `[flow]` keys), `tests/kit/`
+(`test_wait_until_event.py`, and the write count of `test_session.py`), `kit/` (`kit/templates/runtime/builder.txt`),
+`config/` (`config/session-rules.md` rule 18), `.claude/` (`.claude/agents/conductor.md`) and `agk.toml` (the new test
+file in the `[[testing.map]]` entries of `session.py`, `conductor.py` and `launch.py`).
 
 ## Residual
 

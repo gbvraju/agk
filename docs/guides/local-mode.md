@@ -242,6 +242,16 @@ change with an ADR in the same pull request.
    (add it with `crontab -e`). Each runs `git fetch` in the checkout and then the pass `(verify: a scheduled task and a cron
    job start with a short PATH; check that python, git, gh and the adapter's terminal are found, and that the task runs
    while you are signed in, which a terminal tab needs)`.
+
+   **The scripted pass** (brief #1310, ADR-0554): `watchdog --pass` keeps the conductor's model asleep while nothing
+   changed. It takes or renews the lease under its name itself (another live holder, such as an interactive conductor with
+   `/loop`, starts nothing), runs `session.py review-queue --fingerprint`, the plan and `conductor.py sweep` as scripts, and
+   starts one conductor job through the adapter only when the fingerprint or the sweep's lines (without their ages) differ
+   from those of the last job, the plan's `Start` line starts a brief, or no job ran for 24 hours; otherwise it prints
+   `watchdog: nothing changed; no job started`. The job does one pass and ends, and leaves the lease to the script; a job
+   that fails is tried again on the next pass. `watchdog --install --pass` prints the line that runs it every 10 minutes.
+   The sessions the watchdog and `launch.py` start get `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0`, which turns the runtime's
+   idle recaps off `(verify)`; your own session is untouched.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then
