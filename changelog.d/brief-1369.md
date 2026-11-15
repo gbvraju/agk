@@ -1,0 +1,1 @@
+- A comment whose body `gh api` reads from a file (`-F body=@file`) is posted from that file again; the Who line is no longer appended to the file name (brief #1369, ADR-0574)
