@@ -28,7 +28,7 @@ from test_conductor_watchdog import (  # noqa: F401
 from test_session import REPO, comment, iso
 
 NOW = datetime(2026, 11, 15, 12, 0, tzinfo=UTC)
-SILENT = 30
+IDLE = 60  # `[flow] idle_minutes`, never below `silent_minutes`
 
 
 def at(minutes: int) -> datetime:
@@ -43,19 +43,149 @@ def at(minutes: int) -> datetime:
     [
         (False, False, at(5), None, True, "ended"),  # the process is gone
         (True, True, at(5), None, True, "ended"),  # the exit file is newer than the record
-        (True, False, at(5), None, False, "live"),  # posted or pushed within silent_minutes
-        (True, False, at(45), None, False, "idle"),  # nothing since the take for 45 minutes
+        (True, False, at(5), None, False, "live"),  # posted or pushed within idle_minutes
+        (True, False, at(45), None, False, "live"),  # 45 minutes: a heavy step may run that long
+        (True, False, at(75), None, False, "idle"),  # nothing since the take for 75 minutes
         (True, False, at(90), None, True, "live"),  # its own Report: is newest: it waits
-        (True, False, at(90), at(40), True, "idle"),  # a verdict 40 minutes old, no move since
-        (True, False, at(90), at(10), True, "live"),  # a verdict 10 minutes old: not yet
-        (True, False, at(5), at(40), True, "live"),  # it moved after the verdict
+        (True, False, at(90), at(70), True, "idle"),  # a verdict 70 minutes old, no move since
+        (True, False, at(90), at(40), True, "live"),  # a verdict 40 minutes old: not yet
+        (True, False, at(5), at(70), True, "live"),  # it moved after the verdict
     ],
 )
 def test_each_state_of_a_session(alive, exited, own, owed, has_pr, state):
     """REQ-050: brief #1355 answer 1 (a fake process table and a fake clock)."""
     import conductor
 
-    assert conductor.builder_state(alive, exited, own, owed, NOW, SILENT, has_pr) == state
+    assert conductor.builder_state(alive, exited, own, owed, NOW, IDLE, has_pr) == state
+
+
+@pytest.mark.parametrize("sign", ["transcript", "commit", "files", "lock"])
+def test_any_one_sign_of_work_makes_a_quiet_builder_live(sign):
+    """REQ-050: brief #1355 answer 1 as corrected (any one sign of work is `live`)."""
+    import conductor
+
+    args = (True, False, at(90), at(70), NOW, IDLE, True)
+    assert conductor.builder_state(*args) == "idle"
+    assert conductor.builder_state(*args, busy=[sign]) == "live"
+    assert conductor.builder_state(False, False, at(5), None, NOW, IDLE, True, busy=[sign]) == (
+        "ended"
+    )
+
+
+@pytest.mark.parametrize(
+    "flow, minutes", [("", 60), ("idle_minutes = 90\n", 90), ("silent_minutes = 120\n", 120)]
+)
+def test_idle_minutes_is_never_below_silent_minutes(tmp_path, flow, minutes):
+    """REQ-050: brief #1355 answer 1 as corrected (`[flow] idle_minutes`, 60 by default)."""
+    import conductor
+
+    (tmp_path / "agk.toml").write_text("[flow]\n" + flow, encoding="utf-8")
+    assert conductor.idle_minutes(tmp_path) == minutes
+
+
+def quiet_worktree(tmp_path: Path) -> Path:
+    """A worktree whose only files are the adapter's record, written long ago."""
+    import os
+
+    worktree = tmp_path / "agk-b1"
+    write_record(worktree, "b1", 4242, "2026-11-15T09:00:00Z")
+    old = (NOW - timedelta(hours=3)).timestamp()
+    os.utime(worktree / ".agk-session-pid", (old, old))
+    return worktree
+
+
+def signs(tmp_path, monkeypatch, worktree, processes=None) -> list[str]:
+    import conductor
+    import launch
+
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setattr(conductor, "lock_base", lambda root: tmp_path / "locks")
+    table = processes if processes is not None else {4242: (1, 10), 4243: (4242, 50)}
+    record = launch.read_record(worktree)
+    return conductor.busy_signs(tmp_path, worktree, record, table, NOW, IDLE)
+
+
+def test_a_builder_whose_only_sign_is_a_transcript_write_is_live(tmp_path, monkeypatch):
+    """REQ-050: brief #1355 answer 7 as corrected (the runtime's transcript was written)."""
+    import os
+
+    import conductor
+
+    worktree = quiet_worktree(tmp_path)
+    assert signs(tmp_path, monkeypatch, worktree) == []
+    folder = conductor.transcript_folder(worktree)
+    assert folder.parent == tmp_path / "runtime" / "projects"
+    folder.mkdir(parents=True)
+    turn = folder / "0000.jsonl"
+    turn.write_text("{}\n", encoding="utf-8")
+    written = (NOW - timedelta(minutes=20)).timestamp()
+    os.utime(turn, (written, written))
+    assert signs(tmp_path, monkeypatch, worktree) == ["transcript"]
+    stale = (NOW - timedelta(minutes=90)).timestamp()
+    os.utime(turn, (stale, stale))
+    assert signs(tmp_path, monkeypatch, worktree) == []
+
+
+def test_a_file_change_in_the_worktree_is_a_sign_of_work(tmp_path, monkeypatch):
+    """REQ-050: brief #1355 answer 1 as corrected (a file change; the record files are not)."""
+    import os
+
+    worktree = quiet_worktree(tmp_path)
+    (worktree / "notes.txt").write_text("x\n", encoding="utf-8")
+    written = (NOW - timedelta(minutes=10)).timestamp()
+    os.utime(worktree / "notes.txt", (written, written))
+    assert signs(tmp_path, monkeypatch, worktree) == ["files"]
+
+
+def write_lock(tmp_path: Path, session: str, beat_minutes: int, pid: int = 9, now=NOW) -> None:
+    import json
+
+    held = tmp_path / "locks" / "agk-lock-heavy"
+    held.mkdir(parents=True, exist_ok=True)
+    owner = {
+        "session": session,
+        "pid": pid,
+        "started": (now - timedelta(minutes=90)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "beat": (now - timedelta(minutes=beat_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    (held / "owner.json").write_text(json.dumps(owner), encoding="utf-8")
+
+
+def test_a_heavy_step_under_the_lock_is_a_sign_of_work(tmp_path, monkeypatch):
+    """REQ-050: brief #1355 answer 1 as corrected (a lock of this session with a fresh heartbeat,
+    by its name or by a process of its tree; another session's lock or a stale beat is not)."""
+    worktree = quiet_worktree(tmp_path)
+    write_lock(tmp_path, "b1", beat_minutes=1)
+    assert signs(tmp_path, monkeypatch, worktree) == ["lock"]
+    write_lock(tmp_path, "other", beat_minutes=1, pid=4243)  # its tree holds the lock
+    assert signs(tmp_path, monkeypatch, worktree) == ["lock"]
+    write_lock(tmp_path, "other", beat_minutes=1)
+    assert signs(tmp_path, monkeypatch, worktree) == []
+    write_lock(tmp_path, "b1", beat_minutes=20)
+    assert signs(tmp_path, monkeypatch, worktree) == []
+
+
+@pytest.mark.parametrize(
+    "stdout, platform, table",
+    [
+        (" 10 1 00:01:02\n 11 10 1-00:00:03\n x y z\n", "linux", {10: (1, 62), 11: (10, 86403)}),
+        ("10 1 0:00.70\n", "darwin", {10: (1, 0)}),
+        ("10 1 62\r\n11 10 5\r\n", "win32", {10: (1, 62), 11: (10, 5)}),
+    ],
+)
+def test_the_process_table_and_the_trees_cpu_time(stdout, platform, table):
+    """REQ-050: brief #1355 answer 1 as corrected (the process tree's CPU seconds)."""
+    import launch
+
+    def run(words, **_):
+        return subprocess.CompletedProcess(words, 0, stdout=stdout)
+
+    assert launch.process_table(run=run, platform=platform) == table
+    assert launch.tree_cpu(10, {**table, 12: (99, 7)}) == {
+        p: c for p, (_, c) in table.items()
+    }  # never 12, which is not below 10
+    failed = subprocess.CompletedProcess([], 1, stdout="")
+    assert launch.process_table(run=lambda w, **_: failed, platform=platform) is None
 
 
 def write_record(worktree: Path, session: str, pid: int, started: str, brief: int = 7) -> None:
@@ -208,6 +338,10 @@ def builders(world, tmp_path, monkeypatch):  # noqa: F811
     import conductor
 
     monkeypatch.setattr(conductor, "worktree_safe", lambda path: True)
+    processes = {4242: (1, 10), 4243: (4242, 50)}  # the wrapper and the runtime below it
+    monkeypatch.setattr(launch, "process_table", lambda **_: dict(processes))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setattr(conductor, "lock_base", lambda root: tmp_path / "locks")
     double = world["stub"]
     double.serve(f"repos/{REPO}/issues/61/comments", [marker(3)])  # a live conductor holds it
     double.serve(
@@ -224,7 +358,8 @@ def builders(world, tmp_path, monkeypatch):  # noqa: F811
         f"repos/{REPO}/commits/{'a' * 40}",
         {"commit": {"committer": {"date": iso(timedelta(hours=-2))}}},
     )
-    yield {**world, "name": name, "worktree": worktree, "table": table, "stopped": stopped}
+    yield {**world, "name": name, "worktree": worktree, "table": table, "stopped": stopped,
+           "processes": processes, "tmp": tmp_path}  # fmt: skip
     import shutil
 
     shutil.rmtree(worktree, ignore_errors=True)
@@ -271,13 +406,31 @@ def test_an_ended_builder_is_restarted_once_under_its_name(builders, capsys):
     ]
 
 
-def test_an_idle_builder_is_stopped_then_restarted(builders, capsys):
-    """REQ-050: brief #1355 answers 2 and 5 (a verdict waits 40 minutes with no move)."""
+def read_before(builders, minutes: int = 6, cpu: dict | None = None) -> None:
+    """The first of the two reads, MINUTES ago, with the process tree's CPU seconds CPU."""
+    import conductor
+
+    root = builders["repo"].root
+    memo = conductor.builder_memo(root)
+    seen = cpu if cpu is not None else {"4242": 10, "4243": 50}
+    then = datetime.now(UTC) - timedelta(minutes=minutes)
+    memo.setdefault("checks", {})[builders["name"]] = {"at": conductor.stamp_of(then), "cpu": seen}
+    conductor.keep_builder_memo(root, memo)
+
+
+def owes_a_verdict(builders, minutes: int = 70) -> None:
     pr_comments(
         builders,
-        comment(2, "builder", "Report: aaaaaaa ready for review", iso(timedelta(hours=-1))),
-        comment(3, "boss", "Verdict: fix list aaaaaaa", iso(timedelta(minutes=-40))),
+        comment(2, "builder", "Report: aaaaaaa ready for review", iso(timedelta(hours=-2))),
+        comment(3, "boss", "Verdict: fix list aaaaaaa", iso(timedelta(minutes=-minutes))),
     )
+
+
+def test_an_idle_builder_is_stopped_then_restarted(builders, capsys):
+    """REQ-050: brief #1355 answers 2, 3 and 5 (a verdict waits 70 minutes with no move, every
+    sign is quiet, and two reads 5 minutes apart give the same result)."""
+    owes_a_verdict(builders)
+    read_before(builders)
     code, out = watchdog(builders, capsys)
     assert builder_line(out) == f"watchdog: builder {builders['name']} #7 idle -> restarted"
     assert builders["stopped"] == [4242] and len(starts(builders)) == 1
@@ -288,9 +441,8 @@ def test_an_idle_builder_with_unpushed_work_is_held(builders, capsys, monkeypatc
     import conductor
 
     monkeypatch.setattr(conductor, "worktree_safe", lambda path: False)
-    pr_comments(
-        builders, comment(3, "boss", "Verdict: fix list aaaaaaa", iso(timedelta(minutes=-40)))
-    )
+    owes_a_verdict(builders)
+    read_before(builders)
     _, out = watchdog(builders, capsys)
     assert (
         builder_line(out) == f"watchdog: builder {builders['name']} #7 idle -> held (unpushed work)"
@@ -307,6 +459,72 @@ def test_a_live_builder_waiting_on_a_review_is_left(builders, capsys):
     _, out = watchdog(builders, capsys)
     assert builder_line(out) == f"watchdog: builder {builders['name']} #7 live -> left"
     assert starts(builders) == [] and builders["stopped"] == []
+
+
+def test_a_builder_in_a_90_minute_heavy_step_is_live_and_never_stopped(builders, capsys):
+    """REQ-050: brief #1355 answer 7 as corrected (a fresh lock heartbeat, a child process
+    running, no post for 90 minutes: `live`, never stopped, never restarted)."""
+    owes_a_verdict(builders, minutes=90)
+    read_before(builders)
+    builders["processes"][4244] = (4243, 900)  # the heavy step's child, still running
+    write_lock(builders["tmp"], "other", beat_minutes=1, pid=4244, now=datetime.now(UTC))
+    _, out = watchdog(builders, capsys)
+    assert builder_line(out) == f"watchdog: builder {builders['name']} #7 live -> left"
+    assert builders["stopped"] == [] and starts(builders) == []
+
+
+def test_a_builder_whose_transcript_was_written_is_left(builders, capsys):
+    """REQ-050: brief #1355 answer 7 as corrected (its only sign is a transcript write)."""
+    import conductor
+
+    owes_a_verdict(builders)
+    read_before(builders)
+    folder = conductor.transcript_folder(builders["worktree"])
+    folder.mkdir(parents=True)
+    (folder / "0000.jsonl").write_text("{}\n", encoding="utf-8")
+    _, out = watchdog(builders, capsys)
+    assert builder_line(out) == f"watchdog: builder {builders['name']} #7 live -> left"
+    assert builders["stopped"] == []
+
+
+@pytest.mark.parametrize(
+    "before",
+    [
+        None,  # the first read: a second one is due
+        {"minutes": 2},  # too close: two reads are 5 minutes apart
+        {"minutes": 45},  # too old to be the same quiet spell
+        {"minutes": 6, "cpu": {"4242": 10, "4243": 41}},  # the tree used CPU between the reads
+        {"minutes": 6, "cpu": {"4242": 10}},  # a process below it started between the reads
+    ],
+)
+def test_an_idle_stop_needs_two_reads_5_minutes_apart_with_the_same_result(
+    builders, capsys, before
+):
+    """REQ-050: brief #1355 answer 3 as corrected (otherwise `held (working)`, no NEEDS-YOU)."""
+    import conductor
+
+    owes_a_verdict(builders)
+    if before is not None:
+        read_before(builders, **before)
+    _, out = watchdog(builders, capsys)
+    assert builder_line(out) == f"watchdog: builder {builders['name']} #7 idle -> held (working)"
+    assert builders["stopped"] == [] and starts(builders) == []
+    assert conductor.held_builder_lines(builders["repo"].root) == []
+    # this read is kept, so the next pass 5 or more minutes later can stop it
+    checks = conductor.builder_memo(builders["repo"].root)["checks"][builders["name"]]
+    assert checks["cpu"] == {"4242": 10, "4243": 50}
+
+
+def test_an_unreadable_process_table_never_stops_a_builder(builders, capsys, monkeypatch):
+    """REQ-050: brief #1355 answer 3 as corrected (a read that fails is not a quiet read)."""
+    import launch
+
+    monkeypatch.setattr(launch, "process_table", lambda **_: None)
+    owes_a_verdict(builders)
+    read_before(builders)
+    _, out = watchdog(builders, capsys)
+    assert builder_line(out) == f"watchdog: builder {builders['name']} #7 idle -> held (working)"
+    assert builders["stopped"] == []
 
 
 @pytest.mark.parametrize(
@@ -393,4 +611,4 @@ def test_the_guide_names_the_record_and_the_install(tmp_path):
     """REQ-050: brief #1355 answer 6."""
     text = (ROOT / "docs" / "guides" / "local-mode.md").read_text(encoding="utf-8")
     assert ".agk-session-pid" in text and "watchdog --install --pass" in text
-    assert "keeps builders" in text
+    assert "keeps builders" in text and "idle_minutes" in text and "two reads" in text

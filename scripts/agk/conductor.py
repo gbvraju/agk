@@ -206,9 +206,14 @@ Brief #1355 (ADR-0568): after its conductor checks, `watchdog` (and `--pass`) re
 session with a process record (`<parent of the checkout>/agk-<session>/.agk-session-pid`) and a
 live take of its brief, and prints one line each, `watchdog: builder <name> #<brief>
 ended|idle|live -> restarted|left|held (<reason>)`, posting nothing. An `ended` builder is
-restarted through the adapter with `launch.py`'s resume prompt under the same name; an `idle` one
-(it owes the next move and made none for `[flow] silent_minutes`) is stopped first, only when its
-worktree is clean and pushed; a parked or handed-over one is never restarted; one restart per
+restarted through the adapter with `launch.py`'s resume prompt under the same name. A builder is
+`idle` only when every sign of work is quiet for `[flow] idle_minutes` (60 by default, never below
+`silent_minutes`): it owes the next move and posted or pushed nothing, its transcript was not
+written, no local commit or file change in its worktree, no `lock.py` lock of it with a fresh
+heartbeat, and two reads of its process tree 5 to 30 minutes apart (one per pass, kept in
+`builders.json`) show the same processes and CPU seconds; until they agree it prints `held
+(working)`, which is no NEEDS-YOU line. An idle one is stopped first, only when its worktree is
+clean and pushed; a parked or handed-over one is never restarted; one restart per
 session per hour, kept in `<git dir>/agk/builders.json`, and `sweep` prints `NEEDS-YOU: builder
 <name> #<brief> held (<reason>)` for each held one.
 
@@ -2362,21 +2367,37 @@ RESTART_GAP = timedelta(hours=1)
 OWED = ("Verdict:", "Correction:", "Answer:", "Maintainer answer:")
 FINAL = re.compile(r"Report: \S+ (handing over:|over cap )")
 NO_ROOM = "no room: max_builders or builder_memory_gb"
+IDLE = ("idle_minutes", 60)
+QUIET = timedelta(minutes=5)  # a fresh lock heartbeat, and the least gap of the two reads
+READ_LATE = timedelta(minutes=30)  # an earlier read older than this starts the two reads again
+WORKING = "working"
 
 
-def builder_state(alive, exited, own, owed, now, silent: int, has_pr: bool) -> str:
+def idle_minutes(root) -> int:
+    """`[flow] idle_minutes` (60 by default), never below `silent_minutes` (ADR-0568 decision 2)."""
+    silent = session.flow_int(root, SILENT[0], SILENT[1], 0)
+    return max(session.flow_int(root, IDLE[0], IDLE[1], 0), silent)
+
+
+def builder_state(alive, exited, own, owed, now, quiet: int, has_pr: bool, busy=()) -> str:
     """`ended`, `idle` or `live` (ADR-0568 decisions 1 and 2). OWN is the builder's newest move
-    (its record, take, posts or push), OWED the newest line it owes an answer to, or None."""
+    (its record, take, posts or push), OWED the newest line it owes an answer to, or None; BUSY
+    the signs of work its machine shows (`busy_signs`): any one of them is `live`."""
     if not alive or exited:
         return "ended"
-    wait = timedelta(minutes=silent)
+    if busy:
+        return "live"
+    wait = timedelta(minutes=quiet)
     if not has_pr:
         return "idle" if now - own >= wait else "live"
     return "idle" if owed is not None and owed > own and now - owed >= wait else "live"
 
 
-def builder_action(state: str, *, final, parked, recent, room, safe) -> tuple[str, str | None]:
-    """(`restart`, `left` or `held`, the reason) for one session (ADR-0568 decisions 2 and 3)."""
+def builder_action(
+    state: str, *, final, parked, recent, room, safe, checked=True
+) -> tuple[str, str | None]:
+    """(`restart`, `left` or `held`, the reason) for one session (ADR-0568 decisions 2 and 3);
+    CHECKED is whether two reads 5 minutes apart found the same quiet process tree."""
     if state == "live":
         return "left", None
     if parked or final:
@@ -2385,6 +2406,8 @@ def builder_action(state: str, *, final, parked, recent, room, safe) -> tuple[st
         return "held", "restarted within the hour"
     if state == "idle" and not safe:
         return "held", "unpushed work"
+    if state == "idle" and not checked:
+        return "held", WORKING
     if not room:
         return "held", NO_ROOM
     return "restart", None
@@ -2408,6 +2431,99 @@ def worktree_safe(worktree: Path) -> bool:
     changes = git_out("status", "--porcelain", "--untracked-files=all")
     unpushed = git_out("rev-list", "HEAD", "--not", "--remotes")
     return changes == "" and unpushed == ""
+
+
+def transcript_folder(worktree: Path) -> Path:
+    """The runtime's transcript folder of a session started in WORKTREE: `projects/<the folder's
+    path, every character other than a letter or digit a dash>` under `CLAUDE_CONFIG_DIR`, else
+    `~/.claude` (verify: the runtime's layout on POSIX and on Windows)."""
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
+    return Path(base) / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(Path(worktree).resolve()))
+
+
+def newest_write(folder: Path, skip: AbstractSet[str] = frozenset()) -> float | None:
+    """The newest modification time of a file below FOLDER, never inside `.git`; None for none."""
+    newest_ = None
+    for top, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d != ".git"]
+        for name in files:
+            if name in skip:
+                continue
+            with contextlib.suppress(OSError):
+                moment = (Path(top) / name).stat().st_mtime
+                newest_ = moment if newest_ is None else max(newest_, moment)
+    return newest_
+
+
+def lock_base(root) -> Path:
+    """The folder of the heavy-step locks (`lock_dir` of agk.toml, else the temp folder)."""
+    import lock
+
+    return lock.lock_folder(Path(root), "x").parent
+
+
+def holds_fresh_lock(root, name: str, tree: AbstractSet[int], now) -> bool:
+    """A `lock.py` lock of session NAME, or of a process of its tree, with a heartbeat younger
+    than 5 minutes; a lock folder that cannot be read counts as held (ADR-0568 decision 2)."""
+    import lock
+
+    try:
+        folders = sorted(lock_base(root).glob("agk-lock-*"))
+    except (OSError, lock.Usage):
+        return True
+    for held in folders:
+        owner = lock.read_owner(held) if held.is_dir() else None
+        if owner is None:
+            continue
+        ours = owner.get("session") == name or bool(set(lock.holder_pids(owner)) & set(tree))
+        beat = lock.beat_minutes(owner, now)
+        if ours and beat is not None and beat < QUIET.total_seconds() / 60:
+            return True
+    return False
+
+
+def busy_signs(root, worktree: Path, record: dict, table, now, quiet: int) -> list[str]:
+    """The signs of work that one read shows within QUIET minutes (ADR-0568 decision 2): a
+    transcript write, a local commit, a file change in the worktree (the adapter's record and
+    exit file are not one), and a lock with a fresh heartbeat. The process tree's CPU use is
+    the two reads' part (`watch_builders`)."""
+    since = (now - timedelta(minutes=quiet)).timestamp()
+    found = []
+    written = newest_write(transcript_folder(worktree))
+    if written is not None and written >= since:
+        found.append("transcript")
+    with contextlib.suppress(OSError):
+        done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "-C", str(worktree), "log", "-1", "--format=%ct"],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )  # fmt: skip
+        stamp = done.stdout.strip()
+        if done.returncode == 0 and stamp.isdigit() and int(stamp) >= since:
+            found.append("commit")
+    changed = newest_write(Path(worktree), {launch.RECORD_FILE, launch.EXIT_FILE})
+    if changed is not None and changed >= since:
+        found.append("files")
+    tree = launch.tree_cpu(record["pid"], table or {})
+    if holds_fresh_lock(root, record["session"], set(tree), now):
+        found.append("lock")
+    return found
+
+
+def two_reads(checks: dict, name: str, cpu: dict | None, now) -> bool:
+    """Whether an earlier read, 5 to 30 minutes ago, found the same CPU seconds for the same
+    processes of the tree; keeps this read for the next pass when it did not."""
+    found = checks.get(name)
+    before: dict = found if isinstance(found, dict) else {}
+    then = when(str(before.get("at") or ""))
+    same = (
+        cpu is not None
+        and then is not None
+        and QUIET <= now - then <= READ_LATE
+        and before.get("cpu") == cpu
+    )
+    if not same:
+        checks[name] = {"at": stamp_of(now), "cpu": cpu}
+    return same
 
 
 def builder_file(root) -> Path | None:
@@ -2516,10 +2632,12 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
     if not records:
         return []
     pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
-    silent = session.flow_int(root, SILENT[0], SILENT[1], 0)
+    quiet = idle_minutes(root)
     limit = launch.max_builders(Path(root))
     memo = builder_memo(root)
     restarts, held = memo.setdefault("restarts", {}), memo.setdefault("held", {})
+    checks = memo.setdefault("checks", {})
+    table = launch.process_table()
     running = sum(
         1 for w, r in records if not launch.exited(w, r) and launch.process_alive(r["pid"])
     )
@@ -2530,10 +2648,18 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
         if facts is None:
             continue
         alive = launch.process_alive(record["pid"])
-        state = builder_state(
-            alive, launch.exited(worktree, record), facts["own"], facts["owed"], now, silent,
-            facts["pr"] is not None,
-        )  # fmt: skip
+        args = (alive, launch.exited(worktree, record), facts["own"], facts["owed"], now, quiet)
+        state = builder_state(*args, facts["pr"] is not None)
+        if state == "idle":
+            busy = busy_signs(root, worktree, record, table, now, quiet)
+            state = builder_state(*args, facts["pr"] is not None, busy)
+        checked = False
+        if state == "idle":
+            cpu = None if table is None else launch.tree_cpu(record["pid"], table)
+            shown = None if cpu is None else {str(p): c for p, c in sorted(cpu.items())}
+            checked = two_reads(checks, name, shown, now)
+        else:
+            checks.pop(name, None)
         last = when(str(restarts.get(name) or ""))
         room = (running - (state == "idle") < limit) and memory_line(root)[1]
         action, why = builder_action(
@@ -2543,6 +2669,7 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
             recent=last is not None and now - last < RESTART_GAP,
             room=room,
             safe=state != "idle" or worktree_safe(worktree),
+            checked=checked,
         )
         if action == "restart" and state == "idle" and not stopped(record["pid"]):
             action, why = "held", "the process did not stop"
@@ -2555,7 +2682,9 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
             if code == 0:
                 restarts[name] = stamp_of(now)
                 running += state == "ended"
-        if action == "held":
+        if action == "restarted":
+            checks.pop(name, None)
+        if action == "held" and why != WORKING:  # a working builder needs no one
             held[name] = {"brief": number, "reason": why}
         else:
             held.pop(name, None)

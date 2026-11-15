@@ -484,6 +484,61 @@ def has_process(worktree: Path) -> bool:
     return record is not None and not exited(worktree, record) and process_alive(record["pid"])
 
 
+WINDOWS_TABLE = (
+    "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, "
+    "$_.ParentProcessId, [int64](($_.KernelModeTime + $_.UserModeTime) / 10000000) }"
+)
+
+
+def cpu_seconds(text: str) -> int | None:
+    """Whole CPU seconds of `[[dd-]hh:]mm:ss[.cc]` (ps) or of a bare count (Windows)."""
+    days, _, clock = text.rpartition("-")
+    parts = clock.split(":")
+    if (days and not days.isdigit()) or len(parts) > 3:
+        return None
+    try:
+        total = 0.0
+        for part in parts:
+            total = total * 60 + float(part)
+    except ValueError:
+        return None
+    return int(total) + int(days or 0) * 86400
+
+
+def process_table(run=subprocess.run, platform: str | None = None) -> dict | None:
+    """{pid: (parent pid, CPU seconds)} of every process, or None when it cannot be read (verify:
+    `ps -o time=` on POSIX, `Get-CimInstance Win32_Process` through PowerShell on Windows)."""
+    if (platform or sys.platform) == "win32":
+        words = ["powershell", "-NoProfile", "-Command", WINDOWS_TABLE]
+    else:
+        words = ["ps", "-A", "-o", "pid=,ppid=,time="]
+    try:
+        done = run(words, capture_output=True, text=True, encoding="utf-8")
+    except OSError:
+        return None
+    if done.returncode != 0:
+        return None
+    table = {}
+    for line in done.stdout.splitlines():
+        parts = line.split()
+        cpu = cpu_seconds(parts[2]) if len(parts) == 3 else None
+        if cpu is not None and parts[0].isdigit() and parts[1].isdigit():
+            table[int(parts[0])] = (int(parts[1]), cpu)
+    return table
+
+
+def tree_cpu(pid: int, table: dict) -> dict[int, int]:
+    """{pid: CPU seconds} of PID and every process below it in TABLE."""
+    found: dict[int, int] = {}
+    todo = [pid]
+    while todo:
+        current = todo.pop()
+        if current in table and current not in found:
+            found[current] = table[current][1]
+            todo += [p for p, (parent, _) in table.items() if parent == current]
+    return found
+
+
 def stop_tree(pid: int, run=subprocess.run, platform: str | None = None) -> None:
     """Stop the process PID and every process below it, and nothing else (ADR-0568 decision 3)."""
     if (platform or sys.platform) == "win32":

@@ -262,7 +262,12 @@ change with an ADR in the same pull request.
    session, its process id, the UTC start time and the brief) before the session's first turn, kept out of git as the exit
    file is. After its conductor checks, each pass reads every builder with that record and a live take, and prints
    `watchdog: builder <name> #<brief> ended|idle|live -> restarted|left|held (<reason>)`: an ended builder is restarted under
-   its name with the resume prompt, an idle one (it owes the next move and made none for `[flow] silent_minutes`) is
+   its name with the resume prompt. A builder is idle only when every sign of work has been quiet for `[flow]
+   idle_minutes` (60 by default, never below `silent_minutes`): it owes the next move and posted and pushed nothing, its
+   runtime transcript was not written `(verify)`, no local commit and no file change in its worktree, no lock of
+   `lock.py` with a fresh heartbeat, and two reads of its process tree 5 to 30 minutes apart (one per pass) show the
+   same processes and the same CPU time; any one sign makes it live, so a heavy step of any length is never stopped,
+   and until the two reads agree the line says `held (working)`. An idle one is
    stopped and restarted only when its worktree is clean and pushed, a parked or handed-over one is never restarted, and a
    session is restarted at most once an hour; a held one is a `NEEDS-YOU:` line of the next sweep. `launch.py` never
    starts a second session of a name whose process is still there. Install the scheduled task on the machine that runs
