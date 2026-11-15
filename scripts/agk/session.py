@@ -156,6 +156,7 @@ import contextlib
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import secrets
@@ -351,6 +352,12 @@ MEMO: dict | None = None  # within one plan run, each GET read once (ADR-0529 de
 RATE_LIMIT = re.compile(r"rate limit|HTTP 429", re.IGNORECASE)
 RATE_WAITS = 5  # rate limits waited out for one call before it counts as failed
 RESET_SLACK = 1.0  # seconds after the reset time that GitHub reports
+SECONDARY_WAIT = 60.0  # a secondary limit with no retry-after: 60 s, doubled per try (ADR-0565)
+SECONDARY_CAP = 900.0  # a secondary wait is capped at 15 minutes, then the call fails
+WRITE_GAP = 1.0  # seconds between two mutating calls of one process (brief #1335 answer 2)
+WRITES = 0  # the mutating calls this run made (brief #1335 answer 3)
+LAST_WRITE: float | None = None  # the monotonic time of the last mutating call
+MUTATING = frozenset({"POST", "PATCH", "PUT", "DELETE"})
 UNREACHABLE = re.compile(
     r"error connecting|dial tcp|no such host|could not resolve|connection (?:refused|reset)"
     r"|network is unreachable|i/o timeout|tls handshake|timed out|temporary failure in name",
@@ -358,8 +365,9 @@ UNREACHABLE = re.compile(
 )
 
 
-def rate_reset() -> float | None:
-    """The reset time of the core rate limit that GitHub reports (`GET rate_limit` is free)."""
+def rate_state() -> tuple[float | None, float] | None:
+    """The core limit that GitHub reports (`GET rate_limit` is free): (remaining, reset), the
+    remaining None when not given; None when it cannot be read."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["gh", "api", "--method", "GET", "rate_limit"],
         capture_output=True,
@@ -367,9 +375,48 @@ def rate_reset() -> float | None:
         encoding="utf-8",
     )
     try:
-        return float(json.loads(proc.stdout)["resources"]["core"]["reset"])
-    except (ValueError, KeyError, TypeError):
+        core = json.loads(proc.stdout)["resources"]["core"]
+        left = core.get("remaining")
+        return (None if left is None else float(left)), float(core["reset"])
+    except (ValueError, KeyError, TypeError, AttributeError):
         return None
+
+
+def number(text: str | None) -> float | None:
+    try:
+        return float(text) if text is not None else None
+    except ValueError:
+        return None
+
+
+def rate_wait(headers: dict[str, str], tries: int) -> tuple[float, str] | None:
+    """Brief #1335 answer 1 (ADR-0565): the seconds to wait and the limit's kind, or None (the
+    call fails). `retry-after` when positive; else the reset time when `x-ratelimit-remaining` is
+    0; else 60 s doubled per further try. With no header, `GET rate_limit` answers the same."""
+    left, reset = number(headers.get("x-ratelimit-remaining")), headers.get("x-ratelimit-reset")
+    if not headers:
+        state = rate_state()
+        if state is None:
+            return None
+        left, reset = (0.0 if state[0] is None else state[0]), str(state[1])
+    kind = "primary" if left == 0 else "secondary"
+    retry = number(headers.get("retry-after"))
+    if retry is not None and retry > 0:
+        return retry, kind
+    if left == 0 and (at := number(reset)) is not None:
+        return max(0.0, at - time.time()) + RESET_SLACK, kind
+    return SECONDARY_WAIT * 2**tries, "secondary"
+
+
+def pace(method: str) -> None:
+    """Brief #1335 answers 2 and 3: a mutating call waits until WRITE_GAP after the last one and
+    is counted; a read is never delayed."""
+    global LAST_WRITE
+    if method not in MUTATING:
+        return
+    if LAST_WRITE is not None and (gap := WRITE_GAP - (time.monotonic() - LAST_WRITE)) > 0:
+        time.sleep(gap)
+    LAST_WRITE = time.monotonic()
 
 
 # --- the read cache with conditional requests (brief #1251 build (b) answer 3, ADR-0548) -------
@@ -689,22 +736,27 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
         if MEMO is not None:
             MEMO[key] = kept
         return kept
+    global WRITES
     entry = CACHE.entry(endpoint) if cacheable else None
-    asked = ["-i"] if cacheable else []
+    headed = cacheable  # `-i`: a limit's headers come with the read (ADR-0565 decision 1)
+    asked = ["-i"] if headed else []
+    WRITES += method in MUTATING
     if entry is not None:
         asked += ["-H", f"If-None-Match: {entry['etag']}"]
     if method != "GET":
         STORE.forget(endpoint)
     fields = who_fields(endpoint, method, extra)  # a comment ends `Who: AGK` (ADR-0546)
+    tries = 0
     for attempt in range(RATE_WAITS + 1):
         CALLS += 1
+        pace(method)
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
             ["gh", "api", "--method", method, endpoint, *fields, *asked],
             capture_output=True,
             text=True,
             encoding="utf-8",
         )
-        status, headers, text = split_response(proc.stdout) if cacheable else (None, {}, "")
+        status, headers, text = split_response(proc.stdout) if headed else (None, {}, "")
         if status == 304 and entry is not None:
             LAST_ERROR = ""
             CACHED += 1
@@ -714,7 +766,7 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
             return entry["body"]
         LAST_ERROR = proc.stderr if proc.returncode != 0 else ""
         if proc.returncode == 0:
-            text = text if cacheable else proc.stdout
+            text = text if headed else proc.stdout
             try:
                 found = json.loads(text) if text.strip() else {}
             except ValueError:
@@ -724,10 +776,18 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
             if MEMO is not None and method == "GET":
                 MEMO[key] = found
             return found
-        reset = rate_reset() if RATE_LIMIT.search(proc.stderr) else None
-        if reset is None or attempt == RATE_WAITS:
+        limited = RATE_LIMIT.search(proc.stderr) or status == 429
+        wait = rate_wait(headers if status else {}, tries) if limited else None
+        if wait is None or attempt == RATE_WAITS:
             return None
-        time.sleep(max(0.0, reset - time.time()) + RESET_SLACK)
+        seconds, kind = wait
+        tries += kind == "secondary"
+        capped = kind == "secondary" and seconds > SECONDARY_CAP
+        seconds = min(seconds, SECONDARY_CAP) if kind == "secondary" else seconds
+        print(f"github: limited, waiting {math.ceil(seconds)} s ({kind})", file=sys.stderr)
+        time.sleep(seconds)
+        if capped:
+            return None  # brief #1335 answer 4: the caller's unreadable path runs
     return None
 
 
