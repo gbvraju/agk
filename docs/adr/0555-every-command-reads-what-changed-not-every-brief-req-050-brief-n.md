@@ -1,6 +1,6 @@
 # ADR-0555: Every command reads what changed, not every brief
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: ADR-0553, ADR-0548, ADR-0529, brief #1314, brief #1309, brief #1251, plan #661
