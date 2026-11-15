@@ -96,6 +96,12 @@ MOVED = {
 }
 # Every rewording of a moved text (answer 1): only a citation of the rule that now holds it.
 REWORDED = {
+    5: [  # brief #1276, ADR-0547: claim also adds the label agk:taken (brief #1251)
+        (
+            "which posts one comment and nothing else",
+            "which posts one comment and adds the label `agk:taken`, and nothing else",
+        ),
+    ],
     23: [
         ("follows the five polls of rule 21 and", "follows the five polls above and"),
         (" (rule 21)", ""),
