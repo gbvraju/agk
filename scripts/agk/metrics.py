@@ -1805,15 +1805,14 @@ def read_replies(home: Path | None, folders: list[Path], since: datetime) -> tup
 
 def add_tokens(into: dict, tokens: dict) -> None:
     for kind, _ in COST_KINDS:
-        value = tokens.get(kind)
-        into[kind] = (
-            None if value is None or into.get(kind, 0) is None else into.get(kind, 0) + value
-        )
+        value, have = tokens.get(kind), into.get(kind, 0)
+        into[kind] = have + value if isinstance(value, int) and isinstance(have, int) else None
 
 
 def total_of(tokens: dict) -> int | None:
     values = [tokens.get(kind) for kind, _ in COST_KINDS]
-    return None if any(v is None for v in values) else sum(values)
+    known = [v for v in values if isinstance(v, int)]
+    return sum(known) if len(known) == len(values) else None
 
 
 def usd_of(model: str, tokens: dict, prices: dict) -> Decimal | None:
@@ -1842,13 +1841,16 @@ def day_figures(day: date, replies: list[dict], prices: dict) -> dict:
         if r["when"] is None or r["when"].date() != day:
             continue
         key = (r["session"], r["role"], brief_of(r), r["model"])
-        group = groups.setdefault(key, {"replies": 0, "tokens": {}, "usd": Decimal(0)})
+        group: dict[str, Any] = groups.setdefault(
+            key, {"replies": 0, "tokens": {}, "usd": Decimal(0)}
+        )
         group["replies"] += 1
         add_tokens(group["tokens"], r["tokens"])
         if prices:
             usd = usd_of(r["model"], r["tokens"], prices)
             group["usd"] = None if usd is None or group["usd"] is None else group["usd"] + usd
-    rows, total = [], {"replies": 0, "tokens": {}, "usd": Decimal(0) if prices else None}
+    rows: list[dict] = []
+    total: dict[str, Any] = {"replies": 0, "tokens": {}, "usd": Decimal(0) if prices else None}
     for key in sorted(groups):
         group = groups[key]
         row = dict(zip(("session", "role", "brief", "model"), key, strict=True))
@@ -1871,13 +1873,20 @@ def ranked(rows: list[dict], key: str) -> str:
     for row in rows:
         name, have = row[key], sums.get(row[key], 0)
         sums[name] = None if row["total"] is None or have is None else have + row["total"]
-    order = sorted(sums, key=lambda n: (-sums[n] if sums[n] is not None else 1, n))
+
+    def place(name: str) -> tuple[int, str]:
+        value = sums[name]
+        return (-value if value is not None else 1, name)
+
+    order = sorted(sums, key=place)
     return ", ".join(f"{name} {shown(sums[name])}" for name in order[:COST_TOP])
 
 
 def share_line(tokens: dict) -> str:
     inp, write, read = (tokens.get(k) for k in ("input", "cache_write", "cache_read"))
-    if None in (inp, write, read) or not (inp + write + read):
+    if not (isinstance(inp, int) and isinstance(write, int) and isinstance(read, int)):
+        return "Cache reads: unknown"
+    if not inp + write + read:
         return "Cache reads: unknown"
     side = Decimal(inp + write + read)
     read_pc = tenths(Decimal(100) * read / side)
