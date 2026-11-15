@@ -69,7 +69,7 @@ def project(tmp: Path, adapter: str | None = WINDOWS, auto: bool = True) -> Path
     (root / "docs" / "adr" / "0007-something.md").write_text("# ADR-0007: Other\n", "utf-8")
     flow = ["[flow]", f"auto_start = {'true' if auto else 'false'}"]
     flow += [adapter] if adapter else []
-    text = 'version = "6.0.0"\n\n' + "\n".join(flow) + '\nplan_issue = 3\n\n[plan]\nx = 1\n'
+    text = 'version = "6.0.0"\n\n' + "\n".join(flow) + "\nplan_issue = 3\n\n[plan]\nx = 1\n"
     (root / "agk.toml").write_text(text, encoding="utf-8")
     subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed args
     subprocess.run(  # nosec B603 B607 - fixed argument list
@@ -151,7 +151,9 @@ def test_embedded_linux_scripts_pass_bash_n(tmp_path):
     for name, body in blocks.items():
         path = tmp_path / f"{name}.sh"
         path.write_text(body + "\n", encoding="utf-8")
-        done = subprocess.run([bash, "-n", str(path)], capture_output=True, text=True)  # nosec B603
+        done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+            [bash, "-n", str(path)], capture_output=True, text=True
+        )
         assert done.returncode == 0, f"{name}: {done.stderr}"
 
 
@@ -323,8 +325,14 @@ def test_pull_request_to_wsl(tmp_path):
         assert section in text
     body = Path(re.search(r"^body: (.+)$", done.stdout, flags=re.M).group(1)).read_text("utf-8")
     assert "Brief:" not in body  # `--brief none`: the repository has no open brief
-    for field in ("Advances:", "Summary:", "Build-state row: 2026-11-15",
-                  "Decisions taken:", "Questions: none", "Verified:"):
+    for field in (
+        "Advances:",
+        "Summary:",
+        "Build-state row: 2026-11-15",
+        "Decisions taken:",
+        "Questions: none",
+        "Verified:",
+    ):
         assert field in body, field
     assert "ADR-0008" in body
     assert all("POST" not in c for c in gh.calls())
@@ -393,8 +401,16 @@ def test_status_lines(tmp_path):
     done = gh.run(root, "status", "--state", str(write_state(tmp_path, data)))
     assert done.returncode == 0, done.stderr
     heads = [line.split(":", 1)[0] for line in done.stdout.strip().splitlines()]
-    assert heads == ["wsl", "sign-ins", "clone", "adapter", "watchdog", "podman", "playwright",
-                     "doctor"]
+    assert heads == [
+        "wsl",
+        "sign-ins",
+        "clone",
+        "adapter",
+        "watchdog",
+        "podman",
+        "playwright",
+        "doctor",
+    ]
     assert "Ubuntu-24.04" in done.stdout and "11 GB" in done.stdout
     assert "GitHub done, Claude waiting" in done.stdout
     assert "adapter: the WSL adapter on main" in done.stdout

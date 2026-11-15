@@ -1,4 +1,4 @@
-"""/agk:wsl's helper: the plan, the status lines and the adapter pull request (brief #1376, ADR-0577).
+"""/agk:wsl's helper: the plan, the status, the adapter pull request (brief #1376, ADR-0577).
 
     python3 wsl.py plan [--state FILE] [--back] [--root DIR]
     python3 wsl.py status [--state FILE] [--root DIR]
@@ -140,7 +140,7 @@ def load_state(path: str | None) -> dict | None:
 
 def results(state: dict | None) -> dict[str, str]:
     steps = (state or {}).get("steps") or []
-    return {s.get("step"): s.get("result") for s in steps if isinstance(s, dict)}
+    return {str(s.get("step")): str(s.get("result")) for s in steps if isinstance(s, dict)}
 
 
 def word(found: dict[str, str], step: str) -> str:
@@ -177,7 +177,9 @@ def plan(root: Path, state: dict | None, back: bool) -> list[str]:
         if not auto:
             lines.append("watchdog: none (auto_start is off, so no conductor runs here)")
         elif kind == "windows":
-            lines.append("watchdog: the Windows task re-enabled, the WSL task disabled (never deleted)")
+            lines.append(
+                "watchdog: the Windows task re-enabled, the WSL task disabled (never deleted)"
+            )
         else:
             lines.append("watchdog: the Windows task is re-enabled after that pull request merges")
         lines.append("clone: the clone inside WSL stays; nothing is deleted")
@@ -188,8 +190,8 @@ def plan(root: Path, state: dict | None, back: bool) -> list[str]:
     lines = [
         "machine: already set up"
         if all_done(found, MACHINE)
-        else f"machine: WSL 2 with {distro}, {sized} for WSL (.wslconfig, a backup kept), then git, "
-        "Python, the GitHub CLI, Node.js and Podman inside it",
+        else f"machine: WSL 2 with {distro}, {sized} for WSL (.wslconfig, a backup kept), then "
+        "git, Python, the GitHub CLI, Node.js and Podman inside it",
         "sign-ins: done"
         if all_done(found, SIGN_INS) and all(s in found for s in SIGN_INS)
         else "sign-ins: GitHub and Claude, each the normal sign-in in your browser",
@@ -220,7 +222,8 @@ def status(root: Path, state: dict | None) -> list[str]:
         lines = [
             f"wsl: {state.get('distro') or 'not read'} {word(found, 'wsl2')}, "
             f"{memory if memory else '?'} GB for WSL",
-            f"sign-ins: GitHub {word(found, 'github_signin')}, Claude {word(found, 'claude_signin')}",
+            f"sign-ins: GitHub {word(found, 'github_signin')}, "
+            f"Claude {word(found, 'claude_signin')}",
             f"clone: {state.get('project_dir') or 'not read'} {word(found, 'clone')}, "
             f"worktrees {word(found, 'worktrees')}",
         ]
@@ -331,10 +334,12 @@ def body_path(root: Path) -> Path:
 
 
 def make_pr(root: Path, to: str, brief: str | None, today: str) -> list[str]:
-    """Brief #1376 answer 3: the adapter change, the project's ADR and the body; nothing committed."""
+    """Brief #1376 answer 3: the adapter change, the project's ADR and the body; no commit."""
     text = local_toml(root)
     if adapter_kind(read_toml(text)) == to:
-        raise Refusal(f"launch_adapter is already the {NAMES[to]} adapter; nothing written {SETTING}")
+        raise Refusal(
+            f"launch_adapter is already the {NAMES[to]} adapter; nothing written {SETTING}"
+        )
     slug = "the-workforce-runs-in-wsl-2" if to == "wsl" else "the-workforce-runs-on-windows-again"
     number, adr = next_adr(root, slug)
     adr.parent.mkdir(parents=True, exist_ok=True)
@@ -355,13 +360,21 @@ def make_pr(root: Path, to: str, brief: str | None, today: str) -> list[str]:
     path = body_path(root)
     path.write_text(body, encoding="utf-8")
     rel = adr.relative_to(root).as_posix()
+    message = f"agk: the workforce runs {'in WSL 2' if to == 'wsl' else 'on Windows again'}"
+    branch = git(root, "rev-parse", "--abbrev-ref", "HEAD") or "<branch>"
     return [
         "changed: agk.toml (launch_adapter in the flow table)",
         f"adr: wrote {rel} (ADR-{number:04d}, Proposed)",
-        f"commit: agk: the workforce runs {'in WSL 2' if to == 'wsl' else 'on Windows again'}",
+        f"commit: {message}",
         f"body: {path}",
         "",
         body.rstrip("\n"),
+        "",
+        "then you run, in this folder (the kit commits, pushes and merges nothing):",
+        f'  git add agk.toml {rel} && git commit -m "{message}"',
+        f"  python3 scripts/agk/prepush.py --record --body {path}",
+        f"  git push -u origin {branch}",
+        f"  python3 {Path(__file__).resolve().as_posix()} open --body {path} --branch {branch}",
     ]
 
 
