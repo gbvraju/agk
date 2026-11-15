@@ -25,7 +25,8 @@ from test_prepush import MK_FAIL, TOML, path_with, project, scanner, steps
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 EVIDENCE = re.compile(
-    r"^Evidence: prepush schema 1, head ([0-9a-f]{12}), (\d+) steps ok, record ([0-9a-f]{12})$",
+    r"^Evidence: prepush schema 1, head ([0-9a-f]{12}), (\d+) steps ok, record ([0-9a-f]{12})"
+    r" in the (shared evidence folder|given file)$",
     re.M,
 )
 PLANTED = "planted-value-that-must-not-leak"  # an environment value the record must not hold
@@ -325,3 +326,33 @@ def test_a_file_inside_the_shared_folder_prints_no_outside_line(repo, outside):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert record.is_file()
     assert OUTSIDE_LINE not in proc.stdout
+
+
+READ_HINT = re.compile(
+    r"^prepush: read it with python3 scripts/agk/evidence\.py check --head ([0-9a-f]{12})$", re.M
+)
+
+
+def test_the_evidence_line_says_the_record_is_in_the_shared_folder(repo, outside):
+    """REQ-050: brief #1360 answer 2: with no FILE the line names the shared evidence folder and
+    `evidence.py check --head` once, never a path or a user name."""
+    project(repo)
+    proc = run(repo, "--quick", "--record", scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    match = EVIDENCE.search(proc.stdout)
+    assert match and match.group(4) == "shared evidence folder", proc.stdout
+    hints = READ_HINT.findall(proc.stdout)
+    assert hints == [match.group(1)], proc.stdout
+    assert str(repo.root) not in proc.stdout and "agk-evidence" not in proc.stdout
+
+
+def test_the_evidence_line_says_the_record_is_in_the_given_file(repo, outside):
+    """REQ-050: brief #1360 answer 2: with a FILE the line says so and names no path."""
+    project(repo)
+    record = outside / "record.json"
+    proc = run(repo, "--quick", "--record", str(record), scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    match = EVIDENCE.search(proc.stdout)
+    assert match and match.group(4) == "given file", proc.stdout
+    assert not READ_HINT.search(proc.stdout)
+    assert str(outside) not in proc.stdout
