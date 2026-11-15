@@ -48,7 +48,7 @@ This ADR covers build (f): rule 20, with rule 18's budget as `Q-S0059-15` reads 
 
 A steward joining a running project has the project's decisions in its memory before it answers, at a bounded cost:
 in the recorded double, 150 comments are read in 2 pages and the first onboarding makes 6 reads and 6 posts. Protected
-path classes changed: `.claude/` (`agents/steward.md`, its words held at 645 by shortening its sentences, with no
+path classes changed: `.claude/` (`agents/steward.md`, its words held at its `config/rule-budget.txt` line (704 after #1348) by shortening its sentences, with no
 instruction removed), `scripts/agk/` (`steward_onboard.py`,
 `steward.py`), `agk.toml` (the `[[testing.map]]` entries), `tests/kit/` (one new test file) and `kit/`
 (`manifest.json`).
