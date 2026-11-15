@@ -330,6 +330,27 @@ def test_a_running_entry_that_is_not_valid_is_refused_naming_the_field_never_its
     assert "a b; rm" not in out.stderr and "builder a" not in out.stderr
 
 
+MANAGED = "sam_example"  # a managed-user login: handle, underscore, short code (invented)
+LONG = "s" * 40
+
+
+def test_a_running_author_with_an_underscore_is_resumed_with_its_author_filter(tmp_path):
+    """REQ-052: brief #1327 answers 1 and 3 (a managed login with an underscore resumes)."""
+    doc = running({"session": "builder-a", "brief": 5, "pull_request": 41, "author": MANAGED})
+    out = launch(tmp_path, doc, "--resume")
+    assert out.returncode == 0, out.stderr
+    (text,) = resume_prompts(out)
+    assert "python3 scripts/agk/session.py queue --role builder --author sam_example" in text
+
+
+@pytest.mark.parametrize("author", ["_sam", "-sam", "sam/x", "sam.x", LONG])
+def test_a_running_author_that_is_not_a_login_is_still_refused_naming_the_field(tmp_path, author):
+    """REQ-052: brief #1327 answer 1 (the refused forms stay refused; the field, never the value)."""
+    out = launch(tmp_path, running({"session": "builder-a", "brief": 5, "author": author}), "--resume")
+    assert out.returncode == 2 and out.stdout == ""
+    assert "(field author)" in out.stderr and author not in out.stderr
+
+
 def test_a_running_list_that_is_not_a_list_or_names_a_session_twice_is_refused(tmp_path):
     out = launch(tmp_path, {"start": [], "running": "builder-a"}, "--resume")
     assert out.returncode == 2 and "(field running)" in out.stderr

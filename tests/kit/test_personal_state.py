@@ -511,3 +511,25 @@ def test_the_floor_of_a_folder_with_no_personal_table_is_refused_by_name(tmp_pat
     (tmp_path / "agk.toml").write_text('[flow]\nassign = "next"\n', encoding="utf-8")
     with pytest.raises(common.CheckError, match="setting: personal"):
         personal.floor(tmp_path, tmp_path, None, False)
+
+
+# Brief #1327: a managed-user login (an underscore) is a login.
+
+
+def test_attach_accepts_a_managed_login_with_an_underscore(tmp_path):
+    """REQ-052: brief #1327 answers 1 and 3 (the personal state accepts `sam_example`)."""
+    clone = make_clone(tmp_path / "demo")
+    home = tmp_path / "state"
+    proc = cli(clone, home, "attach", "--person", "sam_example")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert reviewers.solo_person(sidecar_of(home)) == "sam_example"
+
+
+@pytest.mark.parametrize("person", ["_sam", "-sam", "sam/x", "sam.x", "s" * 40])
+def test_attach_still_refuses_a_login_that_is_not_one_naming_the_option(tmp_path, person):
+    """REQ-052: brief #1327 answer 1 (the refused forms stay refused; the option, never the value)."""
+    clone = make_clone(tmp_path / "demo")
+    proc = cli(clone, tmp_path / "state", "attach", "--person", person)
+    assert proc.returncode == 1
+    assert "option: --person" in proc.stdout and person not in proc.stdout + proc.stderr
+    assert not (tmp_path / "state").exists()
