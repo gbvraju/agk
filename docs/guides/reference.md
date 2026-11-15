@@ -127,7 +127,8 @@ It never reads or prints a message's text, and makes no network call. It prints 
 UTC by default; `--days N` ends there), one row per session, role, brief and model, the day's total, the top five
 sessions and briefs, and the share of cache reads against fresh input. With an optional `[cost.prices.<model>]` table
 in `agk.toml` (`input`, `output`, `cache_write`, `cache_read`: USD per million tokens; no price ships with the kit) it
-adds an estimate in USD; without one it prints tokens only. A figure it cannot read is `unknown`, never 0. `--save`
+adds an estimate in USD; without one it prints tokens only. A figure it cannot read is `unknown`, never 0, and a record file it cannot read is counted and marks the total as a lower
+bound. `--save`
 writes the day's figures to `docs/runs/cost/<date>.json`. See ADR-0544.
 
 ## Release pack

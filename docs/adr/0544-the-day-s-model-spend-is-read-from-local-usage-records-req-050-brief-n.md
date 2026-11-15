@@ -38,7 +38,9 @@ and `cache_read_input_tokens` were read from this cloud runtime's own records, n
    refused naming the setting, never the value. Without a table the rows show `-` and one line `usd: not priced`; a
    model with no price, or a priced kind missing, is `unknown`.
 6. A count that is missing or not a whole number of 0 or more is `unknown`, and so is every sum it enters, never 0; a
-   line that is not JSON is counted as unreadable; a day with no reply of this clone prints `Total: unknown`.
+   line that is not JSON is counted as unreadable; a record file or folder that cannot be read is counted on the
+   `Skipped:` line and marks the day's total `(at least: <n> record files could not be read)`, so a short total is
+   never silent; a day with no reply of this clone prints `Total: unknown`.
 7. `--save` writes each day's figures, numbers and identifiers only, to `docs/runs/cost/<date>.json`.
 
 ## Consequences

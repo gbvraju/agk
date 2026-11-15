@@ -1766,22 +1766,26 @@ def records_home(given: str | None) -> Path | None:
     return None
 
 
-def read_replies(home: Path | None, folders: list[Path], since: datetime) -> tuple[list, int, int]:
+def read_replies(
+    home: Path | None, folders: list[Path], since: datetime
+) -> tuple[list, int, int, int]:
     """(this clone's replies, each at its first entry, the replies of other folders, the lines that
-    are not JSON) from the record files written at or after `since`."""
+    are not JSON, the record files or folders that could not be read) from the record files
+    written at or after `since`. An unreadable file is counted, never passed over in silence."""
     replies: list[dict] = []
     seen: set[str] = set()
-    others = broken = 0
+    others = broken = lost = 0
     try:
         files = sorted(home.rglob("*.jsonl")) if home and home.is_dir() else []
     except OSError:
-        files = []
+        files, lost = [], 1
     for file in files:
         try:
             if datetime.fromtimestamp(file.stat().st_mtime, UTC) < since:
                 continue
             text = file.read_text(encoding="utf-8", errors="replace")
         except OSError:
+            lost += 1
             continue
         for line in text.splitlines():
             if not line.strip():
@@ -1800,7 +1804,7 @@ def read_replies(home: Path | None, folders: list[Path], since: datetime) -> tup
                 continue
             reply["session"] = reply["session"] or file.stem
             replies.append(reply)
-    return replies, others, broken
+    return replies, others, broken, lost
 
 
 def add_tokens(into: dict, tokens: dict) -> None:
@@ -1894,11 +1898,12 @@ def share_line(tokens: dict) -> str:
     return f"Cache reads: {read_pc}% of input-side tokens; fresh input {fresh_pc}%"
 
 
-def render_day(figures: dict, others: int, broken: int) -> str:
+def render_day(figures: dict, others: int, broken: int, lost: int) -> str:
     total, rows, priced = figures["total"], figures["rows"], figures["priced"]
     out = [f"Spend {figures['day']} (UTC; local usage records of this clone, numbers only)", ""]
     if not rows:
-        out.append("Total: unknown (no usage record of this clone)")
+        lacking = f"; {lost} record files could not be read" if lost else ""
+        out.append(f"Total: unknown (no usage record of this clone{lacking})")
     else:
         head = ["session", "role", "brief", "model", "replies", *[k for k, _ in COST_KINDS]]
         head += ["total", "usd"]
@@ -1913,17 +1918,19 @@ def render_day(figures: dict, others: int, broken: int) -> str:
         parts += [f"{k.replace('_', ' ')} {shown(tokens[k])}" for k, _ in COST_KINDS]
         parts.append(f"total {shown(total_of(tokens))}")
         line = "Total: " + ", ".join(parts)
-        out += ["", line + (f", ~usd {shown(total['usd'])}" if priced else "")]
+        line += f", ~usd {shown(total['usd'])}" if priced else ""
+        out += ["", line + (f" (at least: {lost} record files could not be read)" if lost else "")]
         if not priced:
             out.append(f"usd: not priced (setting: {PRICES_SETTING})")
         out.append(f"Top sessions: {ranked(rows, 'session')}")
         out.append(f"Top briefs: {ranked(rows, 'brief')}")
         out.append(share_line(tokens))
-    out.append(f"Skipped: {others} replies of other folders, {broken} unreadable lines")
+    skipped = f"Skipped: {others} replies of other folders, {broken} unreadable lines"
+    out.append(f"{skipped}, {lost} unreadable files")
     return "\n".join(out) + "\n"
 
 
-def saved_figures(figures: dict) -> dict:
+def saved_figures(figures: dict, lost: int) -> dict:
     def number(value: Any) -> Any:
         return float(shown(value)) if isinstance(value, Decimal) else value
 
@@ -1932,7 +1939,7 @@ def saved_figures(figures: dict) -> dict:
     data_total["total"] = total_of(total["tokens"])
     data_total["usd"] = number(total["usd"])
     rows = [{k: number(v) for k, v in row.items()} for row in figures["rows"]]
-    return {"day": figures["day"], "total": data_total, "rows": rows}
+    return {"day": figures["day"], "total": data_total, "rows": rows, "unreadable_files": lost}
 
 
 def cost_main(options: dict) -> int:
@@ -1940,17 +1947,19 @@ def cost_main(options: dict) -> int:
     prices = cost_prices(root)
     last = options["day"] or datetime.now(UTC).date()
     days = [last - timedelta(days=n) for n in range(options["days"] - 1, -1, -1)]
-    replies, others, broken = read_replies(
+    replies, others, broken, lost = read_replies(
         records_home(options["records"]), clone_folders(root), start_of(days[0])
     )
     texts = []
     for day in days:
         figures = day_figures(day, replies, prices)
-        texts.append(render_day(figures, others, broken))
+        texts.append(render_day(figures, others, broken, lost))
         if options["save"]:
             target = root / COST_DIR / f"{figures['day']}.json"
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(json.dumps(saved_figures(figures), indent=2) + "\n", encoding="utf-8")
+            target.write_text(
+                json.dumps(saved_figures(figures, lost), indent=2) + "\n", encoding="utf-8"
+            )
             texts.append(f"saved {COST_DIR}/{figures['day']}.json\n")
     sys.stdout.write("\n".join(texts))
     return 0

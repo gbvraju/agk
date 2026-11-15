@@ -254,7 +254,9 @@ def test_another_clones_records_are_skipped(repo, tmp_path) -> None:
     proc = run_cost(repo, top)
     assert proc.returncode == 0, proc.stderr
     assert [r["session"] for r in rows(proc.stdout)] == [S1]
-    assert "Skipped: 3 replies of other folders, 0 unreadable lines" in proc.stdout
+    assert "Skipped: 3 replies of other folders, 0 unreadable lines, 0 unreadable files" in (
+        proc.stdout
+    )
 
 
 def test_a_worktree_of_the_clone_is_counted(repo, tmp_path) -> None:
@@ -297,6 +299,31 @@ def test_a_malformed_record_is_unknown_not_zero(repo, tmp_path) -> None:
     assert got[S2]["brief"] == "unknown"
     assert "1 unreadable lines" in proc.stdout
     assert "output unknown" in proc.stdout
+
+
+def test_an_unreadable_record_file_is_counted_not_passed_over(repo, tmp_path) -> None:
+    """REQ-050 AC5: answer 4 (a record file that cannot be read is counted and the total is marked
+    as a lower bound, never silently short; verdict on 55dc3a56, finding 1)."""
+    here = str(repo.root)
+    top = records(tmp_path, {"p/a.jsonl": [reply(here, S1, "m1")]})
+    (top / "p" / "b.jsonl").mkdir()  # a record path that cannot be read as a file
+    proc = run_cost(repo, top, "--save")
+    assert proc.returncode == 0, proc.stderr
+    assert "total 100 (at least: 1 record files could not be read)" in proc.stdout
+    assert "0 unreadable lines, 1 unreadable files" in proc.stdout
+    saved = json.loads((repo.root / "docs" / "runs" / "cost" / f"{DAY}.json").read_text())
+    assert saved["unreadable_files"] == 1
+
+
+def test_only_unreadable_files_print_unknown_with_the_count(repo, tmp_path) -> None:
+    """REQ-050 AC5: answer 4 (no readable reply and an unreadable file: `unknown` and the count)."""
+    top = tmp_path / "records" / "projects" / "p" / "a.jsonl"
+    top.mkdir(parents=True)
+    proc = run_cost(repo, top.parent.parent)
+    assert proc.returncode == 0, proc.stderr
+    assert "Total: unknown (no usage record of this clone; 1 record files could not be read)" in (
+        proc.stdout
+    )
 
 
 def test_no_record_prints_unknown_never_zero(repo, tmp_path) -> None:
