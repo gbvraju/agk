@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import launch  # noqa: E402
 import session  # noqa: E402
 import steward  # noqa: E402
-from common import CheckError, personal_table, repo_root  # noqa: E402
+from common import CheckError, personal_table, repo_root, utf8_output  # noqa: E402
 
 RULE = "SPEC-0059 rule 5"
 QID = re.compile(r"Q-\d+-\w+")
@@ -203,6 +203,7 @@ def ready(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parser = argparse.ArgumentParser(prog="steward_owner.py", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     a = sub.add_parser("ask")
