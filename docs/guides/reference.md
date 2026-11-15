@@ -159,7 +159,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
 
     python3 scripts/agk/steward.py start --session ID
     python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
-    python3 scripts/agk/steward.py end --session ID
+    python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
 
 The steward's notes (SPEC-0059 rule 8, ADR-0557): one open issue labelled `agk-steward`, created when none is open, one
 comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Pattern`, `Gap`, `Risk`, `Lesson`,
@@ -168,12 +168,13 @@ prints the newest of each kind, posts `Started: steward <session> <UTC time>` an
 steward's marker is live (60 minutes, no `Ended:`); at 500 comments it opens a new issue that carries the open owner
 questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). A failed
 GitHub call exits 4. In personal mode the notes are `docs/runs/steward/memory.md` of the sidecar and nothing is posted.
+`end` writes the pass's counted calls and tokens on its `Ended:` marker, `not shown` for a figure not given, never 0.
 
 ## Steward evidence
 
     python3 scripts/agk/steward_evidence.py stage [--date YYYY-MM-DD]
     python3 scripts/agk/steward_evidence.py settle --question FILE [--stage STAGE]
-    python3 scripts/agk/steward_evidence.py answer --question FILE --number N
+    python3 scripts/agk/steward_evidence.py answer --question FILE --number N [--recheck FILE]
     python3 scripts/agk/steward_evidence.py triage --finding FILE
     python3 scripts/agk/steward_evidence.py skill --step STEP
 
@@ -184,13 +185,29 @@ question file is JSON: `id`, `class` (`technical`, `requirement`, `business`, `s
 optional `changes`, `reverses` and `ranking`, and `findings`, each `source` (1 owner decision, 2 Approved spec or
 requirement, 3 signed-off prototype, 4 source document, 5 AGK rule or code), `answer`, `place` and `rule`. `settle` prints
 the comment `Answer: Q-<id> <answer> (evidence: <source and place>; rule: <rule>)` (exit 0) or `owner: <reason>` with the
-recommendation and a `Gap:` to record (exit 3); `answer` posts that one comment and nothing on an owner question. A
-requirement answer goes to the owner with its recommendation until build (d)'s re-check. A finding file is JSON: `id`,
+recommendation and a `Gap:` to record (exit 3); `answer` posts that one comment, with a `Class:` second line, and nothing
+on an owner question. A requirement answer is posted only when `--recheck` (JSON `answer`, the fresh reviewer's) agrees;
+otherwise both answers go to the owner, as does a class the owner overrode twice in seven days. A finding file is JSON: `id`,
 `triage` (`kit brief`, `kit correction`, `kit question`, `project brief` or `owner question`), `why`, `text`, optional
 `cause` and `reproduced`; `triage` prints `file`, `draft` (a kit filing from a project, until build (e)) or `ask` and the
 `Triage:` note, or refuses (exit 2) a text without its `Modes:` line, failing the brief shape or the neutrality list, an
 unreproduced cause, or a filing above `[steward] auto_file` without an `Owner said` line. `skill` prints the step's skill
 from the agent file's table, or `no skill:` (exit 3). A failed GitHub call exits 4.
+
+## Steward daily list
+
+    python3 scripts/agk/steward_daily.py daily
+    python3 scripts/agk/steward_daily.py bundle --question FILE
+
+The steward's measured quality (SPEC-0059 rules 3 and 13, ADR-0560). `daily`, run after `steward.py start`, posts at the
+first start of a UTC day one `Daily: <date>` comment on the memory issue for each day since the last list (the days
+missed are listed; no scheduler): each steward `Answer:` with its comment id and evidence, each pass's calls and tokens,
+each brief filed without an `Owner said` line with its priority, the owner questions asked and answered, the override
+share (owner overrides over steward answers) and any warning (two overrides of one class in seven days, until a
+`Decision:` names `class <class>`). It first posts one `Override: Q-<id> class <class>: ...` note per new override. It
+reads the repository's comments and issues once each with `since=`; a figure it cannot read is `unknown`, never 0. In
+personal mode it prints the list. `bundle` prints what the fresh reviewer is given: the question and its cited evidence,
+never the steward's answer (ADR-0430's form). A failed GitHub call exits 4.
 
 ## Outbound data guard
 
