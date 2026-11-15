@@ -6,18 +6,19 @@ Usage: python3 scripts/agk/steward_voice.py check FILE
        python3 scripts/agk/steward_voice.py confirm FILE --answers FILE
        python3 scripts/agk/steward_voice.py shortened --rules N[,N]
 
-`check` reads a reply the steward is about to give a person and prints one line per broken rule of
-ADR-0582, naming the rule and never the text, exit 1, or `voice: ok`, exit 0: rule 1, the first line
-is an ask or an answer, not a heading or a greeting only; rule 2, at most 5 bullets, 12 lines and 100
-characters a line; rule 3, more than three choices only with a "more"; rule 4, a decision names its
-recommendation; rule 5, a status is three lines (done, in progress, waiting on you); rule 8, no kit
-term (the planted list of SPEC-0059 rule 5). `choose` renders a decision (JSON: decision, options of
-label with an optional score, group or ruled_out, recommend, because, and an optional sharper `ask`) as
-rule 4's one shape with at most three choices: it drops what the evidence rules out and says how many,
-groups kinds, keeps the best three by score with "say more for N other options", or asks the one
-sharper question. `form` renders up to five inputs as one short form with each default filled in, and
-`confirm` plays the answers back in at most three lines. `shortened` records one `Shortened:` marker
-in the steward's memory, which the daily list counts. No network but `shortened`'s one post, no model.
+`check` reads a reply the steward is about to give a person and prints one line per broken rule
+of ADR-0582, naming the rule and never the text, exit 1, or `voice: ok`, exit 0: rule 1, the
+first line is an ask or an answer, not a heading or a greeting only; rule 2, at most 5 bullets,
+12 lines and 100 characters a line; rule 3, more than three choices only with a "more"; rule 4,
+a decision names its recommendation; rule 5, a status is three lines (done, in progress, waiting
+on you); rule 8, no kit term (the planted list of SPEC-0059 rule 5). `choose` renders a decision
+(JSON: decision, options of label with an optional score, group or ruled_out, recommend,
+because, and an optional sharper `ask`) as rule 4's one shape with at most three choices: it
+drops what the evidence rules out and says how many, groups kinds, keeps the best three by score
+with "say more for N other options", or asks the one sharper question. `form` renders up to five
+inputs as one short form with each default filled in, and `confirm` plays the answers back in at
+most three lines. `shortened` records one `Shortened:` marker in the steward's memory, which the
+daily list counts. No network but `shortened`'s one post, no model.
 """
 
 from __future__ import annotations
@@ -116,15 +117,24 @@ def choose(data: dict) -> str:
             groups[o["group"]] = groups.get(o["group"], 0) + 1
         listed = ", ".join(f"{n} {g}" for g, n in groups.items())
         return shape(
-            [head, listed, *note, f"I recommend {data['recommend']} because {because}",
-             "Reply with which group to open"]
+            [
+                head,
+                listed,
+                *note,
+                f"I recommend {data['recommend']} because {because}",
+                "Reply with which group to open",
+            ]
         )
     if len(kept) > MAX_CHOICES and data.get("ask") and not any("score" in o for o in kept):
         ask = data["ask"]
         return shape(
-            [head, f"{ask['question']} ({' / '.join(ask['choices'])})", *note,
-             f"I recommend {ask['recommend']} because {ask['because']}",
-             f"Reply {' or '.join(ask['choices'])}"]
+            [
+                head,
+                f"{ask['question']} ({' / '.join(ask['choices'])})",
+                *note,
+                f"I recommend {ask['recommend']} because {ask['because']}",
+                f"Reply {' or '.join(ask['choices'])}",
+            ]
         )
     more = []
     if len(kept) > MAX_CHOICES:
@@ -138,9 +148,14 @@ def choose(data: dict) -> str:
     listed = " / ".join(f"{letter[o['label']]} {o['label']}" for o in kept)
     pick = data["recommend"]
     return shape(
-        [head, f"Options: {listed}", *note,
-         f"I recommend {letter.get(pick, '')} {pick} because {because}".replace("  ", " "),
-         *more, f"Reply {reply_letters(len(kept))}"]
+        [
+            head,
+            f"Options: {listed}",
+            *note,
+            f"I recommend {letter.get(pick, '')} {pick} because {because}".replace("  ", " "),
+            *more,
+            f"Reply {reply_letters(len(kept))}",
+        ]
     )
 
 
@@ -150,8 +165,11 @@ def form(fields: list[dict]) -> str:
         raise ValueError(f"a form holds 1 to {MAX_FIELDS} inputs; ask in two forms ({ADR} rule 7)")
     rows = [f"{len(fields)} answers needed; reply yes to accept these, or change a line:"]
     for f in fields:
-        extra = f" (or {' / '.join(c for c in f['choices'] if c != f['default'])})" if f.get(
-            "choices") else ""
+        extra = (
+            f" (or {' / '.join(c for c in f['choices'] if c != f['default'])})"
+            if f.get("choices")
+            else ""
+        )
         rows.append(f"- {f['name']}: {f['default']}{extra}")
     return "\n".join(rows)
 

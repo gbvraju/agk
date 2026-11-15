@@ -1,10 +1,10 @@
 """Tests of scripts/agk/steward_voice.py, the steward's voice (brief #1382, ADR-0582; REQ-069 AC2).
 
-Recorded replies (invented, example.com): a ten-option decision shows three or fewer, a recommendation
-and "more"; grouping, evidence-dropping and the sharper question each produce their form; a status is
-three lines; a 40-line summary fails and its shortened form passes; a form of four inputs shows each
-default and a three-line confirmation; a kit term fails; the daily list counts shortened replies; the
-role file names the voice. No network, no model.
+Recorded replies (invented, example.com): a ten-option decision shows three or fewer, a
+recommendation and "more"; grouping, evidence-dropping and the sharper question each produce
+their form; a status is three lines; a 40-line summary fails and its shortened form passes; a
+form of four inputs shows each default and a three-line confirmation; a kit term fails; the
+daily list counts shortened replies; the role file names the voice. No network, no model.
 """
 
 from __future__ import annotations
@@ -24,9 +24,7 @@ TEN = {
     "decision": "how the sign-in page looks first",
     "recommend": "Plain email link",
     "because": "it costs least and ships this week",
-    "options": [
-        {"label": f"Idea {n}", "score": n} for n in range(1, 10)
-    ]
+    "options": [{"label": f"Idea {n}", "score": n} for n in range(1, 10)]
     + [{"label": "Plain email link", "score": 5}],
 }
 
@@ -106,7 +104,9 @@ def test_req069_many_unranked_options_ask_one_sharper_question():
 
 
 def test_req069_a_status_reply_is_three_lines():
-    good = "Done: the sign-in page\nIn progress: the order list\nWaiting on you: reply yes to the date"
+    good = (
+        "Done: the sign-in page\nIn progress: the order list\nWaiting on you: reply yes to the date"
+    )
     assert voice.problems(good) == []
     four = good + "\nAlso: the logo"
     assert any("rule 5" in p for p in voice.problems(four))
@@ -187,10 +187,16 @@ def test_req069_the_check_command_names_the_rule(tmp_path, capsys):
 
 def test_req069_the_daily_list_counts_shortened_replies():
     memory = [
-        {"id": 1, "body": "Shortened: steward reply (voice rules 2)\n\nWho: AGK steward",
-         "created_at": "2026-11-15T08:00:00Z"},
-        {"id": 2, "body": "Shortened: steward reply (voice rules 3)\n\nWho: AGK steward",
-         "created_at": "2026-11-15T09:00:00Z"},
+        {
+            "id": 1,
+            "body": "Shortened: steward reply (voice rules 2)\n\nWho: AGK steward",
+            "created_at": "2026-11-15T08:00:00Z",
+        },
+        {
+            "id": 2,
+            "body": "Shortened: steward reply (voice rules 3)\n\nWho: AGK steward",
+            "created_at": "2026-11-15T09:00:00Z",
+        },
     ]
     text = steward_daily.daily_text(date(2026, 11, 16), [date(2026, 11, 15)], [], memory, [])
     assert "Replies shortened (2026-11-15): 2" in text
@@ -200,7 +206,9 @@ def test_req069_shortened_records_one_marker(monkeypatch, capsys):
     seen = []
     import steward
 
-    monkeypatch.setattr(steward, "write", lambda root, text, gh: (seen.append(text), (0, ["ok"]))[1])
+    monkeypatch.setattr(
+        steward, "write", lambda root, text, gh: (seen.append(text), (0, ["ok"]))[1]
+    )
     assert voice.main(["shortened", "--rules", "2,3"]) == 0
     assert seen == ["Shortened: steward reply (voice rules 2, 3)"]
     assert steward.entry_kind(seen[0]) == "Shortened"
@@ -215,9 +223,16 @@ def test_req069_the_role_file_and_the_guide_name_the_voice_and_its_check():
     guide = (ROOT / "docs" / "guides" / "steward-voice.md").read_text(encoding="utf-8")
     for n in range(1, 10):
         assert f"\n{n}. **" in guide, n
-    for words in ("say more for N other options", "which group to open", "sharper question",
-                  "Waiting on you:", "multiple-choice question tool", "(verify", "never asked",
-                  "Lines posted on GitHub keep the kit's forms"):
+    for words in (
+        "say more for N other options",
+        "which group to open",
+        "sharper question",
+        "Waiting on you:",
+        "multiple-choice question tool",
+        "(verify",
+        "never asked",
+        "Lines posted on GitHub keep the kit's forms",
+    ):
         assert words in guide, words
     manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert "scripts/agk/steward_voice.py" in manifest["verbatim"]
