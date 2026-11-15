@@ -23,7 +23,9 @@ import steward_outbound as outbound  # noqa: E402
 
 PLUGIN_FILE = ROOT / ".claude-plugin" / "plugin.json"
 if not PLUGIN_FILE.is_file():  # a project's copy of the kit's tests holds no plugin file
-    pytest.skip("a copy of the kit's tests without .claude-plugin/plugin.json", allow_module_level=True)
+    pytest.skip(
+        "a copy of the kit's tests without .claude-plugin/plugin.json", allow_module_level=True
+    )
 PLUGIN = json.loads(PLUGIN_FILE.read_text(encoding="utf-8"))
 
 SCRIPT = ROOT / "scripts" / "agk" / "steward_outbound.py"
