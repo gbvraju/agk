@@ -202,19 +202,19 @@ job is tried again. `--install --pass` prints the scheduler line every 10 minute
 watchdog, the reviewer starts and `launch.py` set
 `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` for the sessions they start (verify).
 
-Brief #1359 (ADR-0571): `watchdog --pass` starts each job on the tier its queue needs, as
-`AGK_TIER` and `AGK_EFFORT`, and prints `watchdog: tier <tier>[: <why>]`. It reads each pull
-request that `review-queue --all` lists for review (the pull request, its files and comments):
-`strongest` at `high` when one changes a protected path class, adds or changes a spec or ADR
-(`docs/specs/`, `docs/adr/`), is a first review (no verdict by a counted author yet, Q-1359-3),
-carries a `Question:` or `Correction:` after its last verdict or two verdicts of different kinds
-on one head, or is an intake (a title starting `Intake:`); also for a question on a brief, a queue that cannot be read and
-`[models] conductor = "strongest"`, the one pin. Every other pass runs on `mid` at `medium`, and
-its prompt says to post no verdict where it meets one of those or is unsure, and to end with
-`escalate: #<n> <reason>` for each. Those lines, from the adapter's output or, for a background
-job, from `<worktree>/.agk-session.log` once the job ended, start one strongest job at once,
-printing `watchdog: escalated #<n> to strongest: <reason>`; never a step down inside a pass. The
-interactive `watchdog` and the reviewer starts stay on `strongest`.
+Brief #1359 (ADR-0571): `watchdog --pass` starts each job on the tier its queue needs, as `AGK_TIER`
+and `AGK_EFFORT`, and prints `watchdog: tier <tier>[: <why>]`. It reads each pull request that
+`review-queue --all` lists for review (the pull request, its files and comments): `strongest` at
+`high` when one changes a protected path class, adds or changes a spec or ADR (`docs/specs/`,
+`docs/adr/`), is a first review (no verdict by a counted author yet, Q-1359-3), carries a
+`Question:` or `Correction:` after its last verdict or two verdicts of different kinds on one head,
+or is an intake (a title starting `Intake:`); also for a question on a brief, a queue that cannot be
+read and `[models] conductor = "strongest"`, the one pin. Every other pass runs on `mid` at
+`medium`, and its prompt says to post no verdict where it meets one of those or is unsure, and to
+end with `escalate: #<n> <reason>` for each. Those lines, from the adapter's output or, for a
+background job, from `<worktree>/.agk-session.log` once the job ended, start one strongest job at
+once, printing `watchdog: escalated #<n> to strongest: <reason>`; never a step down inside a pass.
+The interactive `watchdog` and the reviewer starts stay on `strongest`.
 
 Brief #1355 (ADR-0568): after its conductor checks, `watchdog` (and `--pass`) reads each builder
 session with a process record (`<parent of the checkout>/agk-<session>/.agk-session-pid`) and a
