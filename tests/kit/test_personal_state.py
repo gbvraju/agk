@@ -527,7 +527,7 @@ def test_attach_accepts_a_managed_login_with_an_underscore(tmp_path):
 
 @pytest.mark.parametrize("person", ["_sam", "-sam", "sam/x", "sam.x", "s" * 40])
 def test_attach_still_refuses_a_login_that_is_not_one_naming_the_option(tmp_path, person):
-    """REQ-052: brief #1327 answer 1 (the refused forms stay refused; the option, never the value)."""
+    """REQ-052: brief #1327 answer 1 (refused forms stay refused; the option, never the value)."""
     clone = make_clone(tmp_path / "demo")
     proc = cli(clone, tmp_path / "state", "attach", "--person", person)
     assert proc.returncode == 1

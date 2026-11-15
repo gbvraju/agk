@@ -345,8 +345,9 @@ def test_a_running_author_with_an_underscore_is_resumed_with_its_author_filter(t
 
 @pytest.mark.parametrize("author", ["_sam", "-sam", "sam/x", "sam.x", LONG])
 def test_a_running_author_that_is_not_a_login_is_still_refused_naming_the_field(tmp_path, author):
-    """REQ-052: brief #1327 answer 1 (the refused forms stay refused; the field, never the value)."""
-    out = launch(tmp_path, running({"session": "builder-a", "brief": 5, "author": author}), "--resume")
+    """REQ-052: brief #1327 answer 1 (refused forms stay refused; the field, never the value)."""
+    doc = running({"session": "builder-a", "brief": 5, "author": author})
+    out = launch(tmp_path, doc, "--resume")
     assert out.returncode == 2 and out.stdout == ""
     assert "(field author)" in out.stderr and author not in out.stderr
 
