@@ -1,0 +1,1 @@
+- `steward_outbound.py` sets UTF-8 output before it prints and reads git's output as UTF-8, and its tests skip in a project's copy of the kit's tests that holds no plugin file (brief #1344)
