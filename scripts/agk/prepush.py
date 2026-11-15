@@ -102,6 +102,11 @@ folder is made when missing. `--record FILE` writes FILE as before, and the `Evi
 the same either way. A `--queue` run passes `auto` on, so the record is named by the head the
 job runs on.
 
+Brief #1329 (ADR-0564): a `--record FILE` whose folder is not the clone's shared evidence folder
+is still written, and prepush prints one line after it, `OUTSIDE_LINE` below, naming the option and
+never the path: a conductor on the same machine reads only that folder or its scratch folder. It
+changes no exit code, no step and no record field.
+
 SPEC-0046 rule 11 (build (f)): the run folders of brief #613 (ADR-0299) are retired. The keys
 `[testing] results_dir`, `keep_passed` and `keep_runs` keep their checks and do nothing: no folder,
 no `AGK_RUN_DIR`, no `run_dir` in the record. When one is set, prepush prints one line
@@ -185,6 +190,10 @@ USAGE = (
 SCHEMA = 1
 AUTO_RECORD = "auto"  # `--record` with no FILE (brief #1269, ADR-0536)
 EVIDENCE_FOLDER = "agk-evidence"  # in the git common dir, shared by every worktree of a clone
+OUTSIDE_LINE = (
+    "prepush: record written outside the shared evidence folder; a conductor on this machine reads"
+    " only that folder (option: --record with no FILE)"
+)  # brief #1329 (ADR-0564)
 LEFT_TO_CI = "selected (full left to CI)"  # the record's set of such a run (brief #1031 answer 3)
 LEFT_LINE = (
     "tests: full suite left to CI's proof job (always_full {glob}); ran the {n} mapped test files"
@@ -1145,6 +1154,12 @@ def record_file(root: Path, option: str | None) -> Path | None:
     return path
 
 
+def outside_shared(root: Path, path: Path) -> bool:
+    """True when the record PATH is not directly in the clone's shared evidence folder (brief #1329)."""
+    shared = shared_record(root, "x")
+    return shared is None or path.resolve().parent != shared.parent
+
+
 def write_record(path: Path, record: dict) -> str:
     """Write the record; return the sha256 of the file. OSError when it cannot be written."""
     data = (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8")
@@ -1194,6 +1209,11 @@ def main(argv: list[str] | None = None) -> int:
         print("prepush: the base does not resolve (setting: --base, AGK_BASE, default_branch)")
         return 2
     record_path = record_file(root, options["record"])
+    outside = bool(
+        record_path is not None
+        and options["record"] != AUTO_RECORD
+        and outside_shared(root, record_path)
+    )
     record: dict | None = None
     if record_path is not None:
         if not record_path.parent.is_dir():
@@ -1240,18 +1260,23 @@ def main(argv: list[str] | None = None) -> int:
             if result.text:
                 print(result.text)
             print(f"prepush: stopped at {name}; nothing after it ran")
-            return finish(record, record_path, not_run, "failed", 1)
+            return finish(record, record_path, not_run, "failed", 1, outside)
         if result.outcome == "ok" and name in ("tests", "secret-scan") and result.text:
             print(result.text)
     if not_run:
         print(f"prepush: passed; not run: {', '.join(not_run)}")
     else:
         print("prepush: all steps passed")
-    return finish(record, record_path, not_run, "passed", 0)
+    return finish(record, record_path, not_run, "passed", 0, outside)
 
 
 def finish(
-    record: dict | None, path: Path | None, not_run: list[str], result: str, code: int
+    record: dict | None,
+    path: Path | None,
+    not_run: list[str],
+    result: str,
+    code: int,
+    outside: bool = False,
 ) -> int:
     """Write the record when one was asked for and print the `Evidence:` line; keep the exit."""
     if record is None or path is None:
@@ -1266,6 +1291,8 @@ def finish(
     ok = sum(1 for step in record["steps"] if step["outcome"] == "ok")
     head = record["head"][:12]
     print(f"Evidence: prepush schema {SCHEMA}, head {head}, {ok} steps ok, record {sha[:12]}")
+    if outside:
+        print(OUTSIDE_LINE)
     return code
 
 

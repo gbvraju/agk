@@ -97,8 +97,12 @@ base, whether the work tree was clean, and each step's command, exit code and a 
 itself. With no FILE after `--record` the record goes to one fixed place (brief #1269, ADR-0536):
 `<git common dir>/agk-evidence/<40-hex head>.json`, in the folder `git rev-parse --git-common-dir` names, which every worktree
 of the clone shares, so every session on the machine can read it and the conductor finds it from the head alone. It is never
-tracked and never makes the tree dirty. A session on another machine still passes a FILE (`--record <record file>`), kept
-outside the repository (a record inside it makes the tree dirty), and gives that file to the conductor. Run it on a clean
+tracked and never makes the tree dirty. A session on the same machine as the conductor runs `--record` with no FILE: the
+conductor's guard reads only that shared folder (`evidence.py check --head <sha>`) or a record in its own scratch folder, and
+prepush prints one line when a FILE lands anywhere else (brief #1329, ADR-0564). A session on another machine still passes a
+FILE (`--record <record file>`), kept outside the repository (a record inside it makes the tree dirty), and the file is copied
+into the conductor's scratch folder or the shared folder before the conductor runs `evidence.py check <file> --head <sha>`,
+the two places its guard reads. Run it on a clean
 tree: a record of a dirty tree is reported as such.
 
 In PowerShell write `$base = git merge-base HEAD origin/main` and `python` where `python3` is not on the path; the `lock.py`
