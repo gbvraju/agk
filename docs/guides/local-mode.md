@@ -118,13 +118,19 @@ secret scan of the governance workflow is not part of `make governance`: `prepus
 commits, and fails, naming the tool and the version the workflow pins, when the scanner is not installed (ADR-0306): install
 it first, since a scan is never skipped in any mode. `doctor.py` prints whether the scanner is installed and at which version.
 
+On Windows with `core.autocrlf` set to `true`, git rewrites the project's own files to CRLF line endings on checkout and an
+edit commits them back changed; the kit keeps LF only for its own files. `doctor.py` then prints
+`line endings: this machine rewrites LF to CRLF; add "* text=auto eol=lf" to .gitattributes (setting: core.autocrlf)`.
+Add that line to the project's `.gitattributes` yourself, outside the kit's lines; the kit never changes it (brief #1360).
+
 Then add the `Evidence:` line that prepush printed to the pull request body, beside `Verified:`, and one line that names
 the head it ran on:
 
-    Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>
+    Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file> in the shared evidence folder
     Local evidence: <head sha> governance ok; tests <n> passed; proof <outcome>; pr body ok; secret scan <result>
 
-with each figure copied verbatim from the output. A new push makes both lines stale: run again and replace them. Mark the pull
+with each figure copied verbatim from the output; the Evidence line ends `in the given file` when a FILE was passed, and
+with no FILE prepush prints one more line naming `evidence.py check --head <sha12>`, the way to read it (brief #1360). A new push makes both lines stale: run again and replace them. Mark the pull
 request ready only when they name the current head.
 
 ### The stop hook between turns

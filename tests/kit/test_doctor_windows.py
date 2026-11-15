@@ -12,6 +12,7 @@ owner. The platform, the paths and every GitHub answer are simulated: no Windows
 from __future__ import annotations
 
 import json
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
 
 import doctor
@@ -244,3 +245,57 @@ def test_answer3_a_file_without_placeholder_lines_is_unchanged_outside_the_block
     path = codeowners(tmp_path, outside + reviewers.BLOCK_BEGIN + RENDERED + reviewers.BLOCK_END)
     assert reviewers.write_codeowners(tmp_path, RENDERED, adopt_mode=True).startswith("unchanged")
     assert path.read_text(encoding="utf-8").startswith(outside)
+
+
+# --- brief #1360 answer 3: line endings ----------------------------------------------------------
+
+EOL_LINE = (
+    'line endings: this machine rewrites LF to CRLF; add "* text=auto eol=lf" to .gitattributes'
+    " (setting: core.autocrlf)"
+)
+
+
+def git(*args: str) -> None:
+    subprocess.run(["git", *args], check=True, capture_output=True)  # nosec B603 B607 - fixed list
+
+
+def crlf_repo(tmp_path: Path, autocrlf: str | None, attributes: str | None) -> Path:
+    git("init", "-q", str(tmp_path))
+    if autocrlf is not None:
+        git("-C", str(tmp_path), "config", "core.autocrlf", autocrlf)
+    if attributes is not None:
+        (tmp_path / ".gitattributes").write_text(attributes, encoding="utf-8")
+    return tmp_path
+
+
+KIT_ATTRIBUTES = "# agk: the kit's own files\nscripts/agk/** text eol=lf\n"
+
+
+def test_answer3_a_crlf_machine_without_an_eol_rule_is_warned(tmp_path):
+    """REQ-050: brief #1360 answer 3 (core.autocrlf true, only the kit's own eol lines)."""
+    root = crlf_repo(tmp_path, "true", KIT_ATTRIBUTES)
+    assert doctor.line_ending_lines(root, "win32") == [EOL_LINE]
+    assert doctor.line_ending_lines(crlf_repo(tmp_path / "b", "TRUE", None), "win32") == [EOL_LINE]
+
+
+def test_answer3_an_eol_rule_for_the_projects_own_files_silences_it(tmp_path):
+    """REQ-050: brief #1360 answer 3 (the project's own `*` rule names an eol)."""
+    root = crlf_repo(tmp_path, "true", KIT_ATTRIBUTES + "* text=auto eol=lf\n")
+    assert doctor.line_ending_lines(root, "win32") == []
+
+
+def test_answer3_no_warning_off_windows_or_without_autocrlf(tmp_path, monkeypatch):
+    """REQ-050: brief #1360 answer 3 (Windows only, and only `core.autocrlf true`)."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "no-global"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    root = crlf_repo(tmp_path, "true", KIT_ATTRIBUTES)
+    assert doctor.line_ending_lines(root, "linux") == []
+    assert doctor.line_ending_lines(crlf_repo(tmp_path / "b", "input", None), "win32") == []
+    assert doctor.line_ending_lines(crlf_repo(tmp_path / "c", None, None), "win32") == []
+
+
+def test_answer3_the_doctor_leaves_gitattributes_unchanged(tmp_path):
+    """REQ-050: brief #1360 answer 3 (the kit does not change the project's file itself)."""
+    root = crlf_repo(tmp_path, "true", KIT_ATTRIBUTES)
+    doctor.line_ending_lines(root, "win32")
+    assert (root / ".gitattributes").read_text(encoding="utf-8") == KIT_ATTRIBUTES

@@ -23,7 +23,8 @@ from test_evidence import LINE, check, project, worktrees
 from test_prepush import path_with, scanner
 
 EVIDENCE = re.compile(
-    r"^Evidence: prepush schema 1, head ([0-9a-f]{12}), (\d+) steps ok, record ([0-9a-f]{12})$",
+    r"^Evidence: prepush schema 1, head ([0-9a-f]{12}), (\d+) steps ok, record ([0-9a-f]{12})"
+    r" in the (shared evidence folder|given file)$",
     re.M,
 )
 MISSING = "evidence: no record for this head in the shared evidence folder (option: --record)"
