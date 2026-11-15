@@ -1,6 +1,6 @@
 # ADR-0550: The evidence check sees the same bytes as governance
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0233, ADR-0257, ADR-0449, ADR-0536, ADR-0542, SPEC-0037, brief #1291, plan #661

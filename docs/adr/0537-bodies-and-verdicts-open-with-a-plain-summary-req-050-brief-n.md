@@ -1,6 +1,6 @@
 # ADR-0537: Pull request bodies and verdicts open with a plain summary
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: brief #1270, plan #661

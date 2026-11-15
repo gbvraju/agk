@@ -1,1 +1,0 @@
-- Every comment the kit posts through `session.py`, `conductor.py`, `route.py` and `merge_cleared.py` ends with one last line `Who: AGK` (with the role where known), so the history tells AGK from the owner under one login; a marker, not a rule: nothing reads or requires it (brief #1289, ADR-0546)

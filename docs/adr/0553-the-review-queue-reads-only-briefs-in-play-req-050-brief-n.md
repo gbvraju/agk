@@ -1,6 +1,6 @@
 # ADR-0553: The review queue reads only the briefs in play
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0548, ADR-0529, brief #1309, brief #1251, brief #408, plan #661

@@ -1,1 +1,0 @@
-- Session rule 18 now says that `session.py claim` (and `claim --build X`) adds the label `agk:taken` beside its one `taken:` comment, as the code has since brief #1251, and a test keeps the rule and the code in step (brief #1276, ADR-0547 Proposed)

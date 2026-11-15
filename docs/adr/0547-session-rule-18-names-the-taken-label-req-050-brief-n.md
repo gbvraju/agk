@@ -1,6 +1,6 @@
 # ADR-0547: Session rule 18 names the taken label that claim adds
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: brief #1276, brief #1251, ADR-0529, pull request #1261
