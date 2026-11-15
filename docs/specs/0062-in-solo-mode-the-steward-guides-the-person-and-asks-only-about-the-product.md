@@ -91,7 +91,7 @@ REQ-069 AC1: *the steward starts from the kit alone, learns who it talks to and 
 
 ## Open questions
 
-Each is a point the brief leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules.
+Each is a point the brief leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules. `Q-S0062-1` to `Q-S0062-8` are ruled as read by the maintainer's answer on #1319 (comment 6894152503), one file each under `docs/runs/decisions/`, and the rules above hold their readings. No question is open.
 
 - Q-S0062-1: which words count as a yes? Reading: an explicit sentence of approval in reply to the one question just asked, with no condition, change or question; anything else is asked again (rule 14).
 - Q-S0062-2: may the plain yes ever cover a merge or a tag? Reading: no; a merge, a tag, a force push and a workflow change stay the person's own action or denied (rule 13).
