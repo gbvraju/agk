@@ -22,6 +22,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from common import utf8_output  # noqa: E402
+
 KIT_HOST = "github.com"
 FORGES = frozenset({"github.com", "gitlab.com", "bitbucket.org"})
 LISTS = ("config/neutrality.txt", "kit/templates/neutrality.txt")  # the second only where present
@@ -64,6 +66,7 @@ def remotes(root: Path) -> list[tuple[str, str]] | None:
             ["git", "-C", str(root), "config", "--local", "--get-regexp", r"^remote\..*\.url$"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
     except OSError:
@@ -166,6 +169,7 @@ def check(
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parser = argparse.ArgumentParser(prog="steward_outbound.py", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     cmd = sub.add_parser("check")
