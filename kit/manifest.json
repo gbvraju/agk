@@ -139,6 +139,7 @@
     "scripts/agk/steward_onboard.py",
     "scripts/agk/steward_outbound.py",
     "scripts/agk/steward_owner.py",
+    "scripts/agk/steward_voice.py",
     "scripts/agk/survey.py",
     "scripts/agk/test_map.py",
     "scripts/agk/test_plan.py",

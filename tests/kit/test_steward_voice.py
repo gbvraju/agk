@@ -53,8 +53,10 @@ def test_req069_three_options_take_the_one_decision_shape():
         "because": "testing needs two more weeks",
     }
     text = voice.choose(data)
-    assert text.startswith("Decision: the first release date · Options: A 1 March / B 15 March")
-    assert "I recommend B 15 March because testing needs two more weeks · Reply A, B or C" in text
+    assert all(len(line) <= 100 for line in text.splitlines())
+    flat = text.replace("\n", " · ")
+    assert flat.startswith("Decision: the first release date · Options: A 1 March / B 15 March")
+    assert "I recommend B 15 March because testing needs two more weeks · Reply A, B or C" in flat
     assert voice.problems(text) == []
 
 
