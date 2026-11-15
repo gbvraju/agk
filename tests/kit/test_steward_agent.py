@@ -87,4 +87,4 @@ def test_req066_principle_7_and_claude_item_1_carry_the_steward_class():
         assert "steward" not in re.search(rf"^{n}\. (.+)$", principles, re.M).group(1)
     core = (ROOT / "config" / "core-rules.md").read_text(encoding="utf-8")
     item = core.split("\n1. You implement;", 1)[1].split("\n\n", 1)[0]
-    assert "steward" in item and "SPEC-0059 rule 3" in item and "owner" in item
+    assert "steward" in item and "SPEC-0059 rule 3" in item and "the owner" in item

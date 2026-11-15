@@ -63,7 +63,7 @@ class GitHub:
             ]
         if method == "GET":
             since = re.search(r"since=([^&]+)", query)
-            page = int((re.search(r"page=(\d+)", query) or [0, 1])[1])
+            page = int((re.search(r"(?:^|&)page=(\d+)", query) or [0, 1])[1])
             items = [c for c in self.issues[int(number)]["c"] if not since or c["updated_at"] >= since[1]]
             return items[(page - 1) * 100 : page * 100]
         if method == "POST" and number is None:

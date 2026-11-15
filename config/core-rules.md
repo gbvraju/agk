@@ -36,11 +36,11 @@ All of `constitution/principles.md`, principles 1 to 12, is core; it is short, s
 
 ## CLAUDE.md items
 
-The list `CLAUDE.md` carried before ADR-0247, with its numbers and exact text, except `CLAUDE.md item 2` and
-`CLAUDE.md item 10`, kept there.
+The list `CLAUDE.md` carried before ADR-0247, with its numbers, except `CLAUDE.md item 2` and `CLAUDE.md item 10`.
 
-1. You implement; you never decide. Decisions are ADRs or requirement statuses written by the reviewers. Where a
-   brief leaves something open, record it as a `Q-…` question and choose the most conservative reading.
+1. You implement; you never decide. Decisions are ADRs or requirement statuses written by the reviewers. Where a brief
+   leaves something open, record it as a `Q-…` question and choose the most conservative reading. The steward may answer
+   a question that the evidence settles (SPEC-0059 rule 3), with its evidence; the rest go to the owner.
 
 `CLAUDE.md item 2` is in `CLAUDE.md`.
 
