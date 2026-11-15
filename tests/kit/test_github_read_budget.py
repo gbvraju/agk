@@ -184,8 +184,10 @@ SAME_AFTER = {"claim free", "stalls"}  # the edits change nothing these print
 
 def said(out: subprocess.CompletedProcess) -> tuple[int, str]:
     """The exit and the output, with the sweep's ages in minutes masked: a 650-brief run takes
-    seconds, so the minute can turn between two runs of one state (build (b))."""
+    seconds, so the minute can turn between two runs of one state (build (b)). For the same reason
+    the steward's start line, which a question's age decides (brief #1322), is left out."""
     text = re.sub(r"(SILENT \d+ \S+ )\d+", r"\1<age>", out.stdout)
+    text = re.sub(r"^STEWARD: .*\n", "", text, flags=re.M)
     return out.returncode, re.sub(r"\b\d+m\b", "<age>", text)
 
 
