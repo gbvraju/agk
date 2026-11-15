@@ -868,10 +868,13 @@ code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
 [[testing.map]]
 code = "scripts/agk/steward.py"
-tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_agent.py"]
+tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py"]
 [[testing.map]]
 code = ".claude/hooks/steward_guard.py"
 tests = ["tests/kit/test_steward_guard.py"]
+[[testing.map]]
+code = "scripts/agk/steward_evidence.py"
+tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py"]
 [[testing.map]]
 code = "scripts/agk/survey.py"
 tests = ["tests/kit/test_survey.py", "tests/kit_dev/test_kit_manifest.py"]

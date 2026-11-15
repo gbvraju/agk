@@ -39,6 +39,10 @@ def project(tmp_path):
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "neutrality.txt").write_text("widgetcorp\n", encoding="utf-8")
     (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "export.py").write_text("", encoding="utf-8")
     return tmp_path
 
 
