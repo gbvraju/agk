@@ -32,9 +32,10 @@ only after that pull request merges.
    (`status`), writes the adapter change with its ADR and prints the body (`pr --to wsl|windows`), and opens the draft
    pull request by REST (`open`). It reads the default branch's `agk.toml` with one GET through `gh`, posts only the one
    pull request, and never merges.
-4. **The protected step goes by pull request:** after the machine is ready, the skill makes one pull request that sets
-   `launch_adapter = "bash scripts/start-session-local.sh"` in the `[flow]` table with the project's own ADR, runs
-   `prepush.py --record` in WSL, pushes and stops. On the next `/agk:wsl` after the merge the script installs the WSL
+4. **The protected step goes by pull request:** after the machine is ready, the skill prepares one pull request that
+   sets `launch_adapter = "bash scripts/start-session-local.sh"` in the `[flow]` table with the project's own ADR, and
+   the person commits, runs `prepush.py --record` in WSL, pushes and opens it with `wsl.py open`, as printed: SPEC-0005
+   rule 8 keeps a command from committing or pushing (Q-1376-1). On the next `/agk:wsl` after the merge the script installs the WSL
    watchdog task and disables, never deletes, the Windows one (`AGK conductor watchdog`). `/agk:wsl back` makes the
    reverse pull request and re-enables the Windows task. Personal mode has no conductor and gets no watchdog step.
 5. **The doctor knows WSL:** inside WSL with the project under `/mnt/`, `doctor.py` prints
@@ -47,7 +48,8 @@ only after that pull request merges.
 A person on Windows moves the workforce into WSL with one command and returns with another; the protected adapter
 change still comes as a reviewed pull request, and nothing is merged by the kit. Protected path classes changed:
 `skills/` (`skills/wsl/SKILL.md`), `scripts/agk/` (`wsl_setup.ps1`, `wsl.py`, `doctor.py`), `tests/kit/`
-(`test_wsl_setup.py`) and `agk.toml` (the new test in the `[[testing.map]]` entries). No workflow, ruleset or required
+(`test_wsl_setup.py`), `tests/kit_dev/` (`test_distribution.py` lists the new command, `test_kit_manifest.py` the two
+kit-only files) and `agk.toml` (the new test in the `[[testing.map]]` entries). No workflow, ruleset or required
 check changes; CI mode and cloud sessions, which already run on Linux, are unchanged.
 
 ## Residual
