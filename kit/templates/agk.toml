@@ -168,11 +168,8 @@ review_mode = "team"
 # [models.routes]
 # strongest = { task = "builder-strongest" }
 # mid = { task = "builder-mid" }
-# The conductor's pass tier: `watchdog --pass` starts a routine pass on mid at medium and one that
-# holds a protected, spec or ADR change, a first review above [review] large_lines changed lines (300 by default), a
-# Question:, a Correction:, a disagreement or an intake on strongest at high. `conductor = "strongest"` (the one value) pins
-# every pass to strongest. A change needs an ADR.
+# The conductor's pass tier: `watchdog --pass` starts a routine pass on mid at medium and one that holds
+# a first review, a protected, spec or ADR change, a Question:, a Correction:, a disagreement or an intake on strongest at
+# high. `conductor = "strongest"` (the one value) pins every pass to strongest. A change needs an ADR.
 # [models]
 # conductor = "strongest"
-# [review]
-# large_lines = 300

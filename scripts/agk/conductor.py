@@ -206,10 +206,9 @@ Brief #1359 (ADR-0571): `watchdog --pass` starts each job on the tier its queue 
 `AGK_TIER` and `AGK_EFFORT`, and prints `watchdog: tier <tier>[: <why>]`. It reads each pull
 request that `review-queue --all` lists for review (the pull request, its files and comments):
 `strongest` at `high` when one changes a protected path class, adds or changes a spec or ADR
-(`docs/specs/`, `docs/adr/`), is a first review (no verdict by a counted author) of more than
-`[review] large_lines` changed lines (300 by default), carries a `Question:` or `Correction:`
-after its last verdict or two verdicts of different kinds on one head, or is an intake (a title
-starting `Intake:`); also for a question on a brief, a queue that cannot be read and
+(`docs/specs/`, `docs/adr/`), is a first review (no verdict by a counted author yet, Q-1359-3),
+carries a `Question:` or `Correction:` after its last verdict or two verdicts of different kinds
+on one head, or is an intake (a title starting `Intake:`); also for a question on a brief, a queue that cannot be read and
 `[models] conductor = "strongest"`, the one pin. Every other pass runs on `mid` at `medium`, and
 its prompt says to post no verdict where it meets one of those or is unsure, and to end with
 `escalate: #<n> <reason>` for each. Those lines, from the adapter's output or, for a background
@@ -2301,7 +2300,7 @@ TIER_NOTE = (
 )
 MID_NOTE = (
     "On the `mid` tier, post no verdict on a pull request that changes a protected path class, "
-    "adds or changes a spec or ADR, is a first review of more than {large} changed lines, carries "
+    "adds or changes a spec or ADR, is a first review (no verdict on it yet), carries "
     "a `Question:`, a `Correction:` or a disagreement between verdicts, or is an intake, nor on "
     "one whose verdict you are unsure of: end your pass with one line `escalate: #<n> <reason>` "
     "for each, and the watchdog runs one strongest pass for them at once.\n"
@@ -2319,7 +2318,7 @@ def pass_classes(root) -> list[str]:
 
 def queued_items(root, repo: str) -> list[dict]:
     """The queue a job is handed: each pull request `review-queue --all` lists for review, with its
-    title, author, changed paths, changed lines and comments, and each question on a brief;
+    title, author, changed paths and comments, and each question on a brief;
     CheckError when one cannot be read."""
     code, listed = session.quietly(session.review_queue, root, "--all")
     if code:
@@ -2337,21 +2336,19 @@ def queued_items(root, repo: str) -> list[dict]:
         said = session.pages(f"repos/{repo}/issues/{n}/comments")
         if not isinstance(pr, dict) or files is None or said is None:
             raise CheckError(f"#{n} cannot be read")
-        changed = [pr.get(k) for k in ("additions", "deletions")]
         found.append(
             {
                 "number": n,
                 "title": str(pr.get("title") or ""),
                 "author": str((pr.get("user") or {}).get("login") or ""),
                 "paths": [str(f.get("filename") or "") for f in files if isinstance(f, dict)],
-                "changed": sum(x for x in changed if isinstance(x, int)),
                 "comments": said,
             }
         )
     return found
 
 
-def strongest_reasons(one: dict, classes: list[str], authors: list[str], large: int) -> list[str]:
+def strongest_reasons(one: dict, classes: list[str], authors: list[str]) -> list[str]:
     """Why one queued item needs the strongest tier (brief #1359 answer 1); [] for a routine one."""
     n = one["number"]
     if one.get("brief_question"):
@@ -2372,8 +2369,8 @@ def strongest_reasons(one: dict, classes: list[str], authors: list[str], large: 
         if session.author_of(c) in allowed
         and (m := session.HEAD_VERDICT.fullmatch(session.first_line(c)))
     ]
-    if not marks and one.get("changed", 0) > large:
-        out.append(f"#{n} first review of {one['changed']} changed lines")
+    if not marks:  # Q-1359-3: every first review stays on the strongest tier
+        out.append(f"#{n} first review")
     after = said[said.index(marks[-1][0]) + 1 :] if marks else said
     for kind in ("Question:", "Correction:"):
         if any(session.first_line(c).startswith(kind) for c in after):
@@ -2395,7 +2392,6 @@ def tier_for_pass(root, repo: str) -> tuple[str, str, list[str]]:
     try:
         if config.conductor_pin(root):
             return (*STRONG, ["pinned by [models] conductor"])
-        large = config.review_large_lines(root)
     except CheckError as exc:
         return (*STRONG, [str(exc)])
     try:
@@ -2403,7 +2399,7 @@ def tier_for_pass(root, repo: str) -> tuple[str, str, list[str]]:
     except CheckError:
         return (*STRONG, ["the queue cannot be read"])
     classes, authors = pass_classes(root), verdict_authors(root)
-    why = [r for one in items for r in strongest_reasons(one, classes, authors, large)]
+    why = [r for one in items for r in strongest_reasons(one, classes, authors)]
     return (*(STRONG if why else ROUTINE), why)
 
 
@@ -2429,14 +2425,14 @@ def logged_escalations(root, name: str, state: dict) -> list[tuple[str, str]]:
 
 
 def start_job(root, adapter: str, name: str, repo: str, why: str, tier: tuple) -> str | None:
-    """Call the adapter once for one conductor job on TIER (tier, effort, large); its standard
+    """Call the adapter once for one conductor job on TIER (tier, effort); its standard
     output, or None when it cannot be run or fails."""
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
     env.update(launch.QUIET)
     env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER=tier[0], AGK_EFFORT=tier[1])
     prompt = JOB_PROMPT.format(name=name, repo=repo, why=why)
     prompt += TIER_NOTE.format(tier=tier[0], effort=tier[1])
-    prompt += MID_NOTE.format(large=tier[2]) if tier[0] == "mid" else ""
+    prompt += MID_NOTE if tier[0] == "mid" else ""
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
             shlex.split(adapter),
@@ -2462,7 +2458,7 @@ def escalate(root, adapter: str, name: str, repo: str, found: list) -> bool:
         print(f"watchdog: escalated #{n} to strongest: {reason}")
     named = "; ".join(f"#{n} ({reason})" for n, reason in found)
     why = f"a mid pass escalated {named}: review these first"
-    return start_job(root, adapter, name, repo, why, (*STRONG, 0)) is not None
+    return start_job(root, adapter, name, repo, why, STRONG) is not None
 
 
 def job_running(root, repo: str, name: str, state: dict, now: datetime) -> bool:
@@ -2545,8 +2541,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
         return 0
     tier, effort, needs = tier_for_pass(root, repo)
     print(f"watchdog: tier {tier}: {'; '.join(needs)}" if needs else f"watchdog: tier {tier}")
-    large = config.review_large_lines(root) if tier == "mid" else 0
-    output = start_job(root, adapter, name, repo, ", ".join(why), (tier, effort, large))
+    output = start_job(root, adapter, name, repo, ", ".join(why), (tier, effort))
     if output is None:  # the state stays, so the next pass tries again
         return 1
     print(f"watchdog: job started {name} on {tier} at {effort}: {', '.join(why)}")

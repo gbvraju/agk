@@ -47,14 +47,11 @@ rule_tags_from = "2026-12-06"
 # allowed_hosts = ["db.internal.example.com"]
 # allow_paths = [{ path = "docs/logs/README.md", reason = "a guide about logs, not a log" }]
 # Who hands a finished builder its next work: "conductor" (the session asks on the agk-conductor issue and waits for an Assign: line) or "next" (session.py next, for setups with no conductor); a change needs an ADR.
-# The conductor's pass tier (brief #1359, ADR-0571): `watchdog --pass` starts a routine pass on mid at medium and one that
-# holds a protected, spec or ADR change, a first review above [review] large_lines changed lines (300 by default), a
-# Question:, a Correction:, a disagreement or an intake on strongest at high. `conductor = "strongest"` (the one value) pins
-# every pass to strongest; this repository keeps the defaults. A change needs an ADR.
+# The conductor's pass tier (brief #1359, ADR-0571): `watchdog --pass` starts a routine pass on mid at medium and one that holds
+# a first review, a protected, spec or ADR change, a Question:, a Correction:, a disagreement or an intake on strongest at
+# high. `conductor = "strongest"` (the one value) pins every pass to strongest; this repository keeps the defaults. A change needs an ADR.
 # [models]
 # conductor = "strongest"
-# [review]
-# large_lines = 300
 [flow]
 # "next" by the owner's direction of 2026-11-11 (brief #1029, ADR-0438): a finished builder takes its next brief at once;
 # the slots s<n> still act on Assign: lines (builder_start below is unchanged).

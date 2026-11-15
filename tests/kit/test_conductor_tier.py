@@ -2,7 +2,7 @@
 
 `conductor.py watchdog --pass` decides the tier of the job it starts from the queue it hands it:
 `strongest` at `high` when a queued pull request changes a protected path class, adds or changes a
-spec or ADR, is a first review of more than `[review] large_lines` changed lines, carries a
+spec or ADR, is a first review (Maintainer answer Q-1359-3), carries a
 `Question:`, a `Correction:` or a disagreement between verdicts, or is an intake (and for a question
 on a brief, or a queue it cannot read); `mid` at `medium` for every other pass. A mid job that
 ends with `escalate: #<n> <reason>` is followed at once by one strongest job, and
@@ -40,14 +40,13 @@ def item(**extra) -> dict:
         "title": "A small change (brief #9)",
         "author": "b1",
         "paths": ["docs/guides/example.md"],
-        "changed": 40,
         "comments": [comment(1, "boss", VERDICT), comment(2, "b1", f"Report: {SHA[:9]} done")],
     }
     return {**base, **extra}
 
 
-def reasons(one: dict, large: int = 300) -> list[str]:
-    return conductor.strongest_reasons(one, CLASSES, ["boss"], large)
+def reasons(one: dict) -> list[str]:
+    return conductor.strongest_reasons(one, CLASSES, ["boss"])
 
 
 # --- answer 1: each row of the list picks its tier ----------------------------------------
@@ -65,7 +64,7 @@ def test_1359_a_routine_re_review_needs_no_strongest_pass():
         ({"paths": ["agk.toml"]}, "#7 changes a protected path class"),
         ({"paths": ["docs/specs/SPEC-0099-example.md"]}, "#7 adds or changes a spec or ADR"),
         ({"paths": ["docs/adr/0999-example.md"]}, "#7 adds or changes a spec or ADR"),
-        ({"comments": [], "changed": 301}, "#7 first review of 301 changed lines"),
+        ({"comments": []}, "#7 first review"),
         ({"title": "Intake: an example (brief #9)"}, "#7 is an intake"),
     ],
 )
@@ -74,17 +73,13 @@ def test_1359_each_strongest_row_picks_the_strongest_tier(extra, why):
     assert why in reasons(item(**extra))
 
 
-def test_1359_a_first_review_at_or_below_large_lines_stays_mid():
-    """REQ-050: brief #1359 answer 1 (`large_lines` is the bound, 300 by default)."""
-    assert reasons(item(comments=[], changed=300)) == []
-    assert reasons(item(comments=[], changed=120), large=100) == [
-        "#7 first review of 120 changed lines"
+def test_1359_every_first_review_stays_on_strongest_and_a_re_review_does_not():
+    """REQ-050: Maintainer answer Q-1359-3 ("first reviews and risky changes stay on the
+    strongest model"; SPEC-0045 rule 6, amendment 183)."""
+    assert reasons(item(comments=[comment(2, "b1", "Report: abc ready for review")])) == [
+        "#7 first review"
     ]
-
-
-def test_1359_a_re_review_of_a_large_change_is_no_first_review():
-    """REQ-050: brief #1359 answer 1 (only a first review counts the lines)."""
-    assert reasons(item(changed=900)) == []
+    assert reasons(item()) == []  # a re-review after a verdict
 
 
 @pytest.mark.parametrize(
@@ -115,13 +110,13 @@ def test_1359_two_verdicts_on_one_head_that_disagree_pick_strongest():
 def test_1359_a_verdict_by_an_unlisted_account_counts_for_nothing():
     """REQ-050: brief #1359 answer 1 (only a listed verdict author's verdict counts)."""
     said = [comment(1, "someone", VERDICT)]
-    assert reasons(item(comments=said, changed=500)) == ["#7 first review of 500 changed lines"]
+    assert reasons(item(comments=said)) == ["#7 first review"]
 
 
 def test_1359_a_question_on_a_brief_picks_strongest():
     """REQ-050: brief #1359 answer 1 (a `Question:` with no pull request yet)."""
     one = {"number": 12, "brief_question": True}
-    assert conductor.strongest_reasons(one, CLASSES, ["boss"], 300) == ["#12 question on a brief"]
+    assert conductor.strongest_reasons(one, CLASSES, ["boss"]) == ["#12 question on a brief"]
 
 
 # --- the queue the job is handed -----------------------------------------------------------
@@ -160,7 +155,7 @@ def test_1359_the_queue_reads_only_the_pull_requests_listed_for_review(monkeypat
     queue_world(monkeypatch, listed, pulls, files, said)
     found = conductor.queued_items(tmp_path, REPO)
     assert [one["number"] for one in found] == [7, 12]
-    assert found[0]["paths"] == ["docs/guides/example.md"] and found[0]["changed"] == 35
+    assert found[0]["paths"] == ["docs/guides/example.md"] and found[0]["author"] == "b1"
     assert found[1] == {"number": 12, "brief_question": True}
 
 
@@ -183,32 +178,28 @@ def toml(tmp_path: Path, text: str) -> Path:
     return tmp_path
 
 
-def test_1359_the_pin_and_large_lines_are_read_and_checked(tmp_path):
-    """REQ-050: brief #1359 answer 3 (the pin) and answer 1 (`large_lines`)."""
-    root = toml(tmp_path, '[models]\nconductor = "strongest"\n[review]\nlarge_lines = 120\n')
-    assert config.conductor_pin(root) == "strongest" and config.review_large_lines(root) == 120
-    assert config.model_settings(root)["review"] == config.REVIEW_FLOOR  # the table still reads
-    root = toml(tmp_path, "")
-    assert config.conductor_pin(root) is None and config.review_large_lines(root) == 300
+def test_1359_the_pin_is_read_and_the_models_table_still_reads(tmp_path):
+    """REQ-050: brief #1359 answer 3 (the pin beside the kinds of SPEC-0045 rule 2)."""
+    root = toml(tmp_path, '[models]\nconductor = "strongest"\n')
+    assert config.conductor_pin(root) == "strongest"
+    assert config.model_settings(root)["review"] == config.REVIEW_FLOOR
+    assert config.conductor_pin(toml(tmp_path, "")) is None
 
 
-@pytest.mark.parametrize(
-    ("text", "setting"),
-    [
-        ('[models]\nconductor = "mid"\n', "models.conductor"),
-        ("[models]\nconductor = 3\n", "models.conductor"),
-        ("[review]\nlarge_lines = 0\n", "review.large_lines"),
-        ('[review]\nlarge_lines = "many"\n', "review.large_lines"),
-    ],
-)
-def test_1359_a_wrong_pin_or_bound_is_refused_naming_the_setting(tmp_path, text, setting):
+@pytest.mark.parametrize("value", ['"mid"', '"fast"', "3", "true"])
+def test_1359_a_pin_other_than_strongest_is_refused_naming_the_setting(tmp_path, value):
     """REQ-050: brief #1359 answer 3; principle 8 (the setting, never the value)."""
-    root = toml(tmp_path, text)
-    with pytest.raises(CheckError, match=setting.replace(".", r"\.")) as caught:
-        config.conductor_pin(root) if setting.startswith("models") else config.review_large_lines(
-            root
-        )
-    assert '"mid"' not in str(caught.value) and "many" not in str(caught.value)
+    root = toml(tmp_path, f"[models]\nconductor = {value}\n")
+    with pytest.raises(CheckError, match=r"setting: models\.conductor") as caught:
+        config.conductor_pin(root)
+    assert value.strip('"') not in str(caught.value)
+
+
+def test_1359_the_role_file_names_the_scripted_pass_exception():
+    """REQ-050: SPEC-0045 rule 6 as amendment 183 amends it: the conductor runs on `strongest`
+    at `high` except a routine job of the scripted pass."""
+    text = (SCRIPTS.parents[1] / ".claude" / "agents" / "conductor.md").read_text()
+    assert "the `strongest` tier at `high` effort, except" in text and "ADR-0571" in text
 
 
 def test_1359_the_pin_forces_the_strongest_pass(monkeypatch, tmp_path):

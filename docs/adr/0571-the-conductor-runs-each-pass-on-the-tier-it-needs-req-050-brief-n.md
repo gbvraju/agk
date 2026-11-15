@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-15
 - Deciders: maintainers
-- Related: ADR-0554, ADR-0525, ADR-0528, ADR-0568, SPEC-0045, brief #1359, brief #1283, plan #661
+- Related: ADR-0554, ADR-0525, ADR-0528, ADR-0568, ADR-0289, SPEC-0045 (amendment 183), brief #1359, brief #1283, plan #661
 - Requirements: REQ-050
 
 ## Context
@@ -14,7 +14,9 @@ role runs on `strongest`. Many passes are routine (a re-review of an applied fix
 only a `Report: ... nothing to change`, a sweep, a re-plan), and the co-owner's review named the always-strongest
 conductor as the largest cost lever. `config.MODEL_DEFAULTS` already routes builder kinds below `strongest`, and
 `watchdog --pass` already decides as a script whether a job starts. Brief #1283 (merged as #1352) gives the spend by
-role and model that measures the change.
+role and model that measures the change. SPEC-0045 rule 6 (Approved) kept the conductor on `strongest`; the maintainers
+chose to amend it in the same pull request (`Maintainer answer: Q-1359-3 (a)`: "first reviews and risky changes stay on
+the strongest model"), and `docs/runs/proposed-spec-amendments-183.md` holds the amended lines.
 
 ## Decision
 
@@ -22,8 +24,8 @@ role and model that measures the change.
    `session.py review-queue --all` lists for review (the pull request, its files and its comments, GET only) and starts
    the job on `strongest` at `high` when any of them changes a protected path class (`config/protected-paths.txt`),
    adds or changes a spec or ADR (`docs/specs/`, `docs/adr/`), is a first review (no verdict by a counted verdict
-   author) of more than `[review] large_lines` changed lines (additions plus deletions, 300 by default, a whole number
-   of at least 1), carries a `Question:` or a `Correction:` after its last verdict or two verdicts of different kinds
+   author yet: every first review, by the maintainers' answer to Q-1359-3, so the brief's `[review] large_lines` bound
+   is not added), carries a `Question:` or a `Correction:` after its last verdict or two verdicts of different kinds
    on one head (a disagreement), or is an intake (a title starting `Intake:`); also when the queue holds a question
    on a brief, or cannot be read. Every other pass starts on `mid` at `medium`. The tier and effort reach the adapter
    as `AGK_TIER` and `AGK_EFFORT`, the prompt names them, and the pass prints `watchdog: tier <tier>[: <why>]` and
@@ -37,7 +39,8 @@ role and model that measures the change.
 3. **Floors stay.** `REVIEW_FLOOR` and the reviewer starts (ADR-0528) stay on `strongest` at `high`; the interactive
    `watchdog` without `--pass`, which starts a looping conductor, stays on `strongest`; the architect and shadow
    roles are unchanged. `[models] conductor = "strongest"`, the one value accepted, pins every pass to `strongest`;
-   another value, or a `large_lines` that is not a whole number of at least 1, is refused naming the setting.
+   another value is refused naming the setting (`setting: models.conductor`). SPEC-0045 rules 2 (the `conductor`
+   key) and 6 (the scripted pass's exception) are amended by amendment 183.
 4. **Measured.** The pull request body gives the before figure; the share of passes on each tier, the tokens per
    merged pull request over the first week and the share of mid verdicts that the shadow or a later strongest pass
    changed are read from #1283's spend by role and model and the `tier:` marks of decision 2.
@@ -50,8 +53,11 @@ role and model that measures the change.
 Routine passes start on the mid tier and every escalation costs one strongest pass. Protected path classes changed:
 `scripts/agk/` (`conductor.py`, `config.py`), `.claude/` (`.claude/agents/conductor.md`), `tests/kit/`
 (`test_conductor_tier.py`), `kit/` (`kit/templates/agk.toml`) and
-`agk.toml` (the two settings as comments and the new test file in the `[[testing.map]]` entries of `conductor.py`,
+`agk.toml` (the pin as a comment and the new test file in the `[[testing.map]]` entries of `conductor.py`,
 `config.py` and `.claude/agents/*.md`).
+
+Not protected: `docs/specs/0045-each-kind-of-work-runs-on-the-model-it-needs.md` (rules 2 and 6, amendment 183) and
+`docs/runs/proposed-spec-amendments-183.md`.
 
 ## Residual
 
