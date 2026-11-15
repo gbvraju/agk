@@ -271,3 +271,57 @@ def test_record_without_a_file_writes_the_shared_record(repo):
     proc = repo.run("prepush.py", "--record")
     assert "usage:" not in proc.stdout + proc.stderr
     assert EVIDENCE.search(proc.stdout), proc.stdout
+
+
+OUTSIDE_LINE = (
+    "prepush: record written outside the shared evidence folder; a conductor on this machine reads"
+    " only that folder (option: --record with no FILE)"
+)
+
+
+def shared_folder(repo) -> Path:
+    """The clone's shared evidence folder (brief #1269), made as prepush makes it."""
+    common = (repo.root / repo.git("rev-parse", "--git-common-dir").strip()).resolve()
+    folder = common / "agk-evidence"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def test_a_record_file_outside_the_shared_folder_is_named_once(repo, outside):
+    """REQ-039: brief #1329 answers 1 and 4 (ADR-0564): the record is still written, one line names
+    the option, never the path, and the exit is as before."""
+    project(repo)
+    record = outside / "record.json"
+    proc = run(repo, "--quick", "--record", str(record), scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert load(record)["result"] == "passed"
+    assert proc.stdout.count(OUTSIDE_LINE) == 1, proc.stdout
+    assert str(outside) not in proc.stdout + proc.stderr
+    assert EVIDENCE.search(proc.stdout), proc.stdout
+
+
+def test_a_failed_run_with_an_outside_record_still_exits_1(repo, outside):
+    """REQ-039: brief #1329 answer 1: the line changes no exit code."""
+    project(repo, mk=MK_FAIL)
+    record = outside / "record.json"
+    proc = run(repo, "--record", str(record), scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert proc.stdout.count(OUTSIDE_LINE) == 1, proc.stdout
+
+
+def test_no_file_prints_no_outside_line(repo, outside):
+    """REQ-039: brief #1329 answer 4: `--record` with no FILE prints nothing new."""
+    project(repo)
+    proc = run(repo, "--quick", "--record", scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert OUTSIDE_LINE not in proc.stdout
+
+
+def test_a_file_inside_the_shared_folder_prints_no_outside_line(repo, outside):
+    """REQ-039: brief #1329 answer 4: a FILE directly in the shared folder prints no line."""
+    project(repo)
+    record = shared_folder(repo) / "by-hand.json"
+    proc = run(repo, "--quick", "--record", str(record), scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert record.is_file()
+    assert OUTSIDE_LINE not in proc.stdout
