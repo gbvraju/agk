@@ -12,5 +12,5 @@ config/session-rules.md 3436 37
 .claude/agents/drift-auditor.md 140 4
 .claude/agents/reviewer.md 579 12
 .claude/agents/shadow.md 1280 15
-.claude/agents/steward.md 645 0
+.claude/agents/steward.md 704 0
 config/review-checklist.md 306 12

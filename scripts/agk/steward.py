@@ -2,7 +2,7 @@
 
 Usage: python3 scripts/agk/steward.py start --session ID
        python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
-       python3 scripts/agk/steward.py end --session ID
+       python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
 
 The memory is one open issue labelled `agk-steward`, created when none is open: one comment per
 entry, whose first word is one of KINDS, each ending `Who: AGK steward`. `start` reads it before any
@@ -14,8 +14,10 @@ word. A `Started: steward <session> <UTC time>` newer than 60 minutes with no `E
 comments a start opens a new memory issue whose first comment links the old one and carries every
 open `Owner question:` (no later `Decision:` names its Q id), then closes the old one. `record`
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
-the value (exit 2). In personal mode (a `[personal]` table) the memory is
-`docs/runs/steward/memory.md` of the sidecar and nothing is posted. A failed GitHub call exits 4.
+the value (exit 2). `end` writes the pass's counted calls and tokens on its marker, `not shown` when
+not given, never 0 (rule 13's daily list reads them). In personal mode (a `[personal]` table) the
+memory is `docs/runs/steward/memory.md` of the sidecar and nothing is posted. A failed GitHub call
+exits 4.
 """
 
 from __future__ import annotations
@@ -278,9 +280,12 @@ def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[st
     return 0, [f"memory: #{cache['issue']}", *summary(memory)]
 
 
-def end(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[str]]:
+def end(
+    root: Path, session: str, gh: Gh, now: datetime, calls: int | None = None, tokens=None
+) -> tuple[int, list[str]]:
     del now  # the marker names the session; its time is the comment's own
-    return write(root, f"Ended: steward {session}", gh)
+    figures = f" calls {calls or 'not shown'}; tokens {tokens or 'not shown'}"
+    return write(root, f"Ended: steward {session}{figures}", gh)
 
 
 def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
@@ -331,8 +336,11 @@ def main(argv: list[str] | None = None) -> int:
     utf8_output()
     parser = argparse.ArgumentParser(prog="steward.py", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("start", "end"):
-        sub.add_parser(name).add_argument("--session", required=True)
+    sub.add_parser("start").add_argument("--session", required=True)
+    end_p = sub.add_parser("end")
+    end_p.add_argument("--session", required=True)
+    end_p.add_argument("--calls", type=int)
+    end_p.add_argument("--tokens", type=int)
     rec = sub.add_parser("record")
     rec.add_argument("--kind", required=True)
     group = rec.add_mutually_exclusive_group(required=True)
@@ -344,10 +352,10 @@ def main(argv: list[str] | None = None) -> int:
         if opts.command == "record":
             text = opts.text if opts.text is not None else opts.file.read_text(encoding="utf-8")
             code, lines = record(root, opts.kind, text, gh_api)
+        elif opts.command == "start":
+            code, lines = start(root, opts.session, gh_api, now)
         else:
-            code, lines = (start if opts.command == "start" else end)(
-                root, opts.session, gh_api, now
-            )
+            code, lines = end(root, opts.session, gh_api, now, opts.calls, opts.tokens)
     except Unreadable as exc:
         print(f"error: {exc} cannot be read", file=sys.stderr)
         return 4

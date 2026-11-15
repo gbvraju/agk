@@ -79,7 +79,7 @@ def test_req066_a_planning_requirement_question_goes_to_the_owner_with_a_recomme
 
 
 def test_req066_a_building_requirement_answer_waits_for_the_recheck():
-    """REQ-066: rules 3(b) and 4, settled in building, but posted only after build (d)."""
+    """REQ-066: rules 3(b), 4 and 13, settled in building, but posted only with the re-check."""
     found = ev.settle(question("requirement", [SPEC]), "build")
     assert found["to"] == "owner" and "re-check" in found["reason"]
     assert "weekly" in found["recommendation"]
