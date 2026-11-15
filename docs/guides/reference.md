@@ -163,10 +163,20 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/conductor.py rerun --pr N [--apply]
     python3 scripts/agk/conductor.py check-verdict FILE [--pr N]
     python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
-    python3 scripts/agk/conductor.py watchdog [--session NAME] [--install]
+    python3 scripts/agk/conductor.py watchdog [--session NAME] [--install] [--pass]
     python3 scripts/agk/conductor.py review --pr N [--start]
     python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
     python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT
+    python3 scripts/agk/session.py summary --pr N --file FILE
+
+Waits that cost no model turns (brief #1310, ADR-0554). `session.py watch --pr N` and `watch --assign ID` take
+`--until-event`: they return only on an event, printing every event line of one read, or after `[flow] wake_minutes` (110
+by default) with `renew: no event`, renewing a slot's lease every 240 s themselves. `session.py summary --pr N --file FILE`
+posts the pull request's one working summary (`Summary: <head>` and the file, at most `[flow] summary_lines` lines, 25 by
+default) and edits it in place on the next run; `resume --pr N` prints it with the `git diff` since its head. `conductor.py
+watchdog --pass` runs the review queue's fingerprint, the plan and the sweep as scripts and starts one conductor job only when
+they changed since the last job, the plan starts a brief, or no job ran for 24 hours; `--install --pass` prints the line that
+runs it every 10 minutes.
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
 `--since` (default: the start) whose first line starts `Question:` or `Report:`, or is an owner's answer or approval (an

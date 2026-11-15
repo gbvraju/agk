@@ -580,3 +580,213 @@ def test_two_open_conductor_issues_read_the_newest(proj, stub):
     assert out.returncode == 0 and out.stdout.splitlines() == ["empty"], out.stdout
     read = [c[1].split("?")[0] for c in stub.calls()]
     assert f"{ISSUES}/51/comments" in read and f"{ISSUES}/50/comments" not in read
+
+
+# --- only the briefs in play are read (brief #1309, ADR-0553) ----------------------------------
+# REQ-050. From the one listing of the open briefs, the comments of a brief are read only when it
+# can hold a live take: it carries `agk:taken`, or its listing shows comments and an `updated_at`
+# other than the one kept, beside the read cache, from the last run that read it with no question.
+# A listing with `comments` 0 is never read; one that does not show `comments` is read as before.
+# The recorded double of test_session_plan_reads (ETags, 304s, pages), invented data only.
+
+from test_session_plan_reads import Double  # noqa: E402
+
+QUIET = "2026-11-01T00:00:00Z"
+
+
+@pytest.fixture
+def double(tmp_path):
+    (tmp_path / "double").mkdir()
+    return Double(tmp_path / "double")  # beside the autouse stub of this file
+
+
+@pytest.fixture
+def dproj(repo, double):
+    repo.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
+    repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    return repo
+
+
+def listing(n: int, count: int = 0, taken: bool = False, when: str = QUIET) -> dict:
+    labels = [{"name": "agk-brief"}] + ([{"name": "agk:taken"}] if taken else [])
+    return {**brief(n), "labels": labels, "comments": count, "updated_at": when}
+
+
+def dqueue(proj, double: Double, *extra: str, cache: bool = True, code: int = 0):
+    import os
+    import subprocess  # nosec B404 - fixed argument list, no shell
+    import sys
+
+    from test_session import SCRIPTS, clean_env
+
+    env = clean_env()
+    env.update(
+        PATH=f"{double.bin}{os.pathsep}{os.environ['PATH']}",
+        GH_STUB_DIR=str(double.dir),
+        AGK_READ_CACHE=str(double.cache) if cache else "off",
+    )
+    out = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPTS / "session.py"), "review-queue", *extra],
+        cwd=proj.root,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+    )
+    assert out.returncode == code, out.stdout + out.stderr
+    return out.stdout.splitlines()
+
+
+def read_briefs(double: Double) -> list[int]:
+    """The briefs whose comments the pass asked for, in order."""
+    found = [re.fullmatch(rf"{ISSUES}/(\d+)/comments", c[1].split("?")[0]) for c in double.calls()]
+    return [int(m.group(1)) for m in found if m]
+
+
+def beyond_listings(double: Double) -> list[list]:
+    """The calls a pass makes beyond its three listings (open pull requests, conductor issues,
+    briefs): the comments of briefs and the pull requests that keep a take live."""
+    listings = (OPEN, ISSUES)
+    return [c for c in double.calls() if c[1].split("?")[0] not in listings or "state=all" in c[1]]
+
+
+def in_play_fixture(double: Double, count: int = 650) -> list[dict]:
+    """`count` open briefs besides three in play: #101 and #102 taken under the label (a question
+    on #101), #103 taken before the label existed, with a question and no label."""
+    briefs = [listing(n) for n in range(1, count + 1) if n not in (101, 102, 103)]
+    briefs += [listing(101, 2, taken=True), listing(102, 1, taken=True), listing(103, 2)]
+    briefs.sort(key=lambda b: b["number"])
+    double.serve(ISSUES, briefs)
+    double.serve(OPEN, [])
+    double.serve(f"{ISSUES}/101/comments", [took(1), note(2, "Question: Q-101-1 which?", 595)])
+    double.serve(f"{ISSUES}/102/comments", [took(1)])
+    double.serve(f"{ISSUES}/103/comments", [took(1), note(2, "Question: Q-103-1 which?", 595)])
+    return briefs
+
+
+@pytest.mark.parametrize("mode", ["--fingerprint", "--all"])
+def test_six_hundred_and_fifty_briefs_of_which_three_are_in_play_cost_at_most_six_calls(
+    dproj, double, mode
+):
+    """REQ-050: brief #1309 answers 1 and 4a."""
+    in_play_fixture(double)
+    for _ in range(2):  # a cold pass and a warm one
+        lines = dqueue(dproj, double, mode)
+        assert sorted(set(read_briefs(double))) == [101, 102, 103], read_briefs(double)
+        assert len(beyond_listings(double)) <= 6, beyond_listings(double)
+        assert all(c[0] == "GET" for c in double.calls())
+        if mode == "--all":
+            assert lines == ["#101 question on a brief", "#103 question on a brief"]
+        double.forget()
+
+
+def test_the_fingerprint_is_the_one_a_read_of_every_brief_gives(dproj, double):
+    """REQ-050: brief #1309 answers 2 and 4b (the same lines and facts for the same state)."""
+    briefs = in_play_fixture(double, count=40)
+    cold, warm = dqueue(dproj, double, "--fingerprint"), dqueue(dproj, double, "--fingerprint")
+    off = dqueue(dproj, double, "--fingerprint", cache=False)
+    for b in briefs:  # the listing with no count, so every brief is read, as before brief #1309
+        del b["comments"]
+        if b["number"] not in (101, 102, 103):
+            double.serve(f"{ISSUES}/{b['number']}/comments", [])
+    double.serve(ISSUES, briefs)
+    double.forget()
+    every = dqueue(dproj, double, "--fingerprint", cache=False)
+    assert len(set(read_briefs(double))) == 43
+    assert cold == warm == off == every and len(cold) == 1
+
+
+def test_a_brief_with_comments_and_no_take_is_read_once_then_skipped_while_unchanged(dproj, double):
+    """REQ-050: brief #1309 answers 1 and 3 (a new comment changes `updated_at`, so it is read)."""
+    double.serve(OPEN, [])
+    double.serve(ISSUES, [listing(7, 1)])
+    double.serve(f"{ISSUES}/7/comments", [note(1, "A field note.", 500)])
+    assert dqueue(dproj, double) == ["empty"] and read_briefs(double) == [7]
+    double.forget()
+    assert dqueue(dproj, double) == ["empty"] and read_briefs(double) == []
+    double.forget()
+    double.serve(ISSUES, [listing(7, 3, when="2026-11-02T00:00:00Z")])
+    double.serve(
+        f"{ISSUES}/7/comments",
+        [note(1, "A field note.", 500), took(2), note(3, "Question: Q", 595)],
+    )
+    assert dqueue(dproj, double) == ["#7 question on a brief"] and read_briefs(double) == [7]
+
+
+def test_a_brief_with_no_comment_is_never_read(dproj, double):
+    """REQ-050: brief #1309 answer 1 (even under the take label)."""
+    double.serve(OPEN, [])
+    double.serve(ISSUES, [listing(7), listing(8, taken=True)])
+    assert dqueue(dproj, double) == ["empty"] and read_briefs(double) == []
+
+
+def test_a_brief_under_the_take_label_is_read_on_every_pass(dproj, double):
+    """REQ-050: brief #1309 answer 1 (a labelled brief is never skipped by the kept time)."""
+    double.serve(OPEN, [])
+    double.serve(ISSUES, [listing(7, 1, taken=True)])
+    double.serve(f"{ISSUES}/7/comments", [took(1)])
+    assert dqueue(dproj, double) == ["empty"]
+    double.forget()
+    double.serve(f"{ISSUES}/7/comments", [took(1), note(2, "Question: Q-7-1 ok?", 595)])
+    assert dqueue(dproj, double) == ["#7 question on a brief"] and read_briefs(double) == [7]
+
+
+def test_an_answered_question_and_a_lapsed_take_drop_out(dproj, double):
+    """REQ-050: brief #1309 answer 3."""
+    double.serve(OPEN, [])
+    double.serve(ISSUES, [listing(7, 3, taken=True), listing(8, 2, taken=True)])
+    asked = [took(1), note(2, "Question: Q-7-1 ok?", 595)]
+    double.serve(f"{ISSUES}/7/comments", [*asked, note(3, "Yes.", 597, login="boss")])
+    double.serve(f"{ISSUES}/8/comments", [took(1, when=0), note(2, "Question: Q-8-1?", 595)])
+    assert dqueue(dproj, double) == ["empty"]
+
+
+def test_a_brief_with_an_open_pull_request_is_not_read(dproj, double):
+    """REQ-050: brief #1309 answer 3 (left to the pull request, as before)."""
+    pr = {**listed(9, None, draft=True), "body": "Brief: #7\n"}
+    double.serve(OPEN, [pr])
+    double.serve(f"{ISSUES}/9/comments", [])
+    double.serve(ISSUES, [listing(7, 2, taken=True)])
+    double.serve(f"{ISSUES}/7/comments", [took(1), note(2, "Question: Q-7-1 ok?", 595)])
+    assert dqueue(dproj, double, "--all") == ["empty", f"#9 {SHORT} skip: draft"]
+    assert read_briefs(double) == [9]
+
+
+def test_a_new_verdict_author_reads_the_kept_briefs_again(dproj, double):
+    """REQ-050: brief #1309 answer 1 (what counts as an answer changed, so the kept times go)."""
+    double.serve(OPEN, [])
+    double.serve(ISSUES, [listing(7, 3)])
+    asked = [took(1), note(2, "Question: Q-7-1 ok?", 595), note(3, "Yes.", 597, login="third")]
+    double.serve(f"{ISSUES}/7/comments", asked)
+    dproj.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, third]\n")
+    assert dqueue(dproj, double) == ["empty"]
+    double.forget()
+    dproj.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    assert dqueue(dproj, double) == ["#7 question on a brief"] and read_briefs(double) == [7]
+
+
+def test_with_the_cache_off_every_brief_with_comments_is_read(dproj, double):
+    """REQ-050: brief #1309 answer 1 (no kept time: read as before)."""
+    double.serve(OPEN, [])
+    double.serve(ISSUES, [listing(7, 1)])
+    double.serve(f"{ISSUES}/7/comments", [note(1, "A field note.", 500)])
+    for _ in range(2):
+        assert dqueue(dproj, double, cache=False) == ["empty"] and read_briefs(double) == [7]
+        double.forget()
+
+
+@pytest.mark.parametrize("which", ["listing", "comments"])
+def test_github_unreadable_is_an_error_never_an_empty_queue(dproj, double, which):
+    """REQ-050: brief #1309 answer 3 (exit and line as today)."""
+    double.serve(OPEN, [])
+    double.serve(ISSUES, [listing(7, 1)])
+    double.serve(f"{ISSUES}/7/comments", [note(1, "A field note.", 500)])
+    dqueue(dproj, double)  # read once and kept
+    double.forget()
+    if which == "listing":
+        double.serve(ISSUES, "FAIL")
+    else:
+        double.serve(ISSUES, [listing(7, 2, when="2026-11-02T00:00:00Z")])
+        double.serve(f"{ISSUES}/7/comments", "FAIL")
+    lines = dqueue(dproj, double, code=2)
+    assert "empty" not in lines
