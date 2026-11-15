@@ -25,7 +25,8 @@ base resolves (outside CI, no default branch) it reads HEAD alone, as before. A 
 base with HEAD fails with the shared message, as the other modes do. A record of the merge base is verified exactly
 as one of HEAD's: its Final comment must be in FILE, and without FILE, while any record exists, it fails closed.
 
-This changes the protected path class `scripts/agk/` (`scripts/agk/check_adrs.py`).
+Protected path classes changed: `scripts/agk/` (`check_adrs.py`), `tests/kit/` (`test_check_adrs.py`) and
+`docs/adr/` (this file).
 
 ## Consequences
 
