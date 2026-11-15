@@ -116,6 +116,21 @@ text of the transcript. A builder passes `--since` with the time of its previous
 line per pull request and, with an optional `[models.prices]` table in `agk.toml` (a tier to a price per million tokens),
 one cost line. See SPEC-0045 rules 8 and 9 and ADR-0419.
 
+## The day's model spend
+
+    python3 scripts/agk/metrics.py --cost [--day YYYY-MM-DD] [--days N] [--records DIR] [--save]
+
+Reads the local session records of this clone's sessions (by default `<CLAUDE_CONFIG_DIR or ~/.claude>/projects`, or
+`--records DIR`; a reply whose working folder is not the clone or one of its worktrees is skipped and counted) and of
+each reply only its usage fields: model, input, output, cache write and cache read tokens, time, branch and session.
+It never reads or prints a message's text, and makes no network call. It prints one table per day (`--day`, today in
+UTC by default; `--days N` ends there), one row per session, role, brief and model, the day's total, the top five
+sessions and briefs, and the share of cache reads against fresh input. With an optional `[cost.prices.<model>]` table
+in `agk.toml` (`input`, `output`, `cache_write`, `cache_read`: USD per million tokens; no price ships with the kit) it
+adds an estimate in USD; without one it prints tokens only. A figure it cannot read is `unknown`, never 0, and a record file it cannot read is counted and marks the total as a lower
+bound. `--save`
+writes the day's figures to `docs/runs/cost/<date>.json`. See ADR-0544.
+
 ## Release pack
 
     python3 scripts/agk/release_pack.py check <out>/<tag>
