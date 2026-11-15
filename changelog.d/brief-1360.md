@@ -1,0 +1,1 @@
+- `prepush.py --record` says where the record went, and with no FILE names `evidence.py check --head` to read it; `doctor.py` warns on Windows when `core.autocrlf` rewrites line endings (brief #1360)

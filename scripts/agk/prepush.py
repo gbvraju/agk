@@ -98,9 +98,12 @@ Brief #1269 (ADR-0536): `--record` with no FILE, or `--record auto`, writes the 
 `<git common dir>/agk-evidence/<40-hex head>.json`, the folder `git rev-parse --git-common-dir`
 names: one per clone, shared by every worktree of it, never tracked and never making the tree
 dirty, so the conductor finds it from the head alone (`evidence.py check --head <sha>`). The
-folder is made when missing. `--record FILE` writes FILE as before, and the `Evidence:` line is
-the same either way. A `--queue` run passes `auto` on, so the record is named by the head the
+folder is made when missing. `--record FILE` writes FILE as before. A `--queue` run passes `auto` on, so the record is named by the head the
 job runs on.
+
+Brief #1360 (ADR-0572): the `Evidence:` line ends `... record <sha12> in the shared evidence
+folder` with no FILE, then one line names `evidence.py check --head <sha12>` as the way to read it;
+with a FILE it ends `... in the given file`. No path and no user name is printed.
 
 Brief #1329 (ADR-0564): a `--record FILE` whose folder is not the clone's shared evidence folder
 is still written, and prepush prints one line after it, `OUTSIDE_LINE` below, naming the option and
@@ -1215,6 +1218,7 @@ def main(argv: list[str] | None = None) -> int:
         and options["record"] != AUTO_RECORD
         and outside_shared(root, record_path)
     )
+    given = options["record"] != AUTO_RECORD
     record: dict | None = None
     if record_path is not None:
         if not record_path.parent.is_dir():
@@ -1261,14 +1265,14 @@ def main(argv: list[str] | None = None) -> int:
             if result.text:
                 print(result.text)
             print(f"prepush: stopped at {name}; nothing after it ran")
-            return finish(record, record_path, not_run, "failed", 1, outside)
+            return finish(record, record_path, not_run, "failed", 1, outside, given)
         if result.outcome == "ok" and name in ("tests", "secret-scan") and result.text:
             print(result.text)
     if not_run:
         print(f"prepush: passed; not run: {', '.join(not_run)}")
     else:
         print("prepush: all steps passed")
-    return finish(record, record_path, not_run, "passed", 0, outside)
+    return finish(record, record_path, not_run, "passed", 0, outside, given)
 
 
 def finish(
@@ -1278,6 +1282,7 @@ def finish(
     result: str,
     code: int,
     outside: bool = False,
+    given: bool = True,
 ) -> int:
     """Write the record when one was asked for and print the `Evidence:` line; keep the exit."""
     if record is None or path is None:
@@ -1291,7 +1296,12 @@ def finish(
         return 2
     ok = sum(1 for step in record["steps"] if step["outcome"] == "ok")
     head = record["head"][:12]
-    print(f"Evidence: prepush schema {SCHEMA}, head {head}, {ok} steps ok, record {sha[:12]}")
+    where = "the given file" if given else "the shared evidence folder"  # brief #1360 answer 2
+    print(
+        f"Evidence: prepush schema {SCHEMA}, head {head}, {ok} steps ok, record {sha[:12]} in {where}"
+    )
+    if not given:
+        print(f"prepush: read it with python3 scripts/agk/evidence.py check --head {head}")
     if outside:
         print(OUTSIDE_LINE)
     return code

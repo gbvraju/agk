@@ -1387,6 +1387,32 @@ def windows_tools_result(platform: str, which: Any) -> Result | None:
     )
 
 
+EOL_WARNING = (
+    'line endings: this machine rewrites LF to CRLF; add "* text=auto eol=lf" to .gitattributes'
+    " (setting: core.autocrlf)"
+)
+
+
+def line_ending_lines(root: Path, platform: str | None = None) -> list[str]:
+    """Brief #1360 answer 3 (ADR-0572): on Windows, with `core.autocrlf` true and no `*` line with an
+    `eol=` attribute in the project's `.gitattributes`, the one warning line; else none. The kit
+    never changes the project's `.gitattributes` itself."""
+    if not (platform or sys.platform).startswith("win"):
+        return []
+    code, value = git_read(root, "config", "core.autocrlf")
+    if code != 0 or value.strip().lower() != "true":
+        return []
+    try:
+        text = (root / ".gitattributes").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    for line in text.splitlines():
+        fields = line.split()
+        if fields and fields[0] == "*" and any(f.startswith("eol=") for f in fields[1:]):
+            return []
+    return [EOL_WARNING]
+
+
 def windows_tools_entry(res: Result) -> dict:
     severity, ok_text, fail_text = WINDOWS_TOOLS
     message = (ok_text if res.status == "ok" else fail_text) + res.message
@@ -2258,6 +2284,7 @@ def main(argv: list[str] | None = None) -> int:
             + outside_test_dirs_lines(root.resolve())
             + unmapped_lines(root.resolve())
             + main_folder_lines(root.resolve())
+            + line_ending_lines(root.resolve())
         )
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
