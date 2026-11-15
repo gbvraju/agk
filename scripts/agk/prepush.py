@@ -98,8 +98,8 @@ Brief #1269 (ADR-0536): `--record` with no FILE, or `--record auto`, writes the 
 `<git common dir>/agk-evidence/<40-hex head>.json`, the folder `git rev-parse --git-common-dir`
 names: one per clone, shared by every worktree of it, never tracked and never making the tree
 dirty, so the conductor finds it from the head alone (`evidence.py check --head <sha>`). The
-folder is made when missing. `--record FILE` writes FILE as before. A `--queue` run passes `auto` on, so the record is named by the head the
-job runs on.
+folder is made when missing. `--record FILE` writes FILE as before. A `--queue` run passes `auto`
+on, so the record is named by the head the job runs on.
 
 Brief #1360 (ADR-0572): the `Evidence:` line ends `... record <sha12> in the shared evidence
 folder` with no FILE, then one line names `evidence.py check --head <sha12>` as the way to read it;
@@ -1297,9 +1297,8 @@ def finish(
     ok = sum(1 for step in record["steps"] if step["outcome"] == "ok")
     head = record["head"][:12]
     where = "the given file" if given else "the shared evidence folder"  # brief #1360 answer 2
-    print(
-        f"Evidence: prepush schema {SCHEMA}, head {head}, {ok} steps ok, record {sha[:12]} in {where}"
-    )
+    line = f"Evidence: prepush schema {SCHEMA}, head {head}, {ok} steps ok, record {sha[:12]}"
+    print(f"{line} in {where}")
     if not given:
         print(f"prepush: read it with python3 scripts/agk/evidence.py check --head {head}")
     if outside:

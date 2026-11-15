@@ -1394,9 +1394,9 @@ EOL_WARNING = (
 
 
 def line_ending_lines(root: Path, platform: str | None = None) -> list[str]:
-    """Brief #1360 answer 3 (ADR-0572): on Windows, with `core.autocrlf` true and no `*` line with an
-    `eol=` attribute in the project's `.gitattributes`, the one warning line; else none. The kit
-    never changes the project's `.gitattributes` itself."""
+    """Brief #1360 answer 3 (ADR-0572): on Windows, with `core.autocrlf` true and no `*` line with
+    an `eol=` attribute in the project's `.gitattributes`, the one warning line; else none. The
+    kit never changes the project's `.gitattributes` itself."""
     if not (platform or sys.platform).startswith("win"):
         return []
     code, value = git_read(root, "config", "core.autocrlf")
