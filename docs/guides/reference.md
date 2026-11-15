@@ -169,6 +169,29 @@ steward's marker is live (60 minutes, no `Ended:`); at 500 comments it opens a n
 questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). A failed
 GitHub call exits 4. In personal mode the notes are `docs/runs/steward/memory.md` of the sidecar and nothing is posted.
 
+## Steward evidence
+
+    python3 scripts/agk/steward_evidence.py stage [--date YYYY-MM-DD]
+    python3 scripts/agk/steward_evidence.py settle --question FILE [--stage STAGE]
+    python3 scripts/agk/steward_evidence.py answer --question FILE --number N
+    python3 scripts/agk/steward_evidence.py triage --finding FILE
+    python3 scripts/agk/steward_evidence.py skill --step STEP
+
+The steward's evidence rule, answer form and triage (SPEC-0059 rules 2, 3, 4, 6, 7, 12 and 19, ADR-0558). `stage` names
+the stage in the owner's words from the files (`docs/discovery/`, `docs/plan/scope.md`, a `*-stack-options.md` ADR,
+`docs/plan/milestones.md` or `scope-lock.md`) and one GET of the open `agk-conductor` issue, which makes it `build`. A
+question file is JSON: `id`, `class` (`technical`, `requirement`, `business`, `scope`, `date`, `cost` or `signoff`),
+optional `changes`, `reverses` and `ranking`, and `findings`, each `source` (1 owner decision, 2 Approved spec or
+requirement, 3 signed-off prototype, 4 source document, 5 AGK rule or code), `answer`, `place` and `rule`. `settle` prints
+the comment `Answer: Q-<id> <answer> (evidence: <source and place>; rule: <rule>)` (exit 0) or `owner: <reason>` with the
+recommendation and a `Gap:` to record (exit 3); `answer` posts that one comment and nothing on an owner question. A
+requirement answer goes to the owner with its recommendation until build (d)'s re-check. A finding file is JSON: `id`,
+`triage` (`kit brief`, `kit correction`, `kit question`, `project brief` or `owner question`), `why`, `text`, optional
+`cause` and `reproduced`; `triage` prints `file`, `draft` (a kit filing from a project, until build (e)) or `ask` and the
+`Triage:` note, or refuses (exit 2) a text without its `Modes:` line, failing the brief shape or the neutrality list, an
+unreproduced cause, or a filing above `[steward] auto_file` without an `Owner said` line. `skill` prints the step's skill
+from the agent file's table, or `no skill:` (exit 3). A failed GitHub call exits 4.
+
 ## Outbound data guard
 
     python3 scripts/agk/steward_outbound.py check (--text TEXT | --file FILE) [--root DIR]
