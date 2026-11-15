@@ -134,6 +134,7 @@
     "scripts/agk/stalls.py",
     "scripts/agk/status_only.py",
     "scripts/agk/steward.py",
+    "scripts/agk/steward_daily.py",
     "scripts/agk/steward_evidence.py",
     "scripts/agk/steward_onboard.py",
     "scripts/agk/steward_outbound.py",
