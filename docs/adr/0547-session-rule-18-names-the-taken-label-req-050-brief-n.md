@@ -28,6 +28,9 @@ label is added on the same path for a brief and for a build (`claim --build X`).
    `tests/kit/test_session_rules.py` records rule 5's merged text as reworded the same way.
 3. CI and local mode take a brief with the same `claim` and the same GitHub label. Personal mode files no
    issues, and nothing changes in it.
+4. The rule budget line of `config/session-rules.md` in `config/rule-budget.txt` rises from `3426 37` to
+   `3436 37`: the ten words of decision 1 are added, and no other rule is cut (owner, Q-1276-1 answer (b),
+   2026-11-15). The budget may otherwise only go down (ADR-0310).
 
 ## Consequences
 
@@ -37,4 +40,5 @@ follows.
 
 ## Residual
 
-- The rule budget of `config/session-rules.md` (`config/rule-budget.txt`, ADR-0310): the new words are Q-1276-1 on the pull request.
+- The rule budget of `config/session-rules.md` rose by ten words (decision 4, Q-1276-1 (b)); a later brief that trims
+  the session rules may lower it again.
