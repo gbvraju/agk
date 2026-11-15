@@ -1,6 +1,6 @@
 # SPEC-0062: In solo mode the steward guides the person and asks only about the product
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-069
 
