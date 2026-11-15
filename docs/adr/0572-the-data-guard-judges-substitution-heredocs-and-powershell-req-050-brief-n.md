@@ -26,10 +26,14 @@ written, with the measured "before" corrected.
    holds a decoder denies `decoded name`, and a word that joins the placeholder to other text is matched against the
    denied names with the placeholder as `*`. (b) A here-document's delimiter is read; its body is data, searched for a
    denied name and never expanded as a glob; with an unquoted delimiter its substitutions are judged as (a); the
-   command before it is judged as usual. A here-string (`<<<`) stays a redirection. (c) A line of the PowerShell tool,
-   of a `pwsh`/`powershell -Command` argument, or of a session whose `SHELL` names `pwsh` or `powershell`
-   `(verify)`, reads the backquote as PowerShell's escape and line continuation, is split at `;`, `|`, `&&`, `||` and
-   line ends, judges its `$(...)` as a nested PowerShell line and drops the call operators `&` and `.`.
+   command before it is judged as usual. A here-string (`<<<`) stays a redirection. (c) A line of the PowerShell tool
+   or of a `pwsh`/`powershell -Command` argument reads the backquote as PowerShell's escape and line continuation:
+   `` `u{...} `` becomes its code point (one it cannot decode denies `compound form`), `` `0 ``, `` `a ``, `` `b ``,
+   `` `e ``, `` `f ``, `` `n ``, `` `r ``, `` `t `` and `` `v `` their characters, any other character itself, in
+   and outside double quotes. It is split at `;`, `|`, `&&`, `||` and line ends, judges its `$(...)` as a nested
+   PowerShell line and drops the call operators `&` and `.`. A Bash tool line is always judged as bash, since the
+   Bash tool runs bash whatever `SHELL` says; when `SHELL` names `pwsh` or `powershell` `(verify)` it is also judged
+   as PowerShell, and it is denied when either reader denies.
    A form it cannot take apart (an unclosed substitution or here-document, a backquote holding a backslash) denies
    `cannot-judge (compound form)`; that line and `cannot-judge (nested shell)` add `split it into single commands, or`
    before the alternative. A line with a `#` outside quotes, or with unbalanced quotes, is judged on its raw text as
@@ -57,6 +61,9 @@ record went and how to read it, and is told before the first edit that line endi
 - 2026-11-15: SPEC-0042 rule 4 still says a command it cannot split is judged on its raw text; the reviewers patch it.
 - 2026-11-15: a value built at run time (`cat $(ls | grep env)`) is still not caught, as SPEC-0042 rule 16 says.
 - 2026-11-15: whether Claude Code sets `SHELL` to `pwsh` in a PowerShell session is `(verify)`; the PowerShell tool
-  and a `pwsh -Command` argument are read as PowerShell whatever it says.
+  and a `pwsh -Command` argument are read as PowerShell whatever it says. In such a session a Bash tool line with a
+  backquote continuation is denied by the bash reader (`compound form`), as both readers judge it.
+- 2026-11-15: a here-document fed to a shell or an interpreter (`bash <<EOF`, `sh -s <<EOF`) is judged as data, not
+  as commands; a name built at run time inside it is not caught, as on main (the conductor's gap on 609cea6).
 - 2026-11-15: only a `*` line with `eol=` silences the doctor's warning; a project that sets `eol` per extension
   still sees it, which is advice and fails nothing.

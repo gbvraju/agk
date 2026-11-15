@@ -16,10 +16,11 @@ The denial is one line that names the rule and the class, never a path, a comman
 (rule 9). Anything it cannot judge denies (`cannot-judge`); it never allows on an error.
 Brief #1360 (ADR-0572): a `$(...)`, `<(...)`, `>(...)` or backquote command is judged as a nested
 shell and the outer line with a placeholder word; a here-document body is data, searched for a
-denied name and never expanded as a glob; a PowerShell line (the PowerShell tool, a `pwsh -Command`
-argument or a `pwsh` session shell) is split at `;`, `|`, `&&` and `||` with the backquote read as
-its escape and continuation. A form it cannot take apart, and nesting past 3, deny with the hint
-`split it into single commands`.
+denied name and never expanded as a glob; a PowerShell line (the PowerShell tool or a `pwsh
+-Command` argument) is split at `;`, `|`, `&&` and `||` with the backquote read as its escape
+(`u{...}`, `n and the others decoded) and continuation. A Bash tool line is always judged as
+bash, and in a `pwsh` session shell also as PowerShell, denied when either reader denies. A form
+it cannot take apart, and nesting past 3, deny with the hint `split it into single commands`.
 Standard library only; no network. Rules 7 (remote access) and 8 (the environment) are not judged
 here yet: they are left to a later build of the brief (Q-589-1).
 """
@@ -59,6 +60,8 @@ BRACE = re.compile(r"\{([^{}]*,[^{}]*)\}")
 SUB = "agk_sub"  # the placeholder word of a command or process substitution (brief #1360)
 SPLIT_KINDS = {"nested shell", "compound form"}  # their denial adds `split it into single commands`
 POWERSHELL = {"pwsh", "powershell", "pwsh.exe", "powershell.exe"}
+PS_ESCAPES = {"0": "\0", "a": "\a", "b": "\b", "e": "\x1b", "f": "\f", "n": "\n", "r": "\r",
+              "t": "\t", "v": "\v"}
 DECODER = re.compile(
     r"\bbase64\b[^|;&]*\s(?:-\w*d\w*|--decode)\b|\bxxd\b[^|;&]*\s-\w*r|\bopenssl\b[^|;&]*\s-d\b"
     r"|\bprintf\b[^|;&]*\\(?:x[0-9a-fA-F]|[0-7]{3})|\becho\s+-\w*e"
@@ -586,8 +589,14 @@ def ps_split(text: str) -> tuple[list[tuple[list[str], str]], list[str]]:
             if rest.startswith(("\n", "\r\n")):  # a continuation: the line goes on
                 end()
                 i += 2 if rest[0] == "\n" else 3
-            else:
-                word.append(rest[0])
+            elif rest[0] == "u" and text.startswith("{", i + 2):  # `u{2e}: a code point
+                m = re.match(r"\{([0-9a-fA-F]{1,6})\}", text[i + 2 :])
+                if not m or int(m.group(1), 16) > 0x10FFFF:
+                    raise compound()
+                word.append(chr(int(m.group(1), 16)))
+                i += 2 + m.end()
+            else:  # `n, `t, `0 and the rest become their character; any other is kept as is
+                word.append(PS_ESCAPES.get(rest[0], rest[0]))
                 i += 2
         elif text.startswith("$(", i):
             j = ps_close(text, i + 2)
@@ -684,7 +693,9 @@ def decide(payload: object) -> None:
     root = os.environ.get("CLAUDE_PROJECT_DIR") or cwd or os.getcwd()
     guard = Guard(root, cwd or root, load_settings(root))
     if tool in ("Bash", "PowerShell"):
-        guard.command(data["command"], ps=tool == "PowerShell" or powershell_session())
+        guard.command(data["command"], ps=tool == "PowerShell")
+        if tool == "Bash" and powershell_session():  # the Bash tool runs bash: both readers judge
+            guard.command(data["command"], ps=True)
     elif tool == "Glob":
         guard.pattern(data["pattern"], ("secret-file",), expand=False)
     elif tool == "Grep":

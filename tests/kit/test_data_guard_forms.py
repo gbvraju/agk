@@ -116,13 +116,34 @@ def test_answer1_powershell_lines_with_clean_names_are_allowed(hook, folder, com
     assert judge(hook, folder, command, "PowerShell") is None, command
 
 
-def test_answer1_a_powershell_session_reads_a_bash_tool_line_as_powershell(
+def test_answer1_a_powershell_session_judges_a_bash_tool_line_by_both_readers(
     hook, folder, monkeypatch
 ):
-    """REQ-050: brief #1360 answer 1c (the session's shell is `pwsh`)."""
+    """REQ-050: brief #1360 answer 1c and the fix list on 609cea6: the Bash tool runs bash whatever
+    `SHELL` says, so its line is judged as bash and, in a `pwsh` session, also as PowerShell."""
     monkeypatch.setenv("SHELL", "/usr/bin/pwsh")
-    assert judge(hook, folder, "Get-ChildItem -Path src `\n  -Name") is None
-    assert judge(hook, folder, "Get-Content `.env").startswith("data guard: secret-file")
+    assert judge(hook, folder, "cat $'\\x2eenv'").startswith("data guard: secret-file")
+    assert judge(hook, folder, "Get-Content `.env").startswith("data guard: ")
+    line = judge(hook, folder, "Get-Content `.env", "PowerShell")
+    assert line.startswith("data guard: secret-file")
+    assert judge(hook, folder, "Get-ChildItem src | Select-Object -First 1") is None
+
+
+ESCAPED = ['Get-Content "`u{2e}env"', "Get-Content `u{2E}env", 'Get-Content "app`u{2e}log"']
+
+
+@pytest.mark.parametrize("command", ESCAPED)
+def test_answer1_powershell_escapes_are_decoded_before_judging(hook, folder, command):
+    """REQ-050: brief #1360 answer 1c and the fix list on 609cea6 (the `u{...} escape)."""
+    line = judge(hook, folder, command, "PowerShell")
+    assert line is not None and line.startswith("data guard: "), command
+
+
+def test_answer1_a_bad_code_point_escape_denies_with_the_hint(hook, folder):
+    """REQ-050: brief #1360 answer 1c (an escape it cannot decode is a form it cannot judge)."""
+    for command in ('Get-Content "`u{zz}"', 'Get-Content "`u{110000}"'):
+        line = judge(hook, folder, command, "PowerShell")
+        assert line == f"data guard: cannot-judge (compound form): {HINT}", command
 
 
 NESTED_TOO_DEEP = [
