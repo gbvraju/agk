@@ -32,7 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table, repo_root  # noqa: E402
+from common import CheckError, personal_table, repo_root, utf8_output  # noqa: E402
 
 KINDS = (
     "Decision",
@@ -328,6 +328,7 @@ def gh_api(method: str, endpoint: str, fields: dict | None = None):
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parser = argparse.ArgumentParser(prog="steward.py", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("start", "end"):
