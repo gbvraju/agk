@@ -17,7 +17,8 @@ first guarded steward pass on the kit's repository printed about 40 lines to the
 ## Decision
 
 Everything the steward says to a person, in every mode (CI, local, personal) and in solo and team, follows these
-rules, written into `.claude/agents/steward.md`:
+rules, written into `docs/guides/steward-voice.md` (installed with the kit) and named by a short `Voice.` paragraph of
+`.claude/agents/steward.md`:
 
 1. The first line is what the steward needs from the person, or the answer to what they asked; never a heading or a
    greeting only.
@@ -43,8 +44,13 @@ giving it, and records each reply it shortened as one `Shortened:` marker in its
 the kit's forms (SPEC-0062 rule 5). The spec texts of SPEC-0059 rule 5, SPEC-0062 rule 5 and SPEC-0063 gain the same
 sentence through their reviewers (principle 6); this pull request does not edit them.
 
-Protected path classes changed: `.claude/` (`agents/steward.md`), `scripts/agk/` (`steward_voice.py`, `steward.py`,
-`steward_daily.py`), `tests/kit/` (`test_steward_voice.py`) and `kit/` (`manifest.json`).
+The rule budget holds (ADR-0310): the how-to is in the guide, the role file's command arguments move to
+`docs/guides/reference.md`, where they already stand, and the role file's baseline in `config/rule-budget.txt` goes
+down from 873 to 871 words.
+
+Protected path classes changed: `.claude/` (`agents/steward.md`), `config/` (`rule-budget.txt`), `scripts/agk/`
+(`steward_voice.py`, `steward.py`, `steward_daily.py`), `tests/kit/` (`test_steward_voice.py`), `tests/kit_dev/` (`test_kit_manifest.py`: the guide is installed) and `kit/`
+(`manifest.json`).
 
 ## Consequences
 

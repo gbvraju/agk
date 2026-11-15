@@ -206,10 +206,18 @@ def test_req069_shortened_records_one_marker(monkeypatch, capsys):
     assert steward.entry_kind(seen[0]) == "Shortened"
 
 
-def test_req069_the_role_file_names_the_voice_and_its_check():
+def test_req069_the_role_file_and_the_guide_name_the_voice_and_its_check():
     text = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
     assert "Voice." in text and "steward_voice.py check" in text
+    assert "docs/guides/steward-voice.md" in text and "ADR-0582" in text
     for words in ("first line", "at most 5 bullets", "three choices", "say details", "yes"):
         assert words in text, words
+    guide = (ROOT / "docs" / "guides" / "steward-voice.md").read_text(encoding="utf-8")
+    for n in range(1, 10):
+        assert f"\n{n}. **" in guide, n
+    for words in ("say more for N other options", "which group to open", "sharper question",
+                  "Waiting on you:", "multiple-choice question tool", "(verify", "never asked",
+                  "Lines posted on GitHub keep the kit's forms"):
+        assert words in guide, words
     manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert "scripts/agk/steward_voice.py" in manifest["verbatim"]
