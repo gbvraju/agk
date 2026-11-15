@@ -284,3 +284,32 @@ def test_no_check_reads_the_who_line():
         and any(name in p.read_text(encoding="utf-8") for name in ("WHO_LINE", "without_who("))
     )
     assert readers == ["route.py"]  # its `Unreadable:` dedupe compares bodies without the line
+
+
+# --- (e) a body read from a file is left alone (brief #1369, ADR-0574) ----------------------
+
+
+@pytest.mark.parametrize("flag", ["-F", "--field"])
+def test_a_body_read_from_a_file_is_left_unchanged(flag):
+    """REQ-050: brief #1369 answer 1 (`gh` reads the file; the Who line is the poster's)."""
+    fields = [flag, "body=@/tmp/example/x.md"]
+    assert common.who_fields(COMMENTS, "POST", fields) == fields
+    assert common.who_fields(EDIT, "PATCH", fields) == fields
+
+
+@pytest.mark.parametrize("flag", ["-f", "--raw-field"])
+def test_a_raw_body_with_an_at_sign_still_gains_the_line(flag):
+    """REQ-050: brief #1369 answer 1 (`-f` and `--raw-field` never read a file)."""
+    out = common.who_fields(COMMENTS, "POST", [flag, "body=@x.md"])
+    assert out == [flag, "body=@x.md\n\nWho: AGK"]
+
+
+def test_a_typed_body_still_gains_the_line():
+    """REQ-050: brief #1369 answer 2 (`-F body=text` keeps today's behaviour)."""
+    assert common.who_fields(COMMENTS, "POST", ["-F", "body=text"]) == ["-F", "body=text\n\nWho: AGK"]
+
+
+def test_who_argv_leaves_a_file_body_alone():
+    """REQ-050: brief #1369 answer 1, through `who_argv`."""
+    argv = ["--method", "POST", COMMENTS, "-F", "body=@x.md"]
+    assert common.who_argv(argv) == argv
