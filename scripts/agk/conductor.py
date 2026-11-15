@@ -202,6 +202,21 @@ job is tried again. `--install --pass` prints the scheduler line every 10 minute
 watchdog, the reviewer starts and `launch.py` set
 `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` for the sessions they start (verify).
 
+Brief #1359 (ADR-0571): `watchdog --pass` starts each job on the tier its queue needs, as
+`AGK_TIER` and `AGK_EFFORT`, and prints `watchdog: tier <tier>[: <why>]`. It reads each pull
+request that `review-queue --all` lists for review (the pull request, its files and comments):
+`strongest` at `high` when one changes a protected path class, adds or changes a spec or ADR
+(`docs/specs/`, `docs/adr/`), is a first review (no verdict by a counted author) of more than
+`[review] large_lines` changed lines (300 by default), carries a `Question:` or `Correction:`
+after its last verdict or two verdicts of different kinds on one head, or is an intake (a title
+starting `Intake:`); also for a question on a brief, a queue that cannot be read and
+`[models] conductor = "strongest"`, the one pin. Every other pass runs on `mid` at `medium`, and
+its prompt says to post no verdict where it meets one of those or is unsure, and to end with
+`escalate: #<n> <reason>` for each. Those lines, from the adapter's output or, for a background
+job, from `<worktree>/.agk-session.log` once the job ended, start one strongest job at once,
+printing `watchdog: escalated #<n> to strongest: <reason>`; never a step down inside a pass. The
+interactive `watchdog` and the reviewer starts stay on `strongest`.
+
 Brief #1355 (ADR-0568): after its conductor checks, `watchdog` (and `--pass`) reads each builder
 session with a process record (`<parent of the checkout>/agk-<session>/.agk-session-pid`) and a
 live take of its brief, and prints one line each, `watchdog: builder <name> #<brief>
@@ -274,6 +289,8 @@ from common import (
 )
 from full_run import contained_in, covered
 from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
+
+import config
 
 USAGE = (
     "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep | "
@@ -2269,6 +2286,185 @@ def keep_state(root, state: dict) -> None:
         found.write_text(json.dumps(state) + "\n", encoding="utf-8")
 
 
+# --- the tier of a pass (brief #1359, ADR-0571) ---------------------------------------------
+
+STRONG = ("strongest", "high")
+ROUTINE = ("mid", "medium")
+SPEC_OR_ADR = ("docs/specs/", "docs/adr/")
+QUEUED = re.compile(r"#(\d+) [0-9a-f]{0,40} ?review: ")
+BRIEF_ASKED = re.compile(r"#(\d+) question on a brief")
+ESCALATION = re.compile(r"escalate: #(\d+) (\S.*)")
+JOB_LOG = ".agk-session.log"  # the POSIX adapter's log of a background job, in its worktree
+TIER_NOTE = (
+    "You run this pass on the `{tier}` tier at `{effort}` effort: name it in the `Read:` line of "
+    "each verdict you post as `tier: {tier}`.\n"
+)
+MID_NOTE = (
+    "On the `mid` tier, post no verdict on a pull request that changes a protected path class, "
+    "adds or changes a spec or ADR, is a first review of more than {large} changed lines, carries "
+    "a `Question:`, a `Correction:` or a disagreement between verdicts, or is an intake, nor on "
+    "one whose verdict you are unsure of: end your pass with one line `escalate: #<n> <reason>` "
+    "for each, and the watchdog runs one strongest pass for them at once.\n"
+)
+
+
+def pass_classes(root) -> list[str]:
+    """The protected path classes of `config/protected-paths.txt` (none when it cannot be read)."""
+    try:
+        text = (Path(root) / "config" / "protected-paths.txt").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [x.strip() for x in text.splitlines() if x.strip() and not x.startswith("#")]
+
+
+def queued_items(root, repo: str) -> list[dict]:
+    """The queue a job is handed: each pull request `review-queue --all` lists for review, with its
+    title, author, changed paths, changed lines and comments, and each question on a brief;
+    CheckError when one cannot be read."""
+    code, listed = session.quietly(session.review_queue, root, "--all")
+    if code:
+        raise CheckError("the review queue cannot be read")
+    found: list[dict] = []
+    for line in (x.strip() for x in listed.splitlines()):
+        if asked := BRIEF_ASKED.fullmatch(line):
+            found.append({"number": int(asked.group(1)), "brief_question": True})
+            continue
+        if not (queued := QUEUED.match(line)):
+            continue
+        n = int(queued.group(1))
+        pr = session.gh(f"repos/{repo}/pulls/{n}")
+        files = session.pages(f"repos/{repo}/pulls/{n}/files")
+        said = session.pages(f"repos/{repo}/issues/{n}/comments")
+        if not isinstance(pr, dict) or files is None or said is None:
+            raise CheckError(f"#{n} cannot be read")
+        changed = [pr.get(k) for k in ("additions", "deletions")]
+        found.append(
+            {
+                "number": n,
+                "title": str(pr.get("title") or ""),
+                "author": str((pr.get("user") or {}).get("login") or ""),
+                "paths": [str(f.get("filename") or "") for f in files if isinstance(f, dict)],
+                "changed": sum(x for x in changed if isinstance(x, int)),
+                "comments": said,
+            }
+        )
+    return found
+
+
+def strongest_reasons(one: dict, classes: list[str], authors: list[str], large: int) -> list[str]:
+    """Why one queued item needs the strongest tier (brief #1359 answer 1); [] for a routine one."""
+    n = one["number"]
+    if one.get("brief_question"):
+        return [f"#{n} question on a brief"]
+    paths, out = one.get("paths") or [], []
+    if any(p == c or (c.endswith("/") and p.startswith(c)) for p in paths for c in classes):
+        out.append(f"#{n} changes a protected path class")
+    if any(p.startswith(SPEC_OR_ADR) for p in paths):
+        out.append(f"#{n} adds or changes a spec or ADR")
+    counted = session.counted_authors(authors, one.get("author")) or []
+    allowed = {a.lstrip("@").lower() for a in counted}
+    said = sorted(
+        one.get("comments") or [], key=lambda c: (str(c.get("created_at") or ""), c.get("id") or 0)
+    )
+    marks = [
+        (c, m)
+        for c in said
+        if session.author_of(c) in allowed
+        and (m := session.HEAD_VERDICT.fullmatch(session.first_line(c)))
+    ]
+    if not marks and one.get("changed", 0) > large:
+        out.append(f"#{n} first review of {one['changed']} changed lines")
+    after = said[said.index(marks[-1][0]) + 1 :] if marks else said
+    for kind in ("Question:", "Correction:"):
+        if any(session.first_line(c).startswith(kind) for c in after):
+            out.append(f"#{n} carries a {kind}")
+    kinds: dict[str, set[str]] = {}
+    for _, m in marks:
+        if m.group(2):
+            kinds.setdefault(m.group(2)[:7], set()).add(m.group(1))
+    if any(len(v) > 1 for v in kinds.values()):
+        out.append(f"#{n} disagreement between verdicts")
+    if str(one.get("title") or "").startswith("Intake:"):
+        out.append(f"#{n} is an intake")
+    return out
+
+
+def tier_for_pass(root, repo: str) -> tuple[str, str, list[str]]:
+    """(tier, effort, why) of the next job: the pin, else `strongest` at `high` when any queued
+    item needs it or the queue cannot be read, else `mid` at `medium` (brief #1359 answers 1-3)."""
+    try:
+        if config.conductor_pin(root):
+            return (*STRONG, ["pinned by [models] conductor"])
+        large = config.review_large_lines(root)
+    except CheckError as exc:
+        return (*STRONG, [str(exc)])
+    try:
+        items = queued_items(root, repo)
+    except CheckError:
+        return (*STRONG, ["the queue cannot be read"])
+    classes, authors = pass_classes(root), verdict_authors(root)
+    why = [r for one in items for r in strongest_reasons(one, classes, authors, large)]
+    return (*(STRONG if why else ROUTINE), why)
+
+
+def escalations(text: str) -> list[tuple[str, str]]:
+    """The `escalate: #<n> <reason>` lines a mid job ended with, in order."""
+    found = (ESCALATION.fullmatch(x.strip()) for x in (text or "").splitlines())
+    return [(m.group(1), m.group(2).strip()) for m in found if m]
+
+
+def logged_escalations(root, name: str, state: dict) -> list[tuple[str, str]]:
+    """The escalations in the log of the last job when it ran on `mid` and the log is newer than
+    its start (a background job of the POSIX adapter; verify: the Windows adapter keeps no log)."""
+    start = when(str(state.get("job_at") or ""))
+    found = launch.worktree_of(Path(root), name) / JOB_LOG
+    if state.get("tier") != "mid" or start is None:
+        return []
+    try:
+        if found.stat().st_mtime < start.timestamp():
+            return []
+        return escalations(found.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return []
+
+
+def start_job(root, adapter: str, name: str, repo: str, why: str, tier: tuple) -> str | None:
+    """Call the adapter once for one conductor job on TIER (tier, effort, large); its standard
+    output, or None when it cannot be run or fails."""
+    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
+    env.update(launch.QUIET)
+    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER=tier[0], AGK_EFFORT=tier[1])
+    prompt = JOB_PROMPT.format(name=name, repo=repo, why=why)
+    prompt += TIER_NOTE.format(tier=tier[0], effort=tier[1])
+    prompt += MID_NOTE.format(large=tier[2]) if tier[0] == "mid" else ""
+    try:
+        done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
+            shlex.split(adapter),
+            input=prompt,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            capture_output=True,
+            cwd=root,
+        )
+    except OSError:
+        print(f"FAIL conductor: the adapter cannot be run for {name}", file=sys.stderr)
+        return None
+    if done.returncode != 0:
+        print(f"FAIL conductor: the adapter failed for {name}", file=sys.stderr)
+        return None
+    return done.stdout or ""
+
+
+def escalate(root, adapter: str, name: str, repo: str, found: list) -> bool:
+    """One strongest job for the escalations of a mid pass (brief #1359 answer 2)."""
+    for n, reason in found:
+        print(f"watchdog: escalated #{n} to strongest: {reason}")
+    named = "; ".join(f"#{n} ({reason})" for n, reason in found)
+    why = f"a mid pass escalated {named}: review these first"
+    return start_job(root, adapter, name, repo, why, (*STRONG, 0)) is not None
+
+
 def job_running(root, repo: str, name: str, state: dict, now: datetime) -> bool:
     """Whether the last job may still run (fix list 6889113783 item 2): within its first lease
     window, or while the lease under its name was renewed since the script's own last take (the job
@@ -2314,6 +2510,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
         print(f"watchdog: nothing started: {exc}")
         return 1
     last = when(str(state.get("job_at") or ""))
+    logged = logged_escalations(root, name, state) if not state.get("log_read") else []
     why = [
         text
         for text, yes in (
@@ -2324,7 +2521,10 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
         )
         if yes
     ]
-    if not why:
+    if not why and not logged:
+        if state.get("tier") == "mid" and not state.get("log_read"):
+            state["log_read"] = True  # the last job ended without an escalation
+            keep_state(root, state)
         print("watchdog: nothing changed; no job started")
         return 0
     line, allowed = memory_line(root)
@@ -2335,28 +2535,26 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
             "(setting: builder_memory_gb)"
         )
         return 1
-    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
-    env.update(launch.QUIET)
-    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
-    try:
-        done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
-            shlex.split(adapter),
-            input=JOB_PROMPT.format(name=name, repo=repo, why=", ".join(why)),
-            text=True,
-            encoding="utf-8",
-            env=env,
-            capture_output=True,
-            cwd=root,
-        )
-    except OSError:
-        print(f"FAIL conductor: the adapter cannot be run for {name}", file=sys.stderr)
+    seen = {"fingerprint": fingerprint, "sweep": swept, "job_at": stamp_of(now), "log_read": True}
+    if logged:  # brief #1359 answer 2: the escalations of the last mid job, before anything else
+        if not escalate(root, adapter, name, repo, logged):
+            return 1
+        state.update(seen, tier=STRONG[0])
+        keep_state(root, state)
+        print(f"watchdog: job started {name} on strongest at high: escalated by a mid pass")
+        return 0
+    tier, effort, needs = tier_for_pass(root, repo)
+    print(f"watchdog: tier {tier}: {'; '.join(needs)}" if needs else f"watchdog: tier {tier}")
+    large = config.review_large_lines(root) if tier == "mid" else 0
+    said = start_job(root, adapter, name, repo, ", ".join(why), (tier, effort, large))
+    if said is None:  # the state stays, so the next pass tries again
         return 1
-    if done.returncode != 0:  # the state stays, so the next pass tries again
-        print(f"FAIL conductor: the adapter failed for {name}", file=sys.stderr)
+    print(f"watchdog: job started {name} on {tier} at {effort}: {', '.join(why)}")
+    found = escalations(said) if tier == "mid" else []
+    if found and not escalate(root, adapter, name, repo, found):
         return 1
-    state.update(fingerprint=fingerprint, sweep=swept, job_at=stamp_of(now))
+    state.update(seen, tier=STRONG[0] if found else tier, log_read=tier != "mid" or bool(found))
     keep_state(root, state)
-    print(f"watchdog: job started {name}: {', '.join(why)}")
     return 0
 
 

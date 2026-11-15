@@ -24,8 +24,9 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 
 import conductor  # noqa: E402
-import config  # noqa: E402
 from common import CheckError  # noqa: E402
+
+import config  # noqa: E402
 
 TAKEN = datetime(2026, 11, 15, 10, 0, tzinfo=UTC)
 CLASSES = ["scripts/agk/", "agk.toml", ".claude/"]
@@ -184,7 +185,7 @@ def toml(tmp_path: Path, text: str) -> Path:
 
 def test_1359_the_pin_and_large_lines_are_read_and_checked(tmp_path):
     """REQ-050: brief #1359 answer 3 (the pin) and answer 1 (`large_lines`)."""
-    root = toml(tmp_path, "[models]\nconductor = \"strongest\"\n[review]\nlarge_lines = 120\n")
+    root = toml(tmp_path, '[models]\nconductor = "strongest"\n[review]\nlarge_lines = 120\n')
     assert config.conductor_pin(root) == "strongest" and config.review_large_lines(root) == 120
     assert config.model_settings(root)["review"] == config.REVIEW_FLOOR  # the table still reads
     root = toml(tmp_path, "")
@@ -194,10 +195,10 @@ def test_1359_the_pin_and_large_lines_are_read_and_checked(tmp_path):
 @pytest.mark.parametrize(
     ("text", "setting"),
     [
-        ("[models]\nconductor = \"mid\"\n", "models.conductor"),
+        ('[models]\nconductor = "mid"\n', "models.conductor"),
         ("[models]\nconductor = 3\n", "models.conductor"),
         ("[review]\nlarge_lines = 0\n", "review.large_lines"),
-        ("[review]\nlarge_lines = \"many\"\n", "review.large_lines"),
+        ('[review]\nlarge_lines = "many"\n', "review.large_lines"),
     ],
 )
 def test_1359_a_wrong_pin_or_bound_is_refused_naming_the_setting(tmp_path, text, setting):
@@ -207,12 +208,12 @@ def test_1359_a_wrong_pin_or_bound_is_refused_naming_the_setting(tmp_path, text,
         config.conductor_pin(root) if setting.startswith("models") else config.review_large_lines(
             root
         )
-    assert "\"mid\"" not in str(caught.value) and "many" not in str(caught.value)
+    assert '"mid"' not in str(caught.value) and "many" not in str(caught.value)
 
 
 def test_1359_the_pin_forces_the_strongest_pass(monkeypatch, tmp_path):
     """REQ-050: brief #1359 answer 3 (a project may pin the conductor)."""
-    root = toml(tmp_path, "[models]\nconductor = \"strongest\"\n")
+    root = toml(tmp_path, '[models]\nconductor = "strongest"\n')
     monkeypatch.setattr(conductor, "queued_items", lambda root, repo: [item()])
     assert conductor.tier_for_pass(root, REPO) == (
         "strongest", "high", ["pinned by [models] conductor"]
@@ -246,7 +247,9 @@ def local(repo, tmp_path, monkeypatch):
         f"launch_adapter = {json.dumps(f'{sys.executable} {double} {log}')}\n"
     )
     repo.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
-    repo.commit({"agk.toml": text, "config/reviewers.yaml": "version: 1\nverdict_authors: [boss]\n"})
+    repo.commit(
+        {"agk.toml": text, "config/reviewers.yaml": "version: 1\nverdict_authors: [boss]\n"}
+    )
     repo.git("update-ref", "refs/remotes/origin/main", "HEAD")
     monkeypatch.delenv("ESCALATE", raising=False)
     monkeypatch.setattr(common, "available_memory", lambda: None)
