@@ -23,6 +23,10 @@ rule 15. On the default branch no steward agent, guard, setting or memory exists
 2. **The guard.** `.claude/hooks/steward_guard.py` denies what SPEC-0059 rule 11 lists, except the outbound data
    guard, which is build (e)'s. A comment body it cannot read (a command substitution, standard input, a missing
    file) is denied, fail closed, since its first line cannot be checked; so is a GraphQL call (`CLAUDE.md item 10`).
+   Read conservatively, a merge includes `git merge`; a push to the default branch includes a `git push` that names
+   no branch and any write through the `contents` or `git` endpoints; a workflow change includes `gh workflow run`,
+   `enable` and `disable`. The owner's word for a filing above `auto_file` is an `Owner said (<UTC time>): "…"` line
+   in the brief's body, the form of SPEC-0059 rule 5.
    A label write through `gh api .../issues/<n>/labels` may carry only `agk:parked` or `agk-steward`, since the hook
    reads no network and cannot tell a pull request from an issue by its number; `gh pr edit` may add only
    `agk:parked` and `gh issue create|edit` only `agk-steward`. Each denial names the rule and the setting or path
@@ -54,7 +58,7 @@ default branch, change a workflow, the ruleset or a secret, or speak for the own
 Protected path classes changed: `constitution/` (principle 7), `config/` (`core-rules.md`, `rule-budget.txt`),
 `.claude/` (`agents/steward.md`, `hooks/steward_guard.py`), `scripts/agk/` (`steward.py`, `config.py`), `agk.toml`
 (the `[[testing.map]]` entries), `tests/kit/` (the three new test files and the two that quote the changed rules)
-and `kit/` (`manifest.json`, `templates/agk.toml`).
+and `kit/` (`manifest.json`, `templates/agk.toml`, `templates/gitattributes`).
 
 ## Residual
 
