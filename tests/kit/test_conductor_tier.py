@@ -61,7 +61,7 @@ def test_1359_a_routine_re_review_needs_no_strongest_pass():
 @pytest.mark.parametrize(
     ("extra", "why"),
     [
-        ({"paths": ["scripts/agk/session.py"]}, "#7 changes a protected path class"),
+        ({"paths": ["scripts/agk/example.py"]}, "#7 changes a protected path class"),
         ({"paths": ["agk.toml"]}, "#7 changes a protected path class"),
         ({"paths": ["docs/specs/SPEC-0099-example.md"]}, "#7 adds or changes a spec or ADR"),
         ({"paths": ["docs/adr/0999-example.md"]}, "#7 adds or changes a spec or ADR"),
@@ -326,13 +326,14 @@ def test_1359_a_mid_escalation_runs_one_strongest_pass_at_once(local, capsys, mo
     assert "nothing changed" in out and len(jobs(local)) == 2
 
 
-def test_1359_an_escalation_in_the_jobs_log_runs_the_strongest_pass_next(local, capsys):
+def test_1359_an_escalation_in_the_jobs_log_runs_the_strongest_pass_next(
+    local, capsys, monkeypatch, tmp_path
+):
     """REQ-050: brief #1359 answer 2 (a background job's escalation, read from its log)."""
+    folder = tmp_path / "agk-conductor-local"  # the job's worktree, kept inside this test
+    monkeypatch.setattr(conductor.launch, "worktree_of", lambda root, name: folder)
     passed(local, capsys)
     assert len(jobs(local)) == 1
-    from launch import worktree_of
-
-    folder = worktree_of(local["repo"].root, "conductor-local")
     folder.mkdir(parents=True, exist_ok=True)
     (folder / conductor.JOB_LOG).write_text("pass done\nescalate: #7 a protected path\n")
     code, out = passed(local, capsys)

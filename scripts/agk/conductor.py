@@ -2546,11 +2546,11 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     tier, effort, needs = tier_for_pass(root, repo)
     print(f"watchdog: tier {tier}: {'; '.join(needs)}" if needs else f"watchdog: tier {tier}")
     large = config.review_large_lines(root) if tier == "mid" else 0
-    said = start_job(root, adapter, name, repo, ", ".join(why), (tier, effort, large))
-    if said is None:  # the state stays, so the next pass tries again
+    output = start_job(root, adapter, name, repo, ", ".join(why), (tier, effort, large))
+    if output is None:  # the state stays, so the next pass tries again
         return 1
     print(f"watchdog: job started {name} on {tier} at {effort}: {', '.join(why)}")
-    found = escalations(said) if tier == "mid" else []
+    found = escalations(output) if tier == "mid" else []
     if found and not escalate(root, adapter, name, repo, found):
         return 1
     state.update(seen, tier=STRONG[0] if found else tier, log_read=tier != "mid" or bool(found))
