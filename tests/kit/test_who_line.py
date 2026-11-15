@@ -306,7 +306,8 @@ def test_a_raw_body_with_an_at_sign_still_gains_the_line(flag):
 
 def test_a_typed_body_still_gains_the_line():
     """REQ-050: brief #1369 answer 2 (`-F body=text` keeps today's behaviour)."""
-    assert common.who_fields(COMMENTS, "POST", ["-F", "body=text"]) == ["-F", "body=text\n\nWho: AGK"]
+    out = common.who_fields(COMMENTS, "POST", ["-F", "body=text"])
+    assert out == ["-F", "body=text\n\nWho: AGK"]
 
 
 def test_who_argv_leaves_a_file_body_alone():
