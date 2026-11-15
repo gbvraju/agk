@@ -1,0 +1,1 @@
+- The pull request template opens with a plain `Summary:` and keeps every checked field one line; a printed body over 1,500 characters outside `Verified:` gets one information line; the conductor and the review pass write short verdicts that list only what failed, was not proven or changed, and every parsed line is unchanged (brief #1270, ADR-0537)
