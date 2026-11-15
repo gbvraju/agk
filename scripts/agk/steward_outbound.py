@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-KIT_REPO = "gbvraju/agk"  # the `repository` of `.claude-plugin/plugin.json`; a test holds them equal
+KIT_REPO = "gbvraju/agk"  # `.claude-plugin/plugin.json`'s repository; a test holds them equal
 KIT_HOST = "github.com"
 FORGES = frozenset({"github.com", "gitlab.com", "bitbucket.org"})
 LISTS = ("config/neutrality.txt", "kit/templates/neutrality.txt")  # the second only where present
