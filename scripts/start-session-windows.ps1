@@ -25,7 +25,7 @@ if (Test-Path -LiteralPath $worktree) {
         (Get-FullPath $common.Trim()) -ne $ours -or (Get-FullPath $top.Trim()) -ne (Get-FullPath $worktree)) {
         [Console]::Error.WriteLine("start-session-windows: $worktree exists and is not a worktree of this repository; nothing started"); exit 2
     }
-    $changes = @(git -C $worktree status --porcelain --untracked-files=all | Where-Object { $_ -and $_ -notmatch '\.agk-session-exit$' })
+    $changes = @(git -C $worktree status --porcelain --untracked-files=all | Where-Object { $_ -and $_ -notmatch '\.agk-session-(exit|pid)$' })
     if ($LASTEXITCODE -ne 0 -or $changes.Count -gt 0) {
         [Console]::Error.WriteLine("start-session-windows: $worktree is not clean; nothing started"); exit 2
     }
@@ -41,12 +41,14 @@ while (-not (Test-Path -LiteralPath (Join-Path $worktree '.git'))) {
     if ((Get-Date) -gt $deadline) { throw 'the worktree folder did not appear' }
     Start-Sleep -Milliseconds 200
 }
-# Keep the exit file out of git: the worktree's exclude file names it.
+# Keep the exit file and the process record out of git: the worktree's exclude file names them.
 $exclude = (git -C $worktree rev-parse --git-path info/exclude).Trim()
 if (-not [IO.Path]::IsPathRooted($exclude)) { $exclude = Join-Path $worktree $exclude }
 New-Item -ItemType Directory -Force -Path (Split-Path $exclude -Parent) | Out-Null
-if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-exit'))) {
-    Add-Content -LiteralPath $exclude -Value '.agk-session-exit'
+foreach ($name in '.agk-session-exit', '.agk-session-pid') {
+    if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet $name))) {
+        Add-Content -LiteralPath $exclude -Value $name
+    }
 }
 
 # 2. The prompt and the wrapper, in a folder of the session under the long temporary path.
@@ -68,6 +70,9 @@ Remove-Item Env:CLAUDE_CODE_CHILD_SESSION -ErrorAction SilentlyContinue
 $env:AGK_SESSION = $Session
 $env:AGK_BRIEF = $Brief
 Set-Location -LiteralPath $Worktree
+# The process record before the first turn (brief #1355, ADR-0568): this wrapper's process holds claude.
+$started = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-pid') -Value "session=$Session", "pid=$PID", "started_utc=$started", "brief=$Brief"
 $prompt = Get-Content -LiteralPath $PromptFile -Raw
 # The tier's model name and effort: no flag without a model (verify: the flags are claude's).
 $flags = @()

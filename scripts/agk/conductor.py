@@ -202,6 +202,16 @@ job is tried again. `--install --pass` prints the scheduler line every 10 minute
 watchdog, the reviewer starts and `launch.py` set
 `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` for the sessions they start (verify).
 
+Brief #1355 (ADR-0568): after its conductor checks, `watchdog` (and `--pass`) reads each builder
+session with a process record (`<parent of the checkout>/agk-<session>/.agk-session-pid`) and a
+live take of its brief, and prints one line each, `watchdog: builder <name> #<brief>
+ended|idle|live -> restarted|left|held (<reason>)`, posting nothing. An `ended` builder is
+restarted through the adapter with `launch.py`'s resume prompt under the same name; an `idle` one
+(it owes the next move and made none for `[flow] silent_minutes`) is stopped first, only when its
+worktree is clean and pushed; a parked or handed-over one is never restarted; one restart per
+session per hour, kept in `<git dir>/agk/builders.json`, and `sweep` prints `NEEDS-YOU: builder
+<name> #<brief> held (<reason>)` for each held one.
+
 Brief #1248 (ADR-0528): a fresh reviewer gives the gating verdict, in local mode too.
 
     python3 conductor.py review --pr N [--start]
@@ -1187,6 +1197,7 @@ def sweep(root) -> int:
         answerers = {a.lstrip("@").lower() for a in [*(authors or []), *(approvers or [])]}
         lines += steward_lines(root, kept, answerers, now)  # SPEC-0059 rule 2 (brief #1322)
     lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
+    lines += held_builder_lines(root)  # builders the watchdog held on this machine (ADR-0568)
     print("\n".join(lines))
     return 0
 
@@ -2145,8 +2156,18 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
         print(f"watchdog: nothing started: {LEASE_OFF}")
         return 1
     repo = session.repo_name(root)
-    if scripted:
-        return watchdog_pass(root, name, repo, here[1])
+    code = (
+        watchdog_pass(root, name, repo, here[1])
+        if scripted
+        else watchdog_once(root, name, repo, here[1])
+    )
+    builder_pass(root, repo, here[1])  # brief #1355 (ADR-0568): the builders after the conductor
+    return code
+
+
+def watchdog_once(root, name: str, repo: str, adapter: str) -> int:
+    """Start the conductor through the adapter when its lease is free or expired (ADR-0525)."""
+    issue = plan_issue(root)
     holder = lease_holder(plan_comments(repo, issue), verdict_authors(root), datetime.now(UTC))
     if holder is not None:
         print(f"watchdog: lease held by {holder[0]} until {stamp_of(holder[1])}; nothing started")
@@ -2165,7 +2186,7 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
     env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
-            shlex.split(here[1]),
+            shlex.split(adapter),
             input=WATCHDOG_PROMPT.format(name=name, repo=repo),
             text=True,
             encoding="utf-8",
@@ -2333,6 +2354,222 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     keep_state(root, state)
     print(f"watchdog: job started {name}: {', '.join(why)}")
     return 0
+
+
+# --- the watchdog keeps builders alive (brief #1355, ADR-0568) ------------------------------
+
+BUILDER_STATE = "builders.json"  # beside the lease mark, in the git directory: never tracked
+RESTART_GAP = timedelta(hours=1)
+OWED = ("Verdict:", "Correction:", "Answer:", "Maintainer answer:")
+FINAL = re.compile(r"Report: \S+ (handing over:|over cap )")
+NO_ROOM = "no room: max_builders or builder_memory_gb"
+
+
+def builder_state(alive, exited, own, owed, now, silent: int, has_pr: bool) -> str:
+    """`ended`, `idle` or `live` (ADR-0568 decisions 1 and 2). OWN is the builder's newest move
+    (its record, take, posts or push), OWED the newest line it owes an answer to, or None."""
+    if not alive or exited:
+        return "ended"
+    wait = timedelta(minutes=silent)
+    if not has_pr:
+        return "idle" if now - own >= wait else "live"
+    return "idle" if owed is not None and owed > own and now - owed >= wait else "live"
+
+
+def builder_action(state: str, *, final, parked, recent, room, safe) -> tuple[str, str | None]:
+    """(`restart`, `left` or `held`, the reason) for one session (ADR-0568 decisions 2 and 3)."""
+    if state == "live":
+        return "left", None
+    if parked or final:
+        return "left", "parked" if parked else "final report"
+    if recent:
+        return "held", "restarted within the hour"
+    if state == "idle" and not safe:
+        return "held", "unpushed work"
+    if not room:
+        return "held", NO_ROOM
+    return "restart", None
+
+
+def worktree_safe(worktree: Path) -> bool:
+    """Nothing to lose: the worktree is clean and every commit of its head is on a remote."""
+
+    def git_out(*args: str) -> str | None:
+        try:
+            done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+                ["git", "-C", str(worktree), *args], capture_output=True, text=True, check=False
+            )
+        except OSError:
+            return None
+        return done.stdout if done.returncode == 0 else None
+
+    if not Path(worktree).is_dir():
+        return False
+    changes = git_out("status", "--porcelain", "--untracked-files=all")
+    unpushed = git_out("rev-list", "HEAD", "--not", "--remotes")
+    return changes == "" and unpushed == ""
+
+
+def builder_file(root) -> Path | None:
+    mark = lease_mark(root)
+    return None if mark is None else mark.parent / BUILDER_STATE
+
+
+def builder_memo(root) -> dict:
+    found = builder_file(root)
+    try:
+        data = json.loads(found.read_text(encoding="utf-8")) if found else {}
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def keep_builder_memo(root, memo: dict) -> None:
+    found = builder_file(root)
+    if found is not None:
+        found.parent.mkdir(parents=True, exist_ok=True)
+        found.write_text(json.dumps(memo, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def held_builder_lines(root) -> list[str]:
+    """The NEEDS-YOU line of each builder the watchdog held on this machine (ADR-0568)."""
+    held = builder_memo(root).get("held") or {}
+    return [
+        f"NEEDS-YOU: builder {name} #{item.get('brief')} held ({item.get('reason')})"
+        for name, item in sorted(held.items())
+        if isinstance(item, dict)
+    ]
+
+
+def local_records(root) -> list[tuple[Path, dict]]:
+    """(worktree, record) of each session worktree beside the checkout that has a record."""
+    parent = Path(root).resolve().parent
+    found = []
+    for worktree in sorted(parent.glob("agk-*")):
+        record = launch.read_record(worktree)
+        if record is not None and worktree.name == f"agk-{record['session']}":
+            found.append((worktree, record))
+    return found
+
+
+def newest(comments: list, prefixes: tuple[str, ...]) -> datetime | None:
+    times = [
+        session.moment(c.get("created_at"))
+        for c in comments
+        if session.first_line(c).startswith(prefixes)
+    ]
+    return max(times, default=None)
+
+
+def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | None:
+    """What GitHub says of one recorded session: None when it holds no live take of its brief."""
+    number, name = record["brief"], record["session"]
+    if number is None:
+        return None
+    comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+    hours = session.flow_int(root, "claim_hours", session.CLAIM_HOURS, 5)
+    takes = [t for t in session.live_takes(comments, number, pulls, hours) if t[2] == name]
+    if not takes:
+        return None
+    started = session.moment(record["started_utc"])
+    own = max([started, *(t[0] for t in takes)])
+    pull = next((p for p in pulls if named(p, number)), None)
+    facts = {"pr": None, "own": own, "owed": None, "final": False, "parked": False}
+    if pull is None:
+        return {**facts, "own": max([own, newest(comments, ALIVE) or own])}
+    said = read(f"repos/{repo}/issues/{pull['number']}/comments", "the pull request's comments")
+    sha = str((pull.get("head") or {}).get("sha") or "")
+    commit = session.gh(f"repos/{repo}/commits/{sha}") if sha else None
+    pushed = ((commit or {}).get("commit") or {}).get("committer") or {}
+    moves = [own, newest(said, ALIVE)]
+    if pushed.get("date"):
+        moves.append(session.moment(pushed["date"]))
+    reports = [c for c in session.in_order(said) if session.first_line(c).startswith("Report:")]
+    return {
+        "pr": pull["number"],
+        "own": max(x for x in moves if x is not None),
+        "owed": newest(said, OWED),
+        "final": bool(reports) and bool(FINAL.match(session.first_line(reports[-1]))),
+        "parked": session.PARKED_LABEL in session.labels_of(pull)
+        or session.own_park(said) is not None,
+        "author": session.author_of(pull) if isinstance(pull.get("user"), dict) else None,
+    }
+
+
+def stopped(pid: int) -> bool:
+    launch.stop_tree(pid)
+    for _ in range(50):
+        if not launch.process_alive(pid):
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
+    """One line per recorded builder session, restarting an ended or idle one (ADR-0568)."""
+    now = now or datetime.now(UTC)
+    records = local_records(root)
+    if not records:
+        return []
+    pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
+    silent = session.flow_int(root, SILENT[0], SILENT[1], 0)
+    limit = launch.max_builders(Path(root))
+    memo = builder_memo(root)
+    restarts, held = memo.setdefault("restarts", {}), memo.setdefault("held", {})
+    running = sum(
+        1 for w, r in records if not launch.exited(w, r) and launch.process_alive(r["pid"])
+    )
+    lines = []
+    for worktree, record in records:
+        name, number = record["session"], record["brief"]
+        facts = builder_facts(root, repo, record, pulls, now)
+        if facts is None:
+            continue
+        alive = launch.process_alive(record["pid"])
+        state = builder_state(
+            alive, launch.exited(worktree, record), facts["own"], facts["owed"], now, silent,
+            facts["pr"] is not None,
+        )  # fmt: skip
+        last = when(str(restarts.get(name) or ""))
+        room = (running - (state == "idle") < limit) and memory_line(root)[1]
+        action, why = builder_action(
+            state,
+            final=facts["final"],
+            parked=facts["parked"],
+            recent=last is not None and now - last < RESTART_GAP,
+            room=room,
+            safe=state != "idle" or worktree_safe(worktree),
+        )
+        if action == "restart" and state == "idle" and not stopped(record["pid"]):
+            action, why = "held", "the process did not stop"
+        if action == "restart":
+            prompt = launch.resume_for(name, number, None, facts["pr"], facts.get("author"))
+            code, _ = session.quietly(
+                launch.start_with, adapter, [(name, number, None)], [prompt], None, Path(root)
+            )
+            action, why = ("restarted", None) if code == 0 else ("held", "the adapter failed")
+            if code == 0:
+                restarts[name] = stamp_of(now)
+                running += state == "ended"
+        if action == "held":
+            held[name] = {"brief": number, "reason": why}
+        else:
+            held.pop(name, None)
+        lines.append(
+            f"watchdog: builder {name} #{number} {state} -> {action}" + (f" ({why})" if why else "")
+        )
+    keep_builder_memo(root, memo)
+    return lines
+
+
+def builder_pass(root, repo: str, adapter: str) -> None:
+    """Print the builder lines after the conductor's checks; a read that fails is one line."""
+    try:
+        lines = watch_builders(root, repo, adapter)
+    except CheckError as exc:
+        lines = [f"watchdog: builders not read: {exc}"]
+    if lines:
+        print("\n".join(lines))
 
 
 # --- the reviewer at the gate (brief #1248, ADR-0528) ---------------------------------------

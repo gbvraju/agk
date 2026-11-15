@@ -214,6 +214,7 @@ LAUNCH_SCRIPT = os.path.join("scripts", "agk", "launch.py")
 MERGE_SCRIPT = os.path.join("scripts", "agk", "merge_cleared.py")
 CONDUCTOR_SCRIPT = os.path.join("scripts", "agk", "conductor.py")
 ROUTE_SCRIPT = os.path.join("scripts", "agk", "route.py")
+LOCK_SCRIPT = os.path.join("scripts", "agk", "lock.py")  # brief #1355 answer 4 (ADR-0568)
 EVIDENCE_SCRIPT = os.path.join("scripts", "agk", "evidence.py")  # brief #1281 (ADR-0542)
 EVIDENCE_FOLDER = "agk-evidence"  # the shared record folder in the git common dir (ADR-0536)
 EVIDENCE_VALUES = {"--head": SHA, "--sample": re.compile(r"[1-9][0-9]{0,5}")}
@@ -778,6 +779,20 @@ def role_allowed(words: list[str], cwd: object) -> bool:
     return words[7] == "--adapter" and adapter is not None and words[8] == adapter
 
 
+def stuck_check_allowed(words: list[str], cwd: object) -> bool:
+    """The two read-only checks of a stuck builder (brief #1355 answer 4, ADR-0568): exactly
+    `gh api rate_limit` with at most one `--jq <filter>`, and `python3|python scripts/agk/lock.py
+    status [--name <name>]`, the project's own regular file; no other form of either."""
+    if words[:3] == ["gh", "api", "rate_limit"]:
+        rest = words[3:]
+        return rest == [] or (len(rest) == 2 and rest[0] == "--jq" and bool(rest[1]))
+    if len(words) not in (3, 5) or words[0] not in ("python3", "python") or words[2] != "status":
+        return False
+    if len(words) == 5 and not (words[3] == "--name" and SESSION_NAME.fullmatch(words[4])):
+        return False
+    return own_script(words[1], cwd, LOCK_SCRIPT)
+
+
 def auto_merge_on_both() -> bool:
     """`[flow] auto_merge` reads `on` in the checkout's agk.toml and at `origin/<default_branch>`
     as last fetched (no network call here); anything that cannot be read is off (brief #531)."""
@@ -853,6 +868,8 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
     if words[0] == "gh":
         if len(words) < 3 or words[1] != "api":
             return False
+        if words[2] == "rate_limit":
+            return stuck_check_allowed(words, cwd)
         if shadow and is_post(words):
             return shadow_post_ok(words)
         if is_post(words) and brief_post_ok(words):
@@ -873,6 +890,7 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
             or merge_allowed(words, cwd)
             or route_allowed(words, cwd)
             or evidence_allowed(words, cwd)
+            or stuck_check_allowed(words, cwd)
         )
     return False
 
