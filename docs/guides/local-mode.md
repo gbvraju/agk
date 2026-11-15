@@ -174,6 +174,18 @@ with init or adopt, while a project set up with adopt may have no Makefile with 
 
 A verdict in local mode that clears a head without that line clears nothing.
 
+## The main folder stays on the default branch
+
+Where several sessions share one clone, the main folder (the clone itself, not one of its worktrees) stays on the default
+branch and is only pulled: the conductor and the planner read it. Every session, also one you open by hand, starts in its own
+worktree: `git worktree add ../agk-<session> origin/<default branch>`, then open the session in that folder (brief #1301,
+ADR-0551). In the main folder of such a clone (`execution = "local"`, a `[flow] launch_adapter`, or another `agk-*` worktree),
+`session.py claim` and `next --take` are refused and `prepush.py` refuses a push except from the default branch; in personal
+mode they only warn. When the main folder leaves the default branch or gains untracked files, the stop hook prints
+`main folder: on <branch>, <n> untracked; switch back with git checkout <default branch>`, and `conductor.py sweep` and
+`doctor.py` print `MAIN-FOLDER: on <branch>, <n> untracked`. The plan reads brief paths for its `Adds:` check from
+`origin/<default branch>`, never from the main folder's working files.
+
 ## Tidying finished builders
 
 Each builder session gets a worktree and a branch of its own, and they stay after the pull request merges; `git branch -d`
@@ -230,6 +242,17 @@ change with an ADR in the same pull request.
    (add it with `crontab -e`). Each runs `git fetch` in the checkout and then the pass `(verify: a scheduled task and a cron
    job start with a short PATH; check that python, git, gh and the adapter's terminal are found, and that the task runs
    while you are signed in, which a terminal tab needs)`.
+
+   **The scripted pass** (brief #1310, ADR-0554): `watchdog --pass` keeps the conductor's model asleep while nothing
+   changed. It takes or renews the lease under its name itself (another live holder, such as an interactive conductor with
+   `/loop`, starts nothing), runs `session.py review-queue --fingerprint`, the plan and `conductor.py sweep` as scripts, and
+   starts one conductor job through the adapter only when the fingerprint or the sweep's lines (without their ages) differ
+   from those of the last job, the plan's `Start` line starts a brief, or no job ran for 24 hours; otherwise it prints
+   `watchdog: nothing changed; no job started`. The job does one pass and ends, and leaves the lease to the script; a job
+   that fails is tried again on the next pass, and while a job still runs (it renews the lease as it works) the pass
+   starts no second one (`watchdog: job <name> still running; nothing started`). `watchdog --install --pass` prints the line that runs it every 10 minutes.
+   The sessions the watchdog and `launch.py` start get the runtime's variable that turns its idle recaps off
+   `(verify)`; your own session is untouched.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then

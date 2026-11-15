@@ -200,7 +200,7 @@ def test_claim_takes_a_build_whose_old_take_is_stale(proj, stub):
     out = claim(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5 build (c)", out.stdout
     assert claim_posts(stub) == [
-        ["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (c) retakes"]]
+        ["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (c) retakes\n\nWho: AGK"]]
     ]
 
 
@@ -279,7 +279,10 @@ def test_440_next_take_keeps_todays_behaviour_with_the_one_take(proj, stub):
         out = session(proj, stub, *argv) if args else look(proj, stub, "--take")
         assert out.returncode == 0 and taken(out) == 6, out.stdout + out.stderr
         assert claim_line(out) is None
-    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}"]]] * 2
+    assert (
+        posts(stub)
+        == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}\n\nWho: AGK"]]] * 2
+    )
 
 
 def test_440_after_in_next_mode_still_takes(proj, stub):
@@ -288,7 +291,9 @@ def test_440_after_in_next_mode_still_takes(proj, stub):
     free(stub, 6)
     out = session(proj, stub, "after", "--session", "s-me")
     assert out.returncode == 0 and taken(out) == 6, out.stdout + out.stderr
-    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}"]]]
+    assert posts(stub) == [
+        ["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}\n\nWho: AGK"]]
+    ]
 
 
 def test_440_the_printed_claim_command_takes_the_same_brief(proj, stub):
@@ -303,7 +308,7 @@ def test_440_the_printed_claim_command_takes_the_same_brief(proj, stub):
     assert words[0] == "session.py"
     out = session(proj, stub, *words[1:])
     assert out.returncode == 0 and out.stdout.strip() == "claimed #6", out.stdout + out.stderr
-    body = f"body=taken: s-me {DAY} reserves ADR-0004"
+    body = f"body=taken: s-me {DAY} reserves ADR-0004\n\nWho: AGK"
     assert claim_posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", body]]]
 
 
@@ -322,7 +327,7 @@ def test_440_claim_of_a_whole_brief_reserves_past_the_numbers_in_use(
     free(stub, 5)
     out = session(proj, stub, "claim", "--session", "s-me", "--brief", "5")
     assert out.returncode == 0 and out.stdout.strip() == "claimed #5", out.stdout + out.stderr
-    body = f"body=taken: s-me {DAY} reserves {reserves}"
+    body = f"body=taken: s-me {DAY} reserves {reserves}\n\nWho: AGK"
     assert claim_posts(stub) == [["POST", f"{ISSUES}/5/comments", ["-f", body]]]
 
 
@@ -342,7 +347,9 @@ def test_440_next_shows_a_stalled_pull_request_without_taking_it_over(proj, stub
     assert posts(stub) == []
     out = look(proj, stub, "--take")
     assert out.stdout.startswith("stalled #7\n") and "take it over with" not in out.stdout
-    assert posts(stub) == [["POST", f"{ISSUES}/7/comments", ["-f", f"body=taken over: s-me {DAY}"]]]
+    assert posts(stub) == [
+        ["POST", f"{ISSUES}/7/comments", ["-f", f"body=taken over: s-me {DAY}\n\nWho: AGK"]]
+    ]
 
 
 @pytest.mark.parametrize(

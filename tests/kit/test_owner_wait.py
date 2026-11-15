@@ -104,7 +104,7 @@ def test_1282a_watch_parks_and_names_session_after_as_the_next_command(proj, stu
         f"repos/{REPO}/issues/7/comments",
     ]
     assert "labels[]=agk:parked" in writes[0][2]
-    assert "body=Parked-by: wait Q-7-1" in writes[1][2]
+    assert "body=Parked-by: wait Q-7-1\n\nWho: AGK" in writes[1][2]
 
 
 # --- (b) an answer within the wait parks nothing ------------------------------------------------

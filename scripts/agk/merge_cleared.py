@@ -34,11 +34,11 @@ needs one record issue (the open local-mode record issue, else the one open issu
 `agk-auto-merge`), else `held: no record issue (rule 7)`. After the merge, still under the lock, it
 posts one comment `Auto merge: #<n> <merge sha> <UTC time> <verdict link>` there, then fetches the
 default branch, adds a detached worktree of the merge commit in a temporary folder outside the
-checkout and runs `lock.py run --name heavy --session merge-cleared -- env -i PATH=<PATH>
-HOME=<scratch> AGK_PR_BODY=<scratch>/pr-body.md AGK_RECORD_COMMENTS=<scratch>/record-comments.json
-make -C <worktree> -f agk.mk agk-governance AGK_BASE=<parent of the merge commit>` (the kit's
-`agk.mk` target, which a project set up with adopt has without a Makefile, brief #1264), the body
-file holding the pull
+checkout and runs `lock.py run --name heavy --session merge-cleared --only-env PATH=<PATH>
+--only-env HOME=<scratch> --only-env AGK_PR_BODY=<scratch>/pr-body.md --only-env
+AGK_RECORD_COMMENTS=<scratch>/record-comments.json -- make -C <worktree> -f agk.mk
+agk-governance AGK_BASE=<parent of the merge commit>` (the kit's `agk.mk` target, which a
+project set up with adopt has without a Makefile, brief #1264), the body file holding the pull
 request body read before the merge (brief #576, so that a `Covered-by:` build is not reported red)
 and the comments file the Final comment of each rule 3a record in the merge commit's history, one
 GET each as the workflow's `Record comments` step makes them, an unreadable one left out
@@ -87,8 +87,9 @@ verdict (the latest `Verdict:`, naming the head) read beside the body's (`spec a
 Brief #667 (ADR-0320, amendment 132 of SPEC-0039 rule 6) adds the kit tests that read the whole
 tree to the check before the merge. After governance passes on the would-be merge, in the same
 worktree, the command runs the test files of `[testing] pre_merge_tests` (agk.toml on the default
-branch; without the key, none) under the heavy lock: `lock.py run --name heavy ... -- env -i
-PATH=<PATH> HOME=<scratch> AGK_KIT_TESTS=1 PYTHONDONTWRITEBYTECODE=1 <python> -m pytest -q
+branch; without the key, none) under the heavy lock: `lock.py run --name heavy ... --only-env
+PATH=<PATH> --only-env HOME=<scratch> --only-env AGK_KIT_TESTS=1 --only-env
+PYTHONDONTWRITEBYTECODE=1 -- <python> -m pytest -q
 --rootdir <worktree> ... <worktree>/<file>...`; pytest reads the configuration file it finds
 above the listed files. A failure, or a listed name that is not a file of the merge, holds with
 
@@ -163,6 +164,13 @@ merger's job on a failed `governance` or `proof` run of the `merge_group` event:
 branch names (`gh-readonly-queue/<base>/pr-<n>-<sha>`, verify), only when GitHub removed it (open,
 not merged and not in the queue, read with the merger's token), never twice for one queue sha
 (rule 2c).
+
+Brief #1290 (ADR-0549) starts both runs without the `env` program: on Windows the `env` found on
+PATH is Git for Windows' MSYS `env`, which reads a Windows-form PATH as colon-separated and finds
+no `make`, so every cleared pull request was held. lock.py is given the run's clean environment
+with `--only-env NAME=VALUE` and starts `make` (or pytest) with exactly that: the names `env -i`
+kept, PATH unchanged from this process, and on Windows only SystemRoot, ComSpec, PATHEXT, TEMP
+and TMP where set. lock.py keeps this process's environment for its own lock folder.
 """
 
 from __future__ import annotations
@@ -204,6 +212,7 @@ from common import (  # noqa: E402
     show,
     status_flip_only,
     utf8_output,
+    who_argv,
 )
 from reviewers import (  # noqa: E402
     CONFIG,
@@ -992,8 +1001,9 @@ def hold_list(
 
 
 def write_once(args: list[str], env: dict[str, str] | None = None) -> tuple[int, str, str]:
-    """One `gh` call that writes: never retried (SPEC-0039 rule 6)."""
-    proc = gh_api(args, env)
+    """One `gh` call that writes: never retried (SPEC-0039 rule 6). A comment's body ends with
+    `Who: AGK` (brief #1289, ADR-0546)."""
+    proc = gh_api(who_argv(args), env)
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -1209,13 +1219,32 @@ def close_after_merge(repo: str, number: int, merged: str, text: str, title: str
 RECORD_COMMENTS = "record-comments.json"  # in the run's home (amendment 122, brief #601)
 
 
-def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) -> list[str]:
-    """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
-    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH, HOME,
-    AGK_PR_BODY (the file BODY holding the merged pull request's body, brief #576) and
-    AGK_RECORD_COMMENTS (HOME's file of the records' Final comments, amendment 122, brief #601)
-    reach the merged code."""
+WINDOWS_KEPT = ("SystemRoot", "ComSpec", "PATHEXT", "TEMP", "TMP")  # brief #1290, where set
+
+
+def on_windows() -> bool:
+    """`os.name == "nt"`, one function so that a test can fake Windows without faking `os.name`
+    for pathlib (brief #1290)."""
+    return os.name == "nt"
+
+
+def run_env(home: Path, extra: dict[str, str]) -> dict[str, str]:
+    """The clean environment of a run (brief #1290, ADR-0549): PATH unchanged from this process,
+    so in its own separator, HOME the run's scratch home, the names EXTRA and, on Windows only,
+    the five names a Windows process needs to start, where set. Nothing else of this process's
+    environment, as `env -i` kept before."""
+    env = {"PATH": os.environ.get("PATH", ""), "HOME": str(home), **extra}
+    if on_windows():
+        env.update({n: os.environ[n] for n in WINDOWS_KEPT if os.environ.get(n) is not None})
+    return env
+
+
+def lock_argv(wait: float, env: dict[str, str]) -> list[str]:
+    """The project's own lock.py taking the heavy lock for at most WAIT seconds and starting its
+    command with exactly ENV (`--only-env`, brief #1290), up to and with the `--`. lock.py keeps
+    this process's environment for itself, so its lock folder is every other run's."""
     lock_py = Path(__file__).resolve().parent / "lock.py"
+    pairs = [arg for name, value in env.items() for arg in ("--only-env", f"{name}={value}")]
     return [
         sys.executable,
         str(lock_py),
@@ -1226,13 +1255,23 @@ def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) 
         LOCK,
         "--timeout",
         f"{wait:g}",
+        *pairs,
         "--",
-        "env",
-        "-i",
-        f"PATH={os.environ.get('PATH', '')}",
-        f"HOME={home}",
-        f"AGK_PR_BODY={body}",
-        f"AGK_RECORD_COMMENTS={home / RECORD_COMMENTS}",
+    ]
+
+
+def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) -> list[str]:
+    """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
+    the heavy lock waited for at most WAIT seconds, and the clean environment of `run_env`, so
+    that only PATH, HOME, AGK_PR_BODY (the file BODY holding the merged pull request's body,
+    brief #576) and AGK_RECORD_COMMENTS (HOME's file of the records' Final comments, amendment
+    122, brief #601), and on Windows its five start names, reach the merged code. No `env`
+    program (brief #1290: Git for Windows' `env` cannot read a Windows-form PATH)."""
+    env = run_env(
+        home, {"AGK_PR_BODY": str(body), "AGK_RECORD_COMMENTS": str(home / RECORD_COMMENTS)}
+    )
+    return [
+        *lock_argv(wait, env),
         "make",
         "-C",
         str(tree),
@@ -1245,26 +1284,12 @@ def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) 
 
 def tests_argv(tree: Path, home: Path, names: list[str], wait: float) -> list[str]:
     """The pre-merge test run of brief #667 as one argument list: the heavy lock as governance
-    takes it, `env -i` with PATH, HOME and AGK_KIT_TESTS=1 only, and pytest on the files NAMES of
-    TREE, rooted at TREE, so that no token reaches the merged code and nothing is cached."""
-    lock_py = Path(__file__).resolve().parent / "lock.py"
+    takes it, the clean environment of `run_env` with AGK_KIT_TESTS=1 and
+    PYTHONDONTWRITEBYTECODE=1, and pytest on the files NAMES of TREE, rooted at TREE, so that no
+    token reaches the merged code and nothing is cached."""
+    env = run_env(home, {"AGK_KIT_TESTS": "1", "PYTHONDONTWRITEBYTECODE": "1"})
     return [
-        sys.executable,
-        str(lock_py),
-        "run",
-        "--name",
-        HEAVY,
-        "--session",
-        LOCK,
-        "--timeout",
-        f"{wait:g}",
-        "--",
-        "env",
-        "-i",
-        f"PATH={os.environ.get('PATH', '')}",
-        f"HOME={home}",
-        "AGK_KIT_TESTS=1",
-        "PYTHONDONTWRITEBYTECODE=1",
+        *lock_argv(wait, env),
         sys.executable,
         "-m",
         "pytest",

@@ -200,7 +200,12 @@ def test_reprove_apply_updates_the_branch_pinned_to_the_head_and_posts_the_repor
     ]
     posts = [c for c in stub.calls if c[0] == "POST"]
     assert posts == [
-        ("POST", f"repos/{REPO}/issues/7/comments", "-f", f"body=Report: {new} {REPORT}")
+        (
+            "POST",
+            f"repos/{REPO}/issues/7/comments",
+            "-f",
+            f"body=Report: {new} {REPORT}\n\nWho: AGK conductor",
+        )
     ]
     assert f"reprove: #7 {head[:12]}: light (agk.toml)" in capsys.readouterr().out
 

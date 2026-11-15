@@ -2,7 +2,7 @@
 ADR-0231).
 
     python3 scripts/agk/lock.py run --name NAME [--session ID] [--priority P] [--timeout S]
-        -- COMMAND [ARG...]
+        [--only-env NAME=VALUE ...] -- COMMAND [ARG...]
     python3 scripts/agk/lock.py status --name NAME
 
 `run` takes the lock NAME, runs COMMAND without a shell, and releases the lock when the command
@@ -42,6 +42,12 @@ Brief #505 (ADR-0254): the locked command also gets `AGK_LOCK_TOKEN`, the token 
 and `AGK_LOCK_NAME`, and every process below it inherits them, so `prepush.py` inside a wrapper
 finds its caller's slot. The token is a random value with no secret meaning, and it is never
 printed.
+
+Brief #1290 (ADR-0549): `run --only-env NAME=VALUE`, given once per variable, starts the command
+with exactly those variables and nothing else: none of lock.py's own environment and none of the
+`AGK_LOCK_` names. lock.py itself keeps its own environment, so its lock folder (the temp folder,
+`lock_dir` with `~`) is the one every other run finds. The guarded merge uses it in place of the
+`env -i` program, which on Windows (Git for Windows' `env`) cannot read a Windows-form PATH.
 
 Brief #529 (ADR-0264, SPEC-0040 build (a)): with `queue = true` in the `[locks]` table of agk.toml,
 
@@ -113,7 +119,7 @@ from common import (
 
 USAGE = (
     "usage: lock.py run --name NAME [--session ID] [--priority P] [--timeout S]"
-    " -- COMMAND [ARG...]\n"
+    " [--only-env NAME=VALUE ...] -- COMMAND [ARG...]\n"
     "       lock.py status --name NAME [--ticket T [--head SHA]]\n"
     "       lock.py submit --name NAME --session ID [--kind prepush|proof|other] [--brief N]"
     " -- COMMAND [ARG...]\n"
@@ -126,6 +132,7 @@ DEPENDS = re.compile(r"Depends-on: #(\d+)")
 BRIEF_LINE = re.compile(r"Brief: #([1-9][0-9]*)")
 FULL_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")  # the NAME of `--only-env NAME=VALUE` (#1290)
 STALE_MINUTES = 120
 HEARTBEAT = 60  # seconds between two heartbeats of a holder (brief #607)
 POLL = 0.5  # seconds between two tries
@@ -165,6 +172,7 @@ def parse_args(args: list[str]) -> dict:
         "kind": None,
         "brief": None,
         "head": None,
+        "only_env": None,
     }
     rest = args[1:]
     command: list[str] | None = None
@@ -180,7 +188,13 @@ def parse_args(args: list[str]) -> dict:
             "submit": ("--name", "--session", "--kind", "--brief"),
             "runner": ("--name",),
         }[options["action"]]
-        if arg in allowed and i + 1 < len(rest) and options[arg[2:]] is None:
+        if arg == "--only-env" and options["action"] == "run" and i + 1 < len(rest):
+            name, sep, value = rest[i + 1].partition("=")
+            if not sep or not ENV_NAME.fullmatch(name):
+                raise Usage(USAGE)
+            options["only_env"] = {**(options["only_env"] or {}), name: value}
+            i += 2
+        elif arg in allowed and i + 1 < len(rest) and options[arg[2:]] is None:
             options[arg[2:]] = rest[i + 1]
             i += 2
         else:
@@ -1223,15 +1237,27 @@ def on_signal(signum, _frame) -> None:
     raise Stopped(128 + signum)
 
 
-def run_held(command: list[str], held: Path, token: str, session: str = "", name: str = "") -> int:
+def run_held(
+    command: list[str],
+    held: Path,
+    token: str,
+    session: str = "",
+    name: str = "",
+    only_env: dict[str, str] | None = None,
+) -> int:
     # The slot's token and name travel down to every process the command starts, so prepush
     # inside a wrapper finds its caller's slot (brief #505, ADR-0254). The token is never printed.
-    env = {
-        **os.environ,
-        "AGK_LOCK_SESSION": session,
-        "AGK_LOCK_TOKEN": token,
-        "AGK_LOCK_NAME": name,
-    }
+    # With ONLY_ENV (`--only-env`, brief #1290) the command gets exactly those variables.
+    env = (
+        dict(only_env)
+        if only_env is not None
+        else {
+            **os.environ,
+            "AGK_LOCK_SESSION": session,
+            "AGK_LOCK_TOKEN": token,
+            "AGK_LOCK_NAME": name,
+        }
+    )
     try:
         child = subprocess.Popen(command, env=env)  # nosec B603 - the person's own argument list
     except OSError:
@@ -1341,7 +1367,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         if taken is None:
             return 3
-        return run_held(options["command"], taken, token, owner["session"], name)
+        return run_held(
+            options["command"], taken, token, owner["session"], name, options.get("only_env")
+        )
     except KeyboardInterrupt:
         return 130
     except Stopped as exc:

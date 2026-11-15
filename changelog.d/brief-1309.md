@@ -1,0 +1,1 @@
+- `session.py review-queue` reads the comments of only the open briefs in play: those under `agk:taken`, and those whose listing shows comments and a change since the last pass found no question there; a brief with no comment is never read, so a pass over hundreds of open briefs takes a handful of calls (brief #1309, ADR-0553)

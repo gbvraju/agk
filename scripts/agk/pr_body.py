@@ -13,7 +13,8 @@ carries `Brief: none (design)` or `Brief: none (spec)` (`check_pr_body.NONE_FORM
 in either state. Without any of these the state is not known and the body is checked as if a brief
 were open. The `Summary:` line is cut to fit at a word boundary. A body that still fails is never
 printed: the command refuses with the check's own lines, which name the rule and never a value. No
-network.
+network. Brief #1270: a printed body that passes `BODY_NOTE_LIMIT` characters outside its
+`Verified:` lines gets one information line after it; nothing else changes, the exit included.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ KIT_CHECK = Path(__file__).resolve().parent / "check_pr_body.py"
 REPO_CHECK = "scripts/agk/check_pr_body.py"
 BRIEF_ARG = re.compile(r"^(?:#?(\d+)|none)$")
 UNKNOWN = [{"number": 0, "labels": [{"name": "agk-brief"}]}]  # the state assumed when not given
+BODY_NOTE_LIMIT = 1500  # brief #1270: the summary-first form keeps a body under this
 
 
 def fit_summary(text: str, limit: int = SUMMARY_MAX) -> str:
@@ -149,7 +151,31 @@ def prepare(
     return path, text
 
 
+def outside_verified(text: str) -> int:
+    """The characters of the body outside its `Verified:` lines (the field and its items)."""
+    kept, inside = [], False
+    for line in text.splitlines(keepends=True):
+        if line.startswith("Verified:"):
+            inside = True
+            continue
+        if inside and (not line.strip() or line[:1] in "- \t"):
+            continue
+        inside = False
+        kept.append(line)
+    return len("".join(kept))
+
+
+def size_note(text: str) -> str | None:
+    """The one information line for a long body, or None (brief #1270 answer 2)."""
+    n = outside_verified(text)
+    if n <= BODY_NOTE_LIMIT:
+        return None
+    return f"pr body: {n} characters; the summary-first form keeps it under 1,500"
+
+
 def print_body(path: Path, text: str) -> None:
     print(f"Pull request body file: {path}\n")
     print("Pull request body:\n")
     print(text)
+    if note := size_note(text):
+        print(note)

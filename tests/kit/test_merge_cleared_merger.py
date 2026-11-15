@@ -44,6 +44,7 @@ WORKFLOW = WORKFLOWS / "merger.yml"
 MERGE_ENV = "AGK_MERGE_TOKEN"
 MERGE_VALUE = "example-merge-value"
 JOB_VALUE = "example-job-value"
+WHO = "\n\nWho: AGK"  # the last line of each comment the kit posts (brief #1289, ADR-0546)
 NEEDS_KEY = "merge needs AGK_MERGE_TOKEN or the owner's tap"
 
 
@@ -232,7 +233,7 @@ def test_a_hold_gets_one_comment_with_the_reason(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     posted = writes(made)
     assert len(posted) == 1 and posted[0][3] == f"repos/{REPO}/issues/7/comments", posted
-    assert posted[0][5] == f"body=merger: {line}"
+    assert posted[0][5] == f"body=merger: {line}{WHO}"
 
 
 def test_checks_pending_posts_nothing(tmp_path):
@@ -255,7 +256,14 @@ def test_no_secret_posts_the_one_line_once(tmp_path):
     proc = run(root, bin_dir, "--report", "--pr", "7", "--no-secret")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert writes(calls(log)) == [
-        ["api", "--method", "POST", f"repos/{REPO}/issues/7/comments", "-f", f"body={NEEDS_KEY}"]
+        [
+            "api",
+            "--method",
+            "POST",
+            f"repos/{REPO}/issues/7/comments",
+            "-f",
+            f"body={NEEDS_KEY}{WHO}",
+        ]
     ]
 
 
@@ -443,8 +451,9 @@ def step_block(name: str) -> str:
 
 def test_only_the_merge_step_holds_the_secret_and_pip_runs_without_it():
     """REQ-046: the `Correction:` on brief #765 (the secret reaches one step, no install)."""
-    find, merge = step_block("Find a cleared pull request"), step_block(
-        "Merge a cleared pull request"
+    find, merge = (
+        step_block("Find a cleared pull request"),
+        step_block("Merge a cleared pull request"),
     )
     assert "secrets." not in find
     assert "pip install" in find and "pip install" not in merge
@@ -478,7 +487,14 @@ def test_the_step_with_no_secret_posts_the_one_line_and_never_merges(tmp_path):
     proc, made = merge_step(tmp_path, "", comments=[cleared()])
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert writes(made) == [
-        ["api", "--method", "POST", f"repos/{REPO}/issues/7/comments", "-f", f"body={NEEDS_KEY}"]
+        [
+            "api",
+            "--method",
+            "POST",
+            f"repos/{REPO}/issues/7/comments",
+            "-f",
+            f"body={NEEDS_KEY}{WHO}",
+        ]
     ]
 
 

@@ -241,6 +241,63 @@ def repo_root() -> Path:
     return Path(proc.stdout.strip())
 
 
+def committed_bytes(root: Path, files: Mapping[str, bytes]) -> dict[str, bytes]:
+    """FILES ({path from ROOT with `/`: the bytes on disk}) with each file whose bytes on disk hold
+    a CRLF replaced by its index blob, when that blob equals those bytes with every CRLF turned to
+    LF: the file is committed as it is and only the checkout changed its line ends
+    (`core.autocrlf=true`; brief #1291, ADR-0550). Every other file keeps its bytes on disk: one
+    with no CRLF (so an LF checkout reads as before and runs no git), one that is not tracked, one
+    whose change goes beyond the line ends, one committed with CRLF, and every file when git cannot
+    be read here. Read only: `git ls-files -s` and `git cat-file --batch` in ROOT, nothing written,
+    no network."""
+    out = dict(files)
+    wanted = {name: data for name, data in files.items() if b"\r\n" in data}
+    if not wanted:
+        return out
+    try:
+        listed = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "--literal-pathspecs", "ls-files", "-s", "-z", "--", *sorted(wanted)],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        if listed.returncode != 0:
+            return out
+        blobs: dict[str, str] = {}
+        for entry in listed.stdout.split(b"\0"):
+            head, _, raw = entry.partition(b"\t")
+            parts = head.split()
+            if len(parts) == 3 and parts[2] == b"0":
+                blobs[raw.decode("utf-8", errors="surrogateescape")] = parts[1].decode("ascii")
+        names = [name for name in sorted(wanted) if name in blobs]
+        if not names:
+            return out
+        batch = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "cat-file", "--batch"],
+            cwd=root,
+            input="".join(f"{blobs[name]}\n" for name in names).encode("ascii"),
+            capture_output=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return out
+    if batch.returncode != 0:
+        return out
+    data = batch.stdout
+    at = 0
+    for name in names:
+        end = data.find(b"\n", at)
+        fields = data[at:end].split() if end >= 0 else []
+        if len(fields) != 3 or fields[1] != b"blob" or not fields[2].isdigit():
+            return out
+        size = int(fields[2])
+        blob = data[end + 1 : end + 1 + size]
+        at = end + 1 + size + 1
+        if blob == wanted[name].replace(b"\r\n", b"\n"):
+            out[name] = blob
+    return out
+
+
 def _verify(root: Path, ref: str) -> str | None:
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "rev-parse", "--verify", "-q", f"{ref}^{{commit}}"],
@@ -1205,6 +1262,118 @@ def paused(root: Path, ref: str | None = None) -> bool:
     return value
 
 
+# --- the shared main folder (brief #1301, ADR-0551) ----------------------------------------------
+
+MAIN_FOLDER_TEXT = (
+    "this is the main folder that other sessions read; start in your own worktree "
+    "(git worktree add ../agk-<session> origin/<default branch>)"
+)
+REMOTE_RUNTIME = "CLAUDE_CODE_REMOTE"  # set to "true" in Claude Code on the web (verify)
+
+
+def _git_text(root: Path, *args: str) -> str | None:
+    """The stripped output of a read-only git command in ROOT, or None when it fails."""
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
+        )
+    except OSError:
+        return None
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def worktree_paths(root: Path) -> list[Path]:
+    """The clone's worktrees, the main folder first; empty outside git."""
+    text = _git_text(root, "worktree", "list", "--porcelain")
+    if text is None:
+        return []
+    return [Path(x[len("worktree ") :]) for x in text.splitlines() if x.startswith("worktree ")]
+
+
+def is_main_worktree(root: Path) -> bool:
+    """True when ROOT is the clone's main folder: its git directory is the common directory."""
+    found = _git_text(root, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+    parts = (found or "").splitlines()
+    return len(parts) == 2 and Path(parts[0]).resolve() == Path(parts[1]).resolve()
+
+
+def clone_shared_by(root: Path) -> str | None:
+    """What makes ROOT's clone one that several sessions share, named as a setting, or None:
+    `execution = "local"`; a `[flow] launch_adapter`, except in a cloud session, whose clone is
+    its own (brief #1301 mode check CI, Q-1301-1); another worktree whose folder is `agk-*`."""
+    try:
+        settings = config_source(root)
+    except (OSError, ValueError, tomllib.TOMLDecodeError):
+        settings = {}
+    if settings.get("execution") == "local":
+        return "setting: execution"
+    flow = settings.get("flow")
+    adapter = flow.get("launch_adapter") if isinstance(flow, dict) else None
+    if isinstance(adapter, str) and adapter.strip() and os.environ.get(REMOTE_RUNTIME) != "true":
+        return "setting: [flow] launch_adapter"
+    if any(p.name.startswith("agk-") for p in worktree_paths(root)[1:]):
+        return "found: another agk-* worktree"
+    return None
+
+
+def shared_main(root: Path) -> bool:
+    """True when ROOT is the main folder of a clone that several sessions share (brief #1301)."""
+    return is_main_worktree(root) and clone_shared_by(root) is not None
+
+
+def _default_branch_of(root: Path) -> str:
+    try:
+        return str(load_config(root).get("default_branch") or "main")
+    except (CheckError, OSError, ValueError, tomllib.TOMLDecodeError):
+        return "main"
+
+
+def main_folder_refusal(root: Path, push: bool = False) -> tuple[str, bool] | None:
+    """None when a session may build here; else (line, refused). From the shared main folder
+    `claim` and `next --take` are refused, and a push (PUSH) unless the folder is on the default
+    branch; in personal mode (a `[personal]` table) the line is a warning and nothing is refused.
+    The line names what made the clone shared, never a value."""
+    if not is_main_worktree(root):
+        return None
+    by = clone_shared_by(root)
+    if by is None:
+        return None
+    if push and _git_text(root, "symbolic-ref", "--short", "-q", "HEAD") == _default_branch_of(
+        root
+    ):
+        return None
+    try:
+        personal = isinstance(config_source(root).get(PERSONAL_TABLE), dict)
+    except (OSError, ValueError, tomllib.TOMLDecodeError):
+        personal = False
+    if personal:
+        return f"warning: {MAIN_FOLDER_TEXT} ({by})", False
+    return f"refused: {MAIN_FOLDER_TEXT} ({by})", True
+
+
+def main_folder_state(root: Path) -> tuple[str, int, str] | None:
+    """(branch, untracked files, default branch) of the main folder of ROOT's clone when that
+    clone is shared and the folder is off the default branch or holds untracked files outside
+    the ignored paths; None otherwise, also outside git."""
+    trees = worktree_paths(root)
+    if not trees or clone_shared_by(root) is None:
+        return None
+    main = trees[0]
+    default = _default_branch_of(root)
+    branch = _git_text(main, "symbolic-ref", "--short", "-q", "HEAD") or "a detached head"
+    others = _git_text(main, "ls-files", "--others", "--exclude-standard", "-z")
+    untracked = len([x for x in (others or "").split("\0") if x])
+    if branch == default and not untracked:
+        return None
+    return branch, untracked, default
+
+
+def main_folder_line(root: Path) -> str | None:
+    """`on <branch>, <n> untracked` for `main_folder_state`, or None."""
+    state = main_folder_state(root)
+    return None if state is None else f"on {state[0]}, {state[1]} untracked"
+
+
 def json_records(path: Path, label: str) -> list[dict]:
     """The objects in a file written by `gh api`: an array, arrays, pages or one object a line."""
     try:
@@ -1785,3 +1954,57 @@ def router_wanted(root: Path, required: list[str], present: list[str]) -> list[s
         if checks & wanted and name not in present
     )
     return [*dict.fromkeys(present), *extra]
+
+
+# --- the `Who:` line of AGK's comments (brief #1289, ADR-0546) ---------------------------------
+# A marker, not a rule: the owner and every AGK session post as one login, so each comment the
+# kit posts ends with one last line `Who: AGK` (or `Who: AGK <role>`), and a relayed owner
+# decision with `Who: ProductOwner`. No check, guard, router or merge step requires or reads it;
+# a first line is never changed, so every parser of a first line reads a body as before.
+WHO_LINE = re.compile(r"Who: \S[^\n]*")
+COMMENT_ENDPOINT = re.compile(r"(?:^|/)issues/(?:[1-9]\d*/comments|comments/[1-9]\d*)$")
+FIELD_FLAGS = ("-f", "-F", "--field", "--raw-field")
+WHO_FOOTER = re.compile(r"\n+---\n_Generated by \[Claude Code\]\([^)\n]*\)_\s*$")
+
+
+def with_who(body: str, who: str = "AGK", role: str | None = None) -> str:
+    """BODY with one last line `Who: <who>[ <role>]`, unless it already ends with a `Who:` line
+    (before the runtime's `Generated by` footer, when one is there)."""
+    lines = [x for x in WHO_FOOTER.sub("", body).splitlines() if x.strip()]
+    if lines and WHO_LINE.fullmatch(lines[-1].strip()):
+        return body
+    mark = f"Who: {who} {role}" if role else f"Who: {who}"
+    text = body.rstrip()
+    return f"{text}\n\n{mark}" if text else mark
+
+
+def without_who(body: str) -> str:
+    """BODY without its last `Who:` line and the blank lines before it; else BODY unchanged."""
+    lines = body.rstrip().splitlines()
+    if lines and WHO_LINE.fullmatch(lines[-1].strip()):
+        return "\n".join(lines[:-1]).rstrip()
+    return body
+
+
+def who_fields(endpoint: str, method: str, fields, role: str | None = None) -> list[str]:
+    """The `gh api` FIELDS with the `body=` of a comment write (a POST to `issues/<n>/comments`
+    or a PATCH of `issues/comments/<id>`) passed through `with_who`; any other call unchanged:
+    labels, issue bodies, statuses and merges are not marked."""
+    out = list(fields)
+    if method.upper() not in ("POST", "PATCH") or not COMMENT_ENDPOINT.search(endpoint):
+        return out
+    for i in range(1, len(out)):
+        if out[i - 1] in FIELD_FLAGS and out[i].startswith("body="):
+            out[i] = "body=" + with_who(out[i][len("body=") :], role=role)
+    return out
+
+
+def who_argv(argv, role: str | None = None) -> list[str]:
+    """`who_fields` for one `gh api` argument list of the form `[--method M] <endpoint> fields...`;
+    a call without `--method` that sends fields is a POST, as `gh api` makes it."""
+    args = list(argv)
+    method = args[args.index("--method") + 1] if "--method" in args[:-1] else "POST"
+    for i, arg in enumerate(args):
+        if COMMENT_ENDPOINT.search(arg) and not arg.startswith("body="):
+            return [*args[: i + 1], *who_fields(arg, method, args[i + 1 :], role)]
+    return args

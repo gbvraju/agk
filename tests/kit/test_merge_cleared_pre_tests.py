@@ -260,14 +260,15 @@ def test_this_repository_lists_the_brief_s_three_files():
 
 
 def test_the_test_run_is_one_bounded_argument_list():
-    """REQ-046: brief #667 answer 1 (the heavy lock, `env -i`, the brief's pytest command, rooted
+    """REQ-046: brief #667 answer 1 (the heavy lock, the clean environment (`--only-env` since
+    brief #1290, `env -i` before), the brief's pytest command, rooted
     at the worktree; installed code names no kit test file, so pytest finds its configuration)."""
     tree, home = Path("/scratch/tree"), Path("/scratch/home")
     argv = merge_cleared.tests_argv(tree, home, [BUDGET_TEST], 60.0)
     assert argv[2:5] == ["run", "--name", "heavy"]
     end = argv.index("--")
-    assert argv[end + 1 : end + 3] == ["env", "-i"]
-    assert "AGK_KIT_TESTS=1" in argv and f"HOME={home}" in argv
+    assert argv[end + 1] == sys.executable and "env" not in argv  # brief #1290
+    assert "AGK_KIT_TESTS=1" in argv[:end] and f"HOME={home}" in argv[:end]
     assert not any(a.startswith("GH_") or a.startswith("GITHUB_") for a in argv)
     tail = argv[argv.index("pytest") - 1 :]
     assert tail[:3] == ["-m", "pytest", "-q"]
