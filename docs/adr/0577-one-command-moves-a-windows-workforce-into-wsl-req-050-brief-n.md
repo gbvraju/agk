@@ -58,4 +58,8 @@ check changes; CI mode and cloud sessions, which already run on Linux, are uncha
   Windows` until the owner runs it once.
 - 2026-11-15 (verify): marking the project folder trusted in `~/.claude.json` (`hasTrustDialogAccepted`) is the
   co-owner's reading of the runtime's file, not confirmed from its documentation.
+- 2026-11-15: the setup installs Node.js and Claude Code by piping their vendors' install scripts to `bash`
+  (`deb.nodesource.com`, `claude.ai/install.sh`) and the GitHub CLI from its signed apt source, on the person's own
+  machine; these are the vendors' documented routes, kept as the co-owner's script had them (the conductor's lens on
+  #1377).
 - 2026-11-15 (verify): screenshots that `design_compare.py` compares are captured again once on Linux; fonts differ.
