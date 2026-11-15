@@ -1,6 +1,6 @@
 # SPEC-0063: In team mode every listed reviewer may run a steward, first come first served
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-070
 
