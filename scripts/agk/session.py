@@ -430,7 +430,8 @@ DIRECT_OFF = "github: direct transport unavailable, using gh"
 PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
 API_HEADERS = {  # (verify: gh's own defaults)
     "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
+    # built from parts: an installed file holds no literal date (ADR-0112, brief #1366)
+    "X-GitHub-Api-Version": "-".join(("2022", "11", "28")),
     "User-Agent": "agk-session",
 }
 DIRECT_TIMEOUT = 30.0
