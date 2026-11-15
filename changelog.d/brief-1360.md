@@ -1,2 +1,1 @@
-- The data guard judges command substitution, here-documents and PowerShell lines part by part instead of as raw text: a `*` in a commit message is no longer read as a glob, and a form it cannot take apart says `split it into single commands` (brief #1360)
-- `prepush.py --record` says where the record went, and with no FILE names `evidence.py check --head` to read it; `doctor.py` warns on Windows when `core.autocrlf` rewrites line endings (brief #1360)
+- The data guard judges command substitution, here-documents and PowerShell lines part by part (a `*` in a commit message is no longer a glob), `prepush.py --record` says where its record went, and `doctor.py` warns on Windows when `core.autocrlf` rewrites line endings (brief #1360)

@@ -12,6 +12,12 @@ Brief #1360 carries three findings from one builder's log in an adopted project 
 guard (`.claude/hooks/data_guard.py`) refused compound shell lines, `scripts/agk/prepush.py --record` printed a
 record id but not where the record went, and the first edit of a file rewrote its line endings. Each cost a retry.
 
+Measured on main at 945c05a (Q-1360-1): a line holding `$(`, a backquote, `<<`, `<(` or `>(` was not refused whole, as
+the brief said; it was judged on its raw text, where every word, the data of a here-document included, went through the
+path and glob checks. A `*` bullet of a commit message was expanded in the folder and met a log file (`raw-log`), and
+the folder check of a recursive search after such a form was skipped. The maintainers ruled (a): build answer 1 as
+written, with the measured "before" corrected.
+
 ## Decision
 
 1. The data guard (`.claude/hooks/data_guard.py`) takes apart three forms that SPEC-0042 rule 4 judged on their raw
@@ -41,8 +47,8 @@ record id but not where the record went, and the first edit of a file rewrote it
 
 Ordinary multi-line commits and PowerShell lines pass part by part, and a recursive search after a substitution meets
 the folder check. This supersedes, for the three forms, SPEC-0042 rule 4's sentence that a command it cannot split is
-judged on its raw text and otherwise allowed; the spec's text is the reviewers' to patch. A builder learns where its record went and how to read it, and is told before the first edit that line endings
-will be rewritten. Protected path classes changed: `.claude/` (`hooks/data_guard.py`), `scripts/agk/` (`prepush.py`,
+judged on its raw text and otherwise allowed; the spec's text is the reviewers' to patch. A builder learns where its
+record went and how to read it, and is told before the first edit that line endings will be rewritten. Protected path classes changed: `.claude/` (`hooks/data_guard.py`), `scripts/agk/` (`prepush.py`,
 `doctor.py`) and `tests/kit/` (`test_data_guard_forms.py`, `test_prepush_record.py`, `test_evidence_location.py`,
 `test_doctor_windows.py`).
 
@@ -52,6 +58,5 @@ will be rewritten. Protected path classes changed: `.claude/` (`hooks/data_guard
 - 2026-11-15: a value built at run time (`cat $(ls | grep env)`) is still not caught, as SPEC-0042 rule 16 says.
 - 2026-11-15: whether Claude Code sets `SHELL` to `pwsh` in a PowerShell session is `(verify)`; the PowerShell tool
   and a `pwsh -Command` argument are read as PowerShell whatever it says.
-
 - 2026-11-15: only a `*` line with `eol=` silences the doctor's warning; a project that sets `eol` per extension
   still sees it, which is advice and fails nothing.
