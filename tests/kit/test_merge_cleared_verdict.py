@@ -771,17 +771,23 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
     """REQ-046 AC2: brief #528 answer 1 (`gh api`, REST, argument lists, no `--jq`)."""
     proc, made = merge_cleared_run(tmp_path, toml(ON), [cleared()])
     assert proc.returncode == 0
-    assert made == [
-        ["api", "--method", "GET", f"repos/{REPO}/pulls/7"],
-        ["api", "--method", "GET", f"repos/{REPO}/issues/7/comments?per_page=100&page=1"],
-        ["api", "--method", "GET", f"repos/{REPO}/issues?state=open&per_page=100&page=1"],
-        ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1"],
-        ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/status?per_page=100&page=1"],
-        ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1"],
-        ["api", "--method", "GET", f"repos/{REPO}/pulls/7/commits?per_page=100&page=1"],
+    assert made == [  # brief #1336: `-i`, the shared reader's headers (ADR-0566)
+        ["api", "--method", "GET", f"repos/{REPO}/pulls/7", "-i"],
+        ["api", "--method", "GET", f"repos/{REPO}/issues/7/comments?per_page=100&page=1", "-i"],
+        ["api", "--method", "GET", f"repos/{REPO}/issues?state=open&per_page=100&page=1", "-i"],
+        [
+            "api",
+            "--method",
+            "GET",
+            f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1",
+            "-i",
+        ],
+        ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/status?per_page=100&page=1", "-i"],
+        ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1", "-i"],
+        ["api", "--method", "GET", f"repos/{REPO}/pulls/7/commits?per_page=100&page=1", "-i"],
         merge_call(),
         made[-2],
-        ["api", "--method", "GET", f"repos/{REPO}/issues/500"],
+        ["api", "--method", "GET", f"repos/{REPO}/issues/500", "-i"],
     ]
     assert made[-2][:4] == ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
     flat = [a for c in made for a in c]
@@ -797,7 +803,7 @@ def recorded_runs(monkeypatch, platform: str) -> list[tuple[list[str], dict]]:
 
     def fake_run(argv, **kwargs):
         seen.append((list(argv), kwargs))
-        out = answers["comments"] if "comments" in argv[-1] else answers["pulls/7"]
+        out = answers["comments"] if "comments" in argv[4] else answers["pulls/7"]
         return subprocess.CompletedProcess(argv, 0, json.dumps(out), "")
 
     monkeypatch.setattr(sys, "platform", platform)

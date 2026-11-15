@@ -199,6 +199,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import impact  # noqa: E402
 import lock  # noqa: E402
+import session  # noqa: E402
 import session_plan  # noqa: E402
 from common import (  # noqa: E402
     DEFAULT_CONFIG,
@@ -501,18 +502,30 @@ def gh_api(args: list[str], env: dict[str, str] | None = None) -> subprocess.Com
     )
 
 
+def shared_get(endpoint: str) -> Any:
+    """Brief #1336 answer 3 (ADR-0566 decision 5): one GET through the shared reader
+    (`session.gh`: conditional, counted, limit-aware, the direct transport when set), which calls
+    GitHub through `gh_api`. No memo, comment store or unchanged-issue list is used: a cached body
+    answers only a 304 to this same request. None when the read fails or is not JSON."""
+    kept = session.RUN, session.MEMO, session.CACHE.unchanged
+    session.RUN, session.MEMO, session.CACHE.unchanged = via_gh_api, None, None
+    try:
+        return session.gh(endpoint)
+    finally:
+        session.RUN, session.MEMO, session.CACHE.unchanged = kept
+
+
+def via_gh_api(argv: list[str]) -> subprocess.CompletedProcess:
+    return gh_api(argv)  # looked up at each call
+
+
 def read_json(endpoint: str, kind: type, what: str) -> Any:
-    """One `gh api` GET of a REST ENDPOINT, parsed here; an answer that fails, is not JSON or is
-    not of KIND is tried again, and the fifth failure in a row raises Unreadable."""
+    """One GET of a REST ENDPOINT through the shared reader; an answer that fails, is not JSON or
+    is not of KIND is tried again, and the fifth failure in a row raises Unreadable."""
     for attempt in range(READS):
-        proc = gh_api(["--method", "GET", endpoint])
-        if proc.returncode == 0:
-            try:
-                value = json.loads(proc.stdout)
-            except ValueError:
-                value = None
-            if isinstance(value, kind):
-                return value
+        value = shared_get(endpoint)
+        if isinstance(value, kind):
+            return value
         if attempt < READS - 1:
             time.sleep(PAUSE)
     raise Unreadable(what)
@@ -1125,13 +1138,7 @@ def finishes(text: str, brief: int) -> bool:
 
 def read_once(endpoint: str, kind: type) -> Any:
     """One GET, never retried: this step holds nothing, so a read GitHub refuses is skipped."""
-    proc = gh_api(["--method", "GET", endpoint])
-    if proc.returncode != 0:
-        return None
-    try:
-        value = json.loads(proc.stdout)
-    except ValueError:
-        return None
+    value = shared_get(endpoint)
     return value if isinstance(value, kind) else None
 
 
