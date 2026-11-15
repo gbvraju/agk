@@ -58,7 +58,7 @@ In the recorded double a quiet hour makes no return of `watch --until-event` bef
 lease every 240 s, and `watchdog --pass` starts no job on an unchanged fingerprint. Protected path classes changed:
 `scripts/agk/` (`session.py`, `conductor.py`, `launch.py`, `config.py` for the two new `[flow]` keys), `tests/kit/`
 (`test_wait_until_event.py`, and the write count of `test_session.py`), `kit/` (`kit/templates/runtime/builder.txt`),
-`config/` (`config/session-rules.md` rule 18 and its lower line in `config/rule-budget.txt`) and `agk.toml` (the new
+`config/` (`config/session-rules.md` rule 18) and `agk.toml` (the new
 test file in the `[[testing.map]]` entries of `session.py`, `conductor.py` and `launch.py`). The conductor's role file is
 unchanged: the job's prompt carries its one-pass instruction, since the rule budget lets that file only shrink.
 
