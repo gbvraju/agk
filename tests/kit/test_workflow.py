@@ -438,7 +438,7 @@ def test_every_step_after_the_first_body_step_runs_unless_cancelled():
     assert names[-1] == "Secret scan"
 
 
-# --- an edited run waits for the full run without a runner (brief #1122, ADR-0480) --------------
+# --- an edited run waits for the full run in a group of its own (brief #1371, ADR-0576) ---------
 
 
 def concurrency_block() -> str:
@@ -446,25 +446,28 @@ def concurrency_block() -> str:
     return text.split("\nconcurrency:\n", 1)[1].split("\njobs:", 1)[0]
 
 
-def test_an_edited_run_is_in_the_full_runs_group_and_never_cancels_it():
-    """Brief #1122 answer 1 (REQ-039): a description edit joins the group of the head's full run,
-    so it waits there as a pending run that holds no runner, and an edit never cancels a running
-    full run: `cancel-in-progress` is false for an edited run and true for every other pull
-    request run, so a new push still cancels a superseded run."""
+def test_an_edited_run_has_a_group_of_its_own():
+    """Brief #1371 answer 1 (REQ-050, found bug #1253; it replaces brief #1122 answer 1): a
+    description edit runs in `governance-<n>-edited`, so a pending edited run can never replace a
+    pending full run of the head; `cancel-in-progress` is true for every pull request run, so a
+    new push cancels a superseded full run and a new edit a superseded edited run. The semantic
+    check of the groups is `test_workflow_concurrency.py`."""
     block = concurrency_block()
     group = re.search(r"(?m)^  group: (.+)$", block).group(1)
     pull = group.split("||", 1)[1]
+    assert (
+        "github.event.action == 'edited'"
+        " && format('governance-{0}-edited', github.event.pull_request.number)"
+    ) in pull
     assert "format('governance-{0}-code', github.event.pull_request.number || github.sha)" in pull
-    assert "'edited'" not in group  # one group for the full and the edited run of a pull request
     cancel = re.search(r"(?m)^  cancel-in-progress: (.+)$", block).group(1)
-    assert cancel == (
-        "${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}"
-    )
+    assert cancel == "${{ github.event_name == 'pull_request' }}"
 
 
 def test_the_latest_full_run_step_stays_the_fallback_and_fails_closed():
-    """Brief #1122 answer 1: the step that reads the full run is kept for an edited run, and a
-    full run that never finished still fails it."""
+    """Brief #1122 answer 1 and brief #1371 answer 1: the step that reads the full run is kept for
+    an edited run, it orders the edited run after the full run, and a full run that never finished
+    still fails it."""
     block = step_blocks(WORKFLOW.read_text(encoding="utf-8"))["Latest full run"]
     assert "github.event.action == 'edited'" in block.split("\n", 2)[1]
     assert "scripts/agk/full_run.py" in block
