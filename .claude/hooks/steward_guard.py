@@ -11,7 +11,9 @@ merge, `merge_cleared.py`, auto-merge, a push to the default branch, a force pus
 to a file under `.github/`, the ruleset, a required check or a secret; an issue creation whose
 `Priority:` is above `[steward] auto_file` with no `Owner said` line; any label write other than
 `agk:parked` and `agk-steward`; a comment or issue body it cannot read (fail closed); a GraphQL
-call (`CLAUDE.md item 10`). Each denial names the rule and the setting or path class, never the
+call (`CLAUDE.md item 10`); a post to the kit repository from another project whose title or body
+the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6, ADR-0561) matches or cannot
+check. Each denial names the rule and the setting or path class, never the
 value. It reads the command, the files a body names and `agk.toml`; no network, nothing stored.
 """
 
@@ -129,6 +131,31 @@ def filing_problem(text: str | None, project: Path) -> str | None:
     return None
 
 
+def outbound_problem(target: str | None, texts: list[str | None], project: Path) -> str | None:
+    """Rule 11: a post to the kit repository from another project passes the outbound guard."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
+    try:
+        import steward_outbound as outbound
+    except ImportError:
+        return reason("a post to the kit repository it cannot check", "outbound data guard")
+    repo = (target or "").lower().removesuffix(".git")
+    if not repo:
+        return None  # the project's own repository
+    kit, found = outbound.kit_repo(project), outbound.remotes(project)
+    if kit is None:  # no kit named: any other repository may be the kit's, fail closed
+        if found is not None and repo in {r for _, r in found}:
+            return None
+    elif repo != kit or outbound.is_kit(found, kit):
+        return None  # another repository, or the kit's own steward: nothing leaves a project
+    if any(t is None for t in texts):
+        return reason("a post to the kit repository it cannot check", "comment body")
+    lines = outbound.check("\n".join(t for t in texts if t), project, found, kit)
+    if not lines:
+        return None
+    what = "; ".join(line.split(" refuses ", 1)[1].split("; rewrite", 1)[0] for line in lines)
+    return f"steward guard: {RULE} denies a post to the kit repository holding {what}"
+
+
 def labels_problem(values: list[str], allowed: frozenset[str]) -> str | None:
     names = [n.strip() for v in values for n in v.split(",")]
     return None if all(n in allowed for n in names) else reason("a label write", "label")
@@ -174,7 +201,9 @@ def gh_problem(words: list[str], cwd: Path, project: Path) -> str | None:
             problem = body_problem(text, inline) if verb in ("comment", "review", "edit") else None
         if problem:
             return problem
-    return None
+    target = (option_values(words, frozenset({"-R", "--repo"})) or [None])[0]
+    titles = option_values(words, frozenset({"-t", "--title"})) if sub == "issue" else []
+    return outbound_problem(target, [*titles, *(t for t, _ in texts)], project)
 
 
 def api_problem(words: list[str], cwd: Path, project: Path) -> str | None:
@@ -208,6 +237,10 @@ def api_problem(words: list[str], cwd: Path, project: Path) -> str | None:
     for pattern, what in API_DENIED:
         if pattern.search(path):
             return reason(what, "gh api endpoint")
+    if kit := re.match(r"^/?repos/([^/{}]+/[^/{}]+)/", path):
+        posted = [v for k in ("title", "body") for v in fields.get(k, [])]
+        if problem := outbound_problem(kit[1], posted, project):
+            return problem
     if re.search(r"/issues/\d+/labels", path):
         named = [v or "?" for k, vs in fields.items() if k.startswith("labels") for v in vs]
         if method == "DELETE" and not fields:
