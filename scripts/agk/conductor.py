@@ -2159,15 +2159,14 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
     code = (
         watchdog_pass(root, name, repo, here[1])
         if scripted
-        else watchdog_once(root, name, repo, here[1])
+        else watchdog_once(root, name, repo, here[1], issue)
     )
     builder_pass(root, repo, here[1])  # brief #1355 (ADR-0568): the builders after the conductor
     return code
 
 
-def watchdog_once(root, name: str, repo: str, adapter: str) -> int:
+def watchdog_once(root, name: str, repo: str, adapter: str, issue: int) -> int:
     """Start the conductor through the adapter when its lease is free or expired (ADR-0525)."""
-    issue = plan_issue(root)
     holder = lease_holder(plan_comments(repo, issue), verdict_authors(root), datetime.now(UTC))
     if holder is not None:
         print(f"watchdog: lease held by {holder[0]} until {stamp_of(holder[1])}; nothing started")

@@ -1,0 +1,1 @@
+- The watchdog keeps builders alive: both adapters write `.agk-session-pid`, `conductor.py watchdog` restarts an ended or idle builder under its name at most once an hour, `launch.py` never starts a second session of one name, and the conductor's guard allows `gh api rate_limit` and `lock.py status` (brief #1355)

@@ -42,10 +42,11 @@ while (-not (Test-Path -LiteralPath (Join-Path $worktree '.git'))) {
 $exclude = (git -C $worktree rev-parse --git-path info/exclude).Trim()
 if (-not [IO.Path]::IsPathRooted($exclude)) { $exclude = Join-Path $worktree $exclude }
 New-Item -ItemType Directory -Force -Path (Split-Path $exclude -Parent) | Out-Null
-foreach ($name in '.agk-session-exit', '.agk-session-pid') {
-    if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet $name))) {
-        Add-Content -LiteralPath $exclude -Value $name
-    }
+if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-exit'))) {
+    Add-Content -LiteralPath $exclude -Value '.agk-session-exit'
+}
+if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-pid'))) {
+    Add-Content -LiteralPath $exclude -Value '.agk-session-pid'
 }
 
 # 2. The prompt and the wrapper, in a folder of the session under the long temporary path.

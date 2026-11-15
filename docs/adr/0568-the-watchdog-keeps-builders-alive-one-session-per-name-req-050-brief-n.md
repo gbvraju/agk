@@ -34,7 +34,8 @@ ends, and nothing records the process of a session that is still open.
    whose pull request carries `agk:parked` (or a `Parked-by:` line not undone), or whose newest `Report:` hands over
    or reports over cap, is never restarted. A restart counts against `[flow] max_builders` and the free memory against
    `builder_memory_gb`, as a conductor start does. At most one restart per session per hour, kept in
-   `<git dir>/agk/builders.json`; a second need within the hour prints `held (restarted within the hour)`, and the next
+   `<git dir>/agk/builders.json`; a second need within the hour prints `held (restarted within the hour)`, a failed adapter call
+   `held (the adapter failed)` and a process that does not stop `held (the process did not stop)`, and the next
    `conductor.py sweep` prints `NEEDS-YOU: builder <name> #<brief> held (<reason>)` for each held session in that file.
 3. **One session per name.** Before any adapter call, `launch.py` refuses a session whose record shows a live process
    (`launch: not started: session <name> is still running (one session per name)`), naming the session and never a
@@ -52,7 +53,9 @@ ends, and nothing records the process of a session that is still open.
 A builder that ends or goes idle while it owes the next move is back within one watchdog pass after `silent_minutes`,
 never two sessions of one name run, and the conductor can read the rate limit and the heavy lock. Protected path classes
 changed: `scripts/agk/` (`conductor.py`, `launch.py`), `.claude/` (`.claude/hooks/conductor_guard.py`), `kit/`
-(`kit/templates/start-session-windows.ps1`, `kit/templates/start-session-local.sh`) and `tests/kit/`.
+(`kit/templates/start-session-windows.ps1`, `kit/templates/start-session-local.sh`), `tests/kit/`
+(`test_watchdog_builders.py`, `test_conductor_guard_commands.py`) and `agk.toml` (the new test file in the
+`[[testing.map]]` entries of `conductor.py` and `launch.py`, and the guard's test in that of `lock.py`).
 
 ## Residual
 
