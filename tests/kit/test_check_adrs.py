@@ -122,7 +122,9 @@ REVIEWERS = "version: 1\nverdict_authors: [reviewer]\n"
 
 
 def final_record(pr: int, cid: int, number: str = "0002") -> str:
-    return f"Example (#{pr})\n\nADR-{number} Accepted (Final {cid})\nMerged-by: merge_cleared.py\n"
+    from common import MERGED_BY  # the merger's squash message line
+
+    return f"Example (#{pr})\n\nADR-{number} Accepted (Final {cid})\n{MERGED_BY}\n"
 
 
 def final_comment(pr: int, cid: int, path: str = PENDING_ADR) -> dict:

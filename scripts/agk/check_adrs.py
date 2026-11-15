@@ -3,10 +3,11 @@
 An ADR that a squash message line `ADR-nnnn Accepted (Final <comment id>)` in the base's history
 records is Accepted too (SPEC-0021 rule 3a, brief 557), whatever its file says until the release
 pull request flips it. `check_adrs.py --pending --comments FILE` prints, one path a line, each such
-ADR whose file still says `Proposed` and whose record its Final comment in FILE verifies (the
-comments as `gh api repos/{repo}/issues/comments/<id>` answers): the flips the release pull request
-makes. A record that FILE does not verify is not counted; without FILE, while a record exists, it
-fails closed. `check_adrs.py --record-ids` prints the Final comment id of each record read in
+ADR, recorded in HEAD's history or in that of the merge base with the base (brief #1370), whose
+file still says `Proposed` and whose record its Final comment in FILE verifies (the comments as
+`gh api repos/{repo}/issues/comments/<id>` answers): the flips the release pull request makes.
+A record that FILE does not verify is not counted; without FILE, while a record exists, it fails
+closed. `check_adrs.py --record-ids` prints the Final comment id of each record read in
 HEAD's history, one a line, so that the governance workflow can fetch those comments; with
 `--body FILE` only those a check will read: all for a release pull request, those of the ADRs a
 `Covered-by:` line names, else none (brief #1181, ADR-0501).
@@ -174,10 +175,17 @@ def needed_ids(root: Path, mb: str, body: str, records: dict[str, tuple[int, int
     return {source[n][1] for source in sources for n in named if n in source}
 
 
-def pending(root: Path, files: list[Path], comments: list[dict] | None = None) -> int:
-    """Print each ADR accepted by a verified Final record whose file still says Proposed."""
+def pending(
+    root: Path, files: list[Path], comments: list[dict] | None = None, base: str | None = None
+) -> int:
+    """Print, once each, every ADR accepted by a verified Final record of HEAD's history or of the
+    merge base with BASE (the records a merge of main brought in sit on the merge's second parent,
+    brief #1370, ADR-0575) whose file still says Proposed; HEAD alone when no base resolves."""
     try:
         recorded = verified_records(root, "HEAD", comments)
+        resolved = resolve_base(root, base)
+        if resolved is not None:
+            recorded |= verified_records(root, merge_base(root, resolved), comments)
     except CheckError as err:
         print(f"FAIL {NAME}: {err}")
         return 1
@@ -238,10 +246,11 @@ def main(argv: list[str] | None = None) -> int:
         at = args.index("--comments") + 1 if "--comments" in args else None
         try:
             comments = read_comments(args[at] if at is not None and at < len(args) else None)
+            base = base_arg(args)
         except CheckError as err:
             print(f"FAIL {NAME}: {err}")
             return 1
-        return pending(root, files, comments)
+        return pending(root, files, comments, base)
     problems: list[str] = []
 
     numbers: dict[str, str] = {}
