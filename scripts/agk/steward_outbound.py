@@ -14,6 +14,7 @@ refuse the same way. A clean text prints `ok outbound` and exits 0. No network; 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -21,7 +22,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-KIT_REPO = "gbvraju/agk"  # `.claude-plugin/plugin.json`'s repository; a test holds them equal
 KIT_HOST = "github.com"
 FORGES = frozenset({"github.com", "gitlab.com", "bitbucket.org"})
 LISTS = ("config/neutrality.txt", "kit/templates/neutrality.txt")  # the second only where present
@@ -90,12 +90,41 @@ def tokens(root: Path) -> list[tuple[str, list[str]]] | str:
     return out
 
 
-def is_kit(found: list[tuple[str, str]] | None) -> bool:
-    return bool(found) and (KIT_HOST, KIT_REPO) in found
+def kit_repo(root: Path) -> str | None:
+    """The kit's `owner/repo`: the `repository` of `.claude-plugin/plugin.json` (the kit itself,
+    or the kit checkout holding this file), else the `agk` marketplace of `.claude/settings.json`
+    (`kit/templates/plugin-settings.txt`); None when neither names one (every repository is then
+    another's, fail closed)."""
+    for base in (root, Path(__file__).resolve().parents[2]):
+        try:
+            data = json.loads((base / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+            url = data.get("repository")
+            url = url.get("url") if isinstance(url, dict) else url
+            found = parse_remote(str(url)) if isinstance(url, str) else None
+            if found and found[0] == KIT_HOST and found[1]:
+                return found[1]
+        except (OSError, ValueError, AttributeError):
+            pass
+    try:
+        settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        source = settings["extraKnownMarketplaces"]["agk"]["source"]
+        if source.get("source") == "github" and repo_name(str(source.get("repo") or "")):
+            return repo_name(str(source["repo"]))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return None
 
 
-def check(text: str, root: Path, found: list[tuple[str, str]] | None = None) -> list[str]:
-    """The refusal lines for TEXT bound for the kit repository; [] when it may be posted."""
+def is_kit(found: list[tuple[str, str]] | None, kit: str | None) -> bool:
+    return bool(found and kit and (KIT_HOST, kit) in found)
+
+
+def check(
+    text: str, root: Path, found: list[tuple[str, str]] | None = None, kit: str | None = None
+) -> list[str]:
+    """The refusal lines for TEXT bound for the kit repository; [] when it may be posted. KIT is
+    looked up when None; "" means no kit is named."""
+    kit = kit_repo(root) if kit is None else (kit or None)
     lists = tokens(root)
     if isinstance(lists, str):
         return cannot(lists)
@@ -117,11 +146,11 @@ def check(text: str, root: Path, found: list[tuple[str, str]] | None = None) -> 
     for finding in scan_text(text, patterns):
         classes.setdefault(finding.kind, "[guard]; data guard, SPEC-0042")
     hosts = {h for h, _ in found}
-    own = {r for _, r in found if r and r != KIT_REPO}
+    own = {r for _, r in found if r and r != kit}
     repos: set[str] = set()
     for match in URL.finditer(text):
         host, repo = match[1].lower(), repo_name(match[2] or "")
-        if host in hosts and (host, repo) != (KIT_HOST, KIT_REPO):
+        if host in hosts and (host, repo) != (KIT_HOST, kit):
             classes.setdefault("project host URL", "git remotes")
         if host in FORGES or host in hosts:
             repos.add(repo)
@@ -131,7 +160,7 @@ def check(text: str, root: Path, found: list[tuple[str, str]] | None = None) -> 
     for pattern in REPO_REFS:
         repos.update(m[1].lower().removesuffix(".git") for m in pattern.finditer(text))
     repos.update(r for r in own if re.search(rf"(?<![\w.-]){re.escape(r)}(?![\w-])", low))
-    if any(r and r != KIT_REPO for r in repos):
+    if any(r and r != kit for r in repos):
         classes.setdefault("another repository name", "kit repository")
     return [refusal(kind, setting) + REWRITE for kind, setting in sorted(classes.items())]
 

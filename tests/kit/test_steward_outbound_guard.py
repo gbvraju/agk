@@ -21,10 +21,12 @@ sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 
 import steward_outbound as outbound  # noqa: E402
 
+PLUGIN = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+
 SCRIPT = ROOT / "scripts" / "agk" / "steward_outbound.py"
 HOOK = ROOT / ".claude" / "hooks" / "steward_guard.py"
-KIT = outbound.KIT_REPO
-TOKEN = "zephyrcorp"
+KIT = outbound.repo_name(str(PLUGIN["repository"]).split("github.com", 1)[1])
+PLANTED_NAME = "zephyrcorp"
 REMOTE = "https://git.example.test/team/portal.git"
 CLEAN = (
     f"Title: the plan check reads a blank milestone as none\n\n"
@@ -32,7 +34,7 @@ CLEAN = (
     "the check prints nothing for a milestone with no title. Steps: run `make plan`.\n"
 )
 PLANTED = {
-    "neutrality token": f"The {TOKEN.capitalize()} team saw the plan check fail.",
+    "neutrality token": f"The {PLANTED_NAME.capitalize()} team saw the plan check fail.",
     "EMAIL": "Write to pat@example.test about the plan check.",
     "PHONE": "Call +44 20 7946 0958 about the plan check.",
     "project host URL": "See https://git.example.test/wiki/plan for the plan check.",
@@ -40,14 +42,16 @@ PLANTED = {
 }
 
 
-def project(tmp_path: Path, tokens: str = TOKEN, remote: str = REMOTE) -> Path:
+def project(tmp_path: Path, tokens: str = PLANTED_NAME, remote: str = REMOTE) -> Path:
     root = tmp_path / "project"
     (root / "config").mkdir(parents=True)
     (root / "config" / "neutrality.txt").write_text(f"# tokens\n{tokens}\n", encoding="utf-8")
     (root / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
     git = ["git", "-C", str(root)]
-    subprocess.run([*git, "init", "-q"], check=True)  # nosec B603 B607 - fixed arguments
-    subprocess.run([*git, "remote", "add", "origin", remote], check=True)  # nosec B603 B607
+    subprocess.run([*git, "init", "-q"], check=True)  # nosec B603 - fixed argument list
+    subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [*git, "remote", "add", "origin", remote], check=True
+    )
     return root
 
 
@@ -68,11 +72,11 @@ def test_req066_each_planted_value_is_refused_by_class(tmp_path, kind):
     lines = outbound.check(text, root)
     assert lines, kind
     assert any(kind in line and "setting:" in line for line in lines), lines
-    for value in (TOKEN, "pat@example.test", "7946", "git.example.test", "other-org"):
+    for value in (PLANTED_NAME, "pat@example.test", "7946", "git.example.test", "other-org"):
         assert value not in "\n".join(lines).lower()
     proc = run_cli(root, text)
     assert proc.returncode == 2
-    assert kind in proc.stdout and TOKEN not in proc.stdout.lower()
+    assert kind in proc.stdout and PLANTED_NAME not in proc.stdout.lower()
 
 
 def test_req066_project_remote_repository_name_is_refused(tmp_path):
@@ -117,11 +121,21 @@ def test_req066_remotes_that_cannot_be_read_refuse(tmp_path):
     assert lines and "cannot check" in lines[0] and "git remotes" in lines[0]
 
 
-def test_req066_kit_repo_name_matches_the_plugin_file():
-    """REQ-066 AC4: the kit repository the guard allows is the plugin file's repository."""
-    data = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    url = data["repository"]["url"] if isinstance(data["repository"], dict) else data["repository"]
-    assert url.rstrip("/").removesuffix(".git").endswith("/" + KIT)
+def test_req066_the_kit_repository_is_read_from_the_plugin_or_the_settings(tmp_path):
+    """REQ-066 AC4: the kit repository is the plugin file's, else the settings' marketplace."""
+    assert outbound.kit_repo(ROOT) == KIT
+    root = project(tmp_path)
+    (root / ".claude").mkdir()
+    settings = {"extraKnownMarketplaces": {"agk": {"source": {"source": "github", "repo": KIT}}}}
+    (root / ".claude" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    assert outbound.kit_repo(root) == KIT
+
+
+def test_req066_with_no_kit_named_every_repository_name_is_refused(tmp_path):
+    """REQ-066 AC4: a kit that cannot be named makes every repository another's, fail closed."""
+    root = project(tmp_path)
+    lines = outbound.check(CLEAN, root, kit="")
+    assert any("another repository name" in line for line in lines), lines
 
 
 # --- the guard's denial (rule 11) ----------------------------------------------------------------
@@ -161,7 +175,7 @@ def test_req066_guard_denies_a_kit_post_the_outbound_guard_matches(tmp_path, kin
         assert out and out["permissionDecision"] == "deny", command
         reason = out["permissionDecisionReason"]
         assert "SPEC-0059 rule 11" in reason and kind in reason, reason
-        assert TOKEN not in reason.lower() and "example.test" not in reason
+        assert PLANTED_NAME not in reason.lower() and "example.test" not in reason
 
 
 def test_req066_guard_allows_a_clean_kit_post_and_denies_an_unreadable_list(tmp_path):

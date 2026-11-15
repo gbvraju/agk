@@ -31,9 +31,12 @@ draft instead of filing to the kit.
    `[guard]` table or a file that cannot be read refuse the text. Each refusal is one line per class,
    `outbound guard: SPEC-0059 rule 6 refuses <class> (setting: <setting>); rewrite it with invented names
    (example.com)`, naming the setting and the class, never the value; exit 2. A clean text prints `ok outbound`.
-3. **The kit repository.** `KIT_REPO`, the `repository` of `.claude-plugin/plugin.json`, held equal to it by a test,
-   since a project does not install the plugin file. A project whose remotes include the kit repository is the kit
-   itself, and nothing it posts there leaves a project.
+3. **The kit repository.** Read, never written into an installed file (the kit's files stay neutral): the
+   `repository` of `.claude-plugin/plugin.json` of the project or of the kit checkout that holds the script, else the
+   `agk` marketplace's `repo` in `.claude/settings.json` (`kit/templates/plugin-settings.txt`). When neither names
+   one, every repository name in a text is another's, and the guard treats a post to any repository that is not one
+   of the project's remotes as bound for the kit, fail closed. A project whose remotes include the kit repository is
+   the kit itself, and nothing it posts there leaves a project.
 4. **The denial.** `.claude/hooks/steward_guard.py` runs the check on the title and body of a post that targets the
    kit repository (`gh issue create|comment -R|--repo <kit>`, a non-GET `gh api repos/<kit>/...`) and denies it,
    naming rule 11 and each class with its setting, when the check refuses or a body cannot be read. A post to another
@@ -50,5 +53,5 @@ invented names. Protected path classes changed: `scripts/agk/` (`steward_outboun
 
 ## Residual
 
-- 2026-11-15: a kit repository on a host other than `github.com`, or a fork, needs `KIT_REPO` read from a setting
-  (`Q-1324-1`).
+- 2026-11-15: a kit repository on a host other than `github.com`, or a project that names its kit in neither file,
+  refuses every repository name; a setting for it would be a later decision (`Q-1324-1`).

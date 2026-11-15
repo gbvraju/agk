@@ -138,14 +138,18 @@ def outbound_problem(target: str | None, texts: list[str | None], project: Path)
         import steward_outbound as outbound
     except ImportError:
         return reason("a post to the kit repository it cannot check", "outbound data guard")
-    if (target or "").lower().removesuffix(".git") != outbound.KIT_REPO:
-        return None
-    found = outbound.remotes(project)
-    if outbound.is_kit(found):
-        return None  # the kit's own steward: nothing leaves a project
+    repo = (target or "").lower().removesuffix(".git")
+    if not repo:
+        return None  # the project's own repository
+    kit, found = outbound.kit_repo(project), outbound.remotes(project)
+    if kit is None:  # no kit named: any other repository may be the kit's, fail closed
+        if found is not None and repo in {r for _, r in found}:
+            return None
+    elif repo != kit or outbound.is_kit(found, kit):
+        return None  # another repository, or the kit's own steward: nothing leaves a project
     if any(t is None for t in texts):
         return reason("a post to the kit repository it cannot check", "comment body")
-    lines = outbound.check("\n".join(t for t in texts if t), project, found)
+    lines = outbound.check("\n".join(t for t in texts if t), project, found, kit)
     if not lines:
         return None
     what = "; ".join(line.split(" refuses ", 1)[1].split("; rewrite", 1)[0] for line in lines)
