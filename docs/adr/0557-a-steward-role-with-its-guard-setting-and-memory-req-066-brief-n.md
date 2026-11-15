@@ -27,6 +27,10 @@ rule 15. On the default branch no steward agent, guard, setting or memory exists
    no branch and any write through the `contents` or `git` endpoints; a workflow change includes `gh workflow run`,
    `enable` and `disable`. The owner's word for a filing above `auto_file` is an `Owner said (<UTC time>): "…"` line
    in the brief's body, the form of SPEC-0059 rule 5.
+   It reads the command behind a wrapper (`env`, `command`, `exec`, `nohup`, `nice`, `time`, `timeout`, `stdbuf`,
+   `sudo`, `builtin`, `xargs`) and behind `find -exec`, and denies an interpreter's inline code (`python -c`,
+   `node -e`, `perl -e`, `ruby -e`, ...) that names `gh`, `git`, `merge_cleared` or the GitHub API host. A deny
+   list cannot see inside every program; the account boundary stays the real limit, as for the conductor's guard.
    A label write through `gh api .../issues/<n>/labels` may carry only `agk:parked` or `agk-steward`, since the hook
    reads no network and cannot tell a pull request from an issue by its number; `gh pr edit` may add only
    `agk:parked` and `gh issue create|edit` only `agk-steward`. Each denial names the rule and the setting or path

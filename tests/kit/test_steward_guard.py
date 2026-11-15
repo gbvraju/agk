@@ -195,3 +195,33 @@ def test_req066_the_steward_setting_is_read_and_a_bad_value_refused(tmp_path):
             steward_settings(root)
         assert "setting: steward." in str(caught.value)
         assert "'1'" not in str(caught.value) and "-1" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "env gh pr merge 5",
+        "env -u HOME A=1 gh pr merge 5",
+        "timeout 60 gh pr merge 5",
+        "command git push --force origin x",
+        "nohup nice -n 5 git push origin main",
+        "sudo -u ci gh pr merge 5",
+        'python3 -c "import os; os.system(\\"gh pr merge 5\\")"',
+        "node -e \"require('child_process').execSync('git push origin main')\"",
+        "echo 5 | xargs gh pr merge",
+        "find . -name x -exec gh pr merge 5 ;",
+    ],
+)
+def test_req066_a_wrapper_or_inline_code_does_not_pass_the_guard(tmp_path, command):
+    """REQ-066 AC5: rule 11, the command behind a wrapper, `xargs` or `find -exec` is read, and an
+    interpreter's inline code that runs `gh` or `git` is denied (the fix list on f34f420)."""
+    found = bash(project(tmp_path), command)
+    assert found is not None and found["permissionDecision"] == "deny", command
+    assert RULE in found["permissionDecisionReason"]
+
+
+def test_req066_a_wrapper_of_a_read_is_still_allowed(tmp_path):
+    """REQ-066 AC5: rule 11, a wrapper does not deny what it runs when that is allowed."""
+    root = project(tmp_path)
+    for command in ("timeout 60 gh api repos/o/r/pulls/9", "env A=1 git fetch origin main"):
+        assert bash(root, command) is None, command

@@ -36,6 +36,23 @@ FIELD_FLAGS = frozenset({"-f", "--raw-field", "-F", "--field"})
 VALUE_FLAGS = frozenset({"-H", "--header", "-q", "--jq", "-t", "--template", "--cache", "-p"})
 READ_GIT = frozenset({"log", "diff", "show", "status", "blame", "grep", "ls-files", "fetch"})
 SHELLS = frozenset({"bash", "sh", "zsh", "eval"})
+# Fix list on f34f420: a wrapper runs the command after it; each maps to its valued options.
+WRAPPERS = {
+    "env": frozenset({"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}),
+    "command": frozenset(),
+    "exec": frozenset({"-a"}),
+    "nohup": frozenset(),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "time": frozenset({"-f", "--format", "-o", "--output"}),
+    "timeout": frozenset({"-s", "--signal", "-k", "--kill-after"}),
+    "stdbuf": frozenset({"-i", "-o", "-e"}),
+    "sudo": frozenset({"-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-U"}),
+    "xargs": frozenset({"-I", "-n", "-P", "-L", "-s", "-d", "-E", "-a"}),
+    "builtin": frozenset(),
+}
+ASSIGN = re.compile(r"^[A-Za-z_]\w*=")
+INTERPRETER = re.compile(r"^(?:python[0-9.]*|node|nodejs|perl|ruby|deno|bun|php)$")
+RUNS = re.compile(r"\b(?:gh|git|merge_cleared)\b|api\.github\.com")
 BODY_FLAGS = frozenset({"-b", "--body"})
 FORCE = re.compile(
     r"^(?:-f|--force(?:-with-lease|-if-includes)?(?:=.*)?|--mirror|--tags|--delete|-d)$"
@@ -274,31 +291,62 @@ def bash_problem(command: str, cwd: Path, project: Path, depth: int) -> str | No
     if found is None or depth > 3:
         return reason("a command it cannot read", "Bash")
     for words in found:
-        if any("merge_cleared" in w for w in words):
-            return reason("a merge", "`scripts/agk/merge_cleared.py`")
-        if any(w.startswith(".github/") or "/.github/" in w for w in words) and words[0] not in (
-            "cat",
-            "ls",
-            "head",
-            "grep",
-            "git",
-            "gh",
-            *SHELLS,
-        ):
-            return reason("a change to a workflow file", "`.github/`")
-        while words and re.match(r"^[A-Za-z_]\w*=", words[0]):
-            words = words[1:]  # an environment assignment before the command
-        name = os.path.basename(words[0]) if words else ""
-        problem = None
-        if name in SHELLS:
-            inner = words[words.index("-c") + 1] if "-c" in words[:-1] else " ".join(words[1:])
-            problem = bash_problem(inner, cwd, project, depth + 1)
-        if name == "git":
-            problem = git_problem(words, project)
-        elif name == "gh":
-            problem = gh_problem(words, cwd, project)
-        if problem:
+        if problem := command_problem(words, cwd, project, depth):
             return problem
+    return None
+
+
+def unwrap(words: list[str]) -> list[str] | None:
+    """The command a wrapper runs (`env`, `timeout 60`, `sudo -u x`); None for another word."""
+    name = os.path.basename(words[0])
+    if name not in WRAPPERS:
+        return None
+    rest, valued = words[1:], WRAPPERS[name]
+    while rest and (rest[0].startswith("-") or (name == "env" and ASSIGN.match(rest[0]))):
+        rest = rest[2:] if rest[0] in valued else rest[1:]
+    if name == "timeout" and rest:
+        rest = rest[1:]  # the duration
+    return rest
+
+
+def command_problem(words: list[str], cwd: Path, project: Path, depth: int) -> str | None:
+    if any("merge_cleared" in w for w in words):
+        return reason("a merge", "`scripts/agk/merge_cleared.py`")
+    while words and ASSIGN.match(words[0]):
+        words = words[1:]  # an environment assignment before the command
+    if not words:
+        return None
+    if (inner := unwrap(words)) is not None:
+        return command_problem(inner, cwd, project, depth + 1) if depth < 8 else None
+    name = os.path.basename(words[0])
+    if name == "find":
+        found = [i for i, w in enumerate(words) if w in ("-exec", "-execdir", "-ok", "-okdir")]
+        return next(
+            (p for i in found if (p := command_problem(words[i + 1 :], cwd, project, depth + 1))),
+            None,
+        )
+    if INTERPRETER.match(name):
+        code = [words[i + 1] for i, w in enumerate(words[:-1]) if w in ("-c", "-e", "-E", "--eval")]
+        if any(RUNS.search(c) for c in code):
+            return reason("inline code that runs gh or git", "interpreter inline code")
+        return None
+    if any(w.startswith(".github/") or "/.github/" in w for w in words) and name not in (
+        "cat",
+        "ls",
+        "head",
+        "grep",
+        "git",
+        "gh",
+        *SHELLS,
+    ):
+        return reason("a change to a workflow file", "`.github/`")
+    if name in SHELLS:
+        inner = words[words.index("-c") + 1] if "-c" in words[:-1] else " ".join(words[1:])
+        return bash_problem(inner, cwd, project, depth + 1)
+    if name == "git":
+        return git_problem(words, project)
+    if name == "gh":
+        return gh_problem(words, cwd, project)
     return None
 
 
