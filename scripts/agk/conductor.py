@@ -1076,7 +1076,12 @@ def sweep(root) -> int:
     authors, approvers = verdict_authors(root), spec_approvers(root)
     late = session.flow_int(root, LATE[0], LATE[1], 0)
     now = datetime.now(UTC)
+    # Brief #1314 build (b), ADR-0555 decision 3: the store answers each unchanged brief's comments
+    # for the per-brief loops below (`silent_line`, `slot_lines`, the caps' brief pages); the open
+    # issues are listed first after the pull requests, so the store has their counts.
+    session.STORE.begin(root, repo)
     pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
+    issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines = [
         pull_line(root, repo, p, authors, approvers, late, now)
         for p in sorted(pulls, key=lambda p: p["number"])
@@ -1091,7 +1096,6 @@ def sweep(root) -> int:
     lines += [handover_line(repo, p, now) for p in pulls if session.label_of(p) == HANDOVER_LABEL]
     lines.append(branch_line(root, repo, branch))
     lines += main_folder_lines(root)
-    issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]
     wait = session.flow_int(root, SILENT[0], SILENT[1], 0)
     cache: list = []

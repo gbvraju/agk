@@ -28,6 +28,7 @@ from common import CheckError, repo_root, required_checks, utf8_output
 from route import FAILED_RUN, FAILED_STATUS, decide, judged, listing, read_facts
 from session import (
     CLAIM_HOURS,
+    STORE,
     all_takes,
     flow_int,
     gh,
@@ -304,6 +305,9 @@ def idle_stalls(root: Path, comments: dict, now: datetime) -> list[dict]:
 def find(root: Path) -> list[dict]:
     repo = repo_name(root)
     now = datetime.now(UTC)
+    # Brief #1314 build (b), ADR-0555 decision 3: the store, made current by the one delta read,
+    # answers each unchanged brief's comments for `brief_comments`; the listing gives the counts.
+    STORE.begin(root, repo)
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     if issues is None:
         raise CheckError("rule 2 (red-default, claim-no-pr): the open briefs cannot be read")
