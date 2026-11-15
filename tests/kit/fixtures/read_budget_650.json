@@ -1,0 +1,34 @@
+{
+  "about": "Invented data (brief #1314 build (a), ADR-0555): a project with 650 open briefs and 5 open pull requests. `ago` is minutes before the test starts; {day} is today's date and {short} a short head. Every brief touches its own folder, area<n>/**.",
+  "briefs": {"first": 1, "count": 650},
+  "taken": [101, 102],
+  "comments": {
+    "101": [
+      {"id": 11, "login": "builder", "body": "taken: builder-x {day}", "ago": 90},
+      {"id": 12, "login": "builder", "body": "Question: Q-101-1 which spec?", "ago": 30}
+    ],
+    "102": [
+      {"id": 21, "login": "builder", "body": "taken: builder-y {day}", "ago": 60}
+    ],
+    "103": [
+      {"id": 31, "login": "builder", "body": "A field note.", "ago": 600},
+      {"id": 32, "login": "boss", "body": "Answer: Q-103-1 the second one", "ago": 20}
+    ],
+    "104": [
+      {"id": 41, "login": "builder", "body": "Report: 0a1b2c3 an old report", "ago": 700}
+    ]
+  },
+  "pulls": [
+    {"number": 2001, "brief": 200, "comments": [
+      {"id": 51, "login": "builder", "body": "Report: {short} ready for review", "ago": 25}
+    ]},
+    {"number": 2002, "brief": 201, "comments": [
+      {"id": 52, "login": "boss", "body": "Verdict: fix list {short}", "ago": 15}
+    ]},
+    {"number": 2003, "brief": 202, "comments": []},
+    {"number": 2004, "brief": 203, "comments": [
+      {"id": 53, "login": "builder", "body": "Question: Q-203-1 which file?", "ago": 10}
+    ]},
+    {"number": 2005, "brief": 204, "comments": []}
+  ]
+}
