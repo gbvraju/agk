@@ -17421,7 +17421,7 @@
     "config/playbooks/voice-agent.toml": ["961c3e9589ac7d494e0e24641047473f84650ea702f912748f103b5cfccd22f5"],
     "config/playbooks/web-app.toml": ["020cb83e2e1ee2b2c6114bf6b35f4eca19f58f764db3522e4a01e3afc33a89c5"],
     "config/review-checklist.md": ["73d4c174308eb7b12abf8d8b4c9f34dcd10fead78afe4299b2d805162aff03dd"],
-    "config/session-rules.md": ["b724edf16485396de0895d7b72542d10e1d5e4070ff23b0e6dfdf07f0824e76b"],
+    "config/session-rules.md": ["bd2c700181ea4364e9f523a7040adbb9f052a66ae8bfd8e1cbb45106dc25d904"],
     "config/stack-signals.toml": ["da9037d8689134fceffcfcab5d67c7cafee748ebb3e895e56db3648b41bc4bc3"],
     "constitution/principles.md": ["aff1db2adbe084000b496d563b34225c0dac7ea5df345e25f6edfb8a0e5c0797"],
     "docs/adr/TEMPLATE.md": ["f8dab6f1061dc7a703756431cb5d4ffed9127156281134547aaa7c35f292af94"],
