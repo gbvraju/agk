@@ -18,7 +18,7 @@ Q-1336-1` on the brief) that reading the GitHub sign-in token in memory for the 
 ## Decision
 
 1. `[flow] github_transport` of `agk.toml`: `"gh"` (today's behaviour, every call a `gh api` process) or
-   `"direct"`. It is read with its default and needs no line; any other value is refused naming the setting. With
+   `"direct"`. It is read from the nearest `agk.toml` at or above the working folder with its default and needs no line; any other value reads as `"gh"` with one line on standard error that names the setting, never the value, so a read never stops on it. With
    `"direct"`, the plain GETs of `gh()` (no extra arguments) of one process go over one kept-alive HTTPS
    connection of the standard library to the API host of the host `gh` is signed in to (`GH_HOST`, else
    `github.com`, whose API host is `api.github.com`; any other host's API is `/api/v3` on that host
@@ -39,7 +39,8 @@ Q-1336-1` on the brief) that reading the GitHub sign-in token in memory for the 
    gates pass with their figures in the pull request body; the stress gate of the recorded double passes, the
    suite twice with each transport forced and the 20 live plans could not be run in the cloud session that built
    it (the session reaches GitHub only through a proxy), so that switch is a later change.
-5. `merge_cleared.py`'s GETs (`read_json`, `read_once`, and `read_pages` through them) ask through `session.gh`,
+5. `merge_cleared.py`'s GETs (`read_json`, `read_once`, and `read_pages` through `read_json`, which keeps its own
+   paging of keyed lists and its five tries) ask through `session.gh`,
    which reaches GitHub through `merge_cleared.gh_api` (`session.RUN`), so they are conditional, counted and
    limit-aware. Every merge decision still revalidates with GitHub: `merge_cleared.py` never sets the plan's
    memo, the comment store or the unchanged-issue list, so a cached body is used only on a 304 for that same

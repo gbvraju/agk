@@ -154,6 +154,7 @@ from __future__ import annotations
 import atexit
 import contextlib
 import hashlib
+import http.client
 import io
 import json
 import math
@@ -161,6 +162,7 @@ import os
 import re
 import secrets
 import shutil
+import ssl
 import stat
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -417,6 +419,161 @@ def pace(method: str) -> None:
     if LAST_WRITE is not None and (gap := WRITE_GAP - (time.monotonic() - LAST_WRITE)) > 0:
         time.sleep(gap)
     LAST_WRITE = time.monotonic()
+
+
+# --- one connection per command (brief #1336, ADR-0566) ----------------------------------------
+
+TRANSPORT_SETTING = "github_transport"
+TRANSPORTS = ("gh", "direct")
+TRANSPORT_DEFAULT = "gh"  # answer 7: "direct" becomes the default only after its gates
+DIRECT_OFF = "github: direct transport unavailable, using gh"
+PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
+API_HEADERS = {  # (verify: gh's own defaults)
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "agk-session",
+}
+DIRECT_TIMEOUT = 30.0
+RUN: Callable[[list[str]], Any] | None = None  # another command's `gh api` caller (answer 3)
+
+
+def run_gh(argv: list[str]) -> Any:
+    """`gh api ARGV`, through RUN when a command set one (merge_cleared.py's `gh_api`)."""
+    if RUN is not None:
+        return RUN(argv)
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["gh", "api", *argv], capture_output=True, text=True, encoding="utf-8"
+    )
+
+
+def transport_setting(start: Path | None = None) -> str:
+    """`github_transport` of the flow table of the nearest agk.toml at or above START (the
+    working folder): `gh` or `direct`; unset, unreadable or any other value is `gh`, the last with
+    one line naming the setting."""
+    here = (start or Path.cwd()).resolve()
+    for folder in (here, *here.parents):
+        if (folder / "agk.toml").is_file():
+            try:
+                value = flow_value(folder, TRANSPORT_SETTING, TRANSPORT_DEFAULT, 1)
+            except CheckError:
+                return "gh"
+            if value in TRANSPORTS:
+                return value
+            print(f"github: {TRANSPORT_SETTING} of the [flow] table must be gh or direct; using gh",
+                  file=sys.stderr)  # fmt: skip
+            return "gh"
+        if (folder / ".git").exists():
+            break
+    return TRANSPORT_DEFAULT
+
+
+class Direct:
+    """Answer 1: the plain GETs of one process over one kept-alive HTTPS connection. The token is
+    read once from `gh auth token` and kept on this object alone (answer 2); every failure that
+    is not GitHub's own answer turns the process back to `gh api` with DIRECT_OFF, once."""
+
+    def __init__(self) -> None:
+        self.mode: Any = UNSET  # "direct" or "gh", once read
+        self.conn: Any = None
+        self.token: str | None = None
+        self.host = ""
+        self.base = ""
+        self.opened = 0  # connections made by this process
+
+    @staticmethod
+    def connect(host: str) -> Any:
+        return http.client.HTTPSConnection(
+            host, timeout=DIRECT_TIMEOUT, context=ssl.create_default_context()
+        )
+
+    @staticmethod
+    def read_token(host: str) -> str:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["gh", "auth", "token", "--hostname", host],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        return proc.stdout.strip() if proc.returncode == 0 else ""
+
+    def off(self) -> None:
+        if self.mode == "direct":
+            print(DIRECT_OFF, file=sys.stderr)
+        self.mode, self.token = "gh", None
+        self.close()
+
+    def close(self) -> None:
+        if self.conn is not None:
+            with contextlib.suppress(Exception):
+                self.conn.close()
+        self.conn = None
+
+    def ready(self) -> bool:
+        if self.mode is UNSET:
+            self.mode = transport_setting()
+            if self.mode == "direct":
+                self.start()
+        return self.mode == "direct"
+
+    def start(self) -> None:
+        if any(os.environ.get(name) for name in PROXY_VARS):
+            return self.off()
+        signed = os.environ.get("GH_HOST") or "github.com"
+        self.host, self.base = (
+            ("api.github.com", "") if signed == "github.com" else (signed, "/api/v3")
+        )
+        try:
+            self.token = self.read_token(signed) or None
+        except OSError:
+            self.token = None
+        if self.token is None or not re.fullmatch(r"[A-Za-z0-9._-]+", self.host):
+            self.off()
+
+    def ask(self, path: str, headers: dict[str, str]) -> tuple[int, str, list, bytes]:
+        if self.conn is None:
+            self.conn = self.connect(self.host)
+            self.opened += 1
+        self.conn.request("GET", path, headers=headers)
+        found = self.conn.getresponse()
+        body = found.read()
+        if found.getheader("content-length") not in (None, str(len(body))):
+            raise http.client.IncompleteRead(b"")
+        return found.status, str(found.reason or ""), list(found.getheaders()), body
+
+    def get(self, endpoint: str, etag: str | None) -> Any:
+        """The answer in the form `gh api -i` prints (a CompletedProcess), or None: ask `gh`."""
+        if endpoint.startswith(("http:", "https:", "/")) or not self.ready():
+            return None
+        headers = {**API_HEADERS, "Authorization": f"Bearer {self.token}"}
+        if etag:
+            headers["If-None-Match"] = etag
+        path = f"{self.base}/{quote(endpoint, safe='/?&=,:+@%')}"
+        for attempt in (0, 1):  # a kept-alive connection the server dropped is opened once again
+            try:
+                status, reason, pairs, body = self.ask(path, headers)
+                break
+            except (OSError, http.client.HTTPException, ValueError):
+                self.close()
+                if attempt:
+                    self.off()
+                    return None
+        if status == 401 or (300 <= status < 400 and status != 304):
+            self.off()  # a redirect is never followed: the token reaches no other host
+            return None
+        text = body.decode("utf-8", errors="replace")
+        head = "".join(f"{name}: {value}\r\n" for name, value in pairs)
+        out = f"HTTP/1.1 {status} {reason}\r\n{head}\r\n{text}"
+        if 200 <= status < 300:
+            return subprocess.CompletedProcess([], 0, out, "")
+        try:
+            message = str(json.loads(text).get("message") or reason)
+        except (ValueError, AttributeError):
+            message = reason
+        return subprocess.CompletedProcess([], 1, out, f"gh: {message} (HTTP {status})\n")
+
+
+DIRECT = Direct()
+atexit.register(DIRECT.close)
 
 
 # --- the read cache with conditional requests (brief #1251 build (b) answer 3, ADR-0548) -------
@@ -750,12 +907,9 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     for attempt in range(RATE_WAITS + 1):
         CALLS += 1
         pace(method)
-        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["gh", "api", "--method", method, endpoint, *fields, *asked],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
+        proc = DIRECT.get(endpoint, entry and entry["etag"]) if cacheable else None
+        if proc is None:  # brief #1336: the direct transport is off, or fell back for this call
+            proc = run_gh(["--method", method, endpoint, *fields, *asked])
         status, headers, text = split_response(proc.stdout) if headed else (None, {}, "")
         if status == 304 and entry is not None:
             LAST_ERROR = ""
