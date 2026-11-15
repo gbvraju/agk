@@ -466,7 +466,7 @@ def process_alive(pid: int) -> bool:
     if sys.platform == "win32":
         done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
             ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, encoding="utf-8", check=False,
         )  # fmt: skip
         return f'"{pid}"' in done.stdout
     try:
@@ -487,9 +487,14 @@ def has_process(worktree: Path) -> bool:
 def stop_tree(pid: int, run=subprocess.run, platform: str | None = None) -> None:
     """Stop the process PID and every process below it, and nothing else (ADR-0568 decision 3)."""
     if (platform or sys.platform) == "win32":
-        run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True)
+        run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True, text=True, encoding="utf-8",
+        )  # fmt: skip
         return
-    table = run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True).stdout
+    table = run(
+        ["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True, encoding="utf-8"
+    ).stdout
     children: dict[int, list[int]] = {}
     for line in table.splitlines():
         parts = line.split()

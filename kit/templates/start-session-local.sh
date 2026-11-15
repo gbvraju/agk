@@ -6,7 +6,7 @@
 # otherwise in the background with its output in <worktree>/.agk-session.log (verify: the terminal's options and
 # claude's print mode, -p, are the terminal's and the runtime's, and were not run by the session that wrote this).
 # Before claude starts, <worktree>/.agk-session-pid holds session=, pid= (this wrapper's process, whose tree holds
-# claude), started_utc= and brief= (brief #1355, ADR-0568); the watchdog and launch.py read it.
+# claude), started_utc= and brief=; the watchdog and launch.py read it.
 # When claude exits, <worktree>/.agk-session-exit holds exit_code=<code> and ended_utc=<UTC time>.
 # With AGK_MODEL set (the tier's name from [models.names]) claude gets --model AGK_MODEL, and
 # --effort AGK_EFFORT beside it when that is set; without AGK_MODEL it gets no flag (verify: the flags are claude's).

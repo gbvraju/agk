@@ -2396,8 +2396,9 @@ def worktree_safe(worktree: Path) -> bool:
     def git_out(*args: str) -> str | None:
         try:
             done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-                ["git", "-C", str(worktree), *args], capture_output=True, text=True, check=False
-            )
+                ["git", "-C", str(worktree), *args],
+                capture_output=True, text=True, encoding="utf-8", check=False,
+            )  # fmt: skip
         except OSError:
             return None
         return done.stdout if done.returncode == 0 else None
@@ -2431,8 +2432,12 @@ def keep_builder_memo(root, memo: dict) -> None:
 
 
 def held_builder_lines(root) -> list[str]:
-    """The NEEDS-YOU line of each builder the watchdog held on this machine (ADR-0568)."""
-    held = builder_memo(root).get("held") or {}
+    """The NEEDS-YOU line of each builder the watchdog held on this machine (ADR-0568); none when
+    the root is not a git checkout (the sweep's tests run on a fake root)."""
+    try:
+        held = builder_memo(root).get("held") or {}
+    except OSError:
+        return []
     return [
         f"NEEDS-YOU: builder {name} #{item.get('brief')} held ({item.get('reason')})"
         for name, item in sorted(held.items())

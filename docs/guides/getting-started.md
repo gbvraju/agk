@@ -465,7 +465,7 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    $env:AGK_SESSION = $Session
    $env:AGK_BRIEF = $Brief
    Set-Location -LiteralPath $Worktree
-   # The process record before the first turn (brief #1355, ADR-0568): this wrapper's process holds claude.
+   # The process record before the first turn: this wrapper's process holds claude.
    $started = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
    Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-pid') -Value "session=$Session", "pid=$PID", "started_utc=$started", "brief=$Brief"
    $prompt = Get-Content -LiteralPath $PromptFile -Raw
