@@ -531,6 +531,126 @@ CACHE = ReadCache()
 atexit.register(CACHE.save)  # the 304s' new read times
 
 
+STORE_SCHEMA = 1
+WHOLE_PAGE = re.compile(r"repos/([^/?]+/[^/?]+)/issues/(\d+)/comments$")
+OPEN_LISTING = re.compile(r"repos/([^/?]+/[^/?]+)/issues\?(?:.*&)?state=open(?:&|$)")
+READS_MODES = ("delta", "full")
+
+
+class CommentStore:
+    """Brief #1314 answer 1, ADR-0555 decision 3: for each open brief, the full list of its
+    comments, kept beside the read cache and made current by one `changed_comments` read. A brief
+    is answered from it only when this run's open listing shows its `comments` count and that
+    count is 0 or the stored list's length; anything else is read from GitHub as before."""
+
+    def __init__(self) -> None:
+        self.repo: str | None = None  # active for this repository once `begin` made it current
+        self.issues: dict[int, list] = {}
+        self.counts: dict[int, int] = {}
+        self.stamp = 0.0
+
+    def file(self, repo: str) -> Path | None:
+        folder, found = CACHE.folder(), REPO_OF.match(f"repos/{repo}/")
+        if folder is None or found is None:
+            return None
+        return folder / f"{found.group(1)}__{found.group(2)}.comments.json"
+
+    def begin(self, root, repo: str) -> None:
+        """Load the store and merge the delta since its stamp; with `github_reads = "full"`, no
+        cache folder or a delta that cannot be read, the store stays off (every read as before)."""
+        path = self.file(repo) if github_reads(root) == "delta" else None
+        if path is None:
+            return
+        began = time.time()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        data = data if isinstance(data, dict) else {}
+        issues: dict[int, list] = {}
+        kept, stamp = data.get("issues"), data.get("stamp")
+        if (
+            data.get("schema") == STORE_SCHEMA
+            and isinstance(kept, dict)
+            and isinstance(stamp, (int, float))
+            and not isinstance(stamp, bool)
+        ):
+            delta = changed_comments(repo, float(stamp))
+            if delta is None:
+                return
+            issues = {int(k): v for k, v in kept.items() if k.isdigit() and isinstance(v, list)}
+            for comment in delta:
+                number = issue_of(comment)
+                if number in issues:
+                    rest = [c for c in issues[number] if c.get("id") != comment["id"]]
+                    issues[number] = sorted(rest + [comment], key=lambda c: c.get("id") or 0)
+        self.repo, self.issues, self.counts, self.stamp = repo, issues, {}, began
+        atexit.register(self.save, path)
+
+    def answer(self, endpoint: str) -> list | None:
+        found = WHOLE_PAGE.fullmatch(endpoint)
+        if self.repo is None or found is None or found.group(1) != self.repo:
+            return None
+        number = int(found.group(2))
+        count = self.counts.get(number)
+        if count == 0:
+            return []
+        held = self.issues.get(number)
+        return list(held) if held is not None and len(held) == count else None
+
+    def note(self, endpoint: str, found: list) -> None:
+        """A full read of an issue's comments is stored; an open listing gives the counts."""
+        if self.repo is None:
+            return
+        if (whole := WHOLE_PAGE.fullmatch(endpoint)) and whole.group(1) == self.repo:
+            self.issues[int(whole.group(2))] = found
+        elif (listing := OPEN_LISTING.match(endpoint)) and listing.group(1) == self.repo:
+            for item in found:
+                count, number = item.get("comments"), item.get("number")
+                if "pull_request" not in item and _whole(number) and _whole(count):
+                    self.counts[number] = count
+
+    def forget(self, endpoint: str) -> None:
+        """A comment posted or changed by this run: its issue is read from GitHub again."""
+        if self.repo is not None and (found := re.search(r"/issues/(\d+)/comments", endpoint)):
+            self.issues.pop(int(found.group(1)), None)
+            self.counts.pop(int(found.group(1)), None)
+
+    def save(self, path: Path) -> None:
+        """The store, whole, by write and rename; only the briefs the open listing showed are
+        kept once one was read. A file that cannot be written is left (it only saves calls)."""
+        keep = {n: c for n, c in self.issues.items() if not self.counts or n in self.counts}
+        data = {"schema": STORE_SCHEMA, "stamp": self.stamp, "issues": keep}
+        try:
+            handle, temp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+            with os.fdopen(handle, "w", encoding="utf-8") as out:
+                json.dump(data, out)
+            os.replace(temp, path)
+        except OSError:
+            return
+
+
+def _whole(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def issue_of(comment: dict) -> int:
+    """The number of the issue or pull request a comment of the delta is on, 0 when none."""
+    found = ISSUE_OF.search(str(comment.get("issue_url") or ""))
+    return int(found.group(1)) if found else 0
+
+
+STORE = CommentStore()
+
+
+def github_reads(root) -> str:
+    """`github_reads` of the flow table (ADR-0555 decision 4): `delta`, the default, or `full`."""
+    value = flow_value(Path(root), "github_reads", "delta", 1)
+    if value not in READS_MODES:
+        raise CheckError("rule 1: github_reads of the [flow] table must be delta or full")
+    return value
+
+
 def split_response(text: str) -> tuple[int | None, dict[str, str], str]:
     """`gh api -i` output: the status, the headers (lower-case names) and the body. Output that
     does not start with a status line is all body (status None): what a `gh` without `-i`, or a
@@ -573,6 +693,8 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     asked = ["-i"] if cacheable else []
     if entry is not None:
         asked += ["-H", f"If-None-Match: {entry['etag']}"]
+    if method != "GET":
+        STORE.forget(endpoint)
     fields = who_fields(endpoint, method, extra)  # a comment ends `Who: AGK` (ADR-0546)
     for attempt in range(RATE_WAITS + 1):
         CALLS += 1
@@ -610,6 +732,8 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
 
 
 def pages(endpoint: str) -> list | None:
+    if (held := STORE.answer(endpoint)) is not None:  # ADR-0555 decision 3
+        return held
     sep = "&" if "?" in endpoint else "?"
     found: list = []
     page = 1
@@ -619,6 +743,7 @@ def pages(endpoint: str) -> list | None:
             return None
         found += chunk
         if len(chunk) < PAGE:
+            STORE.note(endpoint, found)
             return found
         page += 1
 
@@ -640,17 +765,31 @@ def changed_since_pass(repo: str) -> None:
     stamp = CACHE.meta(f"repos/{repo}/", STAMP_NOTE)
     if not isinstance(stamp, (int, float)):
         return
-    since = stamp - SKEW
-    found = pages(f"repos/{repo}/issues/comments?since={stamp_iso(since)}")
+    found = changed_comments(repo, stamp)
     if found is None:
-        return
-    changed = set()
+        return  # unreadable, or a comment that names no issue: read every page
+    changed = {issue_of(c) for c in found}
+    CACHE.unchanged = (stamp - SKEW, changed)
+
+
+def changed_comments(repo: str, since: float) -> list | None:
+    """Brief #1314 answer 1, ADR-0555 decision 1: the comments on the repository's issues and
+    pull requests created or edited since `since` less SKEW, every page read, each comment once
+    (its copy with the newest `updated_at`). None when a page cannot be read or a comment names
+    no id or no issue: the caller then reads as before."""
+    query = f"since={stamp_iso(since - SKEW)}&sort=updated&direction=asc"
+    found = pages(f"repos/{repo}/issues/comments?{query}")
+    if found is None:
+        return None
+    newest: dict[int, dict] = {}
     for comment in found:
-        number = ISSUE_OF.search(str(comment.get("issue_url") or ""))
-        if number is None:
-            return  # a comment that names no issue: read every page
-        changed.add(int(number.group(1)))
-    CACHE.unchanged = (since, changed)
+        cid = comment.get("id") if isinstance(comment, dict) else None
+        if not isinstance(cid, int) or isinstance(cid, bool) or not issue_of(comment):
+            return None
+        kept, edited = newest.get(cid), str(comment.get("updated_at") or "")
+        if kept is None or edited >= str(kept.get("updated_at") or ""):
+            newest[cid] = comment
+    return list(newest.values())
 
 
 def end_pass(repo: str, began: float) -> None:
@@ -2157,6 +2296,7 @@ def claim(root, me: str, number: int, build: str | None) -> int:
     if not main_folder_guard(root):
         return 1
     repo = repo_name(root)
+    STORE.begin(root, repo)  # brief #1314: unchanged briefs answered from the store (ADR-0555)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
     prs = pages(f"repos/{repo}/pulls?state=all")
     if comments is None or prs is None:
