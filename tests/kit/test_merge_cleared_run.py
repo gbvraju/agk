@@ -195,8 +195,14 @@ def test_ci_mode_merges_when_every_required_check_ended_success(tmp_path):
     assert one_line(proc) == MERGED and proc.returncode == 0
     reads = [c for c in made if any("check-runs" in a for a in c)]
     assert reads == [
-        ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1"]
-    ]
+        [
+            "api",
+            "--method",
+            "GET",
+            f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1",
+            "-i",
+        ]
+    ]  # brief #1336: `-i`, the shared reader's headers (ADR-0566 decision 5)
 
 
 @pytest.mark.parametrize(
@@ -507,7 +513,7 @@ def test_a_merge_is_one_pinned_put_and_one_line(tmp_path):
     writes = [c for c in made if c[2] != "GET"]
     record = ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
     assert writes[0] == merge_call() and [c[:4] for c in writes[1:]] == [record]
-    brief = ["api", "--method", "GET", f"repos/{REPO}/issues/500"]  # brief #959: the body's brief
+    brief = ["api", "--method", "GET", f"repos/{REPO}/issues/500", "-i"]  # brief #959, #1336
     assert made[-3:] == [*writes, brief], "the merge, the record line, then the read of the brief"
 
 
