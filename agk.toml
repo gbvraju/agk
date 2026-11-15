@@ -1,6 +1,6 @@
 # agk configuration for this repository. Read by the checks before pyproject.toml [tool.agk].
 # The kit version this repository ships: equal to kit_version in kit/manifest.json (a test checks it); every kit bump updates both.
-version = "0.64.4"
+version = "0.64.5"
 default_branch = "main"
 test_dirs = ["tests"]
 lint_paths = ["scripts/agk", "tests", ".claude/hooks"]
@@ -325,10 +325,11 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
-  "tests/kit/test_who_line.py",
+  "tests/kit/test_who_line.py", "tests/kit/test_github_read_budget.py",
   "tests/kit/test_conductor_wakes.py", "tests/kit/test_reviewer_slots_local.py",
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
+  "tests/kit/test_wait_until_event.py",
   "tests/kit/test_conductor_start_wake.py",
   "tests/kit/test_light_reprove.py",
 ]
@@ -551,6 +552,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_wait_until_event.py",
   "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_launch.py", "tests/kit/test_launch_auto_start.py",
   "tests/kit/test_launch_kinds.py", "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
 ]
@@ -771,7 +773,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
-  "tests/kit/test_who_line.py",
+  "tests/kit/test_who_line.py", "tests/kit/test_github_read_budget.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_route_owner_ask.py",
   "tests/kit/test_agent_apps.py", "tests/kit/test_approve_short.py", "tests/kit/test_approved_spec_not_draft.py",
   "tests/kit/test_ci_saving.py", "tests/kit/test_conductor_guard_launch.py",
@@ -806,7 +808,8 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
-  "tests/kit/test_who_line.py",
+  "tests/kit/test_wait_until_event.py",
+  "tests/kit/test_who_line.py", "tests/kit/test_shared_main.py",
   "tests/kit/test_owner_wait.py", "tests/kit/test_session_watch_answers.py", "tests/kit/test_conductor_start_wake.py", "tests/kit/test_check_brief.py",
   "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py", "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py", "tests/kit/test_plan_questions.py",
@@ -824,6 +827,8 @@ tests = [
   "tests/kit/test_session_paused.py", "tests/kit/test_session_plan.py", "tests/kit/test_session_plan_lanes.py",
   "tests/kit/test_session_plan_malformed.py", "tests/kit/test_session_plan_milestones.py",
   "tests/kit/test_session_plan_overlap.py", "tests/kit/test_session_plan_reads.py", "tests/kit/test_session_prompt.py", "tests/kit/test_session_resume.py", "tests/kit/test_session_review.py",
+  "tests/kit/test_rule18_claim.py",
+  "tests/kit/test_github_read_budget.py",
   "tests/kit/test_session_rules.py", "tests/kit/test_session_silent.py", "tests/kit/test_session_tell.py",
   "tests/kit/test_session_tidy.py", "tests/kit/test_shadow_guard.py", "tests/kit/test_stalls.py", "tests/kit_dev/test_guide_loop.py",
   "tests/kit_dev/test_intake.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_launcher_guide.py",
@@ -840,7 +845,7 @@ tests = [
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
   "tests/kit/test_session_claim_overlap.py", "tests/kit/test_builder_slots.py",
   "tests/kit/test_light_reprove.py", "tests/kit/test_session_plan_milestones.py",
-  "tests/kit/test_session_plan_reads.py",
+  "tests/kit/test_session_plan_reads.py", "tests/kit/test_shared_main.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
@@ -855,7 +860,7 @@ code = "scripts/agk/smoke.py"
 tests = ["tests/kit/test_smoke.py"]
 [[testing.map]]
 code = "scripts/agk/stalls.py"
-tests = ["tests/kit/test_stalls.py", "tests/kit_dev/test_intelligent_testing.py"]
+tests = ["tests/kit/test_stalls.py", "tests/kit/test_github_read_budget.py", "tests/kit_dev/test_intelligent_testing.py"]
 [[testing.map]]
 code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
@@ -956,7 +961,8 @@ tests = [
   "tests/kit/test_conductor_guard_issue.py", "tests/kit/test_core_audit.py", "tests/kit/test_core_rules_page.py",
   "tests/kit/test_fix_list_tags.py", "tests/kit/test_launch.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_run.py", "tests/kit/test_personal_state.py", "tests/kit/test_pr_summary.py",
-  "tests/kit/test_rule_budget.py", "tests/kit/test_rules_dropped.py", "tests/kit/test_session_flow.py",
+  "tests/kit/test_rule18_claim.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_dropped.py",
+  "tests/kit/test_session_flow.py",
   "tests/kit/test_session_plan.py", "tests/kit/test_session_prompt.py", "tests/kit/test_session_rules.py",
   "tests/kit/test_solo_mode.py", "tests/kit_dev/test_conductor_role.py", "tests/kit_dev/test_guide_loop.py",
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_local_mode_guide.py",

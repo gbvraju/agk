@@ -6,6 +6,7 @@
     python3 session.py queue --role conductor|builder|person|merger [--author LOGIN]
     python3 session.py review-queue [--all | --fingerprint]
     python3 session.py resume --pr N
+    python3 session.py summary --pr N --file FILE
     python3 session.py ids [--exclude-pr N]
     python3 session.py demand
     python3 session.py push-check
@@ -138,6 +139,14 @@ label write `agk:parked`, one comment `Parked-by: wait <Q-id>`, and it prints `p
 and the `next:` line that names the builder's hand-over and `session.py after`. A parked pull
 request holds no builder slot, and `next` offers an unparked one (an `Unparked-by:` its author has
 not spoken after) before stalled pull requests and new briefs.
+
+Brief #1310 (ADR-0554): `watch --pr N` and `watch --assign ID` take `--until-event`: they return
+only on an event, printing every event line of one read, or after `[flow] wake_minutes` (110 by
+default) with `renew: no event` (exit 0); a slot's lease is renewed by the wait every 240 s, so
+the 300 s bound of a slot's `watch --assign` is lifted. `summary --pr N --file FILE` posts the pull
+request's one working summary, `Summary: <head>` and the file (at most `[flow] summary_lines`
+lines, 25 by default), and edits it in place on the next run; `resume --pr N` prints it with the
+command for the diff since its head, or the newest `Report:` of the author when there is none.
 """
 
 from __future__ import annotations
@@ -176,10 +185,12 @@ from common import (
     covered_fix_list,
     git,
     load_config,
+    main_folder_refusal,
     next_free_ids,
     paused,
     repo_root,
     required_checks,
+    shared_main,
     show,
     utf8_output,
     who_fields,
@@ -206,13 +217,14 @@ from config import (
 NAME = "session"
 USAGE = (
     "usage: session.py watch (--pr N [--since ID] [--session ID] | --merged N | --assign ID)\n"
-    "                        [--interval S] [--timeout S]\n"
+    "                        [--interval S] [--timeout S] [--until-event]\n"
     "       session.py next --session ID [--take]\n"
     "       session.py claim --session ID --brief N [--build X]\n"
     "       session.py after --session ID\n"
     "       session.py queue --role conductor|builder|person|merger [--author LOGIN]\n"
     "       session.py review-queue [--all | --fingerprint]\n"
     "       session.py resume --pr N\n"
+    "       session.py summary --pr N --file FILE\n"
     "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
     "       session.py plan [--json] [--record] [--if-changed] | plan --what-if DIR\n"
@@ -230,6 +242,7 @@ USAGE = (
 )
 COMMANDS = (
     "watch",
+    "summary",
     "next",
     "claim",
     "after",
@@ -518,6 +531,126 @@ CACHE = ReadCache()
 atexit.register(CACHE.save)  # the 304s' new read times
 
 
+STORE_SCHEMA = 1
+WHOLE_PAGE = re.compile(r"repos/([^/?]+/[^/?]+)/issues/(\d+)/comments$")
+OPEN_LISTING = re.compile(r"repos/([^/?]+/[^/?]+)/issues\?(?:.*&)?state=open(?:&|$)")
+READS_MODES = ("delta", "full")
+
+
+class CommentStore:
+    """Brief #1314 answer 1, ADR-0555 decision 3: for each open brief, the full list of its
+    comments, kept beside the read cache and made current by one `changed_comments` read. A brief
+    is answered from it only when this run's open listing shows its `comments` count and that
+    count is 0 or the stored list's length; anything else is read from GitHub as before."""
+
+    def __init__(self) -> None:
+        self.repo: str | None = None  # active for this repository once `begin` made it current
+        self.issues: dict[int, list] = {}
+        self.counts: dict[int, int] = {}
+        self.stamp = 0.0
+
+    def file(self, repo: str) -> Path | None:
+        folder, found = CACHE.folder(), REPO_OF.match(f"repos/{repo}/")
+        if folder is None or found is None:
+            return None
+        return folder / f"{found.group(1)}__{found.group(2)}.comments.json"
+
+    def begin(self, root, repo: str) -> None:
+        """Load the store and merge the delta since its stamp; with `github_reads = "full"`, no
+        cache folder or a delta that cannot be read, the store stays off (every read as before)."""
+        path = self.file(repo) if github_reads(root) == "delta" else None
+        if path is None:
+            return
+        began = time.time()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        data = data if isinstance(data, dict) else {}
+        issues: dict[int, list] = {}
+        kept, stamp = data.get("issues"), data.get("stamp")
+        if (
+            data.get("schema") == STORE_SCHEMA
+            and isinstance(kept, dict)
+            and isinstance(stamp, (int, float))
+            and not isinstance(stamp, bool)
+        ):
+            delta = changed_comments(repo, float(stamp))
+            if delta is None:
+                return
+            issues = {int(k): v for k, v in kept.items() if k.isdigit() and isinstance(v, list)}
+            for comment in delta:
+                number = issue_of(comment)
+                if number in issues:
+                    rest = [c for c in issues[number] if c.get("id") != comment["id"]]
+                    issues[number] = sorted(rest + [comment], key=lambda c: c.get("id") or 0)
+        self.repo, self.issues, self.counts, self.stamp = repo, issues, {}, began
+        atexit.register(self.save, path)
+
+    def answer(self, endpoint: str) -> list | None:
+        found = WHOLE_PAGE.fullmatch(endpoint)
+        if self.repo is None or found is None or found.group(1) != self.repo:
+            return None
+        number = int(found.group(2))
+        count = self.counts.get(number)
+        if count == 0:
+            return []
+        held = self.issues.get(number)
+        return list(held) if held is not None and len(held) == count else None
+
+    def note(self, endpoint: str, found: list) -> None:
+        """A full read of an issue's comments is stored; an open listing gives the counts."""
+        if self.repo is None:
+            return
+        if (whole := WHOLE_PAGE.fullmatch(endpoint)) and whole.group(1) == self.repo:
+            self.issues[int(whole.group(2))] = found
+        elif (listing := OPEN_LISTING.match(endpoint)) and listing.group(1) == self.repo:
+            for item in found:
+                count, number = item.get("comments"), item.get("number")
+                if "pull_request" not in item and _whole(number) and _whole(count):
+                    self.counts[number] = count
+
+    def forget(self, endpoint: str) -> None:
+        """A comment posted or changed by this run: its issue is read from GitHub again."""
+        if self.repo is not None and (found := re.search(r"/issues/(\d+)/comments", endpoint)):
+            self.issues.pop(int(found.group(1)), None)
+            self.counts.pop(int(found.group(1)), None)
+
+    def save(self, path: Path) -> None:
+        """The store, whole, by write and rename; only the briefs the open listing showed are
+        kept once one was read. A file that cannot be written is left (it only saves calls)."""
+        keep = {n: c for n, c in self.issues.items() if not self.counts or n in self.counts}
+        data = {"schema": STORE_SCHEMA, "stamp": self.stamp, "issues": keep}
+        try:
+            handle, temp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+            with os.fdopen(handle, "w", encoding="utf-8") as out:
+                json.dump(data, out)
+            os.replace(temp, path)
+        except OSError:
+            return
+
+
+def _whole(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def issue_of(comment: dict) -> int:
+    """The number of the issue or pull request a comment of the delta is on, 0 when none."""
+    found = ISSUE_OF.search(str(comment.get("issue_url") or ""))
+    return int(found.group(1)) if found else 0
+
+
+STORE = CommentStore()
+
+
+def github_reads(root) -> str:
+    """`github_reads` of the flow table (ADR-0555 decision 4): `delta`, the default, or `full`."""
+    value = flow_value(Path(root), "github_reads", "delta", 1)
+    if value not in READS_MODES:
+        raise CheckError("rule 1: github_reads of the [flow] table must be delta or full")
+    return value
+
+
 def split_response(text: str) -> tuple[int | None, dict[str, str], str]:
     """`gh api -i` output: the status, the headers (lower-case names) and the body. Output that
     does not start with a status line is all body (status None): what a `gh` without `-i`, or a
@@ -560,6 +693,8 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     asked = ["-i"] if cacheable else []
     if entry is not None:
         asked += ["-H", f"If-None-Match: {entry['etag']}"]
+    if method != "GET":
+        STORE.forget(endpoint)
     fields = who_fields(endpoint, method, extra)  # a comment ends `Who: AGK` (ADR-0546)
     for attempt in range(RATE_WAITS + 1):
         CALLS += 1
@@ -597,6 +732,8 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
 
 
 def pages(endpoint: str) -> list | None:
+    if (held := STORE.answer(endpoint)) is not None:  # ADR-0555 decision 3
+        return held
     sep = "&" if "?" in endpoint else "?"
     found: list = []
     page = 1
@@ -606,6 +743,7 @@ def pages(endpoint: str) -> list | None:
             return None
         found += chunk
         if len(chunk) < PAGE:
+            STORE.note(endpoint, found)
             return found
         page += 1
 
@@ -627,17 +765,31 @@ def changed_since_pass(repo: str) -> None:
     stamp = CACHE.meta(f"repos/{repo}/", STAMP_NOTE)
     if not isinstance(stamp, (int, float)):
         return
-    since = stamp - SKEW
-    found = pages(f"repos/{repo}/issues/comments?since={stamp_iso(since)}")
+    found = changed_comments(repo, stamp)
     if found is None:
-        return
-    changed = set()
+        return  # unreadable, or a comment that names no issue: read every page
+    changed = {issue_of(c) for c in found}
+    CACHE.unchanged = (stamp - SKEW, changed)
+
+
+def changed_comments(repo: str, since: float) -> list | None:
+    """Brief #1314 answer 1, ADR-0555 decision 1: the comments on the repository's issues and
+    pull requests created or edited since `since` less SKEW, every page read, each comment once
+    (its copy with the newest `updated_at`). None when a page cannot be read or a comment names
+    no id or no issue: the caller then reads as before."""
+    query = f"since={stamp_iso(since - SKEW)}&sort=updated&direction=asc"
+    found = pages(f"repos/{repo}/issues/comments?{query}")
+    if found is None:
+        return None
+    newest: dict[int, dict] = {}
     for comment in found:
-        number = ISSUE_OF.search(str(comment.get("issue_url") or ""))
-        if number is None:
-            return  # a comment that names no issue: read every page
-        changed.add(int(number.group(1)))
-    CACHE.unchanged = (since, changed)
+        cid = comment.get("id") if isinstance(comment, dict) else None
+        if not isinstance(cid, int) or isinstance(cid, bool) or not issue_of(comment):
+            return None
+        kept, edited = newest.get(cid), str(comment.get("updated_at") or "")
+        if kept is None or edited >= str(kept.get("updated_at") or ""):
+            newest[cid] = comment
+    return list(newest.values())
 
 
 def end_pass(repo: str, began: float) -> None:
@@ -883,15 +1035,82 @@ class Reads:
         return True
 
 
+# --- the wait until an event (brief #1310, ADR-0554) ---------------------------------------------
+
+WAKE_MINUTES = 110  # below the runtime's 2-hour background limit (verify)
+RENEW_NO_EVENT = "renew: no event"
+SUMMARY_LINES = 25
+SUMMARY_SETTING = "(setting: summary_lines in the flow table of agk.toml)"
+SUMMARY = re.compile(r"Summary: ([0-9a-f]{7,40})(?: .*)?")
+
+
+def wake_bound(root, args: dict[str, str], limit: float | None) -> tuple[float | None, bool]:
+    """(the limit of a wait, whether it is the wake bound): with `--until-event` the wait returns by
+    `[flow] wake_minutes` at the latest, else it keeps the limit it was given."""
+    if "--until-event" not in args:
+        return limit, False
+    wake = float(flow_int(root, "wake_minutes", WAKE_MINUTES, 18) * 60)
+    if limit is not None and limit < wake:
+        return limit, False
+    return wake, True
+
+
+class Renewal:
+    """A slot's lease renewed by the wait itself every `RENEW_EVERY` seconds (ADR-0554): `due()`
+    gives None to go on, or the exit the wait ends with (refused, or GitHub unreadable)."""
+
+    def __init__(self, root, me: str | None, on: bool) -> None:
+        self.root, self.me = root, me
+        self.held = bool(on and me and is_slot(root, me) and slot_run(root, me))
+        self.renewed: float | None = None
+        self.reads = Reads(root)
+
+    def due(self) -> int | None:
+        if not self.held or (
+            self.renewed is not None and time.monotonic() - self.renewed < RENEW_EVERY
+        ):
+            return None
+        try:
+            code, said = quietly(slot_lease, self.root, "--renew", self.me)
+        except CheckError:
+            return EXIT_UNREADABLE if self.reads.failed("the slot's lease") else None
+        self.reads.good()
+        if code:
+            print(said, flush=True)
+            return code
+        self.renewed = time.monotonic()
+        return None
+
+    def nap(self, pause: float) -> float:
+        """The pause, cut so that the wait is awake when the next renewal is due."""
+        if not self.held or self.renewed is None:
+            return pause
+        return max(1.0, min(pause, RENEW_EVERY - (time.monotonic() - self.renewed)))
+
+
 def watch(root, args: dict[str, str]) -> int:
     repo = repo_name(root)
     number = args.get("--pr") or args["--merged"]
     only_merge = "--merged" in args
-    interval, limit = float(args.get("--interval", 60)), args.get("--timeout")
+    interval = float(args.get("--interval", 60))
+    given = float(args["--timeout"]) if "--timeout" in args else None
+    limit, woken = wake_bound(root, args, given)
+    every = "--until-event" in args  # every event line of one read is printed (ADR-0554)
+    renewal = Renewal(root, args.get("--session"), every)
     started = time.monotonic()
 
     def late() -> bool:
         return limit is not None and time.monotonic() - started >= float(limit)
+
+    def ended() -> int:
+        print(RENEW_NO_EVENT if woken else "timeout")
+        return 0 if woken else 3
+
+    def shown(lines: list[str | None]) -> bool:
+        found = list(dict.fromkeys(x for x in lines if x))
+        for line in found if every else found[:1]:
+            print(line)
+        return bool(found)
 
     seen = 0
     label: Any = UNSET
@@ -911,13 +1130,16 @@ def watch(root, args: dict[str, str]) -> int:
         while (found := newest(thread.read())) is None:
             if reads.failed(f"the comments of #{number}"):
                 return EXIT_UNREADABLE
+            if (code := renewal.due()) is not None:
+                return code
             if late():
-                print("timeout")
-                return 3
+                return ended()
             time.sleep(interval)
         reads.good()
         seen = found
     while True:
+        if (code := renewal.due()) is not None:
+            return code
         pr = gh(f"repos/{repo}/pulls/{number}")
         if not isinstance(pr, dict):
             if reads.failed(f"pull request #{number}"):
@@ -947,18 +1169,22 @@ def watch(root, args: dict[str, str]) -> int:
                 if first:  # what landed after the last Report: and before this watch started
                     first = False
                     floor = max(report_floor(comments, own), since)
-                    line = missed_verdict(comments, floor, head, authors)
-                    line = line or correction_line(comments, floor, authors, int(number))
-                    line = line or answer_line(comments, floor, own, answerers)
-                    if line:
-                        print(line)
+                    if shown(
+                        [
+                            missed_verdict(comments, floor, head, authors),
+                            correction_line(comments, floor, authors, int(number)),
+                            answer_line(comments, floor, own, answerers),
+                        ]
+                    ):
                         return 0
-                line = verdict_line(comments, seen, head, authors)
-                line = line or correction_line(comments, seen, authors, int(number))
-                line = line or answer_line(comments, seen, own, answerers)
-                line = line or approve_line(comments, max(seen, since), head, approvers)
-                if line:
-                    print(line)
+                if shown(
+                    [
+                        verdict_line(comments, seen, head, authors),
+                        correction_line(comments, seen, authors, int(number)),
+                        answer_line(comments, seen, own, answerers),
+                        approve_line(comments, max(seen, since), head, approvers),
+                    ]
+                ):
                     return 0
                 if waits is not None and (parked_line := owner_park(repo, pr, comments, waits,
                                                                     root, args)):  # fmt: skip
@@ -990,8 +1216,7 @@ def watch(root, args: dict[str, str]) -> int:
         if told is not None and (code := told.poll()) is not None:
             return code
         if late():
-            print("timeout")
-            return 3
+            return ended()
         state = (
             json.dumps(pr, sort_keys=True, default=str) if isinstance(pr, dict) else None,
             thread.changed,
@@ -1000,7 +1225,8 @@ def watch(root, args: dict[str, str]) -> int:
         )
         quiet = last_state is not None and state[0] == last_state[0] and not any(state[1:])
         pause, last_state = backoff(pause, interval, not quiet), state
-        time.sleep(pause)
+        left = None if limit is None else limit - (time.monotonic() - started)
+        time.sleep(renewal.nap(pause if left is None else min(pause, max(interval, left))))
 
 
 class Told:
@@ -1472,7 +1698,8 @@ def brief_shape(root, repo: str) -> Callable:
     """What this repository refuses in a brief body: rule 4, and the wave with a plan issue."""
     from session_plan import touch_problems, touch_rules  # the plan builds on this module
 
-    rules = touch_rules(root)
+    # The default branch's files, never the main folder's (brief #1301, ADR-0551).
+    rules = touch_rules(root, f"origin/{load_config(Path(root))['default_branch']}")
     known = plan_waves(repo) if plan_issue_set(root) else None
     waves = plan_issue_set(root)
     limits = brief_code_paths(root)
@@ -2055,8 +2282,21 @@ def red_fix(root, s: Survey, number: int) -> bool:
     return number in fix_briefs(root, issues, comments, pulls)
 
 
+def main_folder_guard(root) -> bool:
+    """True when this session may take work here; prints the refusal or warning line otherwise
+    (brief #1301, ADR-0551: `shared_main`, the main folder of a clone other sessions share)."""
+    found = main_folder_refusal(Path(root)) if shared_main(Path(root)) else None
+    if found is None:
+        return True
+    print(found[0])
+    return not found[1]
+
+
 def claim(root, me: str, number: int, build: str | None) -> int:
+    if not main_folder_guard(root):
+        return 1
     repo = repo_name(root)
+    STORE.begin(root, repo)  # brief #1314: unchanged briefs answered from the store (ADR-0555)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
     prs = pages(f"repos/{repo}/pulls?state=all")
     if comments is None or prs is None:
@@ -2148,7 +2388,11 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
     interval = float(args.get("--interval", 60))
     limit = float(args.get("--timeout", flow_int(root, "claim_hours", CLAIM_HOURS, 1) * 3600))
     slotted = is_slot(root, me)  # a slot returns within the bound, so that it renews in time
-    limit = min(limit, WATCH_BOUND - interval) if slotted else limit
+    if "--until-event" in args:  # the script renews the lease, so the bound is lifted (ADR-0554)
+        bound, woken = wake_bound(root, args, limit)
+        limit = limit if bound is None else bound
+    else:
+        limit, woken = (min(limit, WATCH_BOUND - interval) if slotted else limit), False
     held = slotted and bool(slot_run(root, me))
     started = time.monotonic()
     renewed: float | None = None
@@ -2216,7 +2460,7 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
                 print(f"assign {early[1].group(2)}")
                 return 0
         if time.monotonic() - started >= limit:
-            print("no event" if slotted else "assign-timeout")
+            print(RENEW_NO_EVENT if woken else "no event" if slotted else "assign-timeout")
             return 0
         moved = thread.moved(seen, allowed)
         if moved is not None and moved != issue:  # a roll-over (brief #1251 answer 3c)
@@ -2224,7 +2468,10 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
             found = thread.read()
             continue
         pause = backoff(pause, interval, thread.changed)
-        time.sleep(min(pause, max(interval, limit - (time.monotonic() - started))))
+        nap = min(pause, max(interval, limit - (time.monotonic() - started)))
+        if held and renewed is not None and woken:  # awake for the next renewal (ADR-0554)
+            nap = max(1.0, min(nap, RENEW_EVERY - (time.monotonic() - renewed)))
+        time.sleep(nap)
         found = thread.read()
 
 
@@ -2905,7 +3152,10 @@ def is_red(item: dict) -> bool:
 def next_brief(root, me: str, taking: bool = False) -> int:
     """The work `next` would hand this session, with the same choice and reasons either way.
     Without `taking` it only shows it and posts nothing, with the command that takes it; with
-    `taking` (`next --take`, and `after`) it takes it as before (brief #440, ADR-0236)."""
+    `taking` (`next --take`, and `after`) it takes it as before (brief #440, ADR-0236); taking is
+    refused from the shared main folder (brief #1301)."""
+    if taking and not main_folder_guard(root):
+        return 1
     repo = repo_name(root)
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     red = [i for i in issues or [] if is_red(i)]
@@ -3539,25 +3789,68 @@ def brief_question(comments: list, allowed: set[str]) -> dict | None:
     return max(asked, key=lambda c: (stamp(c), c.get("id") or 0), default=None)
 
 
+QUIET_NOTE = "quiet_briefs"  # the read cache's note of briefs read with no question (ADR-0553)
+
+
+def quiet_briefs(repo: str, allowed: set[str]) -> dict:
+    """Brief #1309 answer 1: the `updated_at` of each open brief that the last pass read and found
+    with no unanswered question, kept beside the read cache; empty when the cache is off, holds
+    none, or was kept for other verdict authors (what counts as an answer changed)."""
+    note = CACHE.meta(f"repos/{repo}/", QUIET_NOTE)
+    if not isinstance(note, dict) or note.get("authors") != sorted(allowed):
+        return {}
+    briefs = note.get("briefs")
+    return briefs if isinstance(briefs, dict) else {}
+
+
+def keep_quiet(repo: str, allowed: set[str], quiet: dict[str, str]) -> None:
+    CACHE.set_meta(f"repos/{repo}/", QUIET_NOTE, {"authors": sorted(allowed), "briefs": quiet})
+
+
+def in_play(issue: dict, kept: dict) -> bool | None:
+    """Brief #1309 answer 1, ADR-0553: whether a brief's comments must be read to find a live take
+    with an unanswered question. None: its listing shows no comment, so it holds neither. True:
+    it carries the take label, or its listing does not show the count or a time, or its time is
+    not the one kept from a read that found no question. False: unchanged since that read."""
+    count = issue.get("comments")
+    if isinstance(count, int) and not isinstance(count, bool) and count == 0:
+        return None
+    if has_label(issue, TAKEN_LABEL) or not isinstance(count, int):
+        return True
+    seen = issue.get("updated_at")
+    return not (isinstance(seen, str) and kept.get(str(issue["number"])) == seen)
+
+
 def brief_questions(root, repo: str, authors: list[str], prs: list) -> tuple[list[str], list]:
     """Brief 408 answer 1: each open `agk-brief` issue with a live `taken:`, no open pull request
     with its `Brief: #n` line and an unanswered `Question:`, as a line and as a fact. A brief with
     an open pull request is left to that pull request's own rules (a draft's question is listed
-    there)."""
+    there). Only the comments of a brief in play are read (brief #1309, ADR-0553, `in_play`)."""
     found = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     if found is None:
         raise CheckError(f"rule 3: the open issues labelled {LABEL} cannot be read")
     named = {brief_number(p) for p in prs}
     allowed = {a.lstrip("@").lower() for a in authors}
+    kept = quiet_briefs(repo, allowed)
+    quiet: dict[str, str] = {}
     asked = []
     for issue in sorted(labelled(found, LABEL), key=lambda i: i["number"]):
         if issue["number"] in named:
+            continue
+        play = in_play(issue, kept)
+        if play is None:
+            continue
+        if play is False:  # unchanged since a read that found no question: still none
+            quiet[str(issue["number"])] = issue["updated_at"]
             continue
         comments = pages(f"repos/{repo}/issues/{issue['number']}/comments")
         if comments is None:
             raise CheckError("rule 3: the comments of an open brief cannot be read")
         if (question := brief_question(comments, allowed)) is not None:
             asked.append((issue["number"], comments, question))
+        elif not has_label(issue, TAKEN_LABEL) and isinstance(issue.get("updated_at"), str):
+            quiet[str(issue["number"])] = issue["updated_at"]
+    keep_quiet(repo, allowed, quiet)
     if not asked:
         return [], []
     every = pages(f"repos/{repo}/pulls?state=all")  # a merged pull request keeps a take live
@@ -3975,10 +4268,76 @@ def resume(root, number: int) -> int:
         )
     else:
         print("verdict: none")
+    since = summary_lines_of(comments, author, head)
     print("commands:")
     if SAFE_REF.fullmatch(ref):
         print(f"  git fetch origin {ref}\n  git checkout -B {ref} {head}")
+    if since and since != head:
+        print(f"  git diff {since}..{head}")
     print(f"  python3 scripts/agk/session.py watch --pr {number}")
+    return 0
+
+
+def summary_comment(comments: list, login: str) -> dict | None:
+    """The newest comment by `login` whose first line is `Summary: <head>` (ADR-0554)."""
+    me = login.lstrip("@").lower()
+    found = [
+        c
+        for c in comments
+        if author_of(c) == me and isinstance(c.get("id"), int) and SUMMARY.fullmatch(first_line(c))
+    ]
+    return max(found, key=lambda c: c["id"], default=None)
+
+
+def summary_lines_of(comments: list, author: str, head: str) -> str | None:
+    """Print the working summary (or, with none, the newest `Report:` of the author) and give the
+    head it was written at, from which the diff to read starts (brief #1310 answer 2)."""
+    found = summary_comment(comments, author)
+    if found is not None:
+        named = SUMMARY.fullmatch(first_line(found))
+        since = named.group(1) if named else ""
+        print(f"summary (comment {found['id']}) at {since}:")
+        for line in plain(str(found.get("body") or "")).splitlines()[1:]:
+            print(f"  {line}" if line else "")
+        return since
+    print("summary: none (read the newest Report: and the diff since its head)")
+    me = author.lstrip("@").lower()
+    reports = [c for c in comments if author_of(c) == me and first_line(c).startswith("Report:")]
+    if not reports:
+        return None
+    last = max(reports, key=lambda c: c.get("id", 0))
+    print(f"report: {first_line(last)} (comment {last.get('id')})")
+    named = re.match(r"Report: ([0-9a-f]{7,40})\b", first_line(last))
+    return named.group(1) if named else None
+
+
+def summary(root, number: int, file: Path) -> int:
+    """Post the pull request's one working summary, or edit it in place (brief #1310 answer 2)."""
+    repo = repo_name(root)
+    pr = gh(f"repos/{repo}/pulls/{number}")
+    comments = pages(f"repos/{repo}/issues/{number}/comments")
+    if not isinstance(pr, dict) or "head" not in pr or comments is None:
+        raise CheckError("the pull request and its comments cannot be read")
+    try:
+        text = file.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        raise CheckError("the summary file cannot be read") from None
+    cap = flow_int(root, "summary_lines", SUMMARY_LINES, 18)
+    if not text or len(text.splitlines()) > cap:
+        print(f"summary: refused: empty or longer than the summary allows {SUMMARY_SETTING}")
+        return 1
+    head = str(pr["head"].get("sha"))
+    found = summary_comment(comments, str((pr.get("user") or {}).get("login") or ""))
+    body = f"body=Summary: {head}\n\n{text}"
+    if found is not None:
+        done = gh(f"repos/{repo}/issues/comments/{found['id']}", "-f", body, method="PATCH")
+        line = f"summary: edited comment {found['id']} at {head[:7]}"
+    else:
+        done = gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST")
+        line = f"summary: posted at {head[:7]}"
+    if done is None:
+        raise CheckError("the summary cannot be written")
+    print(line)
     return 0
 
 
@@ -4250,10 +4609,14 @@ def main(argv: list[str] | None = None) -> int:
     take_flag = args[:1] == ["next"] and args.count("--take") == 1
     if take_flag:
         args = [a for a in args if a != "--take"]
+    until_flag = args[:1] == ["watch"] and args.count("--until-event") == 1  # ADR-0554
+    if until_flag:
+        args = [a for a in args if a != "--until-event"]
     if not args or args[0] not in COMMANDS or len(args[1:]) % 2:
         print(USAGE)
         return 2
     cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
+    pairs = len(args[1::2])
     allowed = {
         "watch": {
             "--pr",
@@ -4282,10 +4645,16 @@ def main(argv: list[str] | None = None) -> int:
         "route": {"--brief"},
         "prompt": {"--brief", "--session", "--follow-up"},
         "fallback": {"--kind", "--after"},
+        "summary": {"--pr", "--file"},
     }
-    if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
+    if not set(opts) <= allowed[cmd] or len(opts) != pairs:
         print(USAGE)
         return 2
+    if until_flag:
+        if "--merged" in opts:
+            print(USAGE)
+            return 2
+        opts["--until-event"] = "1"
     if cmd == "watch":
         modes = [k for k in ("--pr", "--merged", "--assign") if k in opts]
         ok = len(modes) == 1 and (
@@ -4305,6 +4674,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif cmd == "resume":
         ok = number_of(opts.get("--pr"))
+    elif cmd == "summary":
+        ok = number_of(opts.get("--pr")) and "--file" in opts
     elif cmd == "claim":
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and number_of(
             opts.get("--brief")
@@ -4354,6 +4725,8 @@ def main(argv: list[str] | None = None) -> int:
             return after(root, opts["--session"])
         if cmd == "resume":
             return resume(root, int(opts["--pr"]))
+        if cmd == "summary":
+            return summary(root, int(opts["--pr"]), Path(opts["--file"]))
         if cmd == "ids":
             return ids(root, int(opts["--exclude-pr"]) if "--exclude-pr" in opts else None)
         if cmd in ("demand", "push-check"):

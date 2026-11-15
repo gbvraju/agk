@@ -1,6 +1,6 @@
 # ADR-0543: Owner waits are bounded in minutes and rest hours park at once
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: brief #1282, brief #1277, brief #1245, brief #1043, brief #615, ADR-0301, ADR-0442, ADR-0453
