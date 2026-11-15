@@ -64,7 +64,9 @@ class GitHub:
         if method == "GET":
             since = re.search(r"since=([^&]+)", query)
             page = int((re.search(r"(?:^|&)page=(\d+)", query) or [0, 1])[1])
-            items = [c for c in self.issues[int(number)]["c"] if not since or c["updated_at"] >= since[1]]
+            items = [
+                c for c in self.issues[int(number)]["c"] if not since or c["updated_at"] >= since[1]
+            ]
             return items[(page - 1) * 100 : page * 100]
         if method == "POST" and number is None:
             new = self.add_issue(tuple(fields["labels"]))
@@ -130,7 +132,10 @@ def test_req066_a_quiet_start_reads_the_memory_first_within_five_calls(root):
     gh.calls.clear()
     code, _ = steward.start(root, "s2", gh, NOW + timedelta(minutes=5))
     assert code == 0 and gh.counted() <= 5
-    assert gh.calls[0] == ("GET", "repos/{owner}/{repo}/issues?labels=agk-steward&state=open&per_page=10")
+    assert gh.calls[0] == (
+        "GET",
+        "repos/{owner}/{repo}/issues?labels=agk-steward&state=open&per_page=10",
+    )
     gh.comment(number, "Term: a widget is a part.", minutes=0)
     gh.calls.clear()
     steward.start(root, "s3", gh, NOW + timedelta(minutes=9))
@@ -162,7 +167,7 @@ def test_req066_an_old_marker_is_not_live(root):
 
 
 def test_req066_at_500_comments_a_new_issue_carries_the_open_owner_questions(root):
-    """REQ-066 AC7: rule 8, the roll-over links the old issue, carries the open questions, closes it."""
+    """REQ-066 AC7: rule 8, the roll-over links the old issue, carries the open questions."""
     gh = GitHub()
     old = gh.add_issue()
     gh.comment(old, "Owner question: Q-7-1 Should the report go out on Friday?", minutes=300)

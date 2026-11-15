@@ -37,7 +37,9 @@ VALUE_FLAGS = frozenset({"-H", "--header", "-q", "--jq", "-t", "--template", "--
 READ_GIT = frozenset({"log", "diff", "show", "status", "blame", "grep", "ls-files", "fetch"})
 SHELLS = frozenset({"bash", "sh", "zsh", "eval"})
 BODY_FLAGS = frozenset({"-b", "--body"})
-FORCE = re.compile(r"^(?:-f|--force(?:-with-lease|-if-includes)?(?:=.*)?|--mirror|--tags|--delete|-d)$")
+FORCE = re.compile(
+    r"^(?:-f|--force(?:-with-lease|-if-includes)?(?:=.*)?|--mirror|--tags|--delete|-d)$"
+)
 API_DENIED = (
     (re.compile(r"/pulls/\d+/merge$|/merges$"), "a merge"),
     (re.compile(r"/git/|/releases|/tags"), "a tag or a push"),
@@ -101,9 +103,12 @@ def filing_problem(text: str | None, project: Path) -> str | None:
         limit = steward_settings(project)["auto_file"]
     except Exception as exc:  # noqa: BLE001 - a refused or unreadable table fails closed
         setting = re.search(r"setting: ([\w.]+)", str(exc))
-        return f"steward guard: {RULE} denies a filing (setting: {setting[1] if setting else 'steward'})"
+        name = setting[1] if setting else "steward"
+        return f"steward guard: {RULE} denies a filing (setting: {name})"
     if limit is False or int(found[1]) > limit:
-        return f"steward guard: {RULE} denies a filing above the priority (setting: steward.auto_file)"
+        return (
+            f"steward guard: {RULE} denies a filing above the priority (setting: steward.auto_file)"
+        )
     return None
 
 
@@ -272,7 +277,13 @@ def bash_problem(command: str, cwd: Path, project: Path, depth: int) -> str | No
         if any("merge_cleared" in w for w in words):
             return reason("a merge", "`scripts/agk/merge_cleared.py`")
         if any(w.startswith(".github/") or "/.github/" in w for w in words) and words[0] not in (
-            "cat", "ls", "head", "grep", "git", "gh", *SHELLS
+            "cat",
+            "ls",
+            "head",
+            "grep",
+            "git",
+            "gh",
+            *SHELLS,
         ):
             return reason("a change to a workflow file", "`.github/`")
         while words and re.match(r"^[A-Za-z_]\w*=", words[0]):
@@ -296,7 +307,9 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         payload = None
-    found = decide(payload) if isinstance(payload, dict) else reason("an unreadable call", "hook input")
+    found = (
+        decide(payload) if isinstance(payload, dict) else reason("an unreadable call", "hook input")
+    )
     if found:
         out = {"hookEventName": "PreToolUse", "permissionDecision": "deny"}
         print(json.dumps({"hookSpecificOutput": {**out, "permissionDecisionReason": found}}))

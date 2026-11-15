@@ -98,7 +98,7 @@ def test_req066_an_owner_answer_needs_the_quote_line(tmp_path):
         "cp notes.txt .github/workflows/ci.yml",
         "gh workflow run ci.yml",
         "gh api --method POST repos/o/r/rulesets -f name=x",
-        "gh api --method PUT repos/o/r/branches/main/protection/required_status_checks -f strict=true",
+        "gh api -X PUT repos/o/r/branches/main/protection/required_status_checks -f strict=1",
         "gh secret set TOKEN --body x",
         "gh api --method PUT repos/o/r/actions/secrets/TOKEN -f encrypted_value=x",
         "gh api graphql -f query='mutation { x }'",
@@ -109,7 +109,7 @@ def test_req066_an_owner_answer_needs_the_quote_line(tmp_path):
         "gh api --method POST repos/o/r/issues/9/labels -f 'labels[]=agk:ready'",
         "gh api --method DELETE repos/o/r/issues/9/labels/agk-brief",
         "gh api repos/o/r/issues/9/comments -F body=@-",
-        "gh api repos/o/r/issues/9/comments -f body=\"$(cat x)\"",
+        'gh api repos/o/r/issues/9/comments -f body="$(cat x)"',
     ],
 )
 def test_req066_the_listed_actions_are_denied_naming_the_rule(tmp_path, command):
@@ -154,9 +154,10 @@ def test_req066_a_filing_above_auto_file_needs_the_owner_line(tmp_path):
     assert bash(none, filing(none, 0))["permissionDecision"] == "deny"
     bad = project(tmp_path, 'default_branch = "main"\n[steward]\nauto_file = 9\n')
     found = bash(bad, filing(bad, 0))
-    assert found["permissionDecision"] == "deny" and "setting: steward.auto_file" in found[
-        "permissionDecisionReason"
-    ]
+    assert (
+        found["permissionDecision"] == "deny"
+        and "setting: steward.auto_file" in found["permissionDecisionReason"]
+    )
 
 
 @pytest.mark.parametrize(

@@ -15,7 +15,7 @@ comments a start opens a new memory issue whose first comment links the old one 
 open `Owner question:` (no later `Decision:` names its Q id), then closes the old one. `record`
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
 the value (exit 2). In personal mode (a `[personal]` table) the memory is
-`docs/runs/steward/memory.md` of the sidecar and nothing is posted. A GitHub read that fails exits 4.
+`docs/runs/steward/memory.md` of the sidecar and nothing is posted. A failed GitHub call exits 4.
 """
 
 from __future__ import annotations
@@ -80,7 +80,9 @@ def read_memory(comments: list[dict]) -> dict:
     """{"newest": {kind: [entries newest first]}, "unknown": [ids of other first words]}."""
     newest: dict[str, list[dict]] = {}
     unknown = []
-    for item in sorted(comments, key=lambda c: (c.get("created_at", ""), c.get("id", 0)), reverse=True):
+    for item in sorted(
+        comments, key=lambda c: (c.get("created_at", ""), c.get("id", 0)), reverse=True
+    ):
         kind = entry_kind(item.get("body", ""))
         if kind is None:
             unknown.append(item.get("id"))
@@ -117,8 +119,14 @@ def live_start(comments: list[dict], session: str, now: datetime) -> str | None:
 
 
 def open_questions(comments: list[dict]) -> list[str]:
-    decided = {q for c in comments if entry_kind(c["body"]) == "Decision" for q in QID.findall(c["body"])}
-    asked = [c["body"].strip().splitlines()[0] for c in comments if entry_kind(c["body"]) == "Owner question"]
+    decided = {
+        q for c in comments if entry_kind(c["body"]) == "Decision" for q in QID.findall(c["body"])
+    }
+    asked = [
+        c["body"].strip().splitlines()[0]
+        for c in comments
+        if entry_kind(c["body"]) == "Owner question"
+    ]
     return [line for line in asked if not set(QID.findall(line)) & decided]
 
 
@@ -133,7 +141,10 @@ def cache_file(root: Path) -> Path:
     if os.environ.get("AGK_STEWARD_CACHE"):
         return Path(os.environ["AGK_STEWARD_CACHE"])
     found = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "-C", str(root), "rev-parse", "--git-common-dir"], capture_output=True, text=True, check=False
+        ["git", "-C", str(root), "rev-parse", "--git-common-dir"],
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
     )
     folder = Path(found.stdout.strip() or ".git")
     return (folder if folder.is_absolute() else root / folder) / "agk-steward-memory.json"
@@ -180,7 +191,14 @@ def memory_issue(gh: Gh, root: Path, cache: dict) -> dict:
     """The open memory issue with its comments current in the cache; created when none is open."""
     listed = [i for i in call(gh, "GET", LISTING) if "pull_request" not in i]
     if not listed:
-        listed = [call(gh, "POST", ISSUES, {"title": TITLE, "body": "The steward's notes.", "labels": [LABEL]})]
+        listed = [
+            call(
+                gh,
+                "POST",
+                ISSUES,
+                {"title": TITLE, "body": "The steward's notes.", "labels": [LABEL]},
+            )
+        ]
     issue = max(listed, key=lambda i: i["number"])
     if cache.get("issue") != issue["number"]:
         cache.clear()
@@ -192,7 +210,9 @@ def memory_issue(gh: Gh, root: Path, cache: dict) -> dict:
             known[item["id"]] = item
         if len(known) != issue.get("comments", 0) and since:
             known = {c["id"]: c for c in comments_of(gh, issue["number"], None)}  # a deleted one
-        cache["comments"] = sorted(known.values(), key=lambda c: (c.get("created_at") or "", c["id"]))
+        cache["comments"] = sorted(
+            known.values(), key=lambda c: (c.get("created_at") or "", c["id"])
+        )
     return issue
 
 
@@ -203,10 +223,15 @@ def post(gh: Gh, cache: dict, text: str) -> None:
 
 def roll_over(gh: Gh, cache: dict) -> None:
     old, carried = cache["issue"], open_questions(cache["comments"])
-    new = call(gh, "POST", ISSUES, {"title": TITLE, "body": f"Continues #{old}.", "labels": [LABEL]})
+    new = call(
+        gh, "POST", ISSUES, {"title": TITLE, "body": f"Continues #{old}.", "labels": [LABEL]}
+    )
     cache.clear()
     cache.update({"issue": new["number"], "comments": []})
-    lines = [f"Memory continued from #{old}; open owner questions carried forward:", *(carried or ["none"])]
+    lines = [
+        f"Memory continued from #{old}; open owner questions carried forward:",
+        *(carried or ["none"]),
+    ]
     post(gh, cache, "\n".join(lines))
     call(gh, "PATCH", f"{ISSUES}/{old}", {"state": "closed"})
 
@@ -261,8 +286,9 @@ def end(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[str]
 def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
     if kind not in KINDS:
         return 2, ["refused: not a memory kind (setting: the first word of rule 8)"]
-    from config import guard_patterns
     from guard import scan_text
+
+    from config import guard_patterns
 
     findings = scan_text(f"{kind}: {text}", guard_patterns(root))
     if findings:
@@ -288,8 +314,12 @@ def gh_api(method: str, endpoint: str, fields: dict | None = None):
     args = ["gh", "api", "-X", method, endpoint]
     if fields is not None:
         args += ["--input", "-"]
-    found = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        args, input=json.dumps(fields) if fields is not None else None, capture_output=True, text=True, check=False
+    found = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        args,
+        input=json.dumps(fields) if fields is not None else None,
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
     )
     try:
         return json.loads(found.stdout) if found.returncode == 0 else None
@@ -314,7 +344,9 @@ def main(argv: list[str] | None = None) -> int:
             text = opts.text if opts.text is not None else opts.file.read_text(encoding="utf-8")
             code, lines = record(root, opts.kind, text, gh_api)
         else:
-            code, lines = (start if opts.command == "start" else end)(root, opts.session, gh_api, now)
+            code, lines = (start if opts.command == "start" else end)(
+                root, opts.session, gh_api, now
+            )
     except Unreadable as exc:
         print(f"error: {exc} cannot be read", file=sys.stderr)
         return 4

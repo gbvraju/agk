@@ -155,6 +155,20 @@ red" is open), `idle-capacity` (the plan names sessions to start and no brief wa
 live take with no pull request and no post by its session for 2 hours). `--json` gives the same. It reads with `gh api` (GET
 only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repository cannot be read (ADR-0205).
 
+## Steward memory
+
+    python3 scripts/agk/steward.py start --session ID
+    python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
+    python3 scripts/agk/steward.py end --session ID
+
+The steward's notes (SPEC-0059 rule 8, ADR-0557): one open issue labelled `agk-steward`, created when none is open, one
+comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Pattern`, `Gap`, `Risk`, `Lesson`,
+`Owner question`, `Triage`, `Override`, `Onboarded`). `start` reads the notes first, with `since=` from the last one seen,
+prints the newest of each kind, posts `Started: steward <session> <UTC time>` and exits 1, writing nothing, while another
+steward's marker is live (60 minutes, no `Ended:`); at 500 comments it opens a new issue that carries the open owner
+questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). A failed
+GitHub call exits 4. In personal mode the notes are `docs/runs/steward/memory.md` of the sidecar and nothing is posted.
+
 ## Conductor routines
 
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
