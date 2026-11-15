@@ -1,0 +1,1 @@
+- `steward_evidence.py` sets UTF-8 output before it prints (brief #1350)
