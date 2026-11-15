@@ -3,8 +3,8 @@
 # a rule added is a rule retired, or made a check, in the same pull request; a cut file lowers its line in the same
 # pull request. Print the counts with `python3 scripts/agk/rules.py budget`; tests/kit/test_rule_budget.py compares them.
 CLAUDE.md 229 2
-constitution/principles.md 210 12
-config/core-rules.md 660 26
+constitution/principles.md 224 12
+config/core-rules.md 677 26
 config/session-rules.md 3436 37
 .claude/agents/architect-review.md 720 13
 .claude/agents/architect.md 863 17
@@ -12,4 +12,5 @@ config/session-rules.md 3436 37
 .claude/agents/drift-auditor.md 140 4
 .claude/agents/reviewer.md 579 12
 .claude/agents/shadow.md 1280 15
+.claude/agents/steward.md 549 0
 config/review-checklist.md 306 12

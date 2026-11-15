@@ -26,10 +26,13 @@ WORKING_SESSION_RULES = {1, 3, 7, 17, 18, 21, 31}
 
 # The numbered list of CLAUDE.md before brief #388, item for item, whitespace flattened.
 OLD_CLAUDE_ITEMS = {
+    # Item 1 carries the steward's class of ADR-0557 (brief #1320, SPEC-0059 rule 15).
     1: (
         "You implement; you never decide. Decisions are ADRs or requirement statuses "
         "written by the reviewers. Where a brief leaves something open, record it as a "
-        "`Q-…` question and choose the most conservative reading."
+        "`Q-…` question and choose the most conservative reading. The steward may answer "
+        "a question that the evidence settles (SPEC-0059 rule 3), with its evidence; the "
+        "rest go to the owner."
     ),
     2: (
         "One PR per item, branched from the default branch (`origin/<default branch>`), "

@@ -8,7 +8,7 @@ The twelve rules. Briefs cite them by number.
 4. Build-state is only appended, and only by docs commits.
 5. Generated files are never committed.
 6. Approved specs are owned by a reviewer group; agents propose patches.
-7. Questions are recorded, never guessed; unconfirmed facts are marked (verify).
+7. Questions are recorded, never guessed; the steward may answer one that the evidence settles (SPEC-0059 rule 3), citing it; unconfirmed facts are marked (verify).
 8. Refusals name the setting or path class, never the value.
 9. No secrets in the repository or in an agent session; scanners' ignore lists never grow.
 10. Dates come from `date -u`; PR bodies state what they advance; tests carry REQ markers or, in personal mode, the state's test map.

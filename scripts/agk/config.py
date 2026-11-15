@@ -51,6 +51,10 @@ more, is refused naming `setting: flow.brief_code_paths`, never the value.
 `owner_rest_hours` (empty when unset, else `"HH:MM-HH:MM"`, which may cross midnight) and
 `owner_utc_offset` (`"+00:00"` when unset, a fixed offset `"+HH:MM"` or `"-HH:MM"`, so no time-zone
 database is needed). A bad value is refused naming `setting: flow.<key>`, never the value.
+
+`steward_settings(root)` reads the optional `[steward]` table (SPEC-0059 rule 12, brief #1320,
+ADR-0557): `auto_file`, `false` or a whole number from 0 to 3, 0 when unset. An unknown key or
+another value is refused naming `setting: steward.<key>`, never the value.
 """
 
 from __future__ import annotations
@@ -635,6 +639,31 @@ def capacity_settings(root: Path) -> dict | None:
     return found | table
 
 
+# --- the [steward] table (SPEC-0059 rule 12, brief #1320, ADR-0557) -----------------------------
+
+STEWARD_DEFAULTS = {"auto_file": 0}
+
+
+class StewardSettingError(CheckError):
+    """The `[steward]` table is refused, naming the setting and never the value."""
+
+
+def steward_settings(root: Path) -> dict:
+    """`auto_file`: the highest brief priority the steward files without the owner's word, a whole
+    number from 0 to 3, or `false` for none; 0 when unset or with no table."""
+    try:
+        table = config_source(root).get("steward", {})
+    except (OSError, ValueError):
+        raise StewardSettingError("the [steward] table is refused (setting: steward)") from None
+    if not isinstance(table, dict):
+        raise StewardSettingError("the [steward] table is refused (setting: steward)")
+    for key, value in table.items():
+        number = isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 3
+        if key not in STEWARD_DEFAULTS or not (number or value is False):
+            raise StewardSettingError(f"the [steward] table is refused (setting: steward.{key})")
+    return {**STEWARD_DEFAULTS, **table}
+
+
 # --- the known keys of each table (brief #1245, ADR-0527) ---------------------------------------
 
 TABLE_KEYS: dict[str, frozenset[str]] = {
@@ -717,6 +746,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
     ),
     "design": frozenset({"pixel_tolerance", "render", "ui_paths"}),
     "delivery": frozenset({"work_type"}),
+    "steward": frozenset(STEWARD_DEFAULTS),
 }
 TOP_LEVEL = "top level"
 

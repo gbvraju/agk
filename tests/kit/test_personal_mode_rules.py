@@ -43,7 +43,11 @@ OTHERS = {
     4: "Build-state is only appended, and only by docs commits.",
     5: "Generated files are never committed.",
     6: "Approved specs are owned by a reviewer group; agents propose patches.",
-    7: "Questions are recorded, never guessed; unconfirmed facts are marked (verify).",
+    # Principle 7 carries the steward's class of ADR-0557 (brief #1320, SPEC-0059 rule 15).
+    7: (
+        "Questions are recorded, never guessed; the steward may answer one that the evidence "
+        "settles (SPEC-0059 rule 3), citing it; unconfirmed facts are marked (verify)."
+    ),
     8: "Refusals name the setting or path class, never the value.",
     9: ("No secrets in the repository or in an agent session; scanners' ignore lists never grow."),
     11: "A check is never weakened to go green; it is changed by ADR.",
