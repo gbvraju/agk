@@ -3,6 +3,7 @@
 Usage: python3 scripts/agk/steward.py start --session ID
        python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
        python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
+       python3 scripts/agk/steward.py onboard [--again]
 
 The memory is one open issue labelled `agk-steward`, created when none is open: one comment per
 entry, whose first word is one of KINDS, each ending `Who: AGK steward`. `start` reads it before any
@@ -15,7 +16,8 @@ comments a start opens a new memory issue whose first comment links the old one 
 open `Owner question:` (no later `Decision:` names its Q id), then closes the old one. `record`
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
 the value (exit 2). `end` writes the pass's counted calls and tokens on its marker, `not shown` when
-not given, never 0 (rule 13's daily list reads them). In personal mode (a `[personal]` table) the
+not given, never 0 (rule 13's daily list reads them). `onboard` is `steward_onboard.py onboard`
+(SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In personal mode (a `[personal]` table) the
 memory is `docs/runs/steward/memory.md` of the sidecar and nothing is posted. A failed GitHub call
 exits 4.
 """
@@ -341,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     end_p.add_argument("--session", required=True)
     end_p.add_argument("--calls", type=int)
     end_p.add_argument("--tokens", type=int)
+    sub.add_parser("onboard").add_argument("--again", action="store_true")
     rec = sub.add_parser("record")
     rec.add_argument("--kind", required=True)
     group = rec.add_mutually_exclusive_group(required=True)
@@ -348,6 +351,10 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--file", type=Path)
     opts = parser.parse_args(argv)
     root, now = repo_root(), datetime.now(UTC)
+    if opts.command == "onboard":
+        import steward_onboard
+
+        return steward_onboard.run(root, opts.again)
     try:
         if opts.command == "record":
             text = opts.text if opts.text is not None else opts.file.read_text(encoding="utf-8")
