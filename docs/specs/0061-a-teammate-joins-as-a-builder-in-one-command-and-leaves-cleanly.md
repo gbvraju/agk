@@ -96,7 +96,7 @@ REQ-068 AC1: *a teammate joins and leaves with no settings change, and a dead la
 
 ## Open questions
 
-Each is a point the brief leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules.
+Each is a point the brief leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules. `Q-S0061-1` to `Q-S0061-9` are ruled as read by the maintainer's answer on #1307 (comment 6892285582), one file each under `docs/runs/decisions/`, and the rules above hold their readings. No question is open.
 
 - Q-S0061-1: what is the member name form? Reading: 2 to 30 lower-case letters, digits and hyphens, starting with a letter, not ending with a hyphen and matching none of `s<n>`, `r<n>` and `s-shadow` (rule 3).
 - Q-S0061-2: is `[team] members` required? Reading: no; an absent table or an empty list means any collaborator with push access (rule 8).
