@@ -20,7 +20,9 @@ import steward  # noqa: E402
 import steward_onboard  # noqa: E402
 
 NOW = datetime(2026, 11, 15, 10, 30, tzinfo=UTC)
-PATH = re.compile(r"repos/\{owner\}/\{repo\}/(issues(?:/comments)?)(?:/(\d+))?(/comments)?(?:\?(.*))?$")
+PATH = re.compile(
+    r"repos/\{owner\}/\{repo\}/(issues(?:/comments)?)(?:/(\d+))?(/comments)?(?:\?(.*))?$"
+)
 
 
 class GitHub:
@@ -49,7 +51,7 @@ class GitHub:
         if any(word in endpoint for word in self.unreadable):
             return None
         if kind == "issues/comments":
-            page = int(re.search(r"page=(\d+)", query)[1])
+            page = int(re.search(r"(?:^|&)page=(\d+)", query)[1])
             return self.repo[(page - 1) * 100 : page * 100]
         if method == "GET" and number is None:
             label = re.search(r"labels=([^&]+)", query)[1]
@@ -64,7 +66,11 @@ class GitHub:
             return {"number": 1, "comments": 0}
         if method == "POST" and comments:
             self.next_id += 1
-            item = {"id": self.next_id, "body": fields["body"], "created_at": "2026-11-15T10:30:00Z"}
+            item = {
+                "id": self.next_id,
+                "body": fields["body"],
+                "created_at": "2026-11-15T10:30:00Z",
+            }
             item["updated_at"] = item["created_at"]
             self.memory.append(item)
             return item
@@ -104,7 +110,7 @@ def executing(root: Path) -> None:
     )
     (root / "docs" / "runs" / "decisions").mkdir(parents=True)
     (root / "docs" / "runs" / "decisions" / "2026-11-02-q-12-1.md").write_text(
-        "| 2026-11-02 | Q-12-1 ruled: the report goes out on Fridays. | comment 1 | x | maintainers |\n",
+        "| 2026-11-02 | Q-12-1 ruled: the report goes out on Fridays. | comment 1 | x | y |\n",
         encoding="utf-8",
     )
     (root / "docs" / "requirements.md").write_text(
@@ -157,7 +163,9 @@ def test_req066_execution_harvests_decisions_with_sources_before_any_answer(root
     assert "Q-12-1 ruled: the report goes out on Fridays." in decisions
     assert "REQ-001 in-progress (source: docs/requirements.md)" in decisions
     assert all(p.rstrip().endswith(steward.WHO) for p in posts)
-    assert posts[-1].startswith("Onboarded: build 2026-11-15, 6 decisions, 0 gaps, 0 open questions")
+    assert posts[-1].startswith(
+        "Onboarded: build 2026-11-15, 6 decisions, 0 gaps, 0 open questions"
+    )
     assert not any(p.startswith("Answer:") for p in posts)
     assert any(line.startswith("rely on: ") for line in lines)
 
@@ -234,7 +242,7 @@ def test_req066_a_second_start_is_already_onboarded_and_writes_nothing(root):
 
 
 def test_req066_again_adds_only_new_notes(root):
-    """REQ-066 AC1: rule 20 (f) and Q-S0059-14, `--again` keeps the notes and writes no fact twice."""
+    """REQ-066 AC1: rule 20 (f) and Q-S0059-14, `--again` writes no fact twice."""
     executing(root)
     gh = GitHub(labels=merged_work())
     steward_onboard.onboard(root, gh, NOW)
@@ -254,18 +262,19 @@ def test_req066_again_adds_only_new_notes(root):
 
 def test_req066_a_withheld_line_and_personal_mode(root):
     """REQ-066 AC1: rule 20 with rule 14, a line the data guard matches is withheld naming its
-    class, never its value; in personal mode the harvest writes the sidecar file and posts nothing."""
+    class, never its value; in personal mode the harvest writes the sidecar file, posts nothing."""
     executing(root)
     (root / "agk.toml").write_text('[personal]\nforge = "files"\n', encoding="utf-8")
-    (root / "docs" / "adr" / "0010-mail.md").write_text(
-        "# ADR-0010: Mail ops@example.com weekly\n\n- Status: Accepted\n", encoding="utf-8"
+    key = "AKIA" + "ABCDEFGHIJKLMNOP"
+    (root / "docs" / "adr" / "0010-key.md").write_text(
+        f"# ADR-0010: The key {key} rotates\n\n- Status: Accepted\n", encoding="utf-8"
     )
     calls: list = []
     code, lines = steward_onboard.onboard(root, lambda *a: calls.append(a), NOW)
     assert code == 0 and calls == []
     memory = (root / steward.PERSONAL_FILE).read_text(encoding="utf-8")
     assert "ADR-0007 Totals are weekly" in memory and "Onboarded: plan" in memory
-    assert "ops@example.com" not in memory and "withheld by the data guard" in memory
+    assert key not in memory and "withheld by the data guard" in memory
 
 
 def test_req066_the_command_is_a_subcommand_of_steward(root, monkeypatch, capsys):
@@ -273,7 +282,9 @@ def test_req066_the_command_is_a_subcommand_of_steward(root, monkeypatch, capsys
     seen = {}
     monkeypatch.setattr(steward, "repo_root", lambda: root)
     monkeypatch.setattr(
-        steward_onboard, "onboard", lambda r, gh, now, again=False: seen.update(again=again) or (0, ["ok"])
+        steward_onboard,
+        "onboard",
+        lambda r, gh, now, again=False: seen.update(again=again) or (0, ["ok"]),
     )
     assert steward.main(["onboard", "--again"]) == 0
     assert seen == {"again": True} and capsys.readouterr().out == "ok\n"

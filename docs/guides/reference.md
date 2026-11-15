@@ -192,6 +192,24 @@ requirement answer goes to the owner with its recommendation until build (d)'s r
 unreproduced cause, or a filing above `[steward] auto_file` without an `Owner said` line. `skill` prints the step's skill
 from the agent file's table, or `no skill:` (exit 3). A failed GitHub call exits 4.
 
+## Steward onboarding
+
+    python3 scripts/agk/steward.py onboard [--again]
+    python3 scripts/agk/steward_onboard.py onboard [--again]
+
+The steward's first start (SPEC-0059 rule 20, ADR-0562). With no `Onboarded:` note in the memory it names the entry
+point: `day 0` (no Approved spec, no `agk-brief` issue; stage `start`, nothing harvested), `execution` (an open
+`agk-conductor` issue, or `docs/plan/scope-lock.md` and a closed brief) or `planning` (the stage of `steward_evidence.py
+stage`). Planning and execution harvest, by list pages only: the first lines of the repository's comments
+(`Maintainer answer:`, `Answer:`, `Question:`, `Owner needed:`), the open `agk:parked` issues, Accepted ADRs,
+`docs/runs/decisions/`, Approved specs, `docs/requirements.md` statuses, `docs/design/signoffs.md` and the last line of
+`check_plan.py --trace`. The notes are marked `harvested`, each line with its source: `Decision:` (at most 50 lines a
+note), one `Owner question:` per open question and per question whose answers disagree, `Risk:` for parked work and
+`Gap:` for a source that cannot be read. A line the data guard matches is withheld, naming the class. It ends with
+`Onboarded: <stage> <date>, <n> decisions, <n> gaps, <n> open questions` and prints the summary. Onboarded already, it
+writes nothing; `--again` writes only lines no note holds. Personal mode reads the files only and writes the sidecar
+file. Exit 4: the memory or the stage cannot be read.
+
 ## Outbound data guard
 
     python3 scripts/agk/steward_outbound.py check (--text TEXT | --file FILE) [--root DIR]
