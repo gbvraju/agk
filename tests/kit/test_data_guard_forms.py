@@ -54,6 +54,7 @@ PLANTED = [
     "cat <<EOF\n$(cat .env)\nEOF", "cat <<-EOF\n\tsee app.log\n\tEOF",
     'git commit -m "$(cat <<\'EOF\'\nfix: the ~/.ssh/id_rsa path\nEOF\n)"',
     "pwsh -Command 'Get-Content `.env'", "echo $(date); grep -r foo .",
+    "cat $(echo .env)", "bash <<'EOF'\ncat .env\nEOF",  # the conductor's cases on 609cea6
 ]
 
 
