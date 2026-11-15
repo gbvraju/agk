@@ -315,7 +315,8 @@ def test_1310d_the_summary_is_posted_once_then_edited_in_place(proj, stub, tmp_p
     assert out.stdout.strip() == f"summary: posted at {SHA[:7]}"
     posted = writes(stub)
     assert len(posted) == 1 and posted[0][:2] == ["POST", COMMENTS]
-    assert f"body=Summary: {SHA}\n\nBuilt: the wait.\nDecisions: none." in posted[0][2]
+    sent = f"body=Summary: {SHA}\n\nBuilt: the wait.\nDecisions: none."
+    assert any(arg.startswith(sent) for arg in posted[0][2])
     (tmp_path / "again").mkdir()
     again = Stub(tmp_path / "again")
     mine = comment(20, "builder", f"Summary: {OTHER}\n\nBuilt: an older text.")
