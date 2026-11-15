@@ -907,7 +907,8 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     for attempt in range(RATE_WAITS + 1):
         CALLS += 1
         pace(method)
-        proc = DIRECT.get(endpoint, entry and entry["etag"]) if cacheable else None
+        etag = None if entry is None else str(entry["etag"])
+        proc = DIRECT.get(endpoint, etag) if cacheable else None
         if proc is None:  # brief #1336: the direct transport is off, or fell back for this call
             proc = run_gh(["--method", method, endpoint, *fields, *asked])
         status, headers, text = split_response(proc.stdout) if headed else (None, {}, "")

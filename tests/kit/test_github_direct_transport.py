@@ -34,7 +34,7 @@ from test_merge_cleared_verdict import ON, cleared, merge_cleared_run, toml  # n
 from test_session import REPO, SCRIPTS, clean_env  # noqa: E402
 from test_session_plan_reads import Double  # noqa: E402
 
-TOKEN = "tok-PLANTED-0123456789abcdef"  # invented
+PLANTED = "tok-PLANTED-0123456789abcdef"  # invented
 EP = "repos/acme/widgets/issues/7"
 BODY = {"number": 7, "title": "example"}
 MERGE_READS = 8  # measured on the recorded cleared merge (brief #1336 answer 4)
@@ -124,7 +124,7 @@ def direct(monkeypatch, tmp_path):
     fresh = session.Direct()
     monkeypatch.setattr(session, "DIRECT", fresh)
     monkeypatch.setattr(fresh, "connect", server.connect)
-    monkeypatch.setattr(fresh, "read_token", lambda host: TOKEN)
+    monkeypatch.setattr(fresh, "read_token", lambda host: PLANTED)
     monkeypatch.setattr(session, "transport_setting", lambda start=None: "direct")
     monkeypatch.setattr(session, "time", SimpleNamespace(
         time=clock.time, monotonic=clock.monotonic, sleep=clock.sleep))  # fmt: skip
@@ -143,10 +143,10 @@ def direct(monkeypatch, tmp_path):
 
 def no_token_anywhere(capsys, *folders: Path) -> None:
     out = capsys.readouterr()
-    assert TOKEN not in out.out + out.err
+    assert PLANTED not in out.out + out.err
     for folder in folders:
         for item in folder.rglob("*") if folder.exists() else []:
-            assert TOKEN.encode() not in item.read_bytes(), item
+            assert PLANTED.encode() not in item.read_bytes(), item
 
 
 # --- answers 1 and 7: the setting and its default ---------------------------------------------
@@ -198,7 +198,7 @@ def test_the_reads_of_one_process_share_one_connection_and_the_etag_cache(direct
     assert direct.server.opened == ["api.github.com"] and direct.transport.opened == 1
     assert session.CACHED - before == 1
     assert direct.server.asked[1][2]["If-None-Match"] == '"e1"'
-    assert all(h["Authorization"] == f"Bearer {TOKEN}" for _, _, h in direct.server.asked)
+    assert all(h["Authorization"] == f"Bearer {PLANTED}" for _, _, h in direct.server.asked)
     assert direct.server.asked[0][1] == f"/{EP}"
     assert direct.gh.calls == []  # no `gh api`, and the token was read once by the fake
     no_token_anywhere(capsys, direct.cache)
@@ -258,7 +258,7 @@ def test_a_dropped_kept_alive_connection_is_opened_once_again(direct, capsys):
     "fault",
     [
         [TimeoutError("timed out"), TimeoutError("timed out")],
-        [ConnectionResetError(TOKEN), ConnectionResetError(TOKEN)],  # an error that names it
+        [ConnectionResetError(PLANTED), ConnectionResetError(PLANTED)],  # an error that names it
         [OSError("certificate verify failed"), OSError("certificate verify failed")],
         [
             Answer(200, {"Content-Length": "999"}, b'{"cut'),
@@ -399,7 +399,7 @@ import importlib, json, os, re, shutil, subprocess, sys
 from urllib.parse import unquote
 sys.path.insert(0, sys.argv[1])
 import session
-TOKEN = TOKEN_HERE
+PLANTED = TOKEN_HERE
 GH = shutil.which("gh")
 
 class Answer:
@@ -414,7 +414,7 @@ class Answer:
 
 class Conn:
     def request(self, method, path, headers=None):
-        assert method == "GET" and headers["Authorization"] == "Bearer " + TOKEN
+        assert method == "GET" and headers["Authorization"] == "Bearer " + PLANTED
         with open(os.path.join(os.environ["GH_STUB_DIR"], "direct.log"), "a") as out:
             out.write(path + "\\n")
         argv = [GH, "api", "--method", "GET", unquote(path.lstrip("/")), "-i"]
@@ -436,11 +436,11 @@ def connect(host):
     return Conn()
 
 session.Direct.connect = staticmethod(connect)
-session.Direct.read_token = staticmethod(lambda host: TOKEN)
+session.Direct.read_token = staticmethod(lambda host: PLANTED)
 module = importlib.import_module(sys.argv[2])
 sys.argv = [sys.argv[2] + ".py", *sys.argv[3:]]
 sys.exit(module.main())
-""".replace("TOKEN_HERE", repr(TOKEN))
+""".replace("TOKEN_HERE", repr(PLANTED))
 
 
 @pytest.fixture
@@ -495,9 +495,9 @@ def test_each_switched_command_prints_the_same_with_either_transport(served, nam
         asked = (double.dir / "direct.log").exists()
         assert asked == (transport == "direct"), found.stderr  # the transport that ran
         assert session.DIRECT_OFF not in found.stderr, found.stderr
-        assert TOKEN not in found.stdout + found.stderr
+        assert PLANTED not in found.stdout + found.stderr
         outs[transport] = (timed(said(found)), [c[:2] + c[3:] for c in double.calls()])
     assert outs["gh"] == outs["direct"]
     for item in double.cache.glob("*"):
-        assert TOKEN.encode() not in item.read_bytes()
+        assert PLANTED.encode() not in item.read_bytes()
     assert not re.search(r"Traceback", outs["direct"][0][1])
