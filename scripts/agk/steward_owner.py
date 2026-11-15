@@ -72,7 +72,7 @@ def relay_body(qid: str, answer: str, words: str, at: str) -> str:
 
 
 def relay_problem(body: str) -> str | None:
-    """A relayed owner answer: rule 5's first line, the `Owner said` quote and `Who: ProductOwner`."""
+    """A relayed owner answer: rule 5's first line, the `Owner said` quote, `Who: ProductOwner`."""
     lines = body.strip().splitlines()
     if not lines or not ANSWER_FIRST.fullmatch(lines[0]):
         return f"refused: the first line is `Maintainer answer: Q-<id> <answer>` ({RULE})"
@@ -134,8 +134,10 @@ def relay(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
         return 0, [f"post on #{opts.on}:", *body.splitlines()]
     repo = session.repo_name(root)
     post(repo, opts.on, body)
-    return 0, [f"relayed {opts.qid} on #{opts.on}", *unpark(root, repo, opts.on, opts.qid,
-                                                             opts.conductor)]  # fmt: skip
+    return 0, [
+        f"relayed {opts.qid} on #{opts.on}",
+        *unpark(root, repo, opts.on, opts.qid, opts.conductor),
+    ]
 
 
 def park(root: Path, number: int, conductor: str | None, now: datetime) -> tuple[int, list[str]]:
@@ -188,8 +190,9 @@ def not_ready(root: Path, plan_text: str, trace_text: str) -> list[str]:
 
 
 def ready(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
-    failed = not_ready(root, opts.plan.read_text(encoding="utf-8"),
-                       opts.trace.read_text(encoding="utf-8"))  # fmt: skip
+    failed = not_ready(
+        root, opts.plan.read_text(encoding="utf-8"), opts.trace.read_text(encoding="utf-8")
+    )
     if failed:
         return 1, [*failed, "conductor: not started"]
     args = ["role", "--role", "conductor", "--session", opts.session]

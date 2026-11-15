@@ -47,8 +47,11 @@ ASKED = at(11, "builder1", "Question: Q-7-1 which runtime for the widget export?
 def test_req066_a_question_is_waiting_until_an_answer_names_it():
     """REQ-066 AC1: rule 2, the waiting `Question:` lines and the three answers that end one."""
     assert conductor.waiting_questions([ASKED], ANSWERERS) == [("Q-7-1", 11)]
-    for first in ("Answer: Q-7-1 the smaller one", "Maintainer answer: Q-7-1 yes",
-                  "Correction: Q-7-1 is withdrawn"):  # fmt: skip
+    for first in (
+        "Answer: Q-7-1 the smaller one",
+        "Maintainer answer: Q-7-1 yes",
+        "Correction: Q-7-1 is withdrawn",
+    ):
         assert conductor.waiting_questions([ASKED, at(12, "boss", first, 5)], ANSWERERS) == []
     other = at(12, "boss", "Answer: Q-7-2 another question", 5)
     assert conductor.waiting_questions([ASKED, other], ANSWERERS) == [("Q-7-1", 11)]
@@ -85,7 +88,9 @@ def test_req066_the_start_names_the_configured_adapter(marks, monkeypatch):
     monkeypatch.setattr(conductor, "configured_start_adapter", lambda root: ADAPTER)
     conductor.steward_lines(marks, {7: [ASKED]}, ANSWERERS, NOW)
     (line,) = conductor.steward_lines(marks, {7: [ASKED]}, ANSWERERS, NOW)
-    assert line.endswith("--session steward-202611151300 --adapter 'scripts/start-session.sh --cloud'")
+    assert line.endswith(
+        "--session steward-202611151300 --adapter 'scripts/start-session.sh --cloud'"
+    )
 
 
 def adapter_file(tmp_path: Path, code: int) -> str:
@@ -125,7 +130,7 @@ def test_req066_a_refused_start_is_listed_as_stuck_never_silent(tmp_path, monkey
     assert launch.main(["role", "--role", "architect", "--session", "x"]) == 2
 
 
-def test_req066_the_conductor_guard_allows_the_steward_start_through_launch_only(project, tmp):
+def test_req066_the_conductor_guard_allows_the_steward_start_through_launch_only(project, tmp):  # noqa: F811
     """REQ-066 AC1: rule 2, the guard allows `launch.py role --role steward`, the adapter only
     as configured, and no other role or spelling."""
     base = "python3 scripts/agk/launch.py role --role"
@@ -135,7 +140,9 @@ def test_req066_the_conductor_guard_allows_the_steward_start_through_launch_only
     assert not allowed(run_hook(adapted, project, tmp))
     on(project)
     assert allowed(run_hook(adapted, project, tmp))
-    assert not allowed(run_hook(f"{base} steward --session steward-1 --adapter other", project, tmp))
+    assert not allowed(
+        run_hook(f"{base} steward --session steward-1 --adapter other", project, tmp)
+    )
     assert not allowed(run_hook(f"{base} conductor --session c1", project, tmp))
     assert not allowed(run_hook("claude --agent steward", project, tmp))
 
@@ -146,9 +153,16 @@ def plan_root(tmp_path, monkeypatch):
     (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
     (tmp_path / "docs" / "plan").mkdir(parents=True)
     (tmp_path / "docs" / "plan" / "scope-lock.md").write_text("# Scope lock: Widgets\n")
-    (tmp_path / "cache.json").write_text(json.dumps({"issue": 3, "comments": [
-        {"id": 1, "body": "Owner question: Q-9-1 M2 Which colour? I recommend blue."},
-    ]}))  # fmt: skip
+    (tmp_path / "cache.json").write_text(
+        json.dumps(
+            {
+                "issue": 3,
+                "comments": [
+                    {"id": 1, "body": "Owner question: Q-9-1 M2 Which colour? I recommend blue."},
+                ],
+            }
+        )
+    )
     (tmp_path / "plan.json").write_text('{"malformed": [], "start": []}')
     (tmp_path / "trace.txt").write_text("| row |\nok plan: 4 of 4 in-scope source lines\n")
     calls: list = []
@@ -158,8 +172,16 @@ def plan_root(tmp_path, monkeypatch):
 
 
 def ready(root: Path) -> int:
-    args = ["ready", "--plan", str(root / "plan.json"), "--trace", str(root / "trace.txt"),
-            "--session", "c1", "--start"]  # fmt: skip
+    args = [
+        "ready",
+        "--plan",
+        str(root / "plan.json"),
+        "--trace",
+        str(root / "trace.txt"),
+        "--session",
+        "c1",
+        "--start",
+    ]
     return steward_owner.main(args)
 
 
@@ -185,9 +207,19 @@ def test_req066_a_plan_that_fails_any_check_starts_no_conductor(
     elif broken == "scope":
         (root / "docs" / "plan" / "scope-lock.md").unlink()
     elif broken == "question":
-        (root / "cache.json").write_text(json.dumps({"issue": 3, "comments": [
-            {"id": 2, "body": "Owner question: Q-9-2 Ship M1 on Friday or wait? I recommend wait."},
-        ]}))  # fmt: skip
+        (root / "cache.json").write_text(
+            json.dumps(
+                {
+                    "issue": 3,
+                    "comments": [
+                        {
+                            "id": 2,
+                            "body": "Owner question: Q-9-2 Ship M1 now or wait? I recommend wait.",
+                        },
+                    ],
+                }
+            )
+        )
     else:
         (root / "cache.json").unlink()
     assert ready(root) == 1
@@ -203,6 +235,10 @@ def test_req066_the_agent_files_name_the_two_starts():
     steward_text = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
     assert "launch.py role --role steward" in conductor_text and "stuck:" in conductor_text
     assert "where a steward runs" in conductor_text.lower()
-    for command in ("steward_owner.py ask", "steward_owner.py relay", "steward_owner.py park",
-                    "steward_owner.py ready"):  # fmt: skip
+    for command in (
+        "steward_owner.py ask",
+        "steward_owner.py relay",
+        "steward_owner.py park",
+        "steward_owner.py ready",
+    ):
         assert command in steward_text

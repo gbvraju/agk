@@ -1120,7 +1120,8 @@ def steward_lines(root, kept: dict, answerers: set[str], now) -> list[str]:
 
 
 def configured_start_adapter(root) -> str | None:
-    """`launch_adapter` when `auto_start` is on with it in the checkout and on the default branch."""
+    """`launch_adapter` when `auto_start` is on with it in the checkout and on the default branch
+    alike, else None."""
     try:
         here = launch.launch_settings(Path(root))
         there = launch.launch_settings(Path(root), f"origin/{launch.default_branch(Path(root))}")

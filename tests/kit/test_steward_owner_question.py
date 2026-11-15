@@ -51,8 +51,12 @@ class GitHub:
     def __call__(self, endpoint: str, *extra: str, method: str = "GET"):
         self.calls.append((method, endpoint, extra))
         if method == "GET" and endpoint.endswith("/pulls/7"):
-            return {"number": 7, "user": {"login": "builder1"}, "created_at": "2026-11-15T10:00:00Z",
-                    "labels": [{"name": n} for n in sorted(self.labels)]}  # fmt: skip
+            return {
+                "number": 7,
+                "user": {"login": "builder1"},
+                "created_at": "2026-11-15T10:00:00Z",
+                "labels": [{"name": n} for n in sorted(self.labels)],
+            }
         if method == "GET" and "/issues/7/comments" in endpoint:
             return list(self.comments)
         if method == "POST" and endpoint.endswith("/labels"):
@@ -68,20 +72,27 @@ class GitHub:
         raise AssertionError((method, endpoint))
 
     def posted(self) -> list[str]:
-        return [x[2][1].split("=", 1)[1] for x in self.calls if x[0] == "POST" and "comments" in x[1]]
+        return [
+            x[2][1].split("=", 1)[1] for x in self.calls if x[0] == "POST" and "comments" in x[1]
+        ]
 
 
 @pytest.fixture
 def root(tmp_path, monkeypatch):
     (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
     monkeypatch.setattr(steward_owner.session, "repo_name", lambda root: REPO)
-    monkeypatch.setattr(steward_owner.session, "owner_people", lambda r, p: ({"boss"}, {"boss", "owner"}))
+    monkeypatch.setattr(
+        steward_owner.session, "owner_people", lambda r, p: ({"boss"}, {"boss", "owner"})
+    )
     monkeypatch.setattr(steward_owner.session, "owner_wait_settings", lambda r: PLAIN)
     told: list = []
     monkeypatch.setattr(steward_owner.session, "tell", lambda r, me, text: told.append((me, text)))
     records: list = []
-    monkeypatch.setattr(steward_owner.steward, "record",
-                        lambda r, kind, text, gh: records.append((kind, text)) or (0, ["recorded"]))  # fmt: skip
+    monkeypatch.setattr(
+        steward_owner.steward,
+        "record",
+        lambda r, kind, text, gh: records.append((kind, text)) or (0, ["recorded"]),
+    )
     return tmp_path, told, records
 
 
@@ -101,7 +112,9 @@ def test_req066_the_owner_question_has_no_kit_term(root):
     assert "one line" in steward_owner.question_problem(f"{GOOD}\nA second line.")
 
 
-def test_req066_ask_records_tells_the_owner_and_posts_for_the_maintainers(root, monkeypatch, capsys):
+def test_req066_ask_records_tells_the_owner_and_posts_for_the_maintainers(
+    root, monkeypatch, capsys
+):
     """REQ-066 AC3: rule 5, the memory entry, the sentence for the chat and the `Question:` line."""
     base, _, records = root
     gh = GitHub([])
@@ -114,8 +127,9 @@ def test_req066_ask_records_tells_the_owner_and_posts_for_the_maintainers(root, 
 
 def test_req066_a_relay_without_the_owners_quote_or_a_malformed_one_is_refused():
     """REQ-066 AC3: rule 5, the three lines of a relayed owner answer."""
-    good = steward_owner.relay_body("Q-7-1", "wait a week", "Wait a week, the totals matter.",
-                                    "2026-11-15T12:40Z")  # fmt: skip
+    good = steward_owner.relay_body(
+        "Q-7-1", "wait a week", "Wait a week, the totals matter.", "2026-11-15T12:40Z"
+    )
     assert good.splitlines() == [
         "Maintainer answer: Q-7-1 wait a week",
         'Owner said (2026-11-15T12:40Z): "Wait a week, the totals matter."',
@@ -124,8 +138,12 @@ def test_req066_a_relay_without_the_owners_quote_or_a_malformed_one_is_refused()
     assert steward_owner.relay_problem(good) is None
     missing = "Maintainer answer: Q-7-1 wait a week\nWho: ProductOwner\n"
     assert "second line" in steward_owner.relay_problem(missing)
-    for said in ('Owner said: "Wait."', 'Owner said (15 Nov 18:10 IST): "Wait."',
-                 "Owner said (2026-11-15T12:40Z): Wait.", 'Owner said (2026-11-15T12:40Z): ""'):  # fmt: skip
+    for said in (
+        'Owner said: "Wait."',
+        'Owner said (15 Nov 18:10 IST): "Wait."',
+        "Owner said (2026-11-15T12:40Z): Wait.",
+        'Owner said (2026-11-15T12:40Z): ""',
+    ):
         body = f"Maintainer answer: Q-7-1 wait\n{said}\nWho: ProductOwner\n"
         assert "second line" in steward_owner.relay_problem(body), said
     no_who = 'Maintainer answer: Q-7-1 wait\nOwner said (2026-11-15T12:40Z): "Wait."\n'
@@ -135,12 +153,25 @@ def test_req066_a_relay_without_the_owners_quote_or_a_malformed_one_is_refused()
 def relay_args(base: Path, words: str = "Wait a week, the totals matter.") -> list[str]:
     said = base / "said.txt"
     said.write_text(words + "\n", encoding="utf-8")
-    return ["relay", "--qid", "Q-7-1", "--on", "7", "--answer", "wait a week", "--said", str(said),
-            "--at", "2026-11-15T12:40Z", "--conductor", "c1"]  # fmt: skip
+    return [
+        "relay",
+        "--qid",
+        "Q-7-1",
+        "--on",
+        "7",
+        "--answer",
+        "wait a week",
+        "--said",
+        str(said),
+        "--at",
+        "2026-11-15T12:40Z",
+        "--conductor",
+        "c1",
+    ]
 
 
 def test_req066_rule10a_the_steward_parks_an_unanswered_owner_question(root, monkeypatch):
-    """REQ-066 AC6: rule 10 (a), an owner question unanswered for the wait parks the pull request."""
+    """REQ-066 AC6: rule 10 (a), an owner question unanswered for the wait parks it."""
     base, told, _ = root
     gh = GitHub([at(1, "boss", "Question: Q-7-1 for the maintainers: Friday or a week?", 31)])
     monkeypatch.setattr(steward_owner.session, "gh", gh)
@@ -165,8 +196,13 @@ def test_req066_rule10c_the_relay_unparks_and_tells_the_conductor_once(root, mon
     """REQ-066 AC6: rule 10 (c), the owner's reply relayed after parking removes the label and
     sends one `Tell:` naming the pull request and the Q id."""
     base, told, _ = root
-    gh = GitHub([at(1, "boss", "Question: Q-7-1 for the maintainers: Friday or a week?", 90),
-                 at(2, "boss", "Parked-by: wait Q-7-1", 50)], labels=("agk:parked",))  # fmt: skip
+    gh = GitHub(
+        [
+            at(1, "boss", "Question: Q-7-1 for the maintainers: Friday or a week?", 90),
+            at(2, "boss", "Parked-by: wait Q-7-1", 50),
+        ],
+        labels=("agk:parked",),
+    )
     monkeypatch.setattr(steward_owner.session, "gh", gh)
     monkeypatch.setattr(steward_owner, "repo_root", lambda: base)
     assert steward_owner.main(relay_args(base)) == 0
@@ -192,8 +228,12 @@ def test_req066_rule10_a_conductor_with_no_steward_still_parks_and_resumes(monke
     monkeypatch.setattr(conductor, "parked_mark", lambda root: tmp_path / "parked")
 
     def lines() -> list[str]:
-        pull = {"number": 7, "user": {"login": "builder1"}, "created_at": "2026-11-15T10:00:00Z",
-                "labels": [{"name": n} for n in labels]}  # fmt: skip
+        pull = {
+            "number": 7,
+            "user": {"login": "builder1"},
+            "created_at": "2026-11-15T10:00:00Z",
+            "labels": [{"name": n} for n in labels],
+        }
         return conductor.owner_lines("root", REPO, [pull], PLAIN, ["boss"], ["owner"], NOW)
 
     assert lines() == ["PARKED #7 Q-7-1"]
