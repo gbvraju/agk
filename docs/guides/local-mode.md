@@ -250,8 +250,8 @@ change with an ADR in the same pull request.
    from those of the last job, the plan's `Start` line starts a brief, or no job ran for 24 hours; otherwise it prints
    `watchdog: nothing changed; no job started`. The job does one pass and ends, and leaves the lease to the script; a job
    that fails is tried again on the next pass. `watchdog --install --pass` prints the line that runs it every 10 minutes.
-   The sessions the watchdog and `launch.py` start get `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0`, which turns the runtime's
-   idle recaps off `(verify)`; your own session is untouched.
+   The sessions the watchdog and `launch.py` start get the runtime's variable that turns its idle recaps off
+   `(verify)`; your own session is untouched.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then

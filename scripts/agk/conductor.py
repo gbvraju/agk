@@ -2001,7 +2001,7 @@ def install_line(root, name: str, platform: str, scripted: bool = False) -> str:
     10, ADR-0554); printed, never run."""
     named = "" if name == WATCHDOG_NAME else f" --session {name}"
     named += " --pass" if scripted else ""
-    minutes = PASS_MINUTES if scripted else WATCHDOG_MINUTES
+    minutes = JOB_MINUTES if scripted else WATCHDOG_MINUTES
     folder = str(Path(root).resolve())
     if platform == "win32":
         run = (
@@ -2087,11 +2087,11 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
 
 # --- the scripted pass: a model only when there is work (brief #1310 answer 3, ADR-0554) ---------
 
-PASS_MINUTES = 10
-PASS_DAY = timedelta(hours=24)  # one job a day still posts the conductor's report
-PASS_STATE = "watchdog.json"  # beside the lease mark, in the git directory: never tracked
+JOB_MINUTES = 10
+JOB_DAY = timedelta(hours=24)  # one job a day still posts the conductor's report
+JOB_STATE = "watchdog.json"  # beside the lease mark, in the git directory: never tracked
 AGE = re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z|\b\d+(?:s|m|h|d|min| min)\b")
-PASS_PROMPT = (
+JOB_PROMPT = (
     "You are the AGK conductor {name} for repository {repo}, started by the local watchdog's "
     "scripted pass (`python3 scripts/agk/conductor.py watchdog --pass`) because {why}. Your role "
     "is `.claude/agents/conductor.md` on the default branch: read it, `CLAUDE.md`, "
@@ -2107,7 +2107,7 @@ PASS_PROMPT = (
 
 def pass_state_file(root) -> Path | None:
     mark = lease_mark(root)
-    return None if mark is None else mark.parent / PASS_STATE
+    return None if mark is None else mark.parent / JOB_STATE
 
 
 def pass_state(root) -> dict:
@@ -2157,7 +2157,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
             ("the queue changed", fingerprint != state.get("fingerprint")),
             ("the plan starts a brief", starts),
             ("a sweep line changed", swept != state.get("sweep")),
-            ("no job ran for 24 hours", last is None or now - last >= PASS_DAY),
+            ("no job ran for 24 hours", last is None or now - last >= JOB_DAY),
         )
         if yes
     ]
@@ -2178,7 +2178,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
             shlex.split(adapter),
-            input=PASS_PROMPT.format(name=name, repo=repo, why=", ".join(why)),
+            input=JOB_PROMPT.format(name=name, repo=repo, why=", ".join(why)),
             text=True,
             encoding="utf-8",
             env=env,

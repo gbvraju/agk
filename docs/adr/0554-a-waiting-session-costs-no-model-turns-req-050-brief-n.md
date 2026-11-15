@@ -44,7 +44,8 @@ session read everything again, so a builder still lives until its pull request m
    `watchdog: nothing changed; no job started`. The job does one pass and ends, and leaves the lease to the script. The
    fingerprint and the time of the last job are kept in `<git dir>/agk/watchdog.json`, beside the lease mark, only after a job started without error,
    so a job that fails is tried again on the next pass. `--install --pass` prints the scheduler line every 10 minutes.
-   An interactive conductor with `/loop` is unchanged.
+   An interactive conductor with `/loop` is unchanged. Session rule 18's wait for an `Assign:` is `watch --assign ID
+   --until-event`.
 4. Recaps are off for agent sessions: the watchdog and `launch.py` start every adapter with
    `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` `(verify: https://code.claude.com/docs/en/env-vars, read by a helper agent of the
    builder session, not by the builder)`. A person's own session is untouched.
@@ -57,10 +58,15 @@ In the recorded double a quiet hour makes no return of `watch --until-event` bef
 lease every 240 s, and `watchdog --pass` starts no job on an unchanged fingerprint. Protected path classes changed:
 `scripts/agk/` (`session.py`, `conductor.py`, `launch.py`, `config.py` for the two new `[flow]` keys), `tests/kit/`
 (`test_wait_until_event.py`, and the write count of `test_session.py`), `kit/` (`kit/templates/runtime/builder.txt`),
-`config/` (`config/session-rules.md` rule 18), `.claude/` (`.claude/agents/conductor.md`) and `agk.toml` (the new test
-file in the `[[testing.map]]` entries of `session.py`, `conductor.py` and `launch.py`).
+`config/` (`config/session-rules.md` rule 18 and its lower line in `config/rule-budget.txt`) and `agk.toml` (the new
+test file in the `[[testing.map]]` entries of `session.py`, `conductor.py` and `launch.py`). The conductor's role file is
+unchanged: the job's prompt carries its one-pass instruction, since the rule budget lets that file only shrink.
 
 ## Residual
 
+- 2026-11-15: a slot run as a cloud scheduled task keeps its own 5-minute `watch --assign` of ADR-0368 (no flag); whether
+  rule 18's wording should name that exception is Q-1310-1.
+- 2026-11-15 (verify): in an unattended session a background command gets 30 minutes unless the session passes a longer
+  timeout, up to 2 hours; a wait started there with `--until-event` is given that timeout.
 - 2026-11-15 (verify): the background-command limit (30 minutes by default, 2 hours at most, in unattended sessions) and
   the recap variable were read from the runtime's documentation by a helper agent, not confirmed on a run.

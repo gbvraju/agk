@@ -2249,7 +2249,8 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
     limit = float(args.get("--timeout", flow_int(root, "claim_hours", CLAIM_HOURS, 1) * 3600))
     slotted = is_slot(root, me)  # a slot returns within the bound, so that it renews in time
     if "--until-event" in args:  # the script renews the lease, so the bound is lifted (ADR-0554)
-        limit, woken = wake_bound(root, args, limit)
+        bound, woken = wake_bound(root, args, limit)
+        limit = limit if bound is None else bound
     else:
         limit, woken = (min(limit, WATCH_BOUND - interval) if slotted else limit), False
     held = slotted and bool(slot_run(root, me))
@@ -4153,7 +4154,8 @@ def summary_lines_of(comments: list, author: str, head: str) -> str | None:
     head it was written at, from which the diff to read starts (brief #1310 answer 2)."""
     found = summary_comment(comments, author)
     if found is not None:
-        since = SUMMARY.fullmatch(first_line(found)).group(1)  # type: ignore[union-attr]
+        named = SUMMARY.fullmatch(first_line(found))
+        since = named.group(1) if named else ""
         print(f"summary (comment {found['id']}) at {since}:")
         for line in plain(str(found.get("body") or "")).splitlines()[1:]:
             print(f"  {line}" if line else "")
