@@ -45,6 +45,13 @@ every prompt names with the tier's model name from `[models.names]` when the pro
 the adapter gets as `AGK_KIND`, `AGK_TIER`, `AGK_EFFORT` and `AGK_MODEL`. A `small` or `mechanical`
 prompt names the lean reading list instead of today's line. A running entry's `escalated_from`
 (the tier it stopped on, never `strongest`) resumes it one tier up, at least at `build`'s effort.
+
+Brief #1322 (SPEC-0059 rule 2, ADR-0559): `role --role steward|conductor --session ID [--adapter
+COMMAND]` starts one role session: the steward (the conductor's start when a question waits) or the
+conductor (the steward's start when the plan is ready). It prints the role's prompt, or with
+`--adapter` calls the adapter once as above, with `AGK_SESSION`, `AGK_ROLE`, `AGK_AGENT`, the
+`design` kind, tier and effort, and no `AGK_BRIEF`. A start that the adapter or the memory floor
+refuses prints `stuck: <role> <session> not started (<why>)`, never silent (exit 1).
 """
 
 from __future__ import annotations
@@ -447,9 +454,67 @@ def start_with(
     return 0
 
 
+ROLES = ("steward", "conductor")
+ROLE_PROMPT = (
+    "You are session {session}, the {role} of this repository. Start the role with "
+    "`claude --agent {role}` (verify: the flag of the runtime used) and follow "
+    "`.claude/agents/{role}.md`. Read CLAUDE.md, constitution/principles.md and "
+    "config/core-rules.md first. {kind_line}\n"
+)
+
+
+def role_main(args: list[str]) -> int:
+    """`role --role steward|conductor --session ID [--adapter COMMAND]` (brief #1322)."""
+    opts = dict(zip(args[1::2], args[2::2], strict=False))
+    if (
+        len(args[1:]) % 2
+        or len(opts) != len(args[1::2])
+        or not {"--role", "--session"} <= set(opts) <= {"--role", "--session", "--adapter"}
+        or opts["--role"] not in ROLES
+        or not SESSION_ID.fullmatch(opts["--session"])
+    ):
+        print("usage: launch.py role --role steward|conductor --session ID [--adapter COMMAND]",
+              file=sys.stderr)  # fmt: skip
+        return 2
+    role, session = opts["--role"], opts["--session"]
+    prompt = ROLE_PROMPT.format(session=session, role=role, kind_line=kind_line(DESIGN))
+    if "--adapter" not in opts:
+        print(prompt, end="")
+        return 0
+    stuck = f"stuck: {role} {session} not started"
+    words = shlex.split(opts["--adapter"])
+    if not words:
+        print(f"{stuck} (the adapter is empty)")
+        return 1
+    try:
+        allowed = memory_allows(Path.cwd())
+    except CheckError:
+        allowed = False
+    if not allowed:
+        print(f"{stuck} (setting: flow.min_free_memory_mb)")
+        return 1
+    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
+    env.update(QUIET, AGK_SESSION=session, AGK_ROLE=role, AGK_AGENT=role)
+    env.update(AGK_KIND=DESIGN[0], AGK_TIER=DESIGN[1], AGK_EFFORT=DESIGN[2])
+    try:
+        done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
+            words, input=prompt, text=True, encoding="utf-8", env=env, capture_output=True
+        )
+    except OSError:
+        print(f"{stuck} (the adapter cannot be run)")
+        return 1
+    if done.returncode != 0:
+        print(f"{stuck} (the adapter failed)")
+        return 1
+    print(f"started {role} {session}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
+    if args[:1] == ["role"]:
+        return role_main(args)
     resume = args.count("--resume") == 1 and args[:1] == ["prompts"]
     if resume:
         args.remove("--resume")
