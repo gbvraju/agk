@@ -3,7 +3,7 @@ and 19; brief #1321, ADR-0558).
 
 Usage: python3 scripts/agk/steward_evidence.py stage [--date YYYY-MM-DD]
        python3 scripts/agk/steward_evidence.py settle --question FILE [--stage STAGE]
-       python3 scripts/agk/steward_evidence.py answer --question FILE --number N
+       python3 scripts/agk/steward_evidence.py answer --question FILE --number N [--recheck FILE]
        python3 scripts/agk/steward_evidence.py triage --finding FILE
        python3 scripts/agk/steward_evidence.py skill --step STEP
 
@@ -13,13 +13,15 @@ JSON: `id` (Q-...), `class` (one of CLASSES), optional `changes` (of scope, date
 rule 3's order, `answer`, `place`, `rule`) and `ranking` (`source` and `place` of an earlier
 decision that ranks disagreeing sources). `stage` prints the stage in the owner's words, read from
 the files and one GET of the open `agk-conductor` issue (never in personal mode). `settle` prints
-the `Answer:` comment (exit 0) or `owner: <reason>` with the recommendation and any `Gap:` to
-record (exit 3); `answer` posts that one comment on issue or pull request N, and nothing when the
-question goes to the owner. A requirement answer goes to the owner with its recommendation until
-build (d)'s re-check lands. `triage` judges one finding (JSON: `id`, `triage`, `why`, `text`,
-optional `cause` and `reproduced`): exit 0 with `file`, `draft` or `ask` and its `Triage:` entry,
-2 when refused, naming the setting or list, never the value. `skill` prints the step's skill from
-the agent file's table, or `no skill:` and one kit brief to file (exit 3). Exit 4: GitHub unread.
+the `Answer:` comment (exit 0) or `owner: <reason>` with the recommendation and any `Gap:` to record
+(exit 3); `answer` posts that one comment on issue or pull request N, and nothing when the question
+goes to the owner. A requirement answer is posted only when the fresh reviewer's answer
+(`--recheck`, JSON `answer`; build (d), ADR-0560) agrees; otherwise both go to the owner, as does a
+class the owner overrode twice in seven days (`steward_daily.py`). `triage` judges one finding
+(JSON: `id`, `triage`, `why`, `text`, optional `cause` and `reproduced`): exit 0 with `file`,
+`draft` or `ask` and its `Triage:` entry, 2 when refused, naming the setting or list, never the
+value. `skill` prints the step's skill from the agent file's table, or `no skill:` and one kit brief
+to file (exit 3). Exit 4: GitHub unread.
 """
 
 from __future__ import annotations
@@ -103,13 +105,16 @@ def one_line(text: object) -> str:
     return " ".join(str(text).split())
 
 
-def settle(question: dict, stage: str) -> dict:
+def settle(
+    question: dict, stage: str, recheck: dict | None = None, warned: frozenset | set = frozenset()
+) -> dict:
     """Rule 3: the first source that answers wins; its negative cases and authority by stage."""
     question = checked(question)
     qid, cls, findings = question["id"], question["class"], question.get("findings", [])
     findings = sorted(findings, key=lambda f: f["source"])
     answers = {one_line(f["answer"]) for f in findings}
     out = {"to": "owner", "line": None, "recommendation": None, "evidence": None, "gap": False}
+    out["class"] = cls
     ranking = question.get("ranking")
     if len(answers) > 1 and isinstance(ranking, dict):
         findings = [f for f in findings if f["source"] == ranking.get("source")]
@@ -125,6 +130,8 @@ def settle(question: dict, stage: str) -> dict:
         reason = "it changes scope, a date, a cost or what the customer signs off"
     elif question.get("reverses"):
         reason = "it reverses an earlier owner decision"
+    elif cls in warned:
+        reason = "the owner overrode this class twice in seven days (rule 3)"
     elif building(stage) and cls == "requirement" and not any(f["source"] < 5 for f in findings):
         reason, out["gap"] = "a planning gap: nothing the plan decided names it", True
         out["record"] = f"Gap: {qid} {reason} (stage: {stage})"
@@ -132,8 +139,13 @@ def settle(question: dict, stage: str) -> dict:
         reason = "sources disagree with no ranking" if answers else "no source answers it"
     elif requirement and not building(stage):
         reason = "a requirement question in planning goes to the owner"
-    elif requirement:
-        reason = "a requirement answer waits for the re-check of build (d)"
+    elif requirement and not (second := (recheck or {}).get("answer")):
+        reason = "a requirement answer needs the fresh re-check (rule 13)"
+    elif requirement and norm(second) != norm(win["answer"]):
+        reason = (
+            f"the re-check disagrees: steward {one_line(win['answer'])}; "
+            f"re-check {one_line(second)}"
+        )
     else:
         out["to"], reason = "answer", f"settled by source {win['source']} of rule 3"
         out["line"] = (
@@ -144,8 +156,12 @@ def settle(question: dict, stage: str) -> dict:
     return out
 
 
+def norm(text: object) -> str:
+    return one_line(text).casefold().rstrip(".")
+
+
 def answer_body(found: dict) -> str:
-    return f"{found['line']}\n\n{WHO}\n"
+    return f"{found['line']}\nClass: {found['class']}\n\n{WHO}\n"
 
 
 def owner_lines(found: dict) -> list[str]:
@@ -166,9 +182,16 @@ def conductor_open(root: Path, gh) -> bool:
     return bool(listed)
 
 
-def answer(root: Path, question: dict, number: int, gh, today: date) -> tuple[int, list[str]]:
-    """Rules 4 and 18: one comment, only for a question the steward may answer."""
-    found = settle(question, stage_of(root, today, conductor_open(root, gh)))
+def answer(
+    root: Path, question: dict, number: int, gh, today: date, recheck: dict | None = None
+) -> tuple[int, list[str]]:
+    """Rules 4, 13 and 18: one comment, only for a question the steward may answer."""
+    from steward import load_cache
+    from steward_daily import warned
+
+    now = datetime.combine(today, datetime.min.time(), UTC)
+    classes = warned(load_cache(root).get("comments", []), now)  # the start's cache: no call
+    found = settle(question, stage_of(root, today, conductor_open(root, gh)), recheck, classes)
     if found["to"] != "answer":
         return 3, owner_lines(found)
     posted = gh(
@@ -263,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     answer_p = sub.add_parser("answer")
     answer_p.add_argument("--question", type=Path, required=True)
     answer_p.add_argument("--number", type=int, required=True)
+    answer_p.add_argument("--recheck", type=Path)
     sub.add_parser("triage").add_argument("--finding", type=Path, required=True)
     sub.add_parser("skill").add_argument("--step", required=True)
     opts = parser.parse_args(argv)
@@ -288,7 +312,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2 if found["action"] == "refused" else 0
         question = json.loads(opts.question.read_text(encoding="utf-8"))
         if opts.command == "answer":
-            code, lines = answer(root, question, opts.number, gh_api, today)
+            recheck = json.loads(opts.recheck.read_text("utf-8")) if opts.recheck else None
+            code, lines = answer(root, question, opts.number, gh_api, today, recheck)
             print("\n".join(lines))
             return code
         stage = opts.stage or stage_of(root, today, conductor_open(root, gh_api))

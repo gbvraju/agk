@@ -1,5 +1,6 @@
 """Tests of scripts/agk/steward_daily.py: the daily list, the override share and its warning, and
-the fresh re-check of a requirement answer (SPEC-0059 rules 3 and 13; brief #1323, ADR-0560; REQ-066).
+the fresh re-check of a requirement answer (SPEC-0059 rules 3 and 13; brief #1323, ADR-0560;
+REQ-066).
 
 Invented data only (example.com); no network, no model: the reviewer agent of the re-check is a
 stub answer, and GitHub is a recorded double that counts each call.
@@ -17,8 +18,12 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "scripts" / "agk"))
 
+sys.path.insert(0, str(HERE))
+
+import steward  # noqa: E402
 import steward_daily as daily  # noqa: E402
 import steward_evidence as ev  # noqa: E402
+from test_steward_memory import GitHub  # noqa: E402
 
 NOW = datetime(2026, 11, 15, 9, 0, tzinfo=UTC)
 WHO = "Who: AGK steward"
@@ -44,7 +49,11 @@ def answer(cid, qid, text, when, cls="technical"):
 REPO = [
     answer(201, "Q-7-1", "make lint", "2026-11-14T08:00:00Z"),
     answer(202, "Q-7-2", "weekly", "2026-11-14T09:00:00Z", cls="requirement"),
-    c(203, 'Maintainer answer: Q-7-2 monthly\nOwner said (2026-11-14T10:00Z): "monthly"', "2026-11-14T10:00:00Z"),
+    c(
+        203,
+        'Maintainer answer: Q-7-2 monthly\nOwner said (2026-11-14T10:00Z): "monthly"',
+        "2026-11-14T10:00:00Z",
+    ),
     c(204, "Maintainer answer: Q-7-1 make lint", "2026-11-14T11:00:00Z"),
     c(205, "Answer: Q-9-9 by someone else", "2026-11-14T12:00:00Z"),
     answer(206, "Q-7-3", "today's", "2026-11-15T08:00:00Z"),
@@ -78,12 +87,14 @@ def test_req066_the_days_listed_start_after_the_last_daily_list_and_name_the_mis
         date(2026, 11, 15),
         date(2026, 11, 16),
     ]
-    assert daily.days_to_list([*MEMORY, c(106, "Daily: 2026-11-15", "x", 9)], date(2026, 11, 15)) == []
+    assert (
+        daily.days_to_list([*MEMORY, c(106, "Daily: 2026-11-15", "x", 9)], date(2026, 11, 15)) == []
+    )
     assert daily.days_to_list([], date(2026, 11, 15)) == [date(2026, 11, 14)]
 
 
 def test_req066_the_daily_list_of_a_fixture_day():
-    """REQ-066: rule 13, each answer with its id and evidence, each pass, each filing, the counts."""
+    """REQ-066: rule 13, each answer with its id and evidence, each pass, filing and count."""
     text = daily.daily_text(date(2026, 11, 15), [date(2026, 11, 14)], REPO, MEMORY, ISSUES)
     lines = text.splitlines()
     assert lines[0] == "Daily: 2026-11-15"
@@ -128,7 +139,11 @@ def test_req066_the_daily_list_is_posted_once_with_its_override_entries():
         calls.append((method, endpoint))
         if method == "POST":
             posted.append(fields["body"])
-            return {"id": 900 + len(posted), "body": fields["body"], "created_at": "2026-11-15T09:00:00Z"}
+            return {
+                "id": 900 + len(posted),
+                "body": fields["body"],
+                "created_at": "2026-11-15T09:00:00Z",
+            }
         return REPO if "issues/comments" in endpoint else ISSUES
 
     cache = {"issue": 9, "comments": list(MEMORY)}
@@ -139,6 +154,20 @@ def test_req066_the_daily_list_is_posted_once_with_its_override_entries():
     assert len(posted) == 2 and len(calls) <= 5
     assert daily.post_daily(cache, gh, NOW) == (0, ["daily: already posted for 2026-11-15"])
     assert len(posted) == 2
+
+
+def test_req066_a_pass_writes_its_calls_and_tokens_or_not_shown(tmp_path, monkeypatch):
+    """REQ-066: rules 13 and 18, each pass's counted calls and tokens; `not shown`, never 0."""
+    monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "cache.json"))
+    (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
+    gh = GitHub()
+    steward.start(tmp_path, "s1", gh, NOW)
+    steward.end(tmp_path, "s1", gh, NOW, 9, None)
+    body = gh.issues[1]["c"][-1]["body"]
+    assert body.startswith("Ended: steward s1 calls 9; tokens not shown")
+    memory = [c(1, body, "2026-11-14T10:00:00Z", 9)]
+    text = daily.daily_text(date(2026, 11, 15), [date(2026, 11, 14)], [], memory, [])
+    assert "- steward s1: calls 9; tokens not shown" in text.splitlines()
 
 
 # --- rule 3 by stage (d): the override warning ----------------------------------------------------
@@ -167,7 +196,12 @@ def test_req066_two_overrides_of_one_class_in_seven_days_send_it_to_the_owner():
 
 
 def requirement():
-    return {"id": "Q-7-2", "class": "requirement", "text": "How often is the report?", "findings": [SPEC]}
+    return {
+        "id": "Q-7-2",
+        "class": "requirement",
+        "text": "How often is the report?",
+        "findings": [SPEC],
+    }
 
 
 def test_req066_the_recheck_bundle_holds_the_question_and_evidence_only():
