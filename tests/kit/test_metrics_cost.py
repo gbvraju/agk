@@ -12,9 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 import metrics as metrics_mod
+import pytest
 
 DAY = "2026-11-14"
 MARKER = "kiwi-marker-9c1 https://example.com/secret-text"  # text that must never reach the output
@@ -108,7 +107,9 @@ def test_groups_by_session_role_brief_and_model(repo, tmp_path) -> None:
                 reply(here, S1, "m2", model="model-b"),
             ],
             "p/two.jsonl": [
-                reply(here, S2, "m3", branch="main", agent="conductor", inp=1, out=2, write=3, read=4),
+                reply(
+                    here, S2, "m3", branch="main", agent="conductor", inp=1, out=2, write=3, read=4
+                ),
                 reply(here, S2, "m4", branch="main", at="2026-11-13T23:59:59Z"),  # the day before
             ],
             "p/three.jsonl": [reply(f"{here}/sub", S3, "m5", branch="claude/brief-77")],
@@ -187,9 +188,9 @@ def test_a_bad_price_table_is_refused_naming_the_setting(repo, tmp_path) -> None
     repo.write("agk.toml", '[cost.prices.model-a]\ninput = "cheap"\n')
     top = records(tmp_path, {"p/a.jsonl": [reply(str(repo.root), S1, "m1")]})
     proc = run_cost(repo, top)
-    assert proc.returncode == 2
-    assert "cost.prices" in proc.stderr
-    assert "cheap" not in proc.stderr
+    assert proc.returncode == 1
+    assert "(setting: cost.prices.input)" in proc.stdout
+    assert "cheap" not in proc.stdout + proc.stderr
 
 
 def test_no_content_field_is_read_or_printed(repo, tmp_path) -> None:
@@ -237,9 +238,9 @@ def test_the_reader_never_touches_a_content_field() -> None:
 
 
 def test_another_clones_records_are_skipped(repo, tmp_path) -> None:
-    """REQ-050 AC5: answer 4, test (d) (a record of another folder, or of none, is never counted)."""
+    """REQ-050 AC5: answer 4, test (d) (a record of another folder, or none, never counts)."""
     here = str(repo.root)
-    other = str(tmp_path / "other-clone")
+    other = str(tmp_path.parent / f"{tmp_path.name}-other" / "clone")
     sibling = f"{here}-copy"  # a folder whose name starts with the clone's is not the clone
     no_cwd = reply(here, S3, "m4")
     del no_cwd["cwd"]
@@ -259,7 +260,7 @@ def test_another_clones_records_are_skipped(repo, tmp_path) -> None:
 def test_a_worktree_of_the_clone_is_counted(repo, tmp_path) -> None:
     """REQ-050 AC5: answer 1 (a reply whose folder is a worktree of the clone is counted)."""
     repo.commit({"README.md": "x\n"})
-    tree = tmp_path / "wt-1283"
+    tree = tmp_path.parent / f"{tmp_path.name}-wt" / "brief-1283"  # outside the clone folder
     repo.git("worktree", "add", "-q", "-b", "claude/brief-1283", str(tree))
     top = records(tmp_path, {"p/a.jsonl": [reply(str(tree), S1, "m1", branch="")]})
     proc = run_cost(repo, top)
