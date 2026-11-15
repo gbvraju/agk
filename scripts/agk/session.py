@@ -558,13 +558,18 @@ class CommentStore:
         data = data if isinstance(data, dict) else {}
         issues: dict[int, list] = {}
         kept, stamp = data.get("issues"), data.get("stamp")
-        if data.get("schema") == STORE_SCHEMA and isinstance(kept, dict) and _number(stamp):
+        if (
+            data.get("schema") == STORE_SCHEMA
+            and isinstance(kept, dict)
+            and isinstance(stamp, (int, float))
+            and not isinstance(stamp, bool)
+        ):
             delta = changed_comments(repo, float(stamp))
             if delta is None:
                 return
             issues = {int(k): v for k, v in kept.items() if k.isdigit() and isinstance(v, list)}
             for comment in delta:
-                number = int(ISSUE_OF.search(comment["issue_url"]).group(1))
+                number = issue_of(comment)
                 if number in issues:
                     rest = [c for c in issues[number] if c.get("id") != comment["id"]]
                     issues[number] = sorted(rest + [comment], key=lambda c: c.get("id") or 0)
@@ -591,7 +596,7 @@ class CommentStore:
         elif (listing := OPEN_LISTING.match(endpoint)) and listing.group(1) == self.repo:
             for item in found:
                 count, number = item.get("comments"), item.get("number")
-                if "pull_request" not in item and _number(number) and _whole(count):
+                if "pull_request" not in item and _whole(number) and _whole(count):
                     self.counts[number] = count
 
     def forget(self, endpoint: str) -> None:
@@ -618,8 +623,10 @@ def _whole(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-def _number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+def issue_of(comment: dict) -> int:
+    """The number of the issue or pull request a comment of the delta is on, 0 when none."""
+    found = ISSUE_OF.search(str(comment.get("issue_url") or ""))
+    return int(found.group(1)) if found else 0
 
 
 STORE = CommentStore()
@@ -750,7 +757,7 @@ def changed_since_pass(repo: str) -> None:
     found = changed_comments(repo, stamp)
     if found is None:
         return  # unreadable, or a comment that names no issue: read every page
-    changed = {int(ISSUE_OF.search(c["issue_url"]).group(1)) for c in found}
+    changed = {issue_of(c) for c in found}
     CACHE.unchanged = (stamp - SKEW, changed)
 
 
@@ -766,7 +773,7 @@ def changed_comments(repo: str, since: float) -> list | None:
     newest: dict[int, dict] = {}
     for comment in found:
         cid = comment.get("id") if isinstance(comment, dict) else None
-        if not _number(cid) or ISSUE_OF.search(str(comment.get("issue_url") or "")) is None:
+        if not isinstance(cid, int) or isinstance(cid, bool) or not issue_of(comment):
             return None
         kept, edited = newest.get(cid), str(comment.get("updated_at") or "")
         if kept is None or edited >= str(kept.get("updated_at") or ""):

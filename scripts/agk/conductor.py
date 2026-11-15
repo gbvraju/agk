@@ -343,7 +343,7 @@ def new_lines(
         delta = session.changed_comments(repo, since.timestamp())
     by_issue: dict[int, list] = {}
     for c in delta or []:
-        by_issue.setdefault(int(session.ISSUE_OF.search(c["issue_url"]).group(1)), []).append(c)
+        by_issue.setdefault(session.issue_of(c), []).append(c)
     lines = []
     for number in numbers:
         comments = (

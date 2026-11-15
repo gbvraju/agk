@@ -325,7 +325,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
-  "tests/kit/test_who_line.py",
+  "tests/kit/test_who_line.py", "tests/kit/test_github_read_budget.py",
   "tests/kit/test_conductor_wakes.py", "tests/kit/test_reviewer_slots_local.py",
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
@@ -824,6 +824,7 @@ tests = [
   "tests/kit/test_session_paused.py", "tests/kit/test_session_plan.py", "tests/kit/test_session_plan_lanes.py",
   "tests/kit/test_session_plan_malformed.py", "tests/kit/test_session_plan_milestones.py",
   "tests/kit/test_session_plan_overlap.py", "tests/kit/test_session_plan_reads.py", "tests/kit/test_session_prompt.py", "tests/kit/test_session_resume.py", "tests/kit/test_session_review.py",
+  "tests/kit/test_github_read_budget.py",
   "tests/kit/test_session_rules.py", "tests/kit/test_session_silent.py", "tests/kit/test_session_tell.py",
   "tests/kit/test_session_tidy.py", "tests/kit/test_shadow_guard.py", "tests/kit/test_stalls.py", "tests/kit_dev/test_guide_loop.py",
   "tests/kit_dev/test_intake.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_launcher_guide.py",

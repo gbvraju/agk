@@ -52,7 +52,9 @@ the shared reader, `conductor.py watch`, `session.py claim` and the setting; bui
 A conductor waiting on a 650-brief project makes three requests a poll, answered by `304` when nothing changed,
 instead of about 650; a contended claim reads only the briefs whose comments changed. A project returns to the old
 reads with one line, `github_reads = "full"`. Protected path classes changed: `scripts/agk/` (`session.py`,
-`conductor.py`) and `tests/kit/` (`test_github_read_budget.py`, `fixtures/read_budget_650.json`).
+`conductor.py`), `tests/kit/` (`test_github_read_budget.py`, `fixtures/read_budget_650.json`) and `agk.toml` (the
+new test file in the `[[testing.map]]` entries of `session.py` and `conductor.py`, so that a change to either selects
+it).
 
 ## Residual
 
