@@ -1,6 +1,6 @@
 # SPEC-0064: An autopilot supervisor per machine runs every AI session as a short job
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-071
 
