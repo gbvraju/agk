@@ -9,7 +9,7 @@ run therefore starts with this check. FILE is the saved response of one `GET` of
 of the head (`actions/runs?head_sha=...`, which the workflow makes); a run counts as full when its
 run name is `governance full` (the `run-name` of the workflow). The check passes when the latest
 full run of this head succeeded. When that run is still queued or in progress it prints `waiting`
-and exits 3, and the workflow polls the same GET again (every 30 seconds, for at most 20 minutes).
+and exits 3, and the workflow polls the same GET again (every 30 seconds, for at most 45 minutes).
 An unreadable response and no full run fail, and the next push re-runs in full. A cancelled full
 run is never the latest while another full run of the head is not cancelled, and runs created in
 the same second are ordered by run id (brief #272, ADR-0162).

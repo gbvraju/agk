@@ -472,7 +472,7 @@ def test_the_latest_full_run_step_stays_the_fallback_and_fails_closed():
     assert "github.event.action == 'edited'" in block.split("\n", 2)[1]
     assert "scripts/agk/full_run.py" in block
     assert (
-        'echo "rule 2: the full governance run of the head did not finish in 20 minutes"' in block
+        'echo "rule 2: the full governance run of the head did not finish in 45 minutes"' in block
     )
     assert block.rstrip().endswith("exit 1")
 

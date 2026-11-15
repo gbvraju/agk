@@ -235,3 +235,19 @@ def test_every_governance_pull_request_type_is_covered():
     """REQ-050: the cases above name every `pull_request` type of the governance workflow, so a
     new type cannot slip into a group unchecked."""
     assert set(pull_types("governance.yml")) == set(FULL_ACTIONS) | {"edited"}
+
+
+def test_the_edited_run_waits_well_above_a_slow_full_run():
+    """REQ-050: brief #1371 (fix list 1 on #1374): with its own group the edited run's only order
+    after the full run is its step `Latest full run`, whose bound counts from the edited run's
+    start, so it polls every 30 seconds for at most 45 minutes, well above a full run of 17
+    minutes, and fails closed after that."""
+    body = (WORKFLOWS / "governance.yml").read_text(encoding="utf-8")
+    step = body.split("      - name: Latest full run\n", 1)[1].split("\n      - name: ", 1)[0]
+    attempts = re.search(r"for attempt in \$\(seq 0 (\d+)\); do", step)
+    sleep = re.search(r'\[ "\$attempt" -lt (\d+) \] && sleep (\d+)', step)
+    assert attempts and sleep and attempts.group(1) == sleep.group(1)
+    minutes = int(sleep.group(1)) * int(sleep.group(2)) / 60
+    assert minutes == 45
+    assert f"did not finish in {int(minutes)} minutes" in step
+    assert step.rstrip().endswith("exit 1")

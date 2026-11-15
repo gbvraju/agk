@@ -6,7 +6,7 @@
 - Related: ADR-0480, ADR-0302, ADR-0505, brief #1371, found bug #1253, brief #1122, brief #216, brief #621, plan #661
 - Requirements: REQ-050
 
-Protected classes: `.github/`, `tests/kit/`, `kit/`
+Protected classes: `.github/`, `scripts/agk/`, `tests/kit/`, `kit/`
 
 ## Context
 
@@ -34,20 +34,24 @@ fails closed (ADR-0480 decision 2).
    ADR-0480 decision 1; its decisions 2 to 4 stand.
 2. **The order between them** is the step `Latest full run` alone. An edited run that starts while the full run is
    queued or in progress holds a runner while it polls, as before brief #1122: that cost is taken in exchange for never
-   losing the head's full run.
+   losing the head's full run. The group no longer holds the edited run until the full run ends, so the step's bound
+   counts from the edited run's own start and must lie well above a slow full run (17, 12 and 12 minutes on
+   2026-11-15, plus a queued runner): it polls the same GET every 30 seconds for at most 45 minutes (`seq 0 90`), and
+   fails closed after that, as before.
 3. **`proof.yml` is unchanged.** It runs on no `edited` event, so every run in a pull request's `proof-<n>` group is a
    full run of that pull request, and a replacement there is always by a newer full run.
 4. **A test pins it without GitHub.** `tests/kit/test_workflow_concurrency.py` evaluates each workflow's `concurrency:`
    expressions for invented events (a small evaluator of the expression subset the two blocks use) and asserts that no
    `edited` run shares a group with a `pull_request` full run, that every pull request type of the governance workflow
    is covered, that the default branch's push group and its cancel rule are unchanged, and that the proof group holds
-   only full runs. The text tests of ADR-0480 in `test_workflow.py`, `test_main_batching.py` and `test_ci_saving.py`
+   only full runs, and that the step `Latest full run` polls every 30 seconds for at most 45 minutes. The text tests of ADR-0480 in `test_workflow.py`, `test_main_batching.py` and `test_ci_saving.py`
    change to the new group.
 5. **The workflow file is the owner's** (ADR-0505): the builder commits the whole proposed file at
    `.agk/workflow-proposals/governance.yml` and the owner applies it with `/agk:workflow-apply <pr>`. The builder
    prompt keeps its order (push, body edit, ready); the workaround of editing the body before the push is not needed.
 
-Protected path classes changed: `.github/` (`.github/workflows/governance.yml`, applied by the owner), `tests/kit/`
+Protected path classes changed: `.github/` (`.github/workflows/governance.yml`, applied by the owner), `scripts/agk/`
+(the docstring of `full_run.py` names the new bound), `tests/kit/`
 (`test_workflow_concurrency.py`, `test_workflow.py`, `test_main_batching.py`, `test_ci_saving.py`) and `kit/`
 (`kit/hashes.json` only as `kit_hashes.py` writes it).
 
@@ -55,7 +59,7 @@ Protected path classes changed: `.github/` (`.github/workflows/governance.yml`, 
 
 A push followed at once by a body edit and ready-for-review keeps a full governance run of the head, so the edited run
 reads a real result and the router no longer labels a pull request `agk:ci-red` with no check failing. An edited run
-that starts during a full run again holds a runner while it polls, for at most 20 minutes, which gives back part of
+that starts during a full run again holds a runner while it polls, for at most 45 minutes, which gives back part of
 the minutes ADR-0480 saved.
 
 ## Residual
