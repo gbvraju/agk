@@ -1,0 +1,1 @@
+- `session.py claim` takes the red alarm that `next --take` takes, refusing it only for `next`'s reasons with `next`'s line, and `watch --pr` and `watch --assign` end within a second of their `--timeout` (brief #1368)
