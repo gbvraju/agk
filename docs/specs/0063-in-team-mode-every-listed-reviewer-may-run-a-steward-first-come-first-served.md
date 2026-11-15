@@ -87,7 +87,7 @@ REQ-070 AC1: *only a listed reviewer runs a steward.* Rules 3 and 4. REQ-070 AC2
 
 ## Open questions
 
-Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it until a person rules.
+Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it. `Q-S0063-1` to `Q-S0063-8` are ruled as read by the maintainer's answer on #1343 (comment 6897023424), one file each under `docs/runs/decisions/`, and the rules above hold their readings. No question is open.
 
 - Q-S0063-1: may a reviewer group be limited to areas? Reading: only where `config/reviewers.yaml` already names it: a path class whose approver group lists a person routes the questions that name its files; every other question goes to every listed reviewer (brief answer 5; rule 3).
 - Q-S0063-2: the same login signed in on two machines: one steward or two? Reading: one; the second start of a login with a live `Started:` stands by, since the record cannot tell two machines of one login apart (rule 4).
