@@ -1892,7 +1892,8 @@ def save_reads(root, figures: dict) -> None:
 
 
 def reads_line(figures: dict) -> str:
-    line = f"reads: {figures['calls']} calls ({figures['cached']} from cache), {figures['seconds']} s"
+    calls, cached = figures["calls"], figures["cached"]
+    line = f"reads: {calls} calls ({cached} from cache), {figures['seconds']} s"
     return f"{line}, writes: {figures['writes']}" if figures.get("writes") else line
 
 

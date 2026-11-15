@@ -43,8 +43,9 @@ mutating requests `(verify: the header names and the one-minute floor)`.
 A secondary limit no longer sleeps to the core reset, and the kit's own bursts of posts are spread out by one
 second each. A write carries no `-i`, so its limit is told from `GET rate_limit` and not from its own
 `retry-after`; adding `-i` to writes would change the recorded arguments of every write in the kit's tests.
-Protected path classes changed: `scripts/agk/` (`session.py`, `session_plan.py`, `checklist.py`) and `tests/kit/`
-(`test_github_rate_wait.py`).
+Protected path classes changed: `scripts/agk/` (`session.py`, `session_plan.py`, `checklist.py`), `tests/kit/`
+(`test_github_rate_wait.py`) and `agk.toml` (the new test file in the `[[testing.map]]` entries of the three
+scripts).
 
 ## Residual
 
