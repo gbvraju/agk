@@ -20,7 +20,7 @@
   },
   "pulls": [
     {"number": 2001, "brief": 200, "comments": [
-      {"id": 51, "login": "builder", "body": "Report: {short} ready for review", "ago": 25}
+      {"id": 51, "login": "builder", "body": "Report: {short} ready for review", "ago": 5}
     ]},
     {"number": 2002, "brief": 201, "comments": [
       {"id": 52, "login": "boss", "body": "Verdict: fix list {short}", "ago": 15}

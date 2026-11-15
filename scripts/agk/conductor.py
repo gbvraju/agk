@@ -158,6 +158,13 @@ answered, with the label removed and one `Unparked-by: answer <Q-id>` comment; i
 `UNPARKED #<n> <Q-id>; run: python3 scripts/agk/session.py resume --pr <n>` and, once per park,
 `PARKED #<n> <Q-id>`. A person's own `agk:parked` is never removed.
 
+Brief #1322 (SPEC-0059 rule 2, ADR-0559): from the same comments, `sweep` then prints one line
+`STEWARD: #<n> <Q-id>, ... waited one pass unanswered; run: python3 scripts/agk/launch.py role
+--role steward --session steward-<comment id>` (with `--adapter <launch_adapter>` when `auto_start`
+is on in the checkout and on the default branch) when a `Question:` has waited one conductor pass
+(25 minutes) with no `Answer:`, `Maintainer answer:` or `Correction:` by a listed author and no
+steward post (ending `Who: AGK steward`) after it. It is read from the comments alone.
+
 Brief #1237 (ADR-0525): local mode restarts the conductor unattended.
 
     python3 conductor.py watchdog [--session NAME] [--install] [--pass]
@@ -1023,7 +1030,9 @@ def parked_mark(root) -> Path | None:
     return found.with_name("parked") if found else None
 
 
-def owner_lines(root, repo: str, pulls: list, settings: dict, authors, approvers, now) -> list:
+def owner_lines(
+    root, repo: str, pulls: list, settings: dict, authors, approvers, now, kept=None
+) -> list:
     """The owner-wait lines of `sweep` (brief #1282 answers 3 and 4): it parks each open pull
     request whose owner wait has passed (`session.park_pull`) and unparks each one this rule parked
     once the owner answered (`session.unpark_pull`), then prints `PARKED #<n> <key>` once per park,
@@ -1042,6 +1051,8 @@ def owner_lines(root, repo: str, pulls: list, settings: dict, authors, approvers
     for pull in sorted(pulls, key=lambda p: p["number"]):
         number = pull["number"]
         comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+        if kept is not None:
+            kept[number] = comments  # read once: the steward's start reads them too (#1322)
         found = session.owner_step(pull, comments, settings, now, listed, answerers)
         if found and found[0] == "unpark" and session.unpark_pull(repo, number, found[1]):
             unparks.append(
@@ -1061,6 +1072,61 @@ def owner_lines(root, repo: str, pulls: list, settings: dict, authors, approvers
     if mark is not None:
         write_held(mark, sorted(set(listed_now)))
     return unparks + parks
+
+
+STEWARD_PASS = timedelta(minutes=25)  # one conductor pass: its wake-up timer is at most 25 minutes
+STEWARD_WHO = "Who: AGK steward"
+
+
+def waiting_questions(comments: list, answerers: set[str]) -> list[tuple[str, int]]:
+    """(Q id, comment id) of each `Question: Q-...` with no `Answer:`, `Maintainer answer:` or
+    `Correction:` by an answerer after it that names its Q id or names none, and no steward post
+    (one ending `Who: AGK steward`) after it: the steward has taken it (SPEC-0059 rule 2)."""
+    open_items: dict[str, int] = {}
+    for c in session.in_order(comments):
+        line, body = session.first_line(c), str(c.get("body") or "")
+        if line.startswith("Question: ") and (found := session.QUESTION_ID.search(line)):
+            open_items[found.group(0)] = int(c.get("id") or 0)
+        elif session.author_of(c) in answerers and line.startswith(
+            ("Answer:", "Maintainer answer:", "Correction:")
+        ):
+            for qid in session.QUESTION_ID.findall(body) or list(open_items):
+                open_items.pop(qid, None)
+        if STEWARD_WHO in (x.strip() for x in body.splitlines()):
+            open_items.clear()
+    return sorted(open_items.items(), key=lambda kv: kv[1])
+
+
+def steward_lines(root, kept: dict, answerers: set[str], now) -> list[str]:
+    """One `STEWARD:` line when a question has waited one conductor pass (`STEWARD_PASS`) with no
+    answer and no steward post after it (SPEC-0059 rule 2, brief #1322). Read from the comments
+    alone, so every sweep of the same comments prints the same line; the session is named by the
+    oldest waiting question, and a second start of a running steward writes nothing (ADR-0557)."""
+    due = []
+    for number, comments in sorted(kept.items()):
+        when = {int(c.get("id") or 0): session.moment(c.get("created_at")) for c in comments}
+        for qid, cid in waiting_questions(comments, answerers):
+            if when.get(cid) is not None and now - when[cid] >= STEWARD_PASS:
+                due.append((number, qid, cid))
+    if not due:
+        return []
+    asks = ", ".join(f"#{n} {q}" for n, q, _ in due)
+    name = f"steward-{min(c for *_, c in due)}"
+    adapter = configured_start_adapter(root)
+    run = f"python3 scripts/agk/launch.py role --role steward --session {name}"
+    run += f" --adapter {shlex.quote(adapter)}" if adapter else ""
+    return [f"STEWARD: {asks} waited one pass unanswered; run: {run}"]
+
+
+def configured_start_adapter(root) -> str | None:
+    """`launch_adapter` when `auto_start` is on with it in the checkout and on the default branch
+    alike, else None."""
+    try:
+        here = launch.launch_settings(Path(root))
+        there = launch.launch_settings(Path(root), f"origin/{launch.default_branch(Path(root))}")
+    except (CheckError, OSError):
+        return None
+    return here[1] if here == there and here[0] is True and here[1] else None
 
 
 def main_folder_lines(root) -> list[str]:
@@ -1116,7 +1182,10 @@ def sweep(root) -> int:
     except CheckError as refused:
         lines.append(f"owner waits: {refused}")
     else:
-        lines += owner_lines(root, repo, pulls, waits, authors, approvers, now)  # before new briefs
+        kept: dict = {}
+        lines += owner_lines(root, repo, pulls, waits, authors, approvers, now, kept)
+        answerers = {a.lstrip("@").lower() for a in [*(authors or []), *(approvers or [])]}
+        lines += steward_lines(root, kept, answerers, now)  # SPEC-0059 rule 2 (brief #1322)
     lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
     print("\n".join(lines))
     return 0
