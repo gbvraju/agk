@@ -49,5 +49,7 @@ scripts).
 
 ## Residual
 
-- 2026-11-15: a write's `retry-after` is not read (decision 1); a write limited by a secondary limit waits
-  60 seconds, doubled, rather than the exact seconds GitHub asked.
+- 2026-11-15: Q-1335-1: brief #1335 answer 1 reads every limited call's headers from the call itself; here a
+  write's `retry-after` is not read (decision 1), the write asks `GET rate_limit` instead, and a write limited by a
+  secondary limit waits 60 seconds, doubled, rather than the seconds GitHub asked. Reading them would add `-i` to
+  every write and change the recorded arguments of the writes in about 44 test files; the question is open.
