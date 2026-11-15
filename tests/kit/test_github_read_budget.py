@@ -1,6 +1,7 @@
 """No command reads GitHub once per open brief: one shared read of what changed, and a call budget.
 
-Brief #1314 build (a), ADR-0555; REQ-050. `session.changed_comments` makes the one repository-wide
+Brief #1314 builds (a) and (b), ADR-0555; REQ-050. Build (b) switches `stalls.py` and the sweep of
+`conductor.py` (its per-brief loops) to the comment store, and holds the rest of the table. `session.changed_comments` makes the one repository-wide
 `issues/comments?since=` read; `conductor.py watch` judges its lines from it, and `session.py
 claim` answers unchanged briefs from a comment store beside the read cache. `github_reads` of the
 `[flow]` table is `"delta"` by default and `"full"` for the old per-item reads. On a recorded
@@ -13,6 +14,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
@@ -39,6 +41,7 @@ BUDGET = {
     "claim": 8,
     "review-queue": 6,
     "plan": 35,
+    "stalls": 15,
 }
 
 
@@ -106,6 +109,11 @@ class World:
         for p in self.pulls:
             double.serve(f"{PULLS}/{p['number']}/files", [])
         double.serve(f"repos/{REPO}/compare/{SHA}...main", {"ahead_by": 0, "files": []})
+        for n in self.taken:  # the sweep's SILENT check of a taken brief (build (b))
+            double.serve(f"repos/{REPO}/git/matching-refs/heads/claude/brief-{n}", [])
+        for p in self.pulls:  # the router's facts of each pull request
+            double.serve(f"{PULLS}/{p['number']}", self.pull(p))
+            double.serve(f"{ISSUES}/{p['number']}/events", [])
 
     def edit(self, n: int, cid: int, body: str, minutes: float = 1) -> None:
         for c in self.comments[n]:
@@ -163,11 +171,17 @@ COMMANDS = {
     "watch": ("conductor.py", "watch", "--since", SINCE, "--once"),
     "claim taken": ("session.py", "claim", "--session", "s-me", "--brief", "102"),
     "claim free": ("session.py", "claim", "--session", "s-me", "--brief", "300"),
+    "stalls": ("stalls.py",),  # build (b)
+    "sweep": ("conductor.py", "sweep"),  # build (b): silent_line, slot_lines
 }
+SAME_AFTER = {"claim free", "stalls"}  # the edits change nothing these print
 
 
 def said(out: subprocess.CompletedProcess) -> tuple[int, str]:
-    return out.returncode, out.stdout
+    """The exit and the output, with the sweep's ages in minutes masked: a 650-brief run takes
+    seconds, so the minute can turn between two runs of one state (build (b))."""
+    text = re.sub(r"(SILENT \d+ \S+ )\d+", r"\1<age>", out.stdout)
+    return out.returncode, re.sub(r"\b\d+m\b", "<age>", text)
 
 
 def comment_reads(double: Double) -> list[int]:
@@ -175,6 +189,12 @@ def comment_reads(double: Double) -> list[int]:
     pre = f"{ISSUES}/"
     return [int(e[len(pre) : -len("/comments")]) for e in found if e.endswith("/comments")
             and e[len(pre) : -len("/comments")].isdigit()]  # fmt: skip
+
+
+def brief_reads(double: Double) -> list[int]:
+    """The per-issue comment pages asked of briefs, not of the open pull requests."""
+    pulls = {p["number"] for p in FIXTURE["pulls"]}
+    return [n for n in comment_reads(double) if n not in pulls]
 
 
 def within(name: str, double: Double) -> None:
@@ -197,7 +217,9 @@ def test_each_switched_command_prints_the_same_in_both_modes(proj, double, comma
     mode(proj, None)  # the default is delta
     assert said(run(proj, double, *args)) == full  # cold: the store fills
     assert said(run(proj, double, *args)) == full  # warm
-    assert len(set(comment_reads(double))) <= 3, comment_reads(double)
+    # The sweep's per-pull-request loops read through the ETag cache (304s), not the store.
+    asked = brief_reads(double) if command == "sweep" else comment_reads(double)
+    assert len(set(asked)) <= 3, asked
     world.edit(102, 21, f"taken: builder-q {DAY}")  # an edit in place
     world.delete(103, 32)  # a deletion lowers the count
     world.add(2003, 60, "builder", f"Report: {SHA[:7]} ready for review")  # a new comment
@@ -206,7 +228,7 @@ def test_each_switched_command_prints_the_same_in_both_modes(proj, double, comma
     after = said(run(proj, double, *args))
     mode(proj, "delta")
     assert said(run(proj, double, *args)) == after
-    if command != "claim free":
+    if command not in SAME_AFTER:
         assert after != full  # the change is seen, not merely the same in both modes
 
 
@@ -257,6 +279,34 @@ def test_a_warm_plan_costs_at_most_thirty_five(proj, double):
         out = run(proj, double, "session.py", "plan", "--json")
         assert out.returncode == 0, out.stderr
     within("plan", double)
+
+
+def test_a_warm_stalls_run_costs_at_most_fifteen(proj, double):
+    """REQ-050: brief #1314 answer 7 and build (b) (`stalls.py`)."""
+    World().serve(double)
+    for _ in range(2):
+        out = run(proj, double, "stalls.py")
+        assert out.returncode in (0, 3), out.stdout + out.stderr
+    within("stalls", double)
+    assert len(brief_reads(double)) <= 3, brief_reads(double)  # requests too, 304s included
+
+
+@pytest.mark.parametrize("args", [("conductor.py", "sweep"), ("session.py", "plan", "--json")])
+def test_a_warm_sweep_and_plan_ask_no_page_of_each_brief(proj, double, args):
+    """REQ-050: brief #1314 answer 3, build (b) (the sweep's loops; the plan's pass, ADR-0548)."""
+    World().serve(double)
+    for _ in range(2):
+        out = run(proj, double, *args)
+        assert out.returncode == 0, out.stdout + out.stderr
+    assert len(brief_reads(double)) <= 3, brief_reads(double)
+
+
+def test_the_router_reads_no_brief_page(proj, double):
+    """REQ-050: brief #1314 answer 7 (`route.py --all`; its 18-call budget is test_route_local)."""
+    World().serve(double)
+    out = run(proj, double, "route.py", "--all")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert brief_reads(double) == []
 
 
 def test_a_broken_budget_names_the_command_the_budget_and_the_count(double):
@@ -445,7 +495,7 @@ def test_an_unreadable_delta_reads_as_before_and_never_as_no_comments(proj, doub
     """REQ-050: brief #1314 answer 4 (GitHub unreadable: the same lines and exits)."""
     world = World(count=40)
     world.serve(double)
-    for args in (COMMANDS["watch"], COMMANDS["claim taken"]):
+    for args in (COMMANDS[k] for k in ("watch", "claim taken", "stalls", "sweep")):
         mode(proj, "full")
         full = said(run(proj, double, *args))
         mode(proj, "delta")
