@@ -1,1 +1,0 @@
-- The local evidence check adds its worktree with the committed line ends (`-c core.autocrlf=false -c core.eol=lf`) and runs governance with the conductor's environment (PATH, a scratch HOME, AGK_BASE), and the design digests of rules 9 and 15 read a file's committed bytes when a checkout changed only its line ends, so a correct record agrees on Windows (brief #1291, ADR-0550)

@@ -1,6 +1,6 @@
 # ADR-0554: A waiting session costs no model turns
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: ADR-0362, ADR-0368, ADR-0453, ADR-0525, ADR-0553, brief #1310, brief #1287, plan #661

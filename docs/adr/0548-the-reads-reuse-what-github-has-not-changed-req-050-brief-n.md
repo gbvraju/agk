@@ -1,6 +1,6 @@
 # ADR-0548: The reads reuse what GitHub has not changed
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0529, ADR-0523, SPEC-0030, brief #1251, plan #661

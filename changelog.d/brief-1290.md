@@ -1,1 +1,0 @@
-- The guarded merge no longer starts the `env` program: `lock.py run --only-env NAME=VALUE` starts `make` (and the pre-merge pytest) with exactly the kept variables, PATH unchanged, and on Windows also SystemRoot, ComSpec, PATHEXT, TEMP and TMP, so a cleared pull request merges on Windows as on Linux (brief #1290, ADR-0549)

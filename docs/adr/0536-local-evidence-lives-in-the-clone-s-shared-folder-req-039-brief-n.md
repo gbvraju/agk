@@ -1,6 +1,6 @@
 # ADR-0536: Local evidence lives in the clone's shared folder
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0208, ADR-0233, SPEC-0039, brief #374, brief #434, brief #982, brief #1269, plan #661

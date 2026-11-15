@@ -1,6 +1,6 @@
 # ADR-0551: Sessions never build in the shared main folder
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0237, ADR-0525, ADR-0531, SPEC-0050, brief #1301, plan #661
