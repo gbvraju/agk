@@ -1,6 +1,6 @@
 # SPEC-0061: A teammate joins as a builder in one command and leaves cleanly
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-068
 
