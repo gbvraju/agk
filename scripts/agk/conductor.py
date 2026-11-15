@@ -160,7 +160,7 @@ answered, with the label removed and one `Unparked-by: answer <Q-id>` comment; i
 
 Brief #1237 (ADR-0525): local mode restarts the conductor unattended.
 
-    python3 conductor.py watchdog [--session NAME] [--install]
+    python3 conductor.py watchdog [--session NAME] [--install] [--pass]
 
 `watchdog` is one pass, never a loop. It reads, in order: the pause of the default branch
 (`agk paused; nothing started`, exit 0); `auto_start` and `launch_adapter` of the `[flow]` table,
@@ -179,6 +179,21 @@ It posts nothing and takes no lease: the started conductor takes its own, and th
 from running. `--install` reads nothing and runs nothing: it prints the one scheduler line for the
 platform, `schtasks /Create /SC MINUTE /MO 30 ...` on Windows and a crontab line elsewhere, each a
 `git fetch` of the checkout and then this pass, for the person to run.
+
+Brief #1310 (ADR-0554): `watchdog --pass` is the scripted conductor pass. After the same checks it
+takes or renews the lease under NAME (another live holder starts nothing, exit 0), runs
+`review-queue --fingerprint`, the plan and `sweep` in the script, and starts one conductor job
+through the adapter only when the fingerprint or the sweep's lines (without their ages and times)
+differ from those of the last job, the plan's `Start` line starts a brief, or no job ran for 24
+hours; otherwise it prints `watchdog: nothing changed; no job started`. The job does one pass and
+leaves the lease to the script. Under `--pass` the lease no longer keeps two jobs apart, since the
+script and its job share the name: the pass starts nothing, printing `watchdog: job <name> still
+running; nothing started`, within the first lease window of its last job or while the lease was
+renewed since the script's own last take (the job renews it first and as it works). What the
+last job saw is kept in `<git dir>/agk/watchdog.json` only after the adapter succeeded, so a failed
+job is tried again. `--install --pass` prints the scheduler line every 10 minutes. The
+watchdog, the reviewer starts and `launch.py` set
+`CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` for the sessions they start (verify).
 
 Brief #1248 (ADR-0528): a fresh reviewer gives the gating verdict, in local mode too.
 
@@ -203,6 +218,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -242,7 +258,8 @@ USAGE = (
     "conductor.py merge-queue [--dry-run] [--max-batch N] | "
     "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] | "
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N | "
-    "conductor.py reprove --pr N [--apply] | conductor.py watchdog [--session NAME] [--install] | "
+    "conductor.py reprove --pr N [--apply] | "
+    "conductor.py watchdog [--session NAME] [--install] [--pass] | "
     "conductor.py review --pr N [--start]"
 )
 REPROVE_REPORT = "merge of main (light re-prove, SPEC-0050 amendment 171)"
@@ -1988,34 +2005,37 @@ WATCHDOG_PROMPT = (
 )
 
 
-def watchdog_args(args: list[str]) -> tuple[str, bool] | None:
-    """(NAME, `--install` given) for `watchdog [--session NAME] [--install]`; None otherwise."""
-    rest, name, install = args[1:], WATCHDOG_NAME, False
+def watchdog_args(args: list[str]) -> tuple[str, bool, bool] | None:
+    """(NAME, `--install` given, `--pass` given) for `watchdog [--session NAME] [--install]
+    [--pass]`; None otherwise."""
+    rest, name, install, scripted = args[1:], WATCHDOG_NAME, False, False
     while rest:
         if rest[0] == "--install" and not install:
             install, rest = True, rest[1:]
+        elif rest[0] == "--pass" and not scripted:
+            scripted, rest = True, rest[1:]
         elif rest[0] == "--session" and len(rest) > 1 and NAME.fullmatch(rest[1]):
             name, rest = rest[1], rest[2:]
         else:
             return None
-    return name, install
+    return name, install, scripted
 
 
-def install_line(root, name: str, platform: str) -> str:
-    """The one scheduler line that runs a watchdog pass every 30 minutes; printed, never run."""
+def install_line(root, name: str, platform: str, scripted: bool = False) -> str:
+    """The one scheduler line that runs a watchdog pass every 30 minutes (a scripted pass every
+    10, ADR-0554); printed, never run."""
     named = "" if name == WATCHDOG_NAME else f" --session {name}"
+    named += " --pass" if scripted else ""
+    minutes = JOB_MINUTES if scripted else WATCHDOG_MINUTES
     folder = str(Path(root).resolve())
     if platform == "win32":
         run = (
             f'cmd /c cd /d \\"{folder}\\" && git fetch -q origin && '
             f"python scripts\\agk\\conductor.py watchdog{named}"
         )
-        return (
-            f'schtasks /Create /SC MINUTE /MO {WATCHDOG_MINUTES} /TN "{WATCHDOG_TASK}" '
-            f'/TR "{run}" /F'
-        )
+        return f'schtasks /Create /SC MINUTE /MO {minutes} /TN "{WATCHDOG_TASK}" /TR "{run}" /F'
     return (
-        f"*/{WATCHDOG_MINUTES} * * * * cd {shlex.quote(folder)} && git fetch -q origin && "
+        f"*/{minutes} * * * * cd {shlex.quote(folder)} && git fetch -q origin && "
         f"python3 scripts/agk/conductor.py watchdog{named}"
     )
 
@@ -2035,8 +2055,9 @@ def memory_line(root) -> tuple[str, bool]:
     return line, not (per and free is not None and free < per * session_plan.GIB)
 
 
-def watchdog(root, name: str) -> int:
-    """One pass: start the conductor through the adapter when its lease is free or expired."""
+def watchdog(root, name: str, scripted: bool = False) -> int:
+    """One pass: start the conductor through the adapter when its lease is free or expired; with
+    `scripted` (`--pass`), the scripted pass of ADR-0554."""
     if session.paused_default(root):
         print("watchdog: agk paused; nothing started")
         return 0
@@ -2051,6 +2072,8 @@ def watchdog(root, name: str) -> int:
         print(f"watchdog: nothing started: {LEASE_OFF}")
         return 1
     repo = session.repo_name(root)
+    if scripted:
+        return watchdog_pass(root, name, repo, here[1])
     holder = lease_holder(plan_comments(repo, issue), verdict_authors(root), datetime.now(UTC))
     if holder is not None:
         print(f"watchdog: lease held by {holder[0]} until {stamp_of(holder[1])}; nothing started")
@@ -2065,6 +2088,7 @@ def watchdog(root, name: str) -> int:
         )
         return 1
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
+    env.update(launch.QUIET)
     env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
@@ -2083,6 +2107,158 @@ def watchdog(root, name: str) -> int:
         print(f"FAIL conductor: the adapter failed for {name}", file=sys.stderr)
         return 1
     print(f"watchdog: started {name}")
+    return 0
+
+
+# --- the scripted pass: a model only when there is work (brief #1310 answer 3, ADR-0554) ---------
+
+JOB_MINUTES = 10
+JOB_DAY = timedelta(hours=24)  # one job a day still posts the conductor's report
+JOB_STATE = "watchdog.json"  # beside the lease mark, in the git directory: never tracked
+AGE = re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z|\b\d+(?:s|m|h|d|min| min)\b")
+JOB_PROMPT = (
+    "You are the AGK conductor {name} for repository {repo}, started by the local watchdog's "
+    "scripted pass (`python3 scripts/agk/conductor.py watchdog --pass`) because {why}. Your role "
+    "is `.claude/agents/conductor.md` on the default branch: read it, `CLAUDE.md`, "
+    "`constitution/principles.md` and `config/session-rules.md` first and follow them exactly. "
+    "The watchdog holds the lease under {name} between passes: renew it first with "
+    "`python3 scripts/agk/conductor.py lease --take {name}`, again before a step that may pass 10 "
+    "minutes, and do not release it: while you renew it the watchdog starts no other job. "
+    "Do one pass: `python3 scripts/agk/session.py queue --role conductor`, then "
+    "`python3 scripts/agk/session.py review-queue --all` and the pass on its "
+    "lines, then the plan's starts and the sweep's lines; schedule no wake, start no loop, and "
+    "end when the pass is done.\n"
+)
+
+
+def pass_state_file(root) -> Path | None:
+    mark = lease_mark(root)
+    return None if mark is None else mark.parent / JOB_STATE
+
+
+def pass_state(root) -> dict:
+    """The fingerprint, sweep digest and time of the last job started (an empty dict when none)."""
+    found = pass_state_file(root)
+    try:
+        data = json.loads(found.read_text(encoding="utf-8")) if found else {}
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def pass_facts(root) -> tuple[str, bool, str]:
+    """(the review queue's fingerprint, whether the plan starts a brief, the digest of the sweep's
+    lines without their ages and times), each run as the script it is; CheckError when one fails."""
+    code, said = session.quietly(session.review_queue, root, "--fingerprint")
+    if code or not said.startswith("fingerprint "):
+        raise CheckError("the review queue cannot be read")
+    code, planned = session.quietly(session_plan.plan, root, False, False, False)
+    if code not in (0, 1):
+        raise CheckError("the plan cannot be read")
+    starts = any(re.match(r"Start [1-9]\d*:", line) for line in planned.splitlines())
+    code, swept = session.quietly(sweep, root)
+    if code:
+        raise CheckError("the sweep cannot be read")
+    lines = sorted(AGE.sub("", line).strip() for line in swept.splitlines() if line.strip())
+    digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+    return said.split()[1], starts, digest
+
+
+def keep_state(root, state: dict) -> None:
+    found = pass_state_file(root)
+    if found is not None:
+        found.parent.mkdir(parents=True, exist_ok=True)
+        found.write_text(json.dumps(state) + "\n", encoding="utf-8")
+
+
+def job_running(root, repo: str, name: str, state: dict, now: datetime) -> bool:
+    """Whether the last job may still run (fix list 6889113783 item 2): within its first lease
+    window, or while the lease under its name was renewed since the script's own last take (the job
+    renews it as it works and never releases it; it lapses `LEASE_MINUTES` after the job ends)."""
+    start = when(str(state.get("job_at") or ""))
+    if start is None:
+        return False
+    if now < start + timedelta(minutes=LEASE_MINUTES):
+        return True
+    issue = plan_issue(root)
+    holder = (
+        None
+        if issue is None
+        else lease_holder(plan_comments(repo, issue), verdict_authors(root), now)
+    )
+    return (
+        holder is not None and holder[0] == name and stamp_of(holder[1]) != state.get("own_until")
+    )
+
+
+def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
+    """Hold the lease, run the scripts of the pass, start one conductor job only when needed and
+    never a second one while the last may still run."""
+    state, now = pass_state(root), datetime.now(UTC)
+    if job_running(root, repo, name, state, now):
+        print(f"watchdog: job {name} still running; nothing started")
+        return 0
+    code, said = session.quietly(lease, root, "--take", name, False)
+    if code:
+        print(f"watchdog: {said}; nothing started")
+        return 0 if code == merge_cleared.EXIT_HELD else 1
+    issue = plan_issue(root)
+    holder = (
+        None
+        if issue is None
+        else lease_holder(plan_comments(repo, issue), verdict_authors(root), now)
+    )
+    state["own_until"] = stamp_of(holder[1]) if holder else None  # the script's own take
+    keep_state(root, state)
+    try:
+        fingerprint, starts, swept = pass_facts(root)
+    except CheckError as exc:
+        print(f"watchdog: nothing started: {exc}")
+        return 1
+    last = when(str(state.get("job_at") or ""))
+    why = [
+        text
+        for text, yes in (
+            ("the queue changed", fingerprint != state.get("fingerprint")),
+            ("the plan starts a brief", starts),
+            ("a sweep line changed", swept != state.get("sweep")),
+            ("no job ran for 24 hours", last is None or now - last >= JOB_DAY),
+        )
+        if yes
+    ]
+    if not why:
+        print("watchdog: nothing changed; no job started")
+        return 0
+    line, allowed = memory_line(root)
+    print(line)
+    if not allowed:
+        print(
+            "watchdog: nothing started: free memory is below one builder "
+            "(setting: builder_memory_gb)"
+        )
+        return 1
+    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
+    env.update(launch.QUIET)
+    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
+    try:
+        done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
+            shlex.split(adapter),
+            input=JOB_PROMPT.format(name=name, repo=repo, why=", ".join(why)),
+            text=True,
+            encoding="utf-8",
+            env=env,
+            capture_output=True,
+            cwd=root,
+        )
+    except OSError:
+        print(f"FAIL conductor: the adapter cannot be run for {name}", file=sys.stderr)
+        return 1
+    if done.returncode != 0:  # the state stays, so the next pass tries again
+        print(f"FAIL conductor: the adapter failed for {name}", file=sys.stderr)
+        return 1
+    state.update(fingerprint=fingerprint, sweep=swept, job_at=stamp_of(now))
+    keep_state(root, state)
+    print(f"watchdog: job started {name}: {', '.join(why)}")
     return 0
 
 
@@ -2221,6 +2397,7 @@ def free_slot(repo: str, asks: list, count: int, minutes: int, allowed: set[str]
 def start_reviewer(root, repo: str, slot: str, number: int, head: str) -> int:
     """Call the adapter once for one reviewer session, as `launch.py` does (no shell)."""
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
+    env.update(launch.QUIET)
     env.update(
         AGK_SESSION=slot,
         AGK_ROLE="reviewer",
@@ -2366,7 +2543,7 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     guard = watchdog_args(args) if args[:1] == ["watchdog"] else None
     gate = review_args(args)
     if guard is not None and guard[1]:
-        print(install_line(root or repo_root(), guard[0], sys.platform))
+        print(install_line(root or repo_root(), guard[0], sys.platform, guard[2]))
         return 0
     if queue is None and routine is None and guard is None and gate is None and not plain:
         print(USAGE, file=sys.stderr)
@@ -2386,7 +2563,7 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
                 return reprove(root, routine[1], routine[2])
             return lease(root, routine[1], routine[2])
         if guard is not None:
-            return watchdog(root, guard[0])
+            return watchdog(root, guard[0], guard[2])
         if gate is not None:
             return review(root, *gate)
         if args == ["sweep"]:

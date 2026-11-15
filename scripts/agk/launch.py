@@ -79,6 +79,8 @@ LEAN_READING = (
 KINDS = ("design", "build", "small")  # a brief's kinds (rule 4); `mechanical` is a follow-up's
 FOLLOW_UP_KINDS = (*KINDS, "mechanical")
 LEAN_KINDS = ("small", "mechanical")
+# Recaps off for agent sessions (brief #1310 answer 4, ADR-0554; verify: the runtime's variable)
+QUIET = {"CLAUDE_CODE_ENABLE_AWAY_SUMMARY": "0"}
 TIERS = config.MODEL_TIERS  # strongest first
 EFFORTS = config.MODEL_EFFORTS  # lowest first
 KIND_LINE = "Kind: {kind}; tier: {tier}; effort: {effort}{model}. {stop}"
@@ -416,7 +418,7 @@ def start_with(
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
     for index, (session, brief, build) in enumerate(found):
-        env = {**os.environ, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
+        env = {**os.environ, **QUIET, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
         if build:
             env["AGK_BUILD"] = build
         run = runs[index] if runs else DESIGN

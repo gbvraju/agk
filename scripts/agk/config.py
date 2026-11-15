@@ -672,6 +672,8 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "stall_hours",
             "stall_minutes",
             "stop_check",
+            "summary_lines",
+            "wake_minutes",
         }
     ),
     "testing": frozenset(
