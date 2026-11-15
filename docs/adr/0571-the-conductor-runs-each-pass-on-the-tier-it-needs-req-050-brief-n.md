@@ -55,7 +55,7 @@ Routine passes start on the mid tier and every escalation costs one strongest pa
 
 ## Residual
 
-- 2026-11-15 (verify): the Windows adapter opens the job in a terminal and keeps no log, so a background mid job's
-  `escalate:` lines reach the watchdog only from the POSIX adapter's log or a foreground adapter's output (Q-1359-2).
+- 2026-11-15: the Windows adapter opens the job in a Windows Terminal tab and keeps no log (confirmed, Q-1359-2), so
+  a background mid job's `escalate:` lines there are not read until the next strongest pass.
 - 2026-11-15: a mid pass that misjudges a row and posts a verdict anyway is caught only by the shadow or a later
   strongest pass; decision 4's measure counts those.

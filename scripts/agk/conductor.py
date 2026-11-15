@@ -2415,7 +2415,7 @@ def escalations(text: str) -> list[tuple[str, str]]:
 
 def logged_escalations(root, name: str, state: dict) -> list[tuple[str, str]]:
     """The escalations in the log of the last job when it ran on `mid` and the log is newer than
-    its start (a background job of the POSIX adapter; verify: the Windows adapter keeps no log)."""
+    its start (a background job of the POSIX adapter; the Windows adapter keeps none, Q-1359-2)."""
     start = when(str(state.get("job_at") or ""))
     found = launch.worktree_of(Path(root), name) / JOB_LOG
     if state.get("tier") != "mid" or start is None:
