@@ -1,13 +1,14 @@
 """No command reads GitHub once per open brief: one shared read of what changed, and a call budget.
 
 Brief #1314 builds (a) and (b), ADR-0555; REQ-050. Build (b) switches `stalls.py` and the sweep of
-`conductor.py` (its per-brief loops) to the comment store, and holds the rest of the table. `session.changed_comments` makes the one repository-wide
-`issues/comments?since=` read; `conductor.py watch` judges its lines from it, and `session.py
-claim` answers unchanged briefs from a comment store beside the read cache. `github_reads` of the
-`[flow]` table is `"delta"` by default and `"full"` for the old per-item reads. On a recorded
-650-brief fixture (`fixtures/read_budget_650.json`, invented data) each switched command prints the
-same output in both modes, through edits, deletions and new comments, and a warm run holds the
-budget of counted calls (all but the 304s). The recorded double of test_session_plan_reads."""
+`conductor.py` (its per-brief loops) to the comment store, and holds the rest of the table.
+`session.changed_comments` makes the one repository-wide `issues/comments?since=` read;
+`conductor.py watch` judges its lines from it, and `session.py claim` answers unchanged briefs
+from a comment store beside the read cache. `github_reads` of the `[flow]` table is `"delta"` by
+default and `"full"` for the old per-item reads. On a recorded 650-brief fixture
+(`fixtures/read_budget_650.json`, invented data) each switched command prints the same output in
+both modes, through edits, deletions and new comments, and a warm run holds the budget of counted
+calls (all but the 304s). The recorded double of test_session_plan_reads."""
 
 from __future__ import annotations
 
