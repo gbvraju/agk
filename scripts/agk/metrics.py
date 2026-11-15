@@ -4,11 +4,16 @@ Standard library only. It reads the GitHub REST API with `gh api` (GET only; `gh
 credential, this script holds none) or recorded JSON files (`--api-dir`), and local git objects.
 It writes only to stdout. Every field is derived; nothing is typed by an agent, and a field whose
 inputs are missing is `unknown`, never 0 or no (rule 10).
+
+`--cost` (brief #1283, ADR-0544) reads no API: it reads the usage fields of this clone's local
+session records, never a message's text, and prints the day's model spend by session, role, brief
+and model; `--save` also writes the day's figures to `docs/runs/cost/<date>.json`.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -27,6 +32,7 @@ from common import (
     REQUIREMENTS,
     CheckError,
     agent_apps,
+    config_source,
     covered_fix_list,
     final_accepts,
     git,
@@ -52,7 +58,8 @@ USAGE = (
     "       metrics.py --save-checklist [--to FILE] [--days N] [--repo OWNER/REPO] "
     "[--api-dir DIR]\n"
     "       metrics.py --usage-by-kind FACTS [--before YYYY-MM-DD] [--after YYYY-MM-DD] "
-    "[--repo OWNER/REPO] [--api-dir DIR]"
+    "[--repo OWNER/REPO] [--api-dir DIR]\n"
+    "       metrics.py --cost [--day YYYY-MM-DD] [--days N] [--records DIR] [--save]"
 )
 UNKNOWN = "unknown"
 NONE = "-"
@@ -1615,13 +1622,373 @@ def save_main(options: dict) -> int:
     return 0
 
 
+# --- the day's model spend from local usage records (brief #1283, ADR-0544) -----------------
+
+# The four token kinds of a reply and the usage field each is read from. The record layout is the
+# runtime's (verify: `<CLAUDE_CONFIG_DIR or ~/.claude>/projects/**/*.jsonl`, one JSON entry a line
+# with `cwd`, `gitBranch`, `sessionId`, `timestamp` and `message.id`, `message.model` and
+# `message.usage`; read from this cloud runtime's own records, not from its documentation).
+COST_KINDS = (
+    ("input", "input_tokens"),
+    ("output", "output_tokens"),
+    ("cache_write", "cache_creation_input_tokens"),
+    ("cache_read", "cache_read_input_tokens"),
+)
+COST_ROLES = ("conductor", "builder", "steward", "reviewer", "shadow", "architect")
+# Entry fields that may name the session's agent (verify: none is written by the runtime read
+# here, Q-1283-1); a value is used only when it is one of COST_ROLES, so no text is printed.
+AGENT_FIELDS = ("agentName", "agentType", "agent")
+COST_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
+BRIEF_BRANCH = re.compile(r"claude/brief-(\d+)(?:-[a-z])?")
+BRIEF_FOLDER = re.compile(r"brief-(\d+)")
+COST_DIR = "docs/runs/cost"
+COST_TOP = 5
+PRICES_SETTING = "[cost] prices"
+
+
+def cost_count(used: dict, field: str) -> int | None:
+    value = used.get(field)
+    return value if type(value) is int and value >= 0 else None
+
+
+def cost_role(entry: dict, branch: str | None) -> str:
+    """The role from the session's agent name, else `builder` on a builder branch, else unknown."""
+    for field in AGENT_FIELDS:
+        name = entry.get(field)
+        if isinstance(name, str):
+            low = name.strip().lower()
+            if low in ("architect-review", "reviewer"):
+                return "reviewer"
+            if low in COST_ROLES:
+                return low
+    if branch and BRIEF_BRANCH.fullmatch(branch):
+        return "builder"
+    return UNKNOWN
+
+
+def cost_reply(entry: Any) -> dict | None:
+    """The usage fields of one assistant reply, or None for an entry that is no reply. Only the
+    named fields are read (`.get` of a key): never the message's content, never a walk of the
+    entry. A count that cannot be read is None (unknown), never 0."""
+    if not isinstance(entry, dict) or entry.get("type") != "assistant":
+        return None
+    message = entry.get("message")
+    if not isinstance(message, dict):
+        return None
+    mid = message.get("id")
+    used = message.get("usage")
+    if not isinstance(mid, str) or not mid:
+        return None
+    used = used if isinstance(used, dict) else {}
+    model = message.get("model")
+    session = entry.get("sessionId")
+    branch = entry.get("gitBranch")
+    branch = branch if isinstance(branch, str) and branch else None
+    cwd = entry.get("cwd")
+    return {
+        "id": mid,
+        "when": stamp(entry.get("timestamp") if isinstance(entry.get("timestamp"), str) else None),
+        "cwd": cwd if isinstance(cwd, str) and cwd else None,
+        "session": session if isinstance(session, str) and COST_ID.fullmatch(session) else None,
+        "model": model if isinstance(model, str) and COST_ID.fullmatch(model) else UNKNOWN,
+        "branch": branch,
+        "role": cost_role(entry, branch),
+        "tokens": {kind: cost_count(used, field) for kind, field in COST_KINDS},
+    }
+
+
+def cost_prices(root: Path) -> dict[str, dict[str, Decimal]]:
+    """The optional `[cost] prices` table: a model to its price in USD per million tokens of each
+    kind. A bad table or price is refused naming the setting, never the value."""
+    try:
+        table = config_source(root).get("cost", {})
+    except (OSError, ValueError):
+        raise CheckError("the [cost] table is refused (setting: cost)") from None
+    prices = table.get("prices", {}) if isinstance(table, dict) else None
+    if not isinstance(prices, dict):
+        raise CheckError("the [cost] table is refused (setting: cost.prices)")
+    out: dict[str, dict[str, Decimal]] = {}
+    kinds = {kind for kind, _ in COST_KINDS}
+    for model, row in prices.items():
+        if not isinstance(row, dict) or not set(row) <= kinds:
+            raise CheckError("the [cost] table is refused (setting: cost.prices)")
+        out[model] = {}
+        for kind, price in row.items():
+            if type(price) not in (int, float) or not math.isfinite(price) or price < 0:
+                raise CheckError(f"the [cost] table is refused (setting: cost.prices.{kind})")
+            out[model][kind] = Decimal(str(price))
+    return out
+
+
+def clone_folders(root: Path) -> list[Path]:
+    """The clone's own folder and each of its worktrees."""
+    found = [root.resolve()]
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", str(root), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode == 0:
+        for line in proc.stdout.splitlines():
+            if line.startswith("worktree "):
+                path = Path(line[len("worktree ") :]).resolve()
+                if path not in found:
+                    found.append(path)
+    return found
+
+
+def of_clone(cwd: str | None, folders: list[Path]) -> bool:
+    if not cwd:
+        return False
+    try:
+        path = Path(cwd).resolve()
+    except (OSError, ValueError):
+        return False
+    return any(path == f or f in path.parents for f in folders)
+
+
+def brief_of(reply: dict) -> str:
+    match = BRIEF_BRANCH.fullmatch(reply["branch"] or "")
+    if match is None and reply["cwd"]:
+        match = BRIEF_FOLDER.search(Path(reply["cwd"]).name)
+    return f"#{match.group(1)}" if match else UNKNOWN
+
+
+def records_home(given: str | None) -> Path | None:
+    if given:
+        return Path(given)
+    if os.environ.get("CLAUDE_CONFIG_DIR"):
+        return Path(os.environ["CLAUDE_CONFIG_DIR"]) / "projects"
+    if os.environ.get("HOME"):
+        return Path(os.environ["HOME"]) / ".claude" / "projects"
+    return None
+
+
+def read_replies(
+    home: Path | None, folders: list[Path], since: datetime
+) -> tuple[list, int, int, int]:
+    """(this clone's replies, each at its first entry, the replies of other folders, the lines that
+    are not JSON, the record files or folders that could not be read) from the record files
+    written at or after `since`. An unreadable file is counted, never passed over in silence."""
+    replies: list[dict] = []
+    seen: set[str] = set()
+    others = broken = lost = 0
+    try:
+        files = sorted(home.rglob("*.jsonl")) if home and home.is_dir() else []
+    except OSError:
+        files, lost = [], 1
+    for file in files:
+        try:
+            if datetime.fromtimestamp(file.stat().st_mtime, UTC) < since:
+                continue
+            text = file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            lost += 1
+            continue
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                broken += 1
+                continue
+            reply = cost_reply(entry)
+            if reply is None or reply["id"] in seen:
+                continue
+            seen.add(reply["id"])
+            if not of_clone(reply["cwd"], folders):
+                others += 1
+                continue
+            reply["session"] = reply["session"] or file.stem
+            replies.append(reply)
+    return replies, others, broken, lost
+
+
+def add_tokens(into: dict, tokens: dict) -> None:
+    for kind, _ in COST_KINDS:
+        value, have = tokens.get(kind), into.get(kind, 0)
+        into[kind] = have + value if isinstance(value, int) and isinstance(have, int) else None
+
+
+def total_of(tokens: dict) -> int | None:
+    values = [tokens.get(kind) for kind, _ in COST_KINDS]
+    known = [v for v in values if isinstance(v, int)]
+    return sum(known) if len(known) == len(values) else None
+
+
+def usd_of(model: str, tokens: dict, prices: dict) -> Decimal | None:
+    row = prices.get(model)
+    if row is None:
+        return None
+    usd = Decimal(0)
+    for kind, _ in COST_KINDS:
+        if tokens.get(kind) is None or (tokens[kind] and kind not in row):
+            return None
+        usd += Decimal(tokens[kind]) * row.get(kind, Decimal(0)) / Decimal(1_000_000)
+    return usd
+
+
+def shown(value: Any) -> str:
+    if value is None:
+        return UNKNOWN
+    if isinstance(value, Decimal):
+        return str(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    return str(value)
+
+
+def day_figures(day: date, replies: list[dict], prices: dict) -> dict:
+    groups: dict[tuple, dict] = {}
+    for r in replies:
+        if r["when"] is None or r["when"].date() != day:
+            continue
+        key = (r["session"], r["role"], brief_of(r), r["model"])
+        group: dict[str, Any] = groups.setdefault(
+            key, {"replies": 0, "tokens": {}, "usd": Decimal(0)}
+        )
+        group["replies"] += 1
+        add_tokens(group["tokens"], r["tokens"])
+        if prices:
+            usd = usd_of(r["model"], r["tokens"], prices)
+            group["usd"] = None if usd is None or group["usd"] is None else group["usd"] + usd
+    rows: list[dict] = []
+    total: dict[str, Any] = {"replies": 0, "tokens": {}, "usd": Decimal(0) if prices else None}
+    for key in sorted(groups):
+        group = groups[key]
+        row = dict(zip(("session", "role", "brief", "model"), key, strict=True))
+        row |= {"replies": group["replies"], **{k: group["tokens"][k] for k, _ in COST_KINDS}}
+        row["total"] = total_of(group["tokens"])
+        row["usd"] = group["usd"] if prices else None
+        rows.append(row)
+        total["replies"] += group["replies"]
+        add_tokens(total["tokens"], group["tokens"])
+        if prices:
+            total["usd"] = (
+                None if row["usd"] is None or total["usd"] is None else total["usd"] + row["usd"]
+            )
+    return {"day": day.isoformat(), "rows": rows, "total": total, "priced": bool(prices)}
+
+
+def ranked(rows: list[dict], key: str) -> str:
+    """The top names by their total tokens, largest first; an unknown total sorts last."""
+    sums: dict[str, int | None] = {}
+    for row in rows:
+        name, have = row[key], sums.get(row[key], 0)
+        sums[name] = None if row["total"] is None or have is None else have + row["total"]
+
+    def place(name: str) -> tuple[int, str]:
+        value = sums[name]
+        return (-value if value is not None else 1, name)
+
+    order = sorted(sums, key=place)
+    return ", ".join(f"{name} {shown(sums[name])}" for name in order[:COST_TOP])
+
+
+def share_line(tokens: dict) -> str:
+    inp, write, read = (tokens.get(k) for k in ("input", "cache_write", "cache_read"))
+    if not (isinstance(inp, int) and isinstance(write, int) and isinstance(read, int)):
+        return "Cache reads: unknown"
+    if not inp + write + read:
+        return "Cache reads: unknown"
+    side = Decimal(inp + write + read)
+    read_pc = tenths(Decimal(100) * read / side)
+    fresh_pc = tenths(Decimal(100) * (inp + write) / side)
+    return f"Cache reads: {read_pc}% of input-side tokens; fresh input {fresh_pc}%"
+
+
+def render_day(figures: dict, others: int, broken: int, lost: int) -> str:
+    total, rows, priced = figures["total"], figures["rows"], figures["priced"]
+    out = [f"Spend {figures['day']} (UTC; local usage records of this clone, numbers only)", ""]
+    if not rows:
+        lacking = f"; {lost} record files could not be read" if lost else ""
+        out.append(f"Total: unknown (no usage record of this clone{lacking})")
+    else:
+        head = ["session", "role", "brief", "model", "replies", *[k for k, _ in COST_KINDS]]
+        head += ["total", "usd"]
+        out.append("| " + " | ".join(head) + " |")
+        out.append("|" + "---|" * len(head))
+        for row in rows:
+            cells = [shown(row[h]) for h in head[:-1]]
+            cells.append(shown(row["usd"]) if priced else NONE)
+            out.append("| " + " | ".join(cells) + " |")
+        tokens = total["tokens"]
+        parts = [f"replies {total['replies']}"]
+        parts += [f"{k.replace('_', ' ')} {shown(tokens[k])}" for k, _ in COST_KINDS]
+        parts.append(f"total {shown(total_of(tokens))}")
+        line = "Total: " + ", ".join(parts)
+        line += f", ~usd {shown(total['usd'])}" if priced else ""
+        out += ["", line + (f" (at least: {lost} record files could not be read)" if lost else "")]
+        if not priced:
+            out.append(f"usd: not priced (setting: {PRICES_SETTING})")
+        out.append(f"Top sessions: {ranked(rows, 'session')}")
+        out.append(f"Top briefs: {ranked(rows, 'brief')}")
+        out.append(share_line(tokens))
+    skipped = f"Skipped: {others} replies of other folders, {broken} unreadable lines"
+    out.append(f"{skipped}, {lost} unreadable files")
+    return "\n".join(out) + "\n"
+
+
+def saved_figures(figures: dict, lost: int) -> dict:
+    def number(value: Any) -> Any:
+        return float(shown(value)) if isinstance(value, Decimal) else value
+
+    total = figures["total"]
+    data_total = {"replies": total["replies"], **{k: total["tokens"].get(k) for k, _ in COST_KINDS}}
+    data_total["total"] = total_of(total["tokens"])
+    data_total["usd"] = number(total["usd"])
+    rows = [{k: number(v) for k, v in row.items()} for row in figures["rows"]]
+    return {"day": figures["day"], "total": data_total, "rows": rows, "unreadable_files": lost}
+
+
+def cost_main(options: dict) -> int:
+    root = repo_root()
+    prices = cost_prices(root)
+    last = options["day"] or datetime.now(UTC).date()
+    days = [last - timedelta(days=n) for n in range(options["days"] - 1, -1, -1)]
+    replies, others, broken, lost = read_replies(
+        records_home(options["records"]), clone_folders(root), start_of(days[0])
+    )
+    texts = []
+    for day in days:
+        figures = day_figures(day, replies, prices)
+        texts.append(render_day(figures, others, broken, lost))
+        if options["save"]:
+            target = root / COST_DIR / f"{figures['day']}.json"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                json.dumps(saved_figures(figures, lost), indent=2) + "\n", encoding="utf-8"
+            )
+            texts.append(f"saved {COST_DIR}/{figures['day']}.json\n")
+    sys.stdout.write("\n".join(texts))
+    return 0
+
+
 def parse_args(args: list[str]) -> dict | None:
     options: dict = {"today": None, "repo": None, "api": None, "issues": None, "mode": "body"}
     options |= {"usage": None, "before": None, "after": None}
     options |= {"save": False, "to": None, "days": 7}
+    options |= {"cost": False, "day": None, "records": None, "save_cost": False, "days_set": False}
     i = 0
     while i < len(args):
         arg = args[i]
+        if arg in ("--cost", "--save"):
+            options["cost" if arg == "--cost" else "save_cost"] = True
+            i += 1
+            continue
+        if arg in ("--day", "--records") and i + 1 < len(args):
+            if arg == "--records":
+                options["records"] = args[i + 1]
+            elif not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args[i + 1]):
+                return None
+            else:
+                try:
+                    options["day"] = date.fromisoformat(args[i + 1])
+                except ValueError:
+                    return None
+            i += 2
+            continue
         if arg == "--save-checklist":
             options["save"] = True
             i += 1
@@ -1631,6 +1998,7 @@ def parse_args(args: list[str]) -> dict | None:
                 options["to"] = args[i + 1]
             elif args[i + 1].isdigit() and int(args[i + 1]) >= 1:
                 options["days"] = int(args[i + 1])
+                options["days_set"] = True
             else:
                 return None
             i += 2
@@ -1668,6 +2036,20 @@ def parse_args(args: list[str]) -> dict | None:
         return None
     if options["usage"] and (options["issues"] or options["today"] or options.get("mode_set")):
         return None
+    return cost_options(options)
+
+
+def cost_options(options: dict) -> dict | None:
+    """`--cost` goes with `--day`, `--days`, `--records` and `--save` alone, and they with it."""
+    own = options["day"] or options["records"] or options["save_cost"]
+    if not options["cost"]:
+        return None if own else options
+    other = options["usage"] or options["issues"] or options["today"] or options.get("mode_set")
+    if other or options["save"] or options["to"] or options["repo"] or options["api"]:
+        return None
+    if not options["days_set"]:
+        options["days"] = 1
+    options["save"] = options.pop("save_cost")
     return options
 
 
@@ -1689,6 +2071,8 @@ def main(argv: list[str] | None = None) -> int:
     if options is None:
         print(USAGE, file=sys.stderr)
         return 2
+    if options["cost"]:
+        return cost_main(options)
     if options["save"]:
         return save_main(options)
     if options["usage"]:

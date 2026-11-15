@@ -1,0 +1,1 @@
+- The day's model spend is shown by session, role, brief and model: `metrics.py --cost [--day] [--days N] [--save]` reads only the usage fields of this clone's local session records, never their text, prices them from an optional `[cost.prices.<model>]` table, prints `unknown` for what it cannot read and saves the figures to `docs/runs/cost/<date>.json` (brief #1283, ADR-0544)
