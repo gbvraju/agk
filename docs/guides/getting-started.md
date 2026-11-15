@@ -392,7 +392,7 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    claude --remote "$prompt"
    ```
 
-   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The kit installs the script `scripts/start-session-windows.ps1` shown here, as a template that is written only where the file is absent; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add`, or, when the folder `..\agk-<session>` is still there from an earlier start (a session that ended or crashed), reuses it if it is a clean worktree of this repository (fetch, then the default branch checked out detached) and otherwise starts nothing, exiting 2 with one line naming the folder, so a restart after a crash works (brief #1237, ADR-0525); and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, adding `--model <name>` and `--effort <level>` when the adapter was given `AGK_MODEL` and `AGK_EFFORT` (the tier of the brief's kind, from `[models.names]`; brief #1252, ADR-0530), and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. Once the worktree exists, the script appends `.agk-session-exit` to the worktree's exclude file (the path `git -C <worktree> rev-parse --git-path info/exclude` names), so the exit file, which is written into the worktree untracked, never reaches a commit, not even through a later `git add -A` in that worktree. The adapter needs PowerShell 7 (`pwsh`; install it with `winget install Microsoft.PowerShell`), which Windows does not install by default, and it must not be run under Windows PowerShell 5.1 (`powershell.exe`): there, `& claude @flags $prompt` passes the prompt to a native program with its embedded double quotes stripped, so a prompt that holds quotes arrives changed.
+   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The kit installs the script `scripts/start-session-windows.ps1` shown here, as a template that is written only where the file is absent; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add`, or, when the folder `..\agk-<session>` is still there from an earlier start (a session that ended or crashed), reuses it if it is a clean worktree of this repository (fetch, then the default branch checked out detached) and otherwise starts nothing, exiting 2 with one line naming the folder, so a restart after a crash works (brief #1237, ADR-0525); and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, adding `--model <name>` and `--effort <level>` when the adapter was given `AGK_MODEL` and `AGK_EFFORT` (the tier of the brief's kind, from `[models.names]`; brief #1252, ADR-0530), and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. Once the worktree exists, the script appends `.agk-session-exit` to the worktree's exclude file (the path `git -C <worktree> rev-parse --git-path info/exclude` names), so the exit file, which is written into the worktree untracked, never reaches a commit, not even through a later `git add -A` in that worktree. Before `claude` starts, the wrapper writes `<worktree>/.agk-session-pid` (the session, the wrapper's process id, the UTC start time and the brief), excluded the same way; the watchdog and `launch.py` read it (brief #1355, ADR-0568). The adapter needs PowerShell 7 (`pwsh`; install it with `winget install Microsoft.PowerShell`), which Windows does not install by default, and it must not be run under Windows PowerShell 5.1 (`powershell.exe`): there, `& claude @flags $prompt` passes the prompt to a native program with its embedded double quotes stripped, so a prompt that holds quotes arrives changed.
 
    ```powershell
    # scripts/start-session-windows.ps1: one Windows Terminal tab per session, in its own worktree.
@@ -419,7 +419,7 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
            (Get-FullPath $common.Trim()) -ne $ours -or (Get-FullPath $top.Trim()) -ne (Get-FullPath $worktree)) {
            [Console]::Error.WriteLine("start-session-windows: $worktree exists and is not a worktree of this repository; nothing started"); exit 2
        }
-       $changes = @(git -C $worktree status --porcelain --untracked-files=all | Where-Object { $_ -and $_ -notmatch '\.agk-session-exit$' })
+       $changes = @(git -C $worktree status --porcelain --untracked-files=all | Where-Object { $_ -and $_ -notmatch '\.agk-session-(exit|pid)$' })
        if ($LASTEXITCODE -ne 0 -or $changes.Count -gt 0) {
            [Console]::Error.WriteLine("start-session-windows: $worktree is not clean; nothing started"); exit 2
        }
@@ -435,12 +435,15 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
        if ((Get-Date) -gt $deadline) { throw 'the worktree folder did not appear' }
        Start-Sleep -Milliseconds 200
    }
-   # Keep the exit file out of git: the worktree's exclude file names it.
+   # Keep the exit file and the process record out of git: the worktree's exclude file names them.
    $exclude = (git -C $worktree rev-parse --git-path info/exclude).Trim()
    if (-not [IO.Path]::IsPathRooted($exclude)) { $exclude = Join-Path $worktree $exclude }
    New-Item -ItemType Directory -Force -Path (Split-Path $exclude -Parent) | Out-Null
    if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-exit'))) {
        Add-Content -LiteralPath $exclude -Value '.agk-session-exit'
+   }
+   if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-pid'))) {
+       Add-Content -LiteralPath $exclude -Value '.agk-session-pid'
    }
 
    # 2. The prompt and the wrapper, in a folder of the session under the long temporary path.
@@ -462,6 +465,9 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    $env:AGK_SESSION = $Session
    $env:AGK_BRIEF = $Brief
    Set-Location -LiteralPath $Worktree
+   # The process record before the first turn: this wrapper's process holds claude.
+   $started = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+   Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-pid') -Value "session=$Session", "pid=$PID", "started_utc=$started", "brief=$Brief"
    $prompt = Get-Content -LiteralPath $PromptFile -Raw
    # The tier's model name and effort: no flag without a model (verify: the flags are claude's).
    $flags = @()
