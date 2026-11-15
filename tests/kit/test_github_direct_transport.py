@@ -18,6 +18,7 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import time
 import tracemalloc
 from pathlib import Path
 from types import SimpleNamespace
@@ -136,6 +137,8 @@ def direct(monkeypatch, tmp_path):
     monkeypatch.setattr(session, "CACHE", session.ReadCache())
     monkeypatch.setattr(session, "MEMO", None)
     monkeypatch.setattr(session, "RUN", None)
+    monkeypatch.setattr(session, "WRITES", 0)
+    monkeypatch.setattr(session, "LAST_WRITE", None)  # a fake-clock write time never leaks out
     return SimpleNamespace(
         server=server, clock=clock, gh=gh, transport=fresh, cache=tmp_path / "cache"
     )
@@ -356,8 +359,18 @@ def test_eight_processes_share_one_cache_folder_with_no_corrupt_file(tmp_path):
 # --- answer 3: the guarded merge reads through the shared reader -------------------------------
 
 
+def test_a_write_time_from_another_clock_never_makes_a_long_wait(monkeypatch):
+    """REQ-050: the hang on a81ea3e: a write time from a fake clock far ahead of the real one."""
+    slept: list[float] = []
+    monkeypatch.setattr(session, "LAST_WRITE", time.monotonic() + 1_000_000.0)
+    monkeypatch.setattr(session.time, "sleep", slept.append)
+    session.pace("POST")
+    assert slept and max(slept) <= session.WRITE_GAP
+
+
 def test_the_merge_reads_are_counted_and_conditional(monkeypatch, tmp_path):
     """REQ-050"""
+    monkeypatch.setattr(session, "rate_state", lambda: None)  # never a real `gh`
     seen: list[list[str]] = []
     answers = iter([
         f'HTTP/2.0 200 OK\r\nEtag: "m1"\r\n\r\n{json.dumps(BODY)}',
@@ -420,7 +433,7 @@ class Conn:
         argv = [GH, "api", "--method", "GET", unquote(path.lstrip("/")), "-i"]
         if "If-None-Match" in headers:
             argv += ["-H", "If-None-Match: " + headers["If-None-Match"]]
-        proc = subprocess.run(argv, capture_output=True, text=True)
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
         status, head, body = session.split_response(proc.stdout)
         if status is None:
             found = re.search(r"HTTP (\\d{3})", proc.stderr)

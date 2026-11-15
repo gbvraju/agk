@@ -417,7 +417,7 @@ def pace(method: str) -> None:
     if method not in MUTATING:
         return
     if LAST_WRITE is not None and (gap := WRITE_GAP - (time.monotonic() - LAST_WRITE)) > 0:
-        time.sleep(gap)
+        time.sleep(min(gap, WRITE_GAP))  # brief #1336: bounded, whatever clock set LAST_WRITE
     LAST_WRITE = time.monotonic()
 
 
@@ -493,6 +493,7 @@ class Direct:
             capture_output=True,
             text=True,
             encoding="utf-8",
+            timeout=DIRECT_TIMEOUT,
         )
         return proc.stdout.strip() if proc.returncode == 0 else ""
 
@@ -524,7 +525,7 @@ class Direct:
         )
         try:
             self.token = self.read_token(signed) or None
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             self.token = None
         if self.token is None or not re.fullmatch(r"[A-Za-z0-9._-]+", self.host):
             self.off()
