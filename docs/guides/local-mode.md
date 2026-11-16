@@ -220,9 +220,11 @@ things on the machine that runs the sessions, in this order (brief #1237, ADR-05
 change with an ADR in the same pull request.
 
 1. **The adapter.** The kit installs two launch adapters, which a project then owns: `scripts/start-session-windows.ps1`
-   (a Windows Terminal tab per session, in its own worktree; it needs PowerShell 7) and `scripts/start-session-local.sh`
-   (Linux and macOS: a GNOME Terminal tab when a desktop is there, otherwise the background, with its output in the worktree's
-   `.agk-session.log`). Each writes `<worktree>/.agk-session-exit` when its session ends. Set the one for the machine in the
+   (Windows; it needs PowerShell 7) and `scripts/start-session-local.sh` (Linux and macOS), each starting one session per call
+   in its own worktree. Each runs its job headless in the background, with no terminal tab and no Windows Terminal needed,
+   and writes the job's output to the worktree's `.agk-session.log` (brief #1388, ADR-0588). With `show_jobs = true` in the
+   `[autopilot]` table of `agk.toml` (default false) a job also shows in a terminal tab that closes when it ends, its output
+   still in the log. Each writes `<worktree>/.agk-session-exit` when its session ends. Set the one for the machine in the
    `[flow]` table, and try it once by hand as [the getting-started guide](getting-started.md) shows ("Automatic starts after
    a review pass"):
 

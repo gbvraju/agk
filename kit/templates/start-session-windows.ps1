@@ -1,4 +1,4 @@
-# scripts/start-session-windows.ps1: one Windows Terminal tab per session, in its own worktree.
+# scripts/start-session-windows.ps1: one background job per session, in its own worktree; a tab only with show_jobs.
 $ErrorActionPreference = 'Stop'
 $session = $env:AGK_SESSION
 $brief = $env:AGK_BRIEF
@@ -61,10 +61,13 @@ Set-Content -LiteralPath $promptFile -Value $prompt -Encoding utf8
 # The job's kind, item and head (SPEC-0064 rule 3), from AGK_JOB_KIND, AGK_ITEM and AGK_HEAD, for the record.
 $Kind = $env:AGK_JOB_KIND; $Item = $env:AGK_ITEM; $Head = $env:AGK_HEAD
 Set-Content -LiteralPath (Join-Path $work 'job.txt') -Encoding utf8 -Value "kind=$Kind", "item=$Item", "head=$Head"
+# A tab only with [autopilot] show_jobs = true, which launch.py passes as AGK_SHOW_JOBS (SPEC-0064 rule 5).
+$show = $env:AGK_SHOW_JOBS -eq 'true'
+Set-Content -LiteralPath (Join-Path $work 'show.txt') -Encoding utf8 -Value $(if ($show) { 'true' } else { 'false' })
 $wrapper = Join-Path $work 'run.ps1'
 Set-Content -LiteralPath $wrapper -Encoding utf8 -Value @'
 param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)
-# The tab's environment: PATH fresh, TEMP long, no inherited child-session marker.
+# The job's environment: PATH fresh, TEMP long, no inherited child-session marker.
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
             [Environment]::GetEnvironmentVariable('Path', 'User')
 $env:TEMP = $LongTemp
@@ -82,16 +85,28 @@ $prompt = Get-Content -LiteralPath $PromptFile -Raw
 # The tier's model name and effort: no flag without a model (verify: the flags are claude's).
 $flags = @()
 if ($Model) { $flags += '--model', $Model; if ($Effort) { $flags += '--effort', $Effort } }
-try { & claude @flags $prompt; $code = $LASTEXITCODE } catch { $code = 1 }
+# Headless (-p), the output in the log; with show_jobs also in the tab (verify: the runtime's headless flag on Windows).
+$log = Join-Path $Worktree '.agk-session.log'
+$shown = (Get-Content -LiteralPath (Join-Path (Split-Path $PromptFile -Parent) 'show.txt') -ErrorAction SilentlyContinue) -eq 'true'
+try {
+    if ($shown) { & claude @flags -p $prompt 2>&1 | Tee-Object -FilePath $log } else { & claude @flags -p $prompt *> $log }
+    $code = $LASTEXITCODE
+} catch { $code = 1 }
 if ($null -eq $code) { $code = 1 }
 $at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
 Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-exit') -Value "exit_code=$code", "ended_utc=$at"
 exit $code
 '@
 
-# 3. The tab, only now that the worktree exists. The model and effort follow as arguments, never empty ones.
+# 3. The job, only now that the worktree exists: hidden, with no Windows Terminal, or with show_jobs a tab that closes
+#    when it ends. The model and effort follow as arguments, never empty ones (verify: Start-Process's quoting).
 $extra = @()
 if ($env:AGK_MODEL) { $extra += $env:AGK_MODEL; if ($env:AGK_EFFORT) { $extra += $env:AGK_EFFORT } }
-wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
-    pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief @extra
+if ($show) {
+    wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
+        pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief @extra
+} else {
+    $quoted = @($wrapper, $worktree, $promptFile, $longTemp, $session, $brief) + $extra | ForEach-Object { '"' + $_ + '"' }
+    Start-Process -FilePath pwsh -WindowStyle Hidden -WorkingDirectory $worktree -ArgumentList (@('-NoProfile', '-File') + $quoted)
+}
 
