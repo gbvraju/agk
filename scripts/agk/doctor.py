@@ -4,7 +4,9 @@ Standard library only. Read-only: it reads local files and runs `git` only to re
 only with GET on seven paths of the repository, an eighth where the product report is installed,
 two more with `builder_start = "assign"` (the assignments issue and its slot markers, ADR-0402)
 and one more of the kit's own repository, its newest release (brief #320; `gh` holds the
-credential; this script holds none). It writes nothing.
+credential; this script holds none). It writes nothing, and it never changes a session's
+permission mode or a `.claude/settings*.json` file (brief #1411, ADR-0594): the runtime's own
+`/doctor` is another command `(verify)`, and a steward that lost its reads after it restarts.
 A check that could not read what it needs is `cannot-check` with a reason class, never `ok`.
 Messages name a setting or a path class, never a value. Output is a text report or, with --json,
 the same findings as one JSON object; the exit code is 0 only when every check is ok.

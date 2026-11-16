@@ -346,6 +346,21 @@ and the place in the hook, never a value, and the refusal says `see agk logs --r
 - A guard that refuses a command it should judge, such as a seed run against a throwaway database, is a defect of the kit.
   Report it with the redacted lines from `agk logs --refusals`, never with the raw command.
 
+## Reporting a defect of the kit
+
+A defect of the kit itself is reported in one form, kept apart from the project's own work (brief #1411, ADR-0594).
+Draft it with `python3 scripts/agk/steward_owner.py defect --title "<one line>" --file <what should happen instead>`:
+the draft adds the kit version, the operating system and shell, the reason codes and the newest redacted refusal lines,
+and the outbound data guard checks it before anything is posted. With `--post`, on the owner's word, it becomes one issue
+in this project labelled `agk-kit-defect`, never `agk-brief`, so the conductor never schedules it. The steward lists the
+open ones with `python3 scripts/agk/steward_owner.py defects`. Nothing is sent to the kit's maintainers by itself: the
+owner decides whether to pass a report on. In personal mode the draft is printed for the person and nothing is posted.
+
+When a steward's `gh api` reads stop working in a session (after a `/doctor` or settings change, for example),
+`python3 scripts/agk/steward_owner.py reads` names, once, the setting or permission mode that refuses them and the step
+that restores them; usually that is restarting the steward session. The kit's `doctor.py` never changes a permission
+mode.
+
 ## What is lost
 
 Say it plainly to everyone working on the project:

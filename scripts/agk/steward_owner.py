@@ -6,6 +6,9 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
                                            [--conductor ID]
        python3 scripts/agk/steward_owner.py park --pr N [--conductor ID]
        python3 scripts/agk/steward_owner.py ready --plan FILE --trace FILE --session ID [--start]
+       python3 scripts/agk/steward_owner.py defect --title TEXT --file FILE [--refusals N] [--post]
+       python3 scripts/agk/steward_owner.py defects
+       python3 scripts/agk/steward_owner.py reads [--session ID] [--refused]
 
 `ask` takes one plain business sentence (FILE): one line, a question with its choices and `I
 recommend`, and no kit term (a file name, label, rule number, id or command); it records it as an
@@ -28,6 +31,18 @@ Brief #1387 (SPEC-0064 rules 6 and 14, ADR-0585): with `auto_start` and `launch_
 (`conductor.py watchdog --pass`) starts the conductor; without them it prints the conductor's
 prompt as before. A steward the supervisor started (`AGK_STEWARD_START=conductor`) relays nothing:
 `relay` refuses (exit 2).
+
+Brief #1411 (ADR-0594): `defect` drafts one kit-defect report: the title, the kit version
+(`version` of `agk.toml`), the operating system and shell, the reason codes and the newest N (5)
+redacted lines of the refusal log (`guard_logs`, ADR-0593) and what should happen instead (FILE).
+The outbound data guard (`steward_outbound.check`) checks the title and body first, fail closed (exit 2). It
+prints the draft; `--post` opens it as one issue in the project's own repository labelled
+`agk-kit-defect`, never `agk-brief`, so the plan never offers it; in personal mode nothing is
+posted. `defects` lists the open kit defects, one line each, or `kit defects: none open`. `reads`
+checks one read, `gh api rate_limit`: `reads: ok`, or once per session one line naming the setting
+or permission mode that refuses it and the one step that restores it (exit 1); `--refused` says
+the runtime itself refused the steward's own `gh api` call, and names the permission entry of
+`.claude/settings*.json` that explains it, else the session's permission mode `(verify)`.
 """
 
 from __future__ import annotations
@@ -35,17 +50,22 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import re
+import subprocess  # nosec B404 - one fixed argument list (`gh api rate_limit`), no shell
 import sys
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import guard_logs  # noqa: E402
 import launch  # noqa: E402
 import session  # noqa: E402
 import steward  # noqa: E402
 from common import CheckError, personal_table, repo_root, utf8_output  # noqa: E402
+from session_plan import KIT_DEFECT_LABEL  # noqa: E402
 
 RULE = "SPEC-0059 rule 5"
 QID = re.compile(r"Q-\d+-\w+")
@@ -215,6 +235,175 @@ def ready(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
     return launch.role_main(args), []
 
 
+# --- kit defects and the steward's reads (brief #1411, ADR-0594) -------------------------------
+
+
+def kit_version(root: Path) -> str:
+    try:
+        value = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8")).get("version")
+    except (OSError, ValueError):
+        return "unknown"
+    return str(value) if isinstance(value, str) and guard_logs.NAME.fullmatch(value) else "unknown"
+
+
+def shell_name() -> str:
+    found = os.environ.get("SHELL") or os.environ.get("COMSPEC") or ""
+    name = re.split(r"[\\/]", found)[-1] if found else "unknown"
+    return name if guard_logs.NAME.fullmatch(name) else "unknown"
+
+
+def refusal_lines(root: Path, count: int) -> list[dict]:
+    """The newest COUNT lines of the refusal log, each field redacted again."""
+    out: list[dict] = []
+    for path in guard_logs.refusal_files(root):
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                line = json.loads(raw)
+            except ValueError:
+                continue
+            if isinstance(line, dict):
+                out.append(line)
+    try:
+        patterns = guard_logs.config.guard_patterns(root)
+    except Exception:  # noqa: BLE001 - a refused table: the built-in detectors still redact
+        patterns = []
+    keep = ("at", "hook", "reason", "text", "error")
+    return [
+        {k: guard_logs.redact(json.dumps(x[k]) if k == "error" else str(x[k]), patterns)[0]
+         for k in keep if k in x}  # fmt: skip
+        for x in out[-count:] if count > 0
+    ]
+
+
+def defect_body(root: Path, title: str, expected: str, count: int) -> str:
+    lines = refusal_lines(root, count)
+    codes = sorted({x["reason"] for x in lines if x.get("reason")})
+    body = [
+        f"Kit defect: {title}",
+        "",
+        f"Kit version: {kit_version(root)}",
+        f"Machine: {platform.system() or 'unknown'}; shell: {shell_name()}",
+        f"Reason codes: {', '.join(codes) if codes else 'none recorded'}",
+        "Refusals (redacted, from agk logs --refusals):",
+        *([f"    {json.dumps(x, sort_keys=True)}" for x in lines] or ["    none recorded"]),
+        "",
+        f"What should happen instead: {expected}",
+        "",
+        "Not product work: never scheduled by the plan; the owner decides whether it goes to the "
+        "kit's maintainers.",
+        "",
+        STEWARD_WHO,
+    ]
+    return "\n".join(body) + "\n"
+
+
+def defect(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
+    import steward_outbound  # noqa: PLC0415 - only for a report
+
+    title, expected = opts.title.strip(), opts.file.read_text(encoding="utf-8").strip()
+    if not title or len(title) > 200 or "\n" in title or not expected:
+        return 2, ["refused: a kit defect has a one-line title and what should happen instead"]
+    body = defect_body(root, title, expected, opts.refusals)
+    if refused := steward_outbound.check(f"{title}\n{body}", root):
+        return 2, refused
+    draft = [f"kit defect draft ({KIT_DEFECT_LABEL}): {title}", *body.splitlines()]
+    if personal_table(root) is not None:
+        return 0, [*draft, "personal mode: nothing is posted; it is the person's to send"]
+    if not opts.post:
+        return 0, [*draft, "not posted: run again with --post on the owner's word"]
+    repo = session.repo_name(root)
+    made = session.gh(
+        f"repos/{repo}/issues", "-f", f"title=Kit defect: {title}", "-f", f"body={body}",
+        "-f", f"labels[]={KIT_DEFECT_LABEL}", method="POST",
+    )  # fmt: skip
+    if not isinstance(made, dict) or not made.get("number"):
+        raise CheckError("the kit defect could not be posted")
+    return 0, [f"kit defect filed: #{made['number']} ({KIT_DEFECT_LABEL})"]
+
+
+def defects(root: Path) -> tuple[int, list[str]]:
+    """The open kit defects, one line each (answer 1): the owner sees them, the plan never."""
+    if personal_table(root) is not None:
+        return 0, ["kit defects: personal mode keeps none on GitHub"]
+    repo = session.repo_name(root)
+    found = session.pages(f"repos/{repo}/issues?state=open&labels={KIT_DEFECT_LABEL}")
+    if found is None:
+        raise steward.Unreadable("the open kit defects")
+    found = [i for i in found if isinstance(i, dict) and "pull_request" not in i]
+    if not found:
+        return 0, ["kit defects: none open"]
+    return 0, [
+        f"kit defect #{i.get('number')}: {' '.join(str(i.get('title') or '').split())[:100]} "
+        f"(opened {str(i.get('created_at') or '')[:10]})"
+        for i in sorted(found, key=lambda i: int(i.get("number") or 0))
+    ]
+
+
+RESTART = "restart the steward session (claude --agent steward)"
+
+
+def permission_setting(root: Path) -> tuple[str, str]:
+    """(setting, step) that explains a refused `gh api` read in this session (answer 2)."""
+    allowed = False
+    for name in ("settings.local.json", "settings.json"):
+        try:
+            data = json.loads((root / ".claude" / name).read_text(encoding="utf-8"))
+            rules = data.get("permissions") or {}
+        except (OSError, ValueError, AttributeError):
+            continue
+        for kind in ("deny", "ask"):
+            entries = rules.get(kind) if isinstance(rules, dict) else None
+            if any(str(e).startswith(("Bash(gh", "Bash(*")) for e in entries or []):
+                return f"permissions.{kind} of .claude/{name}", f"remove that entry, then {RESTART}"
+        entries = rules.get("allow") if isinstance(rules, dict) else None
+        allowed |= any(re.match(r"Bash\(gh(?: api)?(?:[ :]\*|\*)", str(e)) for e in entries or [])
+    if not allowed:
+        mode = "the session's permission mode, with no permissions.allow entry for gh api (verify)"
+        return mode, f"{RESTART}, or approve the read when asked"
+    return "the session's permission mode (verify)", RESTART
+
+
+def gh_refusal() -> tuple[str, str] | None:
+    """None when `gh api rate_limit` answers; else (setting, step)."""
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - one fixed argument list, no shell
+            ["gh", "api", "rate_limit", "--jq", ".rate.remaining"],
+            capture_output=True, text=True, timeout=60, check=False,
+        )  # fmt: skip
+    except FileNotFoundError:
+        return "gh on PATH", "install gh, then run gh auth login"
+    except (OSError, subprocess.TimeoutExpired):
+        return "the network or proxy (verify)", "check the connection, then run reads again"
+    if proc.returncode == 0:
+        return None
+    if re.search(r"auth|log ?in|token", proc.stderr or "", re.IGNORECASE):
+        return "gh auth", "run gh auth status, then gh auth login"
+    return "the token's access to the repository", "run gh auth status, then gh auth refresh"
+
+
+def reads(root: Path, session_id: str | None, refused: bool) -> tuple[int, list[str]]:
+    found = permission_setting(root) if refused else gh_refusal()
+    if found is None:
+        return 0, ["reads: ok"]
+    line = (
+        f"reads: gh api refused (setting: {found[0]}); restore: {found[1]}; "
+        "meanwhile the steward reads through the kit's scripts"
+    )
+    sid = session_id or os.environ.get("AGK_SESSION") or ""
+    mark = guard_logs.refusal_path(root)
+    if not mark or not guard_logs.NAME.fullmatch(sid):
+        return 1, [line]
+    mark = mark.with_name(f"steward-reads-{sid}")
+    try:
+        if mark.is_file() and mark.read_text(encoding="utf-8").strip() == line:
+            return 1, []  # said once in this session
+        mark.parent.mkdir(exist_ok=True)
+        mark.write_text(line + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    return 1, [line]
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     parser = argparse.ArgumentParser(prog="steward_owner.py", description=__doc__.split("\n")[0])
@@ -237,6 +426,15 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--trace", type=Path, required=True)
     d.add_argument("--session", required=True)
     d.add_argument("--start", action="store_true")
+    k = sub.add_parser("defect")
+    k.add_argument("--title", required=True)
+    k.add_argument("--file", type=Path, required=True)
+    k.add_argument("--refusals", type=int, default=5)
+    k.add_argument("--post", action="store_true")
+    sub.add_parser("defects")
+    w = sub.add_parser("reads")
+    w.add_argument("--session")
+    w.add_argument("--refused", action="store_true")
     opts = parser.parse_args(argv)
     root = repo_root()
     try:
@@ -246,6 +444,12 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = relay(root, opts)
         elif opts.command == "park":
             code, lines = park(root, opts.pr, opts.conductor, datetime.now(UTC))
+        elif opts.command == "defect":
+            code, lines = defect(root, opts)
+        elif opts.command == "defects":
+            code, lines = defects(root)
+        elif opts.command == "reads":
+            code, lines = reads(root, opts.session, opts.refused)
         else:
             code, lines = ready(root, opts)
     except steward.Unreadable as exc:
