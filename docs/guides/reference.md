@@ -272,6 +272,16 @@ no brief is malformed, the scope is locked and no open owner question blocks the
 lines, exit 1. In personal mode everything is printed and nothing is parked. `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
 
+## Autopilot status
+
+    python3 scripts/agk/autopilot.py status [--week] [--root DIR]
+
+`agk status` (SPEC-0064 rules 3, 5 and 10, ADR-0584): the running jobs of this machine from their records (kind, item,
+head, since, last event), each `claude` process with no record as `unrecorded: process <pid> (not adopted)`, the
+queue, the owner's waits, the held jobs and one `quiet:` reason, from the reads of one pass; it posts nothing.
+`--week` prints the week of `agk-autopilot.jsonl` in the temp folder and the tokens per merged pull request, `unknown`
+where a figure cannot be read.
+
 ## Conductor routines
 
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]

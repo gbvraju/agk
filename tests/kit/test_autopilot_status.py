@@ -59,7 +59,7 @@ def reads(monkeypatch, plan: str = PLAN, sweep: str = SWEEP) -> list:
 
 
 def test_launch_hands_each_job_its_kind_item_and_head(tmp_path):
-    """REQ-071 AC3: rule 3 (a start is a `build` of its brief; a resume with a pull request a `fix`)."""
+    """REQ-071 AC3: rule 3 (a start is a `build` of its brief; a resumed pull request a `fix`)."""
     import launch
 
     root = tmp_path / "proj"
@@ -85,8 +85,9 @@ def test_the_record_reads_its_kind_item_and_head_and_an_older_one_still_reads(tm
     record(tmp_path / "c", "cb-example-3", 44, kind="painter", item="x")
     a, b, c = (launch.read_record(tmp_path / x) for x in "abc")
     assert (a["kind"], a["item"], a["head"]) == ("fix", "#1392", "abc1234")
-    assert (b["kind"], b["item"], b["head"]) == (None, None, None)
-    assert (c["kind"], c["item"]) == (None, None)  # an unknown kind or item is not read
+    assert b == {"session": "cb-example-2", "pid": 43, "started_utc": "2026-11-16T10:00:00Z",
+                 "brief": 7}  # fmt: skip
+    assert "kind" not in c and "item" not in c  # an unknown kind or item is not read
 
 
 def test_a_second_job_of_a_live_name_is_refused_naming_the_session(tmp_path, capsys):

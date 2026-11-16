@@ -6,7 +6,8 @@
 # otherwise in the background with its output in <worktree>/.agk-session.log (verify: the terminal's options and
 # claude's print mode, -p, are the terminal's and the runtime's, and were not run by the session that wrote this).
 # Before claude starts, <worktree>/.agk-session-pid holds session=, pid= (this wrapper's process, whose tree holds
-# claude), started_utc= and brief=; the watchdog and launch.py read it.
+# claude), started_utc=, brief= and, from AGK_JOB_KIND, AGK_ITEM and AGK_HEAD, kind=, item= and head= (SPEC-0064
+# rule 3); the watchdog, launch.py and autopilot.py status read it.
 # When claude exits, <worktree>/.agk-session-exit holds exit_code=<code> and ended_utc=<UTC time>.
 # With AGK_MODEL set (the tier's name from [models.names]) claude gets --model AGK_MODEL, and
 # --effort AGK_EFFORT beside it when that is set; without AGK_MODEL it gets no flag (verify: the flags are claude's).
@@ -52,7 +53,8 @@ printf '%s' "$prompt" > "$prompt_file"
 wrapper='cd "$1" || exit 1
 unset CLAUDE_CODE_CHILD_SESSION
 prompt="$(cat "$2")"; rm -f "$2"
-printf "session=%s\npid=%s\nstarted_utc=%s\nbrief=%s\n" "$6" "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$7" > "$1/.agk-session-pid"
+printf "session=%s\npid=%s\nstarted_utc=%s\nbrief=%s\nkind=%s\nitem=%s\nhead=%s\n" "$6" "$$" \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$7" "$8" "$9" "${10}" > "$1/.agk-session-pid"
 flags=()
 if [ -n "${4:-}" ]; then flags=(--model "$4"); if [ -n "${5:-}" ]; then flags+=(--effort "$5"); fi; fi
 code=0
@@ -64,8 +66,8 @@ exit "$code"'
 if command -v gnome-terminal >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
     gnome-terminal --tab --title "$session" --working-directory "$worktree" -- \
         bash -c "$wrapper" agk-session "$worktree" "$prompt_file" tab "${AGK_MODEL:-}" "${AGK_EFFORT:-}" \
-        "$session" "${AGK_BRIEF:-}"
+        "$session" "${AGK_BRIEF:-}" "${AGK_JOB_KIND:-}" "${AGK_ITEM:-}" "${AGK_HEAD:-}"
 else
     nohup bash -c "$wrapper" agk-session "$worktree" "$prompt_file" background "${AGK_MODEL:-}" "${AGK_EFFORT:-}" \
-        "$session" "${AGK_BRIEF:-}" > "$worktree/.agk-session.log" 2>&1 < /dev/null &
+        "$session" "${AGK_BRIEF:-}" "${AGK_JOB_KIND:-}" "${AGK_ITEM:-}" "${AGK_HEAD:-}" > "$worktree/.agk-session.log" 2>&1 < /dev/null &
 fi
