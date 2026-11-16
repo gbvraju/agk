@@ -1,1 +1,0 @@
-- `prepush.py --record FILE` prints one line, naming the option and never the path, when FILE is not in the clone's shared evidence folder, the folder a conductor on the same machine reads; the local-mode guide says where a record must land, and the getting-started guide names `design_compare.py` by the plugin's path (brief #1329, ADR-0564)
