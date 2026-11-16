@@ -97,7 +97,9 @@ def test_a_live_conductor_under_another_name_starts_nothing(tmp_path, monkeypatc
     Machine(monkeypatch, alive={4001})
     assert gate(root) is False
     out = capsys.readouterr().out
-    assert "watchdog: conductor conductor-local-df is running on this machine; nothing started" in out
+    assert (
+        "watchdog: conductor conductor-local-df is running on this machine; nothing started" in out
+    )
 
 
 def test_no_conductor_on_the_machine_lets_one_start(tmp_path, monkeypatch):
@@ -135,7 +137,9 @@ def test_a_working_conductor_with_a_lapsed_lease_is_left(tmp_path, monkeypatch, 
     assert "watchdog: conductor conductor-local left (working)\n" in capsys.readouterr().out
 
 
-def test_an_idle_conductor_is_stopped_and_replaced_once_never_doubled(tmp_path, monkeypatch, capsys):
+def test_an_idle_conductor_is_stopped_and_replaced_once_never_doubled(
+    tmp_path, monkeypatch, capsys
+):
     """REQ-050: brief #1409 answer 2 (two quiet reads, then one stop; once an hour)."""
     root = project(tmp_path)
     record(tmp_path, "conductor-local", 4020, NOW - timedelta(hours=3))
@@ -172,7 +176,9 @@ def test_twenty_passes_with_a_lapsed_lease_leave_exactly_one_conductor(tmp_path,
 def test_a_persons_own_conductor_is_named_and_never_stopped(tmp_path, monkeypatch, capsys):
     """REQ-050: brief #1409 answers 2 and 4 (no record: the kit never stops it)."""
     root = project(tmp_path)
-    machine = Machine(monkeypatch, listed=[(5001, 1, "/home/u/.local/bin/claude --agent conductor")])
+    machine = Machine(
+        monkeypatch, listed=[(5001, 1, "/home/u/.local/bin/claude --agent conductor")]
+    )
     for minutes in range(0, 120, 10):
         assert gate(root, NOW + timedelta(minutes=minutes)) is False
     assert machine.stops == []
@@ -184,7 +190,10 @@ def test_a_persons_own_conductor_is_named_and_never_stopped(tmp_path, monkeypatc
 
 @pytest.mark.parametrize(
     "platform, stop",
-    [("linux", "pkill -TERM -P 4031,5001; kill 4031 5001"), ("win32", "taskkill /T /F /PID 4031 /PID 5001")],
+    [
+        ("linux", "pkill -TERM -P 4031,5001; kill 4031 5001"),
+        ("win32", "taskkill /T /F /PID 4031 /PID 5001"),
+    ],
 )
 def test_the_sweep_names_the_extras_once_with_the_stop_line(tmp_path, monkeypatch, platform, stop):
     """REQ-050: brief #1409 answer 4 (keep the lease holder, close the others)."""
@@ -215,7 +224,9 @@ def test_one_conductor_on_the_machine_is_no_sweep_line(tmp_path, monkeypatch):
 # --- answer 5: memory before a start ----------------------------------------------------------
 
 
-def test_a_start_below_the_memory_floor_is_refused_and_names_the_setting(tmp_path, monkeypatch, capsys):
+def test_a_start_below_the_memory_floor_is_refused_and_names_the_setting(
+    tmp_path, monkeypatch, capsys
+):
     """REQ-050: brief #1409 answer 5 (read at the start; the next pass tries again)."""
     import launch
 
@@ -246,7 +257,9 @@ def test_a_builder_restart_below_the_memory_floor_is_held(tmp_path, monkeypatch)
 # --- answer 6: every start path ---------------------------------------------------------------
 
 
-def test_launch_role_conductor_starts_nothing_beside_a_live_conductor(tmp_path, monkeypatch, capsys):
+def test_launch_role_conductor_starts_nothing_beside_a_live_conductor(
+    tmp_path, monkeypatch, capsys
+):
     """REQ-050: brief #1409 answer 6 (a person's `launch.py role conductor`)."""
     import launch
 
@@ -258,8 +271,9 @@ def test_launch_role_conductor_starts_nothing_beside_a_live_conductor(tmp_path, 
     args = ["role", "--role", "conductor", "--session", "c2", "--adapter", "echo"]
     assert launch.role_main(args, root=root) == 1
     assert called == []
-    assert "stuck: conductor c2 not started (conductor conductor-local is running on this machine)" in (
-        capsys.readouterr().out
+    assert (
+        "stuck: conductor c2 not started (conductor conductor-local is running on this machine)"
+        in (capsys.readouterr().out)
     )
 
 
@@ -305,7 +319,9 @@ def test_the_process_list_is_read_on_both_platforms(platform, out, pid):
 
     table = autopilot.claude_processes(run=run, platform=platform)
     assert seen[0][0] == ("powershell" if platform == "win32" else "ps")
-    conductors = [p for p, _, args in table if autopilot.is_claude(args) and "--agent conductor" in args]
+    conductors = [
+        p for p, _, args in table if autopilot.is_claude(args) and "--agent conductor" in args
+    ]
     assert conductors == [pid]
 
 

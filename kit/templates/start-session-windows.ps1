@@ -22,7 +22,8 @@ if ($env:AGK_JOB_KIND -eq 'conductor') {
         }
         $live = $f['pid'] -match '^\d+$' -and (Get-Process -Id ([int]$f['pid']) -ErrorAction SilentlyContinue)
         if ($f['kind'] -eq 'conductor' -and $live -and (-not $f['ended_utc'] -or $f['ended_utc'] -lt $f['started_utc'])) {
-            [Console]::Error.WriteLine("start-session-windows: conductor $($f['session']) is running on this machine; nothing started"); exit 3
+            [Console]::Error.WriteLine("start-session-windows: conductor $($f['session']) is running on this machine; nothing started")
+            exit 3
         }
     }
 }
