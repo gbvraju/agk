@@ -82,8 +82,8 @@ def error_of(exc: BaseException, hook_file: str) -> dict:
     """The exception's type and the deepest place in the hook's own file; never its message."""
     frames = traceback.extract_tb(exc.__traceback__)
     own = [f for f in frames if os.path.basename(f.filename) == os.path.basename(hook_file)]
-    place = (own or frames or [None])[-1]
-    where = f"{place.name}:{place.lineno}" if place else "unknown"
+    found = own or list(frames)
+    where = f"{found[-1].name}:{found[-1].lineno}" if found else "unknown"
     return {"type": type(exc).__name__, "place": where}
 
 
@@ -115,7 +115,7 @@ def record_refusal(
         try:
             patterns = config.guard_patterns(Path(root or os.getcwd()))
         except Exception:  # noqa: BLE001 - a refused table: the built-in detectors still redact
-            patterns = ()
+            patterns = []
         text = redact(refused_text(payload), patterns)[0]
         line = {
             "at": (now or datetime.now(UTC)).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -146,7 +146,7 @@ def refusal_files(root: Path) -> list[Path]:
 
 def today_line(root: Path, now: datetime) -> str:
     """`refusals today: <n> (<reason> <k>, ...)`, most first, or `refusals today: none`."""
-    day, counts = now.strftime("%Y-%m-%d"), Counter()
+    day, counts = now.strftime("%Y-%m-%d"), Counter[str]()
     for path in refusal_files(root):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
