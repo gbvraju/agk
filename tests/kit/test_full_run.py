@@ -255,11 +255,12 @@ def test_the_step_waits_for_a_running_full_run_and_then_decides(tmp_path):
     assert proc.returncode == 1 and (calls, sleeps) == (3, 2)
 
 
-def test_the_step_waits_at_most_twenty_minutes_and_then_fails(tmp_path):
-    """Verdict on 5aaaf17: every 30 seconds, 40 waits, then a failure."""
+def test_the_step_waits_at_most_forty_five_minutes_and_then_fails(tmp_path):
+    """Verdict on 5aaaf17: every 30 seconds, then a failure; 90 waits (45 minutes) since brief
+    #1371 gave the edited run its own group (ADR-0576), from 40 (20 minutes)."""
     proc, calls, sleeps = run_step(tmp_path, [RUNNING])
     assert proc.returncode == 1, proc.stdout + proc.stderr
-    assert sleeps == 40 and calls == 41
+    assert sleeps == 90 and calls == 91
     assert "sleep 30" in step_script()
 
 

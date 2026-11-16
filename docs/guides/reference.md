@@ -282,6 +282,25 @@ queue, the owner's waits, the held jobs and one `quiet:` reason, from the reads 
 `--week` prints the week of `agk-autopilot.jsonl` in the temp folder and the tokens per merged pull request, `unknown`
 where a figure cannot be read.
 
+## Steward voice
+
+    python3 scripts/agk/steward_voice.py check FILE
+    python3 scripts/agk/steward_voice.py choose FILE
+    python3 scripts/agk/steward_voice.py form FILE
+    python3 scripts/agk/steward_voice.py confirm FILE --answers FILE
+    python3 scripts/agk/steward_voice.py shortened --rules N[,N]
+
+The steward's voice (ADR-0582, brief #1382). `check` reads a reply to a person and prints one `voice: rule <n>:` line per
+broken rule, naming the rule and never the text (exit 1), or `voice: ok`: the first line is an ask or an answer; at most
+5 bullets, 12 lines and 100 characters a line; more than three choices only with a "more"; a decision names its
+recommendation; a status is three lines (`Done:`, `In progress:`, `Waiting on you:`); no kit term of SPEC-0059 rule 5's
+list. `choose` renders a decision JSON (`decision`, `options` of `label` with optional `score`, `group` or `ruled_out`,
+`recommend`, `because`, optional `ask`) as `Decision: · Options: A / B / C · I recommend · Reply`, dropping what the
+evidence rules out, grouping kinds, keeping the best three by score with `say more for N other options`, or asking the
+one sharper question. `form` renders 1 to 5 inputs (`name`, `default`, optional `choices`) as one form with each default;
+`confirm` plays the answers back in at most three lines. `shortened` records one `Shortened:` marker, counted in the
+daily list. Exit 2: a refused input; exit 4: the memory cannot be written.
+
 ## Conductor routines
 
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]

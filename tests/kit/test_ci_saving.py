@@ -73,28 +73,27 @@ def test_proof_cancels_the_run_on_a_superseded_commit():
 
 
 def test_governance_cancels_a_superseded_run_of_a_pull_request_and_never_a_push():
-    """Brief #216 answer 3: a push to the default branch is never cancelled (and, since brief
-    #1122, ADR-0480, neither is a run by an edited description's run)."""
+    """Brief #216 answer 3: a push to the default branch is never cancelled; every pull request
+    run cancels a superseded run of its own group (brief #1371, ADR-0576)."""
     block = (
         workflow("governance.yml")
         .split("\nconcurrency:\n", 1)[1]
         .split("\n\n", 1)[0]
         .split("\njobs:", 1)[0]
     )
-    assert (
-        "cancel-in-progress: ${{ github.event_name == 'pull_request'"
-        " && github.event.action != 'edited' }}"
-    ) in block
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in block
     assert "github.event.pull_request.number || github.sha" in block
 
 
 def test_a_description_edit_cannot_cancel_the_full_governance_run():
-    """Brief #216 answer 3, as brief #1122 answer 1 changed it (ADR-0480): an `edited` run joins
-    the full run's group with `cancel-in-progress` false, so a body edit during a full run waits
-    for it and never cancels it and leaves the partial run to report the check."""
+    """Brief #216 answer 3, as brief #1371 answer 1 changed it (ADR-0576): an `edited` run has a
+    group of its own, `governance-<n>-edited`, so a body edit during a full run neither cancels it
+    nor replaces a pending full run, and the partial run reports the check after it."""
     block = workflow("governance.yml").split("\nconcurrency:\n", 1)[1].split("\njobs:", 1)[0]
-    cancel = re.search(r"(?m)^  cancel-in-progress: (.+)$", block)
-    assert cancel and "github.event.action != 'edited'" in cancel.group(1)
+    group = re.search(r"(?m)^  group: (.+)$", block)
+    assert group and "format('governance-{0}-edited', github.event.pull_request.number)" in (
+        group.group(1)
+    )
 
 
 def test_proof_decides_the_status_only_commit_with_one_get_and_the_script():
