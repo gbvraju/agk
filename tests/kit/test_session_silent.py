@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import stat
+
 import pytest
 from test_session import (
     PR,
     PR_COMMENTS,
-    WATCH,
     pull,
     session,
 )
@@ -41,7 +42,19 @@ def proj(request):
     return request.getfixturevalue("session_proj")
 
 
-MERGE = ("watch", "--merged", "7", "--interval", "0", "--timeout", "5")
+# The bound of a wait that must end on its fifth failed read, never on time (brief #1415): at 5
+# seconds a loaded runner's six `gh` calls outran it and the wait printed `timeout` (exit 3).
+WAIT = "30"
+WATCH = ("watch", "--pr", "7", "--interval", "0", "--timeout", WAIT)
+MERGE = ("watch", "--merged", "7", "--interval", "0", "--timeout", WAIT)
+
+
+def slowed(stub, seconds: float) -> None:
+    """Each `gh` call of the stub takes SECONDS first, as on a loaded runner (brief #1415)."""
+    gh, real = stub.bin / "gh", stub.bin / "gh-stub"
+    gh.rename(real)
+    gh.write_text(f'#!/bin/sh\nsleep {seconds}\nexec "{real}" "$@"\n', encoding="utf-8")
+    gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
 
 
 # --- watch --pr and --merged (answer 1) ---------------------------------------------------------
@@ -55,6 +68,15 @@ def test_ac_five_failed_reads_of_the_pull_request_end_the_wait_with_an_error(pro
     assert out.stdout.strip() == "error: pull request #7 cannot be read"
     gets = [c for c in stub.calls() if c[1] == PR]
     assert len(gets) == 5
+
+
+def test_ac_five_slow_failed_reads_still_end_with_the_error_not_a_timeout(proj, stub):
+    """Brief #1415: a second a call, as on a loaded runner, still ends on the fifth failed read."""
+    slowed(stub, 1.0)
+    stub.serve(PR_COMMENTS, [], nth=1)
+    out = session(proj, stub, *WATCH)
+    assert out.returncode == 4, out.stdout + out.stderr
+    assert out.stdout.strip() == "error: pull request #7 cannot be read"
 
 
 def test_ac_four_failures_then_a_good_read_do_not_end_the_wait(proj, stub):
