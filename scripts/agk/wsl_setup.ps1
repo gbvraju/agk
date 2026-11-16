@@ -16,6 +16,9 @@
     wsl_setup.ps1 -Status             run the checks only and change nothing
     wsl_setup.ps1 -InstallWatchdog    also move the watchdog into WSL (after the adapter pull request merged)
     wsl_setup.ps1 -Back               re-enable the Windows watchdog task and disable the WSL one
+    -Engine podman|docker|docker-desktop  the container engine (brief #1379, ADR-0579): Podman by default; Docker
+                                      Engine inside WSL; or Docker Desktop's WSL integration (detected, never
+                                      installed). -DockerRootless uses Docker's rootless mode instead of the docker group.
 
 .EXAMPLE
   pwsh -NoProfile -File scripts/agk/wsl_setup.ps1 -Json
@@ -31,7 +34,10 @@ param(
     [int]    $WslSwapGB = 4,
     [string] $CorpCaFile = '',             # optional: a company root certificate (.crt or .cer, PEM or DER)
     [string] $WebDir = '',                 # optional: the folder with the Playwright tests; default: found
-    [switch] $SkipPodman,
+    [ValidateSet('podman', 'docker', 'docker-desktop')]
+    [string] $Engine = 'podman',
+    [switch] $DockerRootless,
+    [switch] $SkipPodman,                  # skips the container engine, whichever is chosen
     [switch] $SkipPlaywright,
     [switch] $InstallWatchdog,
     [switch] $Back,
@@ -49,6 +55,7 @@ $script:MemoryGB = 0
 $script:Doctor = ''
 $script:WebPath = ''
 $script:LinuxUser = ''
+$script:Engines = $null
 $WslTask = 'AGK conductor watchdog (WSL)'
 $WindowsTask = 'AGK conductor watchdog'
 
@@ -99,6 +106,8 @@ function Write-State {
         memory_gb = $script:MemoryGB
         watchdog = (Get-WatchdogState)
         doctor = $script:Doctor
+        engine = $Engine
+        engines = $script:Engines
     }
     $state | ConvertTo-Json -Depth 5
 }
@@ -136,6 +145,7 @@ function Invoke-Phase([string]$User, [string]$Path, [string[]]$Environment) {
         if ($line -match '^AGK_STEP=([a-z_]+)\|([a-z]+)\|(.*)$') { Add-Result $Matches[1] $Matches[2] $Matches[3] }
         elseif ($line -match '^AGK_WEB=(.+)$') { $script:WebPath = $Matches[1] }
         elseif ($line -match '^AGK_DOCTOR=(.*)$') { $script:Doctor = $Matches[1] }
+        elseif ($line -match '^AGK_ENGINE_VERSION=(.*)$') { $script:Engines.wsl_version = $Matches[1] }
         else { Say "    $line" 'DarkGray' }
     }
 }
@@ -176,8 +186,46 @@ Say '------------' 'Cyan'
 $build = [int](Get-CimInstance Win32_OperatingSystem).BuildNumber
 if (-not (Invoke-Step -Name 'windows' -Done { $build -ge 19041 } -Do { "Windows build $build is too old for WSL 2; Windows 10 2004 (19041) or later is needed" })) { Finish }
 
+# --- the container engines on Windows, read only (brief #1379): versions and volumes, nothing moved ----------------
+function Get-EngineOutput([string]$Exe, [string[]]$Arguments) {
+    if (-not (Get-Command $Exe -ErrorAction SilentlyContinue)) { return @() }
+    $out = & $Exe @Arguments 2>$null
+    if ($LASTEXITCODE -ne 0) { return @() }
+    return @($out | Where-Object { $_ })
+}
+$family = if ($Engine -eq 'podman') { 'podman' } else { 'docker' }
+$desktopExe = Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'
+function Test-DesktopRunning { [bool](Get-Process -Name 'Docker Desktop' -ErrorAction SilentlyContinue) }
+function Test-PodmanMachine { [bool]((Get-EngineOutput 'podman' @('machine', 'list', '--format', '{{.Running}}')) -match 'true') }
+$script:Engines = [ordered]@{
+    desktop = (Test-Path $desktopExe)
+    desktop_running = (Test-DesktopRunning)
+    windows_docker = [string]((Get-EngineOutput 'docker' @('version', '--format', '{{.Server.Version}}')) | Select-Object -First 1)
+    windows_podman = [string]((Get-EngineOutput 'podman' @('version', '--format', '{{.Client.Version}}')) | Select-Object -First 1)
+    volumes = @(Get-EngineOutput $family @('volume', 'ls', '--format', '{{.Name}}'))
+    wsl_version = ''
+}
+# After the move the Windows engine of the same family is stopped, never removed; back starts it again.
+function Test-WindowsEngine([bool]$WantRunning) {
+    if ($Engine -eq 'docker-desktop' -or $SkipPodman) { return $true }
+    if ($Engine -eq 'podman') { if (-not $script:Engines.windows_podman) { return $true }; return (Test-PodmanMachine) -eq $WantRunning }
+    if (-not $script:Engines.desktop) { return $true }
+    return (Test-DesktopRunning) -eq $WantRunning
+}
+function Stop-WindowsEngine {
+    if ($Engine -eq 'podman') { & podman machine stop *> $null; return 'the Podman machine on Windows is stopped (not removed)' }
+    return 'quit Docker Desktop (it stays installed) so one engine holds the ports'
+}
+function Start-WindowsEngine {
+    if ($Engine -eq 'podman') { & podman machine start *> $null; return 'the Podman machine on Windows started' }
+    & wsl.exe -d $Distro -u root -- systemctl stop docker.service docker.socket *> $null
+    Start-Process $desktopExe
+    return 'Docker Engine inside WSL stopped (still installed), then Docker Desktop started'
+}
+
 if ($Back) {
     Invoke-Step -Name 'watchdog_back' -Done { Test-WslTasks $false } -Do { Set-WindowsWatchdog } | Out-Null
+    Invoke-Step -Name 'windows_engine_back' -Done { Test-WindowsEngine $true } -Do { Start-WindowsEngine } | Out-Null
     Finish
 }
 
@@ -288,7 +336,7 @@ set_nodejs() {
 }
 
 has_podman() {
-  [ "${AGK_PODMAN:-1}" = 0 ] && return 0
+  [ "${AGK_PODMAN:-1}" = 0 ] || [ "${AGK_ENGINE:-podman}" != podman ] && return 0
   command -v podman >/dev/null && grep -q "^$AGK_USER:" /etc/subuid && grep -q "^$AGK_USER:" /etc/subgid
 }
 set_podman() {
@@ -302,18 +350,57 @@ step company_ca has_company_ca set_company_ca
 step packages has_packages set_packages
 step gh_cli has_gh_cli set_gh_cli
 step nodejs has_nodejs set_nodejs
+# Docker Engine from Docker's own repository (verify: the names on Docker's install page), with the Compose plugin.
+has_docker() {
+  [ "${AGK_PODMAN:-1}" = 0 ] || [ "${AGK_ENGINE:-podman}" != docker ] && return 0
+  command -v docker >/dev/null && docker compose version >/dev/null 2>&1 || return 1
+  [ "${AGK_ROOTLESS:-0}" = 1 ] && return 0
+  id -nG "$AGK_USER" | grep -qw docker && systemctl is-enabled docker >/dev/null 2>&1
+}
+set_docker() {
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  install -d -m 0755 /etc/apt/keyrings
+  curl -fsSL "https://download.docker.com/linux/$ID/gpg" -o /etc/apt/keyrings/docker.asc \
+    || { echo "the Docker download failed: a company certificate may be needed"; return 1; }
+  chmod a+r /etc/apt/keyrings/docker.asc
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/$ID $VERSION_CODENAME stable" \
+    > /etc/apt/sources.list.d/docker.list
+  apt-get update -qq && apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin \
+    docker-compose-plugin docker-ce-rootless-extras >/dev/null || return 1
+  if [ "${AGK_ROOTLESS:-0}" = 1 ]; then
+    systemctl disable --now docker.service docker.socket >/dev/null 2>&1
+    echo "rootless mode: the step docker_rootless sets it up for your user"
+  else
+    usermod -aG docker "$AGK_USER"
+    systemctl enable --now docker >/dev/null 2>&1 || echo "systemd starts Docker after WSL restarts: run /agk:wsl again"
+  fi
+}
+
 step podman has_podman set_podman
+step docker has_docker set_docker
 exit 0
 '@
+# Never two engines on one port: Docker Engine inside WSL waits until Docker Desktop's engine is stopped.
+if (-not (Invoke-Step -Name 'one_engine' -Done { $Engine -ne 'docker' -or -not (Test-DesktopRunning) } -Do { 'Docker Desktop is running: quit it (it stays installed) so one engine holds the ports, then run /agk:wsl again' } -Otherwise 'waiting')) { Finish }
 $check = if ($Status) { '1' } else { '0' }
+$rootless = if ($DockerRootless) { '1' } else { '0' }
 $podmanFlag = if ($SkipPodman) { '0' } else { '1' }
 $playFlag = if ($SkipPlaywright) { '0' } else { '1' }
 Say 'System packages inside WSL (a few minutes on the first run)...'
 $rootLinux = Write-LinuxScript 'agk-wsl-root.sh' $rootScript
-Invoke-Phase 'root' $rootLinux @("AGK_USER=$($script:LinuxUser)", "AGK_CA=$caLinux", "AGK_PODMAN=$podmanFlag", "AGK_CHECK_ONLY=$check")
+Invoke-Phase 'root' $rootLinux @("AGK_USER=$($script:LinuxUser)", "AGK_CA=$caLinux", "AGK_PODMAN=$podmanFlag", "AGK_ENGINE=$Engine", "AGK_ROOTLESS=$rootless", "AGK_CHECK_ONLY=$check")
 if ($script:Results | Where-Object { $_.Step -eq 'wsl_conf' -and $_.Result -eq 'done' -and -not $Status }) { $script:Restart = $true }
 
 Invoke-Step -Name 'restart' -Done { -not $script:Restart } -Do { & wsl.exe --shutdown; Start-Sleep -Seconds 8; $script:Restart = $false; 'WSL restarted so the new settings apply' } | Out-Null
+
+# Docker Desktop's WSL integration, when chosen: Desktop is detected, never installed.
+function Test-DesktopWsl { & wsl.exe -d $Distro -u $script:LinuxUser -- docker version *> $null; $LASTEXITCODE -eq 0 }
+function Set-DesktopWsl {
+    if (-not $script:Engines.desktop) { return 'Docker Desktop is not installed here: run /agk:wsl with -Engine docker or podman' }
+    return "in Docker Desktop, Settings, Resources, WSL integration, turn on $Distro, then run /agk:wsl again"
+}
+Invoke-Step -Name 'desktop_wsl' -Done { $Engine -ne 'docker-desktop' -or $SkipPodman -or (Test-DesktopWsl) } -Do { Set-DesktopWsl } -Otherwise 'waiting' | Out-Null
 
 # --- the GitHub sign-in: the normal browser sign-in ----------------------------------------------------------------
 function Test-GitHub { & wsl.exe -d $Distro -u $script:LinuxUser -- gh auth status *> $null; $LASTEXITCODE -eq 0 }
@@ -333,6 +420,7 @@ $userScript = @'
 set -uo pipefail
 exec 2>&1
 export PATH="$HOME/.local/bin:$PATH"
+[ "${AGK_ROOTLESS:-0}" = 1 ] && export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
 [ -f /etc/profile.d/agk-ca.sh ] && . /etc/profile.d/agk-ca.sh
 BASE="$(dirname "$AGK_DIR")"
 
@@ -444,7 +532,7 @@ set_playwright() {
   npx playwright install chromium >/dev/null 2>&1 || echo "in $web run  npm ci  then  npx playwright install chromium"
 }
 
-has_podman_check() { [ "${AGK_PODMAN:-1}" = 0 ] || podman info >/dev/null 2>&1; }
+has_podman_check() { [ "${AGK_PODMAN:-1}" = 0 ] || [ "${AGK_ENGINE:-podman}" != podman ] || podman info >/dev/null 2>&1; }
 set_podman_check() { podman system migrate >/dev/null 2>&1; echo "run  podman info  in the AGK shell to see the error"; }
 
 step git_config has_git_config set_git_config
@@ -455,10 +543,39 @@ step kit_tools has_kit_tools set_kit_tools
 step trust has_trust set_trust waiting
 step plugin has_plugin set_plugin waiting
 step playwright has_playwright set_playwright
+engine_cmd() { if [ "${AGK_ENGINE:-podman}" = podman ]; then echo podman; else echo docker; fi; }
+has_docker_rootless() {
+  { [ "${AGK_ENGINE:-podman}" = docker ] && [ "${AGK_ROOTLESS:-0}" = 1 ]; } || return 0
+  systemctl --user is-active docker >/dev/null 2>&1 && grep -q DOCKER_HOST "$HOME/.bashrc"
+}
+set_docker_rootless() {
+  dockerd-rootless-setuptool.sh install >/dev/null 2>&1 \
+    || { echo "run  dockerd-rootless-setuptool.sh install  in the AGK shell"; return 1; }
+  grep -q DOCKER_HOST "$HOME/.bashrc" || echo "export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock" >> "$HOME/.bashrc"
+}
+# One container and one compose service with the chosen engine (brief #1379 answer 5).
+has_engine_check() {
+  [ "${AGK_PODMAN:-1}" = 0 ] && return 0
+  local e f; e="$(engine_cmd)"; f="$HOME/.cache/agk/compose-check.yaml"
+  mkdir -p "$HOME/.cache/agk"
+  printf 'services:\n  check:\n    image: docker.io/library/hello-world\n' > "$f"
+  "$e" run --rm docker.io/library/hello-world >/dev/null 2>&1 || return 1
+  "$e" compose -f "$f" up --abort-on-container-exit >/dev/null 2>&1 || return 1
+  "$e" compose -f "$f" down >/dev/null 2>&1
+}
+set_engine_check() {
+  echo "run  $(engine_cmd) run --rm hello-world  and  $(engine_cmd) compose version  in the AGK shell; podman compose needs podman-compose"
+}
+
 step podman_check has_podman_check set_podman_check
+step docker_rootless has_docker_rootless set_docker_rootless
+step engine_check has_engine_check set_engine_check
 
 web="$(web_dir)"
 [ -n "$web" ] && echo "AGK_WEB=$web"
+if [ "$(engine_cmd)" = podman ]; then v="$(podman version --format '{{.Client.Version}}' 2>/dev/null)"
+else v="$(docker version --format '{{.Server.Version}}' 2>/dev/null)"; fi
+echo "AGK_ENGINE_VERSION=$v"
 if has_clone; then
   echo "AGK_DOCTOR=$(cd "$AGK_DIR" && python3 scripts/agk/doctor.py 2>&1 | grep '^summary:' | tail -1)"
 fi
@@ -466,7 +583,7 @@ exit 0
 '@
 Say 'Your Linux user...'
 $userLinux = Write-LinuxScript 'agk-wsl-user.sh' $userScript
-Invoke-Phase $script:LinuxUser $userLinux @("AGK_GIT_NAME=$GitName", "AGK_GIT_EMAIL=$GitEmail", "AGK_REPO=$ownerRepo", "AGK_DIR=$($script:ProjectDir)", "AGK_PODMAN=$podmanFlag", "AGK_PLAYWRIGHT=$playFlag", "AGK_WEBDIR=$WebDir", "AGK_CHECK_ONLY=$check")
+Invoke-Phase $script:LinuxUser $userLinux @("AGK_GIT_NAME=$GitName", "AGK_GIT_EMAIL=$GitEmail", "AGK_REPO=$ownerRepo", "AGK_DIR=$($script:ProjectDir)", "AGK_PODMAN=$podmanFlag", "AGK_ENGINE=$Engine", "AGK_ROOTLESS=$rootless", "AGK_PLAYWRIGHT=$playFlag", "AGK_WEBDIR=$WebDir", "AGK_CHECK_ONLY=$check")
 
 # --- the Claude sign-in: the normal browser sign-in (verify: the runtime keeps it in ~/.claude/.credentials.json) ---
 function Test-Claude { & wsl.exe -d $Distro -u $script:LinuxUser -- test -s "/home/$($script:LinuxUser)/.claude/.credentials.json"; $LASTEXITCODE -eq 0 }
@@ -504,6 +621,7 @@ Invoke-Step -Name 'terminal' -Done { Test-Terminal } -Do { Set-Terminal } | Out-
 # --- the watchdog: only after the launch-adapter pull request merged ----------------------------------------------
 if ($InstallWatchdog) {
     Invoke-Step -Name 'watchdog' -Done { Test-WslTasks $true } -Do { Set-WslWatchdog } | Out-Null
+    Invoke-Step -Name 'windows_engine' -Done { Test-WindowsEngine $false } -Do { Stop-WindowsEngine } -Otherwise 'waiting' | Out-Null
 }
 
 Finish
