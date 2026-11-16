@@ -43,11 +43,12 @@ class Machine:
 
     def __init__(self, crontab: str = "", gh: int = 0, sleep: str = "masked"):
         self.crontab, self.gh, self.sleep, self.calls = crontab, gh, sleep, []
+        self.read = (0, "")  # (code, error output) of `crontab -l` when it fails
 
     def __call__(self, argv, given=None):
         self.calls.append(list(argv))
         if argv[:2] == ["crontab", "-l"]:
-            return 0, self.crontab
+            return self.read if self.read[0] else (0, self.crontab)
         if argv == ["crontab", "-"]:
             self.crontab = given
             return 0, ""
@@ -265,6 +266,34 @@ def test_on_installs_one_entry_and_edits_no_tracked_file(tmp_path, machine, caps
     assert tracked_changes(root) == before
     assert autopilot.main(["off", "--root", str(root)], now=NOW) == 0
     assert machine.crontab.splitlines() == ["0 1 * * * echo kept-example"]
+
+
+@pytest.mark.parametrize(
+    "answer, written",
+    [
+        ((1, "no crontab for cb-example-1\n"), True),  # no crontab yet: an empty one
+        ((1, "crontab: cannot open the spool (permission denied)\n"), False),
+        ((127, ""), False),  # crontab does not run
+    ],
+)
+def test_a_failed_crontab_read_writes_nothing_but_no_crontab_is_empty(
+    tmp_path, machine, monkeypatch, capsys, answer, written
+):
+    """REQ-071 AC5: rule 7 (a failed read never wipes the person's other entries)."""
+    import autopilot
+
+    monkeypatch.setattr(autopilot, "PLATFORM", "linux")
+    root = project(tmp_path, ADAPTER)
+    machine.crontab, machine.read = "0 1 * * * echo kept-example\n", answer
+    code = autopilot.main(["on", "--root", str(root)], now=NOW)
+    wrote = ["crontab", "-"] in machine.calls
+    assert wrote is written and code == (0 if written else 1)
+    if written:
+        assert machine.crontab.endswith(autopilot.ENTRY_TAG + "\n")
+        assert "kept-example" not in machine.crontab  # the double's empty crontab was read
+    else:
+        assert machine.crontab == "0 1 * * * echo kept-example\n"
+        assert "(setting: crontab)" in capsys.readouterr().out
 
 
 def test_on_and_off_on_windows_use_one_named_task(tmp_path, machine, monkeypatch):

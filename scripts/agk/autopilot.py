@@ -41,6 +41,7 @@ pid=,ppid=,args=`; on Windows it is not read and the line says `unknown`).
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import shutil
 import subprocess  # nosec B404 - fixed argument lists, no shell
@@ -301,19 +302,21 @@ ENTRY_TAG = "# agk-autopilot"  # marks the one crontab line `on` writes and `off
 TASK_NAME = "agk-autopilot"  # the one Windows Task Scheduler entry
 STATE_FILE = "autopilot.json"  # beside the lease mark, in the git directory: never tracked
 RUN_LINE = "python3 scripts/agk/conductor.py watchdog --pass"
+NO_CRONTAB = re.compile(r"^no crontab for ", re.MULTILINE)  # the one failed read that is empty
 WINDOWS_RUN_LINE = "python scripts\\agk\\conductor.py watchdog --pass"
 OWNER_JOBS = ("review", "steward", "conductor")  # rule 8: never stopped by the budget
 
 
 def run_command(argv: list[str], given: str | None = None) -> tuple[int, str]:
-    """Run one fixed command of this machine: (exit code, its output); 127 when it cannot run."""
+    """Run one fixed command of this machine: (exit code, its output, or its error output when
+    it fails); 127 when it cannot run."""
     try:
         done = subprocess.run(  # nosec B603 - fixed argument lists, no shell
             argv, input=given, capture_output=True, text=True, encoding="utf-8", check=False
         )  # fmt: skip
     except OSError:
         return 127, ""
-    return done.returncode, done.stdout
+    return done.returncode, done.stdout if done.returncode == 0 else done.stderr
 
 
 def mode_allows(mode: str | None, kind: str, owner_yes: bool = False) -> bool:
@@ -435,6 +438,9 @@ def set_entry(root: Path, interval: int | None) -> int:
         code, _ = run_command([*argv, "/TR", command, "/F"])
         return code
     code, text = run_command(["crontab", "-l"])
+    if code != 0 and not NO_CRONTAB.search(text):  # a failed read never empties the crontab
+        print("autopilot: the crontab cannot be read; nothing written (setting: crontab)")
+        return 1
     kept = [x for x in (text if code == 0 else "").splitlines() if not x.endswith(ENTRY_TAG)]
     if interval is not None:
         kept.append(entry_line(root, interval))

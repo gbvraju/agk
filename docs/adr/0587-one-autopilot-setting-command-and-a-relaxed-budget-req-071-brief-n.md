@@ -34,7 +34,9 @@ and no table, command or budget of the autopilot exists; `[autopilot] show_jobs`
    older tagged line replaced, every other line kept) or the Windows task `agk-autopilot` (`schtasks /Create ... /F`),
    every `interval_minutes`, running `git fetch -q origin` then `conductor.py watchdog --pass`, runs the machine
    checks and prints the `[autopilot] mode = "on"` change as one the person makes by pull request with its ADR; `off`
-   removes the entry and prints `mode = "off"` the same way. Neither edits a tracked file.
+   removes the entry and prints `mode = "off"` the same way. Neither edits a tracked file. Only a `crontab -l` that
+   fails with `no crontab for <user>` reads as an empty crontab; any other failed read writes nothing and is refused
+   with one line naming `setting: crontab`, so the person's other entries are never lost.
 5. **The machine checks.** `ok:` or `warn:` lines, each warning naming its setting: the entry runs while nobody is
    signed in (cron: yes; Windows: a warning, `(verify)`), sleep is off (Linux: `systemctl is-enabled sleep.target`
    reads `masked`; elsewhere a warning, `(verify: per OS)`), free memory holds one builder
