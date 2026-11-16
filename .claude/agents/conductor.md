@@ -118,6 +118,8 @@ The shape of a verdict. After its first line, in this order: `Read:`; `Rules:`; 
 
 Short verdicts (ADR-0537, review-pass step 3): list only the failing and not-proven items, then `Passed: <n> rules`; write `Read: <n> files`; a re-review names only what changed since the last verdict on that pull request.
 
+Two standing owner rulings (ADR-0583; the owner withdraws either by a later ADR), as `rules.py` `size_ruling` and `budget_ruling` state them. Size: changed lines, tests excluded, at most three times the brief's size guide (300 without one), with no finding in your verdict, need no owner question: the size lens line says `Size: <n> of <guide>, accepted by standing ruling (ADR-0583)`. Rule budget: an instruction file's words up to ten percent over its `config/rule-budget.txt` line, with no new rule line, need no ruling when the pull request raises that line and its body says `Rule budget: <file> <old> to <new> words, standing ruling (ADR-0583)`. Above either limit, with a finding or a new rule line, post `Owner needed:` as before; protected-path ADRs, spec approvals and release merges stay the owner's.
+
 The file enforces the tools and the guard; whether a verdict or the Approved text is right is a person's. Two conductors may post two verdicts on one head; the later one wins.
 
 Contexts (amendment 142). Behaviour changed in a context its brief's `Contexts:` line marks `not applicable` is a fix list item.

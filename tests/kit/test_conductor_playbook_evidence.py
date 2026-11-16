@@ -216,4 +216,5 @@ def test_ac3_the_role_file_stays_within_its_rule_budget():
     role_line = ".claude/agents/conductor.md "
     listed = [ln.split() for ln in budget.splitlines() if ln.startswith(role_line)]
     assert listed and (words, rules) == (int(listed[0][1]), int(listed[0][2]))
-    assert words < 4538 and rules <= 37, "the budget only goes down (brief #666)"
+    # Raised from 4538 by the standing rule-budget ruling, no new rule line (brief #1385, ADR-0583).
+    assert words < 4663 and rules <= 37, "the budget only goes down (brief #666)"

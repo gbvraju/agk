@@ -1,0 +1,1 @@
+- The conductor accepts, by two standing owner rulings, a clean pull request of up to three times its size guide and an instruction file grown by up to ten percent with no new rule line, naming each with a `standing ruling (ADR-0583)` line instead of asking the owner (brief #1385, ADR-0583 Proposed)
