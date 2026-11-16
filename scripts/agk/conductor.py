@@ -3129,8 +3129,8 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
         )
         short = state == "ended" and facts["pr"] is not None  # brief #1389: one job per event
         if short:
-            code = launch.fields_of(worktree / launch.EXIT_FILE).get("exit_code")
-            job_ended(jobs.get(name), facts, code)
+            exit_code = launch.fields_of(worktree / launch.EXIT_FILE).get("exit_code")
+            job_ended(jobs.get(name), facts, exit_code)
         if short and (action == "restart" or why == "restarted within the hour"):
             action, why = job_gate(jobs.get(name), facts, now) or (action, why)
         if action == "restart" and state == "idle" and not stopped(record["pid"]):

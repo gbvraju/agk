@@ -265,7 +265,7 @@ def test_the_rules_and_the_builder_text_say_a_job_ends_and_never_watches():
     """REQ-071 AC2: no job runs `session.py watch`; the builder text names the five sections."""
     rules = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
     ten = next(x for x in rules.splitlines() if x.startswith("10. "))
-    assert "short job" in ten and "never runs `watch`" in ten and "failed twice" in ten
+    assert "short job" in ten and "never running `watch`" in ten and "failed twice" in ten
     eighteen = next(x for x in rules.splitlines() if x.startswith("18. "))
     assert "A short job (rule 10) ends at its `Report:`" in eighteen
     body = (ROOT / "kit" / "templates" / "runtime" / "builder.txt").read_text(encoding="utf-8")
