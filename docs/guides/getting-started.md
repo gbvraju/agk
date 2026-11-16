@@ -435,7 +435,7 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
        if ((Get-Date) -gt $deadline) { throw 'the worktree folder did not appear' }
        Start-Sleep -Milliseconds 200
    }
-   # Keep the exit file and the process record out of git: the worktree's exclude file names them.
+   # Keep the exit file, the process record and the log out of git: the worktree's exclude file names them.
    $exclude = (git -C $worktree rev-parse --git-path info/exclude).Trim()
    if (-not [IO.Path]::IsPathRooted($exclude)) { $exclude = Join-Path $worktree $exclude }
    New-Item -ItemType Directory -Force -Path (Split-Path $exclude -Parent) | Out-Null
@@ -445,6 +445,9 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-pid'))) {
        Add-Content -LiteralPath $exclude -Value '.agk-session-pid'
    }
+   if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session.log'))) {
+       Add-Content -LiteralPath $exclude -Value '.agk-session.log'
+   }
 
    # 2. The prompt and the wrapper, in a folder of the session under the long temporary path.
    $longTemp = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Temp'
@@ -452,6 +455,9 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    New-Item -ItemType Directory -Force -Path $work | Out-Null
    $promptFile = Join-Path $work 'prompt.txt'
    Set-Content -LiteralPath $promptFile -Value $prompt -Encoding utf8
+   # The job's kind, item and head (SPEC-0064 rule 3), from AGK_JOB_KIND, AGK_ITEM and AGK_HEAD, for the record.
+   $Kind = $env:AGK_JOB_KIND; $Item = $env:AGK_ITEM; $Head = $env:AGK_HEAD
+   Set-Content -LiteralPath (Join-Path $work 'job.txt') -Encoding utf8 -Value "kind=$Kind", "item=$Item", "head=$Head"
    $wrapper = Join-Path $work 'run.ps1'
    Set-Content -LiteralPath $wrapper -Encoding utf8 -Value @'
    param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)
@@ -467,7 +473,8 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    Set-Location -LiteralPath $Worktree
    # The process record before the first turn: this wrapper's process holds claude.
    $started = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-   Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-pid') -Value "session=$Session", "pid=$PID", "started_utc=$started", "brief=$Brief"
+   $job = @(Get-Content -LiteralPath (Join-Path (Split-Path $PromptFile -Parent) 'job.txt'))
+   Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-pid') -Value (@("session=$Session", "pid=$PID", "started_utc=$started", "brief=$Brief") + $job)
    $prompt = Get-Content -LiteralPath $PromptFile -Raw
    # The tier's model name and effort: no flag without a model (verify: the flags are claude's).
    $flags = @()

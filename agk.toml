@@ -154,6 +154,9 @@ tests = [
   "tests/kit_dev/test_upgrade_route_triggers.py", "tests/kit_dev/test_windows_line_endings.py",
 ]
 [[testing.map]]
+code = "scripts/agk/autopilot.py"
+tests = ["tests/kit/test_autopilot_status.py"]
+[[testing.map]]
 code = "scripts/agk/batch.py"
 tests = ["tests/kit/test_batch.py"]
 [[testing.map]]
@@ -565,6 +568,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_autopilot_status.py",
   "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_starts.py",
   "tests/kit/test_wait_until_event.py",
@@ -825,6 +829,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_autopilot_status.py",
   "tests/kit/test_steward_owner_question.py",
   "tests/kit/test_wait_until_event.py",
   "tests/kit/test_steward_agent.py",
@@ -859,6 +864,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
 tests = [
+  "tests/kit/test_autopilot_status.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_plan_questions.py",
