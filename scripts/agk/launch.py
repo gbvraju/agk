@@ -64,6 +64,11 @@ start, `fix` for a resume of a pull request, `build` for one without, the role f
 `AGK_ITEM` (`#<brief or pull request>`, empty for a role) and `AGK_HEAD` (empty until a supervisor
 knows it), which the adapters add to the record as `kind=`, `item=` and `head=`; `read_record`
 reads them, leaving out a field that is absent or not of its form.
+
+Brief #1388 (SPEC-0064 rules 3 and 5, ADR-0588): each adapter call also gets `AGK_SHOW_JOBS`
+(`true` or `false`), from `show_jobs` of the `[autopilot]` table (false when unset); both adapters
+run a job in the background with its log, and only with `true` show it in a tab that closes when it
+ends. A value of another kind is refused naming the setting.
 """
 
 from __future__ import annotations
@@ -230,6 +235,19 @@ def launch_settings(root: Path, ref: str | None = None) -> tuple[bool, str | Non
     if adapter is not None and (not isinstance(adapter, str) or not adapter.strip()):
         raise CheckError("launch_adapter of the flow table must be a command (a non-empty string)")
     return auto, adapter
+
+
+def show_jobs(root: Path) -> bool:
+    """`[autopilot] show_jobs` of the checkout's agk.toml (false when unset), true or false."""
+    text = checkout_text(root)
+    try:
+        table = tomllib.loads(text).get("autopilot", {}) if text is not None else {}
+    except tomllib.TOMLDecodeError:
+        raise CheckError("agk.toml cannot be read") from None
+    value = table.get("show_jobs", False) if isinstance(table, dict) else False
+    if not isinstance(value, bool):
+        raise CheckError("show_jobs of the autopilot table must be true or false")
+    return value
 
 
 def default_branch(root: Path) -> str:
@@ -609,6 +627,7 @@ job kinds and items (brief #1386), `build` of the brief when not given."""
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
     refused = 0
+    shown = "true" if show_jobs(root or Path.cwd()) else "false"
     for index, (session, brief, build) in enumerate(found):
         if has_process(worktree_of(root or Path.cwd(), session)):
             print(STILL_RUNNING.format(name=session), file=sys.stderr)
@@ -619,6 +638,7 @@ job kinds and items (brief #1386), `build` of the brief when not given."""
             env["AGK_BUILD"] = build
         job_kind, item = (jobs[index] if jobs else None) or ("build", brief)
         env.update({"AGK_JOB_KIND": job_kind, "AGK_ITEM": f"#{item}", "AGK_HEAD": ""})
+        env["AGK_SHOW_JOBS"] = shown
         run = runs[index] if runs else DESIGN
         kind, tier, effort, model = run
         env.update({"AGK_KIND": kind, "AGK_TIER": tier, "AGK_EFFORT": effort})
@@ -688,9 +708,14 @@ def role_main(args: list[str]) -> int:
     if has_process(worktree_of(Path.cwd(), session)):
         print(f"{stuck} (one session per name)")
         return 1
+    try:
+        shown = "true" if show_jobs(Path.cwd()) else "false"
+    except CheckError:
+        print(f"{stuck} (setting: autopilot.show_jobs)")
+        return 1
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
     env.update(QUIET, AGK_SESSION=session, AGK_ROLE=role, AGK_AGENT=role)
-    env.update(AGK_JOB_KIND=role, AGK_ITEM="", AGK_HEAD="")
+    env.update(AGK_JOB_KIND=role, AGK_ITEM="", AGK_HEAD="", AGK_SHOW_JOBS=shown)
     env.update(AGK_KIND=DESIGN[0], AGK_TIER=DESIGN[1], AGK_EFFORT=DESIGN[2])
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell

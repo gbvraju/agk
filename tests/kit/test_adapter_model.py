@@ -123,7 +123,7 @@ def test_the_windows_adapter_hands_the_model_and_effort_to_its_tab():
     wrapper = wrapper_of(script)
     params = "param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)"
     assert wrapper.splitlines()[0] == params
-    assert "& claude @flags $prompt" in wrapper
+    assert "& claude @flags -p $prompt" in wrapper  # headless since brief #1388
     assert "& claude $prompt" not in wrapper
     tab = script[script.find("wt -w 0 new-tab") :]
     assert "@extra" in tab and "$env:AGK_MODEL" in script
@@ -133,9 +133,9 @@ def test_the_windows_adapter_hands_the_model_and_effort_to_its_tab():
 @pytest.mark.parametrize(
     "model, effort, expected",
     [
-        (MODEL, "medium", ["--model", MODEL, "--effort", "medium", "build it"]),
-        (MODEL, None, ["--model", MODEL, "build it"]),
-        (None, None, ["build it"]),
+        (MODEL, "medium", ["--model", MODEL, "--effort", "medium", "-p", "build it"]),
+        (MODEL, None, ["--model", MODEL, "-p", "build it"]),
+        (None, None, ["-p", "build it"]),
     ],
 )
 def test_the_windows_wrapper_passes_the_model_only_when_set(tmp_path, model, effort, expected):
