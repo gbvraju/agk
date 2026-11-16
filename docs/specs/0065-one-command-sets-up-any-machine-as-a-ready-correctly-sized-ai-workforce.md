@@ -89,7 +89,7 @@ REQ-072 AC1: *one command that resumes and ends with one table.* Rules 2 and 12.
 
 ## Open questions
 
-Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it. All are open until the maintainers rule.
+Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it. `Q-S0065-1` to `Q-S0065-12` are ruled as read by the maintainer's answer on #1396 (comment 6907045808); one file each under `docs/runs/decisions/`, and the rules above hold their readings. No question is open.
 
 - Q-S0065-1: may winget be used without asking IT on a company machine? Reading: only when the machine's policy, read first, allows it; otherwise the stop line of rule 7 (brief answer 5).
 - Q-S0065-2: may `/agk:setup` add a scheduler task by itself? Reading: only after the person's yes in the plan, and only on the conductor's machine (brief answer 5; rule 9).
