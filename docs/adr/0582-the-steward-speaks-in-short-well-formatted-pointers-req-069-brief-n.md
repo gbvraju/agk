@@ -49,8 +49,9 @@ The rule budget holds (ADR-0310): the how-to is in the guide, the role file's co
 down from 873 to 871 words.
 
 Protected path classes changed: `.claude/` (`agents/steward.md`), `config/` (`rule-budget.txt`), `scripts/agk/`
-(`steward_voice.py`, `steward.py`, `steward_daily.py`), `tests/kit/` (`test_steward_voice.py`), `tests/kit_dev/` (`test_kit_manifest.py`: the guide is installed) and `kit/`
-(`manifest.json`).
+(`steward_voice.py`, `steward.py`, `steward_daily.py`), `tests/kit/` (`test_steward_voice.py`), `tests/kit_dev/`
+(`test_kit_manifest.py`: the guide is installed), `kit/` (`manifest.json`, `templates/gitattributes`) and `agk.toml`
+(the `[testing]` map entry of `steward_voice.py`).
 
 ## Consequences
 
