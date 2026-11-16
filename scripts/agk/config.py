@@ -55,6 +55,13 @@ database is needed). A bad value is refused naming `setting: flow.<key>`, never 
 `steward_settings(root)` reads the optional `[steward]` table (SPEC-0059 rule 12, brief #1320,
 ADR-0557): `auto_file`, `false` or a whole number from 0 to 3, 0 when unset. An unknown key or
 another value is refused naming `setting: steward.<key>`, never the value.
+
+`autopilot_settings(root)` reads the optional `[autopilot]` table (SPEC-0064 rules 7 and 8, brief
+#1390, ADR-0587): `mode` (`off`, `assist` or `on`; `assist` when the table names none, None with no
+table, when today's `auto_start`, `launch_adapter` and `[capacity]` decide for one release),
+`interval_minutes` (5), `daily_budget` (absent or `"off"`: no limit; else whole tokens above 0) and
+`show_jobs`, with `legacy`, the names of those old settings still set. An unknown key or another
+value is refused naming `setting: autopilot.<key>`, never the value.
 """
 
 from __future__ import annotations
@@ -677,6 +684,69 @@ def steward_settings(root: Path) -> dict:
         if key not in STEWARD_DEFAULTS or not (number or value is False):
             raise StewardSettingError(f"the [steward] table is refused (setting: steward.{key})")
     return {**STEWARD_DEFAULTS, **table}
+
+
+# --- the [autopilot] table (SPEC-0064 rules 7 and 8, brief #1390, ADR-0587) ---------------------
+
+AUTOPILOT_MODES = ("off", "assist", "on")
+AUTOPILOT_INTERVAL = 5  # minutes between quiet passes (rule 2)
+AUTOPILOT_KEYS = ("mode", "interval_minutes", "daily_budget", "show_jobs")
+
+
+class AutopilotSettingError(CheckError):
+    """The `[autopilot]` table is refused, naming the setting and never the value."""
+
+
+def _refuse_autopilot(key: str = "") -> AutopilotSettingError:
+    named = f"autopilot.{key}" if key else "autopilot"
+    return AutopilotSettingError(f"the [autopilot] table is refused (setting: {named})")
+
+
+def legacy_autopilot(source: dict) -> list[str]:
+    """The settings `[autopilot]` replaces that this agk.toml still sets, by name only."""
+    flow = source.get("flow", {}) if isinstance(source.get("flow"), dict) else {}
+    found = [k for k in ("auto_start", "launch_adapter") if flow.get(k) not in (None, "", False)]
+    return found + (["capacity"] if "capacity" in source else [])
+
+
+def autopilot_settings(root: Path) -> dict:
+    """`mode` (None with no table: today's settings decide for one release; `assist` when the
+    table names none), `interval_minutes` (5), `daily_budget` (None when absent or `"off"`, else
+    a whole number of tokens above 0), `show_jobs` (false) and `legacy`, the old settings set."""
+    try:
+        source = config_source(root)
+    except (OSError, ValueError):
+        raise _refuse_autopilot() from None
+    legacy = legacy_autopilot(source)
+    found: dict = {"mode": None, "interval_minutes": AUTOPILOT_INTERVAL, "daily_budget": None}
+    found |= {"show_jobs": False, "legacy": legacy}
+    if "autopilot" not in source:
+        return found
+    table = source["autopilot"]
+    if not isinstance(table, dict):
+        raise _refuse_autopilot()
+    for key in sorted(table):
+        if key not in AUTOPILOT_KEYS:
+            raise _refuse_autopilot(key)
+
+    def whole(value: object) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+    found["mode"] = table.get("mode", "assist")
+    found["interval_minutes"] = table.get("interval_minutes", AUTOPILOT_INTERVAL)
+    found["daily_budget"] = table.get("daily_budget", "off")
+    found["show_jobs"] = table.get("show_jobs", False)
+    if found["mode"] not in AUTOPILOT_MODES:
+        raise _refuse_autopilot("mode")
+    if not whole(found["interval_minutes"]):
+        raise _refuse_autopilot("interval_minutes")
+    if found["daily_budget"] == "off":
+        found["daily_budget"] = None
+    elif not whole(found["daily_budget"]):
+        raise _refuse_autopilot("daily_budget")
+    if not isinstance(found["show_jobs"], bool):
+        raise _refuse_autopilot("show_jobs")
+    return found
 
 
 # --- the known keys of each table (brief #1245, ADR-0527) ---------------------------------------
