@@ -26,27 +26,36 @@ REUSE specification version)`.
 1. `LICENSE` holds the AGK Proprietary Licence, with the text of brief #1419 answer 1 exactly; its SPDX identifier is
    `LicenseRef-AGK-Proprietary`, which `pyproject.toml` and `.claude-plugin/plugin.json` name. Only the owner edits that
    text.
-2. Every kit file carries one header of three lines, after any line that must come first (a `#!` line, an encoding
-   line, YAML or TOML front matter): `SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula`,
-   `SPDX-License-Identifier: LicenseRef-AGK-Proprietary` and the one notice line of the brief. The comment form is `#`
-   for Python, shell, PowerShell, YAML, TOML, make and plain lists, and one `<!-- -->` block for Markdown and HTML. The
-   kit files are the files of `kit/manifest.json` (`verbatim` and `experimental`), every file under `scripts/agk/`,
-   `.claude/`, `skills/` and `.claude-plugin/`, and `LICENSE` itself is the licence and carries none.
-3. A file that cannot hold a comment (JSON, a generated file such as `kit/hashes.json`) and every file under `.github/`
-   are covered by one annotation in `REUSE.toml` at the repository root. `.github/` is annotated and not edited because
-   a builder never changes a workflow file, and the issue and pull request templates would otherwise copy the header into
-   every issue and pull request body. A project carries the same annotation as the last section of its `LICENSE-AGK`,
-   since a project's own `REUSE.toml` is not the kit's to write.
-4. `kit/manifest.json` copies `LICENSE` verbatim to the project as `LICENSE-AGK` (`init` and `upgrade`); the project's
-   own `LICENSE` is never written.
+2. Every kit file carries one header of three parts, after any line that must come first (a `#!` line, an encoding
+   line, front matter): `SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula`,
+   `SPDX-License-Identifier: LicenseRef-AGK-Proprietary` and the notice of the brief. The comment form is `#` for
+   Python, shell, PowerShell, YAML, TOML, make and plain lists, and one `<!-- -->` block for Markdown and HTML. In the
+   `#` form the notice is wrapped at word boundaries so that no line passes 100 characters, the lint's limit; the HTML
+   form keeps it on one line. The kit files are the files of `kit/manifest.json` (`verbatim`, `experimental`,
+   `rendered`) and every tracked file under `scripts/agk/`, `.claude/`, `skills/`, `.claude-plugin/` and `kit/`;
+   `LICENSE` and `LICENSE-AGK` are the licence and carry none.
+3. A file that cannot hold a comment (JSON, a generated file such as `kit/hashes.json`), every file under `.github/`
+   and the three document templates (`docs/adr/TEMPLATE.md`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`) are
+   covered by one annotation in `REUSE.toml` at the repository root. `.github/` is annotated and not edited because a
+   builder never changes a workflow file, and the issue and pull request templates would otherwise copy the header
+   into every issue and pull request body; the document templates are copied by `new_spec.py` into a project's own
+   ADRs, specs and briefs, which are not the kit's.
+4. The kit carries `LICENSE-AGK`: the text of `LICENSE` verbatim, then the annotation of decision 3, since a project's
+   own `REUSE.toml` is not the kit's to write. `kit/manifest.json` lists it as a verbatim file, so `init`, `adopt` and
+   `upgrade` write it to the project root and `uninstall` removes an unedited copy; the project's own `LICENSE` is
+   never written.
 5. A project names its grant in a `[licence]` table of `agk.toml` with `grant`, `repository` and `valid_until`.
    `doctor.py` warns, and never blocks, when the table is missing, when `repository` differs from the `origin` remote,
-   and after `valid_until`, where it names the uninstall step. There is no network call and no licence server.
-6. `rules.py` does not count the header block (the `SPDX-` lines and the notice line, with the comment markers around
-   them) toward an instruction file's word budget, so `config/rule-budget.txt` is unchanged.
+   and after `valid_until`, where it names the uninstall step. The warning is its own text line and its own `licence`
+   key of the JSON report. The kit's own repository needs no grant. There is no network call and no licence server.
+6. `rules.py` does not count the header toward an instruction file's words or rule lines, so `config/rule-budget.txt`
+   is unchanged; `check_runbooks.py` and the tests that measure a page read it without the header.
 7. `scripts/agk/check_licence_notice.py` fails when a kit file lacks the header, or, for a file that cannot hold one,
-   the annotation, naming the path class and never a value. It runs in `make governance` and in `prepush.py`.
-8. Templates under `kit/templates/` become a project's own files (its `agk.toml`, its requirements) and carry no header.
+   the annotation, naming the path class and never a value; in a project it needs `LICENSE-AGK` and the header in each
+   file under `scripts/agk/`. It runs in `make governance`, so in CI's governance and in `prepush.py`, and its
+   `--write` adds the missing headers.
+8. Templates under `kit/templates/` become a project's own files (its `agk.toml`, its requirements) and carry no
+   header.
 
 ## Consequences
 
