@@ -55,6 +55,9 @@ problems|cannot be read; map complete|<n> problems|absent|not checked (<n> pages
 Brief #1245 (ADR-0527): `misplaced-settings` names each key that the kit reads from a table of
 agk.toml (`config.TABLE_KEYS`) but that stands at the top level or in another table, with the
 table it is in and the table it belongs to, never its value.
+Brief #1390 (ADR-0587): `autopilot-settings` names each of `[flow] auto_start`, `launch_adapter`
+and `[capacity]` still set, which `[autopilot]` replaces: read for one release while that table is
+absent, then from it only; never a value.
 """
 
 from __future__ import annotations
@@ -470,6 +473,14 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "agk.toml: ",
         "move each named setting into the table it belongs to (a change to agk.toml needs an ADR "
         "in the same pull request)",
+    ),
+    "autopilot-settings": (  # brief #1390 (ADR-0587): read for one release, then [autopilot] only
+        "warn",
+        "no setting that [autopilot] replaces is set",
+        "agk.toml: ",
+        "set [autopilot] mode and remove the named settings and the watchdog's scheduler task "
+        "(python3 scripts/agk/autopilot.py on installs its own); they are read for one release "
+        "while [autopilot] is absent (a change to agk.toml needs an ADR in the same pull request)",
     ),
     "engines-keys": (
         "warn",
@@ -1099,14 +1110,24 @@ def auto_merge_result(config: dict) -> Result:
     return Result("ok", message="on, method squash" if state == "on" else "off")
 
 
-def merge_queue_result(config: dict) -> Result:
+def merge_queue_result(config: dict, repo_data: Any = None) -> Result:
     """`merge queue: on` or `merge queue: off` (brief #972 answer 5, amendment 158 item 7), from
-    the setting alone, never from the ruleset; a malformed value fails naming the setting."""
+    the setting, never from the ruleset; a malformed value fails naming the setting. In CI mode
+    (not `execution = "local"`) with the queue off, a repository REPO_DATA reads as owned by a
+    user account is `unavailable (user-owned repository)`: GitHub offers the queue only to an
+    organization, so the owner merges with `merge_cleared.py --pr <n> --owner` (brief #1358
+    answer 3, ADR-0570). The kit changes no ruleset."""
     try:
         state = merge_cleared.merge_queue_setting(config)
     except CheckError as err:
         return Result("fail", message=str(err))
-    return Result("ok", message="on" if state else "off")
+    if state:
+        return Result("ok", message="on")
+    owner = repo_data.get("owner") if isinstance(repo_data, dict) else None
+    user = isinstance(owner, dict) and owner.get("type") == "User"
+    if user and config.get("execution") != "local":
+        return Result("ok", message="unavailable (user-owned repository)")
+    return Result("ok", message="off")
 
 
 def slot_minutes(number: int) -> list[int]:
@@ -1261,6 +1282,19 @@ def misplaced_settings_result(config: dict) -> Result:
         for key, where, homes in found
     ]
     return Result("fail", message="; ".join(parts))
+
+
+def autopilot_settings_result(root: Path) -> Result:
+    """Brief #1390 (ADR-0587): the old settings `[autopilot]` replaces, by name, never a value."""
+    try:
+        found = models.autopilot_settings(root)
+    except CheckError as exc:
+        return Result("fail", message=str(exc))
+    if not found["legacy"]:
+        return Result("ok")
+    names = ", ".join(f"[{n}]" if n == "capacity" else n for n in found["legacy"])
+    when = "read for one release" if found["mode"] is None else "not read: [autopilot] is set"
+    return Result("fail", message=f"{names} ({when})")
 
 
 def main_folder_lines(root: Path) -> list[str]:
@@ -1843,7 +1877,7 @@ def run_checks(
     results.update(engine_results(root, kit_root, config))
     results["actions-minutes"] = minutes_result(root, reads)
     results["auto-merge-setting"] = auto_merge_result(config)
-    results["merge-queue-setting"] = merge_queue_result(config)
+    results["merge-queue-setting"] = merge_queue_result(config, reads.get("repo", "", raw=True)[0])
     results["model-routes"] = model_routes_result(root)
     results["always-full-infra"] = always_full_result(root)
     results["slot-schedule"] = slot_schedule_result(root, reads)
@@ -1853,6 +1887,7 @@ def run_checks(
     results["launch-adapter"] = launch_adapter_result(root)
     results["model-names"] = model_names_result(root)
     results["misplaced-settings"] = misplaced_settings_result(config)
+    results["autopilot-settings"] = autopilot_settings_result(root)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]

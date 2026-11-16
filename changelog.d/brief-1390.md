@@ -1,0 +1,1 @@
+- One `[autopilot] mode` setting (`off`, `assist`, `on`), `autopilot.py on|off` (`agk autopilot`) installs or removes the one scheduler entry and checks the machine, and a `daily_budget` that limits nothing unless set, relaxed with `budget off [--today]`; `agk doctor` warns `autopilot-settings` while the old settings are set (brief #1390)

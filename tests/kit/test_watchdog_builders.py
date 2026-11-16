@@ -381,9 +381,14 @@ def builder_line(out: str) -> str:
 
 
 def test_an_ended_builder_is_restarted_once_under_its_name(builders, capsys):
-    """REQ-050: brief #1355 answer 2 (ended -> restarted with the resume prompt; posts nothing)."""
+    """REQ-050: brief #1355 answer 2 (ended -> restarted with the resume prompt; posts nothing);
+    since brief #1389 (ADR-0586) an ended builder is restarted on its event, here a fix list."""
     builders["table"].clear()
-    pr_comments(builders, comment(2, "builder", "Report: aaaaaaa ready for review", iso()))
+    pr_comments(
+        builders,
+        comment(2, "builder", "Report: aaaaaaa ready for review", iso(timedelta(hours=-2))),
+        comment(3, "boss", "Verdict: fix list aaaaaaa", iso(timedelta(minutes=-30))),
+    )
     code, out = watchdog(builders, capsys)
     name = builders["name"]
     assert code == 0

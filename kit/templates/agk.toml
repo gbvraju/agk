@@ -162,6 +162,14 @@ review_mode = "team"
 # owner's word, a whole number from 0 to 3, or false for none; 0 when unset. Another key or value is refused naming the setting.
 # [steward]
 # auto_file = 0
+# The autopilot (SPEC-0064 rules 7 and 8, REQ-071), absent by default: while absent, auto_start, launch_adapter and [capacity] decide,
+# for one release (agk doctor warns autopilot-settings). mode is off (nothing starts by itself), assist (the default when the table
+# is set: the conductor and steward run, a builder starts on the owner's yes) or on; daily_budget is tokens a UTC day, "off" when
+# unset. python3 scripts/agk/autopilot.py on|off installs or removes the scheduler entry. A change needs an ADR.
+# [autopilot]
+# mode = "assist"
+# interval_minutes = 5
+# daily_budget = "off"
 # The model routes (SPEC-0045 rule 3, REQ-052), absent by default: every session then starts on one route. With
 # builder_start = "start" a tier maps to the plain label of the scheduled task that starts it (or flag = true); with "assign" to its
 # slots. A table names strongest; a tier with no route uses the next stronger one. No model name here. A change needs an ADR.

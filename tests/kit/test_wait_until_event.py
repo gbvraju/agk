@@ -300,6 +300,10 @@ def test_1310_the_usage_is_checked(proj, stub, args):
 
 PR = f"repos/{REPO}/pulls/7"
 COMMENTS = f"repos/{REPO}/issues/7/comments"
+FIXED = (  # brief #1389 (ADR-0586): the fixed sections every summary carries
+    "Alternatives rejected: none.\nRisks: none.\nHow to run the tests: pytest.\n"
+    "Where it is stuck: nowhere.\n"
+)
 
 
 def writes(stub) -> list[list]:
@@ -309,7 +313,7 @@ def writes(stub) -> list[list]:
 def test_1310d_the_summary_is_posted_once_then_edited_in_place(proj, stub, tmp_path):
     """REQ-050: brief #1310 test (d)."""
     text = tmp_path / "summary.md"
-    text.write_text("Built: the wait.\nDecisions: none.\n", encoding="utf-8")
+    text.write_text("Built: the wait.\nDecisions and why: none.\n" + FIXED, encoding="utf-8")
     stub.serve(PR, pull())
     stub.serve(COMMENTS, [ASKED])
     out = session(proj, stub, "summary", "--pr", "7", "--file", str(text))
@@ -317,7 +321,7 @@ def test_1310d_the_summary_is_posted_once_then_edited_in_place(proj, stub, tmp_p
     assert out.stdout.strip() == f"summary: posted at {SHA[:7]}"
     posted = writes(stub)
     assert len(posted) == 1 and posted[0][:2] == ["POST", COMMENTS]
-    sent = f"body=Summary: {SHA}\n\nBuilt: the wait.\nDecisions: none."
+    sent = f"body=Summary: {SHA}\n\nBuilt: the wait.\nDecisions and why: none."
     assert any(arg.startswith(sent) for arg in posted[0][2])
     (tmp_path / "again").mkdir()
     again = Stub(tmp_path / "again")
@@ -335,7 +339,7 @@ def test_1310d_the_summary_is_posted_once_then_edited_in_place(proj, stub, tmp_p
 def test_1310d_a_summary_of_another_author_is_not_edited(proj, stub, tmp_path):
     """REQ-050: brief #1310 answer 2 (the builder's own summary only)."""
     text = tmp_path / "summary.md"
-    text.write_text("Built: the wait.\n", encoding="utf-8")
+    text.write_text("Built: the wait.\nDecisions and why: none.\n" + FIXED, encoding="utf-8")
     stub.serve(PR, pull())
     stub.serve(COMMENTS, [comment(20, "stranger", f"Summary: {OTHER}\n\nnot mine")])
     out = session(proj, stub, "summary", "--pr", "7", "--file", str(text))
@@ -345,7 +349,8 @@ def test_1310d_a_summary_of_another_author_is_not_edited(proj, stub, tmp_path):
 def test_1310d_a_summary_longer_than_the_setting_is_refused(proj, stub, tmp_path):
     """REQ-050: brief #1310 answer 5 (refused naming the setting; nothing posted)."""
     text = tmp_path / "summary.md"
-    text.write_text("\n".join(f"line {n}" for n in range(26)) + "\n", encoding="utf-8")
+    lines = [f"line {n}" for n in range(21)] + ["Decisions and why: none."]
+    text.write_text("\n".join(lines) + "\n" + FIXED, encoding="utf-8")
     stub.serve(PR, pull())
     stub.serve(COMMENTS, [])
     out = session(proj, stub, "summary", "--pr", "7", "--file", str(text))
@@ -443,6 +448,11 @@ def local(repo, tmp_path, monkeypatch):
     )
     monkeypatch.setattr(conductor.session_plan, "plan", lambda root, *a: print(facts["plan"]) or 0)
     monkeypatch.setattr(conductor, "sweep", lambda root: print(facts["sweep"]) or 0)
+    # Brief #1387 (ADR-0585): the supervisor's change reads, stop rules and health line are
+    # tested in test_autopilot_supervisor.py; here they read nothing and stop nothing.
+    monkeypatch.setattr(conductor, "change_reads", lambda root, repo, state, now: (False, None))
+    monkeypatch.setattr(conductor, "stop_reason", lambda root, repo, *a: (None, None))
+    monkeypatch.setattr(conductor, "record_health", lambda started, now: None)
     return {"repo": repo, "log": log, "facts": facts, "leases": leases}
 
 

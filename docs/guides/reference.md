@@ -272,6 +272,24 @@ no brief is malformed, the scope is locked and no open owner question blocks the
 lines, exit 1. In personal mode everything is printed and nothing is parked. `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
 
+## Autopilot status
+
+    python3 scripts/agk/autopilot.py status [--week] [--root DIR]
+
+`agk status` (SPEC-0064 rules 3, 5 and 10, ADR-0584): the running jobs of this machine from their records (kind, item,
+head, since, last event), each `claude` process with no record as `unrecorded: process <pid> (not adopted)`, the
+queue, the owner's waits, the held jobs and one `quiet:` reason, from the reads of one pass; it posts nothing.
+`--week` prints the week of `agk-autopilot.jsonl` in the temp folder and the tokens per merged pull request, `unknown`
+where a figure cannot be read.
+
+    python3 scripts/agk/autopilot.py on|off|budget on|budget off [--today]|retry N [--root DIR]
+
+`agk autopilot` (SPEC-0064 rules 7, 8 and 11, ADR-0587): `on` installs the one scheduler entry (a tagged crontab line
+or the Windows task `agk-autopilot`, every `[autopilot] interval_minutes`) and runs the machine checks, each `ok:` or
+`warn:` naming its setting, changing no power setting; `off` removes the entry. Both print, never write, the protected
+`agk.toml` change of `[autopilot] mode`. `budget off [--today]` relaxes `daily_budget`, `budget on` ends that, and
+`retry N` lifts a hold, each kept in `<git dir>/agk/autopilot.json`; `status` starts with the mode and the budget line.
+
 ## Steward voice
 
     python3 scripts/agk/steward_voice.py check FILE

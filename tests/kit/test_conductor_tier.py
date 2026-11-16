@@ -262,6 +262,11 @@ def local(repo, tmp_path, monkeypatch):
     monkeypatch.setattr(conductor, "queued_items", lambda root, repo: facts["queue"])
     monkeypatch.setattr(conductor, "pass_classes", lambda root: CLASSES)
     monkeypatch.setattr(conductor, "builder_pass", lambda root, repo, adapter: None)
+    # Brief #1387 (ADR-0585): the supervisor's change reads, stop rules and health line are
+    # tested in test_autopilot_supervisor.py; here they read nothing and stop nothing.
+    monkeypatch.setattr(conductor, "change_reads", lambda root, repo, state, now: (False, None))
+    monkeypatch.setattr(conductor, "stop_reason", lambda root, repo, *a: (None, None))
+    monkeypatch.setattr(conductor, "record_health", lambda started, now: None)
     return {"repo": repo, "log": log, "facts": facts}
 
 
