@@ -148,47 +148,42 @@ def test_1202_a_the_conductor_text_holds_no_long_run_placeholder():
 
 
 def test_1202_b_the_conductor_starts_builders_within_the_limits():
-    """REQ-039: brief #1202 answer 4 (b) and answer 1: both builder tasks, `Started: cb`, limits."""
-    conductor = text("conductor.txt")
+    """REQ-039: brief #1202 answer 4 (b), as brief #1391 (ADR-0589) moved the starts: the
+    launcher, the supervisor in CI mode, starts every builder by kind within the capacity; the
+    conductor is one review job and keeps its owner asks and the merger."""
+    launcher = text("launcher.txt")
     for words in (
         "<mid builder task>",
         "<strongest builder task>",
         "kind: small",
-        "START #<brief>",
-        "Started: cb<brief> <UTC time> by the conductor (<kind>)",
         "Session name: cb<brief>[<build letter>]. Item: brief #<brief>[ build (<x>)].",
-        "2 hours",
         "Capacity:",
         "cb<brief>r",
         "agk:handover",
         "45 minutes",
-        "Owner needed:",
-        "<plan issue>",
-        "merger.yml",
     ):
+        assert words in launcher, words
+    conductor = text("conductor.txt")
+    for words in ("Owner needed:", "<plan issue>", "merger.yml", "one pass, then end"):
         assert words in conductor, words
-    six = [ln for ln in conductor.splitlines() if ln.startswith("6. ")]
-    assert len(six) == 1 and "START" in six[0], six
 
 
 def test_1202_c_the_conductor_may_fire_only_the_builder_tasks():
-    """REQ-039: brief #1202 answer 4 (c): the last paragraph allows only firing builder tasks."""
+    """REQ-039: brief #1202 answer 4 (c), narrowed by brief #1391 (ADR-0589): the conductor's
+    review job fires no scheduled task at all."""
     last = last_paragraph("conductor.txt")
-    assert (
-        "never create, change or delete a scheduled task; firing the two builder tasks is the "
-        "only scheduled-task action allowed" in last
-    ), last
+    assert "never create, change or delete a scheduled task; fire no scheduled task" in last, last
     assert "conductor task" not in last
 
 
 def test_1202_d_the_launcher_is_the_backup_at_45_minutes():
-    """REQ-039: brief #1202 answer 4 (d) and answer 2: 45 minutes of silence, not 90; a backup."""
+    """REQ-039: brief #1202 answer 4 (d) and answer 2: 45 minutes of silence, not 90; the
+    launcher is still the backup for a builder that ended without a line (ADR-0589)."""
     launcher = text("launcher.txt")
     assert "45 minutes" in launcher
     assert "90 minutes" not in launcher
     assert "backup" in launcher
-    tasks = ("<mid builder task>", "<strongest builder task>", "<conductor task>", "<plan issue>")
-    for words in tasks:
+    for words in ("<mid builder task>", "<strongest builder task>", "<conductor task>"):
         assert words in launcher, words
 
 
@@ -213,9 +208,10 @@ def test_1202_e_the_builder_text_carries_the_running_rules():
 
 
 def test_1202_f_the_readme_and_guide_say_the_launcher_is_the_backup():
-    """REQ-039: brief #1202 answer 3: the conductor starts builders; the launcher is its backup."""
+    """REQ-039: brief #1202 answer 3, as brief #1391 (ADR-0589) changed it: the launcher is the
+    supervisor in CI mode and the backup for a silent builder."""
     readme = text("README.md")
-    assert "starts builders itself" in readme and "backup" in readme
+    assert "supervisor" in readme and "backup" in readme  # brief #1391 (ADR-0589)
     guide = GUIDE.read_text(encoding="utf-8")
     section = guide.split("Running around the clock", 1)[1].split("\n8. ", 1)[0]
-    assert "starts builders itself" in section and "backup" in section
+    assert "is the supervisor in CI mode" in section and "backup" in section

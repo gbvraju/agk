@@ -231,6 +231,9 @@ clean and pushed; a parked or handed-over one is never restarted; one restart pe
 session per hour, kept in `<git dir>/agk/builders.json`, and `sweep` prints `NEEDS-YOU: builder
 <name> #<brief> held (<reason>)` for each held one.
 
+Brief #1391 (SPEC-0064 build (f), ADR-0589): `claim_job` posts the supervisor's claim on a job's
+item, `Started: <session> <UTC> by the supervisor (<kind>)`, for `autopilot.py jobs --claim`.
+
 Brief #1389 (SPEC-0064 build (c), ADR-0586): a builder is a short job. An ended builder with a pull
 request is `left (waits for an event)` until a verdict, correction or answer newer than its own
 move, an `agk:conflict` or `agk:ci-red` label, or a first failure of its last job; then one `fix`
@@ -1820,6 +1823,17 @@ def post(endpoint: str, what: str, *extra: str, method: str = "POST") -> None:
     fields = common.who_fields(endpoint, method, extra, role="conductor")
     if session.gh(endpoint, *fields, method=method) is None:
         raise CheckError(what)
+
+
+def claim_job(repo: str, job: dict, when: str) -> bool:
+    """The supervisor's claim on a job's item before it starts (brief #1391, ADR-0589): one
+    `Started: <session> <UTC> by the supervisor (<kind>)`; False when it cannot be posted."""
+    body = f"Started: {job['session']} {when} by the supervisor ({job['kind']})"
+    try:
+        post(f"repos/{repo}/issues/{job['item']}/comments", "the claim", "-f", f"body={body}")
+    except CheckError:
+        return False
+    return True
 
 
 def reprove(root, number: int, apply: bool) -> int:
