@@ -569,6 +569,7 @@ tests = [
 code = "scripts/agk/launch.py"
 tests = [
   "tests/kit/test_autopilot_status.py",
+  "tests/kit/test_autopilot_adapters.py",
   "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_starts.py",
   "tests/kit/test_wait_until_event.py",
