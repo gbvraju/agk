@@ -1,1 +1,0 @@
-- `session.py` waits out a GitHub limit as GitHub asks: the `retry-after` seconds, else the reset time of a spent primary limit, else 60 seconds doubled per try (a secondary wait capped at 15 minutes); two writes of one process are at least one second apart, and the plan's `reads:` line and `checklist.py` point 8 show the run's writes (brief #1335, ADR-0565)

@@ -1,6 +1,6 @@
 # ADR-0567: Add REQ-070: In team mode every listed reviewer may run a steward, first come first served
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0063, SPEC-0059, SPEC-0062, SPEC-0039, ADR-0541, ADR-0546, ADR-0556, brief #1320, brief #1318, brief #1342, plan #661

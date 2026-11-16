@@ -1,6 +1,6 @@
 # ADR-0571: The conductor runs each pass on the tier it needs
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: ADR-0554, ADR-0525, ADR-0528, ADR-0568, ADR-0289, SPEC-0045 (amendment 183), brief #1359, brief #1283, plan #661

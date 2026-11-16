@@ -1,6 +1,6 @@
 # ADR-0566: One connection per command, and the guarded merge reads through the shared reader
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1336, brief #1335, brief #1251, brief #1314, ADR-0548, ADR-0555, ADR-0565, plan #661

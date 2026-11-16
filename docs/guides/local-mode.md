@@ -280,6 +280,17 @@ change with an ADR in the same pull request.
    session is restarted at most once an hour; a held one is a `NEEDS-YOU:` line of the next sweep. `launch.py` never
    starts a second session of a name whose process is still there. Install the scheduled task on the machine that runs
    the sessions, `python3 scripts/agk/conductor.py watchdog --install --pass`, and run the line it prints.
+
+   **One conductor per machine** (brief #1409, ADR-0592). Before any conductor start (`watchdog`, `watchdog --pass`,
+   `launch.py role --role conductor` and both adapters, for a job of kind `conductor`), the kit reads this machine's job
+   records of kind `conductor` under any name and the process list (`ps`, on Windows `Get-CimInstance Win32_Process`) for
+   a session started with `--agent conductor`. While one is alive nothing starts:
+   `watchdog: conductor <name> is running on this machine; nothing started`. The lease stays the rule between machines.
+   When the lease has lapsed beside a conductor the kit started, the pass reads it by the builders' signs of work: a
+   working one is `left (working)`; an idle one is stopped and one starts in its place, at most once an hour. A conductor
+   a person started is never stopped. When more than one already runs, the sweep and `agk status` print
+   `NEEDS-YOU: <n> conductors on this machine: keep <lease holder>, close <names>; stop with: <command>`. No conductor and
+   no builder restart starts below `[flow] min_free_memory_mb`; the next pass tries again.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then
@@ -331,6 +342,35 @@ builder hands over and moves on, and the parked pull request no longer takes a b
 next `conductor.py sweep` unparks it and prints its `resume --pr <n>` command, before new briefs. A bad value is refused
 with a line naming the setting. In personal mode there are no pull requests, so nothing is
 parked.
+
+## When a guard refuses a command
+
+Every refusal by a hook (the data guard, the conductor's, the steward's and the architect's guard) is kept on the machine,
+so it is not lost when the session closes (brief #1410, ADR-0593). Each one adds a line to `refusals.log` in the `agk`
+folder of the clone's git folder, which is never tracked or posted: the time in UTC, the session, the role, the hook, the
+reason and the refused command or path with every secret and personal value replaced by a label, cut at 500 characters. The
+file rolls over at 1 MB and keeps one older file. When a guard fails inside itself, its line also names the kind of error
+and the place in the hook, never a value, and the refusal says `see agk logs --refusals`.
+
+- Read them with `agk logs --refusals` (`python3 scripts/agk/guard_logs.py --refusals`), from the project folder.
+- `agk status` shows today's count by reason, for example `refusals today: 2 (cannot-judge (hook error) 2)`.
+- A guard that refuses a command it should judge, such as a seed run against a throwaway database, is a defect of the kit.
+  Report it with the redacted lines from `agk logs --refusals`, never with the raw command.
+
+## Reporting a defect of the kit
+
+A defect of the kit itself is reported in one form, kept apart from the project's own work (brief #1411, ADR-0594).
+Draft it with `python3 scripts/agk/steward_owner.py defect --title "<one line>" --file <what should happen instead>`:
+the draft adds the kit version, the operating system and shell, the reason codes and the newest redacted refusal lines,
+and the outbound data guard checks it before anything is posted. With `--post`, on the owner's word, it becomes one issue
+in this project labelled `agk-kit-defect`, never `agk-brief`, so the conductor never schedules it. The steward lists the
+open ones with `python3 scripts/agk/steward_owner.py defects`. Nothing is sent to the kit's maintainers by itself: the
+owner decides whether to pass a report on. In personal mode the draft is printed for the person and nothing is posted.
+
+When a steward's `gh api` reads stop working in a session (after a `/doctor` or settings change, for example),
+`python3 scripts/agk/steward_owner.py reads` names, once, the setting or permission mode that refuses them and the step
+that restores them; usually that is restarting the steward session. The kit's `doctor.py` never changes a permission
+mode.
 
 ## What is lost
 

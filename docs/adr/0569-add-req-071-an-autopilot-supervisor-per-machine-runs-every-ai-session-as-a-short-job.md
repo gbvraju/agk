@@ -1,6 +1,6 @@
 # ADR-0569: Add REQ-071: An autopilot supervisor per machine runs every AI session as a short job
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0064, SPEC-0058, SPEC-0059, SPEC-0062, SPEC-0063, SPEC-0041, ADR-0525, ADR-0554, ADR-0568, brief #1355, brief #1310, brief #1357, plan #661

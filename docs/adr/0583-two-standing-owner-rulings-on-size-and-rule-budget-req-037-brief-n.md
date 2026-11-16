@@ -1,6 +1,6 @@
 # ADR-0583: Two standing owner rulings on size and the rule budget
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers (the owner's standing decisions)
 - Related: brief #1385, ADR-0310, plan #661

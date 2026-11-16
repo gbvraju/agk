@@ -1,1 +1,0 @@
-- `launch.py prompts --resume` and `personal_state.py attach --person` accept a GitHub login with an underscore after its first character, as a managed-user login has (`sam_example`); a login starting with a hyphen or underscore, holding another character or longer than 39 characters is still refused naming the field or option (brief #1327, ADR-0563)

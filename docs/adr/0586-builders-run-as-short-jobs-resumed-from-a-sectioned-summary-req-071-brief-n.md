@@ -1,6 +1,6 @@
 # ADR-0586: Builders run as short jobs, resumed from a sectioned summary, started on events and held after two failures
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1389, SPEC-0064 rules 4, 9, 15 and 16 (c), Q-S0064-1, brief #1387 (ADR-0585), brief #1355 (ADR-0568), brief #1310 (ADR-0554), brief #1386, plan #661

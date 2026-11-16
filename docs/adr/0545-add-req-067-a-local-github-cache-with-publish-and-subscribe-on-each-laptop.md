@@ -1,6 +1,6 @@
 # ADR-0545: Add REQ-067: A local GitHub cache with publish and subscribe on each laptop, nothing hosted
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0060, SPEC-0012, SPEC-0030, SPEC-0041, SPEC-0058, ADR-0191, ADR-0295, ADR-0529, ADR-0536, ADR-0548, ADR-0565, brief #1284, brief #1262, brief #1251, plan #661

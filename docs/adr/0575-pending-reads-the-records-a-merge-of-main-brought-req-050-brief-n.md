@@ -1,6 +1,6 @@
 # ADR-0575: `check_adrs.py --pending` reads the records a merge of main brought in
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1370, found bug #1266, release #1258, ADR-0277, ADR-0501, plan #661

@@ -1,6 +1,6 @@
 # ADR-0559: The steward relays the owner, and the conductor starts it
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0059, ADR-0557, ADR-0543, ADR-0528, ADR-0190, brief #1322, brief #1320, brief #1282, plan #661
