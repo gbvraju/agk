@@ -11,6 +11,24 @@ $prompt = [Console]::In.ReadToEnd()
 # 1. The worktree first, and wait until its folder exists.
 $repo = (git rev-parse --show-toplevel).Trim()
 $worktree = Join-Path (Split-Path $repo -Parent) "agk-$session"
+# One conductor per machine (brief #1409): a conductor job starts nothing while a record of kind conductor beside this
+# checkout names a live process that has not written its exit file (verify: not run on Windows by the session that wrote it).
+if ($env:AGK_JOB_KIND -eq 'conductor') {
+    foreach ($dir in @(Get-ChildItem -LiteralPath (Split-Path $repo -Parent) -Directory -Filter 'agk-*')) {
+        $record = Join-Path $dir.FullName '.agk-session-pid'
+        if (-not (Test-Path -LiteralPath $record)) { continue }
+        $f = @{}
+        foreach ($file in @($record, (Join-Path $dir.FullName '.agk-session-exit'))) {
+            if (Test-Path -LiteralPath $file) {
+                Get-Content -LiteralPath $file | ForEach-Object { $k, $v = $_ -split '=', 2; if ($null -ne $v) { $f[$k.Trim()] = $v.Trim() } }
+            }
+        }
+        $live = $f['pid'] -match '^\d+$' -and (Get-Process -Id ([int]$f['pid']) -ErrorAction SilentlyContinue)
+        if ($f['kind'] -eq 'conductor' -and $live -and (-not $f['ended_utc'] -or $f['ended_utc'] -lt $f['started_utc'])) {
+            [Console]::Error.WriteLine("start-session-windows: conductor $($f['session']) is running on this machine; nothing started"); exit 3
+        }
+    }
+}
 git -C $repo fetch --quiet origin
 if (Test-Path -LiteralPath $worktree) {
     # The folder is there from an earlier start (brief #1030, ADR-0439): reuse it when it is a clean

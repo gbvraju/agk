@@ -21,6 +21,21 @@ prompt="$(cat)"
 # 1. The worktree first, and keep the session's own files out of git.
 repo="$(git rev-parse --show-toplevel)"
 worktree="$(dirname "$repo")/agk-$session"
+# One conductor per machine (brief #1409): a conductor job starts nothing while a record of kind conductor beside this
+# checkout names a live process that has not written its exit file.
+if [ "${AGK_JOB_KIND:-}" = conductor ]; then
+    field() { sed -n "s/^$1=//p" "$2" 2>/dev/null | tr -d '\r' || true; }
+    for record in "$(dirname "$repo")"/agk-*/.agk-session-pid; do
+        [ -f "$record" ] || continue
+        pid="$(field pid "$record")"; started="$(field started_utc "$record")"
+        ended="$(field ended_utc "$(dirname "$record")/.agk-session-exit")"
+        if [ "$(field kind "$record")" = conductor ] && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null \
+            && { [ -z "$ended" ] || [[ "$ended" < "$started" ]]; }; then
+            echo "start-session-local: conductor $(field session "$record") is running on this machine; nothing started" >&2
+            exit 3
+        fi
+    done
+fi
 git -C "$repo" fetch --quiet origin
 if [ -e "$worktree" ]; then
     # The folder is there from an earlier start (a session that ended or crashed): reuse it when it is a clean

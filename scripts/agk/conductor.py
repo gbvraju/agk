@@ -1239,6 +1239,7 @@ def sweep(root) -> int:
         lines += steward_lines(root, kept, answerers, now)  # SPEC-0059 rule 2 (brief #1322)
     lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
     lines += held_builder_lines(root)  # builders the watchdog held on this machine (ADR-0568)
+    lines += extra_conductor_lines(root)  # brief #1409: the extra conductors of this machine
     print("\n".join(lines))
     return 0
 
@@ -2136,7 +2137,7 @@ WATCHDOG_PROMPT = (
     "Take the lease first with `python3 scripts/agk/conductor.py lease --take {name}`; when it "
     "is refused another conductor holds it, so end at once. Renew it and release it as the role "
     "says, and run `python3 scripts/agk/session.py queue --role conductor` before anything else "
-    "(session rule 11).\n"
+    "(session rule 11).\n" + launch.CONDUCTOR_NOTE
 )
 
 
@@ -2237,8 +2238,10 @@ def watchdog_once(root, name: str, repo: str, adapter: str, issue: int) -> int:
             "(setting: builder_memory_gb)"
         )
         return 1
+    if not conductor_gate(root):  # brief #1409: one conductor per machine
+        return 0
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
-    env.update(launch.QUIET)
+    env.update(launch.QUIET, **JOB_RECORD)
     env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
@@ -2273,11 +2276,12 @@ JOB_PROMPT = (
     "`constitution/principles.md` and `config/session-rules.md` first and follow them exactly. "
     "The watchdog holds the lease under {name} between passes: renew it first with "
     "`python3 scripts/agk/conductor.py lease --take {name}`, again before a step that may pass 10 "
-    "minutes, and do not release it: while you renew it the watchdog starts no other job. "
+    "minutes, and do not release it while work remains: while you renew it the watchdog starts "
+    "no other job. "
     "Do one pass: `python3 scripts/agk/session.py queue --role conductor`, then "
     "`python3 scripts/agk/session.py review-queue --all` and the pass on its "
     "lines, then the plan's starts and the sweep's lines; schedule no wake, start no loop, and "
-    "end when the pass is done.\n"
+    "end when the pass is done.\n" + launch.CONDUCTOR_NOTE
 )
 
 
@@ -2466,7 +2470,7 @@ def start_job(root, adapter: str, name: str, repo: str, why: str, tier: tuple) -
     """Call the adapter once for one conductor job on TIER (tier, effort); its standard
     output, or None when it cannot be run or fails."""
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
-    env.update(launch.QUIET)
+    env.update(launch.QUIET, **JOB_RECORD)
     env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER=tier[0], AGK_EFFORT=tier[1])
     prompt = JOB_PROMPT.format(name=name, repo=repo, why=why)
     prompt += TIER_NOTE.format(tier=tier[0], effort=tier[1])
@@ -2717,7 +2721,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
         )
         return 1
     started: dict[str, int] = {}
-    if why or logged:
+    if (why or logged) and conductor_gate(root, now):  # brief #1409: one per machine
         code = conductor_job(root, name, repo, adapter, (state, now, why, logged, items))
         if code:
             return code
@@ -3133,6 +3137,8 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
             job_ended(jobs.get(name), facts, exit_code)
         if short and (action == "restart" or why == "restarted within the hour"):
             action, why = job_gate(jobs.get(name), facts, now) or (action, why)
+        if action == "restart" and not memory_floor(root):  # brief #1409 answer 5
+            action, why = "held", f"setting: {launch.MEMORY_SETTING}"
         if action == "restart" and state == "idle" and not stopped(record["pid"]):
             action, why = "held", "the process did not stop"
         if action == "restart":
@@ -3170,6 +3176,99 @@ def builder_pass(root, repo: str, adapter: str) -> None:
         lines = [f"watchdog: builders not read: {exc}"]
     if lines:
         print("\n".join(lines))
+
+
+# --- one conductor per machine (brief #1409, ADR-0592) --------------------------------------
+
+JOB_RECORD = {"AGK_JOB_KIND": "conductor", "AGK_ITEM": "", "AGK_HEAD": ""}  # the record's kind
+ONE_CONDUCTOR = "watchdog: conductor {name} is running on this machine; nothing started"
+
+
+def memory_floor(root) -> bool:
+    """Whether free memory is at `[flow] min_free_memory_mb` or above, read now (answer 5)."""
+    try:
+        return launch.memory_allows(Path(root))
+    except CheckError:
+        return False
+
+
+def conductor_gate(root, now=None) -> bool:
+    """Whether a conductor may start on this machine (brief #1409 answers 1, 2 and 5): free
+    memory at the floor and no live conductor, or the one live conductor started by the kit was
+    idle by ADR-0568's signs (two quiet reads of its process tree), stopped at most once an hour.
+    Prints one line when it starts nothing; a person's own conductor is never stopped."""
+    now = now or datetime.now(UTC)
+    if not memory_floor(root):
+        print(f"watchdog: conductor not started: free memory below {launch.MEMORY_SETTING}")
+        return False
+    alive = launch.live_conductors(root)
+    if not alive:
+        return True
+    name, pid, worktree, record = alive[0]
+    if len(alive) > 1 or worktree is None or record is None:
+        print(ONE_CONDUCTOR.format(name=name))
+        return False
+    memo = builder_memo(root)
+    mine = memo.setdefault("conductor", {})
+    quiet = idle_minutes(root)
+    table = launch.process_table()
+    young = now - session.moment(record["started_utc"]) < timedelta(minutes=quiet)
+    busy = busy_signs(root, worktree, record, table, now, quiet)
+    cpu = None if table is None else launch.tree_cpu(pid, table)
+    shown = None if cpu is None else {str(p): c for p, c in sorted(cpu.items())}
+    checked = two_reads(mine.setdefault("checks", {}), name, shown, now)
+    last = when(str(mine.get("stopped_at") or ""))
+    if young or busy or not checked:
+        why = "left (working)"
+    elif last is not None and now - last < RESTART_GAP:
+        why = "idle -> held (stopped within the hour)"
+    elif not worktree_safe(worktree):
+        why = "idle -> held (unpushed work)"
+    elif not stopped(pid):
+        why = "idle -> held (the process did not stop)"
+    else:
+        mine["stopped_at"] = stamp_of(now)
+        mine["checks"].pop(name, None)
+        keep_builder_memo(root, memo)
+        print(f"watchdog: conductor {name} idle -> stopped; one starts in its place")
+        return True
+    keep_builder_memo(root, memo)
+    print(f"watchdog: conductor {name} {why}")
+    print(ONE_CONDUCTOR.format(name=name))
+    return False
+
+
+def stop_command(pids: list[int]) -> str:
+    """The one line a person runs to close the extra conductors (answer 4)."""
+    if sys.platform == "win32":
+        return "taskkill /T /F " + " ".join(f"/PID {p}" for p in pids)
+    return f"pkill -TERM -P {','.join(map(str, pids))}; kill {' '.join(map(str, pids))}"
+
+
+def extra_conductor_lines(root, holder: str | None = None) -> list[str]:
+    """One `NEEDS-YOU:` line when this machine runs more than one conductor: keep the lease
+    holder (else the first), close the others; names only, never a stop (answer 4)."""
+    try:
+        alive = launch.live_conductors(root)
+    except (OSError, CheckError):
+        return []
+    if len(alive) < 2:
+        return []
+    if holder is None:
+        with contextlib.suppress(CheckError, OSError):
+            issue = plan_issue(root)
+            repo = session.repo_name(root)
+            held = issue and lease_holder(
+                plan_comments(repo, issue), verdict_authors(root), datetime.now(UTC)
+            )
+            holder = held[0] if held else None
+    names = [a[0] for a in alive]
+    keep = holder if holder in names else names[0]
+    close = [a for a in alive if a[0] != keep]
+    return [
+        f"NEEDS-YOU: {len(alive)} conductors on this machine: keep {keep}, close "
+        f"{', '.join(a[0] for a in close)}; stop with: {stop_command([a[1] for a in close])}"
+    ]
 
 
 # --- the reviewer at the gate (brief #1248, ADR-0528) ---------------------------------------

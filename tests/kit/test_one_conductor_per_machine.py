@@ -63,13 +63,12 @@ class Machine:
     """The processes of a test machine: which ids are alive, the table, and the stops made."""
 
     def __init__(self, monkeypatch, alive=(), listed=None):
-        import autopilot
         import conductor
         import launch
 
         self.alive, self.stops, self.listed = set(alive), [], listed or []
         monkeypatch.setattr(launch, "process_alive", lambda pid: pid in self.alive)
-        monkeypatch.setattr(autopilot, "claude_processes", lambda: list(self.listed))
+        monkeypatch.setattr(launch, "command_lines", lambda: list(self.listed))
         monkeypatch.setattr(launch, "process_table", lambda: {p: (1, 3) for p in self.alive})
         monkeypatch.setattr(conductor, "stopped", self.stop)
         monkeypatch.setattr(conductor, "worktree_safe", lambda worktree: True)
@@ -112,12 +111,12 @@ def test_no_conductor_on_the_machine_lets_one_start(tmp_path, monkeypatch):
 
 def test_a_record_written_before_the_kind_is_read_by_its_name(tmp_path, monkeypatch):
     """REQ-050: brief #1409 answer 4 (extras started before this build carry no kind)."""
-    import conductor
+    import launch
 
     root = project(tmp_path)
     record(tmp_path, "conductor-local-a4", 4004, NOW, kind=None)
     Machine(monkeypatch, alive={4004})
-    assert [x[0] for x in conductor.live_conductors(root)] == ["conductor-local-a4"]
+    assert [x[0] for x in launch.live_conductors(root)] == ["conductor-local-a4"]
 
 
 # --- answer 2: an idle conductor is replaced, not doubled -------------------------------------
@@ -133,9 +132,7 @@ def test_a_working_conductor_with_a_lapsed_lease_is_left(tmp_path, monkeypatch, 
     for minutes in (0, 10, 20):
         assert gate(root, NOW + timedelta(minutes=minutes)) is False
     assert machine.stops == []
-    assert "watchdog: conductor conductor-local left (working); nothing started" in (
-        capsys.readouterr().out
-    )
+    assert "watchdog: conductor conductor-local left (working)\n" in capsys.readouterr().out
 
 
 def test_an_idle_conductor_is_stopped_and_replaced_once_never_doubled(tmp_path, monkeypatch, capsys):
@@ -169,7 +166,7 @@ def test_twenty_passes_with_a_lapsed_lease_leave_exactly_one_conductor(tmp_path,
             record(tmp_path, "conductor-local", pid, when)
             machine.alive.add(pid)
         assert len(machine.alive) == 1
-    assert len(machine.alive) == 1 and len(machine.stops) <= 3
+    assert len(machine.alive) == 1 and len(machine.stops) <= 1 + 190 // 60  # once an hour
 
 
 def test_a_persons_own_conductor_is_named_and_never_stopped(tmp_path, monkeypatch, capsys):

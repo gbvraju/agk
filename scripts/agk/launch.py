@@ -572,6 +572,90 @@ def process_table(run=subprocess.run, platform: str | None = None) -> dict | Non
     return table
 
 
+# --- one conductor per machine (brief #1409, ADR-0592) --------------------------------------
+
+WINDOWS_LINES = (
+    "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, "
+    "$_.ParentProcessId, $_.CommandLine }"
+)
+AGENT_CONDUCTOR = "--agent conductor"
+
+
+def command_lines(run=subprocess.run, platform: str | None = None):
+    """[(pid, parent pid, command line)] of every process, or None when it cannot be read (`ps`
+    on POSIX, `Get-CimInstance Win32_Process` on Windows; verify: not run on Windows)."""
+    if (platform or sys.platform) == "win32":
+        words = ["powershell", "-NoProfile", "-Command", WINDOWS_LINES]
+    else:
+        words = ["ps", "-A", "-o", "pid=,ppid=,args="]
+    try:
+        done = run(words, capture_output=True, text=True, encoding="utf-8", check=False)
+    except OSError:
+        return None
+    if done.returncode:
+        return None
+    table = []
+    for line in done.stdout.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            table.append((int(parts[0]), int(parts[1]), parts[2] if len(parts) > 2 else ""))
+    return table
+
+
+def is_claude(args: str) -> bool:
+    """A command line whose program (or first argument) is `claude` or `claude.exe`."""
+    names = (re.split(r"[\\/]", w.strip('"'))[-1].lower() for w in args.split()[:2])
+    return any(n in ("claude", "claude.exe") for n in names)
+
+
+def outside_trees(table: list[tuple[int, int, str]], roots: set[int]) -> list[int]:
+    """The `claude` processes of TABLE outside the process tree of every pid of ROOTS."""
+    parent = {pid: ppid for pid, ppid, _ in table}
+
+    def recorded(pid: int) -> bool:
+        seen: set[int] = set()
+        while pid not in seen and pid > 1:
+            if pid in roots:
+                return True
+            seen.add(pid)
+            pid = parent.get(pid, 0)
+        return False
+
+    return [pid for pid, _, args in table if is_claude(args) and not recorded(pid)]
+
+
+def conductor_record(record: dict) -> bool:
+    """A job record of a conductor: kind `conductor`, or, written before the kind, a name with
+    `conductor` in it (the extras of brief #1409 carry none)."""
+    kind = record.get("kind")
+    return kind == "conductor" or (kind is None and "conductor" in record["session"])
+
+
+def live_conductors(root: Path) -> list[tuple[str, int, Path | None, dict | None]]:
+    """(name, pid, worktree, record) of each live conductor of this machine: a job record of a
+    conductor beside the checkout whose process is there, then each `claude --agent conductor`
+    process outside every recorded tree as `process <pid>`, with no worktree or record."""
+    found: list[tuple[str, int, Path | None, dict | None]] = []
+    roots: set[int] = set()
+    for worktree in sorted(Path(root).resolve().parent.glob("agk-*")):
+        record = read_record(worktree)
+        if record is None or worktree.name != f"agk-{record['session']}":
+            continue
+        if exited(worktree, record) or not process_alive(record["pid"]):
+            continue
+        roots.add(record["pid"])
+        if conductor_record(record):
+            found.append((record["session"], record["pid"], worktree, record))
+    table = command_lines() or []
+    outside = set(outside_trees(table, roots))
+    found += [
+        (f"process {pid}", pid, None, None)
+        for pid, _, args in table
+        if pid in outside and AGENT_CONDUCTOR in args
+    ]
+    return found
+
+
 def tree_cpu(pid: int, table: dict) -> dict[int, int]:
     """{pid: CPU seconds} of PID and every process below it in TABLE."""
     found: dict[int, int] = {}
@@ -686,6 +770,15 @@ ROLE_PROMPT = (
 )
 
 
+CONDUCTOR_NOTE = (  # brief #1409 answer 3: a conductor that is not the lease holder ends itself
+    "One conductor per machine: at each turn run `python3 scripts/agk/conductor.py lease "
+    "--show`; when it names a holder other than {name}, release nothing, print "
+    "`close-tab: {name} is not the lease holder; this session ends` and end. When your pass "
+    "finds nothing to do, run `python3 scripts/agk/conductor.py lease --release {name}` and "
+    "end.\n"
+)
+
+
 SUPERVISED = (
     "The supervisor started you (`AGK_STEWARD_START=conductor`, SPEC-0063 rule 4): answer from "
     "evidence only; relay nothing and approve nothing.\n"
@@ -709,6 +802,7 @@ def role_main(args: list[str], root: Path | None = None, extra: dict | None = No
     role, session = opts["--role"], opts["--session"]
     prompt = ROLE_PROMPT.format(session=session, role=role, kind_line=kind_line(DESIGN))
     prompt += SUPERVISED if (extra or {}).get("AGK_STEWARD_START") == "conductor" else ""
+    prompt += CONDUCTOR_NOTE.format(name=session) if role == "conductor" else ""
     here = root or Path.cwd()
     if "--adapter" not in opts:
         print(prompt, end="")
@@ -728,6 +822,10 @@ def role_main(args: list[str], root: Path | None = None, extra: dict | None = No
     if has_process(worktree_of(here, session)):
         print(f"{stuck} (one session per name)")
         return 1
+    if role == "conductor":  # brief #1409: one conductor per machine, any name
+        if alive := live_conductors(here):
+            print(f"{stuck} (conductor {alive[0][0]} is running on this machine)")
+            return 1
     try:
         shown = "true" if show_jobs(here) else "false"
     except CheckError:
