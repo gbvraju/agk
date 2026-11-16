@@ -1,6 +1,6 @@
 # SPEC-0071: The kit runs from the plugin and a product repository keeps only its project
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-078
 
