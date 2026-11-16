@@ -339,7 +339,7 @@ def model_settings(root: Path) -> dict[str, dict[str, str]]:
     model_prices(root)
     settings = {k: {"tier": t, "effort": e} for k, (t, e) in MODEL_DEFAULTS.items()}
     for kind, entry in table.items():
-        if kind in ("names", "providers", "prices", "routes"):
+        if kind in ("names", "providers", "prices", "routes", "conductor"):
             continue
         if (
             kind not in MODEL_KINDS
@@ -352,6 +352,21 @@ def model_settings(root: Path) -> dict[str, dict[str, str]]:
             raise _refuse_model(f"models.{kind}")
         settings[kind] = {"tier": entry["tier"], "effort": entry["effort"]}
     return settings
+
+
+# Brief #1359 answer 3 (ADR-0571): a project may pin every conductor pass to `strongest`.
+CONDUCTOR_PINS = ("strongest",)
+
+
+def conductor_pin(root: Path) -> str | None:
+    """`[models] conductor`, the one pin of the conductor's pass tier, else None; another value
+    is refused, naming the setting."""
+    value = _models_table(root).get("conductor")
+    if value is None:
+        return None
+    if value not in CONDUCTOR_PINS:
+        raise _refuse_model("models.conductor")
+    return value
 
 
 FAILURES_DEFAULTS = {"issues": False, "artifacts": False, "artifact_paths": []}
