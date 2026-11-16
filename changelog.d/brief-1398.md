@@ -1,1 +1,0 @@
-- The local-mode guide's WSL 2 section names the runtime in the guide's neutral words again, so the guide's vendor-name test and the default branch's governance check pass (brief #1398, found bug #1395)

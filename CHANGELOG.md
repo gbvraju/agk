@@ -27,6 +27,8 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 - #1372 A comment whose body `gh api` reads from a file (`-F body=@file`) is posted from that file again; the Who line is no longer appended to the file name (brief #1369, ADR-0574)
 - #1373 `check_adrs.py --pending` reads the verified Final records of HEAD's history and of the merge base with the default branch, so a release branch that merged main lists every ADR waiting for its status flip before `check_release.py` fails on it; each ADR is listed once, and a branch with no such merge lists as before (brief #1370, found bug #1266, ADR-0575 Proposed)
 - #1375 `session.py claim` takes the red alarm that `next --take` takes, refusing it only for `next`'s reasons with `next`'s line, and `watch --pr` and `watch --assign` end within a second of their `--timeout` (brief #1368)
+- #1377 `/agk:wsl` moves a Windows machine's AI workforce into WSL 2 and back in one command: `wsl_setup.ps1` (kit-only) does the machine work with a skip check per step and a `-Json` table, `wsl.py` prints the plan and status and makes the adapter pull request with its ADR (never merging), and `doctor.py` names `/agk:wsl` for a project on a Windows drive inside WSL or for Windows sessions with WSL present (brief #1376, ADR-0577)
+- #1399 The local-mode guide's WSL 2 section names the runtime in the guide's neutral words again, so the guide's vendor-name test and the default branch's governance check pass (brief #1398, found bug #1395)
 
 ## 0.64.5 (2026-11-14)
 
