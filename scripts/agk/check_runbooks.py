@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import guard
+from check_licence_notice import without_header
 from common import CheckError, repo_root, run, utf8_output
 
 NAME = "runbooks"
@@ -285,6 +286,7 @@ def page_problems(
     except (OSError, UnicodeDecodeError):
         yield "rule 5: page-unreadable"
         return
+    text = without_header(text)  # the owner and licence header is not the page's (ADR-0596)
     prose, code = split_page(text)
     yield from (f"rule 4: {problem}" for problem in form_problems(text, prose))
     for number, line in code:

@@ -2303,6 +2303,7 @@ def render_text(
     deprecation: list[str] | None = None,
     skills: list[str] | None = None,
     design: list[str] | None = None,
+    licence: list[str] | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -2322,6 +2323,7 @@ def render_text(
     lines += [work] if work else []
     lines += skills or []
     lines += design or []  # SPEC-0037 rule 15: the imported versions, information only
+    lines += licence or []  # the licence grant (ADR-0596), a warning only
     lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
@@ -2337,6 +2339,7 @@ def render_json(
     deprecation: list[str] | None = None,
     skills: list[str] | None = None,
     design: list[str] | None = None,
+    licence: list[str] | None = None,
 ) -> str:
     data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
     if scan:
@@ -2349,6 +2352,8 @@ def render_json(
         data["design_import"] = design
     if tidy:
         data["tidy"] = tidy
+    if licence:
+        data["licence"] = licence
     if extra or deprecation:  # `tests` carries the suite and deprecation lines, as before
         data["tests"] = (extra or []) + (deprecation or [])
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
@@ -2431,8 +2436,8 @@ def main(argv: list[str] | None = None) -> int:
             + main_folder_lines(root.resolve())
             + line_ending_lines(root.resolve())
             + machine_wsl_lines(root.resolve())
-            + licence_lines(root.resolve())
         )
+        licence = licence_lines(root.resolve())
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())
@@ -2445,9 +2450,11 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra, scan, work, deprecation, skills, design)
+        render_json(report, version, tidy, extra, scan, work, deprecation, skills, design, licence)
         if options["json"]
-        else render_text(report, version, tidy, extra, scan, work, deprecation, skills, design)
+        else render_text(
+            report, version, tidy, extra, scan, work, deprecation, skills, design, licence
+        )
     )
     return 1 if work_failed else exit_code(report)
 

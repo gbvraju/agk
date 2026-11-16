@@ -42,6 +42,7 @@ REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md", ".github/workflows/agk-tag.yml"}
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
     "CLAUDE.md",
+    "LICENSE-AGK",
     "Makefile",
     "agk.mk",
     ".gitignore",
