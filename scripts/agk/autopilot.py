@@ -300,8 +300,8 @@ PLATFORM = sys.platform
 ENTRY_TAG = "# agk-autopilot"  # marks the one crontab line `on` writes and `off` removes
 TASK_NAME = "agk-autopilot"  # the one Windows Task Scheduler entry
 STATE_FILE = "autopilot.json"  # beside the lease mark, in the git directory: never tracked
-PASS = "python3 scripts/agk/conductor.py watchdog --pass"
-WINDOWS_PASS = "python scripts\\agk\\conductor.py watchdog --pass"
+RUN_LINE = "python3 scripts/agk/conductor.py watchdog --pass"
+WINDOWS_RUN_LINE = "python scripts\\agk\\conductor.py watchdog --pass"
 OWNER_JOBS = ("review", "steward", "conductor")  # rule 8: never stopped by the budget
 
 
@@ -420,7 +420,7 @@ def mode_change(mode: str | None, wanted: str) -> list[str]:
 
 def entry_line(root: Path, interval: int) -> str:
     folder = shlex.quote(str(Path(root).resolve()))
-    return f"*/{interval} * * * * cd {folder} && git fetch -q origin && {PASS} {ENTRY_TAG}"
+    return f"*/{interval} * * * * cd {folder} && git fetch -q origin && {RUN_LINE} {ENTRY_TAG}"
 
 
 def set_entry(root: Path, interval: int | None) -> int:
@@ -430,7 +430,7 @@ def set_entry(root: Path, interval: int | None) -> int:
             code, _ = run_command(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"])
             return code
         folder = str(Path(root).resolve())
-        command = f'cmd /c cd /d "{folder}" && git fetch -q origin && {WINDOWS_PASS}'
+        command = f'cmd /c cd /d "{folder}" && git fetch -q origin && {WINDOWS_RUN_LINE}'
         argv = ["schtasks", "/Create", "/SC", "MINUTE", "/MO", str(interval), "/TN", TASK_NAME]
         code, _ = run_command([*argv, "/TR", command, "/F"])
         return code
@@ -510,7 +510,7 @@ def mode_lines(root: Path, now: datetime) -> list[str]:
     if mode is None:
         head = "autopilot: no [autopilot] table; today's settings decide (setting: autopilot.mode)"
     elif mode == "off":
-        head = f"autopilot: mode off; nothing starts by itself; run: {PASS}"
+        head = f"autopilot: mode off; nothing starts by itself; run: {RUN_LINE}"
     else:
         head = f"autopilot: mode {mode}"
     return [head, budget_line(root, now)]
