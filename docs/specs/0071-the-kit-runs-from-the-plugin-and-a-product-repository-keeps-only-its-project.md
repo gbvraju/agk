@@ -97,7 +97,7 @@ REQ-078 AC1: *the kit lives in the plugin, the repository keeps the project.* Ru
 
 ## Open questions
 
-Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it.
+Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it. `Q-S0071-1` to `Q-S0071-9` are ruled as read by the maintainer's answer on #1422 (comment 6917216479). One file each under `docs/runs/decisions/`, and the rules above hold their readings. No question is open.
 
 - `Q-S0071-1`: do the project's specs and decisions stay at uninstall? Reading: yes, they describe the customer's product; the uninstall removes only the records the owner and the customer agreed to remove (brief answer 6; rule 9).
 - `Q-S0071-2`: can CI mode run clean? Reading: not in this spec; CI mode keeps today's install and the migration refuses there (brief answer 6; rule 5).
