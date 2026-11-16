@@ -121,6 +121,9 @@ Exact `Touches:` (amendment 141 item 1, brief #772): `touch_problems` is the one
 `Touches:` entry that matches more than `[flow] max_touch_glob` files that can hold a brief is
 refused unless the brief has one `Broad:` line, and an `Adds:` entry may not name an existing file.
 `reservation_refusals` refuses a `Reserved:` number held elsewhere (item 5).
+
+Brief #1411 (ADR-0594): an open issue labelled `agk-kit-defect` is a defect of the kit itself and
+never product work: `plan_briefs` leaves it out of the briefs the plan reads, even with `agk-brief`.
 """
 
 from __future__ import annotations
@@ -870,6 +873,12 @@ def fits(pr: dict, number: int, take: tuple) -> bool:
 
 POST_LINE = re.compile(r"(?:Progress|Report|Request):")
 CONDUCTOR_LABEL = "agk-conductor"
+KIT_DEFECT_LABEL = "agk-kit-defect"  # brief #1411 (ADR-0594): a kit defect, never product work
+
+
+def plan_briefs(issues: list) -> list:
+    """The open briefs the plan may offer: an issue labelled `agk-kit-defect` never is."""
+    return [i for i in issues if not (isinstance(i, dict) and KIT_DEFECT_LABEL in label_names(i))]
 
 
 def names(text: str, name: str) -> bool:
@@ -1905,6 +1914,7 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
+    issues = plan_briefs(issues)
     window = max(WINDOW_DAYS * 24, flow_int(root, "claim_hours", reads.CLAIM_HOURS, RULE))
     key = walk_key(issues, active_milestones(root), unblocked_hours(issues))
     s = survey(root, repo, "", issues, Walk(key, want, window))

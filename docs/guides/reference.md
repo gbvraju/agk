@@ -260,6 +260,9 @@ repository that this check refuses.
     python3 scripts/agk/steward_owner.py relay --qid Q --on N --answer TEXT --said FILE --at TIME [--conductor ID]
     python3 scripts/agk/steward_owner.py park --pr N [--conductor ID]
     python3 scripts/agk/steward_owner.py ready --plan FILE --trace FILE --session ID [--start]
+    python3 scripts/agk/steward_owner.py defect --title TEXT --file FILE [--refusals N] [--post]
+    python3 scripts/agk/steward_owner.py defects
+    python3 scripts/agk/steward_owner.py reads [--session ID] [--refused]
     python3 scripts/agk/launch.py role --role steward|conductor --session ID [--adapter COMMAND]
 
 The owner's question and its relay (SPEC-0059 rules 2, 5, 10 and 14, ADR-0559). `ask` takes one plain business sentence
@@ -269,7 +272,7 @@ said (<UTC time>): "<words>"` and `Who: ProductOwner`, refuses it without a well
 wait's `agk:parked` and tells the conductor `parked #<n> answered <Q>`. `park` is the steward's pass of the owner wait on
 one pull request. `ready` starts the conductor through `launch.py role` only when the plan check's trace ends `ok plan`,
 no brief is malformed, the scope is locked and no open owner question blocks the first milestone; else `not ready:`
-lines, exit 1. In personal mode everything is printed and nothing is parked. `launch.py role` prints a role's prompt or
+lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
 
 ## Autopilot status
