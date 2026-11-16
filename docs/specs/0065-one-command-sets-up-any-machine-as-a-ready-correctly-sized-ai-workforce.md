@@ -1,6 +1,6 @@
 # SPEC-0065: One command sets up any machine as a ready, correctly sized AI workforce
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-072
 
