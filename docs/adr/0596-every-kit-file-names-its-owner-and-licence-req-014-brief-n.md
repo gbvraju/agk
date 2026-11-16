@@ -32,13 +32,17 @@ REUSE specification version)`.
    Python, shell, PowerShell, YAML, TOML, make and plain lists, and one `<!-- -->` block for Markdown and HTML. In the
    `#` form the notice is wrapped at word boundaries so that no line passes 100 characters, the lint's limit; the HTML
    form keeps it on one line. The kit files are the files of `kit/manifest.json` (`verbatim`, `experimental`,
-   `rendered`) and every tracked file under `scripts/agk/`, `.claude/`, `skills/`, `.claude-plugin/` and `kit/`;
+   `rendered`) and every tracked file under `scripts/agk/`, `.claude/`, `skills/`, `.claude-plugin/` and `kit/`, so the
+   plugin's command files (`skills/<name>/SKILL.md`, after their front matter) carry it too (Q-1419-2 (a));
    `LICENSE` and `LICENSE-AGK` are the licence and carry none.
 3. A file that cannot hold a comment (JSON, a generated file such as `kit/hashes.json`), every file under `.github/`
    and the three document templates (`docs/adr/TEMPLATE.md`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`) are
-   covered by one annotation in `REUSE.toml` at the repository root. `.github/` is annotated and not edited because a
-   builder never changes a workflow file, and the issue and pull request templates would otherwise copy the header
-   into every issue and pull request body; the document templates are copied by `new_spec.py` into a project's own
+   covered by one annotation in `REUSE.toml` at the repository root. The issue and pull request templates are
+   annotated because a header in them would be copied into every issue and pull request body. Each workflow file
+   carries the `#` header as its first comment lines as well, with no other change to what it does (Q-1419-1 (a),
+   the conductor's verdict of 2026-11-16): a builder never changes a workflow file, so the headed workflows are
+   proposed under `.agk/workflow-proposals/` and the owner applies them with `/agk:workflow-apply` (ADR-0505). The
+   document templates are copied by `new_spec.py` into a project's own
    ADRs, specs and briefs, which are not the kit's. `.gitignore` is annotated too: its text is the marked block of a
    project's own `.gitignore` (the extendable file of ADR-0164).
 4. The kit carries `LICENSE-AGK`: the text of `LICENSE` verbatim, then the annotation of decision 3, since a project's
@@ -70,4 +74,4 @@ header adds three lines to each kit file, which the kit hashes record; the rule 
 ## Residual
 
 - The owner has the licence text reviewed by his legal counsel before the release (2026-11-16).
-- Whether `.github/` files should carry the header in place once a person may edit workflows (2026-11-16, Q-1419-1).
+- The headed workflows wait for the owner's `/agk:workflow-apply 1423` (2026-11-16, Q-1419-4).

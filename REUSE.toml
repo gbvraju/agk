@@ -1,6 +1,6 @@
 # The owner and licence of the kit files that carry no header (brief #1419, ADR-0596): files
-# that cannot hold a comment, the files under .github/ (a builder never edits a workflow, and the
-# issue and pull request templates would copy a header into every issue and pull request), and
+# that cannot hold a comment, the files under .github/ (the issue and pull request templates would
+# copy a header into every issue and pull request; the workflows carry the header as well), and
 # the templates whose text becomes a project's own document, and .gitignore, whose text is a
 # marked block of the project's own .gitignore. Every other kit file carries the
 # header; scripts/agk/check_licence_notice.py checks both. Laid out as the REUSE specification
