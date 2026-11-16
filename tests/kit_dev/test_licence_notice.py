@@ -11,6 +11,7 @@ import tomllib
 from conftest import KIT_ROOT, make_repo, manifest, run_init
 
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+import check_licence_notice as notice  # noqa: E402
 import upgrade  # noqa: E402
 
 NAMING_FILES = [
@@ -122,3 +123,32 @@ def test_the_kit_repository_passes_its_own_licence_check() -> None:
         text=True,
     )
     assert proc.returncode == 0, proc.stdout
+
+
+def test_every_plugin_command_file_is_a_kit_file_with_the_header() -> None:
+    """REQ-014 (Q-1419-2): each `skills/<name>/SKILL.md`, a command of the plugin, is one of the
+    files the check reads, and carries the header after its front matter."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "skills"], cwd=KIT_ROOT, capture_output=True, text=True, check=True
+    ).stdout.split()
+    commands = [rel for rel in tracked if rel.endswith("/SKILL.md")]
+    assert commands
+    files = set(notice.kit_files(KIT_ROOT, tracked))
+    for rel in commands:
+        assert rel in files, rel
+        text = (KIT_ROOT / rel).read_text(encoding="utf-8")
+        assert text.startswith("---\n"), rel
+        assert notice.has_header(text, "html"), rel
+
+
+def test_every_workflow_carries_the_header_or_its_proposal_does() -> None:
+    """REQ-014 (Q-1419-1): each workflow carries the `#` header, or, until the owner applies it
+    with /agk:workflow-apply, its proposal is the workflow with the header and nothing else."""
+    proposals = KIT_ROOT / ".agk" / "workflow-proposals"
+    for path in sorted((KIT_ROOT / ".github" / "workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        if notice.has_header(text, "hash"):
+            continue
+        proposal = proposals / path.name
+        assert proposal.is_file(), path.name
+        assert proposal.read_text(encoding="utf-8") == notice.add_header(text, "hash"), path.name

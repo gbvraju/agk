@@ -166,6 +166,32 @@ def test_write_adds_the_headers_and_then_the_check_passes(repo):
     assert (repo.root / "LICENSE").read_text(encoding="utf-8") == "the licence\n"
 
 
+def test_a_plugin_command_file_without_the_header_fails(repo):
+    """REQ-014 (Q-1419-2): a plugin command file (`skills/<name>/SKILL.md`) is a kit file; without
+    the header after its front matter it fails, naming the path class; with it, it passes."""
+    command = "---\nname: a\ndescription: b\n---\n\n# /agk:a\n"
+    kit_repo(repo, {"scripts/agk/a.py": notice.add_header("x = 1\n", "hash")})
+    repo.commit({"skills/a/SKILL.md": command})
+    proc = repo.run("check_licence_notice.py")
+    assert proc.returncode == 1
+    assert "skills/a/SKILL.md" in proc.stdout
+    assert "path class skills/" in proc.stdout
+    repo.commit({"skills/a/SKILL.md": notice.add_header(command, "html")})
+    assert repo.run("check_licence_notice.py").returncode == 0
+    text = (repo.root / "skills/a/SKILL.md").read_text(encoding="utf-8")
+    assert text.startswith("---\nname: a\ndescription: b\n---\n<!--\n")
+
+
+def test_a_headed_workflow_keeps_its_text_below_the_header():
+    """REQ-014 (Q-1419-1): a workflow takes the `#` header as its first lines and nothing else
+    changes, so taking the header off gives the workflow back."""
+    workflow = "# The gate.\nname: governance\non: pull_request\njobs: {}\n"
+    out = notice.add_header(workflow, "hash")
+    assert out.startswith(f"# {COPYRIGHT}\n# {IDENTIFIER}\n")
+    assert out.endswith(workflow)
+    assert notice.without_header(out) == workflow
+
+
 def test_kit_templates_carry_no_header(repo):
     """REQ-014: a template becomes a project's own file and is not checked."""
     kit_repo(repo, {"scripts/agk/a.py": notice.add_header("x = 1\n", "hash")})

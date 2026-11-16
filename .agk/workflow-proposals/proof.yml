@@ -1,0 +1,158 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# Red-then-green (SPEC-0010 rules 16 and 17). Not a required status check: the `governance` job and the ruleset are unchanged.
+# One step runs proof.py and never fails on an outcome; exactly one of the four `outcome:` steps then ends success and three
+# end skipped, so the outcome is readable from the job's steps (`facts.py`). The names of the not-proven and unknown steps
+# carry the reason of proof.py in parentheses, so the reason is readable there too. The job fails only when proof.py itself failed.
+# It runs the project's tests on the pull request head, as `governance` does; the event is pull_request, never pull_request_target.
+# CI runs only where it can change a result (brief #216): a description edit cannot change a test, so `edited` is not a trigger; a
+# superseded run is cancelled; and a status-only final commit (one commit after a parent whose proof passed, changing only `- Status:`
+# lines, on an unchanged merge base) reports success without running the suite, by `scripts/agk/status_only.py`. The parent's conclusion
+# is the one GET of this file; if it cannot be read the suite runs in full.
+# The test manifest (brief #425, ADR-0230): proof.py writes what ran, what did not and why, and the `Test manifest` step appends
+# it to the job summary on every outcome, skipped included; a skip that this job decides (a draft, a status-only commit) is
+# written by `proof.py --not-run`, which runs nothing. While agk is paused the step is skipped like every other (ADR-0196).
+name: proof
+
+# Fast CI (brief #283): `ready_for_review` runs the suite in full; a superseded run is cancelled by the concurrency group.
+# A draft starts no job (brief #369, ADR-0207): GitHub bills every job as at least one whole minute, and a job that only skips
+# its steps still costs that minute, so the job-level `if:` below skips it; the check reports `skipped`, which the router
+# ignores while the name has another run of the head, and `ready_for_review` and every push to a ready pull request run it. A change with no test of its own
+# (documentation only, say) is reported as skipped by proof.py, never left waiting; per-area runs are the `[proof]` table of
+# agk.toml (brief #305). No install is cached (the project's own command installs what it needs), and nothing is uploaded,
+# so no retention applies.
+# The merge queue (brief #972, ADR-0417): on `merge_group` the job runs on the queue's commit with the same steps; `AGK_BASE` is
+# set only by `Base of the merge ref`, so proof.py takes the default branch, which the queue's commit is built on, as its base.
+# Each queue commit has its own concurrency group and is never cancelled. The job name does not change.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: proof-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  proof:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Base of the merge ref
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          EVENT_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # GitHub checks out a merge of the current base branch and the head; the event's base sha can be older
+          # than that first parent, and a check would then count what other pull requests merged in the meantime.
+          # This step is the only place that sets AGK_BASE: the first parent of a merge checkout, else the event's.
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ]; then
+            base="$(git rev-parse HEAD^1)"
+          else
+            base="$EVENT_BASE"
+          fi
+          if [ -n "$base" ]; then
+            echo "AGK_BASE=$base" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Paused
+        id: paused
+        run: |
+          # Brief #348 (ADR-0196): while agk.toml sets `paused = true` the job prints one line and every later step is skipped, so
+          # the required check reports success. A pull request is judged by its base (AGK_BASE), never by its head: the pull
+          # request that adds the line is still checked in full, its ADR included. A push reads the commit pushed. A value that
+          # is not true or false fails this step, with the refusal (it names the setting, never the value).
+          if [ -n "${AGK_BASE:-}" ]; then
+            state="$(python3 scripts/agk/doctor.py --paused --ref "$AGK_BASE")" || { echo "$state"; exit 1; }
+          else
+            state="$(python3 scripts/agk/doctor.py --paused)" || { echo "$state"; exit 1; }
+          fi
+          if [ "$state" = "agk paused" ]; then
+            echo "agk paused"
+            echo "agk paused" >> "$GITHUB_STEP_SUMMARY"
+            echo "paused=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "paused=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Status-only final commit
+        # Not on `merge_group` (brief #972): the queue's commit is never a status-only commit of a pull request.
+        if: ${{ github.event_name != 'merge_group' && steps.paused.outputs.paused != 'true' }}
+        id: status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          # A draft pull request (brief #283): the suite runs in full on `ready_for_review`. The job-level `if:` (brief #369)
+          # already skips a draft; this second guard keeps the step's own outcome right if that condition is ever removed.
+          if [ "$PR_DRAFT" = true ]; then
+            echo "proof skipped on a draft pull request; it runs in full when it is marked ready for review"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          parent="$(git rev-parse "$HEAD_SHA^" 2>/dev/null || true)"
+          conclusion=""
+          if [ -n "$parent" ]; then
+            conclusion="$(gh api --method GET "repos/${{ github.repository }}/commits/$parent/check-runs?per_page=100" --jq '[.check_runs[] | select(.name == "proof")] | sort_by(.id) | last | .conclusion // ""' 2>/dev/null || true)"
+          fi
+          verdict="$(python scripts/agk/status_only.py --head "$HEAD_SHA" --parent-proof "$conclusion" || echo 'run (the decision failed)')"
+          echo "$verdict"
+          if [ "$verdict" = skip ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; else echo "skip=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Red-then-green
+        id: proof
+        if: ${{ steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          rc=0
+          printf '%s\n' "$PR_BODY" | python scripts/agk/proof.py --head "$HEAD_SHA" --body - --json --manifest "$RUNNER_TEMP/proof-manifest.md" > "$RUNNER_TEMP/proof.json" || rc=$?
+          cat "$RUNNER_TEMP/proof.json"
+          case "$rc" in
+            0|1|4) ;;
+            *) exit "$rc" ;;
+          esac
+          echo "outcome=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['outcome'])" "$RUNNER_TEMP/proof.json")" >> "$GITHUB_OUTPUT"
+          echo "reason=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['reason'] or '')" "$RUNNER_TEMP/proof.json")" >> "$GITHUB_OUTPUT"
+      - name: "outcome: proven"
+        if: ${{ steps.proof.outputs.outcome == 'proven' && steps.paused.outputs.paused != 'true' }}
+        run: echo "proof proven"
+      - name: "outcome: not-proven (${{ steps.proof.outputs.reason }})"
+        if: ${{ steps.proof.outputs.outcome == 'not-proven' && steps.paused.outputs.paused != 'true' }}
+        run: echo "proof not-proven"
+      - name: "outcome: skipped"
+        if: ${{ steps.proof.outputs.outcome == 'skipped' || steps.status.outputs.skip == 'true' || steps.paused.outputs.paused == 'true' }}
+        run: echo "proof skipped"
+      - name: "outcome: unknown (${{ steps.proof.outputs.reason }})"
+        if: ${{ steps.proof.outputs.outcome == 'unknown' && steps.paused.outputs.paused != 'true' }}
+        run: echo "proof unknown"
+      - name: Test manifest
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          SKIP: ${{ steps.status.outputs.skip }}
+        run: |
+          # Brief #425: the manifest of the run, or of the skip this job decided, never a silent skip.
+          manifest="$RUNNER_TEMP/proof-manifest.md"
+          if [ ! -f "$manifest" ] && [ "$SKIP" = true ]; then
+            if [ "$PR_DRAFT" = true ]; then why=draft; else why=status-only; fi
+            python scripts/agk/proof.py --head "$HEAD_SHA" --not-run "$why" --manifest "$manifest" || true
+          fi
+          if [ -f "$manifest" ]; then
+            cat "$manifest" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "proof: no test manifest; proof.py failed before writing it (see the Red-then-green step)" >> "$GITHUB_STEP_SUMMARY"
+          fi
