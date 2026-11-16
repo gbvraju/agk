@@ -147,6 +147,10 @@ the 300 s bound of a slot's `watch --assign` is lifted. `summary --pr N --file F
 request's one working summary, `Summary: <head>` and the file (at most `[flow] summary_lines`
 lines, 25 by default), and edits it in place on the next run; `resume --pr N` prints it with the
 command for the diff since its head, or the newest `Report:` of the author when there is none.
+
+Brief #1389 (ADR-0586): `summary` refuses a file with no line that starts with one of its fixed
+sections, `Decisions and why:`, `Alternatives rejected:`, `Risks:`, `How to run the tests:` and
+`Where it is stuck:`, naming the section and posting nothing.
 """
 
 from __future__ import annotations
@@ -1259,6 +1263,19 @@ RENEW_NO_EVENT = "renew: no event"
 SUMMARY_LINES = 25
 SUMMARY_SETTING = "(setting: summary_lines in the flow table of agk.toml)"
 SUMMARY = re.compile(r"Summary: ([0-9a-f]{7,40})(?: .*)?")
+SECTIONS = (  # brief #1389 (Q-S0064-1 as ruled, ADR-0586): each a line that starts with it
+    "Decisions and why:",
+    "Alternatives rejected:",
+    "Risks:",
+    "How to run the tests:",
+    "Where it is stuck:",
+)
+
+
+def missing_section(text: str) -> str | None:
+    """The first fixed section of the working summary that no line starts with, else None."""
+    starts = [line.strip().lower() for line in text.splitlines()]
+    return next((s for s in SECTIONS if not any(x.startswith(s.lower()) for x in starts)), None)
 
 
 def wake_bound(root, args: dict[str, str], limit: float | None) -> tuple[float | None, bool]:
@@ -4561,6 +4578,10 @@ def summary(root, number: int, file: Path) -> int:
     cap = flow_int(root, "summary_lines", SUMMARY_LINES, 18)
     if not text or len(text.splitlines()) > cap:
         print(f"summary: refused: empty or longer than the summary allows {SUMMARY_SETTING}")
+        return 1
+    gap = missing_section(text)
+    if gap:  # brief #1389: a job ends only after its summary is accepted
+        print(f"summary: refused: the section `{gap}` is missing (sections: {', '.join(SECTIONS)})")
         return 1
     head = str(pr["head"].get("sha"))
     found = summary_comment(comments, str((pr.get("user") or {}).get("login") or ""))

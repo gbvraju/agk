@@ -231,6 +231,13 @@ clean and pushed; a parked or handed-over one is never restarted; one restart pe
 session per hour, kept in `<git dir>/agk/builders.json`, and `sweep` prints `NEEDS-YOU: builder
 <name> #<brief> held (<reason>)` for each held one.
 
+Brief #1389 (SPEC-0064 build (c), ADR-0586): a builder is a short job. An ended builder with a pull
+request is `left (waits for an event)` until a verdict, correction or answer newer than its own
+move, an `agk:conflict` or `agk:ci-red` label, or a first failure of its last job; then one `fix`
+job starts with `launch.FIX_JOB` added to the resume prompt. A job that exits with another code
+than 0, or ends with no new head, post or summary edit, fails; two in a row are `held (failed
+twice)` until the head or a listed author's comment changes.
+
 Brief #1387 (SPEC-0064 build (b), ADR-0585): `watchdog --pass` is the supervisor. A pass holds the
 machine's `lock.py` lock `autopilot` (another pass holding it for 120 s starts nothing, exit 0).
 Before the lease it reads the open pull requests and, within 30 minutes of its last full read,
@@ -2806,6 +2813,54 @@ def builder_action(
     return "restart", None
 
 
+# --- builders as short jobs (brief #1389, SPEC-0064 build (c), ADR-0586) -----------------------
+
+EVENT_LABELS = ("agk:conflict", "agk:ci-red")  # a merge of main or conflict need, a red check
+WAITS = "waits for an event"
+FAILED_TWICE = "failed twice"
+
+
+def job_ended(job: dict | None, facts: dict, code: str | None) -> None:
+    """Count the end of the job the supervisor started, once: a job that exits with a code other
+    than 0, or ends with no progress (no push, no post and no change of its summary), is a
+    failure; a job with progress clears the count (rule 9)."""
+    if not job or not job.get("open"):
+        return
+    job["open"] = False
+    failed = code not in (None, "0") or facts.get("mark") == job.get("mark")
+    job["fails"] = job.get("fails", 0) + 1 if failed else 0
+
+
+def job_gate(job: dict | None, facts: dict, now) -> tuple[str, str | None] | None:
+    """For an ended builder with a pull request: `held (failed twice)` until its head or a listed
+    author's comment changes, `left (waits for an event)` while it owes nothing; None when its
+    event is there (a verdict, a correction or an answer newer than its own move, a conflict or
+    red-check label, or its last job failed once), so the next job starts (rules 4 and 9)."""
+    owed = facts.get("owed")
+    if job and job.get("fails", 0) >= 2:
+        moved = facts.get("head") != job.get("head") or (
+            owed is not None and stamp_of(owed) > str(job.get("owed") or "")
+        )
+        if not moved:
+            return "held", FAILED_TWICE
+        job["fails"] = 0
+    if job and job.get("fails", 0) == 1:  # the event it was started on is still not served
+        return None
+    if owed is not None and owed > facts["own"]:
+        return None
+    if any(x in EVENT_LABELS for x in facts.get("labels") or []):
+        return None
+    return "left", WAITS
+
+
+def job_started(facts: dict, before: dict | None) -> dict:
+    """What a started job is measured against when it ends (rule 9)."""
+    owed = facts.get("owed")
+    return {"open": True, "head": facts.get("head"), "mark": facts.get("mark"),
+            "owed": stamp_of(owed) if owed else None,
+            "fails": (before or {}).get("fails", 0)}  # fmt: skip
+
+
 def worktree_safe(worktree: Path) -> bool:
     """Nothing to lose: the worktree is clean and every commit of its head is on a remote."""
 
@@ -2998,7 +3053,15 @@ def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | Non
     if pushed.get("date"):
         moves.append(session.moment(pushed["date"]))
     reports = [c for c in session.in_order(said) if session.first_line(c).startswith("Report:")]
+    summaries = [
+        str(c.get("updated_at") or "")
+        for c in said
+        if session.SUMMARY.fullmatch(session.first_line(c))
+    ]
     return {
+        "head": sha,  # brief #1389: the head, labels and the mark of progress of the next job
+        "labels": session.labels_of(pull),
+        "mark": f"{sha}|{newest(said, ALIVE)}|{max(summaries, default='')}",
         "pr": pull["number"],
         "own": max(x for x in moves if x is not None),
         "owed": newest(said, OWED),
@@ -3029,7 +3092,7 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
     limit = launch.max_builders(Path(root))
     memo = builder_memo(root)
     restarts, held = memo.setdefault("restarts", {}), memo.setdefault("held", {})
-    checks = memo.setdefault("checks", {})
+    checks, jobs = memo.setdefault("checks", {}), memo.setdefault("jobs", {})
     table = launch.process_table()
     running = sum(
         1 for w, r in records if not launch.exited(w, r) and launch.process_alive(r["pid"])
@@ -3064,17 +3127,28 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
             safe=state != "idle" or worktree_safe(worktree),
             checked=checked,
         )
+        short = state == "ended" and facts["pr"] is not None  # brief #1389: one job per event
+        if short:
+            exit_code = launch.fields_of(worktree / launch.EXIT_FILE).get("exit_code")
+            job_ended(jobs.get(name), facts, exit_code)
+        if short and (action == "restart" or why == "restarted within the hour"):
+            action, why = job_gate(jobs.get(name), facts, now) or (action, why)
         if action == "restart" and state == "idle" and not stopped(record["pid"]):
             action, why = "held", "the process did not stop"
         if action == "restart":
             prompt = launch.resume_for(name, number, None, facts["pr"], facts.get("author"))
+            prompt += launch.FIX_JOB if short else ""
+            kinds = [("fix", facts["pr"])] if short else None
             code, _ = session.quietly(
-                launch.start_with, adapter, [(name, number, None)], [prompt], None, Path(root)
-            )
+                launch.start_with, adapter, [(name, number, None)], [prompt], None, Path(root),
+                kinds,
+            )  # fmt: skip
             action, why = ("restarted", None) if code == 0 else ("held", "the adapter failed")
             if code == 0:
                 restarts[name] = stamp_of(now)
                 running += state == "ended"
+                if short:
+                    jobs[name] = job_started(facts, jobs.get(name))
         if action == "restarted":
             checks.pop(name, None)
         if action == "held" and why != WORKING:  # a working builder needs no one
