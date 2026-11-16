@@ -1,6 +1,22 @@
 """`autopilot.py status`: what the jobs of this machine do, and the week's health figures.
 
     python3 autopilot.py status [--week] [--root DIR]
+    python3 autopilot.py on|off|budget on|budget off [--today]|retry N [--root DIR]
+
+Brief #1390, SPEC-0064 build (d), rules 7, 8 and 11 (ADR-0587); `agk autopilot` is its short form.
+`on` installs the one scheduler entry (a crontab line tagged `# agk-autopilot`, or the Windows task
+`agk-autopilot`), every `[autopilot] interval_minutes` (5), a `git fetch` then `conductor.py
+watchdog --pass`; `off` removes it and keeps every other line. `on` runs the machine checks (the
+entry runs while nobody is signed in, sleep off, free memory for one builder, `gh` signed in, the
+adapter set and runnable), each `ok:` or `warn:` naming the setting, only reads and never changes
+a power setting `(verify: per OS)`; both print, never write, the protected `agk.toml` change of
+`mode`. `mode_allows` and `job_allowed` are what the supervisor asks before a start: `off` starts
+nothing, `assist` a build or fix job only on the owner's yes, `on` all, no table today's settings;
+a reached `daily_budget` (tokens of the UTC day, as `metrics.py --cost --day`; `unknown` when it
+cannot be read, which stops new build and fix jobs too) stops new build and fix jobs, never review,
+steward or conductor jobs. `budget off [--today]` relaxes it and `budget on` ends that, and `retry
+N` lifts a hold of rule 9, each kept in `<git dir>/agk/autopilot.json`, never a tracked file.
+`status` begins with the mode and the budget line.
 
 Brief #1386, SPEC-0064 build (a), rules 3, 5 and 10 (ADR-0584); `agk status` is its short form.
 `status` reads the job records (`<parent of the checkout>/agk-<session>/.agk-session-pid`, with the
@@ -25,6 +41,8 @@ pid=,ppid=,args=`; on Windows it is not read and the line says `unknown`).
 from __future__ import annotations
 
 import json
+import shlex
+import shutil
 import subprocess  # nosec B404 - fixed argument lists, no shell
 import sys
 import tempfile
@@ -36,6 +54,7 @@ from statistics import median
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import conductor
+import config
 import launch
 import metrics
 import session
@@ -44,7 +63,10 @@ from common import CheckError, utf8_output
 
 HEALTH_FILE = "agk-autopilot.jsonl"
 COUNTS = ("ended", "failed", "held", "merged")
-USAGE = "usage: autopilot.py status [--week] [--root DIR]"
+USAGE = (
+    "usage: autopilot.py status [--week] | on | off | budget on | budget off [--today] | retry N"
+    " [--root DIR]"
+)
 
 
 def stamp(when: datetime) -> str:
@@ -271,9 +293,232 @@ def week(root: Path, now: datetime) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+# --- the setting, the budget and the command (rules 7, 8 and 11; brief #1390, ADR-0587) -------
+
+PLATFORM = sys.platform
+ENTRY_TAG = "# agk-autopilot"  # marks the one crontab line `on` writes and `off` removes
+TASK_NAME = "agk-autopilot"  # the one Windows Task Scheduler entry
+STATE_FILE = "autopilot.json"  # beside the lease mark, in the git directory: never tracked
+PASS = "python3 scripts/agk/conductor.py watchdog --pass"
+WINDOWS_PASS = "python scripts\\agk\\conductor.py watchdog --pass"
+OWNER_JOBS = ("review", "steward", "conductor")  # rule 8: never stopped by the budget
+
+
+def run_command(argv: list[str], given: str | None = None) -> tuple[int, str]:
+    """Run one fixed command of this machine: (exit code, its output); 127 when it cannot run."""
+    try:
+        done = subprocess.run(  # nosec B603 - fixed argument lists, no shell
+            argv, input=given, capture_output=True, text=True, encoding="utf-8", check=False
+        )  # fmt: skip
+    except OSError:
+        return 127, ""
+    return done.returncode, done.stdout
+
+
+def mode_allows(mode: str | None, kind: str, owner_yes: bool = False) -> bool:
+    """Rule 7: `off` starts nothing, `assist` a builder only on the owner's yes, `on` all; with no
+    `[autopilot]` table (None) today's settings decide, as before this build."""
+    if mode == "off":
+        return False
+    if mode == "assist":
+        return kind in OWNER_JOBS or owner_yes
+    return True
+
+
+def state_path(root: Path) -> Path | None:
+    mark = conductor.lease_mark(root)
+    return None if mark is None else mark.parent / STATE_FILE
+
+
+def load_state(root: Path) -> dict:
+    found = state_path(root)
+    try:
+        data = json.loads(found.read_text(encoding="utf-8")) if found else {}
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def keep_state(root: Path, data: dict) -> None:
+    found = state_path(root)
+    if found is None:
+        raise CheckError("the git directory cannot be read (setting: autopilot state)")
+    found.parent.mkdir(parents=True, exist_ok=True)
+    found.write_text(json.dumps(data, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def day_spend(root: Path, day) -> int | None:
+    """The day's tokens as `metrics.py --cost --day` counts them, or None when unknown."""
+    try:
+        home = metrics.records_home(None)
+        replies, _, _, lost = metrics.read_replies(
+            home, metrics.clone_folders(root), metrics.start_of(day)
+        )
+    except (CheckError, OSError):
+        return None
+    figures = metrics.day_figures(day, replies, {})
+    return None if lost or not figures["rows"] else metrics.total_of(figures["total"]["tokens"])
+
+
+def relaxed(root: Path, now: datetime) -> str | None:
+    """`today` or `until set again` while `budget off` holds, else None."""
+    off = load_state(root).get("budget_off")
+    if off is True:
+        return "until set again"
+    return f"for {now.date()}" if off == str(now.date()) else None
+
+
+def budget_line(root: Path, now: datetime) -> str:
+    limit = config.autopilot_settings(root)["daily_budget"]
+    spend = day_spend(root, now.date())
+    shown = "unknown" if spend is None else f"{spend} tokens"
+    head = "budget: off" if limit is None else f"budget: {limit} tokens"
+    if limit is not None and (why := relaxed(root, now)):
+        head += f" (relaxed {why})"
+    return f"{head}; spend {now.date()}: {shown}"
+
+
+def job_allowed(root: Path, kind: str, now: datetime, owner_yes: bool = False) -> tuple[bool, str]:
+    """Whether the setting and the budget let a job of KIND start now, and why not."""
+    settings = config.autopilot_settings(root)
+    if not mode_allows(settings["mode"], kind, owner_yes):
+        return False, f"mode {settings['mode']} (setting: autopilot.mode)"
+    limit = settings["daily_budget"]
+    if kind in OWNER_JOBS or limit is None or relaxed(root, now):
+        return True, ""
+    spend = day_spend(root, now.date())
+    if spend is None:
+        return False, "budget set and the spend is unknown (setting: autopilot.daily_budget)"
+    if spend >= limit:
+        return False, "budget reached (setting: autopilot.daily_budget)"
+    return True, ""
+
+
+def budget_note(root: Path, now: datetime) -> bool:
+    """True the first time a UTC day asks, so the owner is told once a day."""
+    data = load_state(root)
+    if data.get("told") == str(now.date()):
+        return False
+    keep_state(root, data | {"told": str(now.date())})
+    return True
+
+
+def retries(root: Path) -> dict:
+    return load_state(root).get("retry") or {}
+
+
+def mode_change(mode: str | None, wanted: str) -> list[str]:
+    if mode == wanted:
+        return []
+    return [
+        "agk.toml: this change is yours, as a pull request with its ADR (agk.toml is a protected "
+        "path); the command edits no tracked file:",
+        f'  [autopilot]\n  mode = "{wanted}"',
+    ]
+
+
+def entry_line(root: Path, interval: int) -> str:
+    folder = shlex.quote(str(Path(root).resolve()))
+    return f"*/{interval} * * * * cd {folder} && git fetch -q origin && {PASS} {ENTRY_TAG}"
+
+
+def set_entry(root: Path, interval: int | None) -> int:
+    """Install (INTERVAL) or remove (None) the one scheduler entry of this checkout."""
+    if PLATFORM == "win32":
+        if interval is None:
+            code, _ = run_command(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"])
+            return code
+        folder = str(Path(root).resolve())
+        command = f'cmd /c cd /d "{folder}" && git fetch -q origin && {WINDOWS_PASS}'
+        argv = ["schtasks", "/Create", "/SC", "MINUTE", "/MO", str(interval), "/TN", TASK_NAME]
+        code, _ = run_command([*argv, "/TR", command, "/F"])
+        return code
+    code, text = run_command(["crontab", "-l"])
+    kept = [x for x in (text if code == 0 else "").splitlines() if not x.endswith(ENTRY_TAG)]
+    if interval is not None:
+        kept.append(entry_line(root, interval))
+    code, _ = run_command(["crontab", "-"], "".join(f"{x}\n" for x in kept))
+    return code
+
+
+def machine_checks(root: Path) -> list[str]:
+    """Rule 11: `ok:` or `warn:` lines naming the setting; reads only, changes no power setting."""
+    out = []
+    if PLATFORM == "win32":
+        out.append(
+            "warn: the task runs only while you are signed in unless it is set to run whether "
+            "you are signed in or not (setting: Task Scheduler run whether signed in) (verify)"
+        )
+        out.append("warn: sleep cannot be read here (setting: power sleep) (verify: per OS)")
+    else:
+        out.append("ok: the cron entry runs while nobody is signed in")
+        code, text = 127, ""
+        if PLATFORM == "linux":  # a read: `is-enabled` changes nothing
+            code, text = run_command(["systemctl", "is-enabled", "sleep.target"])
+        if code in (0, 1) and text.strip() == "masked":
+            out.append("ok: sleep is off")
+        else:
+            out.append(
+                "warn: sleep is on or unknown; turn it off or set a wake timer while autopilot "
+                "is on (setting: power sleep) (verify: per OS)"
+            )
+    line, allowed = conductor.memory_line(root)
+    if allowed:
+        out.append(f"ok: {line.removeprefix('watchdog: ')}")
+    else:
+        out.append("warn: free memory is below one builder (setting: capacity.builder_memory_gb)")
+    code, _ = run_command(["gh", "auth", "status"])
+    signed = "ok: gh is signed in"
+    out.append(signed if code == 0 else "warn: gh is not signed in (setting: gh auth login)")
+    adapter = launch.launch_settings(root)[1]
+    first = shlex.split(adapter)[0] if adapter and adapter.strip() else None
+    if first and (shutil.which(first) or Path(first).is_file()):
+        out.append("ok: the adapter is set and runs")
+    else:
+        out.append("warn: the adapter is unset or does not run (setting: flow.launch_adapter)")
+    return out
+
+
+def autopilot_on(root: Path, turn_on: bool) -> int:
+    settings = config.autopilot_settings(root)
+    code = set_entry(root, settings["interval_minutes"] if turn_on else None)
+    what = "installed" if turn_on else "removed"
+    print(f"autopilot: scheduler entry {what}" if code == 0 else f"autopilot: entry not {what}")
+    if turn_on:
+        print("\n".join(machine_checks(root)))
+    print("\n".join(mode_change(settings["mode"], "on" if turn_on else "off")))
+    return 0 if code == 0 else 1
+
+
+def budget_command(root: Path, words: list[str], now: datetime) -> int:
+    data = load_state(root)
+    if words == ["on"]:
+        data.pop("budget_off", None)
+    elif words in (["off"], ["off", "--today"]):
+        data["budget_off"] = str(now.date()) if words[1:] else True
+    else:
+        print(USAGE, file=sys.stderr)
+        return 2
+    keep_state(root, data)
+    print(budget_line(root, now))
+    return 0
+
+
+def mode_lines(root: Path, now: datetime) -> list[str]:
+    mode = config.autopilot_settings(root)["mode"]
+    if mode is None:
+        head = "autopilot: no [autopilot] table; today's settings decide (setting: autopilot.mode)"
+    elif mode == "off":
+        head = f"autopilot: mode off; nothing starts by itself; run: {PASS}"
+    else:
+        head = f"autopilot: mode {mode}"
+    return [head, budget_line(root, now)]
+
+
+def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
+    now = now or datetime.now(UTC)
     root = Path.cwd()
     if "--root" in args:
         at = args.index("--root")
@@ -282,11 +527,21 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         root = Path(args[at + 1])
         del args[at : at + 2]
+    if args in (["on"], ["off"]):
+        return autopilot_on(root, args == ["on"])
+    if args[:1] == ["budget"]:
+        return budget_command(root, args[1:], now)
+    if len(args) == 2 and args[0] == "retry" and args[1].isdigit():
+        data = load_state(root)
+        keep_state(root, data | {"retry": (data.get("retry") or {}) | {args[1]: stamp(now)}})
+        print(f"autopilot: #{args[1]} may be retried")
+        return 0
     if args not in (["status"], ["status", "--week"]):
         print(USAGE, file=sys.stderr)
         return 2
     if args == ["status", "--week"]:
-        return week(root, datetime.now(UTC))
+        return week(root, now)
+    print("\n".join(mode_lines(root, now)))
     return status(root)
 
 

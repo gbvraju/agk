@@ -55,6 +55,9 @@ problems|cannot be read; map complete|<n> problems|absent|not checked (<n> pages
 Brief #1245 (ADR-0527): `misplaced-settings` names each key that the kit reads from a table of
 agk.toml (`config.TABLE_KEYS`) but that stands at the top level or in another table, with the
 table it is in and the table it belongs to, never its value.
+Brief #1390 (ADR-0587): `autopilot-settings` names each of `[flow] auto_start`, `launch_adapter`
+and `[capacity]` still set, which `[autopilot]` replaces: read for one release while that table is
+absent, then from it only; never a value.
 """
 
 from __future__ import annotations
@@ -470,6 +473,14 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "agk.toml: ",
         "move each named setting into the table it belongs to (a change to agk.toml needs an ADR "
         "in the same pull request)",
+    ),
+    "autopilot-settings": (  # brief #1390 (ADR-0587): read for one release, then [autopilot] only
+        "warn",
+        "no setting that [autopilot] replaces is set",
+        "agk.toml: ",
+        "set [autopilot] mode and remove the named settings and the watchdog's scheduler task "
+        "(python3 scripts/agk/autopilot.py on installs its own); they are read for one release "
+        "while [autopilot] is absent (a change to agk.toml needs an ADR in the same pull request)",
     ),
     "engines-keys": (
         "warn",
@@ -1273,6 +1284,19 @@ def misplaced_settings_result(config: dict) -> Result:
     return Result("fail", message="; ".join(parts))
 
 
+def autopilot_settings_result(root: Path) -> Result:
+    """Brief #1390 (ADR-0587): the old settings `[autopilot]` replaces, by name, never a value."""
+    try:
+        found = models.autopilot_settings(root)
+    except CheckError as exc:
+        return Result("fail", message=str(exc))
+    if not found["legacy"]:
+        return Result("ok")
+    names = ", ".join(f"[{n}]" if n == "capacity" else n for n in found["legacy"])
+    when = "read for one release" if found["mode"] is None else "not read: [autopilot] is set"
+    return Result("fail", message=f"{names} ({when})")
+
+
 def main_folder_lines(root: Path) -> list[str]:
     """`MAIN-FOLDER: on <branch>, <n> untracked` when the main folder of a clone that several
     sessions share is off the default branch or holds untracked files (brief #1301, ADR-0551);
@@ -1863,6 +1887,7 @@ def run_checks(
     results["launch-adapter"] = launch_adapter_result(root)
     results["model-names"] = model_names_result(root)
     results["misplaced-settings"] = misplaced_settings_result(config)
+    results["autopilot-settings"] = autopilot_settings_result(root)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]
