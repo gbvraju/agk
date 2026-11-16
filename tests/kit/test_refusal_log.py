@@ -111,7 +111,7 @@ def test_req050_a_planted_secret_never_reaches_the_log_in_clear(tmp_path):
     raw = (root / ".git" / "agk" / "refusals.log").read_text(encoding="utf-8")
     assert token not in raw and token[4:20] not in raw
     [line] = lines(root)
-    assert "[SECRET-1]" in line["text"] and len(line["text"]) == 500
+    assert "[TOKEN-1]" in line["text"] and len(line["text"]) == 500
 
 
 def test_req050_a_worktree_keeps_its_refusals_in_the_common_dir(tmp_path):
@@ -206,7 +206,7 @@ def test_req050_agk_logs_refusals_prints_the_file_redacted(tmp_path, monkeypatch
     folder = root / ".git" / "agk"
     folder.mkdir()
     (folder / "refusals.log.1").write_text('{"reason": "older"}\n', encoding="utf-8")
-    planted = "ana@mail.example.com"
+    planted = "ana@mail.example.io"  # example.com is not flagged
     (folder / "refusals.log").write_text(f'{{"reason": "newer", "text": "{planted}"}}\n',
                                          encoding="utf-8")
     monkeypatch.chdir(root)

@@ -514,6 +514,23 @@ def decide(payload: dict, review: bool = False) -> str | None:
     return None
 
 
+def keep_refusal(payload: object, hook: str, reason: str, role: str, names: dict) -> bool:
+    """Brief #1410 (ADR-0593): one redacted line per denial in `<git common dir>/agk/refusals.log`,
+    its reason code the name of the `*_RULE` text it denied with; a failure changes nothing."""
+    try:
+        code = next(
+            (k.removesuffix("_RULE").lower() for k, v in names.items()
+             if k.endswith("_RULE") and v == reason), "other",
+        )
+        here = os.path.dirname(os.path.abspath(__file__))
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(here)), "scripts", "agk"))
+        import guard_logs  # noqa: PLC0415 - the kit's own folder, only when something is denied
+
+        return guard_logs.record_refusal(payload, hook, code, role)
+    except Exception:  # noqa: BLE001 - keeping the line never changes the decision
+        return False
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -522,6 +539,8 @@ def main() -> int:
     review = "--review" in sys.argv[1:]
     reason = decide(payload, review) if isinstance(payload, dict) else BASH_RULE
     if reason:
+        keep_refusal(payload, "architect guard", reason, "review" if review else "architect",
+                     globals())
         print(
             json.dumps(
                 {

@@ -153,6 +153,7 @@ from architect_guard import (
     gh_api_allowed,
     gh_api_methods,
     git_allowed,
+    keep_refusal,
     origin_repo,
     project_root,
     tokens_of,
@@ -935,6 +936,9 @@ def main() -> int:
         reason = decide(payload, shadow) if isinstance(payload, dict) else BASH_RULE
         if reason is None and not shadow and guarded_merge(payload):
             decision, reason = "allow", ALLOW_RULE  # lifts the builders' ask entries (verify)
+    if reason and decision == "deny":  # brief #1410: each denial is kept, redacted
+        role = "shadow" if arguments == ["--shadow"] else "conductor"
+        keep_refusal(payload, "conductor guard", reason, role, globals())
     if reason:
         print(
             json.dumps(

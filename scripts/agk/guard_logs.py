@@ -1,6 +1,6 @@
 """Print a log with every secret and personal value redacted, `agk logs` (SPEC-0042 rule 11).
 
-Usage: python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-
+Usage: python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-|--refusals
 
 Brief #561. Each finding of `guard.scan_text` is replaced by `[<KIND>-<n>]`, numbered per kind in
 order of first appearance over the lines printed, so one value keeps one label in a run; the
@@ -11,12 +11,26 @@ are not UTF-8 are replaced. It opens no socket, runs no program and writes no fi
 walking up (patterns only add, so no default-branch check is needed). A usage error, a file it
 cannot read or a refused `[guard]` table exits 2, naming the option or the setting, never a path
 or a value.
+
+Brief #1410 (ADR-0593): every hook refusal is kept on the machine. `record_refusal` appends one JSON
+line per denial to `<git common dir>/agk/refusals.log` (found by reading `.git` and its `commondir`,
+no program run): `at` (UTC), `session`, `role`, `hook`, `reason` (a code), `text` (the command or
+path after `scan_text` redaction, cut at 500 characters) and, for a hook error, `error` with the
+exception's type and the hook's function and line, never a value. The file is never tracked, rolls
+over at 1 MB keeping one older file, and a failed write returns False and changes no decision.
+`--refusals` prints both files, the older first, through the same redaction; `today_line` is the
+count by reason that `agk status` prints.
 """
 
 from __future__ import annotations
 
+import json
+import os
+import re
 import sys
-from collections import deque
+import traceback
+from collections import Counter, deque
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -27,11 +41,128 @@ from guard import scan_text
 import config
 
 DEFAULT_MAX_LINES = 2000
-USAGE = "usage: guard_logs.py [--max-lines N] FILE|-"
+USAGE = "usage: guard_logs.py [--max-lines N] FILE|-|--refusals"
+REFUSALS = "refusals.log"
+ROLL_BYTES = 1_000_000
+CUT = 500
+NAME = re.compile(r"[\w.@-]{1,80}")
 
 
 class Usage(Exception):
     """A usage error, an unreadable file or a refused setting (exit 2)."""
+
+
+# --- the refusal log (brief #1410) ------------------------------------------------------------
+
+
+def common_dir(start: Path) -> Path | None:
+    """The git common dir of the checkout holding START, read from `.git` and `commondir`."""
+    for folder in (start, *start.parents):
+        dot = folder / ".git"
+        if dot.is_dir():
+            return dot
+        if dot.is_file():
+            head = dot.read_text(encoding="utf-8").strip()
+            if not head.startswith("gitdir:"):
+                return None
+            gitdir = folder / head[len("gitdir:") :].strip()
+            common = gitdir / "commondir"
+            if common.is_file():
+                return (gitdir / common.read_text(encoding="utf-8").strip()).resolve()
+            return gitdir.resolve()
+    return None
+
+
+def refusal_path(root: Path) -> Path | None:
+    found = common_dir(Path(os.path.abspath(root)))
+    return found / "agk" / REFUSALS if found else None
+
+
+def error_of(exc: BaseException, hook_file: str) -> dict:
+    """The exception's type and the deepest place in the hook's own file; never its message."""
+    frames = traceback.extract_tb(exc.__traceback__)
+    own = [f for f in frames if os.path.basename(f.filename) == os.path.basename(hook_file)]
+    place = (own or frames or [None])[-1]
+    where = f"{place.name}:{place.lineno}" if place else "unknown"
+    return {"type": type(exc).__name__, "place": where}
+
+
+def refused_text(payload: object) -> str:
+    data = payload.get("tool_input") if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        return ""
+    for field in ("command", "file_path", "notebook_path", "pattern", "path"):
+        if isinstance(data.get(field), str):
+            return data[field]
+    return ""
+
+
+def record_refusal(
+    payload: object, hook: str, reason: str, role: str, error: dict | None = None,
+    now: datetime | None = None,
+) -> bool:
+    """Append one redacted line for a denial; False when it cannot, which changes nothing."""
+    try:
+        cwd = payload.get("cwd") if isinstance(payload, dict) else None
+        root = os.environ.get("CLAUDE_PROJECT_DIR") or (cwd if isinstance(cwd, str) else "")
+        path = refusal_path(Path(root or os.getcwd()))
+        if path is None:
+            return False
+        session = os.environ.get("AGK_SESSION") or (
+            payload.get("session_id") if isinstance(payload, dict) else None
+        )
+        role = os.environ.get("AGK_ROLE") or role
+        try:
+            patterns = config.guard_patterns(Path(root or os.getcwd()))
+        except Exception:  # noqa: BLE001 - a refused table: the built-in detectors still redact
+            patterns = ()
+        text = redact(refused_text(payload), patterns)[0]
+        line = {
+            "at": (now or datetime.now(UTC)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "session": session if isinstance(session, str) and NAME.fullmatch(session) else "unknown",
+            "role": role if NAME.fullmatch(role or "") else "unknown",
+            "hook": hook,
+            "reason": redact(reason, patterns)[0][:CUT],
+            "text": text[:CUT],
+        }
+        if error:
+            line["error"] = error
+        path.parent.mkdir(exist_ok=True)
+        if path.is_file() and path.stat().st_size >= ROLL_BYTES:
+            os.replace(path, path.with_name(REFUSALS + ".1"))
+        with path.open("a", encoding="utf-8") as out:
+            out.write(json.dumps(line, sort_keys=True) + "\n")
+        return True
+    except Exception:  # noqa: BLE001 - keeping the line never changes the decision
+        return False
+
+
+def refusal_files(root: Path) -> list[Path]:
+    path = refusal_path(root)
+    if path is None:
+        return []
+    return [p for p in (path.with_name(REFUSALS + ".1"), path) if p.is_file()]
+
+
+def today_line(root: Path, now: datetime) -> str:
+    """`refusals today: <n> (<reason> <k>, ...)`, most first, or `refusals today: none`."""
+    day, counts = now.strftime("%Y-%m-%d"), Counter()
+    for path in refusal_files(root):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for raw in text.splitlines():
+            try:
+                line = json.loads(raw)
+            except ValueError:
+                continue
+            if isinstance(line, dict) and str(line.get("at", "")).startswith(day):
+                counts[str(line.get("reason", "unknown"))] += 1
+    if not counts:
+        return "refusals today: none"
+    parts = ", ".join(f"{reason} {n}" for reason, n in counts.most_common())
+    return f"refusals today: {sum(counts.values())} ({parts})"
 
 
 def parse(args: list[str]) -> tuple[int, str]:
@@ -94,7 +225,15 @@ def main(argv: list[str] | None = None) -> int:
             patterns = config.guard_patterns(Path.cwd())
         except config.GuardSettingError as exc:
             raise Usage(str(exc)) from None
-        text = read_tail(source, max_lines)
+        if source == "--refusals":
+            files = refusal_files(Path.cwd())
+            if not files:
+                print("agk logs: no refusals recorded")
+                return 0
+            text = "".join(read_tail(str(p), max_lines) for p in files)
+            text = "".join(text.splitlines(keepends=True)[-max_lines:])
+        else:
+            text = read_tail(source, max_lines)
     except Usage as exc:
         print(f"agk logs: {exc}")
         return 2
