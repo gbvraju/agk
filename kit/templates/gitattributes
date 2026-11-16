@@ -35,6 +35,7 @@ scripts/agk/** text eol=lf
 .github/workflows/proof.yml text eol=lf
 .gitignore text eol=lf
 CLAUDE.md text eol=lf
+LICENSE-AGK text eol=lf
 Makefile text eol=lf
 agk.mk text eol=lf
 config/ci-tools.txt text eol=lf

@@ -1786,7 +1786,7 @@ def read_config(root: Path) -> dict:
 
 
 LICENCE_TABLE = "licence"
-LICENCE_UNINSTALL = '/agk:uninstall (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" .`)'
+LICENCE_UNINSTALL = "/agk:uninstall (docs/guides/reference.md, Removing the kit)"
 
 
 def grant_date(value: object) -> datetime.date | None:

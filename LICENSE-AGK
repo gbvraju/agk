@@ -18,6 +18,7 @@ annotation, the one the kit's REUSE.toml holds:
     SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
     SPDX-License-Identifier: LicenseRef-AGK-Proprietary
     path: **/*.json
+    path: .gitignore
     path: .github/**
     path: docs/adr/TEMPLATE.md
     path: docs/briefs/TEMPLATE.md

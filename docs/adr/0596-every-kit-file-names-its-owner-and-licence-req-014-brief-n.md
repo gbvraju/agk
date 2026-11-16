@@ -39,7 +39,8 @@ REUSE specification version)`.
    covered by one annotation in `REUSE.toml` at the repository root. `.github/` is annotated and not edited because a
    builder never changes a workflow file, and the issue and pull request templates would otherwise copy the header
    into every issue and pull request body; the document templates are copied by `new_spec.py` into a project's own
-   ADRs, specs and briefs, which are not the kit's.
+   ADRs, specs and briefs, which are not the kit's. `.gitignore` is annotated too: its text is the marked block of a
+   project's own `.gitignore` (the extendable file of ADR-0164).
 4. The kit carries `LICENSE-AGK`: the text of `LICENSE` verbatim, then the annotation of decision 3, since a project's
    own `REUSE.toml` is not the kit's to write. `kit/manifest.json` lists it as a verbatim file, so `init`, `adopt` and
    `upgrade` write it to the project root and `uninstall` removes an unedited copy; the project's own `LICENSE` is

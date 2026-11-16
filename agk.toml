@@ -243,6 +243,12 @@ tests = [
   "tests/kit_dev/test_kit_tests_check_wiring.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_licence_notice.py"
+tests = [
+  "tests/kit/test_licence_headers.py", "tests/kit/test_check_runbooks.py", "tests/kit/test_rule_budget.py",
+  "tests/kit_dev/test_licence_notice.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_neutrality.py"
 tests = ["tests/kit/test_check_neutrality.py", "tests/kit/test_core_rules_page.py"]
 [[testing.map]]
