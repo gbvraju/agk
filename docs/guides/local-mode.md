@@ -304,9 +304,9 @@ change with an ADR in the same pull request.
 
 On Windows the sessions run faster and without the Windows-only failures (console encoding, CRLF line endings,
 PowerShell lines) inside WSL 2, with the project on WSL's own disk; under `/mnt/c` file-heavy work is about ten times
-slower, and `doctor.py` says so (brief #1376, ADR-0577). In Claude Code on the Windows host run `/agk:wsl`: it shows a
+slower, and `doctor.py` says so (brief #1376, ADR-0577). In the runtime on the Windows host run `/agk:wsl`: it shows a
 plan of five lines or fewer, sets up WSL and the clone on your yes (each step skips what is done, so a stopped run
-resumes), tells you when to do the GitHub and Claude sign-ins in your browser, and makes the one pull request that sets
+resumes), tells you when to do the GitHub and runtime sign-ins in your browser, and makes the one pull request that sets
 `launch_adapter` to `bash scripts/start-session-local.sh`; it never merges. After you merge it, `/agk:wsl` again moves
 the watchdog into WSL and disables (never deletes) the Windows task. `/agk:wsl status` reports each part and
 `/agk:wsl back` returns. Behind a company proxy a download fails until the company root certificate is given: the skill
