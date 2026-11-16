@@ -1781,6 +1781,71 @@ def read_config(root: Path) -> dict:
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)", 3) from None
 
 
+LICENCE_TABLE = "licence"
+LICENCE_UNINSTALL = '/agk:uninstall (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" .`)'
+
+
+def grant_date(value: object) -> datetime.date | None:
+    """`valid_until` as a date: a TOML date or a `YYYY-MM-DD` string; None otherwise."""
+    if isinstance(value, datetime.datetime):
+        return value.date()
+    if isinstance(value, datetime.date):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.date.fromisoformat(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def grant_repository(value: object) -> str | None:
+    """`owner/name` of the `repository` setting (a slug or a GitHub URL), lower case."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    match = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", text)
+    slug = match.group(1) if match else text.removesuffix(".git").strip("/")
+    return slug.lower() if re.fullmatch(r"[^/\s]+/[^/\s]+", slug) else None
+
+
+def licence_lines(root: Path, today: datetime.date | None = None) -> list[str]:
+    """The licence grant of the project (brief #1419 answer 4, ADR-0596): a warning, never a block,
+    when the `[licence]` table of agk.toml is missing, when its `repository` is not the `origin`
+    remote, or after its `valid_until`, naming the uninstall step. None in the kit's own
+    repository. Names the setting, never its value; no network."""
+    if (root / "kit" / "manifest.json").is_file():
+        return []
+    try:
+        config = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    table = config.get(LICENCE_TABLE)
+    if not isinstance(table, dict) or not all(
+        table.get(key) for key in ("grant", "repository", "valid_until")
+    ):
+        return [
+            "warn licence-grant: agk.toml names no written grant of the AGK Proprietary Licence "
+            "(setting: [licence] grant, repository, valid_until; see LICENSE-AGK)"
+        ]
+    lines: list[str] = []
+    origin = origin_repo(root)
+    named = grant_repository(table.get("repository"))
+    if named is None or (origin is not None and named != origin.lower()):
+        lines.append(
+            "warn licence-grant: the granted repository is not the origin remote "
+            "(setting: [licence] repository; see LICENSE-AGK)"
+        )
+    until = grant_date(table.get("valid_until"))
+    day = today or datetime.datetime.now(datetime.UTC).date()
+    if until is None or day > until:
+        lines.append(
+            "warn licence-grant: the grant has ended (setting: [licence] valid_until); stop using "
+            f"AGK and remove it with {LICENCE_UNINSTALL}, see LICENSE-AGK"
+        )
+    return lines
+
+
 def no_kit(root: Path) -> bool:
     """True after a removal (answer 5): a git work tree with no agk.toml, no `[tool.agk]` stamp in
     pyproject.toml and none of the kit's files (KIT_TRACES)."""
@@ -2362,6 +2427,7 @@ def main(argv: list[str] | None = None) -> int:
             + main_folder_lines(root.resolve())
             + line_ending_lines(root.resolve())
             + machine_wsl_lines(root.resolve())
+            + licence_lines(root.resolve())
         )
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()

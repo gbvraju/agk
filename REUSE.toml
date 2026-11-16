@@ -1,0 +1,19 @@
+# The owner and licence of the kit files that carry no header (brief #1419, ADR-0596): files
+# that cannot hold a comment, the files under .github/ (a builder never edits a workflow, and the
+# issue and pull request templates would copy a header into every issue and pull request), and
+# the templates whose text becomes a project's own document. Every other kit file carries the
+# header; scripts/agk/check_licence_notice.py checks both. Laid out as the REUSE specification
+# describes (verify: the REUSE specification version).
+version = 1
+
+[[annotations]]
+path = [
+    "**/*.json",
+    ".github/**",
+    "docs/adr/TEMPLATE.md",
+    "docs/briefs/TEMPLATE.md",
+    "docs/specs/TEMPLATE.md",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Balavardhi Raju Gangula"
+SPDX-License-Identifier = "LicenseRef-AGK-Proprietary"

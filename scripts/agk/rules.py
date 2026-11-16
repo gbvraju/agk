@@ -42,6 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from check_licence_notice import without_header
 from common import (
     CheckError,
     agent_apps,
@@ -88,7 +89,9 @@ USAGE = (
 
 
 def counts(text: str) -> tuple[int, int]:
-    """(words of the whole file, rule lines outside the front matter and fenced code)."""
+    """(words of the whole file, rule lines outside the front matter and fenced code). The owner
+    and licence header is not counted (ADR-0596)."""
+    text = without_header(text)
     lines = text.splitlines()
     start = 0
     if lines and lines[0].strip() == "---":

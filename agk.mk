@@ -14,6 +14,7 @@ agk-governance:
 	$(PY) scripts/agk/check_numbers.py
 	$(PY) scripts/agk/check_specs.py
 	$(PY) scripts/agk/check_neutrality.py
+	$(PY) scripts/agk/check_licence_notice.py
 	$(PY) scripts/agk/check_build_state.py
 	$(PY) scripts/agk/check_kit_tests.py
 	$(PY) scripts/agk/check_design.py

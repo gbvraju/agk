@@ -1038,4 +1038,27 @@ configuration:
   mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^\.claude/hooks/']
 ```
 
+## The licence and its grant
+
+AGK is under the AGK Proprietary Licence (`LicenseRef-AGK-Proprietary`, ADR-0596): `LICENSE` in the kit, copied into
+every project as `LICENSE-AGK`; the project's own `LICENSE` is never written. Every kit file carries a three-part
+header after any line that must come first (a `#!` line, an encoding line, front matter): the `SPDX-FileCopyrightText`
+line, the `SPDX-License-Identifier` line and the notice, as `#` comments or as one `<!-- -->` block. Files that cannot
+hold a comment (JSON), the files under `.github/` and the document templates are covered by the annotation of
+`REUSE.toml`, which `LICENSE-AGK` repeats. `make governance` runs `scripts/agk/check_licence_notice.py`, which fails
+on a kit file with neither, naming its path class; `python3 scripts/agk/check_licence_notice.py --write` adds the
+missing headers. `rules.py budget` does not count the header.
+
+A project names its written grant in `agk.toml`:
+
+```toml
+[licence]
+grant = "G-2026-001"
+repository = "example/app"
+valid_until = 2027-06-30
+```
+
+`doctor.py` warns, and never blocks, when the table is missing, when `repository` is not the `origin` remote, and after
+`valid_until`, when it names the uninstall step (`/agk:uninstall`). It reads no network and no licence server.
+
 Licence: proprietary, all rights reserved (see LICENSE).

@@ -29,6 +29,7 @@ CHECKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("numbers", ("scripts/agk/check_numbers.py",)),
     ("specs", ("scripts/agk/check_specs.py",)),
     ("neutrality", ("scripts/agk/check_neutrality.py",)),
+    ("licence-notice", ("scripts/agk/check_licence_notice.py",)),
     ("build-state", ("scripts/agk/check_build_state.py",)),
     ("kit-tests", ("scripts/agk/check_kit_tests.py",)),
     ("design", ("scripts/agk/check_design.py",)),
@@ -43,7 +44,14 @@ CHECKS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 ALWAYS: frozenset[str] = frozenset(
-    {"protected-changes", "neutrality", "build-state", "pr-mode", "final-clearance"}
+    {
+        "protected-changes",
+        "neutrality",
+        "licence-notice",
+        "build-state",
+        "pr-mode",
+        "final-clearance",
+    }
 )
 
 # A path or folder, and the checks besides ALWAYS that read it (from the paths each check and the
