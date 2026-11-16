@@ -86,9 +86,10 @@ def run(root: Path, bin_dir: Path, *args: str, marker: str | None = None):
         os.environ.update(kept)
 
 
-def checkout(tmp_path: Path, files=None, login: str = OWNER, **saved):
-    """A protected pull request (FILES) cleared for HEAD in CI mode; (checkout, bin, gh log)."""
-    root = repo(tmp_path, toml(ON), reviewers_yaml=APPROVERS)
+def checkout(tmp_path: Path, files=None, login: str = OWNER, flow: str = ON, **saved):
+    """A protected pull request (FILES) cleared for HEAD in CI mode, with the `[flow]` table FLOW
+    on the default branch; (checkout, bin, gh log)."""
+    root = repo(tmp_path, toml(flow), reviewers_yaml=APPROVERS)
     found = {"issues": [AUTO_ISSUE], "files": PROTECTED if files is None else files, **saved}
     bin_dir, log = fake_gh(tmp_path, comments=[verdict()], **found)
     real = bin_dir / "gh-saved"
@@ -214,6 +215,42 @@ def test_owner_still_needs_the_clearing_verdict(tmp_path):
     (tmp_path / "saved.json").write_text(json.dumps(saved), encoding="utf-8")
     proc = run(root, bin_dir, "--pr", "7", "--owner")
     assert one_line(proc).startswith(HELD) and merges(calls(log)) == []
+
+
+OFF = 'auto_merge = false\nauto_merge_method = "squash"\n'
+
+
+def test_owner_merges_with_auto_merge_off_too(tmp_path):
+    """REQ-050: Q-1358-1 (a), the maintainer answer (`--owner` with auto-merge off, the would-be
+    merge first)."""
+    root, bin_dir, log = checkout(tmp_path, flow=OFF)
+    proc = run(root, bin_dir, "--pr", "7", "--owner")
+    assert one_line(proc) == MERGED and proc.returncode == 0
+    assert merges(calls(log)) == [merge_call()] and len(pre_runs(tmp_path)) == 1
+
+
+def test_owner_with_auto_merge_off_never_merges_a_failing_would_be_merge(tmp_path):
+    """REQ-050: Q-1358-1 (a) (every other refusal stays: a red would-be merge, a session)."""
+    root, bin_dir, log = checkout(tmp_path, flow=OFF, premerge_exit=2)
+    proc = run(root, bin_dir, "--pr", "7", "--owner")
+    assert "fails governance" in one_line(proc) and merges(calls(log)) == []
+    proc = run(root, bin_dir, "--pr", "7", "--owner", marker="AGK_SESSION")
+    assert one_line(proc).startswith("merge-cleared #7 ?: refused: ")
+
+
+@pytest.mark.parametrize("flow", [OFF, "", 'auto_merge = "yes"\n'])
+def test_the_guarded_merge_still_needs_auto_merge_on_and_owner_a_good_setting(tmp_path, flow):
+    """REQ-050: Q-1358-1 (a) (only `--owner` runs with auto-merge off; a malformed setting is
+    refused for both, naming the setting)."""
+    root, bin_dir, log = checkout(tmp_path, flow=flow)
+    line = one_line(run(root, bin_dir, "--pr", "7", "--sha", HEAD))
+    assert line.startswith(f"merge-cleared #7 {SHA12}: refused: ") and "auto_merge" in line
+    owner = one_line(run(root, bin_dir, "--pr", "7", "--owner"))
+    if "yes" in flow:
+        assert "refused: " in owner and "auto_merge" in owner and "yes" not in owner
+    else:
+        assert owner == MERGED
+    assert len(merges(calls(log))) == (0 if "yes" in flow else 1)
 
 
 @pytest.mark.parametrize("marker", MARKERS)

@@ -30,7 +30,9 @@ change.
    and never the login. It never joins the merge queue. It is refused, before any read, inside an agent session: when
    `CLAUDECODE` (the runtime's marker, seen set in a Claude Code session on 2026-11-16), `AGK_SESSION` or `AGK_ROLE`
    (the kit's, given by `launch.py` and `conductor.py`) is set, naming those settings. The conductor's guard keeps
-   allowing only the `--sha` form and denies `--owner`.
+   allowing only the `--sha` form and denies `--owner`. By the maintainer answer Q-1358-1 (a), `--owner` also runs
+   with `[flow] auto_merge` off, the would-be merge included; a malformed setting is still refused, and every other
+   hold and refusal stays, the record issue of SPEC-0039 rule 7 among them.
 3. With the merge queue on (an organization-owned repository), the owner's button queues the pull request and the
    `merge_group` runs test the combined result, so `--owner` is optional there. With the queue off, or in a user-owned
    repository, `--owner` is the way. In CI mode, `doctor.py` prints `merge queue: unavailable (user-owned repository)`
@@ -53,8 +55,6 @@ one `changelog.d/` fragment.
 
 ## Residual
 
-- 2026-11-16: `--owner` still needs `[flow] auto_merge = true` on the default branch, as the guarded merge does
-  (`Q-1358-1`). A project with auto-merge off has no guarded merge and gets no `--owner`.
 - 2026-11-16: sessions and people share the owner's account until the identities are separated, so neither the login
   nor GitHub can tell the owner's `--owner` from a session's. The environment markers and the conductor's guard are
   what hold it. A session that clears the markers, or a runtime that sets none, is not stopped by this command.

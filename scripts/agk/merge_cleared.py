@@ -188,6 +188,7 @@ setting), runs every check above with the owner-only holds lifted for that one c
 that account only when the would-be merge passes; otherwise it prints the hold's line. The result
 of the would-be merge is kept in `agk-would-be-merge.json` in the git folder, keyed by the
 head, the default branch's commit, the body and the run's settings, and reused while they stand.
+`--owner` runs with `[flow] auto_merge` off too (the maintainer answer Q-1358-1 (a)).
 """
 
 from __future__ import annotations
@@ -2407,13 +2408,20 @@ def parse_args(argv: list[str]) -> tuple[int, str] | None:
     return int(argv[1]), argv[3]
 
 
-def ruled(root: Path) -> Rules:
+def ruled(root: Path, owner: bool = False) -> Rules:
     """The settings of the default branch of the remote as last fetched, refused or held before
     any GitHub read (SPEC-0039 rules 1, 3 and 5): auto-merge on, not paused, the reviewers file,
     `conductor_accounts`, `spec_approvers`, `required_checks` and `after_merge_timeout`. The merge
-    queue reads them the same way (brief #643, ADR-0329)."""
+    queue reads them the same way (brief #643, ADR-0329). With OWNER (`--owner`, the maintainer
+    answer Q-1358-1 (a)) auto-merge may be off: a malformed setting is still refused."""
     base, data = default_ref(root)
-    setting_on(data)
+    if not owner:
+        setting_on(data)
+    else:
+        try:
+            auto_merge_setting(data)
+        except CheckError as err:
+            raise Refused(str(err)) from None
     if data.get("paused") is True:
         raise Held("paused (rule 5; setting: paused in agk.toml on the default branch)")
     people = reviewers_at(root, base)
@@ -2584,7 +2592,7 @@ def signed_in(rules: Rules) -> None:
 
 
 def outcome(root: Path, number: int, sha: str, owner: bool = False) -> tuple[str, str, int]:
-    rules = ruled(root)
+    rules = ruled(root, owner)
     data = rules.data
     repo = repo_of(root)
     if owner:
