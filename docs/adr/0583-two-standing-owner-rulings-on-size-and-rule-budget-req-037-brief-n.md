@@ -29,10 +29,12 @@ when the review is clean and under 3x budget; role files may grow 10% without a 
 
 `scripts/agk/rules.py` states both limits as `size_ruling` and `budget_ruling`, which the tests check; the
 conductor's role file names them in its verdict steps. `rules.py budget --check` is unchanged: a raise still lands
-in the baseline in the same pull request.
+in the baseline in the same pull request. This pull request is the first use of ruling 2: the conductor's role
+file goes from 4533 to 4662 words (2.8 percent) with 37 rule lines as before, so its baseline line and the fixed cap
+of `tests/kit/test_conductor_playbook_evidence.py` (brief #666: below 4538) are raised to match.
 
 Protected path classes changed: `.claude/` (`agents/conductor.md`), `config/` (`rule-budget.txt`), `scripts/agk/`
-(`rules.py`), `tests/kit/` (`test_standing_rulings.py`) and `docs/adr/` (this file).
+(`rules.py`), `tests/kit/` (`test_standing_rulings.py`, `test_conductor_playbook_evidence.py`) and `docs/adr/` (this file).
 
 ## Consequences
 
