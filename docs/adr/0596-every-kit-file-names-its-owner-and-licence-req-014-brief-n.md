@@ -6,8 +6,8 @@
 - Related: brief #1419, ADR-0433, plan #661
 - Requirements: REQ-014
 
-Protected classes: `constitution/`, `config/`, `.claude/`, `CLAUDE.md`, `scripts/agk/`, `Makefile`, `pyproject.toml`,
-`agk.mk`, `tests/kit/`, `kit/`, `tests/kit_dev/`, `.claude-plugin/`, `skills/`
+Protected classes: `constitution/`, `config/`, `.claude/`, `.github/`, `CLAUDE.md`, `scripts/agk/`, `Makefile`,
+`pyproject.toml`, `agk.mk`, `agk.toml`, `tests/kit/`, `kit/`, `tests/kit_dev/`, `.claude-plugin/`, `skills/`
 
 ## Context
 
@@ -53,11 +53,11 @@ REUSE specification version)`.
    is unchanged; `check_runbooks.py` and the tests that measure a page read it without the header.
 7. `scripts/agk/check_licence_notice.py` fails when a kit file lacks the header, or, for a file that cannot hold one,
    the annotation, naming the path class and never a value; in a project it needs `LICENSE-AGK` and the header in each
-   file under `scripts/agk/`, and its `--write` adds the missing headers. Brief #1419 answer 6 places it in governance
-   and `prepush.py`: a step of `agk-governance` is also one step of `.github/workflows/governance.yml` (SPEC-0007
-   rule 13, a kit test), and a builder never changes a workflow file, so the `agk.mk` line, the workflow step and the
-   `governance_map.py` entry are added together by a person (Q-1419-3). Until then the kit's own CI runs it through a
-   kit test of this repository, in the governance job's tests of the checks and in proof.
+   file under `scripts/agk/`, and its `--write` adds the missing headers. It is a step of `agk-governance` (so of
+   `prepush.py`), of `governance_map.py` (run for every change) and of `.github/workflows/governance.yml`, right
+   after `check_neutrality` (SPEC-0007 rule 13). A builder never changes a workflow file, so the workflow step is
+   proposed as `.agk/workflow-proposals/governance.yml` and the owner applies it with `/agk:workflow-apply` (ADR-0505;
+   the owner's answer to Q-1419-3, 2026-11-16).
 8. Templates under `kit/templates/` become a project's own files (its `agk.toml`, its requirements) and carry no
    header.
 
@@ -71,4 +71,3 @@ header adds three lines to each kit file, which the kit hashes record; the rule 
 
 - The owner has the licence text reviewed by his legal counsel before the release (2026-11-16).
 - Whether `.github/` files should carry the header in place once a person may edit workflows (2026-11-16, Q-1419-1).
-- The governance step of decision 7, which a person adds with the workflow step (2026-11-16, Q-1419-3).

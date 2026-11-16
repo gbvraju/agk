@@ -1046,7 +1046,7 @@ header after any line that must come first (a `#!` line, an encoding line, front
 line, the `SPDX-License-Identifier` line and the notice, as `#` comments or as one `<!-- -->` block. Files that cannot
 hold a comment (JSON), the files under `.github/` and the document templates are covered by the annotation of
 `REUSE.toml`, which `LICENSE-AGK` repeats. `scripts/agk/check_licence_notice.py` fails on a kit file with neither,
-naming its path class (in the kit's repository a kit test runs it; its governance step comes with a workflow step); `python3 scripts/agk/check_licence_notice.py --write` adds the
+naming its path class; `make governance` and the governance workflow run it; `python3 scripts/agk/check_licence_notice.py --write` adds the
 missing headers. `rules.py budget` does not count the header.
 
 A project names its written grant in `agk.toml`:
