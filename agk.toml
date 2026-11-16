@@ -587,6 +587,7 @@ tests = ["tests/kit/test_local_mode.py", "tests/kit_dev/test_local_mode_guide.py
 [[testing.map]]
 code = "scripts/agk/lock.py"
 tests = [
+  "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_evidence.py", "tests/kit/test_lock.py", "tests/kit/test_lock_heartbeat.py",
   "tests/kit/test_lock_queue_runner.py", "tests/kit/test_lock_queue_submit.py", "tests/kit/test_lock_slots.py",
