@@ -1,6 +1,6 @@
 # ADR-0594: A kit defect is reported in one labelled form, and a steward that loses its GitHub reads says so once
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1411, brief #1410, ADR-0593, ADR-0561, ADR-0557, plan #661

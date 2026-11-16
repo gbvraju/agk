@@ -1,6 +1,6 @@
 # ADR-0585: One supervisor pass starts the conductor and steward jobs, once per event, within the stop rules
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1387, SPEC-0064 rules 2, 6, 12, 14, 15 and 16 (b), brief #1386 (ADR-0584), brief #1310 (ADR-0554), brief #1359 (ADR-0571), brief #1355 (ADR-0568), brief #1322 (ADR-0559), SPEC-0063 rule 4, plan #661
