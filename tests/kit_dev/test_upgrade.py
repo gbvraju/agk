@@ -693,7 +693,7 @@ KNOWN_BROKEN_TAGS = ("0.64.3", "0.64.6")
 def test_ac1_a_real_old_install_upgrades_with_no_conflict(tmp_path, version, mode):
     """REQ-014 AC5: rules 7, 13 and 21 against the real kit and the real table."""
     if version in KNOWN_BROKEN_TAGS:
-        pytest.skip(f"kit {version} is a known-broken tag (issue #1256)")
+        pytest.skip(f"kit {version} is a known-broken tag (issues #1256, #1424)")
     target = old_install(tmp_path, version, mode)
     if target is None:
         pytest.skip(f"kit {version} has no {mode}")
