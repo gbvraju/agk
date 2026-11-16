@@ -1,6 +1,6 @@
 # SPEC-0069: Each milestone gets a demo recording of its stories on sample data
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-076
 
