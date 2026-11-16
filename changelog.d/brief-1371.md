@@ -1,0 +1,1 @@
+- A push followed at once by a body edit and ready-for-review no longer cancels every full governance run of the head: the edited run waits in its own concurrency group, `governance-<n>-edited`, and a test pins the groups (found bug #1253, brief #1371, ADR-0576)
