@@ -159,7 +159,7 @@ def test_the_windows_adapter_starts_a_job_hidden_and_opens_a_tab_only_with_show_
 
 
 def test_the_windows_wrapper_runs_claude_headless_and_writes_the_log():
-    """REQ-071 AC3: rule 3 (`-p`, the output in `.agk-session.log`; with show_jobs a tee to the tab)."""
+    """REQ-071 AC3: rule 3 (`-p`, the output in `.agk-session.log`; show_jobs tees to the tab)."""
     wrapper = wrapper_of(windows())
     assert "'.agk-session.log'" in wrapper
     assert "& claude @flags -p $prompt" in wrapper
@@ -221,7 +221,9 @@ def launch_mod():
         ("[autopilot]\nshow_jobs = true\n", True),
     ],
 )
-def test_show_jobs_is_off_unless_the_autopilot_table_turns_it_on(tmp_path, launch_mod, text, expected):
+def test_show_jobs_is_off_unless_the_autopilot_table_turns_it_on(
+    tmp_path, launch_mod, text, expected
+):
     """REQ-071 AC3: rule 5 (`[autopilot] show_jobs`, default false)."""
     (tmp_path / "agk.toml").write_text(text, encoding="utf-8")
     assert launch_mod.show_jobs(tmp_path) is expected
