@@ -1,6 +1,6 @@
 # ADR-0544: The day's model spend is read from local usage records
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1283, brief #798, ADR-0419, plan #661

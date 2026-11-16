@@ -1,6 +1,6 @@
 # ADR-0565: The kit waits as GitHub asks, and paces and counts its own writes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1335, brief #210, brief #1251, ADR-0529, ADR-0548, plan #661

@@ -1,6 +1,6 @@
 # ADR-0563: A GitHub login may hold an underscore
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1327, plan #661

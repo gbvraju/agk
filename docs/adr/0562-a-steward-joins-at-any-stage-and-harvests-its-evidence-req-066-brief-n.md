@@ -1,6 +1,6 @@
 # ADR-0562: A steward joins at any stage and harvests its evidence
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0059, ADR-0557, ADR-0558, brief #1325, brief #1320, brief #1321, plan #661
