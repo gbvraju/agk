@@ -220,9 +220,11 @@ things on the machine that runs the sessions, in this order (brief #1237, ADR-05
 change with an ADR in the same pull request.
 
 1. **The adapter.** The kit installs two launch adapters, which a project then owns: `scripts/start-session-windows.ps1`
-   (a Windows Terminal tab per session, in its own worktree; it needs PowerShell 7) and `scripts/start-session-local.sh`
-   (Linux and macOS: a GNOME Terminal tab when a desktop is there, otherwise the background, with its output in the worktree's
-   `.agk-session.log`). Each writes `<worktree>/.agk-session-exit` when its session ends. Set the one for the machine in the
+   (Windows; it needs PowerShell 7) and `scripts/start-session-local.sh` (Linux and macOS), each starting one session per call
+   in its own worktree. Each runs its job headless in the background, with no terminal tab and no Windows Terminal needed,
+   and writes the job's output to the worktree's `.agk-session.log` (brief #1388, ADR-0588). With `show_jobs = true` in the
+   `[autopilot]` table of `agk.toml` (default false) a job also shows in a terminal tab that closes when it ends, its output
+   still in the log. Each writes `<worktree>/.agk-session-exit` when its session ends. Set the one for the machine in the
    `[flow]` table, and try it once by hand as [the getting-started guide](getting-started.md) shows ("Automatic starts after
    a review pass"):
 
@@ -311,6 +313,13 @@ resumes), tells you when to do the GitHub and runtime sign-ins in your browser, 
 the watchdog into WSL and disables (never deletes) the Windows task. `/agk:wsl status` reports each part and
 `/agk:wsl back` returns. Behind a company proxy a download fails until the company root certificate is given: the skill
 asks for its file. Screenshots that `design_compare.py` compares are captured again once on Linux, where fonts differ.
+
+The container engine is a choice (brief #1379, ADR-0579): `/agk:wsl` reads the project's container files and scripts
+and the engines on the machine, recommends one with its reason, and gives the chosen engine the same checks: its version
+on Windows and in WSL, the volumes listed with export and import commands (nothing moved), one container and one compose
+service started, and the Windows engine stopped after the move (never uninstalled) and started again by
+`/agk:wsl back`. Two engines never share the ports. The engines it offers, with their licence and group notes, are in
+the skill's own page, `skills/wsl/SKILL.md`.
 
 ## When work waits on the owner
 

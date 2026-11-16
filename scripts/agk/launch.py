@@ -58,6 +58,17 @@ Brief #1355 (ADR-0568): both adapters write `<worktree>/.agk-session-pid` (`sess
 adapter call a session whose record shows a live process is refused, naming the session and never
 a path: `launch: not started: session <name> is still running (one session per name)` (exit 1).
 `read_record`, `exited`, `process_alive` and `stop_tree` are the watchdog's reads of that record.
+
+Brief #1386 (SPEC-0064 rule 3, ADR-0584): each adapter call also gets `AGK_JOB_KIND` (`build` for a
+start, `fix` for a resume of a pull request, `build` for one without, the role for `role`),
+`AGK_ITEM` (`#<brief or pull request>`, empty for a role) and `AGK_HEAD` (empty until a supervisor
+knows it), which the adapters add to the record as `kind=`, `item=` and `head=`; `read_record`
+reads them, leaving out a field that is absent or not of its form.
+
+Brief #1388 (SPEC-0064 rules 3 and 5, ADR-0588): each adapter call also gets `AGK_SHOW_JOBS`
+(`true` or `false`), from `show_jobs` of the `[autopilot]` table (false when unset); both adapters
+run a job in the background with its log, and only with `true` show it in a tab that closes when it
+ends. A value of another kind is refused naming the setting.
 """
 
 from __future__ import annotations
@@ -224,6 +235,19 @@ def launch_settings(root: Path, ref: str | None = None) -> tuple[bool, str | Non
     if adapter is not None and (not isinstance(adapter, str) or not adapter.strip()):
         raise CheckError("launch_adapter of the flow table must be a command (a non-empty string)")
     return auto, adapter
+
+
+def show_jobs(root: Path) -> bool:
+    """`[autopilot] show_jobs` of the checkout's agk.toml (false when unset), true or false."""
+    text = checkout_text(root)
+    try:
+        table = tomllib.loads(text).get("autopilot", {}) if text is not None else {}
+    except tomllib.TOMLDecodeError:
+        raise CheckError("agk.toml cannot be read") from None
+    value = table.get("show_jobs", False) if isinstance(table, dict) else False
+    if not isinstance(value, bool):
+        raise CheckError("show_jobs of the autopilot table must be true or false")
+    return value
 
 
 def default_branch(root: Path) -> str:
@@ -414,6 +438,9 @@ def prompt_for(session: str, brief: int, build: str | None = None, run: Run = DE
 
 RECORD_FILE = ".agk-session-pid"  # written by the adapter before the first turn; never tracked
 EXIT_FILE = ".agk-session-exit"
+JOB_KINDS = ("review", "build", "fix", "steward", "conductor")  # SPEC-0064 rule 3
+ITEM = re.compile(r"#[1-9]\d*")
+HEAD = re.compile(r"[0-9a-f]{7,40}")
 STILL_RUNNING = "launch: not started: session {name} is still running (one session per name)"
 
 
@@ -444,12 +471,19 @@ def read_record(worktree: Path) -> dict | None:
     name = found.get("session", "")
     if not (pid.isdigit() and SESSION_ID.fullmatch(name) and utc_of(found.get("started_utc"))):
         return None
-    return {
+    record: dict = {
         "session": name,
         "pid": int(pid),
         "started_utc": found["started_utc"],
         "brief": int(brief) if brief.isdigit() else None,
     }
+    # Brief #1386: a job field of its form only, so a #1355 record reads as before.
+    if found.get("kind") in JOB_KINDS:
+        record["kind"] = found["kind"]
+    for key, form in (("item", ITEM), ("head", HEAD)):
+        if form.fullmatch(found.get(key, "")):
+            record[key] = found[key]
+    return record
 
 
 def exited(worktree: Path, record: dict) -> bool:
@@ -582,15 +616,18 @@ def start_with(
     prompts: list[str] | None = None,
     runs: list[Run] | None = None,
     root: Path | None = None,
+    jobs: list[tuple[str, int] | None] | None = None,
 ) -> int:
     """Call the adapter once for each session; stop at the first one that fails; a session whose
     record shows a live process is refused and the others still start (brief #1355). PROMPTS, when
     given, are the prompts of the sessions in order (the resume prompts of brief 402); RUNS are
-    their kinds, tiers, efforts and model names (brief 709), `design` when not given."""
+    their kinds, tiers, efforts and model names (brief 709), `design` when not given; JOBS are their
+job kinds and items (brief #1386), `build` of the brief when not given."""
     words = shlex.split(adapter)
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
     refused = 0
+    shown = "true" if show_jobs(root or Path.cwd()) else "false"
     for index, (session, brief, build) in enumerate(found):
         if has_process(worktree_of(root or Path.cwd(), session)):
             print(STILL_RUNNING.format(name=session), file=sys.stderr)
@@ -599,6 +636,9 @@ def start_with(
         env = {**os.environ, **QUIET, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
         if build:
             env["AGK_BUILD"] = build
+        job_kind, item = (jobs[index] if jobs else None) or ("build", brief)
+        env.update({"AGK_JOB_KIND": job_kind, "AGK_ITEM": f"#{item}", "AGK_HEAD": ""})
+        env["AGK_SHOW_JOBS"] = shown
         run = runs[index] if runs else DESIGN
         kind, tier, effort, model = run
         env.update({"AGK_KIND": kind, "AGK_TIER": tier, "AGK_EFFORT": effort})
@@ -668,8 +708,14 @@ def role_main(args: list[str]) -> int:
     if has_process(worktree_of(Path.cwd(), session)):
         print(f"{stuck} (one session per name)")
         return 1
+    try:
+        shown = "true" if show_jobs(Path.cwd()) else "false"
+    except CheckError:
+        print(f"{stuck} (setting: autopilot.show_jobs)")
+        return 1
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
     env.update(QUIET, AGK_SESSION=session, AGK_ROLE=role, AGK_AGENT=role)
+    env.update(AGK_JOB_KIND=role, AGK_ITEM="", AGK_HEAD="", AGK_SHOW_JOBS=shown)
     env.update(AGK_KIND=DESIGN[0], AGK_TIER=DESIGN[1], AGK_EFFORT=DESIGN[2])
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
@@ -746,7 +792,8 @@ def resume_main(opts: dict) -> int:
         if "--adapter" in opts and not memory_allows(Path.cwd()):
             return 1
         if "--adapter" in opts:
-            code = start_with(opts["--adapter"], [item[:3] for item in found], prompts, runs)
+            jobs = [("fix", item[3]) if item[3] else None for item in found]
+            code = start_with(opts["--adapter"], [x[:3] for x in found], prompts, runs, jobs=jobs)
         else:
             print((SEPARATOR + "\n").join(prompts), end="")
             code = 0

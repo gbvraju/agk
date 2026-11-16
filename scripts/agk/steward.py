@@ -52,7 +52,7 @@ KINDS = (
     "Override",
     "Onboarded",
 )
-MARKERS = ("Started", "Ended", "Daily")
+MARKERS = ("Started", "Ended", "Daily", "Shortened")
 LABEL = "agk-steward"
 TITLE = "AGK steward memory"
 WHO = "Who: AGK steward"

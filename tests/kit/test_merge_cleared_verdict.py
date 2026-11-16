@@ -889,7 +889,9 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     `set_status`; brief #959, ADR-0411, adds the close of a finished brief, one comment and one
     PATCH, in `close_brief` alone, and the note on an issue left open, one comment, in
     `close_after_merge` alone; brief #972, ADR-0417, adds the one GraphQL call of the merge
-    queue, in `queue_call` alone, made only inside GitHub Actions)."""
+    queue, in `queue_call` alone, made only inside GitHub Actions; brief #1358, ADR-0570, adds
+    the kept would-be merge results, one file in the checkout's git folder, in `checked_write`
+    alone)."""
     text = SCRIPT.read_text(encoding="utf-8")
     brief = text.split("\ndef close_brief(", 1)[1].split("\ndef ", 1)[0]
     assert brief.count('"POST"') == 1 and brief.count('"PATCH"') == 1
@@ -921,6 +923,13 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     assert text.count('"PATCH"') == 1
     assert '"PATCH", endpoint, "-f", "state=closed", "-f", "state_reason=completed"' in close
     text = text.replace(close, "")
+    kept = text.split("\ndef checked_write(", 1)[1].split("\ndef ", 1)[0]  # brief #1358, ADR-0570
+    assert kept.count(".write_text(") == 1 and "path = checked_path(root)" in kept
+    assert 'part.write_text(json.dumps(kept), encoding="utf-8")' in kept
+    assert "os.replace(part, path)" in kept and '"POST"' not in kept
+    assert "CHECKED_FILE" in text.split("\ndef checked_path(", 1)[1].split("\ndef ", 1)[0]
+    assert '"--git-common-dir"' in text, "the kept results live in the git folder, not the tree"
+    text = text.replace(kept, "")
     assert text.count(".write_text(") == 2
     run_body = text.split("\ndef in_worktree(", 1)[1].split("\ndef ", 1)[0]
     assert 'body = home / "pr-body.md"' in run_body and "body.write_text(text" in run_body
