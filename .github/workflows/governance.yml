@@ -13,7 +13,7 @@ name: governance
 
 # A run for an edited description is named `governance edited`, every other one `governance full`: the first step of the partial run reads
 # the latest completed full run of the head by that name (brief #216), so that a partial run cannot turn a failed full run green.
-# The edited run waits for that full run in the full run's own concurrency group, as a pending run that holds no runner (brief #1122, ADR-0480).
+# The edited run has a concurrency group of its own and waits for that full run in its step `Latest full run` (brief #1371, ADR-0576).
 run-name: governance ${{ github.event.action == 'edited' && 'edited' || 'full' }}
 
 on:
@@ -30,7 +30,10 @@ permissions:
   actions: read
 
 # CI runs only where it can change a result (brief #216): a superseded run of a pull request is cancelled, a running push to the
-# default branch never is (a waiting one is replaced by a newer push, brief #621), and a run for an edited description waits in the full run's group and never cancels it (brief #1122, ADR-0480). On an
+# default branch never is (a waiting one is replaced by a newer push, brief #621), and a run for an edited description is in a group of its own,
+# `governance-<n>-edited`, where a newer edit cancels it: GitHub keeps one pending run per group and a newer pending run replaces an older
+# one whatever `cancel-in-progress` says, so an edited run in the full runs' group could replace the pending full run (found bug #1253,
+# brief #1371, ADR-0576). Its step `Latest full run` orders it after the full run of the head. On an
 # edited description only the steps that read the pull request body run (those without the condition `github.event.action != 'edited'`);
 # the job and its name stay, so the required check still reports.
 # Fast CI (brief #283): on a draft pull request the heavy steps (lint, the tests, the project tests) are skipped and the job
@@ -42,8 +45,8 @@ permissions:
 # most one waiting run per group and replaces an older waiting run with the newer one, which checks the newest commit and so every
 # change before it. A commit whose waiting run was replaced is covered by the next completed full run that contains it.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || format('governance-{0}-code', github.event.pull_request.number || github.sha) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}
+  group: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || github.event.action == 'edited' && format('governance-{0}-edited', github.event.pull_request.number) || format('governance-{0}-code', github.event.pull_request.number || github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   governance:
@@ -150,10 +153,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The required check reads the latest governance run of the head: a partial run must not turn a failed full run green.
-          # The concurrency group starts this run only after the full run ends (brief #1122); a full run still queued or in
-          # progress is waited for here as the fallback: the same GET every 30 seconds, at most 20 minutes.
+          # This run has its own concurrency group (brief #1371, ADR-0576), so a full run still queued or in progress is
+          # waited for here: the same GET every 30 seconds, at most 45 minutes, well above a slow full run (brief #1371).
           # A red full run passes only when every failed step of it reads the body (brief #216, build b): one more GET of its jobs.
-          for attempt in $(seq 0 40); do
+          for attempt in $(seq 0 90); do
             gh api --method GET "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.event.pull_request.head.sha }}&event=pull_request&per_page=100" > "$RUNNER_TEMP/runs.json" || : > "$RUNNER_TEMP/runs.json"
             code=0
             out="$(python scripts/agk/full_run.py --runs "$RUNNER_TEMP/runs.json" --head "${{ github.event.pull_request.head.sha }}")" || code=$?
@@ -164,9 +167,9 @@ jobs:
               python scripts/agk/full_run.py --runs "$RUNNER_TEMP/runs.json" --head "${{ github.event.pull_request.head.sha }}" --jobs "$RUNNER_TEMP/jobs.json" || code=$?
             fi
             [ "$code" -ne 3 ] && exit "$code"
-            [ "$attempt" -lt 40 ] && sleep 30
+            [ "$attempt" -lt 90 ] && sleep 30
           done
-          echo "rule 2: the full governance run of the head did not finish in 20 minutes"
+          echo "rule 2: the full governance run of the head did not finish in 45 minutes"
           exit 1
       - name: Install tooling
         if: ${{ github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
