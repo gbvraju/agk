@@ -182,11 +182,12 @@ The owner merges through the kit, never the button:
 
     python3 scripts/agk/merge_cleared.py --pr <n> --owner
 
-reads the current head, refuses a signed-in account outside `spec_approvers` (naming the setting),
-runs every check above with the owner-only holds lifted for that one call, and merges as that
-account only when the would-be merge passes; otherwise it prints the hold's line. The result of the
-would-be merge is kept in `agk-would-be-merge.json` in the checkout's git folder, keyed by the head,
-the default branch's commit, the body and the run's settings, and reused while they stand.
+refuses inside an agent session (`CLAUDECODE`, `AGK_SESSION` or `AGK_ROLE` set, the fix list on
+#1401), reads the current head, refuses a signed-in account outside `spec_approvers` (naming the
+setting), runs every check above with the owner-only holds lifted for that one call, and merges as
+that account only when the would-be merge passes; otherwise it prints the hold's line. The result
+of the would-be merge is kept in `agk-would-be-merge.json` in the git folder, keyed by the
+head, the default branch's commit, the body and the run's settings, and reused while they stand.
 """
 
 from __future__ import annotations
@@ -334,6 +335,15 @@ NOT_APPROVER = (
     "(setting: spec_approvers in config/reviewers.yaml)"
 )
 OWNER_USAGE = "usage: merge_cleared.py --pr <n> --owner"
+# The environment names that mark an agent session (the fix list on #1401): the runtime's own,
+# observed set in a Claude Code session on 2026-11-16, and the kit's, which launch.py and
+# conductor.py give the sessions they start. Sessions share the owner's account, so `--owner` is
+# refused while any of them is set, naming the settings, never a value.
+SESSION_MARKERS = ("CLAUDECODE", "AGK_SESSION", "AGK_ROLE")
+IN_SESSION = (
+    "--owner is the owner's own merge and runs only outside an agent session "
+    "(setting: CLAUDECODE, AGK_SESSION or AGK_ROLE in the environment)"
+)
 QUEUE_SETTING = "merge_queue"
 QUEUE_OUTSIDE = (
     f"the merge queue is joined only by the merger job on GitHub Actions with {MERGE_ENV} "
@@ -2370,7 +2380,12 @@ def owner_args(argv: list[str]) -> int | None:
 
 def owner_main(root: Path, number: int) -> int:
     """`--owner`: the guarded merge of the pull request's current head, as read from GitHub, with
-    the owner-only holds lifted for this one call; one line as `guarded` prints it."""
+    the owner-only holds lifted for this one call; one line as `guarded` prints it. Refused before
+    any read inside an agent session (SESSION_MARKERS): a session runs under the owner's account,
+    so the login alone cannot tell the owner from a session (the fix list on #1401)."""
+    if any(os.environ.get(name) for name in SESSION_MARKERS):
+        print(f"merge-cleared #{number} ?: refused: {IN_SESSION}")
+        return EXIT_REFUSED
     try:
         sha = current_head(repo_of(root), number)
     except (Refused, Unreadable) as err:

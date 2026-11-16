@@ -567,7 +567,8 @@ latest `main`. So the merger still tests the would-be merge of such a pull reque
 `would-be merge: pass` or `would-be merge: fail`; it merges nothing. Merge it through the kit, not the button:
 `python3 scripts/agk/merge_cleared.py --pr <n> --owner` runs the same checks with the owner-only holds lifted for that one
 call and merges, as the account you are signed in to `gh` with, only when the would-be merge passes; it refuses an account
-that is not in `spec_approvers` (`config/reviewers.yaml`). The result is reused while the head and `main` stay the same.
+that is not in `spec_approvers` (`config/reviewers.yaml`), and it refuses inside an agent session (`CLAUDECODE`,
+`AGK_SESSION` or `AGK_ROLE` set), because sessions run under your account: run it in your own terminal. The result is reused while the head and `main` stay the same.
 On `fail` the builder updates its branch first. In a repository owned by an organization with `merge_queue = true`, your
 button queues the pull request and the queue's own runs test it, so `--owner` is optional there; in a repository owned by
 a personal account, where `/agk:doctor` prints `merge queue: unavailable (user-owned repository)`, or with the queue off,

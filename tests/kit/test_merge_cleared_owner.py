@@ -38,10 +38,10 @@ from test_merge_cleared_verdict import (
     merge_call,
     one_line,
     repo,
-    run,
     toml,
     world,
 )
+from test_merge_cleared_verdict import run as run_in
 
 sys.path.insert(0, str(SCRIPTS))
 
@@ -68,6 +68,22 @@ if 'user' in args:  # the signed-in account (`gh api user`)
     sys.exit(0)
 os.execv(sys.executable, [sys.executable, REAL, *args])
 """
+
+
+MARKERS = ("CLAUDECODE", "AGK_SESSION", "AGK_ROLE")  # an agent session's environment names
+
+
+def run(root: Path, bin_dir: Path, *args: str, marker: str | None = None):
+    """The command as the owner runs it, outside an agent session (this suite may itself run in
+    one); with MARKER, that one name set as a session sets it."""
+    kept = {name: os.environ.pop(name) for name in MARKERS if name in os.environ}
+    try:
+        if marker is not None:
+            os.environ[marker] = "1"
+        return run_in(root, bin_dir, *args)
+    finally:
+        os.environ.pop(marker or "", None)
+        os.environ.update(kept)
 
 
 def checkout(tmp_path: Path, files=None, login: str = OWNER, **saved):
@@ -198,6 +214,18 @@ def test_owner_still_needs_the_clearing_verdict(tmp_path):
     (tmp_path / "saved.json").write_text(json.dumps(saved), encoding="utf-8")
     proc = run(root, bin_dir, "--pr", "7", "--owner")
     assert one_line(proc).startswith(HELD) and merges(calls(log)) == []
+
+
+@pytest.mark.parametrize("marker", MARKERS)
+def test_owner_is_refused_inside_an_agent_session(tmp_path, marker):
+    """REQ-050: the fix list on #1401 (sessions share the owner's account: refused before any
+    read, naming the settings, nothing merged or run)."""
+    root, bin_dir, log = checkout(tmp_path)
+    proc = run(root, bin_dir, "--pr", "7", "--owner", marker=marker)
+    line = one_line(proc)
+    assert line.startswith("merge-cleared #7 ?: refused: ") and proc.returncode == 1
+    assert all(name in line for name in MARKERS) and "=1" not in line
+    assert calls(log) == [] and makes(tmp_path) == []
 
 
 @pytest.mark.parametrize("argv", [["--pr", "7", "--owner", "x"], ["--owner", "--pr", "7"]])
