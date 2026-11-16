@@ -300,6 +300,18 @@ change with an ADR in the same pull request.
    Run the conductor itself on the strongest model, because it reviews. `python3 scripts/agk/doctor.py` warns
    `model names: ...` when `auto_start` is on with a `launch_adapter` and the table is unset.
 
+## Running the workforce in WSL 2
+
+On Windows the sessions run faster and without the Windows-only failures (console encoding, CRLF line endings,
+PowerShell lines) inside WSL 2, with the project on WSL's own disk; under `/mnt/c` file-heavy work is about ten times
+slower, and `doctor.py` says so (brief #1376, ADR-0577). In Claude Code on the Windows host run `/agk:wsl`: it shows a
+plan of five lines or fewer, sets up WSL and the clone on your yes (each step skips what is done, so a stopped run
+resumes), tells you when to do the GitHub and Claude sign-ins in your browser, and makes the one pull request that sets
+`launch_adapter` to `bash scripts/start-session-local.sh`; it never merges. After you merge it, `/agk:wsl` again moves
+the watchdog into WSL and disables (never deletes) the Windows task. `/agk:wsl status` reports each part and
+`/agk:wsl back` returns. Behind a company proxy a download fails until the company root certificate is given: the skill
+asks for its file. Screenshots that `design_compare.py` compares are captured again once on Linux, where fonts differ.
+
 ## When work waits on the owner
 
 Local mode uses the same three `[flow]` settings, labels and comments as CI mode. A pull request that waits on the owner
