@@ -39,6 +39,7 @@ COMMANDS = [
     "upgrade",
     "vision",
     "workflow-apply",
+    "wsl",
 ]
 USER_ONLY = [
     "adopt",
@@ -61,6 +62,7 @@ USER_ONLY = [
     "upgrade",
     "vision",
     "workflow-apply",
+    "wsl",
 ]
 FORBIDDEN_VERBS = ["git push", "git commit", "gh pr", "gh issue close", "gh issue comment"]
 SCRIPT_CALL = re.compile(r'^\s*python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/(\w+)\.py"(.*)$', re.M)
@@ -154,6 +156,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "board": {"board"},
         "scope-review": {"plan_intake"},
         "workflow-apply": {"workflow_apply"},
+        "wsl": {"wsl"},
     }
     for name, scripts in expected.items():
         assert {script for script, _ in calls(name)} == scripts, name
