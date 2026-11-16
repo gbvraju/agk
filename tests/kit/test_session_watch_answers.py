@@ -136,3 +136,80 @@ def test_1112f_an_approve_already_there_when_the_watch_started_is_not_printed_ag
     watching(stub, [(pull(), [said])], base=[said])
     out = session(proj, stub, *QUIET)
     assert out.returncode == 3 and out.stdout.strip() == "timeout"
+
+
+# --- a wait ends at its timeout (brief #1368, found bug #1297) ----------------------------------
+
+
+class Clock:
+    """A fake clock for the module under test: `sleep` moves `monotonic` on; the rest is real."""
+
+    def __init__(self) -> None:
+        self.now = self.start = 1000.0
+        self.naps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.naps.append(seconds)
+        self.now += max(0.0, seconds)
+
+    def __getattr__(self, name: str):
+        import time
+
+        return getattr(time, name)
+
+
+def quiet_module(monkeypatch, issues: list | None = None):
+    """session.py in this process with the fake clock and a quiet GitHub: an open pull request
+    that never changes, no comments; GET only."""
+    import sys
+
+    from test_session import SCRIPTS
+
+    sys.path.insert(0, str(SCRIPTS))
+    import session as mod
+
+    clock = Clock()
+    monkeypatch.setattr(mod, "time", clock)
+    monkeypatch.setattr(mod, "repo_name", lambda root: REPO)
+    monkeypatch.setattr(mod, "gh", lambda endpoint, *a, **k: pull())
+    monkeypatch.setattr(
+        mod, "pages", lambda endpoint: list(issues or []) if "labels=" in endpoint else []
+    )
+    return mod, clock
+
+
+@pytest.mark.parametrize("interval", ["60", "45", "300"])
+def test_1368_watch_pr_ends_within_a_second_of_its_timeout(proj, monkeypatch, capsys, interval):
+    """REQ-050: brief #1368 answer 2; `watch --pr 7 --interval <n> --timeout 90` on a quiet pull
+    request ends by 91 s on the fake clock, never a whole interval past it."""
+    mod, clock = quiet_module(monkeypatch)
+    args = {"--pr": "7", "--interval": interval, "--timeout": "90"}
+    assert mod.watch(proj.root, args) == 3
+    assert capsys.readouterr().out.strip() == "timeout"
+    assert 90 <= clock.now - clock.start <= 91, clock.naps
+
+
+@pytest.mark.parametrize("interval", ["60", "45", "300"])
+def test_1368_watch_assign_ends_within_a_second_of_its_timeout(
+    proj, monkeypatch, capsys, interval
+):
+    """REQ-050: brief #1368 answer 2; `watch --assign` with `--timeout 90` ends by 91 s with its
+    end line unchanged."""
+    mod, clock = quiet_module(monkeypatch, [{"number": 3, "title": "conductor"}])
+    args = {"--interval": interval, "--timeout": "90"}
+    assert mod.wait_assign(proj.root, "s-me", args) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "assign-timeout"
+    assert 90 <= clock.now - clock.start <= 91, clock.naps
+
+
+def test_1368_a_wait_never_spins_past_its_timeout_without_a_floor(proj, monkeypatch, capsys):
+    """REQ-050: brief #1368 answer 2; every pause is at least one second (or the interval when it
+    is shorter), so a wait at its bound never polls in a tight loop."""
+    mod, clock = quiet_module(monkeypatch)
+    args = {"--pr": "7", "--interval": "60", "--timeout": "60.5"}
+    assert mod.watch(proj.root, args) == 3
+    assert all(n >= 1 for n in clock.naps), clock.naps
+    assert 60.5 <= clock.now - clock.start <= 61.5, clock.naps

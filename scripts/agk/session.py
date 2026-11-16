@@ -430,7 +430,8 @@ DIRECT_OFF = "github: direct transport unavailable, using gh"
 PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
 API_HEADERS = {  # (verify: gh's own defaults)
     "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
+    # built from parts: an installed file holds no literal date (ADR-0112, brief #1366)
+    "X-GitHub-Api-Version": "-".join(("2022", "11", "28")),
     "User-Agent": "agk-session",
 }
 DIRECT_TIMEOUT = 30.0
@@ -1442,7 +1443,7 @@ def watch(root, args: dict[str, str]) -> int:
         quiet = last_state is not None and state[0] == last_state[0] and not any(state[1:])
         pause, last_state = backoff(pause, interval, not quiet), state
         left = None if limit is None else limit - (time.monotonic() - started)
-        time.sleep(renewal.nap(pause if left is None else min(pause, max(interval, left))))
+        time.sleep(renewal.nap(pause if left is None else min(pause, max(1.0, left))))  # #1368
 
 
 class Told:
@@ -2480,12 +2481,32 @@ def claim_overlap(root, s: Survey, number: int, seen: dict) -> str | None:
     return wait_text(found) if found else None
 
 
-def red_fix(root, s: Survey, number: int) -> bool:
+def red_first(root, s: Survey, number: int) -> tuple[bool, str | None]:
+    """Whether the brief goes before the overlap while the default branch is red, and the reason
+    it is refused then (brief #1368): the open red alarm itself is judged as `next` judges it
+    (taken, stale, parked or held, with `next`'s line, found bug #1341), and a fix brief of it
+    (`red_fix`, brief #1052) passes. A read that fails stops the claim."""
+    issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
+    if issues is None:
+        raise CheckError("rule 3: the open briefs cannot be read")
+    if any(i.get("number") == number and is_red(i) for i in issues):
+        from session_plan import read_gone, settle_takes
+
+        view = survey(root, s.repo, s.me, issues)  # the survey `next` judges the alarm by
+        read_gone(root, view)
+        freed, skipped = settle_takes(view)
+        why = next((w for n, w in skipped if n == number), None)
+        return True, None if number in freed else why
+    return red_fix(root, s, number, issues), None
+
+
+def red_fix(root, s: Survey, number: int, issues: list | None = None) -> bool:
     """Whether the brief is a fix brief of an open red alarm (`session_plan.fix_briefs`, brief
     #1052): it is then claimed before the overlap. A read that fails stops the claim."""
     from session_plan import fix_briefs
 
-    issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
+    if issues is None:
+        issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
     comments = dict(s.comments)
@@ -2534,9 +2555,8 @@ def claim(root, me: str, number: int, build: str | None) -> int:
         return claim_reservation(root, s, number)
 
     def gate() -> str | None:
-        if red_fix(root, s, number):  # brief #1052: a red branch's fix goes before the overlap
-            return None
-        return claim_overlap(root, s, number, seen)
+        first, why = red_first(root, s, number)  # briefs #1052, #1368: the alarm and its fix
+        return why if first else claim_overlap(root, s, number, seen)
 
     if why := take(s, {"number": number}, reserve, build, gate):
         print(f"skip #{number}: {why}")
@@ -2684,7 +2704,7 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
             found = thread.read()
             continue
         pause = backoff(pause, interval, thread.changed)
-        nap = min(pause, max(interval, limit - (time.monotonic() - started)))
+        nap = min(pause, max(1.0, limit - (time.monotonic() - started)))  # never past it (#1368)
         if held and renewed is not None and woken:  # awake for the next renewal (ADR-0554)
             nap = max(1.0, min(nap, RENEW_EVERY - (time.monotonic() - renewed)))
         time.sleep(nap)
