@@ -2319,11 +2319,11 @@ def render_text(
     # (`extra`) stay last, right before the summary (its rule 7's test).
     lines += [tidy] if tidy else []
     lines += deprecation or []
+    lines += licence or []  # the licence grant (ADR-0596), a warning only
     lines += [scan] if scan else []
     lines += [work] if work else []
     lines += skills or []
     lines += design or []  # SPEC-0037 rule 15: the imported versions, information only
-    lines += licence or []  # the licence grant (ADR-0596), a warning only
     lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
