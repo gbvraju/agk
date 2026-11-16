@@ -553,7 +553,7 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     if args == ["status", "--week"]:
         return week(root, now)
     print("\n".join(mode_lines(root, now)))
-    return status(root, now)
+    return status(root)
 
 
 if __name__ == "__main__":
