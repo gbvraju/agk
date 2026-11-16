@@ -40,3 +40,8 @@ Protected path classes changed: `.claude/` (`agents/conductor.md`), `config/` (`
 
 A clean pull request within both limits is cleared without waiting for the owner; the size and budget lines make each
 use of a ruling visible in the verdict or the body. A tenfold oversize or a new rule still reaches the owner.
+
+## Residual
+
+- 2026-11-16: no check reads a verdict's `Size:` line or a body's `Rule budget:` line; the conductor applies the two
+  limits by `size_ruling` and `budget_ruling` as its role file says. A check that reads them is a later brief.
