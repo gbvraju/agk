@@ -336,7 +336,7 @@ NOT_APPROVER = (
 )
 OWNER_USAGE = "usage: merge_cleared.py --pr <n> --owner"
 # The environment names that mark an agent session (the fix list on #1401): the runtime's own,
-# observed set in a Claude Code session on 2026-11-16, and the kit's, which launch.py and
+# seen set in a Claude Code session (ADR-0570), and the kit's, which launch.py and
 # conductor.py give the sessions they start. Sessions share the owner's account, so `--owner` is
 # refused while any of them is set, naming the settings, never a value.
 SESSION_MARKERS = ("CLAUDECODE", "AGK_SESSION", "AGK_ROLE")
