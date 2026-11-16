@@ -1,6 +1,6 @@
 # agk configuration for this repository. Read by the checks before pyproject.toml [tool.agk].
 # The kit version this repository ships: equal to kit_version in kit/manifest.json (a test checks it); every kit bump updates both.
-version = "0.64.5"
+version = "0.64.6"
 default_branch = "main"
 test_dirs = ["tests"]
 lint_paths = ["scripts/agk", "tests", ".claude/hooks"]
@@ -152,6 +152,15 @@ tests = [
   "tests/kit_dev/test_uninstall.py", "tests/kit_dev/test_upgrade.py", "tests/kit_dev/test_upgrade_opt_in.py",
   "tests/kit_dev/test_upgrade_opt_in_several.py", "tests/kit_dev/test_upgrade_project_lines.py",
   "tests/kit_dev/test_upgrade_route_triggers.py", "tests/kit_dev/test_windows_line_endings.py",
+]
+[[testing.map]]
+code = "scripts/agk/autopilot.py"
+tests = [
+  "tests/kit/test_autopilot_status.py",
+  "tests/kit/test_one_conductor_per_machine.py",
+  "tests/kit/test_autopilot_supervisor.py",
+  "tests/kit/test_autopilot_settings.py",
+  "tests/kit/test_autopilot_modes.py",
 ]
 [[testing.map]]
 code = "scripts/agk/batch.py"
@@ -333,6 +342,9 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
+  "tests/kit/test_one_conductor_per_machine.py",
+  "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_conductor_tier.py",
   "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_owner_question.py",
@@ -348,7 +360,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
-  "tests/kit/test_conductor_tier.py",
+  "tests/kit/test_conductor_tier.py", "tests/kit/test_autopilot_settings.py",
   "tests/kit/test_agk_config.py", "tests/kit/test_check_brief.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py",
   "tests/kit/test_caps.py", "tests/kit/test_steward_guard.py",
@@ -428,9 +440,10 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/doctor.py"
 tests = [
-  "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
+  "tests/kit/test_kit_defect_report.py",
+  "tests/kit/test_autopilot_settings.py", "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
   "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
-  "tests/kit/test_doctor_windows.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_wsl_setup.py", "tests/kit/test_doctor_no_kit.py", "tests/kit/test_model_routes.py",
+  "tests/kit/test_doctor_windows.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_doctor_no_kit.py", "tests/kit/test_model_routes.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
@@ -565,6 +578,11 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
+  "tests/kit/test_one_conductor_per_machine.py",
+  "tests/kit/test_autopilot_supervisor.py",
+  "tests/kit/test_autopilot_status.py",
+  "tests/kit/test_autopilot_adapters.py",
   "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_starts.py",
   "tests/kit/test_wait_until_event.py",
@@ -580,6 +598,7 @@ tests = ["tests/kit/test_local_mode.py", "tests/kit_dev/test_local_mode_guide.py
 [[testing.map]]
 code = "scripts/agk/lock.py"
 tests = [
+  "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_evidence.py", "tests/kit/test_lock.py", "tests/kit/test_lock_heartbeat.py",
   "tests/kit/test_lock_queue_runner.py", "tests/kit/test_lock_queue_submit.py", "tests/kit/test_lock_slots.py",
@@ -602,6 +621,7 @@ tests = [
   "tests/kit/test_merge_cleared_before.py", "tests/kit/test_merge_cleared_ci.py", "tests/kit/test_upgrade_adr.py",
   "tests/kit/test_merge_cleared_close_brief.py",
   "tests/kit/test_merge_cleared_merger.py", "tests/kit/test_merge_cleared_owner_ask.py",
+  "tests/kit/test_merge_cleared_owner.py",
   "tests/kit/test_merge_cleared_pre_tests.py",
   "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_merger_on_status.py", "tests/kit/test_merger_sweep.py",
@@ -825,6 +845,8 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
+  "tests/kit/test_autopilot_status.py",
   "tests/kit/test_steward_owner_question.py",
   "tests/kit/test_wait_until_event.py",
   "tests/kit/test_steward_agent.py",
@@ -859,6 +881,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
 tests = [
+  "tests/kit/test_autopilot_status.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_plan_questions.py",
@@ -866,7 +889,7 @@ tests = [
   "tests/kit/test_session_claim_overlap.py", "tests/kit/test_builder_slots.py",
   "tests/kit/test_light_reprove.py", "tests/kit/test_session_plan_milestones.py",
   "tests/kit/test_session_plan_reads.py", "tests/kit/test_shared_main.py",
-  "tests/kit/test_github_rate_wait.py",
+  "tests/kit/test_github_rate_wait.py", "tests/kit/test_kit_defect_report.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
@@ -896,7 +919,9 @@ code = "scripts/agk/steward_onboard.py"
 tests = ["tests/kit/test_steward_onboarding.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = ".claude/hooks/steward_guard.py"
-tests = ["tests/kit/test_steward_guard.py", "tests/kit/test_steward_outbound_guard.py"]
+tests = [
+  "tests/kit/test_steward_guard.py", "tests/kit/test_steward_outbound_guard.py", "tests/kit/test_kit_defect_report.py",
+]
 [[testing.map]]
 code = "scripts/agk/steward_outbound.py"
 tests = ["tests/kit/test_steward_outbound_guard.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -905,7 +930,10 @@ code = "scripts/agk/steward_evidence.py"
 tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py", "tests/kit/test_steward_daily.py"]
 [[testing.map]]
 code = "scripts/agk/steward_owner.py"
-tests = ["tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py"]
+tests = [
+  "tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py",
+  "tests/kit/test_autopilot_supervisor.py", "tests/kit/test_kit_defect_report.py",
+]
 [[testing.map]]
 code = "scripts/agk/steward_voice.py"
 tests = ["tests/kit/test_steward_voice.py", "tests/kit/test_steward_daily.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1003,6 +1031,7 @@ tests = [
 [[testing.map]]
 code = "config/session-rules.md"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_conductor_guard_issue.py", "tests/kit/test_core_audit.py", "tests/kit/test_core_rules_page.py",
   "tests/kit/test_fix_list_tags.py", "tests/kit/test_launch.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_run.py", "tests/kit/test_personal_state.py", "tests/kit/test_pr_summary.py",
@@ -1056,10 +1085,10 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/wsl.py"
-tests = ["tests/kit/test_wsl_setup.py"]
+tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py"]
 [[testing.map]]
 code = "scripts/agk/wsl_setup.ps1"
-tests = ["tests/kit/test_wsl_setup.py"]
+tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py"]
 [[testing.map]]
 code = "skills/**"
 tests = [
@@ -1067,6 +1096,7 @@ tests = [
   "tests/kit/test_playbook_split.py", "tests/kit/test_session_kind.py", "tests/kit/test_test_map_whole.py",
   "tests/kit_dev/test_confirm_skill.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_docs.py",
   "tests/kit_dev/test_engines_discovery.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_wsl_setup.py",
+  "tests/kit/test_wsl_docker.py",
 ]
 [[testing.map]]
 code = ".claude/agents/*.md"

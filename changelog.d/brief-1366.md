@@ -1,1 +1,0 @@
-- The default branch is green again: the GitHub API version header of `session.py`'s direct transport is built from parts, so the installed file holds no literal date; the value sent is unchanged (brief #1366, ADR-0112)

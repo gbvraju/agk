@@ -1,1 +1,0 @@
-- `steward.py` sets UTF-8 output before it prints, so its usage no longer fails on a cp1252 console, and the doctor's list of tables test names the `[steward]` table (brief #1338)

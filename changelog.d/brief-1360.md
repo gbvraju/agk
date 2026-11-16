@@ -1,1 +1,0 @@
-- The data guard judges command substitution, here-documents and PowerShell lines part by part (a `*` in a commit message is no longer a glob), `prepush.py --record` says where its record went, and `doctor.py` warns on Windows when `core.autocrlf` rewrites line endings (brief #1360)

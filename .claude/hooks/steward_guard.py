@@ -10,7 +10,8 @@ Denies: a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, 
 merge, `merge_cleared.py`, auto-merge, a push to the default branch, a force push, a tag; a change
 to a file under `.github/`, the ruleset, a required check or a secret; an issue creation whose
 `Priority:` is above `[steward] auto_file` with no `Owner said` line; any label write other than
-`agk:parked` and `agk-steward`; a comment or issue body it cannot read (fail closed); a GraphQL
+`agk:parked` and `agk-steward`, and `agk-kit-defect` on a new issue (brief #1411, ADR-0594); a
+comment or issue body it cannot read (fail closed); a GraphQL
 call (`CLAUDE.md item 10`); a post to the kit repository from another project whose title or body
 the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6, ADR-0561) matches or cannot
 check. Each denial names the rule and the setting or path class, never the
@@ -32,6 +33,7 @@ OWNER_SAID = re.compile(r'Owner said \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z
 OWNER_LINE = re.compile(r'^Owner said \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z\): ".+"', re.M)
 PRIORITY = re.compile(r"^Priority:\s*(\d+)", re.M)
 LABELS = frozenset({"agk:parked", "agk-steward"})
+FILED = frozenset({"agk-steward", "agk-kit-defect"})  # the labels of a new issue (ADR-0594)
 OPERATORS = frozenset({";", "&&", "||", "|", "&", "\n"})
 WRITE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 FIELD_FLAGS = frozenset({"-f", "--raw-field", "-F", "--field"})
@@ -189,7 +191,8 @@ def gh_problem(words: list[str], cwd: Path, project: Path) -> str | None:
     if sub == "pr" and verb == "edit":
         return labels_problem(added, frozenset({"agk:parked"}))
     if sub == "issue" and verb in ("create", "edit"):
-        if problem := labels_problem(added, frozenset({"agk-steward"})):
+        allowed = FILED if verb == "create" else frozenset({"agk-steward"})
+        if problem := labels_problem(added, allowed):
             return problem
     texts = [(v, True) for v in option_values(words, BODY_FLAGS)]
     files = option_values(words, frozenset({"--body-file", "-F"}))
@@ -248,7 +251,7 @@ def api_problem(words: list[str], cwd: Path, project: Path) -> str | None:
         return labels_problem(named or ["?"], LABELS)
     named = [v or "?" for k, vs in fields.items() if k.startswith("labels") for v in vs]
     if re.search(r"/issues$", path):
-        if problem := labels_problem(named, frozenset({"agk-steward"})):
+        if problem := labels_problem(named, FILED):
             return problem
         text = (fields.get("body") or [""])[0]
         return filing_problem(text, project) or body_problem(text, "body" in inline)
@@ -383,6 +386,20 @@ def command_problem(words: list[str], cwd: Path, project: Path, depth: int) -> s
     return None
 
 
+def keep_refusal(payload: object, found: str) -> bool:
+    """Brief #1410 (ADR-0593): one redacted line per denial in `<git common dir>/agk/refusals.log`,
+    its reason code the path class the denial names; a failure changes nothing."""
+    try:
+        match = re.search(r"\(path class: ([^()]+)\)$", found)
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
+        import guard_logs  # noqa: PLC0415 - the kit's own folder, only when something is denied
+
+        code = match.group(1) if match else "other"
+        return guard_logs.record_refusal(payload, "steward guard", code, "steward")
+    except Exception:  # noqa: BLE001 - keeping the line never changes the decision
+        return False
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -392,6 +409,7 @@ def main() -> int:
         decide(payload) if isinstance(payload, dict) else reason("an unreadable call", "hook input")
     )
     if found:
+        keep_refusal(payload, found)
         out = {"hookEventName": "PreToolUse", "permissionDecision": "deny"}
         print(json.dumps({"hookSpecificOutput": {**out, "permissionDecisionReason": found}}))
     return 0

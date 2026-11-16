@@ -1,1 +1,0 @@
-- `check_adrs.py --pending` reads the verified Final records of HEAD's history and of the merge base with the default branch, so a release branch that merged main lists every ADR waiting for its status flip before `check_release.py` fails on it; each ADR is listed once, and a branch with no such merge lists as before (brief #1370, found bug #1266, ADR-0575 Proposed)

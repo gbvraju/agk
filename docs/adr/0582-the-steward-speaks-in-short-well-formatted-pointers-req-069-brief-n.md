@@ -1,6 +1,6 @@
 # ADR-0582: The steward speaks in short, well-formatted pointers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1382, SPEC-0059, SPEC-0062, SPEC-0063, ADR-0559, ADR-0560, plan #661

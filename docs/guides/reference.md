@@ -260,6 +260,9 @@ repository that this check refuses.
     python3 scripts/agk/steward_owner.py relay --qid Q --on N --answer TEXT --said FILE --at TIME [--conductor ID]
     python3 scripts/agk/steward_owner.py park --pr N [--conductor ID]
     python3 scripts/agk/steward_owner.py ready --plan FILE --trace FILE --session ID [--start]
+    python3 scripts/agk/steward_owner.py defect --title TEXT --file FILE [--refusals N] [--post]
+    python3 scripts/agk/steward_owner.py defects
+    python3 scripts/agk/steward_owner.py reads [--session ID] [--refused]
     python3 scripts/agk/launch.py role --role steward|conductor --session ID [--adapter COMMAND]
 
 The owner's question and its relay (SPEC-0059 rules 2, 5, 10 and 14, ADR-0559). `ask` takes one plain business sentence
@@ -269,8 +272,33 @@ said (<UTC time>): "<words>"` and `Who: ProductOwner`, refuses it without a well
 wait's `agk:parked` and tells the conductor `parked #<n> answered <Q>`. `park` is the steward's pass of the owner wait on
 one pull request. `ready` starts the conductor through `launch.py role` only when the plan check's trace ends `ok plan`,
 no brief is malformed, the scope is locked and no open owner question blocks the first milestone; else `not ready:`
-lines, exit 1. In personal mode everything is printed and nothing is parked. `launch.py role` prints a role's prompt or
+lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
+
+## Autopilot status
+
+    python3 scripts/agk/autopilot.py status [--week] [--root DIR]
+
+`agk status` (SPEC-0064 rules 3, 5 and 10, ADR-0584): the running jobs of this machine from their records (kind, item,
+head, since, last event), each `claude` process with no record as `unrecorded: process <pid> (not adopted)`, the
+queue, the owner's waits, the held jobs and one `quiet:` reason, from the reads of one pass; it posts nothing. A
+`refusals today:` line counts the hooks' refusals of the UTC day by reason (brief #1410, ADR-0593). `--week` prints the week of `agk-autopilot.jsonl` in the temp folder and the tokens per merged pull request, `unknown`
+where a figure cannot be read.
+
+    python3 scripts/agk/autopilot.py on|off|budget on|budget off [--today]|retry N [--root DIR]
+
+`agk autopilot` (SPEC-0064 rules 7, 8 and 11, ADR-0587): `on` installs the one scheduler entry (a tagged crontab line
+or the Windows task `agk-autopilot`, every `[autopilot] interval_minutes`) and runs the machine checks, each `ok:` or
+`warn:` naming its setting, changing no power setting; `off` removes the entry. Both print, never write, the protected
+`agk.toml` change of `[autopilot] mode`. `budget off [--today]` relaxes `daily_budget`, `budget on` ends that, and
+`retry N` lifts a hold, each kept in `<git dir>/agk/autopilot.json`; `status` starts with the mode and the budget line.
+
+    python3 scripts/agk/autopilot.py jobs [--claim] | next [--brief N] [--root DIR]
+
+`agk next` (SPEC-0064 rule 13, ADR-0589): `next` runs one job in the foreground (the next review, fix or build job by
+the supervisor's rules, or the build of brief N), waits for its end and posts nothing; in personal mode it reads the
+files forge. `jobs` prints the pass's `job:`, `held:` and `not started:` lines from GitHub, and `--claim` posts one
+`Started:` claim per build or fix job first: CI mode's launcher task reads them and starts one cloud session per job.
 
 ## Steward voice
 
@@ -597,7 +625,7 @@ and ADR-0321.
 
 ## Reading a log
 
-    python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-
+    python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-|--refusals
 
 `agk logs`: prints the last `N` lines (default 2000) of a log, or of standard input with `-`, with every secret and every
 piece of personal data that the data guard's detectors find replaced by a label such as `[EMAIL-1]`, `[CARD-1]` or
@@ -605,6 +633,8 @@ piece of personal data that the data guard's detectors find replaced by a label 
 the counts per kind only. It opens no socket, writes no file and keeps the values in memory only. A custom kind is added
 with `patterns` in the `[guard]` table of `agk.toml`, which can only add to the built-in detectors; a refused table, a bad
 option or a file it cannot read exits 2 naming the setting or option. See SPEC-0042 rules 10 and 11 and ADR-0268.
+`agk logs --refusals` prints the hooks' refusal log (`refusals.log` in the `agk` folder of the git common dir, and its one
+older file first) the same way, or `agk logs: no refusals recorded` (brief #1410, ADR-0593).
 
 ## The guard ladder
 

@@ -293,3 +293,20 @@ def test_the_two_read_only_checks_are_allowed(locked, command):
 def test_the_neighbours_of_the_two_checks_stay_denied(locked, command):
     """REQ-050: brief #1355 answer 4 (every other `lock.py` subcommand and `rate_limit` form)."""
     assert reason(run_hook(command, locked).stdout) is not None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python3 scripts/agk/merge_cleared.py --pr 7 --owner",
+        "python scripts/agk/merge_cleared.py --pr 7 --owner",
+        "python3 ./scripts/agk/merge_cleared.py --pr 1234 --owner",
+    ],
+)
+def test_the_guard_denies_the_owners_merge(tmp_path, command):
+    """REQ-050: the fix list on #1401 (brief #1358): `--owner` is the owner's alone; the conductor
+    keeps only the `--sha` form, with auto-merge on in both places."""
+    root = merge_project(tmp_path, FLOW_ON, FLOW_ON)
+    found = merge_decision(root, command)
+    assert found is not None and found["permissionDecision"] == "deny", command
+    assert merge_decision(root, command, shadow=True)["permissionDecision"] == "deny"

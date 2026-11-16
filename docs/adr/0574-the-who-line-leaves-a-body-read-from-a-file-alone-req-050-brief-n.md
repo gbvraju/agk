@@ -1,6 +1,6 @@
 # ADR-0574: The Who line leaves a comment body read from a file alone
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1369, found bug #1303, ADR-0546, plan #661

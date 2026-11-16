@@ -4,13 +4,17 @@
     python3 wsl.py status [--state FILE] [--root DIR]
     python3 wsl.py pr --to wsl|windows [--brief N|none] [--date YYYY-MM-DD] [--root DIR]
     python3 wsl.py open --body FILE --branch NAME [--title TEXT] [--root DIR]
+    python3 wsl.py engine [--state FILE] [--choose podman|docker|docker-desktop] [--rootless]
+                          [--root DIR]
 
 Run from the plugin root, never installed into a project. FILE is the `-Json` table of
 `wsl_setup.ps1`. `plan` prints five lines or fewer and `status` one line per part; both read the
 default branch's `agk.toml` with one GET through `gh`. `pr` changes `launch_adapter` in the
 `[flow]` table of the project's `agk.toml`, writes the project's own ADR (Proposed) and prints the
 pull request body; it commits nothing. `open` posts the one draft pull request by REST and never
-merges. Exit 0, 1 on a refusal, 2 on a usage error.
+merges. `engine` (brief #1379, ADR-0579) reads the project's files and the engines of this machine
+(`version` and `volume ls` only) and prints the container engine it recommends, with its reason.
+Exit 0, 1 on a refusal, 2 on a usage error.
 """
 
 from __future__ import annotations
@@ -31,7 +35,8 @@ from common import utf8_output
 USAGE = (
     "usage: wsl.py plan [--state FILE] [--back] | status [--state FILE] | "
     "pr --to wsl|windows [--brief N|none] [--date YYYY-MM-DD] | "
-    "open --body FILE --branch NAME [--title TEXT]  [--root DIR]"
+    "open --body FILE --branch NAME [--title TEXT] | "
+    "engine [--state FILE] [--choose podman|docker|docker-desktop] [--rootless]  [--root DIR]"
 )
 SETTING = "(setting: launch_adapter in the flow table of agk.toml)"
 ADAPTERS = {  # the kit's two adapter commands, as doctor.ADAPTERS sets them
@@ -39,18 +44,43 @@ ADAPTERS = {  # the kit's two adapter commands, as doctor.ADAPTERS sets them
     "wsl": "bash scripts/start-session-local.sh",
 }
 NAMES = {"windows": "Windows", "wsl": "WSL"}
-STATE_KEYS = ("steps", "pending", "project_dir", "distro", "memory_gb", "watchdog", "doctor")
+STATE_KEYS = (
+    "steps", "pending", "project_dir", "distro", "memory_gb", "watchdog", "doctor",
+    "engine", "engines",
+)  # fmt: skip
 RESULTS = ("done", "skipped", "waiting", "failed")
 MACHINE = (
     "windows", "wsl", "distro", "wsl2", "linux_user", "wslconfig", "wsl_conf", "company_ca",
-    "packages", "gh_cli", "nodejs", "podman", "restart",
+    "packages", "gh_cli", "nodejs", "one_engine", "podman", "docker", "desktop_wsl", "restart",
 )  # fmt: skip
 PROJECT = (
     "git_config", "claude_code", "clone", "worktrees", "kit_tools", "trust", "plugin",
-    "playwright", "podman_check", "playwright_libs", "terminal",
+    "playwright", "podman_check", "docker_rootless", "engine_check", "playwright_libs", "terminal",
 )  # fmt: skip
 SIGN_INS = ("github_signin", "claude_signin")
-STEP_IDS = MACHINE + SIGN_INS + PROJECT + ("watchdog", "watchdog_back")
+STEP_IDS = MACHINE + SIGN_INS + PROJECT + (
+    "watchdog", "windows_engine", "watchdog_back", "windows_engine_back",
+)  # fmt: skip
+ENGINES = {  # brief #1379: the container engines the setup offers, Podman the default
+    "podman": "Podman",
+    "docker": "Docker Engine",
+    "docker-desktop": "Docker Desktop's WSL integration",
+}
+DOCKER_TERMS_PAGE = "https://www.docker.com/pricing/"  # Docker's own page; terms never stated here
+ENGINE_FILES = {
+    "docker": (
+        "compose.yaml",
+        "compose.yml",
+        "docker-compose.yaml",
+        "docker-compose.yml",
+        "Dockerfile",
+    ),
+    "podman": ("Containerfile",),
+}
+SCRIPT_FILES = ("Makefile", "GNUmakefile", "justfile", "package.json")
+ENGINE_CALL = re.compile(
+    r"(?m)(?:^|[\s;&|(`\"'])(docker|podman)(?=\s+(?:compose|run|build|pull|exec)\b)"
+)
 WATCHDOGS = {
     "wsl": "the WSL task",
     "windows": "the Windows task",
@@ -191,7 +221,7 @@ def plan(root: Path, state: dict | None, back: bool) -> list[str]:
         "machine: already set up"
         if all_done(found, MACHINE)
         else f"machine: WSL 2 with {distro}, {sized} for WSL (.wslconfig, a backup kept), then "
-        "git, Python, the GitHub CLI, Node.js and Podman inside it",
+        f"git, Python, the GitHub CLI, Node.js and {ENGINES[engine_of(state)]} inside it",
         "sign-ins: done"
         if all_done(found, SIGN_INS) and all(s in found for s in SIGN_INS)
         else "sign-ins: GitHub and Claude, each the normal sign-in in your browser",
@@ -234,14 +264,171 @@ def status(root: Path, state: dict | None) -> list[str]:
     }.get(kind, f"adapter: the {NAMES.get(kind, kind)} adapter on {branch}")
     lines.append(adapter)
     if state is None:
-        lines += [f"{part}: not read" for part in ("watchdog", "podman", "playwright", "doctor")]
+        lines += [f"{part}: not read" for part in ("watchdog", "engine", "playwright", "doctor")]
         return lines
     lines += [
         f"watchdog: {WATCHDOGS.get(str(state.get('watchdog')), 'not read')}",
-        f"podman: {word(found, 'podman')}, rootless check {word(found, 'podman_check')}",
+        engine_line(state, found),
         f"playwright: {word(found, 'playwright')}, libraries {word(found, 'playwright_libs')}",
         f"doctor: {state.get('doctor') or 'not read'}",
     ]
+    return lines
+
+
+def engine_of(state: dict | None) -> str:
+    value = (state or {}).get("engine")
+    return value if value in ENGINES else "podman"
+
+
+def engine_facts(state: dict | None) -> dict:
+    value = (state or {}).get("engines")
+    return value if isinstance(value, dict) else {}
+
+
+def engine_line(state: dict | None, found: dict[str, str]) -> str:
+    """Brief #1379 answer 4: the chosen engine, its check and its version in WSL and on Windows."""
+    engine = engine_of(state)
+    facts_ = engine_facts(state)
+    setup = "podman" if engine == "podman" else "docker" if engine == "docker" else "desktop_wsl"
+    windows = facts_.get("windows_podman" if engine == "podman" else "windows_docker") or "none"
+    return (
+        f"engine: {ENGINES[engine]} {word(found, setup)}, check {word(found, 'engine_check')}, "
+        f"WSL {facts_.get('wsl_version') or 'not read'}, Windows {windows}"
+    )
+
+
+def project_engines(root: Path) -> dict[str, list[str]]:
+    """Brief #1379 answer 1: {engine: [the files naming it]}; the kit's own scripts never count."""
+    found: dict[str, list[str]] = {}
+    for engine, names in ENGINE_FILES.items():
+        for name in names:
+            if (root / name).is_file():
+                found.setdefault(engine, []).append(name)
+    paths = [root / n for n in SCRIPT_FILES]
+    scripts = root / "scripts"
+    if scripts.is_dir():
+        paths += sorted(p for p in scripts.rglob("*") if p.is_file() and "agk" not in p.parts)[:500]
+    for path in paths:
+        try:
+            if not path.is_file() or path.stat().st_size > 200_000:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for engine in sorted(set(ENGINE_CALL.findall(text))):
+            found.setdefault(engine, []).append(path.relative_to(root).as_posix())
+    return found
+
+
+def recommend(uses: dict[str, list[str]], have: set[str]) -> tuple[str, str]:
+    """Brief #1379 answer 1: (engine, the reason in a few words); Podman when nothing decides."""
+    if len(uses) == 1:
+        engine = next(iter(uses))
+        return engine, f"the project names {engine} ({', '.join(uses[engine][:3])})"
+    if not uses and have == {"docker"}:
+        return "docker", "this machine has Docker and the project names no engine"
+    return "podman", "Podman is the default when nothing decides"
+
+
+def two_engines(engine: str, facts_: dict) -> str | None:
+    """Brief #1379 answer 3: never two engines on one port; the refusal, or None."""
+    if engine == "docker" and facts_.get("desktop_running"):
+        return (
+            "one engine only: Docker Desktop's engine is running, so Docker Engine inside WSL "
+            "waits until you quit Docker Desktop (it stays installed)"
+        )
+    return None
+
+
+def probe(exe: str, *args: str) -> list[str]:
+    """One read-only call of a container engine on this machine; [] when it is absent or fails."""
+    found = shutil.which(exe)
+    if found is None:
+        return []
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [found, *args], capture_output=True, text=True, encoding="utf-8", timeout=60
+    )
+    return (
+        [x.strip() for x in done.stdout.splitlines() if x.strip()] if done.returncode == 0 else []
+    )
+
+
+def volume_lines(engine: str, names: list[str]) -> list[str]:
+    """Brief #1379 answer 4: the export and import commands of each volume; nothing is moved."""
+    out = []
+    for name in names:
+        if engine == "podman":
+            out += [
+                f"  export {name}: podman volume export {name} --output {name}.tar",
+                f"  import {name}: podman volume create {name} && "
+                f"podman volume import {name} {name}.tar",
+            ]
+        else:
+            mount = f'-v {name}:/v -v "$PWD":/b docker.io/library/alpine'
+            out += [
+                f"  export {name}: docker run --rm {mount} tar cf /b/{name}.tar -C /v .",
+                f"  import {name}: docker volume create {name} && "
+                f"docker run --rm {mount} tar xf /b/{name}.tar -C /v",
+            ]
+    return out
+
+
+def engine_plan(root: Path, state: dict | None, choose: str | None, rootless: bool) -> list[str]:
+    """Brief #1379 answers 1 to 5: which engine, why, and what comes with it."""
+    uses = project_engines(root)
+    facts_ = engine_facts(state)
+    distro = (state or {}).get("distro") or "Ubuntu-24.04"
+    here = {e: (probe(e, "version", "--format", f) or [""])[0]
+            for e, f in (("docker", "{{.Server.Version}}"),
+                         ("podman", "{{.Client.Version}}"))}  # fmt: skip
+    have = {e for e, v in here.items() if v}
+    if facts_.get("windows_docker") or facts_.get("desktop"):
+        have.add("docker")
+    if facts_.get("windows_podman"):
+        have.add("podman")
+    engine, reason = (choose, "your choice") if choose else recommend(uses, have)
+    named = "; ".join(f"{e} ({', '.join(f[:3])})" for e, f in sorted(uses.items()))
+    lines = [
+        f"project: names {named}" if uses else "project: names no container engine",
+        "machine: " + (", ".join(f"{e} {v}" for e, v in here.items() if v) or "no engine here"),
+        f"engine: {engine} ({reason}); choose another with --choose podman|docker|docker-desktop",
+    ]
+    if "wsl_version" in facts_ or "windows_docker" in facts_ or "windows_podman" in facts_:
+        key = "windows_podman" if engine == "podman" else "windows_docker"
+        lines.append(
+            f"versions: Windows {facts_.get(key) or 'none'}, "
+            f"WSL {facts_.get('wsl_version') or 'none'}"
+        )
+    if engine == "docker":
+        lines.append(
+            "rootless: Docker's rootless mode for your user, with no group added"
+            if rootless
+            else "docker group: you are added to it, which grants root-equivalent access on this "
+            "machine; say --rootless for Docker's rootless mode instead"
+        )
+    if facts_.get("desktop"):
+        lines.append(
+            f"Docker Desktop: found; its licence may need a paid subscription for your "
+            f"organisation, see {DOCKER_TERMS_PAGE} ; choose docker-desktop to use its WSL "
+            f"integration for {distro}, or docker for Docker Engine inside WSL with Desktop's "
+            "engine stopped"
+        )
+    refusal = two_engines(engine, facts_)
+    if refusal:
+        lines.append(f"ports: {refusal}")
+    callers = [f for f in uses.get("docker", []) if f not in ENGINE_FILES["docker"]]
+    if engine == "podman" and callers:
+        lines.append(
+            f"podman-docker: {', '.join(callers[:3])} call docker; they work with Podman only "
+            "with sudo apt-get install podman-docker"
+        )
+    family = "podman" if engine == "podman" else "docker"
+    volumes = probe(family, "volume", "ls", "--format", "{{.Name}}")
+    volumes += [v for v in facts_.get("volumes") or [] if isinstance(v, str) and v not in volumes]
+    if volumes:
+        lines.append(f"volumes: {len(volumes)} of {family} here ({', '.join(volumes)}); "
+                     "nothing is moved")  # fmt: skip
+        lines += volume_lines(family, volumes)
     return lines
 
 
@@ -423,6 +610,7 @@ def main(argv: list[str] | None = None) -> int:
         "status": ({"--state", "--root"}, set()),
         "pr": ({"--to", "--brief", "--date", "--root"}, set()),
         "open": ({"--body", "--branch", "--title", "--root"}, set()),
+        "engine": ({"--state", "--choose", "--root"}, {"--rootless"}),
     }
     if command not in spec:
         print(USAGE, file=sys.stderr)
@@ -435,6 +623,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if command == "plan":
             out = plan(root, load_state(opts.get("--state")), bool(opts.get("--back")))
+        elif command == "engine":
+            choose = opts.get("--choose")
+            if choose is not None and choose not in ENGINES:
+                print(USAGE, file=sys.stderr)
+                return 2
+            state = load_state(opts.get("--state"))
+            out = engine_plan(root, state, choose, bool(opts.get("--rootless")))
         elif command == "status":
             out = status(root, load_state(opts.get("--state")))
         elif command == "pr":

@@ -1,6 +1,6 @@
 # ADR-0572: The data guard judges substitution, here-documents and PowerShell; prepush and the doctor say more
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1360, brief #1269, brief #1329, ADR-0536, ADR-0564, plan #661

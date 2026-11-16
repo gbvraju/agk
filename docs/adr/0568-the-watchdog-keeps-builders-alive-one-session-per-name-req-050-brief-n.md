@@ -1,6 +1,6 @@
 # ADR-0568: The watchdog keeps builders alive, one session per name
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: ADR-0525, ADR-0554, ADR-0322, ADR-0563, brief #1355, plan #661

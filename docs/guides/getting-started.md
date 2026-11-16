@@ -241,6 +241,12 @@ report has six headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`, 
 
 Once the first spec is built by hand you can let sessions find their own work. Three roles take part: a builder session, the conductor and you. The working rule of a session is in `config/session-rules.md`; read it once.
 
+**With the autopilot.** One supervisor per machine starts every session as a short job (SPEC-0064), so you start no conductor or builder by hand (items 2 and 3 are the manual way):
+- On each machine run `agk autopilot on` (`python3 scripts/agk/autopilot.py on`) once: it installs the supervisor's scheduler entry, checks the machine and prints the `[autopilot] mode` line to set by pull request.
+- `agk status` shows the running jobs, the queue and what waits on you.
+- `agk next` (`python3 scripts/agk/autopilot.py next`) runs the next review, fix or build job in the foreground and ends, posting nothing; `agk next --brief <n>` builds brief n. In personal mode it is the way to run jobs.
+- In CI mode the launcher task (`kit/templates/runtime/launcher.txt`) is the supervisor and starts each job as a cloud session.
+
 1. **File the work as a brief.** A brief is an issue labelled `agk-brief`. Create the label once (the maintainer does; `session.py next` finds nothing without it); `session.py claim` also labels a brief it takes `agk:taken`, which GitHub creates on its first use, so that the plan sees the take in the listing (ADR-0529), then write the issue in this shape and check a saved copy before filing it with `python3 scripts/agk/check_brief.py FILE`, which prints `ok brief`:
 
 ```text
@@ -355,10 +361,10 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
          - run: ./start-builders "$(python3 scripts/agk/session.py demand | python3 -c 'import json,sys; print(json.load(sys.stdin)["start"])')"
    ```
 
-   **Running around the clock.** Four roles keep the work moving without a person at the keyboard: the launcher, the conductor, and a builder on the strongest tier or on the mid tier. The kit ships their task texts as templates, `kit/templates/runtime/launcher.txt`, `kit/templates/runtime/conductor.txt` and `kit/templates/runtime/builder.txt` (one text for both builder tasks, by its `Tier:` line: strongest for `design` and `build`, mid for `small` and `mechanical`), with `kit/templates/runtime/README.md` saying which is which; it installs and starts none of them. Replace `<owner>/<repo>` and `<default branch>` and keep every rule. The conductor text starts builders itself, in real time, and the launcher is its backup, restarting a conductor whose lease is free and a builder silent for 45 minutes.
+   **Running around the clock.** Four roles keep the work moving without a person at the keyboard: the launcher, the conductor, and a builder on the strongest tier or on the mid tier. The kit ships their task texts as templates, `kit/templates/runtime/launcher.txt`, `kit/templates/runtime/conductor.txt` and `kit/templates/runtime/builder.txt` (one text for both builder tasks, by its `Tier:` line: strongest for `design` and `build`, mid for `small` and `mechanical`), with `kit/templates/runtime/README.md` saying which is which; it installs and starts none of them. Replace `<owner>/<repo>` and `<default branch>` and keep every rule. The launcher is the supervisor in CI mode: it runs `autopilot.py jobs --claim` and starts each review, build and fix job as a short cloud session, and is the backup for a builder silent for 45 minutes; the conductor text is one review job.
 
-   - On a laptop (as a pilot runs it, and the only path in personal mode, which has no scheduled tasks): run the conductor loop of item 3 in one terminal, and start builders with `/agk:launch` when its plan offers work; each builder follows `builder.txt` from its second paragraph on.
-   - In a cloud runtime: one scheduled task per template. The launcher runs every 30 minutes and fires the other tasks; the conductor runs every 12 hours (and whenever the launcher finds its lease free); each builder task is fired by the conductor (or by the launcher, its backup) with its item in a second message, and keeps its pull request until it closes.
+   - On a laptop: `agk autopilot on` (see **With the autopilot.** above); in personal mode, which has no scheduled tasks, run `agk next` for each job. By hand, run the conductor loop of item 3 in one terminal and start builders with `/agk:launch`; each builder follows `builder.txt` from its second paragraph on.
+   - In a cloud runtime: one scheduled task per template. The launcher runs every 30 minutes and fires the other tasks, each one short job with its item in a second message: the conductor task for a review job (it no longer runs every 12 hours), a builder task for each build or fix job; a builder waits in the foreground no more.
 
    What you still do: approve specs, merge workflow and ruleset changes, and answer every `Question:` whose first line says `for the maintainers`. A workflow change comes to you as a file, not as text to paste: the builder commits the whole proposed file at `.agk/workflow-proposals/<name>.yml` on its branch (a path the cloud accepts; it never changes `.github/workflows/` itself) and its `Question: Q-<N>-n for the maintainers:` names `/agk:workflow-apply <pr>`. Run that command from your checkout: it checks each file, shows the diff and, after your yes, moves it into `.github/workflows/`, commits, pushes the branch with your own `git` and `gh` and answers the question (ADR-0505). Governance fails while a proposal is still on the head, so none reaches the default branch. A push refused for the workflow permission prints `gh auth refresh -s workflow`. How a builder waits: in an interactive Claude Code session it runs `session.py watch` as a background task, whose end wakes the session (item 4); in a cloud scheduled task it runs `watch` in the foreground with a timeout of at most 9 minutes and runs it again, because such a task ends as soon as its session goes idle.
 
@@ -392,10 +398,10 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    claude --remote "$prompt"
    ```
 
-   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The kit installs the script `scripts/start-session-windows.ps1` shown here, as a template that is written only where the file is absent; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add`, or, when the folder `..\agk-<session>` is still there from an earlier start (a session that ended or crashed), reuses it if it is a clean worktree of this repository (fetch, then the default branch checked out detached) and otherwise starts nothing, exiting 2 with one line naming the folder, so a restart after a crash works (brief #1237, ADR-0525); and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, adding `--model <name>` and `--effort <level>` when the adapter was given `AGK_MODEL` and `AGK_EFFORT` (the tier of the brief's kind, from `[models.names]`; brief #1252, ADR-0530), and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. Once the worktree exists, the script appends `.agk-session-exit` to the worktree's exclude file (the path `git -C <worktree> rev-parse --git-path info/exclude` names), so the exit file, which is written into the worktree untracked, never reaches a commit, not even through a later `git add -A` in that worktree. Before `claude` starts, the wrapper writes `<worktree>/.agk-session-pid` (the session, the wrapper's process id, the UTC start time and the brief), excluded the same way; the watchdog and `launch.py` read it (brief #1355, ADR-0568). The adapter needs PowerShell 7 (`pwsh`; install it with `winget install Microsoft.PowerShell`), which Windows does not install by default, and it must not be run under Windows PowerShell 5.1 (`powershell.exe`): there, `& claude @flags $prompt` passes the prompt to a native program with its embedded double quotes stripped, so a prompt that holds quotes arrives changed.
+   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The kit installs the script `scripts/start-session-windows.ps1` shown here, as a template that is written only where the file is absent; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add`, or, when the folder `..\agk-<session>` is still there from an earlier start (a session that ended or crashed), reuses it if it is a clean worktree of this repository (fetch, then the default branch checked out detached) and otherwise starts nothing, exiting 2 with one line naming the folder, so a restart after a crash works (brief #1237, ADR-0525); and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, adding `--model <name>` and `--effort <level>` when the adapter was given `AGK_MODEL` and `AGK_EFFORT` (the tier of the brief's kind, from `[models.names]`; brief #1252, ADR-0530), and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. The job runs headless (`claude -p`) with its output in `<worktree>/.agk-session.log`, and is started hidden with `Start-Process`, needing no Windows Terminal; the tab and the profile below are used only with `show_jobs = true` in the `[autopilot]` table, which `launch.py` passes as `AGK_SHOW_JOBS` (brief #1388, ADR-0588). Once the worktree exists, the script appends `.agk-session-exit` to the worktree's exclude file (the path `git -C <worktree> rev-parse --git-path info/exclude` names), so the exit file, which is written into the worktree untracked, never reaches a commit, not even through a later `git add -A` in that worktree. Before `claude` starts, the wrapper writes `<worktree>/.agk-session-pid` (the session, the wrapper's process id, the UTC start time and the brief), excluded the same way; the watchdog and `launch.py` read it (brief #1355, ADR-0568). The adapter needs PowerShell 7 (`pwsh`; install it with `winget install Microsoft.PowerShell`), which Windows does not install by default, and it must not be run under Windows PowerShell 5.1 (`powershell.exe`): there, `& claude @flags -p $prompt` passes the prompt to a native program with its embedded double quotes stripped, so a prompt that holds quotes arrives changed.
 
    ```powershell
-   # scripts/start-session-windows.ps1: one Windows Terminal tab per session, in its own worktree.
+   # scripts/start-session-windows.ps1: one background job per session, in its own worktree; a tab only with show_jobs.
    $ErrorActionPreference = 'Stop'
    $session = $env:AGK_SESSION
    $brief = $env:AGK_BRIEF
@@ -405,6 +411,25 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    # 1. The worktree first, and wait until its folder exists.
    $repo = (git rev-parse --show-toplevel).Trim()
    $worktree = Join-Path (Split-Path $repo -Parent) "agk-$session"
+   # One conductor per machine (brief #1409): a conductor job starts nothing while a record of kind conductor beside this
+   # checkout names a live process that has not written its exit file (verify: not run on Windows by the session that wrote it).
+   if ($env:AGK_JOB_KIND -eq 'conductor') {
+       foreach ($dir in @(Get-ChildItem -LiteralPath (Split-Path $repo -Parent) -Directory -Filter 'agk-*')) {
+           $record = Join-Path $dir.FullName '.agk-session-pid'
+           if (-not (Test-Path -LiteralPath $record)) { continue }
+           $f = @{}
+           foreach ($file in @($record, (Join-Path $dir.FullName '.agk-session-exit'))) {
+               if (Test-Path -LiteralPath $file) {
+                   Get-Content -LiteralPath $file | ForEach-Object { $k, $v = $_ -split '=', 2; if ($null -ne $v) { $f[$k.Trim()] = $v.Trim() } }
+               }
+           }
+           $live = $f['pid'] -match '^\d+$' -and (Get-Process -Id ([int]$f['pid']) -ErrorAction SilentlyContinue)
+           if ($f['kind'] -eq 'conductor' -and $live -and (-not $f['ended_utc'] -or $f['ended_utc'] -lt $f['started_utc'])) {
+               [Console]::Error.WriteLine("start-session-windows: conductor $($f['session']) is running on this machine; nothing started")
+               exit 3
+           }
+       }
+   }
    git -C $repo fetch --quiet origin
    if (Test-Path -LiteralPath $worktree) {
        # The folder is there from an earlier start (a session that ended or crashed): reuse it when it is a clean
@@ -435,7 +460,7 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
        if ((Get-Date) -gt $deadline) { throw 'the worktree folder did not appear' }
        Start-Sleep -Milliseconds 200
    }
-   # Keep the exit file and the process record out of git: the worktree's exclude file names them.
+   # Keep the exit file, the process record and the log out of git: the worktree's exclude file names them.
    $exclude = (git -C $worktree rev-parse --git-path info/exclude).Trim()
    if (-not [IO.Path]::IsPathRooted($exclude)) { $exclude = Join-Path $worktree $exclude }
    New-Item -ItemType Directory -Force -Path (Split-Path $exclude -Parent) | Out-Null
@@ -445,6 +470,9 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-pid'))) {
        Add-Content -LiteralPath $exclude -Value '.agk-session-pid'
    }
+   if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session.log'))) {
+       Add-Content -LiteralPath $exclude -Value '.agk-session.log'
+   }
 
    # 2. The prompt and the wrapper, in a folder of the session under the long temporary path.
    $longTemp = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Temp'
@@ -452,10 +480,16 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    New-Item -ItemType Directory -Force -Path $work | Out-Null
    $promptFile = Join-Path $work 'prompt.txt'
    Set-Content -LiteralPath $promptFile -Value $prompt -Encoding utf8
+   # The job's kind, item and head (SPEC-0064 rule 3), from AGK_JOB_KIND, AGK_ITEM and AGK_HEAD, for the record.
+   $Kind = $env:AGK_JOB_KIND; $Item = $env:AGK_ITEM; $Head = $env:AGK_HEAD
+   Set-Content -LiteralPath (Join-Path $work 'job.txt') -Encoding utf8 -Value "kind=$Kind", "item=$Item", "head=$Head"
+   # A tab only with [autopilot] show_jobs = true, which launch.py passes as AGK_SHOW_JOBS (SPEC-0064 rule 5).
+   $show = $env:AGK_SHOW_JOBS -eq 'true'
+   Set-Content -LiteralPath (Join-Path $work 'show.txt') -Encoding utf8 -Value $(if ($show) { 'true' } else { 'false' })
    $wrapper = Join-Path $work 'run.ps1'
    Set-Content -LiteralPath $wrapper -Encoding utf8 -Value @'
    param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)
-   # The tab's environment: PATH fresh, TEMP long, no inherited child-session marker.
+   # The job's environment: PATH fresh, TEMP long, no inherited child-session marker.
    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
                [Environment]::GetEnvironmentVariable('Path', 'User')
    $env:TEMP = $LongTemp
@@ -467,24 +501,36 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    Set-Location -LiteralPath $Worktree
    # The process record before the first turn: this wrapper's process holds claude.
    $started = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-   Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-pid') -Value "session=$Session", "pid=$PID", "started_utc=$started", "brief=$Brief"
+   $job = @(Get-Content -LiteralPath (Join-Path (Split-Path $PromptFile -Parent) 'job.txt'))
+   Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-pid') -Value (@("session=$Session", "pid=$PID", "started_utc=$started", "brief=$Brief") + $job)
    $prompt = Get-Content -LiteralPath $PromptFile -Raw
    # The tier's model name and effort: no flag without a model (verify: the flags are claude's).
    $flags = @()
    if ($Model) { $flags += '--model', $Model; if ($Effort) { $flags += '--effort', $Effort } }
-   try { & claude @flags $prompt; $code = $LASTEXITCODE } catch { $code = 1 }
+   # Headless (-p), the output in the log; with show_jobs also in the tab (verify: the runtime's headless flag on Windows).
+   $log = Join-Path $Worktree '.agk-session.log'
+   $shown = (Get-Content -LiteralPath (Join-Path (Split-Path $PromptFile -Parent) 'show.txt') -ErrorAction SilentlyContinue) -eq 'true'
+   try {
+       if ($shown) { & claude @flags -p $prompt 2>&1 | Tee-Object -FilePath $log } else { & claude @flags -p $prompt *> $log }
+       $code = $LASTEXITCODE
+   } catch { $code = 1 }
    if ($null -eq $code) { $code = 1 }
    $at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
    Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-exit') -Value "exit_code=$code", "ended_utc=$at"
    exit $code
    '@
 
-   # 3. The tab, only now that the worktree exists. The model and effort follow as arguments, never empty ones.
+   # 3. The job, only now that the worktree exists: hidden, with no Windows Terminal, or with show_jobs a tab that closes
+   #    when it ends. The model and effort follow as arguments, never empty ones (verify: Start-Process's quoting).
    $extra = @()
    if ($env:AGK_MODEL) { $extra += $env:AGK_MODEL; if ($env:AGK_EFFORT) { $extra += $env:AGK_EFFORT } }
-   wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
-       pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief @extra
-
+   if ($show) {
+       wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
+           pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief @extra
+   } else {
+       $quoted = @($wrapper, $worktree, $promptFile, $longTemp, $session, $brief) + $extra | ForEach-Object { '"' + $_ + '"' }
+       Start-Process -FilePath pwsh -WindowStyle Hidden -WorkingDirectory $worktree -ArgumentList (@('-NoProfile', '-File') + $quoted)
+   }
    ```
 
    The tab uses a Windows Terminal profile named "AGK builder". Add it to the `profiles.list` of the terminal's `settings.json`:
@@ -560,6 +606,20 @@ A pull request that fails its batch is removed by GitHub, and the merger posts o
 `Removed from the merge queue: <check> failed on <queue sha>`. The merger then holds that head and never queues it again
 until a new verdict, which a new head needs anyway. GitHub's merge
 queue is not the conductor's `conductor.py merge-queue`, which stays as it is.
+
+**When only the owner may merge** (brief #1358, ADR-0570). The merger holds a release or a change to a protected class for
+you (`held: protected class <class> (rule 5)`), and the GitHub button merges the head as it is, untested against the
+latest `main`. So the merger still tests the would-be merge of such a pull request and the line ends
+`would-be merge: pass` or `would-be merge: fail`; it merges nothing. Merge it through the kit, not the button:
+`python3 scripts/agk/merge_cleared.py --pr <n> --owner` runs the same checks with the owner-only holds lifted for that one
+call and merges, as the account you are signed in to `gh` with, only when the would-be merge passes; it refuses an account
+that is not in `spec_approvers` (`config/reviewers.yaml`), and it refuses inside an agent session (`CLAUDECODE`,
+`AGK_SESSION` or `AGK_ROLE` set), because sessions run under your account: run it in your own terminal.
+It works with `[flow] auto_merge` off as well, so a project where you merge everything by hand gets the same test. The result is reused while the head and `main` stay the same.
+On `fail` the builder updates its branch first. In a repository owned by an organization with `merge_queue = true`, your
+button queues the pull request and the queue's own runs test it, so `--owner` is optional there; in a repository owned by
+a personal account, where `/agk:doctor` prints `merge queue: unavailable (user-owned repository)`, or with the queue off,
+`--owner` is the way.
 
 ## Upgrading the kit
 

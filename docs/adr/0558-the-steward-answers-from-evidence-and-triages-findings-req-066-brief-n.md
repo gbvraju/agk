@@ -1,6 +1,6 @@
 # ADR-0558: The steward answers from evidence and triages findings
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0059, ADR-0557, SPEC-0048, brief #1321, brief #1320, plan #661

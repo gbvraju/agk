@@ -231,6 +231,29 @@ clean and pushed; a parked or handed-over one is never restarted; one restart pe
 session per hour, kept in `<git dir>/agk/builders.json`, and `sweep` prints `NEEDS-YOU: builder
 <name> #<brief> held (<reason>)` for each held one.
 
+Brief #1391 (SPEC-0064 build (f), ADR-0589): `claim_job` posts the supervisor's claim on a job's
+item, `Started: <session> <UTC> by the supervisor (<kind>)`, for `autopilot.py jobs --claim`.
+
+Brief #1389 (SPEC-0064 build (c), ADR-0586): a builder is a short job. An ended builder with a pull
+request is `left (waits for an event)` until a verdict, correction or answer newer than its own
+move, an `agk:conflict` or `agk:ci-red` label, or a first failure of its last job; then one `fix`
+job starts with `launch.FIX_JOB` added to the resume prompt. A job that exits with another code
+than 0, or ends with no new head, post or summary edit, fails; two in a row are `held (failed
+twice)` until the head or a listed author's comment changes.
+
+Brief #1387 (SPEC-0064 build (b), ADR-0585): `watchdog --pass` is the supervisor. A pass holds the
+machine's `lock.py` lock `autopilot` (another pass holding it for 120 s starts nothing, exit 0).
+Before the lease it reads the open pull requests and, within 30 minutes of its last full read,
+the issues and comments changed since then; with nothing changed (the lease marker's own edits
+are no change) it prints `watchdog: nothing changed; no job started` and reads no plan and no
+sweep. A `STEWARD:` line of the sweep starts one steward job through `launch.py role` with
+`AGK_STEWARD_START=conductor` unless a steward is open (a live record of kind `steward` or a
+`claude --agent steward` process) or this machine started that one within the hour. No job starts
+while the queue is empty and the plan starts nothing and no question waits (`every remaining item
+waits on the owner` when the sweep has a `NEEDS-YOU:` line, else `no brief is ready and nothing
+waits on AGK`), or below 200 core calls left (`the GitHub limit is low`): `watchdog: quiet:
+<reason>` once, kept for `agk status`. Each pass appends one health line (`autopilot.py`).
+
 Brief #1248 (ADR-0528): a fresh reviewer gives the gating verdict, in local mode too.
 
     python3 conductor.py review --pr N [--start]
@@ -1219,6 +1242,7 @@ def sweep(root) -> int:
         lines += steward_lines(root, kept, answerers, now)  # SPEC-0059 rule 2 (brief #1322)
     lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
     lines += held_builder_lines(root)  # builders the watchdog held on this machine (ADR-0568)
+    lines += extra_conductor_lines(root)  # brief #1409: the extra conductors of this machine
     print("\n".join(lines))
     return 0
 
@@ -1623,10 +1647,20 @@ def queued(root, repo: str, rules: merge_cleared.Rules) -> tuple[list[tuple[int,
         except merge_cleared.NotCleared:
             continue
         except (merge_cleared.Held, merge_cleared.Refused) as exc:
-            kept_out.append(f"not queued: #{number} {sha[:12]}: {exc}")
+            kept_out.append(kept_out_line(number, sha, str(exc)))
             continue
         found.append((merge_cleared.stamp(verdict), number, sha))
     return [(number, sha) for _, number, sha in sorted(found)], kept_out
+
+
+def kept_out_line(number: int, sha: str, reason: str) -> str:
+    """One `not queued:` line; for a hold only the owner lifts (a release or a protected class) it
+    names the owner's merge through the kit, `merge_cleared.py --pr <n> --owner`, which merges
+    only a passing would-be merge (brief #1358 answer 2, ADR-0570), never the GitHub button."""
+    line = f"not queued: #{number} {sha[:12]}: {reason}"
+    if merge_cleared.owner_only(reason):
+        line += "; the owner merges with " + merge_cleared.OWNER_COMMAND.format(number)
+    return line
 
 
 def run_merge(root, number: int, sha: str) -> tuple[int, str]:
@@ -1789,6 +1823,17 @@ def post(endpoint: str, what: str, *extra: str, method: str = "POST") -> None:
     fields = common.who_fields(endpoint, method, extra, role="conductor")
     if session.gh(endpoint, *fields, method=method) is None:
         raise CheckError(what)
+
+
+def claim_job(repo: str, job: dict, when: str) -> bool:
+    """The supervisor's claim on a job's item before it starts (brief #1391, ADR-0589): one
+    `Started: <session> <UTC> by the supervisor (<kind>)`; False when it cannot be posted."""
+    body = f"Started: {job['session']} {when} by the supervisor ({job['kind']})"
+    try:
+        post(f"repos/{repo}/issues/{job['item']}/comments", "the claim", "-f", f"body={body}")
+    except CheckError:
+        return False
+    return True
 
 
 def reprove(root, number: int, apply: bool) -> int:
@@ -2106,7 +2151,7 @@ WATCHDOG_PROMPT = (
     "Take the lease first with `python3 scripts/agk/conductor.py lease --take {name}`; when it "
     "is refused another conductor holds it, so end at once. Renew it and release it as the role "
     "says, and run `python3 scripts/agk/session.py queue --role conductor` before anything else "
-    "(session rule 11).\n"
+    "(session rule 11).\n" + launch.CONDUCTOR_NOTE
 )
 
 
@@ -2177,13 +2222,19 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
         print(f"watchdog: nothing started: {LEASE_OFF}")
         return 1
     repo = session.repo_name(root)
-    code = (
-        watchdog_pass(root, name, repo, here[1])
-        if scripted
-        else watchdog_once(root, name, repo, here[1], issue)
-    )
-    builder_pass(root, repo, here[1])  # brief #1355 (ADR-0568): the builders after the conductor
-    return code
+    if not scripted:
+        code = watchdog_once(root, name, repo, here[1], issue)
+        builder_pass(
+            root, repo, here[1]
+        )  # brief #1355 (ADR-0568): the builders after the conductor
+        return code
+    with autopilot_lock(root) as mine:  # brief #1387: two passes of a machine never overlap
+        if not mine:
+            print(f"watchdog: another pass holds the lock {AUTOPILOT_LOCK}; nothing started")
+            return 0
+        code = watchdog_pass(root, name, repo, here[1])
+        builder_pass(root, repo, here[1])
+        return code
 
 
 def watchdog_once(root, name: str, repo: str, adapter: str, issue: int) -> int:
@@ -2201,8 +2252,10 @@ def watchdog_once(root, name: str, repo: str, adapter: str, issue: int) -> int:
             "(setting: builder_memory_gb)"
         )
         return 1
+    if not conductor_gate(root):  # brief #1409: one conductor per machine
+        return 0
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
-    env.update(launch.QUIET)
+    env.update(launch.QUIET, **JOB_RECORD)
     env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
@@ -2237,11 +2290,12 @@ JOB_PROMPT = (
     "`constitution/principles.md` and `config/session-rules.md` first and follow them exactly. "
     "The watchdog holds the lease under {name} between passes: renew it first with "
     "`python3 scripts/agk/conductor.py lease --take {name}`, again before a step that may pass 10 "
-    "minutes, and do not release it: while you renew it the watchdog starts no other job. "
+    "minutes, and do not release it while work remains: while you renew it the watchdog starts "
+    "no other job. "
     "Do one pass: `python3 scripts/agk/session.py queue --role conductor`, then "
     "`python3 scripts/agk/session.py review-queue --all` and the pass on its "
     "lines, then the plan's starts and the sweep's lines; schedule no wake, start no loop, and "
-    "end when the pass is done.\n"
+    "end when the pass is done.\n" + launch.CONDUCTOR_NOTE
 )
 
 
@@ -2260,9 +2314,10 @@ def pass_state(root) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def pass_facts(root) -> tuple[str, bool, str]:
+def pass_facts(root) -> tuple[str, bool, str, str]:
     """(the review queue's fingerprint, whether the plan starts a brief, the digest of the sweep's
-    lines without their ages and times), each run as the script it is; CheckError when one fails."""
+    lines without their ages and times, the sweep's text), each run as the script it is;
+    CheckError when one fails."""
     code, said = session.quietly(session.review_queue, root, "--fingerprint")
     if code or not said.startswith("fingerprint "):
         raise CheckError("the review queue cannot be read")
@@ -2275,7 +2330,7 @@ def pass_facts(root) -> tuple[str, bool, str]:
         raise CheckError("the sweep cannot be read")
     lines = sorted(AGE.sub("", line).strip() for line in swept.splitlines() if line.strip())
     digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
-    return said.split()[1], starts, digest
+    return said.split()[1], starts, digest, swept
 
 
 def keep_state(root, state: dict) -> None:
@@ -2386,16 +2441,17 @@ def strongest_reasons(one: dict, classes: list[str], authors: list[str]) -> list
     return out
 
 
-def tier_for_pass(root, repo: str) -> tuple[str, str, list[str]]:
+def tier_for_pass(root, repo: str, items: list | None = None) -> tuple[str, str, list[str]]:
     """(tier, effort, why) of the next job: the pin, else `strongest` at `high` when any queued
-    item needs it or the queue cannot be read, else `mid` at `medium` (brief #1359 answers 1-3)."""
+    item needs it or the queue cannot be read, else `mid` at `medium` (brief #1359 answers 1-3).
+    ITEMS is the queue the supervisor already read (brief #1387), else it is read here."""
     try:
         if config.conductor_pin(root):
             return (*STRONG, ["pinned by [models] conductor"])
     except CheckError as exc:
         return (*STRONG, [str(exc)])
     try:
-        items = queued_items(root, repo)
+        items = queued_items(root, repo) if items is None else items
     except CheckError:
         return (*STRONG, ["the queue cannot be read"])
     classes, authors = pass_classes(root), verdict_authors(root)
@@ -2428,7 +2484,7 @@ def start_job(root, adapter: str, name: str, repo: str, why: str, tier: tuple) -
     """Call the adapter once for one conductor job on TIER (tier, effort); its standard
     output, or None when it cannot be run or fails."""
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
-    env.update(launch.QUIET)
+    env.update(launch.QUIET, **JOB_RECORD)
     env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER=tier[0], AGK_EFFORT=tier[1])
     prompt = JOB_PROMPT.format(name=name, repo=repo, why=why)
     prompt += TIER_NOTE.format(tier=tier[0], effort=tier[1])
@@ -2481,12 +2537,145 @@ def job_running(root, repo: str, name: str, state: dict, now: datetime) -> bool:
     )
 
 
+# --- the supervisor (brief #1387, SPEC-0064 build (b), ADR-0585) -----------------------------
+
+AUTOPILOT_LOCK = "autopilot"  # the machine's lock.py lock: two passes never overlap (rule 2)
+AUTOPILOT_WAIT = 120  # seconds a pass waits for another pass of this machine, then starts nothing
+FULL_EVERY = timedelta(minutes=30)  # a full read at least this often, for the waits that age
+LOW_LIMIT = 200  # GitHub's core calls left below which a pass starts nothing (rule 12)
+STEWARD_SESSION = re.compile(r"^STEWARD: .*--session (\S+)", re.M)
+
+
+@contextlib.contextmanager
+def autopilot_lock(root):
+    """Hold the lock `autopilot` for one pass; yields whether it was taken within the wait."""
+    import socket
+    import uuid
+
+    import lock
+
+    try:
+        held = lock.lock_folder(Path(root), AUTOPILOT_LOCK)
+        limit = lock.stale_minutes(Path(root))
+    except lock.Usage:
+        print("watchdog: the lock autopilot cannot be read (setting: lock_dir)", file=sys.stderr)
+        yield False
+        return
+    owner = {"session": os.environ.get("AGK_SESSION") or AUTOPILOT_LOCK, "pid": os.getpid(),
+             "host": socket.gethostname(), "started": stamp_of(datetime.now(UTC)),
+             "token": uuid.uuid4().hex}  # fmt: skip
+    with contextlib.redirect_stdout(sys.stderr):
+        taken = lock.take(held, AUTOPILOT_LOCK, owner, limit, AUTOPILOT_WAIT)
+    try:
+        yield taken is not None
+    finally:
+        if taken is not None:
+            lock.clear_if_same(taken, owner["token"])
+
+
+def pulls_digest(pulls: list) -> str:
+    """The open pull requests' numbers, heads, drafts and labels, as one digest."""
+    rows = sorted(
+        (p.get("number") or 0, str((p.get("head") or {}).get("sha") or ""), bool(p.get("draft")),
+         sorted(str(x.get("name")) for x in p.get("labels") or [] if isinstance(x, dict)))
+        for p in pulls if isinstance(p, dict)
+    )  # fmt: skip
+    return hashlib.sha256(json.dumps(rows).encode("utf-8")).hexdigest()
+
+
+def change_reads(root, repo: str, state: dict, now: datetime) -> tuple[bool, str | None]:
+    """(whether nothing changed since the last full read, the open pull requests' digest): the
+    issues and comments changed since then, but the lease marker's own edits, and the open pull
+    requests (brief #1387 answer 1). Never quiet after `FULL_EVERY`, before a first full read,
+    when the 24-hour job is due outside a stop rule, or when a read fails."""
+    found = session.pages(f"repos/{repo}/pulls?state=open")
+    digest = None if found is None else pulls_digest(found)
+    seen, last = when(str(state.get("seen_at") or "")), when(str(state.get("job_at") or ""))
+    due = state.get("quiet") is None and (last is None or now - last >= JOB_DAY)
+    if digest is None or digest != state.get("pulls") or seen is None or due:
+        return False, digest
+    if now - seen >= FULL_EVERY:
+        return False, digest
+    since = seen.timestamp()
+    issues = session.pages(
+        f"repos/{repo}/issues?state=all&since={session.stamp_iso(since - session.SKEW)}"
+    )
+    comments = session.changed_comments(repo, since)
+    if issues is None or comments is None:
+        return False, digest
+    plan = plan_issue(root)
+    moved = [i for i in issues if isinstance(i, dict) and i.get("number") != plan]
+    said = [c for c in comments if not LEASE_LINE.fullmatch(session.first_line(c))]
+    return not moved and not said, digest
+
+
+def stop_reason(root, repo: str, starts: bool, steward: str | None, swept: str):
+    """(the stop rule that holds or None, the queue read for the tier) (rule 12, brief #1387
+    answer 3); paused and memory are the pass's own checks. A queue that cannot be read is no
+    stop. No job of this build is an owner-only step, so the owner's rest hours stop none."""
+    try:
+        items = queued_items(root, repo)
+    except CheckError:
+        items = None
+    if items == [] and not starts and not steward:
+        if any(x.strip().startswith("NEEDS-YOU:") for x in swept.splitlines()):
+            return "every remaining item waits on the owner", items
+        return "no brief is ready and nothing waits on AGK", items
+    rate = session.rate_state()
+    if rate is not None and rate[0] is not None and rate[0] < LOW_LIMIT:
+        return "the GitHub limit is low", items
+    return None, items
+
+
+def steward_due(state: dict, swept: str, now: datetime) -> str | None:
+    """The session of the `STEWARD:` line, unless this machine started it within the hour."""
+    found = STEWARD_SESSION.search(swept)
+    at = when(str(state.get("steward_at") or ""))
+    if not found or (state.get("steward") == found[1] and at and now - at < RESTART_GAP):
+        return None
+    return found[1]
+
+
+def open_steward(root) -> bool:
+    """A live steward of this machine: a job record of kind `steward`, or a person's own
+    `claude --agent steward` process (rule 6)."""
+    import autopilot  # imported here: autopilot imports this module
+
+    for worktree, record in local_records(root):
+        alive = not launch.exited(worktree, record) and launch.process_alive(record["pid"])
+        if record.get("kind") == "steward" and alive:
+            return True
+    table = autopilot.claude_processes() or []
+    return any(autopilot.is_claude(args) and "--agent steward" in args for _, _, args in table)
+
+
+def start_steward(root, adapter: str, name: str) -> bool:
+    """One steward job through `launch.py role`, marked `AGK_STEWARD_START=conductor`, which
+    answers from evidence only and relays and approves nothing (SPEC-0063 rule 4)."""
+    args = ["role", "--role", "steward", "--session", name, "--adapter", adapter]
+    return launch.role_main(args, root=Path(root), extra={"AGK_STEWARD_START": "conductor"}) == 0
+
+
+def record_health(started: dict, now: datetime) -> None:
+    """The pass's one line in the temp folder's health file (rule 10); never fails the pass."""
+    import autopilot  # imported here: autopilot imports this module
+
+    with contextlib.suppress(OSError, CheckError):
+        autopilot.append_health({"started": started}, now)
+
+
 def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     """Hold the lease, run the scripts of the pass, start one conductor job only when needed and
-    never a second one while the last may still run."""
+    never a second one while the last may still run; start the steward job of a waiting question
+    (brief #1387); start nothing while nothing changed or a stop rule holds."""
     state, now = pass_state(root), datetime.now(UTC)
     if job_running(root, repo, name, state, now):
         print(f"watchdog: job {name} still running; nothing started")
+        return 0
+    quiet, digest = change_reads(root, repo, state, now)
+    if quiet:  # brief #1387 answer 1: no lease, no plan, no sweep and no model
+        print("watchdog: nothing changed; no job started")
+        record_health({}, now)
         return 0
     code, said = session.quietly(lease, root, "--take", name, False)
     if code:
@@ -2501,12 +2690,14 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     state["own_until"] = stamp_of(holder[1]) if holder else None  # the script's own take
     keep_state(root, state)
     try:
-        fingerprint, starts, swept = pass_facts(root)
+        fingerprint, starts, swept, sweep_text = pass_facts(root)
     except CheckError as exc:
         print(f"watchdog: nothing started: {exc}")
         return 1
+    read = {"seen_at": stamp_of(now), "pulls": digest}
     last = when(str(state.get("job_at") or ""))
     logged = logged_escalations(root, name, state) if not state.get("log_read") else []
+    steward = steward_due(state, sweep_text, now)
     why = [
         text
         for text, yes in (
@@ -2517,12 +2708,24 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
         )
         if yes
     ]
-    if not why and not logged:
+    if not why and not logged and not steward:
         if state.get("tier") == "mid" and not state.get("log_read"):
             state["log_read"] = True  # the last job ended without an escalation
-            keep_state(root, state)
+        state.update(read)
+        keep_state(root, state)
         print("watchdog: nothing changed; no job started")
+        record_health({}, now)
         return 0
+    stop, items = stop_reason(root, repo, starts, steward, sweep_text)
+    if stop:  # rule 12: said once, checked again on every pass
+        said_before = stop == state.get("quiet")
+        print("watchdog: no job started; the stop rule still holds" if said_before
+              else f"watchdog: quiet: {stop}")  # fmt: skip
+        state.update(read, quiet=stop)
+        keep_state(root, state)
+        record_health({}, now)
+        return 0
+    state.pop("quiet", None)
     line, allowed = memory_line(root)
     print(line)
     if not allowed:
@@ -2531,15 +2734,38 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
             "(setting: builder_memory_gb)"
         )
         return 1
-    seen = {"fingerprint": fingerprint, "sweep": swept, "job_at": stamp_of(now), "log_read": True}
+    started: dict[str, int] = {}
+    if (why or logged) and conductor_gate(root, now):  # brief #1409: one per machine
+        code = conductor_job(root, name, repo, adapter, (state, now, why, logged, items))
+        if code:
+            return code
+        state.update(fingerprint=fingerprint, sweep=swept)
+        started["conductor"] = 1
+    if steward:
+        if open_steward(root):
+            print("watchdog: steward open; no steward job started")
+        elif start_steward(root, adapter, steward):
+            print(f"watchdog: steward job started {steward}")
+            state.update(steward=steward, steward_at=stamp_of(now))
+            started["steward"] = 1
+    state.update(read)
+    keep_state(root, state)
+    record_health(started, now)
+    return 0
+
+
+def conductor_job(root, name: str, repo: str, adapter: str, facts: tuple) -> int:
+    """The conductor job of a pass (ADR-0554, ADR-0571): the escalations of the last mid job
+    first, else one job on the tier the queue needs; STATE gets what the job was started on."""
+    state, now, why, logged, items = facts
+    seen = {"job_at": stamp_of(now), "log_read": True}
     if logged:  # brief #1359 answer 2: the escalations of the last mid job, before anything else
         if not escalate(root, adapter, name, repo, logged):
             return 1
         state.update(seen, tier=STRONG[0])
-        keep_state(root, state)
         print(f"watchdog: job started {name} on strongest at high: escalated by a mid pass")
         return 0
-    tier, effort, needs = tier_for_pass(root, repo)
+    tier, effort, needs = tier_for_pass(root, repo, items)
     print(f"watchdog: tier {tier}: {'; '.join(needs)}" if needs else f"watchdog: tier {tier}")
     output = start_job(root, adapter, name, repo, ", ".join(why), (tier, effort))
     if output is None:  # the state stays, so the next pass tries again
@@ -2549,7 +2775,6 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     if found and not escalate(root, adapter, name, repo, found):
         return 1
     state.update(seen, tier=STRONG[0] if found else tier, log_read=tier != "mid" or bool(found))
-    keep_state(root, state)
     return 0
 
 
@@ -2604,6 +2829,54 @@ def builder_action(
     if not room:
         return "held", NO_ROOM
     return "restart", None
+
+
+# --- builders as short jobs (brief #1389, SPEC-0064 build (c), ADR-0586) -----------------------
+
+EVENT_LABELS = ("agk:conflict", "agk:ci-red")  # a merge of main or conflict need, a red check
+WAITS = "waits for an event"
+FAILED_TWICE = "failed twice"
+
+
+def job_ended(job: dict | None, facts: dict, code: str | None) -> None:
+    """Count the end of the job the supervisor started, once: a job that exits with a code other
+    than 0, or ends with no progress (no push, no post and no change of its summary), is a
+    failure; a job with progress clears the count (rule 9)."""
+    if not job or not job.get("open"):
+        return
+    job["open"] = False
+    failed = code not in (None, "0") or facts.get("mark") == job.get("mark")
+    job["fails"] = job.get("fails", 0) + 1 if failed else 0
+
+
+def job_gate(job: dict | None, facts: dict, now) -> tuple[str, str | None] | None:
+    """For an ended builder with a pull request: `held (failed twice)` until its head or a listed
+    author's comment changes, `left (waits for an event)` while it owes nothing; None when its
+    event is there (a verdict, a correction or an answer newer than its own move, a conflict or
+    red-check label, or its last job failed once), so the next job starts (rules 4 and 9)."""
+    owed = facts.get("owed")
+    if job and job.get("fails", 0) >= 2:
+        moved = facts.get("head") != job.get("head") or (
+            owed is not None and stamp_of(owed) > str(job.get("owed") or "")
+        )
+        if not moved:
+            return "held", FAILED_TWICE
+        job["fails"] = 0
+    if job and job.get("fails", 0) == 1:  # the event it was started on is still not served
+        return None
+    if owed is not None and owed > facts["own"]:
+        return None
+    if any(x in EVENT_LABELS for x in facts.get("labels") or []):
+        return None
+    return "left", WAITS
+
+
+def job_started(facts: dict, before: dict | None) -> dict:
+    """What a started job is measured against when it ends (rule 9)."""
+    owed = facts.get("owed")
+    return {"open": True, "head": facts.get("head"), "mark": facts.get("mark"),
+            "owed": stamp_of(owed) if owed else None,
+            "fails": (before or {}).get("fails", 0)}  # fmt: skip
 
 
 def worktree_safe(worktree: Path) -> bool:
@@ -2798,7 +3071,15 @@ def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | Non
     if pushed.get("date"):
         moves.append(session.moment(pushed["date"]))
     reports = [c for c in session.in_order(said) if session.first_line(c).startswith("Report:")]
+    summaries = [
+        str(c.get("updated_at") or "")
+        for c in said
+        if session.SUMMARY.fullmatch(session.first_line(c))
+    ]
     return {
+        "head": sha,  # brief #1389: the head, labels and the mark of progress of the next job
+        "labels": session.labels_of(pull),
+        "mark": f"{sha}|{newest(said, ALIVE)}|{max(summaries, default='')}",
         "pr": pull["number"],
         "own": max(x for x in moves if x is not None),
         "owed": newest(said, OWED),
@@ -2829,7 +3110,7 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
     limit = launch.max_builders(Path(root))
     memo = builder_memo(root)
     restarts, held = memo.setdefault("restarts", {}), memo.setdefault("held", {})
-    checks = memo.setdefault("checks", {})
+    checks, jobs = memo.setdefault("checks", {}), memo.setdefault("jobs", {})
     table = launch.process_table()
     running = sum(
         1 for w, r in records if not launch.exited(w, r) and launch.process_alive(r["pid"])
@@ -2864,17 +3145,30 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
             safe=state != "idle" or worktree_safe(worktree),
             checked=checked,
         )
+        short = state == "ended" and facts["pr"] is not None  # brief #1389: one job per event
+        if short:
+            exit_code = launch.fields_of(worktree / launch.EXIT_FILE).get("exit_code")
+            job_ended(jobs.get(name), facts, exit_code)
+        if short and (action == "restart" or why == "restarted within the hour"):
+            action, why = job_gate(jobs.get(name), facts, now) or (action, why)
+        if action == "restart" and not memory_floor(root):  # brief #1409 answer 5
+            action, why = "held", f"setting: {launch.MEMORY_SETTING}"
         if action == "restart" and state == "idle" and not stopped(record["pid"]):
             action, why = "held", "the process did not stop"
         if action == "restart":
             prompt = launch.resume_for(name, number, None, facts["pr"], facts.get("author"))
+            prompt += launch.FIX_JOB if short else ""
+            kinds = [("fix", facts["pr"])] if short else None
             code, _ = session.quietly(
-                launch.start_with, adapter, [(name, number, None)], [prompt], None, Path(root)
-            )
+                launch.start_with, adapter, [(name, number, None)], [prompt], None, Path(root),
+                kinds,
+            )  # fmt: skip
             action, why = ("restarted", None) if code == 0 else ("held", "the adapter failed")
             if code == 0:
                 restarts[name] = stamp_of(now)
                 running += state == "ended"
+                if short:
+                    jobs[name] = job_started(facts, jobs.get(name))
         if action == "restarted":
             checks.pop(name, None)
         if action == "held" and why != WORKING:  # a working builder needs no one
@@ -2896,6 +3190,99 @@ def builder_pass(root, repo: str, adapter: str) -> None:
         lines = [f"watchdog: builders not read: {exc}"]
     if lines:
         print("\n".join(lines))
+
+
+# --- one conductor per machine (brief #1409, ADR-0592) --------------------------------------
+
+JOB_RECORD = {"AGK_JOB_KIND": "conductor", "AGK_ITEM": "", "AGK_HEAD": ""}  # the record's kind
+ONE_CONDUCTOR = "watchdog: conductor {name} is running on this machine; nothing started"
+
+
+def memory_floor(root) -> bool:
+    """Whether free memory is at `[flow] min_free_memory_mb` or above, read now (answer 5)."""
+    try:
+        return launch.memory_allows(Path(root))
+    except CheckError:
+        return False
+
+
+def conductor_gate(root, now=None) -> bool:
+    """Whether a conductor may start on this machine (brief #1409 answers 1, 2 and 5): free
+    memory at the floor and no live conductor, or the one live conductor started by the kit was
+    idle by ADR-0568's signs (two quiet reads of its process tree), stopped at most once an hour.
+    Prints one line when it starts nothing; a person's own conductor is never stopped."""
+    now = now or datetime.now(UTC)
+    if not memory_floor(root):
+        print(f"watchdog: conductor not started: free memory below {launch.MEMORY_SETTING}")
+        return False
+    alive = launch.live_conductors(root)
+    if not alive:
+        return True
+    name, pid, worktree, record = alive[0]
+    if len(alive) > 1 or worktree is None or record is None:
+        print(ONE_CONDUCTOR.format(name=name))
+        return False
+    memo = builder_memo(root)
+    mine = memo.setdefault("conductor", {})
+    quiet = idle_minutes(root)
+    table = launch.process_table()
+    young = now - session.moment(record["started_utc"]) < timedelta(minutes=quiet)
+    busy = busy_signs(root, worktree, record, table, now, quiet)
+    cpu = None if table is None else launch.tree_cpu(pid, table)
+    shown = None if cpu is None else {str(p): c for p, c in sorted(cpu.items())}
+    checked = two_reads(mine.setdefault("checks", {}), name, shown, now)
+    last = when(str(mine.get("stopped_at") or ""))
+    if young or busy or not checked:
+        why = "left (working)"
+    elif last is not None and now - last < RESTART_GAP:
+        why = "idle -> held (stopped within the hour)"
+    elif not worktree_safe(worktree):
+        why = "idle -> held (unpushed work)"
+    elif not stopped(pid):
+        why = "idle -> held (the process did not stop)"
+    else:
+        mine["stopped_at"] = stamp_of(now)
+        mine["checks"].pop(name, None)
+        keep_builder_memo(root, memo)
+        print(f"watchdog: conductor {name} idle -> stopped; one starts in its place")
+        return True
+    keep_builder_memo(root, memo)
+    print(f"watchdog: conductor {name} {why}")
+    print(ONE_CONDUCTOR.format(name=name))
+    return False
+
+
+def stop_command(pids: list[int]) -> str:
+    """The one line a person runs to close the extra conductors (answer 4)."""
+    if sys.platform == "win32":
+        return "taskkill /T /F " + " ".join(f"/PID {p}" for p in pids)
+    return f"pkill -TERM -P {','.join(map(str, pids))}; kill {' '.join(map(str, pids))}"
+
+
+def extra_conductor_lines(root, holder: str | None = None) -> list[str]:
+    """One `NEEDS-YOU:` line when this machine runs more than one conductor: keep the lease
+    holder (else the first), close the others; names only, never a stop (answer 4)."""
+    try:
+        alive = launch.live_conductors(root)
+    except (OSError, CheckError):
+        return []
+    if len(alive) < 2:
+        return []
+    if holder is None:
+        with contextlib.suppress(CheckError, OSError):
+            issue = plan_issue(root)
+            repo = session.repo_name(root)
+            held = issue and lease_holder(
+                plan_comments(repo, issue), verdict_authors(root), datetime.now(UTC)
+            )
+            holder = held[0] if held else None
+    names = [a[0] for a in alive]
+    keep = holder if holder in names else names[0]
+    close = [a for a in alive if a[0] != keep]
+    return [
+        f"NEEDS-YOU: {len(alive)} conductors on this machine: keep {keep}, close "
+        f"{', '.join(a[0] for a in close)}; stop with: {stop_command([a[1] for a in close])}"
+    ]
 
 
 # --- the reviewer at the gate (brief #1248, ADR-0528) ---------------------------------------
