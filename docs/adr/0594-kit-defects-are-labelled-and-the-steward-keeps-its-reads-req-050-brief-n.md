@@ -44,10 +44,11 @@ permission mode, not the kit's guard.
 
 ## Consequences
 
-A builder or steward has one named place for a kit defect, kept apart from product work, and the owner sees the open ones
-in one line each. A steward that loses its reads says why once and goes on through the kit's scripts. Protected path
-classes changed: `.claude/` (`agents/steward.md`, `hooks/steward_guard.py`), `scripts/agk/` (`steward_owner.py`,
-`session_plan.py`, `doctor.py`) and `tests/kit/` (`test_kit_defect_report.py`).
+A builder or steward has one named place for a kit defect, kept apart from product work, and the owner sees the open
+ones in one line each. A steward that loses its reads says why once and goes on through the kit's scripts. Protected
+path classes changed: `.claude/` (`agents/steward.md`, `hooks/steward_guard.py`), `scripts/agk/` (`steward_owner.py`,
+`session_plan.py`, `doctor.py`), `tests/kit/` (`test_kit_defect_report.py`) and `agk.toml` (the test map names the
+new test file).
 
 ## Residual
 

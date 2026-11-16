@@ -48,7 +48,9 @@ def made(n: int) -> str:
 
 
 def git(root: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)  # nosec B603 B607
+    subprocess.run(  # nosec B603 B607 - fixed git argument list, no shell
+        ["git", *args], cwd=root, check=True, capture_output=True
+    )
 
 
 @pytest.fixture
@@ -342,9 +344,12 @@ def test_req050_a_read_the_runtime_refused_names_the_permission_setting(
 def test_req050_the_steward_is_told_to_check_its_reads_and_list_kit_defects():
     """REQ-050: brief #1411 answers 1 and 2 (the steward's instructions name both steps)."""
     text = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
-    assert "steward_owner.py reads" in text and "/doctor" in text
-    assert "steward_owner.py defects" in text and "steward_owner.py defect " in text
-    assert LABEL in text
+    assert "docs/guides/local-mode.md` (ADR-0594)" in text and "/doctor" in text and LABEL in text
+    guide = (ROOT / "docs" / "guides" / "local-mode.md").read_text(encoding="utf-8")
+    guide = guide.split("## Reporting a defect of the kit", 1)[1].split("\n## ", 1)[0]
+    assert "steward_owner.py reads" in guide and "/doctor" in guide
+    assert "steward_owner.py defects" in guide and "steward_owner.py defect " in guide
+    assert LABEL in guide and "never `agk-brief`" in guide
 
 
 def test_req050_doctor_changes_no_permission_mode():
