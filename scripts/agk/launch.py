@@ -157,6 +157,13 @@ CARRY_PR = (
     "run `python3 scripts/agk/session.py resume --pr {pr}` and continue from its `next:` step on "
     "the same branch and the same pull request (session rule 9); never open a second one."
 )
+FIX_JOB = (  # brief #1389 (ADR-0586): the supervisor's next job of a pull request
+    "This is one short job (SPEC-0064 rule 4): resume from the working summary, the newest "
+    "verdict and the diff it names, do only the step its event asks (a fix list, a merge of main "
+    "or a conflict, a red check, an answer), push, refresh the working summary with its fixed "
+    "sections, post your `Report:` and end; never run `session.py watch` and never wait: the "
+    "supervisor starts the next job on its event.\n"
+)
 CARRY_TAKE = (
     "the brief is already yours, so do not take it again; read it on GitHub, build it from a "
     "fresh origin/<default branch> on its own branch and open one pull request that names it "

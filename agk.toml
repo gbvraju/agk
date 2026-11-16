@@ -336,6 +336,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_conductor_tier.py",
   "tests/kit/test_watchdog_builders.py",
@@ -569,6 +570,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_autopilot_status.py",
   "tests/kit/test_autopilot_adapters.py",
@@ -834,6 +836,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_autopilot_status.py",
   "tests/kit/test_steward_owner_question.py",
   "tests/kit/test_wait_until_event.py",
@@ -1017,6 +1020,7 @@ tests = [
 [[testing.map]]
 code = "config/session-rules.md"
 tests = [
+  "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_conductor_guard_issue.py", "tests/kit/test_core_audit.py", "tests/kit/test_core_rules_page.py",
   "tests/kit/test_fix_list_tags.py", "tests/kit/test_launch.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_run.py", "tests/kit/test_personal_state.py", "tests/kit/test_pr_summary.py",
