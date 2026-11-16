@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 # The signal table (SPEC-0057 rule 5, ADR-0371): the only place that names the files and dependencies that suggest a
 # work type or stack. It is read from the kit's own root, never from the repository being read. A signal is a proposal
 # for a person to confirm. `python3 scripts/agk/front_door.py check-signals` checks its form against config/playbooks/.

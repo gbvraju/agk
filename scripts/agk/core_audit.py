@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Which checks and rules of the kit ever refused something (brief #328, ADR-0188).
 
     python3 core_audit.py [--since YYYY-MM-DD] [--json] [--write] [--today YYYY-MM-DD]

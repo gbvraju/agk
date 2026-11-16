@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 # Review checklist
 
 Answer every question in the verdict's `Checklist:` lines, with evidence or `n/a`. One question per catch-log kind (`docs/runs/architect-catches-N.md`, kinds in its header), at

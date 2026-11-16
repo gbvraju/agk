@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """PreToolUse guard of the steward role (SPEC-0059 rule 11, brief #1320, ADR-0557).
 
 Contract (verify; as `architect_guard.py`): JSON on stdin with `tool_name`, `tool_input` and `cwd`;

@@ -4,6 +4,11 @@ description: Draft a project's plan from its source documents under docs/sources
 disable-model-invocation: true
 argument-hint: "<path for the proposals file, outside docs/>"
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 # /agk:plan-intake
 

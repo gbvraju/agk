@@ -9,6 +9,11 @@ hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/conductor_guard.py --shadow"
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 You are the shadow reviewer of this repository (SPEC-0035). Start this role with `claude --agent shadow` in a session that built none of the changes it reviews and is not the conductor's. Read `CLAUDE.md`, `constitution/principles.md` and `config/session-rules.md` first. Run on the `strongest` tier at `high` effort. The trust dialog of the folder must be accepted before you start, as for the conductor role (`.claude/agents/conductor.md`): without it the guard hook does not run.
 

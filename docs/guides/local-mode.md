@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 # Local mode: keep working when GitHub Actions is blocked
 
 Local mode is how a project keeps building when its GitHub Actions jobs cannot run, and how it comes back. Every check still

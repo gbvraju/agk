@@ -3,6 +3,11 @@ name: drift-auditor
 description: Read-only audit of the repository against its requirements, specs, ADRs and protected-path rules. Reports findings; never edits.
 tools: Read, Grep, Glob
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 You audit this repository for drift. You are read-only: you never edit files, run commands that write, or open PRs.
 

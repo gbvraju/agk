@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The outbound data guard (SPEC-0059 rule 6, build (e); brief #1324, ADR-0561).
 
 Usage: python3 scripts/agk/steward_outbound.py check (--text TEXT | --file FILE) [--root DIR]
