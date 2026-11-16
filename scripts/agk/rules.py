@@ -11,7 +11,8 @@ four core files, every file under `.claude/agents/` and `config/review-checklist
 
 `budget` prints `<path> <words> <rule lines>` for each instruction file. A rule line is a
 numbered or bulleted line outside the front matter and fenced code. With `--check` it compares the
-counts with `config/rule-budget.txt` and exits 1 on any difference, naming the file.
+counts with `config/rule-budget.txt` and exits 1 on any difference, naming the file. `size_ruling`
+and `budget_ruling` state the owner's two standing rulings (ADR-0583) for the conductor's verdicts.
 
 `dropped` reads, with `gh api` GET only or from recorded responses (`--api-dir`: `pulls.json` and
 `comments-<n>.json`), the open and merged pull requests updated since DATE, and counts the numbered
@@ -182,6 +183,26 @@ def budget_problems(root: Path) -> list[str]:
     for rel in sorted(set(baseline) - set(instruction_files(root))):
         problems.append(f"{rel}: not an instruction file; remove its line from {BASELINE}")
     return problems
+
+
+STANDING = "ADR-0583"  # the owner's two standing rulings (brief #1385)
+
+
+def size_ruling(changed: int, guide: int | None, findings: int) -> str | None:
+    """Ruling 1: at most three times the size guide (300 without one) and no finding is accepted;
+    None means the owner is asked as before."""
+    guide = guide or 300
+    if findings or changed > 3 * guide:
+        return None
+    return f"Size: {changed} of {guide}, accepted by standing ruling ({STANDING})"
+
+
+def budget_ruling(rel: str, old: int, new: int, old_rules: int, new_rules: int) -> str | None:
+    """Ruling 2: words up to ten percent over the baseline with no new rule line need no ruling;
+    None means the owner is asked as before."""
+    if new_rules > old_rules or new * 10 > old * 11:
+        return None
+    return f"Rule budget: {rel} {old} to {new} words, standing ruling ({STANDING})"
 
 
 def budget(root: Path, check: bool) -> int:

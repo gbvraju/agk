@@ -314,6 +314,13 @@ the watchdog into WSL and disables (never deletes) the Windows task. `/agk:wsl s
 `/agk:wsl back` returns. Behind a company proxy a download fails until the company root certificate is given: the skill
 asks for its file. Screenshots that `design_compare.py` compares are captured again once on Linux, where fonts differ.
 
+The container engine is a choice (brief #1379, ADR-0579): `/agk:wsl` reads the project's container files and scripts
+and the engines on the machine, recommends one with its reason, and gives the chosen engine the same checks: its version
+on Windows and in WSL, the volumes listed with export and import commands (nothing moved), one container and one compose
+service started, and the Windows engine stopped after the move (never uninstalled) and started again by
+`/agk:wsl back`. Two engines never share the ports. The engines it offers, with their licence and group notes, are in
+the skill's own page, `skills/wsl/SKILL.md`.
+
 ## When work waits on the owner
 
 Local mode uses the same three `[flow]` settings, labels and comments as CI mode. A pull request that waits on the owner
