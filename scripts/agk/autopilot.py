@@ -27,7 +27,9 @@ kind, item, head, since when and its last event (the newest of the record and th
 is never adopted as a job. Then it reads the plan and the sweep, the GitHub reads of one
 `watchdog --pass` (at most those calls), and prints the queue (the plan's `Start` line), what waits
 on the owner (the sweep's `NEEDS-YOU:` lines), the held jobs (those of them that say `held (`) and
-one `quiet:` line with the reason no job would start. It posts nothing and writes nothing.
+one `quiet:` line with the reason no job would start. It posts nothing and writes nothing. After the
+jobs, `refusals today: <n> (<reason> <k>, ...)` counts the hook refusals of the UTC day from the
+refusal log (brief #1410, ADR-0593), or says `none`.
 
 `append_health` is the pass's one line per pass (build (b) calls it) in `agk-autopilot.jsonl` of
 the user's temp folder, never the checkout: jobs started by kind, ended, failed, held, pull
@@ -55,6 +57,7 @@ from statistics import median
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import conductor
+import guard_logs
 import launch
 import metrics
 import session
@@ -182,11 +185,12 @@ def github_lines(root: Path) -> tuple[list[str], bool]:
     return out, ok
 
 
-def status(root: Path) -> int:
+def status(root: Path, now: datetime | None = None) -> int:
     jobs, roots = job_lines(root)
     print(f"jobs: {len(jobs) or 'none'}")
     for line in jobs:
         print(line)
+    print(guard_logs.today_line(root, now or datetime.now(UTC)))  # brief #1410, ADR-0593
     table = claude_processes()
     if table is None:
         print("unrecorded: unknown (the process table cannot be read)")

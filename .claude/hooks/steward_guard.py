@@ -383,6 +383,20 @@ def command_problem(words: list[str], cwd: Path, project: Path, depth: int) -> s
     return None
 
 
+def keep_refusal(payload: object, found: str) -> bool:
+    """Brief #1410 (ADR-0593): one redacted line per denial in `<git common dir>/agk/refusals.log`,
+    its reason code the path class the denial names; a failure changes nothing."""
+    try:
+        match = re.search(r"\(path class: ([^()]+)\)$", found)
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
+        import guard_logs  # noqa: PLC0415 - the kit's own folder, only when something is denied
+
+        code = match.group(1) if match else "other"
+        return guard_logs.record_refusal(payload, "steward guard", code, "steward")
+    except Exception:  # noqa: BLE001 - keeping the line never changes the decision
+        return False
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -392,6 +406,7 @@ def main() -> int:
         decide(payload) if isinstance(payload, dict) else reason("an unreadable call", "hook input")
     )
     if found:
+        keep_refusal(payload, found)
         out = {"hookEventName": "PreToolUse", "permissionDecision": "deny"}
         print(json.dumps({"hookSpecificOutput": {**out, "permissionDecisionReason": found}}))
     return 0
