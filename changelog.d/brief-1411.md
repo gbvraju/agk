@@ -1,1 +1,0 @@
-- A defect of the kit itself is drafted in one form (`steward_owner.py defect`: version, machine, reason codes, redacted refusals, checked by the outbound guard) and filed labelled `agk-kit-defect`, which the plan never offers; the steward lists open ones, and a steward whose `gh api` reads are refused names the setting and the restoring step once (brief #1411)

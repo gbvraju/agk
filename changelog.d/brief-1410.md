@@ -1,1 +1,0 @@
-- Every hook refusal is kept on the machine, redacted, in the clone's git folder: `agk logs --refusals` prints it and `agk status` counts today's refusals by reason; an internal guard error names its kind and place, and a here-document with Windows line ends is no longer refused (brief #1410)
