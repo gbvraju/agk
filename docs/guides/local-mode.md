@@ -280,6 +280,17 @@ change with an ADR in the same pull request.
    session is restarted at most once an hour; a held one is a `NEEDS-YOU:` line of the next sweep. `launch.py` never
    starts a second session of a name whose process is still there. Install the scheduled task on the machine that runs
    the sessions, `python3 scripts/agk/conductor.py watchdog --install --pass`, and run the line it prints.
+
+   **One conductor per machine** (brief #1409, ADR-0592). Before any conductor start (`watchdog`, `watchdog --pass`,
+   `launch.py role --role conductor` and both adapters, for a job of kind `conductor`), the kit reads this machine's job
+   records of kind `conductor` under any name and the process list (`ps`, on Windows `Get-CimInstance Win32_Process`) for
+   a session started with `--agent conductor`. While one is alive nothing starts:
+   `watchdog: conductor <name> is running on this machine; nothing started`. The lease stays the rule between machines.
+   When the lease has lapsed beside a conductor the kit started, the pass reads it by the builders' signs of work: a
+   working one is `left (working)`; an idle one is stopped and one starts in its place, at most once an hour. A conductor
+   a person started is never stopped. When more than one already runs, the sweep and `agk status` print
+   `NEEDS-YOU: <n> conductors on this machine: keep <lease holder>, close <names>; stop with: <command>`. No conductor and
+   no builder restart starts below `[flow] min_free_memory_mb`; the next pass tries again.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then
