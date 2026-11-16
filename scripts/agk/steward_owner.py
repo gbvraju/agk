@@ -35,13 +35,13 @@ prompt as before. A steward the supervisor started (`AGK_STEWARD_START=conductor
 Brief #1411 (ADR-0594): `defect` drafts one kit-defect report: the title, the kit version
 (`version` of `agk.toml`), the operating system and shell, the reason codes and the newest N (5)
 redacted lines of the refusal log (`guard_logs`, ADR-0593) and what should happen instead (FILE).
-The outbound data guard (`steward_outbound.check`) checks the title and body first, fail closed (exit 2). It
-prints the draft; `--post` opens it as one issue in the project's own repository labelled
-`agk-kit-defect`, never `agk-brief`, so the plan never offers it; in personal mode nothing is
-posted. `defects` lists the open kit defects, one line each, or `kit defects: none open`. `reads`
-checks one read, `gh api rate_limit`: `reads: ok`, or once per session one line naming the setting
-or permission mode that refuses it and the one step that restores it (exit 1); `--refused` says
-the runtime itself refused the steward's own `gh api` call, and names the permission entry of
+The outbound data guard (`steward_outbound.check`) checks the title and body first, fail closed
+(exit 2). It prints the draft; `--post` opens it as one issue in the project's own repository
+labelled `agk-kit-defect`, never `agk-brief`, so the plan never offers it; in personal mode nothing
+is posted. `defects` lists the open kit defects, one line each, or `kit defects: none open`.
+`reads` checks one read, `gh api rate_limit`: `reads: ok`, or once per session one line naming the
+setting or permission mode that refuses it and the one step that restores it (exit 1); `--refused`
+says the runtime itself refused the steward's own `gh api` call, and names the permission entry of
 `.claude/settings*.json` that explains it, else the session's permission mode `(verify)`.
 """
 

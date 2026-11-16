@@ -205,8 +205,8 @@ def test_req050_the_plan_never_offers_a_kit_defect():
 def test_req050_the_steward_lists_open_kit_defects_one_line_each(project, monkeypatch, capsys):
     """REQ-050: brief #1411 answer 1 (the steward lists open kit defects in one line each)."""
     issues = [
-        {"number": 12, "title": "the guard refuses a heredoc", "created_at": "2026-11-15T08:00:00Z"},
-        {"number": 5, "title": "status prints twice\nsecond line", "created_at": "2026-11-01T08:00Z"},
+        {"number": 12, "title": "the guard refuses a heredoc", "created_at": "2026-11-15T08:00Z"},
+        {"number": 5, "title": "status prints twice\nsecond line", "created_at": "2026-11-01T08Z"},
         {"number": 13, "title": "a pull request", "pull_request": {}},
     ]
     hub = GitHub(issues)
