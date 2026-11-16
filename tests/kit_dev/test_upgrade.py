@@ -683,7 +683,8 @@ def upgrade_cli(target: Path, *args: str):
     )
 
 
-# Released tags known to refuse their own install from a stale file table (issues #1256 and #1424, ADR-0539, ADR-0599).
+# Released tags known to refuse their own install from a stale file table
+# (issues #1256 and #1424, ADR-0539, ADR-0599).
 KNOWN_BROKEN_TAGS = ("0.64.3", "0.64.6")
 
 
