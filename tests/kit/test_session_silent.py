@@ -8,9 +8,8 @@ reads. A `gh` stub on `PATH`, saved responses (a call with no fixture fails), no
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import stat
+from pathlib import Path
 
 import pytest
 from test_session import (
