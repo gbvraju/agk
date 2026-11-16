@@ -907,6 +907,9 @@ tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py
 code = "scripts/agk/steward_owner.py"
 tests = ["tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py"]
 [[testing.map]]
+code = "scripts/agk/steward_voice.py"
+tests = ["tests/kit/test_steward_voice.py", "tests/kit/test_steward_daily.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/survey.py"
 tests = ["tests/kit/test_survey.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
