@@ -157,8 +157,10 @@ tests = [
 code = "scripts/agk/autopilot.py"
 tests = [
   "tests/kit/test_autopilot_status.py",
+  "tests/kit/test_one_conductor_per_machine.py",
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_autopilot_settings.py",
+  "tests/kit/test_autopilot_modes.py",
 ]
 [[testing.map]]
 code = "scripts/agk/batch.py"
@@ -341,6 +343,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 code = "scripts/agk/conductor.py"
 tests = [
   "tests/kit/test_autopilot_build_jobs.py",
+  "tests/kit/test_one_conductor_per_machine.py",
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_conductor_tier.py",
   "tests/kit/test_watchdog_builders.py",
@@ -576,6 +579,7 @@ tests = [
 code = "scripts/agk/launch.py"
 tests = [
   "tests/kit/test_autopilot_build_jobs.py",
+  "tests/kit/test_one_conductor_per_machine.py",
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_autopilot_status.py",
   "tests/kit/test_autopilot_adapters.py",

@@ -1,0 +1,1 @@
+- One machine runs at most one conductor: the watchdog, the supervisor pass, `launch.py role conductor` and both adapters start none beside a live one under any name, an idle one is replaced at most once an hour, extras are named once by the sweep, and no conductor or builder starts below `[flow] min_free_memory_mb` (brief #1409)

@@ -241,6 +241,12 @@ report has six headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`, 
 
 Once the first spec is built by hand you can let sessions find their own work. Three roles take part: a builder session, the conductor and you. The working rule of a session is in `config/session-rules.md`; read it once.
 
+**With the autopilot.** One supervisor per machine starts every session as a short job (SPEC-0064), so you start no conductor or builder by hand (items 2 and 3 are the manual way):
+- On each machine run `agk autopilot on` (`python3 scripts/agk/autopilot.py on`) once: it installs the supervisor's scheduler entry, checks the machine and prints the `[autopilot] mode` line to set by pull request.
+- `agk status` shows the running jobs, the queue and what waits on you.
+- `agk next` (`python3 scripts/agk/autopilot.py next`) runs the next review, fix or build job in the foreground and ends, posting nothing; `agk next --brief <n>` builds brief n. In personal mode it is the way to run jobs.
+- In CI mode the launcher task (`kit/templates/runtime/launcher.txt`) is the supervisor and starts each job as a cloud session.
+
 1. **File the work as a brief.** A brief is an issue labelled `agk-brief`. Create the label once (the maintainer does; `session.py next` finds nothing without it); `session.py claim` also labels a brief it takes `agk:taken`, which GitHub creates on its first use, so that the plan sees the take in the listing (ADR-0529), then write the issue in this shape and check a saved copy before filing it with `python3 scripts/agk/check_brief.py FILE`, which prints `ok brief`:
 
 ```text
@@ -355,10 +361,10 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
          - run: ./start-builders "$(python3 scripts/agk/session.py demand | python3 -c 'import json,sys; print(json.load(sys.stdin)["start"])')"
    ```
 
-   **Running around the clock.** Four roles keep the work moving without a person at the keyboard: the launcher, the conductor, and a builder on the strongest tier or on the mid tier. The kit ships their task texts as templates, `kit/templates/runtime/launcher.txt`, `kit/templates/runtime/conductor.txt` and `kit/templates/runtime/builder.txt` (one text for both builder tasks, by its `Tier:` line: strongest for `design` and `build`, mid for `small` and `mechanical`), with `kit/templates/runtime/README.md` saying which is which; it installs and starts none of them. Replace `<owner>/<repo>` and `<default branch>` and keep every rule. The conductor text starts builders itself, in real time, and the launcher is its backup, restarting a conductor whose lease is free and a builder silent for 45 minutes.
+   **Running around the clock.** Four roles keep the work moving without a person at the keyboard: the launcher, the conductor, and a builder on the strongest tier or on the mid tier. The kit ships their task texts as templates, `kit/templates/runtime/launcher.txt`, `kit/templates/runtime/conductor.txt` and `kit/templates/runtime/builder.txt` (one text for both builder tasks, by its `Tier:` line: strongest for `design` and `build`, mid for `small` and `mechanical`), with `kit/templates/runtime/README.md` saying which is which; it installs and starts none of them. Replace `<owner>/<repo>` and `<default branch>` and keep every rule. The launcher is the supervisor in CI mode: it runs `autopilot.py jobs --claim` and starts each review, build and fix job as a short cloud session, and is the backup for a builder silent for 45 minutes; the conductor text is one review job.
 
-   - On a laptop (as a pilot runs it, and the only path in personal mode, which has no scheduled tasks): run the conductor loop of item 3 in one terminal, and start builders with `/agk:launch` when its plan offers work; each builder follows `builder.txt` from its second paragraph on.
-   - In a cloud runtime: one scheduled task per template. The launcher runs every 30 minutes and fires the other tasks; the conductor runs every 12 hours (and whenever the launcher finds its lease free); each builder task is fired by the conductor (or by the launcher, its backup) with its item in a second message, and keeps its pull request until it closes.
+   - On a laptop: `agk autopilot on` (see **With the autopilot.** above); in personal mode, which has no scheduled tasks, run `agk next` for each job. By hand, run the conductor loop of item 3 in one terminal and start builders with `/agk:launch`; each builder follows `builder.txt` from its second paragraph on.
+   - In a cloud runtime: one scheduled task per template. The launcher runs every 30 minutes and fires the other tasks, each one short job with its item in a second message: the conductor task for a review job (it no longer runs every 12 hours), a builder task for each build or fix job; a builder waits in the foreground no more.
 
    What you still do: approve specs, merge workflow and ruleset changes, and answer every `Question:` whose first line says `for the maintainers`. A workflow change comes to you as a file, not as text to paste: the builder commits the whole proposed file at `.agk/workflow-proposals/<name>.yml` on its branch (a path the cloud accepts; it never changes `.github/workflows/` itself) and its `Question: Q-<N>-n for the maintainers:` names `/agk:workflow-apply <pr>`. Run that command from your checkout: it checks each file, shows the diff and, after your yes, moves it into `.github/workflows/`, commits, pushes the branch with your own `git` and `gh` and answers the question (ADR-0505). Governance fails while a proposal is still on the head, so none reaches the default branch. A push refused for the workflow permission prints `gh auth refresh -s workflow`. How a builder waits: in an interactive Claude Code session it runs `session.py watch` as a background task, whose end wakes the session (item 4); in a cloud scheduled task it runs `watch` in the foreground with a timeout of at most 9 minutes and runs it again, because such a task ends as soon as its session goes idle.
 
@@ -405,6 +411,25 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    # 1. The worktree first, and wait until its folder exists.
    $repo = (git rev-parse --show-toplevel).Trim()
    $worktree = Join-Path (Split-Path $repo -Parent) "agk-$session"
+   # One conductor per machine (brief #1409): a conductor job starts nothing while a record of kind conductor beside this
+   # checkout names a live process that has not written its exit file (verify: not run on Windows by the session that wrote it).
+   if ($env:AGK_JOB_KIND -eq 'conductor') {
+       foreach ($dir in @(Get-ChildItem -LiteralPath (Split-Path $repo -Parent) -Directory -Filter 'agk-*')) {
+           $record = Join-Path $dir.FullName '.agk-session-pid'
+           if (-not (Test-Path -LiteralPath $record)) { continue }
+           $f = @{}
+           foreach ($file in @($record, (Join-Path $dir.FullName '.agk-session-exit'))) {
+               if (Test-Path -LiteralPath $file) {
+                   Get-Content -LiteralPath $file | ForEach-Object { $k, $v = $_ -split '=', 2; if ($null -ne $v) { $f[$k.Trim()] = $v.Trim() } }
+               }
+           }
+           $live = $f['pid'] -match '^\d+$' -and (Get-Process -Id ([int]$f['pid']) -ErrorAction SilentlyContinue)
+           if ($f['kind'] -eq 'conductor' -and $live -and (-not $f['ended_utc'] -or $f['ended_utc'] -lt $f['started_utc'])) {
+               [Console]::Error.WriteLine("start-session-windows: conductor $($f['session']) is running on this machine; nothing started")
+               exit 3
+           }
+       }
+   }
    git -C $repo fetch --quiet origin
    if (Test-Path -LiteralPath $worktree) {
        # The folder is there from an earlier start (a session that ended or crashed): reuse it when it is a clean
