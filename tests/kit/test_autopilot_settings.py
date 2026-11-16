@@ -165,8 +165,9 @@ def test_off_prints_the_commands_a_person_would_run(tmp_path, machine, monkeypat
 
 def test_the_old_settings_are_named_while_no_autopilot_table_is_set(tmp_path):
     """REQ-071 AC5: rule 7 (read for one release; doctor's `autopilot-settings` names them)."""
-    import config
     import doctor
+
+    import config
 
     root = project(tmp_path, '[flow]\nauto_start = true\nlaunch_adapter = "x"\n[capacity]\n')
     assert config.autopilot_settings(root)["legacy"] == ["auto_start", "launch_adapter", "capacity"]
@@ -280,7 +281,7 @@ def test_on_and_off_on_windows_use_one_named_task(tmp_path, machine, monkeypatch
 
 
 def test_the_machine_checks_warn_naming_the_setting(tmp_path, machine, monkeypatch, capsys):
-    """REQ-071 AC7: rule 11 (gh, the adapter, the memory and sleep; each warning names its setting)."""
+    """REQ-071 AC7: rule 11 (gh, the adapter, memory, sleep; each warning names its setting)."""
     import autopilot
     import conductor
 

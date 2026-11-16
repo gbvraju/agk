@@ -54,12 +54,13 @@ from statistics import median
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import conductor
-import config
 import launch
 import metrics
 import session
 import session_plan
 from common import CheckError, utf8_output
+
+import config
 
 HEALTH_FILE = "agk-autopilot.jsonl"
 COUNTS = ("ended", "failed", "held", "merged")
