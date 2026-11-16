@@ -261,6 +261,9 @@ jobs:
       - name: check_neutrality
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_neutrality.py
+      - name: check_licence_notice
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
+        run: python scripts/agk/check_licence_notice.py
       - name: check_build_state
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_build_state.py
