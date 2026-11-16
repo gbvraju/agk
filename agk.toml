@@ -159,6 +159,7 @@ tests = [
   "tests/kit/test_autopilot_status.py",
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_autopilot_settings.py",
+  "tests/kit/test_autopilot_modes.py",
 ]
 [[testing.map]]
 code = "scripts/agk/batch.py"

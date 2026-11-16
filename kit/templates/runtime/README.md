@@ -7,12 +7,13 @@ runtime, replaces `<owner>/<repo>` and `<default branch>`, and keeps every rule.
 
 | File | Task | Runs | Tier |
 | --- | --- | --- | --- |
-| `launcher.txt` | keeps one conductor alive, starts one builder per brief the plan offers, restarts a builder whose pull request was handed over or went silent | every 30 minutes | mid |
-| `conductor.txt` | the conductor role of `.claude/agents/conductor.md` on a long run, holding the `conductor-long` lease | every 12 hours | strongest |
-| `builder.txt` | one builder per brief, kept until its pull request closes; one text for two tasks, by its `Tier:` line | fired by the conductor, or the launcher as its backup | strongest for `design` and `build`; mid for `small` and `mechanical` |
+| `launcher.txt` | the supervisor in CI mode (SPEC-0064 rule 13): runs `autopilot.py jobs --claim` and starts one short cloud session per review, build or fix job; restarts a builder whose pull request was handed over or went silent | every 30 minutes | mid |
+| `conductor.txt` | the conductor role of `.claude/agents/conductor.md` for one review job, holding the `conductor-long` lease | fired by the launcher | strongest |
+| `builder.txt` | one builder per brief, as one short job per step until its pull request closes; one text for two tasks, by its `Tier:` line | fired by the launcher | strongest for `design` and `build`; mid for `small` and `mechanical` |
 
-The launcher fires the two builder tasks and the conductor task and nothing else; the conductor fires only the two builder tasks. A builder started by either gets its item in
+The launcher fires the two builder tasks and the conductor task and nothing else; the conductor fires none. A builder started by either gets its item in
 a second message (`Session name: ... Item: brief #<n> ... Reserved: ...`); with no such message it stops.
 
-The conductor text starts builders itself, in real time, on every `START` line of its watch and after every merge and
-verdict, and restarts handed-over and silent ones; the launcher is its backup, at 45 minutes of silence (brief #1202).
+The launcher is the supervisor in CI mode (brief #1391): the script picks the jobs by the rules a machine's
+`conductor.py watchdog --pass` uses and posts each claim, so every mode starts the same jobs; every job ends at its
+`Report:`, `Verdict:` or `Question:`, and the launcher stays the backup for a builder silent for 45 minutes.

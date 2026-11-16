@@ -2,6 +2,19 @@
 
     python3 autopilot.py status [--week] [--root DIR]
     python3 autopilot.py on|off|budget on|budget off [--today]|retry N [--root DIR]
+    python3 autopilot.py jobs [--claim] | next [--brief N] [--root DIR]
+
+Brief #1391, SPEC-0064 build (f), rule 13 (ADR-0589); `agk next` is `next`. `pick` is the
+supervisor's choice of jobs over GitHub-shaped records of any forge, so every mode starts the same
+jobs: a `review` job while a pull request's newest `Report:` is newer than every `Verdict:`,
+`Correction:` or answer, a `fix` job where build (c)'s `conductor.job_gate` sees its event, and a `build` job per brief the
+plan starts (personal mode: per open brief whose `Depends-on` issues are closed). An item with a
+`Started:` or `taken:` newer than its event and `conductor.START_HOURS` is held by that job's
+machine until the take lapses. `jobs [--claim]` prints the jobs from GitHub, gated by
+`job_allowed`, and with `--claim` posts one `Started:` claim per build or fix job first: CI mode's
+launcher task is the supervisor and fires one cloud session per `job:` line. `next [--brief N]`
+runs one job in the foreground through the adapter, waits for its exit file and ends; it posts
+nothing, and in personal mode reads the sidecar's files forge (`forge.FilesForge`), never `gh`.
 
 Brief #1390, SPEC-0064 build (d), rules 7, 8 and 11 (ADR-0587); `agk autopilot` is its short form.
 `on` installs the one scheduler entry (a crontab line tagged `# agk-autopilot`, or the Windows task
@@ -47,6 +60,7 @@ import shutil
 import subprocess  # nosec B404 - fixed argument lists, no shell
 import sys
 import tempfile
+import time
 import tomllib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -59,7 +73,7 @@ import launch
 import metrics
 import session
 import session_plan
-from common import CheckError, utf8_output
+from common import CheckError, personal_table, utf8_output
 
 import config
 
@@ -67,7 +81,7 @@ HEALTH_FILE = "agk-autopilot.jsonl"
 COUNTS = ("ended", "failed", "held", "merged")
 USAGE = (
     "usage: autopilot.py status [--week] | on | off | budget on | budget off [--today] | retry N"
-    " [--root DIR]"
+    " | jobs [--claim] | next [--brief N] [--root DIR]"
 )
 
 
@@ -522,6 +536,187 @@ def mode_lines(root: Path, now: datetime) -> list[str]:
     return [head, budget_line(root, now)]
 
 
+# --- every mode runs the same jobs (brief #1391, SPEC-0064 build (f), rule 13, ADR-0589) ----------
+
+CLEARED = "Verdict: cleared"  # waits for its merge: no builder job (Q-1391-1)
+HELD_BY = ("Started: ", "taken: ")  # a claim on an item: its job runs on some machine (rule 13)
+DEPENDS = re.compile(r"^Depends-on: #(\d+)\s*$", re.M)
+NEXT_POLL = 5  # seconds between two reads of the foreground job's exit file
+NEXT_POLLS = 6 * 3600 // NEXT_POLL  # six hours, LIFETIME's outer bound
+SLEEP = time.sleep
+PERSONAL_NOTE = (
+    "Personal mode (SPEC-0041): post nothing to GitHub and push nothing; the files forge of this "
+    "sidecar keeps every result (session rule 37).\n"
+)
+
+
+def holder(said: list, since: datetime | None, now: datetime) -> str | None:
+    """The session of the newest `Started:` or `taken:` newer than SINCE and than
+    `conductor.START_HOURS` ago: the job another machine may be running (Q-S0064-4)."""
+    edge = now - timedelta(hours=conductor.START_HOURS)
+    edge = max(edge, since) if since else edge
+    found = [c for c in session.in_order(said) if session.first_line(c).startswith(HELD_BY)
+             and session.moment(c.get("created_at")) > edge]  # fmt: skip
+    return (session.first_line(found[-1]).split() + ["?"])[1] if found else None
+
+
+def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict | None = None):
+    """(the jobs, the held ones) by the supervisor's rules, from GitHub-shaped records of any
+    forge: one `review` job while a non-draft pull request's newest `Report:` is newer than every
+    `Verdict:`, `Correction:` or answer; a `fix` job where `conductor.job_gate` (build (c)) sees its event, a clearing verdict
+    being none; a
+    `build` job per open brief that no open pull request names, of READY (the plan's starts) or,
+    with none, whose `Depends-on` issues are closed. A job whose item carries a newer claim is
+    held, never started twice (rule 13)."""
+    jobs: list[dict] = []
+    held: list[dict] = []
+    named, review = set(), None
+
+    def add(kind: str, item: int, name: str, since: datetime | None) -> None:
+        job = {"kind": kind, "item": item, "session": name}
+        if by := holder(comments.get(item) or [], since, now):
+            held.append(job | {"by": by})
+        else:
+            jobs.append(job)
+
+    for pull in sorted(pulls, key=lambda p: p["number"]):
+        n, said, brief = pull["number"], comments.get(pull["number"]) or [], session.brief_number(pull)
+        named.add(brief)
+        report = conductor.newest(said, ("Report:",))
+        verdict = conductor.newest(said, conductor.OWED)
+        if not pull.get("draft") and report and (verdict is None or report > verdict):
+            review = review or n
+        own = conductor.newest(said, conductor.ALIVE) or session.moment(pull.get("created_at"))
+        owing = [c for c in said if not session.first_line(c).startswith(CLEARED)]
+        facts = {"own": own, "owed": conductor.newest(owing, conductor.OWED),
+                 "labels": session.labels_of(pull)}  # fmt: skip
+        if brief is not None and conductor.job_gate(None, facts, now) is None:
+            add("fix", n, f"cb{brief}", facts["owed"])
+    if review is not None:
+        jobs.insert(0, {"kind": "review", "item": review, "session": "conductor"})
+    open_ = {i["number"] for i in issues}
+    for issue in sorted(issues, key=lambda i: i["number"]):
+        n = issue["number"]
+        if n in named or session.LABEL not in session.labels_of(issue):
+            continue
+        waits = any(int(d) in open_ for d in DEPENDS.findall(str(issue.get("body") or "")))
+        if (n not in ready) if ready is not None else waits:
+            continue
+        add("build", n, f"cb{n}{(ready or {}).get(n) or ''}", None)
+    return jobs, held
+
+
+def github_records(root: Path, repo: str) -> tuple[list, list, dict, dict]:
+    """The open pull requests, briefs and their comments from GitHub, and the plan's starts
+    (brief -> build letter); only the briefs the plan starts are read further."""
+    plan = session_plan.build(root)
+    ready = {r["brief"]: r.get("build") for r in [*plan.get("start", []), *plan.get("assign", [])]}
+    pulls = session.pages(f"repos/{repo}/pulls?state=open")
+    issues = session.pages(f"repos/{repo}/issues?state=open&labels={session.LABEL}")
+    if pulls is None or issues is None:
+        raise CheckError("the open pull requests and briefs cannot be read")
+    briefs = [i for i in issues if "pull_request" not in i]
+    comments = {}
+    for n in [p["number"] for p in pulls] + [n for n in ready if n in {i["number"] for i in briefs}]:
+        if (said := session.pages(f"repos/{repo}/issues/{n}/comments")) is None:
+            raise CheckError(f"#{n} cannot be read")
+        comments[n] = said
+    return pulls, briefs, comments, ready
+
+
+def forge_records(root: Path) -> tuple[list, list, dict, None]:
+    """The same records from a sidecar's files forge (personal mode): no `gh`, no network."""
+    import forge
+
+    files = forge.FilesForge(root)
+    pulls = files.get("pulls-open", "pulls?state=open")
+    issues = files.get(f"issues-{session.LABEL}", "issues?state=open")
+    said = {x["number"]: files.get(f"comments-{x['number']}", "") or [] for x in pulls + issues}
+    return pulls, issues, said, None
+
+
+def claim(repo: str, job: dict, now: datetime) -> bool:
+    """Rule 13: one `Started:` comment on the item before its job starts, so another machine's
+    supervisor holds it until it lapses (`conductor.START_HOURS`)."""
+    body = f"Started: {job['session']} {stamp(now)} by the supervisor ({job['kind']})"
+    found = session.gh(f"repos/{repo}/issues/{job['item']}/comments", "-f", f"body={body}",
+                       method="POST")  # fmt: skip
+    return found is not None
+
+
+def jobs_command(root: Path, claiming: bool, now: datetime) -> int:
+    """`jobs [--claim]`: the pass's jobs from GitHub, one line each (CI mode's launcher reads
+    them and fires one cloud session per `job:` line); a review job waits for a held lease."""
+    repo = session.repo_name(root)
+    pulls, briefs, comments, ready = github_records(root, repo)
+    jobs, held = pick(pulls, briefs, comments, now, ready)
+    issue = conductor.plan_issue(root)
+    lease = None if issue is None else conductor.lease_holder(
+        conductor.plan_comments(repo, issue), conductor.verdict_authors(root), now)  # fmt: skip
+    for job in jobs:
+        if job["kind"] == "review" and lease:
+            held.append(job | {"by": lease[0]})
+            continue
+        allowed, why = job_allowed(root, job["kind"], now)
+        line = f"{job['kind']} #{job['item']} {job['session']}"
+        if not allowed:
+            print(f"not started: {line} ({why})")
+        elif claiming and job["kind"] != "review" and not claim(repo, job, now):
+            print(f"not started: {line} (the claim cannot be posted)")
+        else:
+            print(f"job: {line}")
+    for job in held:
+        print(f"held: {job['kind']} #{job['item']} by {job['by']} (until its take lapses)")
+    print("jobs: none" if not jobs and not held else "jobs: end")
+    return 0
+
+
+def next_command(root: Path, brief: int | None, now: datetime) -> int:
+    """`next [--brief N]`: one job in the foreground, by the rules of `pick`, then end; it posts
+    nothing (personal mode: the files forge keeps the results). `--brief N` is the owner's own yes
+    to a build job (Q-S0064-8)."""
+    personal = personal_table(root) is not None
+    repo = root.name if personal else session.repo_name(root)
+    pulls, briefs, comments, ready = (forge_records(root) if personal
+                                      else github_records(root, repo))  # fmt: skip
+    jobs, held = pick(pulls, briefs, comments, now, ready)
+    if brief is not None:
+        jobs = [{"kind": "build", "item": brief, "session": f"cb{brief}"}]
+        held = [h for h in held if h["item"] == brief]
+    job = next((j for j in jobs if job_allowed(root, j["kind"], now, brief is not None)[0]), None)
+    if job is None or (brief is not None and held):
+        why = f"held by {held[0]['by']}" if held else "no job is due"
+        print(f"next: nothing started ({why})")
+        return 0
+    adapter = launch.launch_settings(root)[1]
+    if not adapter or not adapter.strip():
+        print("next: nothing started (setting: flow.launch_adapter)")
+        return 2
+    name, item = job["session"], job["item"]
+    print(f"next: {job['kind']} #{item} {name}")
+    if job["kind"] == "review":
+        args = ["role", "--role", "conductor", "--session", "conductor-next", "--adapter", adapter]
+        name, code = "conductor-next", launch.role_main(args, root=root)
+    else:
+        number = session.brief_number(next((p for p in pulls if p["number"] == item), {})) or item
+        prompt = (launch.prompt_for(name, number) if job["kind"] == "build" else
+                  launch.resume_for(name, number, None, item, None) + launch.FIX_JOB)  # fmt: skip
+        prompt += PERSONAL_NOTE if personal else ""
+        code = launch.start_with(adapter, [(name, number, None)], [prompt], None, root,
+                                 [(job["kind"], item)])  # fmt: skip
+    if code:
+        return 1
+    worktree = launch.worktree_of(root, name)
+    for _ in range(NEXT_POLLS):  # the foreground: wait for the job's own exit file
+        record = launch.read_record(worktree)
+        if record is not None and launch.exited(worktree, record):
+            break
+        SLEEP(NEXT_POLL)
+    ended = launch.fields_of(worktree / launch.EXIT_FILE).get("exit_code", "unknown")
+    print(f"next: {name} ended (exit {ended})")
+    return 0 if ended == "0" else 1
+
+
 def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
@@ -543,6 +738,11 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
         keep_state(root, data | {"retry": (data.get("retry") or {}) | {args[1]: stamp(now)}})
         print(f"autopilot: #{args[1]} may be retried")
         return 0
+    if args in (["jobs"], ["jobs", "--claim"]):
+        return jobs_command(root, args == ["jobs", "--claim"], now)
+    if args[:1] == ["next"] and (args[1:] == [] or (args[1:2] == ["--brief"] and len(args) == 3
+                                                    and args[2].isdigit())):  # fmt: skip
+        return next_command(root, int(args[2]) if args[1:] else None, now)
     if args not in (["status"], ["status", "--week"]):
         print(USAGE, file=sys.stderr)
         return 2

@@ -290,6 +290,13 @@ or the Windows task `agk-autopilot`, every `[autopilot] interval_minutes`) and r
 `agk.toml` change of `[autopilot] mode`. `budget off [--today]` relaxes `daily_budget`, `budget on` ends that, and
 `retry N` lifts a hold, each kept in `<git dir>/agk/autopilot.json`; `status` starts with the mode and the budget line.
 
+    python3 scripts/agk/autopilot.py jobs [--claim] | next [--brief N] [--root DIR]
+
+`agk next` (SPEC-0064 rule 13, ADR-0589): `next` runs one job in the foreground (the next review, fix or build job by
+the supervisor's rules, or the build of brief N), waits for its end and posts nothing; in personal mode it reads the
+files forge. `jobs` prints the pass's `job:`, `held:` and `not started:` lines from GitHub, and `--claim` posts one
+`Started:` claim per build or fix job first: CI mode's launcher task reads them and starts one cloud session per job.
+
 ## Steward voice
 
     python3 scripts/agk/steward_voice.py check FILE
