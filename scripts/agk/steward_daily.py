@@ -160,6 +160,10 @@ def daily_text(
                 lines.append(
                     f"- steward {m[1]}: calls {m[2] or 'not shown'}; tokens {m[3] or 'not shown'}"
                 )
+        cut = sum(
+            1 for m in memory if day_of(m) == day and first(m["body"]).startswith("Shortened:")
+        )
+        lines.append(f"Replies shortened ({day}): {cut}")
         filed = None
         if issues is not None:
             filed = [
