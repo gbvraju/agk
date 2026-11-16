@@ -119,7 +119,7 @@ def record_refusal(
         text = redact(refused_text(payload), patterns)[0]
         line = {
             "at": (now or datetime.now(UTC)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "session": session if isinstance(session, str) and NAME.fullmatch(session) else "unknown",
+            "session": session if NAME.fullmatch(str(session or "")) else "unknown",
             "role": role if NAME.fullmatch(role or "") else "unknown",
             "hook": hook,
             "reason": redact(reason, patterns)[0][:CUT],

@@ -1,12 +1,13 @@
 """Every hook refusal is kept on the machine, redacted (brief #1410, ADR-0593).
 
-Answer 1: each of the four hooks appends one JSON line per denial to `<git common dir>/agk/refusals.log`
-(time, session, role, hook, reason code, the command or path redacted by `guard.scan_text` and cut at
-500 characters); it rolls over at 1 MB keeping one older file, and a failed write never changes the
-decision. Answer 2: a `hook error` line adds the exception's type and the hook's function and line,
-never a value, and the denial adds `see agk logs --refusals`. Answer 3: `agk logs --refusals` and the
-`agk status` count. Answer 4: Windows-shaped seed runs against a throwaway database. Every name and
-value is invented (example.com); no network, no gh.
+Answer 1: each of the four hooks appends one JSON line per denial to
+`<git common dir>/agk/refusals.log` (time, session, role, hook, reason code, the command or path
+redacted by `guard.scan_text` and cut at 500 characters); it rolls over at 1 MB keeping one older
+file, and a failed write never changes the decision. Answer 2: a `hook error` line adds the
+exception's type and the hook's function and line, never a value, and the denial adds
+`see agk logs --refusals`. Answer 3: `agk logs --refusals` and the `agk status` count. Answer 4:
+Windows-shaped seed runs against a throwaway database. Every name and value is invented
+(example.com, example.io); no network, no gh.
 """
 
 from __future__ import annotations
@@ -50,11 +51,20 @@ def project(tmp_path: Path) -> Path:
 
 def run_hook(name: str, root: Path, tool: str, tool_input: dict, *args: str) -> dict | None:
     payload = {"tool_name": tool, "tool_input": tool_input, "cwd": str(root), "session_id": "s-1"}
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "CLAUDE_PROJECT_DIR": str(root),
-           "HOME": str(root.parent / "home"), "AGK_SESSION": "cb-example-1"}
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "CLAUDE_PROJECT_DIR": str(root),
+        "HOME": str(root.parent / "home"),
+        "AGK_SESSION": "cb-example-1",
+    }
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(HOOKS / f"{name}.py"), *args], input=json.dumps(payload),
-        capture_output=True, text=True, env=env, check=False, cwd=root,
+        [sys.executable, str(HOOKS / f"{name}.py"), *args],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+        cwd=root,
     )
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
@@ -144,7 +154,9 @@ def call_main(module, monkeypatch, capsys, payload: dict) -> dict:
     return json.loads(capsys.readouterr().out)["hookSpecificOutput"]
 
 
-def test_req050_a_hook_error_still_denies_and_names_its_type_and_place(tmp_path, monkeypatch, capsys):
+def test_req050_a_hook_error_still_denies_and_names_its_type_and_place(
+    tmp_path, monkeypatch, capsys
+):
     """REQ-050: brief #1410 answer 2 (the exception's type and the function and line, no value)."""
     root = project(tmp_path)
     guard = load_data_guard(monkeypatch, root)
@@ -207,8 +219,9 @@ def test_req050_agk_logs_refusals_prints_the_file_redacted(tmp_path, monkeypatch
     folder.mkdir()
     (folder / "refusals.log.1").write_text('{"reason": "older"}\n', encoding="utf-8")
     planted = "ana@mail.example.io"  # example.com is not flagged
-    (folder / "refusals.log").write_text(f'{{"reason": "newer", "text": "{planted}"}}\n',
-                                         encoding="utf-8")
+    (folder / "refusals.log").write_text(
+        f'{{"reason": "newer", "text": "{planted}"}}\n', encoding="utf-8"
+    )
     monkeypatch.chdir(root)
     assert guard_logs.main(["--refusals"]) == 0
     out = capsys.readouterr().out.splitlines()
@@ -242,12 +255,18 @@ def test_req050_agk_status_counts_todays_refusals_by_reason(tmp_path, monkeypatc
     root = project(tmp_path)
     folder = root / ".git" / "agk"
     folder.mkdir()
-    rows = [("2026-11-16T08:00:00Z", "bash"), ("2026-11-16T09:00:00Z", "secret-file (env file)"),
-            ("2026-11-16T09:30:00Z", "bash"), ("2026-11-15T23:59:59Z", "bash")]
+    rows = [
+        ("2026-11-16T08:00:00Z", "bash"),
+        ("2026-11-16T09:00:00Z", "secret-file (env file)"),
+        ("2026-11-16T09:30:00Z", "bash"),
+        ("2026-11-15T23:59:59Z", "bash"),
+    ]
     text = "".join(json.dumps({"at": at, "reason": r}) + "\n" for at, r in rows)
     (folder / "refusals.log").write_text(text + "not json\n", encoding="utf-8")
     now = datetime(2026, 11, 16, 10, 0, tzinfo=UTC)
-    assert guard_logs.today_line(root, now) == "refusals today: 3 (bash 2, secret-file (env file) 1)"
+    assert (
+        guard_logs.today_line(root, now) == "refusals today: 3 (bash 2, secret-file (env file) 1)"
+    )
     assert guard_logs.today_line(tmp_path / "loose", now) == "refusals today: none"
     monkeypatch.setattr(autopilot, "job_lines", lambda r: ([], []))
     monkeypatch.setattr(autopilot, "claude_processes", lambda: [])
@@ -260,15 +279,27 @@ def test_req050_agk_status_counts_todays_refusals_by_reason(tmp_path, monkeypatc
 
 SEEDS = [
     ("PowerShell", r"psql -h localhost -U seed -d scratch -f db\seed\001_init.sql"),
-    ("PowerShell", r"Get-Content db\seed\001_init.sql | docker exec -i scratch-db psql -U seed scratch"),
-    ("PowerShell", "foreach ($f in Get-ChildItem db\\seed\\*.sql) { psql -U seed -d scratch -f $f }\r\n"),
+    (
+        "PowerShell",
+        r"Get-Content db\seed\001_init.sql | docker exec -i scratch-db psql -U seed scratch",
+    ),
+    (
+        "PowerShell",
+        "foreach ($f in Get-ChildItem db\\seed\\*.sql) { psql -U seed -d scratch -f $f }\r\n",
+    ),
     ("PowerShell", 'psql -U seed -d scratch -c "select 1" `\r\n  -v ON_ERROR_STOP=1\r\n'),
     ("PowerShell", 'psql -U seed -d scratch -c "$(Get-Content db\\seed\\001_init.sql -Raw)"'),
-    ("PowerShell", '& "C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe" -d scratch -f db\\seed\\002.sql'),
-    ("Bash", "for f in db/seed/*.sql; do psql -U seed -d scratch -f \"$f\"; done\r\n"),
-    ("Bash", "psql -U seed -d scratch <<'SQL'\r\nINSERT INTO users VALUES (1, 'a@example.com');\r\nSQL\r\n"),
+    (
+        "PowerShell",
+        '& "C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe" -d scratch -f db\\seed\\002.sql',
+    ),
+    ("Bash", 'for f in db/seed/*.sql; do psql -U seed -d scratch -f "$f"; done\r\n'),
+    (
+        "Bash",
+        "psql -U seed -d scratch <<'SQL'\r\nINSERT INTO users VALUES (1, 'a');\r\nSQL\r\n",
+    ),
     ("Bash", "cat <<EOF | psql -U seed -d scratch\r\nselect 1;\r\nEOF\r\necho seeded\r\n"),
-    ("Bash", 'python -c "import sqlite3; sqlite3.connect(\'scratch.db\').execute(\'select 1\')"\r\n'),
+    ("Bash", "python -c \"import sqlite3; sqlite3.connect('scratch.db').execute('select 1')\"\r\n"),
 ]
 
 
