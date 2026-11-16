@@ -1,6 +1,6 @@
 # ADR-0587: One autopilot setting, one command and a cost budget relaxed by default
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1390, SPEC-0064 rules 7, 8, 9, 11 and 16 (d), brief #1386 (ADR-0584), brief #1387 (ADR-0585), brief #1283 (ADR-0544), plan #661

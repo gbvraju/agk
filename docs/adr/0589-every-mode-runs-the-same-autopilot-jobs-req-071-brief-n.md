@@ -1,6 +1,6 @@
 # ADR-0589: Every mode runs the same autopilot jobs: the launcher is the supervisor in CI mode, and agk next runs one
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1391, SPEC-0064 rules 4, 13, 14 and 16 (f), brief #1389 (ADR-0586), brief #1390 (ADR-0587), brief #1387 (ADR-0585), SPEC-0041, plan #661

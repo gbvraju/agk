@@ -1,6 +1,6 @@
 # ADR-0592: One machine runs at most one conductor; an idle one is replaced, never doubled
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1409, brief #1355 (ADR-0568), brief #1237 (ADR-0525), brief #1387 (ADR-0585), brief #1386 (ADR-0584), plan #661

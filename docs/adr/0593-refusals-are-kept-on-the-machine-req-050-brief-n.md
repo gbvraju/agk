@@ -1,6 +1,6 @@
 # ADR-0593: Every hook refusal is kept on the machine, redacted, and a hook error names what failed
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1410, brief #1360, ADR-0572, ADR-0268, plan #661
