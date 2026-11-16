@@ -407,7 +407,7 @@ def test_status_lines(tmp_path):
         "clone",
         "adapter",
         "watchdog",
-        "podman",
+        "engine",
         "playwright",
         "doctor",
     ]

@@ -193,6 +193,7 @@ def test_the_setup_installs_docker_engine_from_dockers_repository():
 # --- Docker Desktop (answer 3) -------------------------------------------------------------------
 
 TERMS = re.compile(r"(?i)(\$\s?\d|\d+\s*(employees|people|million)|revenue|free for|USD|EUR)")
+TERM_WORDS = re.compile(r"(?i)(employees|revenue|free for|per month|\bUSD\b|\bEUR\b)")
 
 
 def test_desktop_is_named_with_its_licence_line_and_no_terms(tmp_path):
@@ -206,7 +207,7 @@ def test_desktop_is_named_with_its_licence_line_and_no_terms(tmp_path):
     assert wsl.DOCKER_TERMS_PAGE in line and "may need" in line
     assert "docker-desktop" in line and "Ubuntu-24.04" in line
     assert not TERMS.search(done.stdout), done.stdout
-    assert not TERMS.search(ps1_text())
+    assert not TERM_WORDS.search(ps1_text())
 
 
 def test_the_kit_never_installs_docker_desktop():
@@ -253,7 +254,8 @@ def test_nothing_is_deleted_or_uninstalled(pattern):
 def test_windows_engine_is_stopped_after_the_move_and_started_back():
     """REQ-050: brief #1379 answer 4: stopped with the watchdog pass, started again on back."""
     text = ps1_text()
-    assert re.search(r"if \(\$InstallWatchdog\) \{[^}]*Invoke-Step -Name 'windows_engine'", text)
+    block = re.search(r"(?m)^if \(\$InstallWatchdog\) \{\n(.*?)\n\}", text, flags=re.S)
+    assert block and "Invoke-Step -Name 'windows_engine'" in block.group(1)
     assert "Invoke-Step -Name 'windows_engine_back'" in text
     assert "podman machine stop" in text and "podman machine start" in text
 

@@ -17,7 +17,7 @@ prints a password or a sign-in secret. Save each `-Json` output to a file in the
 
 1. Run the checks only, then the status lines, and show them in plain words: WSL and its memory, the sign-ins, the
    clone and its worktrees, the adapter on the default branch, which watchdog is active, Podman and Playwright, and the
-   doctor's verdict. Change nothing.
+   doctor's verdict. Change nothing. Pass `-Engine <engine>` when the state of an earlier run names one.
 
    ```
    pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl_setup.ps1" -Status -Json
@@ -28,18 +28,27 @@ prints a password or a sign-in secret. Save each `-Json` output to a file in the
 
 1. The script reads the project's remote, the git name and email and the machine's memory itself. Ask the person
    nothing else unless a step below says so.
-2. Show the plan (five lines or fewer) and ask for a yes; on anything but a yes, stop:
+2. Show the plan (five lines or fewer) and the container engine lines, and ask for a yes and for the engine; on
+   anything but a yes, stop. The engine lines name what the project's files and this machine use and recommend one
+   with its reason (Podman when nothing decides); the person may choose `podman`, `docker` (Docker Engine inside WSL)
+   or `docker-desktop` (Docker Desktop's WSL integration, never installed by the kit), and for `docker` the group or
+   `--rootless`. Show the Docker Desktop line as printed: it points to Docker's page and states no licence terms.
+   Show the volume lines as printed: nothing is moved; the person runs the export and import commands if they want
+   their data in WSL.
 
    ```
    pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl_setup.ps1" -Status -Json
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl.py" plan --state <state>
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl.py" engine --state <state> [--choose <engine>] [--rootless]
    ```
 
-3. Run the setup (add `-InstallWatchdog` only when the plan's watchdog line says the WSL task goes on), then show
-   the status lines:
+3. Run the setup with the chosen engine (`-Engine <engine>`, and `-DockerRootless` when the person chose rootless;
+   add `-InstallWatchdog` only when the plan's watchdog line says the WSL task goes on: that pass also stops the
+   Windows engine, never uninstalling it), then show the status lines. When `one_engine` waits, Docker Desktop is
+   running: tell the person to quit it (it stays installed); two engines never share the ports.
 
    ```
-   pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl_setup.ps1" -Json
+   pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl_setup.ps1" -Engine <engine> -Json
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl.py" status --state <state>
    ```
 
@@ -77,11 +86,12 @@ prints a password or a sign-in secret. Save each `-Json` output to a file in the
 
 2. When the plan says `pull request`, prepare the reverse pull request as in step 4 above, in the Windows checkout,
    with `wsl.py pr --to windows` and the branch `agk/windows-adapter`.
-3. When the plan's watchdog line says the Windows task is re-enabled, run the script's back form and show the result.
-   The clone inside WSL stays; nothing is deleted.
+3. When the plan's watchdog line says the Windows task is re-enabled, run the script's back form with the engine of
+   the state and show the result: it also starts the Windows engine again. The clone inside WSL stays; nothing is
+   deleted.
 
    ```
-   pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl_setup.ps1" -Back -Json
+   pwsh -NoProfile -File "${CLAUDE_PLUGIN_ROOT}/scripts/agk/wsl_setup.ps1" -Back -Engine <engine> -Json
    ```
 
 Never merge, never enable auto-merge, and do not commit or push: the person does, and reviews and merges the pull
