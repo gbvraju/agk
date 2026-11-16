@@ -343,6 +343,20 @@ next `conductor.py sweep` unparks it and prints its `resume --pr <n>` command, b
 with a line naming the setting. In personal mode there are no pull requests, so nothing is
 parked.
 
+## When a guard refuses a command
+
+Every refusal by a hook (the data guard, the conductor's, the steward's and the architect's guard) is kept on the machine,
+so it is not lost when the session closes (brief #1410, ADR-0593). Each one adds a line to `refusals.log` in the `agk`
+folder of the clone's git folder, which is never tracked or posted: the time in UTC, the session, the role, the hook, the
+reason and the refused command or path with every secret and personal value replaced by a label, cut at 500 characters. The
+file rolls over at 1 MB and keeps one older file. When a guard fails inside itself, its line also names the kind of error
+and the place in the hook, never a value, and the refusal says `see agk logs --refusals`.
+
+- Read them with `agk logs --refusals` (`python3 scripts/agk/guard_logs.py --refusals`), from the project folder.
+- `agk status` shows today's count by reason, for example `refusals today: 2 (cannot-judge (hook error) 2)`.
+- A guard that refuses a command it should judge, such as a seed run against a throwaway database, is a defect of the kit.
+  Report it with the redacted lines from `agk logs --refusals`, never with the raw command.
+
 ## What is lost
 
 Say it plainly to everyone working on the project:

@@ -23,6 +23,10 @@ bash, and in a `pwsh` session shell also as PowerShell, denied when either reade
 it cannot take apart, and nesting past 3, deny with the hint `split it into single commands`.
 Standard library only; no network. Rules 7 (remote access) and 8 (the environment) are not judged
 here yet: they are left to a later build of the brief (Q-589-1).
+Brief #1410 (ADR-0593): each denial is kept, redacted, in `<git common dir>/agk/refusals.log`
+(`guard_logs.record_refusal`); a hook error keeps the exception's type and place, never a value,
+and its denial adds `see agk logs --refusals`. A here-document line with a CRLF line end closes
+the here-document as the same line without its carriage return does.
 """
 
 from __future__ import annotations
@@ -93,7 +97,8 @@ class Denied(Exception):
 
     def line(self) -> str:
         hint = "split it into single commands, or " if self.kind in SPLIT_KINDS else ""
-        return f"data guard: {self.rule} ({self.kind}): {hint}{ALTERNATIVE[self.rule]}"
+        more = "; see agk logs --refusals" if self.kind == "hook error" else ""
+        return f"data guard: {self.rule} ({self.kind}): {hint}{ALTERNATIVE[self.rule]}{more}"
 
 
 def load_settings(root: str) -> dict:
@@ -508,6 +513,7 @@ def walk(
                     j = text.find("\n", i)
                     j = n if j < 0 else j
                     line, i = text[i:j], j + 1
+                    line = line.removesuffix("\r")  # a CRLF line end (brief #1410)
                     if (line.lstrip("\t") if tabs else line) == word:
                         break
                     lines.append(line)
@@ -710,15 +716,34 @@ def decide(payload: object) -> None:
         guard.path(data[FIELDS[tool][0]])
 
 
-def judge(payload: object) -> str | None:
-    """The denial line of rule 9, or None to allow. Any error denies (rule 2)."""
+def verdict(payload: object) -> tuple[Denied | None, BaseException | None]:
+    """The denial, or None to allow, and the error that caused it. Any error denies (rule 2)."""
     try:
         decide(payload)
     except Denied as denied:
-        return denied.line()
-    except Exception:  # noqa: BLE001 - fails closed: an error inside the hook never allows
-        return Denied("cannot-judge", "hook error").line()
-    return None
+        return denied, None
+    except Exception as exc:  # noqa: BLE001 - fails closed: an error inside the hook never allows
+        return Denied("cannot-judge", "hook error"), exc
+    return None, None
+
+
+def judge(payload: object) -> str | None:
+    """The denial line of rule 9, or None to allow."""
+    denied = verdict(payload)[0]
+    return denied.line() if denied else None
+
+
+def keep(payload: object, denied: Denied, exc: BaseException | None) -> bool:
+    """Brief #1410: one redacted line per denial; a failure here leaves the denial as it was."""
+    try:
+        sys.path.insert(0, str(SCRIPTS))
+        import guard_logs  # noqa: PLC0415 - found through SCRIPTS, only when something is denied
+
+        error = guard_logs.error_of(exc, __file__) if exc else None
+        reason = f"{denied.rule} ({denied.kind})"
+        return guard_logs.record_refusal(payload, "data guard", reason, "unknown", error)
+    except Exception:  # noqa: BLE001 - keeping the line never changes the decision
+        return False
 
 
 def main() -> int:
@@ -726,8 +751,10 @@ def main() -> int:
         payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         payload = None
-    line = judge(payload)
-    if line is not None:
+    denied, exc = verdict(payload)
+    line = denied.line() if denied else None
+    if denied is not None:
+        keep(payload, denied, exc)
         out = {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                "permissionDecisionReason": line}
         print(json.dumps({"hookSpecificOutput": out}))
