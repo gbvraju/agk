@@ -1,1 +1,0 @@
-- The launch adapters run each job headless in the background with its output in `<worktree>/.agk-session.log`, with no terminal tab and no Windows Terminal needed; `show_jobs = true` in the `[autopilot]` table shows a job in a tab that closes when it ends, and `launch.py` passes the choice as `AGK_SHOW_JOBS` (brief #1388, SPEC-0064 build (e), ADR-0588)

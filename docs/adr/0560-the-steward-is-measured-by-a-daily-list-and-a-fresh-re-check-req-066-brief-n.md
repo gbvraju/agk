@@ -1,6 +1,6 @@
 # ADR-0560: The steward is measured by a daily list, its override share and a fresh re-check
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0059, ADR-0557, ADR-0558, ADR-0430, brief #1323, brief #1321, brief #1320, plan #661

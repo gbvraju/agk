@@ -1,6 +1,6 @@
 # ADR-0552: Add REQ-068: A teammate joins as a builder in one command and leaves cleanly
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0061, SPEC-0012, SPEC-0034, SPEC-0041, SPEC-0045, SPEC-0058, ADR-0368, ADR-0402, ADR-0438, ADR-0487, ADR-0536, ADR-0543, brief #1306, plan #661

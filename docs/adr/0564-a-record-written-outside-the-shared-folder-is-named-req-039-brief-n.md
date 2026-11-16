@@ -1,6 +1,6 @@
 # ADR-0564: A record written outside the shared evidence folder is named
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1329, brief #1269, brief #1281, ADR-0536, ADR-0542, plan #661

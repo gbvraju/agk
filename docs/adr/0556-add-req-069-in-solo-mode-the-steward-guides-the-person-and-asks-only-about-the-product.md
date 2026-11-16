@@ -1,6 +1,6 @@
 # ADR-0556: Add REQ-069: In solo mode the steward guides the person and asks only about the product
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0062, SPEC-0059, SPEC-0038, SPEC-0048, ADR-0541, ADR-0546, brief #1277, brief #1318, plan #661

@@ -1,6 +1,6 @@
 # ADR-0541: Add REQ-066: A steward answers what the evidence settles and asks the owner only the rest
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0059, SPEC-0012, SPEC-0037, SPEC-0041, SPEC-0042, SPEC-0043, SPEC-0045, SPEC-0048, SPEC-0058, ADR-0301, ADR-0430, ADR-0475, brief #1043, brief #1277, plan #661

@@ -1,6 +1,6 @@
 # ADR-0577: One command moves a Windows workforce into WSL 2 and back
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: ADR-0525, ADR-0554, ADR-0568, ADR-0572, brief #1376, plan #661

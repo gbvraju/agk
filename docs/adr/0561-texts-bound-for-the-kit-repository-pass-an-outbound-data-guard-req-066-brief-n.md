@@ -1,6 +1,6 @@
 # ADR-0561: Texts bound for the kit repository pass an outbound data guard
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: SPEC-0059, SPEC-0042, ADR-0557, brief #1324, brief #1320, plan #661
