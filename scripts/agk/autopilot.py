@@ -7,14 +7,16 @@
 Brief #1391, SPEC-0064 build (f), rule 13 (ADR-0589); `agk next` is `next`. `pick` is the
 supervisor's choice of jobs over GitHub-shaped records of any forge, so every mode starts the same
 jobs: a `review` job while a pull request's newest `Report:` is newer than every `Verdict:`,
-`Correction:` or answer, a `fix` job where build (c)'s `conductor.job_gate` sees its event, and a `build` job per brief the
-plan starts (personal mode: per open brief whose `Depends-on` issues are closed). An item with a
-`Started:` or `taken:` newer than its event and `conductor.START_HOURS` is held by that job's
-machine until the take lapses. `jobs [--claim]` prints the jobs from GitHub, gated by
-`job_allowed`, and with `--claim` posts one `Started:` claim per build or fix job first: CI mode's
-launcher task is the supervisor and fires one cloud session per `job:` line. `next [--brief N]`
-runs one job in the foreground through the adapter, waits for its exit file and ends; it posts
-nothing, and in personal mode reads the sidecar's files forge (`forge.FilesForge`), never `gh`.
+`Correction:` or answer, a `fix` job where build (c)'s `conductor.job_gate` sees its event (a
+clearing verdict is none), and a `build` job per brief the plan starts (personal mode: per open
+brief whose `Depends-on` issues are closed). An item with a `Started:` or `taken:` newer than its
+event and `conductor.START_HOURS` is held by that job's machine until the take lapses. `jobs
+[--claim]` prints the jobs from GitHub, gated by `job_allowed`; with `--claim`,
+`conductor.claim_job` (the supervisor's one write) posts one `Started:` claim per build or fix job
+first, so this script still holds no write of its own. CI mode's launcher task is the supervisor
+and fires one cloud session per `job:` line. `next [--brief N]` runs one job in the foreground
+through the adapter, waits for its exit file and ends; it posts nothing, and in personal mode
+reads the sidecar's files forge (`forge.FilesForge`), never `gh`.
 
 Brief #1390, SPEC-0064 build (d), rules 7, 8 and 11 (ADR-0587); `agk autopilot` is its short form.
 `on` installs the one scheduler entry (a crontab line tagged `# agk-autopilot`, or the Windows task
@@ -563,11 +565,10 @@ def holder(said: list, since: datetime | None, now: datetime) -> str | None:
 def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict | None = None):
     """(the jobs, the held ones) by the supervisor's rules, from GitHub-shaped records of any
     forge: one `review` job while a non-draft pull request's newest `Report:` is newer than every
-    `Verdict:`, `Correction:` or answer; a `fix` job where `conductor.job_gate` (build (c)) sees its event, a clearing verdict
-    being none; a
-    `build` job per open brief that no open pull request names, of READY (the plan's starts) or,
-    with none, whose `Depends-on` issues are closed. A job whose item carries a newer claim is
-    held, never started twice (rule 13)."""
+    `Verdict:`, `Correction:` or answer; a `fix` job where `conductor.job_gate` (build (c)) sees
+    its event, a clearing verdict being none; a `build` job per open brief that no open pull
+    request names, of READY (the plan's starts) or, with none, whose `Depends-on` issues are
+    closed. A job whose item carries a newer claim is held, never started twice (rule 13)."""
     jobs: list[dict] = []
     held: list[dict] = []
     named, review = set(), None
@@ -580,7 +581,11 @@ def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict |
             jobs.append(job)
 
     for pull in sorted(pulls, key=lambda p: p["number"]):
-        n, said, brief = pull["number"], comments.get(pull["number"]) or [], session.brief_number(pull)
+        n, said, brief = (
+            pull["number"],
+            comments.get(pull["number"]) or [],
+            session.brief_number(pull),
+        )
         named.add(brief)
         report = conductor.newest(said, ("Report:",))
         verdict = conductor.newest(said, conductor.OWED)
@@ -591,7 +596,7 @@ def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict |
         facts = {"own": own, "owed": conductor.newest(owing, conductor.OWED),
                  "labels": session.labels_of(pull)}  # fmt: skip
         if brief is not None and conductor.job_gate(None, facts, now) is None:
-            add("fix", n, f"cb{brief}", facts["owed"])
+            add("fix", n, f"cb{brief}", conductor.newest(owing, conductor.OWED))
     if review is not None:
         jobs.insert(0, {"kind": "review", "item": review, "session": "conductor"})
     open_ = {i["number"] for i in issues}
@@ -617,7 +622,9 @@ def github_records(root: Path, repo: str) -> tuple[list, list, dict, dict]:
         raise CheckError("the open pull requests and briefs cannot be read")
     briefs = [i for i in issues if "pull_request" not in i]
     comments = {}
-    for n in [p["number"] for p in pulls] + [n for n in ready if n in {i["number"] for i in briefs}]:
+    for n in [p["number"] for p in pulls] + [
+        n for n in ready if n in {i["number"] for i in briefs}
+    ]:
         if (said := session.pages(f"repos/{repo}/issues/{n}/comments")) is None:
             raise CheckError(f"#{n} cannot be read")
         comments[n] = said
@@ -633,15 +640,6 @@ def forge_records(root: Path) -> tuple[list, list, dict, None]:
     issues = files.get(f"issues-{session.LABEL}", "issues?state=open")
     said = {x["number"]: files.get(f"comments-{x['number']}", "") or [] for x in pulls + issues}
     return pulls, issues, said, None
-
-
-def claim(repo: str, job: dict, now: datetime) -> bool:
-    """Rule 13: one `Started:` comment on the item before its job starts, so another machine's
-    supervisor holds it until it lapses (`conductor.START_HOURS`)."""
-    body = f"Started: {job['session']} {stamp(now)} by the supervisor ({job['kind']})"
-    found = session.gh(f"repos/{repo}/issues/{job['item']}/comments", "-f", f"body={body}",
-                       method="POST")  # fmt: skip
-    return found is not None
 
 
 def jobs_command(root: Path, claiming: bool, now: datetime) -> int:
@@ -661,7 +659,9 @@ def jobs_command(root: Path, claiming: bool, now: datetime) -> int:
         line = f"{job['kind']} #{job['item']} {job['session']}"
         if not allowed:
             print(f"not started: {line} ({why})")
-        elif claiming and job["kind"] != "review" and not claim(repo, job, now):
+        elif (
+            claiming and job["kind"] != "review" and not conductor.claim_job(repo, job, stamp(now))
+        ):
             print(f"not started: {line} (the claim cannot be posted)")
         else:
             print(f"job: {line}")

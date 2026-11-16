@@ -51,7 +51,7 @@ def brief(number: int, body: str = "") -> dict:
 
 
 def records() -> tuple[list, list, dict]:
-    """#71 waits for review, #72 has a fix list, #73 is being built (a draft), briefs #9 and #10 free,
+    """#71 waits for review, #72 has a fix list, #73 is a draft being built, #9 and #10 free,
     #11 waits on the open #10, #8 is named by #73."""
     pulls = [pr(71, 5), pr(72, 6), pr(73, 8, draft=True)]
     comments = {
@@ -82,7 +82,7 @@ def test_one_pass_picks_one_review_one_fix_and_the_free_builds():
 
 
 def test_the_plan_decides_the_builds_where_github_has_one():
-    """REQ-071 AC8: with the plan's starts (team and CI mode), only those briefs, with their build."""
+    """REQ-071 AC8: with the plan's starts (team and CI mode), only those, with their build."""
     pulls, briefs, comments = records()
     jobs, _ = autopilot.pick(pulls, briefs, comments, NOW, {10: "b"})
     assert [j for j in kinds(jobs) if j[0] == "build"] == [("build", 10, "cb10b")]
@@ -91,7 +91,12 @@ def test_the_plan_decides_the_builds_where_github_has_one():
 def test_the_fix_rule_is_build_c_s_job_gate():
     """REQ-071 AC8: the CI pass starts the same fix jobs as a local pass: a fix job exactly where
     `conductor.job_gate` sees an event (an owed verdict, a conflict or red-check label)."""
-    for labels, owed in (((), True), ((), False), (("agk:conflict",), False), (("agk:ci-red",), False)):
+    for labels, owed in (
+        ((), True),
+        ((), False),
+        (("agk:conflict",), False),
+        (("agk:ci-red",), False),
+    ):
         comments = {72: [said(2, "Report: aaaaaaa fix list applied", -120)]}
         if owed:
             comments[72].append(said(3, "Correction: the cause is elsewhere", -60, "boss"))

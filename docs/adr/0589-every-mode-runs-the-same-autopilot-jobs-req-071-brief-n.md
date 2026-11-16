@@ -54,7 +54,8 @@ personal-mode sidecar has no GitHub, so the plan and the review queue cannot be 
    `agk autopilot on` per machine, `agk status`, `agk next`, and the launcher as CI mode's supervisor; the hand-started
    conductor and builder items stay as the manual way.
 
-Protected path classes changed: `scripts/agk/` (`autopilot.py`), `kit/` (`templates/runtime/launcher.txt`,
+Protected path classes changed: `scripts/agk/` (`autopilot.py`; `conductor.py` for `claim_job`, the supervisor's one
+write, so `autopilot.py` keeps holding none, ADR-0584), `kit/` (`templates/runtime/launcher.txt`,
 `conductor.txt`, `builder.txt`, `README.md`), `tests/kit/` (`test_autopilot_modes.py`, `test_runtime_templates.py`,
 whose brief #1202 assertions on the long-run conductor move to the launcher), `agk.toml` (the `[[testing.map]]`
 entry), `docs/adr/` (this file) and `changelog.d/` (one fragment).
