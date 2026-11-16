@@ -85,7 +85,7 @@ REQ-076 AC1: *one demo brief per milestone, and a warning when it is missing.* R
 
 ## Open questions
 
-Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it.
+Each is a point the brief leaves open, or a name it cites that the code holds otherwise; the reading after it is the most conservative one, and the rules above apply it. `Q-S0069-1` to `Q-S0069-11` are ruled as read by the maintainer's answer on #1403 (comment 6907062287), one file each under `docs/runs/decisions/`, and the rules above hold their readings. No question is open.
 
 - Q-S0069-1: the brief says "one brief of kind `demo`", but a plan brief has no `kind` field. Reading: the demo brief is the brief whose `key` is `demo` in its milestone, as the pilot playbook's `brief_order` names it, and no field is added to SPEC-0043's proposals (rule 2).
 - Q-S0069-2: the brief names "the milestone's release brief", which the plan does not have. Reading: no release brief is added; where a plan carries a brief keyed `release` in the milestone it depends on the demo brief, and otherwise the stale warning goes to the steward's sign-off question (rules 2 and 10).
