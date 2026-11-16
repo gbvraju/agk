@@ -50,7 +50,8 @@ run (or a fetch or worktree that fails) opens or updates the red-branch issue th
     merge-cleared: stopped: default branch red after #<n>         exit 1
 
 and that open issue holds every later run. It never reverts, pushes nothing and writes no file
-but those two files, which go with the temporary folder.
+but those two files, which go with the temporary folder (and, since brief #1358, the kept would-be
+merge results in the checkout's git folder).
 The heavy-lock wait is bounded by `[flow] after_merge_timeout` (minutes, 30 by default; lock.py's
 exit 3 is the step `heavy lock`), and any exception, interrupt or SIGTERM after the merge is the
 step `governance not finished`: the red-branch issue is still opened (the fix list on #556).
@@ -171,6 +172,21 @@ no `make`, so every cleared pull request was held. lock.py is given the run's cl
 with `--only-env NAME=VALUE` and starts `make` (or pytest) with exactly that: the names `env -i`
 kept, PATH unchanged from this process, and on Windows only SystemRoot, ComSpec, PATHEXT, TEMP
 and TMP where set. lock.py keeps this process's environment for its own lock folder.
+
+Brief #1358 (ADR-0570): a pull request held only for a release or a protected class (rule 5)
+still gets the check before the merge, once per head, and its line ends with the result:
+
+    merge-cleared #<n> <sha12>: held: protected class <class> (rule 5); would-be merge: pass|fail
+
+The owner merges through the kit, never the button:
+
+    python3 scripts/agk/merge_cleared.py --pr <n> --owner
+
+reads the current head, refuses a signed-in account outside `spec_approvers` (naming the setting),
+runs every check above with the owner-only holds lifted for that one call, and merges as that
+account only when the would-be merge passes; otherwise it prints the hold's line. The result of the
+would-be merge is kept in `agk-would-be-merge.json` in the checkout's git folder, keyed by the head,
+the default branch's commit, the body and the run's settings, and reused while they stand.
 """
 
 from __future__ import annotations
@@ -178,6 +194,7 @@ from __future__ import annotations
 import base64
 import binascii
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -247,6 +264,7 @@ WAIT_MINUTES = 30
 MINUTE = 60.0  # seconds in a minute of after_merge_timeout
 LOCK_TIMEOUT = 3  # lock.py run: the lock was not taken in time (or its folder cannot be written)
 NOT_FINISHED = "governance not finished"  # the step of a run cut off after the merge
+GOVERNANCE_STEP = "make governance"  # the step of a governance run that ran and failed
 LOCAL_EVIDENCE = re.compile(r"Local evidence: ([0-9a-f]{12,40})(?![0-9A-Za-z])")
 EVIDENCE = re.compile(r"Evidence check: (agrees|differs), head ([0-9a-f]{12})(?![0-9A-Za-z])")
 ACCEPT = "Maintainer answer: accept {}"  # the one accepted first line (SPEC-0039 rule 4)
@@ -306,6 +324,16 @@ ENDED = ("success", *RED)  # a commit status that is no longer `pending`
 STATUS_CONTEXT = "agk/verdict"  # the commit status of a verdict (brief #853)
 STATUS_LIMIT = 140  # characters GitHub takes in a status description (verify)
 OWNER_MERGE = "owner merge"
+OWNER_HOLDS = ("release", "protected class")  # the holds only the owner lifts (brief #1358)
+OWNER_COMMAND = "python3 scripts/agk/merge_cleared.py --pr {} --owner"  # ADR-0570 decision 2
+WOULD_BE = "would-be merge"  # the result an owner hold reports (brief #1358 answer 1)
+CHECKED_FILE = "agk-would-be-merge.json"  # the results kept per head and default branch
+CHECKED_KEEP = 50  # results kept in that file
+NOT_APPROVER = (
+    "the signed-in account may not merge as the owner "
+    "(setting: spec_approvers in config/reviewers.yaml)"
+)
+OWNER_USAGE = "usage: merge_cleared.py --pr <n> --owner"
 QUEUE_SETTING = "merge_queue"
 QUEUE_OUTSIDE = (
     f"the merge queue is joined only by the merger job on GitHub Actions with {MERGE_ENV} "
@@ -968,9 +996,24 @@ def hold_list(
     approvers: list,
     accepts: list[str],
     root: Path | None = None,
-) -> None:
+    lift: bool = False,
+    report: bool = False,
+) -> str | None:
     """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order; first,
-    each ADR a Final line ACCEPTS must be one the pull request adds or changes (rule 3)."""
+    each ADR a Final line ACCEPTS must be one the pull request adds or changes (rule 3). The first
+    hold is raised, as before. Brief #1358 (ADR-0570): with REPORT, an owner-only hold (a release
+    or a protected class) that is the only hold is returned instead of raised, so the caller can
+    test the would-be merge; with LIFT (`--owner`) the owner-only holds are lifted, every other
+    hold is raised and the lifted one is returned. None when nothing holds."""
+    owner: str | None = None
+
+    def hold(reason: str, owner_only: bool = False) -> None:
+        nonlocal owner
+        if owner_only:
+            owner = owner or reason
+            return
+        raise Held(owner if owner is not None and not lift else reason)
+
     files = read_pages(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
     count = pull.get("changed_files")
     if not isinstance(count, int) or isinstance(count, bool) or count != len(files):
@@ -990,24 +1033,33 @@ def hold_list(
         raise Held("a commit or the body already holds a record line (rule 3)")
     sha = str(pull["head"]["sha"])
     if released(files):
-        raise Held("release (rule 5)")
+        hold("release (rule 5)", True)
     if unapproved(pull, comments, sha, approvers, root, number):
-        raise Held("spec approval (rule 5)")
+        hold("spec approval (rule 5)")
     if approved_still_draft(repo, files, comments, approvers, sha):
-        raise Held(DRAFT_HOLD)
+        hold(DRAFT_HOLD)
     if (klass := protected_class(files)) is not None:
-        raise Held(f"protected class {klass} (rule 5)")
+        hold(f"protected class {klass} (rule 5)", True)
     if held_label(pull):
-        raise Held("hold label (rule 5)")
+        hold("hold label (rule 5)")
     if QUESTION_LABEL in labels_of(pull):  # an open owner ask (amendment 170, brief #1134)
-        raise Held("owner ask (rule 5)")
+        hold("owner ask (rule 5)")
     if pull.get("draft") is not False:
-        raise Held("draft (rule 5)")
+        hold("draft (rule 5)")
     if dependence_unmet(repo, pull):
-        raise Held("depends-on (rule 5)")
+        hold("depends-on (rule 5)")
     state = pull.get("mergeable_state")
     if not isinstance(state, str) or state in CONFLICT:
-        raise Held("conflict (rule 5)")
+        hold("conflict (rule 5)")
+    if owner is not None and not (lift or report):
+        raise Held(owner)
+    return owner
+
+
+def owner_only(reason: str) -> bool:
+    """Whether a hold's REASON is one only the owner may lift: a release or a protected class
+    (SPEC-0039 rule 5; brief #1358)."""
+    return reason.startswith(OWNER_HOLDS)
 
 
 # --- rule 6: the pinned merge -------------------------------------------------------------------
@@ -1033,14 +1085,17 @@ def current_head(repo: str, number: int) -> str:
     return str(head.get("sha") if isinstance(head, dict) else "")
 
 
-def merge_pull(repo: str, number: int, sha: str, message: list[str] | None = None) -> str:
+def merge_pull(
+    repo: str, number: int, sha: str, message: list[str] | None = None, owner: bool = False
+) -> str:
     """The one merge call, pinned to SHA with the squash method; the merge commit's sha. The
     squash commit message is always this command's own: MESSAGE (the acceptance lines of rule 3a)
-    or the line `MERGED_BY` alone, never GitHub's default, which copies the commit bodies."""
+    or the line `MERGED_BY` alone, never GitHub's default, which copies the commit bodies. With
+    OWNER (`--owner`, brief #1358) the call runs as the signed-in account, never the merger's."""
     args = ["--method", "PUT", f"repos/{repo}/pulls/{number}/merge"]
     args += ["-f", f"sha={sha}", "-f", f"merge_method={METHOD}"]
     args += ["-f", "commit_message=" + "\n".join(message or [MERGED_BY])]
-    code, out, err = write_once(args, merge_env())
+    code, out, err = write_once(args, None if owner else merge_env())
     if code != 0:
         found = HTTP.search(err)
         status = int(found.group(1)) if found else 0
@@ -1392,7 +1447,7 @@ def run_governance(
     sys.stderr.write(out or "")
     if child.returncode == 0:
         return None
-    return "heavy lock" if child.returncode == LOCK_TIMEOUT else "make governance"
+    return "heavy lock" if child.returncode == LOCK_TIMEOUT else GOVERNANCE_STEP
 
 
 def end_child(child: subprocess.Popen) -> None:
@@ -1544,24 +1599,102 @@ def merge_check(
     repo: str = "",
     pre: dict | None = None,
     limit: int | None = None,
+    seen: list[str] | None = None,
 ) -> str | None:
     """Governance on the would-be merge of SHA with the default branch, before the merge (brief
     #610, amendment 123): the run of rule 6 on it, then the pre-merge tests of PRE (the default
     branch's `[testing]` table, brief #667). Between the would-be merge and the run, the holds of
     SPEC-0050 rule 8 with LIMIT, `[flow] max_behind_merges` (brief #727). None when green, else
     the failing step; any exception, interrupt or termination is `governance not finished`,
-    nothing having merged."""
+    nothing having merged. SEEN, when given, gets the default branch's commit the merge was built
+    on (brief #1358)."""
     with after_merge_signals():
         try:
             commit, base = would_be_merge(root, branch, number, sha)
             if commit is None:
                 return base
+            if seen is not None:
+                seen.append(base)
             reprove_check(root, base, sha, limit)
             return in_worktree(root, commit, base, wait, text, CHECK_PREFIX, repo, pre)
         except Held:
             raise
         except BaseException:  # a run that cannot finish is not green; nothing has merged
             return NOT_FINISHED
+
+
+def checked_path(root: Path) -> Path | None:
+    """The file of the kept would-be merge results, in the checkout's git folder (never the work
+    tree); None when git cannot say where that is."""
+    code, found = git_out(root, "rev-parse", "--git-common-dir")
+    return (root / found / CHECKED_FILE) if code == 0 and found else None
+
+
+def checked_key(sha: str, base: str, text: str, pre: dict | None, limit: int | None) -> str:
+    """What a kept result stands for: the head, the default branch's commit, the body the run
+    reads and the settings of the run."""
+    seen = json.dumps([sha, base, text, pre, limit], sort_keys=True, default=str)
+    return hashlib.sha256(seen.encode("utf-8")).hexdigest()
+
+
+def checked_read(root: Path) -> dict[str, str]:
+    path = checked_path(root)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path else {}
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, str)} if isinstance(data, dict) else {}
+
+
+def checked_write(root: Path, key: str, result: str) -> None:
+    """Keep RESULT for KEY, the newest CHECKED_KEEP results only; a file that cannot be written
+    keeps nothing, and the next run runs again."""
+    path = checked_path(root)
+    if path is None:
+        return
+    data = checked_read(root)
+    data.pop(key, None)
+    data[key] = result
+    kept = dict(list(data.items())[-CHECKED_KEEP:])
+    with contextlib.suppress(OSError):
+        part = path.with_name(f"{path.name}.{os.getpid()}")
+        part.write_text(json.dumps(kept), encoding="utf-8")
+        os.replace(part, path)
+
+
+def merge_check_once(
+    root: Path,
+    branch: str,
+    number: int,
+    sha: str,
+    wait: float,
+    text: str,
+    repo: str = "",
+    pre: dict | None = None,
+    limit: int | None = None,
+) -> str | None:
+    """`merge_check` run once per head (brief #1358 answer 4, ADR-0570 decision 4): its result on
+    the head SHA and the default branch's commit, with the same body and settings, is kept in the
+    checkout's git folder and reused while the default branch has not moved. A pass, a failing
+    step and a failing pre-merge test are kept; a run that did not finish and the holds raised
+    before the run (a conflict, re-prove) are not, so they are judged again."""
+    base = fetched_base(root, branch, number, sha)
+    if base is not None:
+        kept = checked_read(root).get(checked_key(sha, base, text, pre, limit))
+        if kept is not None and kept.startswith(TESTS_FAIL):
+            raise Held(kept)
+        if kept is not None:
+            return kept or None
+    seen: list[str] = []
+    try:
+        step = merge_check(root, branch, number, sha, wait, text, repo, pre, limit, seen)
+    except Held as err:
+        if seen and str(err).startswith(TESTS_FAIL):
+            checked_write(root, checked_key(sha, seen[0], text, pre, limit), str(err))
+        raise
+    if seen and step in (None, GOVERNANCE_STEP):  # a step of the setup is tried again
+        checked_write(root, checked_key(sha, seen[0], text, pre, limit), step or "")
+    return step
 
 
 def commit_url(repo: str, sha: str) -> str:
@@ -2119,7 +2252,7 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
         hold_list(repo, number, pull, comments, rules.approvers, accepts, root)
     except Held as err:
         text = str(err)
-        if text.startswith(("release", "protected class")):
+        if owner_only(text):
             return "pending", OWNER_MERGE
         if text.startswith("spec approval"):
             return "pending", "approve " + spec_waiting(
@@ -2228,6 +2361,29 @@ def job_args(argv: list[str]) -> tuple[str, list[str]] | None:
     return None
 
 
+def owner_args(argv: list[str]) -> int | None:
+    """`--pr <n> --owner`, exactly (brief #1358 answer 2): the number, else None."""
+    if len(argv) != 3 or argv[0] != "--pr" or argv[2] != "--owner" or not NUMBER.fullmatch(argv[1]):
+        return None
+    return int(argv[1])
+
+
+def owner_main(root: Path, number: int) -> int:
+    """`--owner`: the guarded merge of the pull request's current head, as read from GitHub, with
+    the owner-only holds lifted for this one call; one line as `guarded` prints it."""
+    try:
+        sha = current_head(repo_of(root), number)
+    except (Refused, Unreadable) as err:
+        print(f"merge-cleared #{number} ?: refused: {err}")
+        return EXIT_UNREADABLE if isinstance(err, Unreadable) else err.code
+    if not SHA.fullmatch(sha):
+        print(f"merge-cleared #{number} ?: refused: GitHub cannot be read (the pull request)")
+        return EXIT_UNREADABLE
+    line, code = guarded(root, number, sha, owner=True)
+    print(line)
+    return code
+
+
 def parse_args(argv: list[str]) -> tuple[int, str] | None:
     if len(argv) != 4 or argv[0] != "--pr" or argv[2] != "--sha":
         return None
@@ -2263,13 +2419,20 @@ def local_mode(data: dict, issues: list[dict]) -> bool:
 
 
 def holds(
-    root: Path, repo: str, number: int, sha: str, rules: Rules
-) -> tuple[dict, dict, list[str], int, int | None]:
+    root: Path,
+    repo: str,
+    number: int,
+    sha: str,
+    rules: Rules,
+    lift: bool = False,
+    report: bool = False,
+) -> tuple[dict, dict, list[str], int, int | None, str | None]:
     """Every hold of SPEC-0039 rules 3, 4, 5 and 7 that reads GitHub and merges nothing, in the
     order of a run: (the pull request, its clearing verdict, the acceptance lines of rule 3a, the
-    record issue, the red-branch issue the pull request fixes or None). A verdict that does not
-    clear the head raises NotCleared; any other hold raises Held, a moved head Refused (exit 3).
-    The merge queue judges each open pull request with it (brief #643, ADR-0329)."""
+    record issue, the red-branch issue the pull request fixes or None, the owner-only hold
+    `hold_list` returns with LIFT or REPORT, else None). A verdict that does not clear the head
+    raises NotCleared; any other hold raises Held, a moved head Refused (exit 3). The merge queue
+    judges each open pull request with it (brief #643, ADR-0329)."""
     pull = read_json(f"repos/{repo}/pulls/{number}", dict, "the pull request")
     head = pull.get("head")
     head_sha = head.get("sha") if isinstance(head, dict) else None
@@ -2296,8 +2459,8 @@ def holds(
     else:
         ci_evidence(repo, sha, rules.required)
     accepts = accepted_adrs(verdict, sha) or []
-    hold_list(repo, number, pull, comments, rules.approvers, accepts, root)
-    return pull, verdict, accepted, record, fixing
+    owner = hold_list(repo, number, pull, comments, rules.approvers, accepts, root, lift, report)
+    return pull, verdict, accepted, record, fixing, owner
 
 
 def queue_mode(repo: str, rules: Rules) -> bool:
@@ -2374,13 +2537,50 @@ def removed_since(comments: list[dict], verdict: dict) -> bool:
     return any(order(c) > order(verdict) for c in removals)
 
 
-def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
+def owner_hold(
+    root: Path, repo: str, number: int, sha: str, rules: Rules, pull: dict, reason: str
+) -> Held:
+    """Brief #1358 answer 1 (ADR-0570 decision 1): a pull request held only for the owner gets the
+    check before the merge all the same, once per head, and the hold names its result. A hold
+    the check itself raises (a conflict, re-prove) is raised as it is; nothing is merged."""
+    data = rules.data
+    text = str(pull.get("body") or "")
+    branch = str(data.get("default_branch", "main"))
+    wait = after_merge_seconds(data)
+    try:
+        step = merge_check_once(
+            root, branch, number, sha, wait, text, repo, rules.pre, rules.behind
+        )
+    except Held as err:
+        if not str(err).startswith(TESTS_FAIL):
+            raise
+        step = str(err)
+    return Held(f"{reason}; {WOULD_BE}: {'pass' if step is None else 'fail'}")
+
+
+def signed_in(rules: Rules) -> None:
+    """`--owner` (brief #1358 answer 2): the signed-in account must be one of `spec_approvers`,
+    else refused naming the setting, never the login."""
+    user = read_json("user", dict, "the signed-in account")
+    name = str(user.get("login") or "").lower()
+    allowed = {str(a).lstrip("@").lower() for a in rules.approvers}
+    if not name or name not in allowed:
+        raise Refused(NOT_APPROVER)
+
+
+def outcome(root: Path, number: int, sha: str, owner: bool = False) -> tuple[str, str, int]:
     rules = ruled(root)
     data = rules.data
     repo = repo_of(root)
+    if owner:
+        signed_in(rules)
     with merge_lock(root):
-        pull, verdict, accepted, record, fixing = holds(root, repo, number, sha, rules)
-        queue = queue_mode(repo, rules)
+        pull, verdict, accepted, record, fixing, lifted = holds(
+            root, repo, number, sha, rules, lift=owner, report=True
+        )
+        if lifted is not None and not owner:
+            raise owner_hold(root, repo, number, sha, rules, pull, lifted)
+        queue = not owner and queue_mode(repo, rules)  # the owner merges, never queues
         if queue and (os.environ.get("GITHUB_ACTIONS") != "true" or not os.environ.get(MERGE_ENV)):
             raise Refused(QUEUE_OUTSIDE)  # before any GraphQL call: never a session's own login
         node = ""
@@ -2393,13 +2593,14 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
         branch = str(data.get("default_branch", "main"))
         wait = after_merge_seconds(data)
-        step = merge_check(root, branch, number, sha, wait, text, repo, rules.pre, rules.behind)
+        check = merge_check_once if owner else merge_check
+        step = check(root, branch, number, sha, wait, text, repo, rules.pre, rules.behind)
         if step is not None:
             raise Held(f"{FAILS} ({step})")
         if queue:
             enqueue(node, sha)
             return "queued", "", EXIT_CLEARED
-        merged = merge_pull(repo, number, sha, accepted)
+        merged = merge_pull(repo, number, sha, accepted, owner)
         recorded, closed = after_merge(
             root,
             repo,
@@ -2423,11 +2624,12 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     return f"merged {merged[:12]}", "", EXIT_CLEARED
 
 
-def guarded(root: Path, number: int, sha: str) -> tuple[str, int]:
-    """The one guarded merge of pull request NUMBER at SHA: (its one line, its exit code)."""
+def guarded(root: Path, number: int, sha: str, owner: bool = False) -> tuple[str, int]:
+    """The one guarded merge of pull request NUMBER at SHA: (its one line, its exit code). With
+    OWNER, the owner's merge of brief #1358 (`--owner`)."""
     prefix = f"merge-cleared #{number} {sha[:12]}:"
     try:
-        word, reason, code = outcome(root, number, sha)
+        word, reason, code = outcome(root, number, sha, owner)
     except Held as err:
         return f"{prefix} held: {err}", EXIT_HELD
     except Refused as err:
@@ -2465,9 +2667,11 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
         if job[0] == "no-secret":
             return no_secret_main(int(job[1][0]), here)
         return report_main(int(job[1][0]), job[1][1], job[1][2], here)
+    if (number := owner_args(argv)) is not None:
+        return owner_main(Path.cwd() if root is None else root, number)
     args = parse_args(argv)
     if args is None:
-        print(f"merge-cleared #? ?: refused: {USAGE}")
+        print(f"merge-cleared #? ?: refused: {USAGE}; or {OWNER_USAGE}")
         return EXIT_REFUSED
     line, code = guarded(Path.cwd() if root is None else root, *args)
     print(line)

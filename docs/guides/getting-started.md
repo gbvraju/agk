@@ -561,6 +561,18 @@ A pull request that fails its batch is removed by GitHub, and the merger posts o
 until a new verdict, which a new head needs anyway. GitHub's merge
 queue is not the conductor's `conductor.py merge-queue`, which stays as it is.
 
+**When only the owner may merge** (brief #1358, ADR-0570). The merger holds a release or a change to a protected class for
+you (`held: protected class <class> (rule 5)`), and the GitHub button merges the head as it is, untested against the
+latest `main`. So the merger still tests the would-be merge of such a pull request and the line ends
+`would-be merge: pass` or `would-be merge: fail`; it merges nothing. Merge it through the kit, not the button:
+`python3 scripts/agk/merge_cleared.py --pr <n> --owner` runs the same checks with the owner-only holds lifted for that one
+call and merges, as the account you are signed in to `gh` with, only when the would-be merge passes; it refuses an account
+that is not in `spec_approvers` (`config/reviewers.yaml`). The result is reused while the head and `main` stay the same.
+On `fail` the builder updates its branch first. In a repository owned by an organization with `merge_queue = true`, your
+button queues the pull request and the queue's own runs test it, so `--owner` is optional there; in a repository owned by
+a personal account, where `/agk:doctor` prints `merge queue: unavailable (user-owned repository)`, or with the queue off,
+`--owner` is the way.
+
 ## Upgrading the kit
 
 Run `/agk:upgrade` (or `python3 scripts/agk/upgrade.py <your repository>` from the kit) to bring the kit's files to a newer

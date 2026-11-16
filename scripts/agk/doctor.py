@@ -1099,14 +1099,24 @@ def auto_merge_result(config: dict) -> Result:
     return Result("ok", message="on, method squash" if state == "on" else "off")
 
 
-def merge_queue_result(config: dict) -> Result:
+def merge_queue_result(config: dict, repo_data: Any = None) -> Result:
     """`merge queue: on` or `merge queue: off` (brief #972 answer 5, amendment 158 item 7), from
-    the setting alone, never from the ruleset; a malformed value fails naming the setting."""
+    the setting, never from the ruleset; a malformed value fails naming the setting. In CI mode
+    (not `execution = "local"`) with the queue off, a repository REPO_DATA reads as owned by a
+    user account is `unavailable (user-owned repository)`: GitHub offers the queue only to an
+    organization, so the owner merges with `merge_cleared.py --pr <n> --owner` (brief #1358
+    answer 3, ADR-0570). The kit changes no ruleset."""
     try:
         state = merge_cleared.merge_queue_setting(config)
     except CheckError as err:
         return Result("fail", message=str(err))
-    return Result("ok", message="on" if state else "off")
+    if state:
+        return Result("ok", message="on")
+    owner = repo_data.get("owner") if isinstance(repo_data, dict) else None
+    user = isinstance(owner, dict) and owner.get("type") == "User"
+    if user and config.get("execution") != "local":
+        return Result("ok", message="unavailable (user-owned repository)")
+    return Result("ok", message="off")
 
 
 def slot_minutes(number: int) -> list[int]:
@@ -1843,7 +1853,7 @@ def run_checks(
     results.update(engine_results(root, kit_root, config))
     results["actions-minutes"] = minutes_result(root, reads)
     results["auto-merge-setting"] = auto_merge_result(config)
-    results["merge-queue-setting"] = merge_queue_result(config)
+    results["merge-queue-setting"] = merge_queue_result(config, reads.get("repo", "", raw=True)[0])
     results["model-routes"] = model_routes_result(root)
     results["always-full-infra"] = always_full_result(root)
     results["slot-schedule"] = slot_schedule_result(root, reads)

@@ -1623,10 +1623,20 @@ def queued(root, repo: str, rules: merge_cleared.Rules) -> tuple[list[tuple[int,
         except merge_cleared.NotCleared:
             continue
         except (merge_cleared.Held, merge_cleared.Refused) as exc:
-            kept_out.append(f"not queued: #{number} {sha[:12]}: {exc}")
+            kept_out.append(kept_out_line(number, sha, str(exc)))
             continue
         found.append((merge_cleared.stamp(verdict), number, sha))
     return [(number, sha) for _, number, sha in sorted(found)], kept_out
+
+
+def kept_out_line(number: int, sha: str, reason: str) -> str:
+    """One `not queued:` line; for a hold only the owner lifts (a release or a protected class) it
+    names the owner's merge through the kit, `merge_cleared.py --pr <n> --owner`, which merges
+    only a passing would-be merge (brief #1358 answer 2, ADR-0570), never the GitHub button."""
+    line = f"not queued: #{number} {sha[:12]}: {reason}"
+    if merge_cleared.owner_only(reason):
+        line += "; the owner merges with " + merge_cleared.OWNER_COMMAND.format(number)
+    return line
 
 
 def run_merge(root, number: int, sha: str) -> tuple[int, str]:

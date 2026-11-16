@@ -157,7 +157,7 @@ def test_an_unprotected_pull_request_is_unchanged(tmp_path):
     assert merges(calls(log)) == [merge_call()]
 
 
-# --- answer 2: the owner merges through the kit ----------------------------------------------------
+# --- answer 2: the owner merges through the kit ------------------------------------------------
 
 
 def test_owner_merges_a_passing_protected_pull_request_with_the_signed_in_login(tmp_path):
@@ -305,7 +305,10 @@ def test_the_conductor_names_the_owner_command_for_an_owner_hold():
         f"not queued: #7 {SHA12}: protected class constitution/ (rule 5); the owner merges with "
         "python3 scripts/agk/merge_cleared.py --pr 7 --owner"
     )
-    assert conductor.kept_out_line(7, HEAD, "draft (rule 5)") == f"not queued: #7 {SHA12}: draft (rule 5)"
+    assert (
+        conductor.kept_out_line(7, HEAD, "draft (rule 5)")
+        == f"not queued: #7 {SHA12}: draft (rule 5)"
+    )
 
 
 @pytest.mark.parametrize(
