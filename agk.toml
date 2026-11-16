@@ -47,6 +47,11 @@ rule_tags_from = "2026-12-06"
 # allowed_hosts = ["db.internal.example.com"]
 # allow_paths = [{ path = "docs/logs/README.md", reason = "a guide about logs, not a log" }]
 # Who hands a finished builder its next work: "conductor" (the session asks on the agk-conductor issue and waits for an Assign: line) or "next" (session.py next, for setups with no conductor); a change needs an ADR.
+# The conductor's pass tier (brief #1359, ADR-0571): `watchdog --pass` starts a routine pass on mid at medium and one that holds
+# a first review, a protected, spec or ADR change, a Question:, a Correction:, a disagreement or an intake on strongest at
+# high. `conductor = "strongest"` (the one value) pins every pass to strongest; this repository keeps the defaults. A change needs an ADR.
+# [models]
+# conductor = "strongest"
 [flow]
 # "next" by the owner's direction of 2026-11-11 (brief #1029, ADR-0438): a finished builder takes its next brief at once;
 # the slots s<n> still act on Assign: lines (builder_start below is unchanged).
@@ -328,6 +333,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_conductor_tier.py",
   "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_owner_question.py",
   "tests/kit/test_steward_starts.py",
@@ -342,6 +348,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
+  "tests/kit/test_conductor_tier.py",
   "tests/kit/test_agk_config.py", "tests/kit/test_check_brief.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py",
   "tests/kit/test_caps.py", "tests/kit/test_steward_guard.py",
@@ -1062,6 +1069,7 @@ tests = [
 [[testing.map]]
 code = ".claude/agents/*.md"
 tests = [
+  "tests/kit/test_conductor_tier.py",
   "tests/kit/test_steward_starts.py",
   "tests/kit/test_check_numbers_amendments.py", "tests/kit/test_conductor_guard_issue.py",
   "tests/kit/test_conductor_playbook_evidence.py", "tests/kit/test_decision_files.py",
