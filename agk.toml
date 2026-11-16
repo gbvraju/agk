@@ -155,7 +155,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/autopilot.py"
-tests = ["tests/kit/test_autopilot_status.py"]
+tests = ["tests/kit/test_autopilot_status.py", "tests/kit/test_autopilot_supervisor.py"]
 [[testing.map]]
 code = "scripts/agk/batch.py"
 tests = ["tests/kit/test_batch.py"]
@@ -336,6 +336,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_conductor_tier.py",
   "tests/kit/test_watchdog_builders.py",
   "tests/kit/test_steward_owner_question.py",
@@ -568,6 +569,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_autopilot_status.py",
   "tests/kit/test_autopilot_adapters.py",
   "tests/kit/test_watchdog_builders.py",
@@ -913,7 +915,10 @@ code = "scripts/agk/steward_evidence.py"
 tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py", "tests/kit/test_steward_daily.py"]
 [[testing.map]]
 code = "scripts/agk/steward_owner.py"
-tests = ["tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py"]
+tests = [
+  "tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py",
+  "tests/kit/test_autopilot_supervisor.py",
+]
 [[testing.map]]
 code = "scripts/agk/steward_voice.py"
 tests = ["tests/kit/test_steward_voice.py", "tests/kit/test_steward_daily.py", "tests/kit_dev/test_kit_manifest.py"]

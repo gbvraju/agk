@@ -22,12 +22,19 @@ trace of `check_plan.py --trace` ends `ok plan`, the plan of `session.py plan --
 malformed brief, `docs/plan/scope-lock.md` exists, and no open owner question of the memory blocks
 the first milestone (one that names `M1` or names no milestone); else it prints `not ready: <check>`
 for each and starts nothing (exit 1). A refusal names the rule or setting, never the value (exit 2).
+
+Brief #1387 (SPEC-0064 rules 6 and 14, ADR-0585): with `auto_start` and `launch_adapter` set,
+`ready --start` starts nothing itself and prints that the supervisor's next pass
+(`conductor.py watchdog --pass`) starts the conductor; without them it prints the conductor's
+prompt as before. A steward the supervisor started (`AGK_STEWARD_START=conductor`) relays nothing:
+`relay` refuses (exit 2).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import UTC, datetime
@@ -124,6 +131,9 @@ def unpark(root: Path, repo: str, number: int, qid: str, conductor: str | None) 
 
 
 def relay(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
+    if os.environ.get("AGK_STEWARD_START") == "conductor":  # brief #1387, SPEC-0063 rule 4
+        return 2, ["refused: a steward the supervisor started relays nothing "
+                   "(setting: AGK_STEWARD_START)"]  # fmt: skip
     words = opts.said.read_text(encoding="utf-8").strip()
     if len(words.splitlines()) != 1:
         return 2, [f"refused: the owner's words are one line, verbatim ({RULE})"]
@@ -199,7 +209,10 @@ def ready(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
     if not opts.start:
         return 0, ["ready: run python3 scripts/agk/launch.py " + " ".join(args)]
     auto, adapter = launch.launch_settings(root)
-    return launch.role_main([*args, *(["--adapter", adapter] if auto and adapter else [])]), []
+    if auto and adapter:  # brief #1387 (ADR-0585): this start is the supervisor's
+        return 0, ["ready: the supervisor starts the conductor at its next pass "
+                   "(python3 scripts/agk/conductor.py watchdog --pass)"]  # fmt: skip
+    return launch.role_main(args), []
 
 
 def main(argv: list[str] | None = None) -> int:

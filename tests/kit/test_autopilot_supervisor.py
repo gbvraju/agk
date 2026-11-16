@@ -68,7 +68,9 @@ def local(repo, tmp_path, monkeypatch):
         f"launch_adapter = {json.dumps(f'{sys.executable} {double} {log}')}\n"
     )
     repo.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
-    repo.commit({"agk.toml": text, "config/reviewers.yaml": "version: 1\nverdict_authors: [boss]\n"})
+    repo.commit(
+        {"agk.toml": text, "config/reviewers.yaml": "version: 1\nverdict_authors: [boss]\n"}
+    )
     repo.git("update-ref", "refs/remotes/origin/main", "HEAD")
     temp = tmp_path / "temp"
     temp.mkdir()
@@ -177,7 +179,8 @@ def test_req071_two_passes_never_overlap_under_the_lock_autopilot(local, capsys,
     monkeypatch.setattr(conductor, "AUTOPILOT_WAIT", 0)
     held = lock.lock_folder(local["repo"].root, conductor.AUTOPILOT_LOCK)
     owner = {"session": "cb-example-1", "pid": os.getpid(), "host": lock.socket.gethostname(),
-             "started": conductor.stamp_of(datetime.now(UTC)), "token": uuid.uuid4().hex}  # fmt: skip
+             "started": conductor.stamp_of(datetime.now(UTC)),
+             "token": uuid.uuid4().hex}  # fmt: skip
     assert lock.try_take(held, owner)
     try:
         code, out = passed(local, capsys)
@@ -201,7 +204,9 @@ def test_req071_a_quiet_pass_on_the_650_brief_fixture_costs_at_most_ten_calls(re
         'launch_adapter = "cb-example-adapter"\n'
     )
     repo.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
-    repo.commit({"agk.toml": text, "config/reviewers.yaml": "version: 1\nverdict_authors: [boss]\n"})
+    repo.commit(
+        {"agk.toml": text, "config/reviewers.yaml": "version: 1\nverdict_authors: [boss]\n"}
+    )
     repo.git("update-ref", "refs/remotes/origin/main", "HEAD")
     now = datetime.now(UTC)
     state = conductor.pass_state_file(repo.root)
@@ -328,7 +333,9 @@ def test_req071_the_owners_rest_hours_stop_no_review_job(local, capsys):
     """REQ-071 AC7: rule 12 and Q-S0064-3 (build and review jobs run in the rest hours; the
     conductor and steward jobs of this build are no owner-only step)."""
     root = local["repo"].root
-    (root / "agk.toml").write_text((root / "agk.toml").read_text() + 'owner_rest_hours = "00:00-23:59"\n')
+    (root / "agk.toml").write_text(
+        (root / "agk.toml").read_text() + 'owner_rest_hours = "00:00-23:59"\n'
+    )
     local["repo"].git("commit", "-qam", "rest")
     local["repo"].git("update-ref", "refs/remotes/origin/main", "HEAD")
     code, out = passed(local, capsys)
@@ -345,7 +352,7 @@ def test_req071_the_steward_start_of_the_conductor_is_the_supervisors(tmp_path, 
     monkeypatch.setattr(steward_owner.launch, "role_main", lambda *a, **k: calls.append(a) or 0)
     monkeypatch.setattr(steward_owner.launch, "launch_settings", lambda root: (True, "adapter"))
     monkeypatch.setattr(steward_owner, "not_ready", lambda root, plan, trace: [])
-    opts = type("Opts", (), {"plan": str(tmp_path / "p"), "trace": str(tmp_path / "t"),
+    opts = type("Opts", (), {"plan": tmp_path / "p", "trace": tmp_path / "t",
                              "session": "conductor-1", "start": True})()  # fmt: skip
     for name in ("p", "t"):
         (tmp_path / name).write_text("")
