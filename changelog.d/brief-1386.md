@@ -1,0 +1,1 @@
+- Every job's record names its kind, item and head, its log stays out of git, and `autopilot.py status` (`agk status`) lists the running jobs, the queue, the owner's waits, the held jobs and why nothing starts; `--week` prints the health figures (brief #1386)
