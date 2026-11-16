@@ -52,7 +52,7 @@ requests merged and the seconds from each event to its job's start, with the tim
 and times only, refused otherwise. `status --week` prints the last seven days of that file and the
 tokens per merged pull request from `metrics.py --cost`'s local records; a figure it cannot read
 is `unknown`, never 0. No network call of its own (verify: the process table is `ps -A -o
-pid=,ppid=,args=`; on Windows it is not read and the line says `unknown`).
+pid=,ppid=,args=`; on Windows `Get-CimInstance Win32_Process` with its command lines, brief #1409).
 """
 
 from __future__ import annotations
@@ -94,49 +94,19 @@ def stamp(when: datetime) -> str:
     return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def claude_processes() -> list[tuple[int, int, str]] | None:
-    """(pid, parent pid, command line) of every process, or None when it cannot be read."""
-    if sys.platform == "win32":
-        return None
-    try:
-        done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["ps", "-A", "-o", "pid=,ppid=,args="],
-            capture_output=True, text=True, encoding="utf-8", check=False,
-        )  # fmt: skip
-    except OSError:
-        return None
-    if done.returncode:
-        return None
-    table = []
-    for line in done.stdout.splitlines():
-        parts = line.split(None, 2)
-        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-            table.append((int(parts[0]), int(parts[1]), parts[2] if len(parts) > 2 else ""))
-    return table
+def claude_processes(run=subprocess.run, platform: str | None = None):
+    """(pid, parent pid, command line) of every process, or None when it cannot be read
+    (`launch.command_lines`: `ps` on POSIX, `Get-CimInstance Win32_Process` on Windows)."""
+    return launch.command_lines(run, platform)
 
 
-def is_claude(args: str) -> bool:
-    return any(Path(w).name in ("claude", "claude.exe") for w in args.split()[:2])
+is_claude = launch.is_claude
 
 
 def unrecorded(table: list[tuple[int, int, str]], roots: set[int]) -> list[int]:
     """The `claude` processes outside every recorded tree, but a person's own steward."""
-    parent = {pid: ppid for pid, ppid, _ in table}
-
-    def recorded(pid: int) -> bool:
-        seen: set[int] = set()
-        while pid not in seen and pid > 1:
-            if pid in roots:
-                return True
-            seen.add(pid)
-            pid = parent.get(pid, 0)
-        return False
-
-    return [
-        pid
-        for pid, _, args in table
-        if is_claude(args) and "--agent steward" not in args and not recorded(pid)
-    ]
+    steward = {pid for pid, _, args in table if "--agent steward" in args}
+    return [pid for pid in launch.outside_trees(table, roots) if pid not in steward]
 
 
 def job_lines(root: Path) -> tuple[list[str], set[int]]:
