@@ -1413,6 +1413,45 @@ def line_ending_lines(root: Path, platform: str | None = None) -> list[str]:
     return [EOL_WARNING]
 
 
+WSL_DRIVE = "wsl: the project is on a Windows drive; move it inside WSL (/agk:wsl)"
+WSL_OFFER = (
+    "wsl: WSL is on this machine and the sessions run on Windows; /agk:wsl moves them into WSL 2"
+)
+
+
+def inside_wsl(version: Path = Path("/proc/version")) -> bool:
+    """Whether this Linux runs inside WSL, read from the kernel's version text."""
+    try:
+        return "microsoft" in version.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return False
+
+
+def wsl_lines(
+    root: Path, platform: str, in_wsl: bool, adapter: str | None, wsl_exe: str | None
+) -> list[str]:
+    """Brief #1376 answer 5 (ADR-0577): inside WSL with the project under `/mnt/`, the move line;
+    on Windows with the kit's Windows adapter set and `wsl` found, the one line naming `/agk:wsl`.
+    Information only, never a failure; the adapter's command is never printed."""
+    if platform.startswith("linux") and in_wsl and root.as_posix().startswith("/mnt/"):
+        return [WSL_DRIVE]
+    windows = ADAPTERS["win32"][1].split(" = ", 1)[1].strip('"')
+    if platform.startswith("win") and wsl_exe and (adapter or "").strip() == windows:
+        return [WSL_OFFER]
+    return []
+
+
+def machine_wsl_lines(root: Path) -> list[str]:
+    import launch
+
+    try:
+        adapter = launch.launch_settings(root)[1]
+    except CheckError:
+        adapter = None
+    in_wsl = sys.platform.startswith("linux") and inside_wsl()
+    return wsl_lines(root, sys.platform, in_wsl, adapter, shutil.which("wsl"))
+
+
 def windows_tools_entry(res: Result) -> dict:
     severity, ok_text, fail_text = WINDOWS_TOOLS
     message = (ok_text if res.status == "ok" else fail_text) + res.message
@@ -2285,6 +2324,7 @@ def main(argv: list[str] | None = None) -> int:
             + unmapped_lines(root.resolve())
             + main_folder_lines(root.resolve())
             + line_ending_lines(root.resolve())
+            + machine_wsl_lines(root.resolve())
         )
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
