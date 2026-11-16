@@ -226,18 +226,16 @@ def test_the_role_gains_the_self_wake_tool_and_nothing_else():
 
 
 def test_the_role_states_the_cadence_and_when_it_stops():
-    """REQ-039: brief #284 answer 3 (and items 1 and 2 of the verdict on de043e0)."""
+    """REQ-039: brief #284 answer 3, as SPEC-0064 rule 15 changes it (brief #1387, ADR-0585):
+    the supervisor starts the conductor as a short job of one pass; no `/loop`, no wake."""
     _, body = role_parts()
     for phrase in (
-        "every 10 minutes",
-        "`ScheduleWakeup`",
-        "python3 scripts/agk/session.py review-queue --fingerprint",
+        "conductor.py watchdog --pass",
+        "a short job of one pass",
         "python3 scripts/agk/session.py review-queue --all",
         "python3 scripts/agk/session.py queue --role conductor",
         "post nothing",
-        "empty for two passes in a row",
-        "schedule no further wake",
-        "an unchanged fingerprint after an empty pass counts as another empty pass",
-        "/loop review every 5 minutes",
+        "Schedule no wake and start no loop",
     ):
         assert phrase in body, phrase
+    assert "/loop" not in body and "every 10 minutes" not in body

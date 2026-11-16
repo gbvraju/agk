@@ -153,6 +153,8 @@ def github_lines(root: Path) -> tuple[list[str], bool]:
         quiet = "paused (setting: paused)"
     if quiet:
         out.append(f"quiet: {quiet}")
+    if kept := conductor.pass_state(root).get("quiet"):  # the supervisor's stop rule (ADR-0585)
+        out.append(f"quiet: supervisor: {kept}")
     return out, ok
 
 

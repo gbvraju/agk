@@ -65,6 +65,10 @@ start, `fix` for a resume of a pull request, `build` for one without, the role f
 knows it), which the adapters add to the record as `kind=`, `item=` and `head=`; `read_record`
 reads them, leaving out a field that is absent or not of its form.
 
+Brief #1387 (ADR-0585): the supervisor's pass calls `role_main` with its checkout and
+`AGK_STEWARD_START=conductor`, which the adapter gets and the prompt names: answer from evidence
+only, relay nothing and approve nothing.
+
 Brief #1388 (SPEC-0064 rules 3 and 5, ADR-0588): each adapter call also gets `AGK_SHOW_JOBS`
 (`true` or `false`), from `show_jobs` of the `[autopilot]` table (false when unset); both adapters
 run a job in the background with its log, and only with `true` show it in a tab that closes when it
@@ -622,7 +626,7 @@ def start_with(
     record shows a live process is refused and the others still start (brief #1355). PROMPTS, when
     given, are the prompts of the sessions in order (the resume prompts of brief 402); RUNS are
     their kinds, tiers, efforts and model names (brief 709), `design` when not given; JOBS are their
-job kinds and items (brief #1386), `build` of the brief when not given."""
+    job kinds and items (brief #1386), `build` of the brief when not given."""
     words = shlex.split(adapter)
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
@@ -675,8 +679,15 @@ ROLE_PROMPT = (
 )
 
 
-def role_main(args: list[str]) -> int:
-    """`role --role steward|conductor --session ID [--adapter COMMAND]` (brief #1322)."""
+SUPERVISED = (
+    "The supervisor started you (`AGK_STEWARD_START=conductor`, SPEC-0063 rule 4): answer from "
+    "evidence only; relay nothing and approve nothing.\n"
+)
+
+
+def role_main(args: list[str], root: Path | None = None, extra: dict | None = None) -> int:
+    """`role --role steward|conductor --session ID [--adapter COMMAND]` (brief #1322); ROOT and
+    EXTRA (the supervisor's `AGK_STEWARD_START`, brief #1387) for a start from a pass."""
     opts = dict(zip(args[1::2], args[2::2], strict=False))
     if (
         len(args[1:]) % 2
@@ -690,6 +701,8 @@ def role_main(args: list[str]) -> int:
         return 2
     role, session = opts["--role"], opts["--session"]
     prompt = ROLE_PROMPT.format(session=session, role=role, kind_line=kind_line(DESIGN))
+    prompt += SUPERVISED if (extra or {}).get("AGK_STEWARD_START") == "conductor" else ""
+    here = root or Path.cwd()
     if "--adapter" not in opts:
         print(prompt, end="")
         return 0
@@ -699,17 +712,17 @@ def role_main(args: list[str]) -> int:
         print(f"{stuck} (the adapter is empty)")
         return 1
     try:
-        allowed = memory_allows(Path.cwd())
+        allowed = memory_allows(here)
     except CheckError:
         allowed = False
     if not allowed:
         print(f"{stuck} (setting: flow.min_free_memory_mb)")
         return 1
-    if has_process(worktree_of(Path.cwd(), session)):
+    if has_process(worktree_of(here, session)):
         print(f"{stuck} (one session per name)")
         return 1
     try:
-        shown = "true" if show_jobs(Path.cwd()) else "false"
+        shown = "true" if show_jobs(here) else "false"
     except CheckError:
         print(f"{stuck} (setting: autopilot.show_jobs)")
         return 1
@@ -717,10 +730,12 @@ def role_main(args: list[str]) -> int:
     env.update(QUIET, AGK_SESSION=session, AGK_ROLE=role, AGK_AGENT=role)
     env.update(AGK_JOB_KIND=role, AGK_ITEM="", AGK_HEAD="", AGK_SHOW_JOBS=shown)
     env.update(AGK_KIND=DESIGN[0], AGK_TIER=DESIGN[1], AGK_EFFORT=DESIGN[2])
+    env.update(extra or {})
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
-            words, input=prompt, text=True, encoding="utf-8", env=env, capture_output=True
-        )
+            words, input=prompt, text=True, encoding="utf-8", env=env, capture_output=True,
+            cwd=here,
+        )  # fmt: skip
     except OSError:
         print(f"{stuck} (the adapter cannot be run)")
         return 1

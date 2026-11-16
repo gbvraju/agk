@@ -192,12 +192,19 @@ def ready(root: Path) -> int:
     return steward_owner.main(args)
 
 
-def test_req066_a_ready_plan_starts_the_conductor_through_launch(plan_root, monkeypatch):
-    """REQ-066 AC1: rule 2, a plan that passes every check starts one conductor by the adapter."""
+def test_req066_a_ready_plan_leaves_the_conductor_start_to_the_supervisor(
+    plan_root, monkeypatch, capsys
+):
+    """REQ-066 AC1: rule 2, as SPEC-0064 rule 14 moves it (brief #1387, ADR-0585): with an
+    adapter a plan that passes every check starts no conductor itself, the supervisor's next pass
+    does; without one it prints the conductor's prompt through `launch.py role`."""
     root, calls = plan_root
     monkeypatch.setattr(steward_owner, "repo_root", lambda: root)
     assert ready(root) == 0
-    assert calls == [["role", "--role", "conductor", "--session", "c1", "--adapter", ADAPTER]]
+    assert calls == [] and "the supervisor starts the conductor" in capsys.readouterr().out
+    monkeypatch.setattr(steward_owner.launch, "launch_settings", lambda root: (False, None))
+    assert ready(root) == 0
+    assert calls == [["role", "--role", "conductor", "--session", "c1"]]
 
 
 @pytest.mark.parametrize("broken", ["trace", "malformed", "scope", "question", "memory"])
@@ -240,7 +247,9 @@ def test_req066_the_agent_files_name_the_two_starts():
     leaves the answers from the rules to a running steward; the steward names its commands."""
     conductor_text = (ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     steward_text = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
-    assert "launch.py role --role steward" in conductor_text and "stuck:" in conductor_text
+    # SPEC-0064 rule 14 (brief #1387, ADR-0585): the conductor's start of the steward is the
+    # supervisor's.
+    assert "the supervisor starts the steward job" in conductor_text and "stuck:" in conductor_text
     assert "where a steward runs" in conductor_text.lower()
     for command in (
         "steward_owner.py ask",

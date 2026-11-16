@@ -443,6 +443,11 @@ def local(repo, tmp_path, monkeypatch):
     )
     monkeypatch.setattr(conductor.session_plan, "plan", lambda root, *a: print(facts["plan"]) or 0)
     monkeypatch.setattr(conductor, "sweep", lambda root: print(facts["sweep"]) or 0)
+    # Brief #1387 (ADR-0585): the supervisor's change reads, stop rules and health line are
+    # tested in test_autopilot_supervisor.py; here they read nothing and stop nothing.
+    monkeypatch.setattr(conductor, "change_reads", lambda root, repo, state, now: (False, None))
+    monkeypatch.setattr(conductor, "stop_reason", lambda root, repo, *a: (None, None))
+    monkeypatch.setattr(conductor, "record_health", lambda started, now: None)
     return {"repo": repo, "log": log, "facts": facts, "leases": leases}
 
 
