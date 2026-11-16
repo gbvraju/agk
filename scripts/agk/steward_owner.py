@@ -368,7 +368,7 @@ def gh_refusal() -> tuple[str, str] | None:
     try:
         proc = subprocess.run(  # nosec B603 B607 - one fixed argument list, no shell
             ["gh", "api", "rate_limit", "--jq", ".rate.remaining"],
-            capture_output=True, text=True, timeout=60, check=False,
+            capture_output=True, text=True, encoding="utf-8", timeout=60, check=False,
         )  # fmt: skip
     except FileNotFoundError:
         return "gh on PATH", "install gh, then run gh auth login"

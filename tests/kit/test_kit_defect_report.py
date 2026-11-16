@@ -27,15 +27,26 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "agk"))
-sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
 
 import guard_logs  # noqa: E402
 import session_plan  # noqa: E402
-import steward_guard  # noqa: E402
 import steward_owner  # noqa: E402
 
 SEED = itertools.count(1411)
 LABEL = "agk-kit-defect"
+HOOK = ROOT / ".claude" / "hooks" / "steward_guard.py"
+
+
+def guard(root: Path, command: str) -> str | None:
+    """The steward guard's denial reason for COMMAND, or None when it allows it."""
+    payload = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(root)}
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(HOOK)], input=json.dumps(payload), capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)}, check=False,
+    )  # fmt: skip
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+    return out["permissionDecisionReason"] if out else None
 
 
 def made(n: int) -> str:
@@ -243,8 +254,7 @@ def test_req050_unreadable_kit_defects_exit_4(project, monkeypatch, capsys):
 def test_req050_the_steward_guard_allows_a_kit_defect_filing(tmp_path, command):
     """REQ-050: brief #1411 answer 1 (the steward may open the labelled issue)."""
     (tmp_path / "b.md").write_text("Kit defect: x\n\nWho: AGK steward\n", encoding="utf-8")
-    payload = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(tmp_path)}
-    assert steward_guard.decide(payload) is None
+    assert guard(tmp_path, command) is None
 
 
 @pytest.mark.parametrize(
@@ -258,8 +268,7 @@ def test_req050_the_steward_guard_allows_a_kit_defect_filing(tmp_path, command):
 def test_req050_the_steward_guard_still_denies_other_labels(tmp_path, command):
     """REQ-050: brief #1411 answer 1 (never `agk-brief`; the label only on a new issue)."""
     (tmp_path / "b.md").write_text("Kit defect: x\n", encoding="utf-8")
-    payload = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(tmp_path)}
-    assert "label" in (steward_guard.decide(payload) or "")
+    assert "label" in (guard(tmp_path, command) or "")
 
 
 # --- answer 2: the steward keeps its GitHub reads ---------------------------------------------
