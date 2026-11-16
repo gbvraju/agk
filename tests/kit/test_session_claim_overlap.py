@@ -308,3 +308,53 @@ def test_1052_f_an_approvers_hold_still_stops_the_fix_brief(proj, stub):
     assert posts(stub) == []
     got = data(proj, stub)
     assert 6 not in [row["brief"] for row in got.get("start", []) + got.get("assign", [])]
+
+
+# --- the red alarm itself is claimed as `next` takes it (brief #1368, found bug #1341) -----------
+
+
+def alarm_scene(stub: Stub) -> None:
+    """Alarm #9 (`Touches: **`) and an open builder pull request #20 that changes a file."""
+    stub.serve(PULLS, [pr(20, 1)])
+    changed(stub, 20, ("modified", FILE))
+    listing(stub, [alarm()])
+    free(stub, 9)
+
+
+def test_1368_a_claim_takes_the_red_alarm_that_next_take_takes(proj, stub):
+    """REQ-050: brief #1368 answer 1; `next --take` takes the alarm past the open pull request,
+    and `claim` takes it the same way, with the one take posted."""
+    alarm_scene(stub)
+    taken = session(proj, stub, "next", "--session", "s-me", "--take")
+    assert taken.returncode == 0, taken.stdout + taken.stderr
+    assert [p[1] for p in claim_posts(stub)] == [f"{ISSUES}/9/comments"]
+    (stub.dir / "calls.log").unlink()
+    out = claim(proj, stub, 9)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.strip() == "claimed #9"
+    assert [p[1] for p in claim_posts(stub)] == [f"{ISSUES}/9/comments"]
+    assert posts(stub)[0][2][1].startswith(f"body=taken: s-me {DAY}")
+
+
+def test_1368_a_taken_red_alarm_is_refused_with_the_line_of_next(proj, stub):
+    """REQ-050: brief #1368 answer 1; a live take of another session refuses the claim of the
+    alarm with `next`'s own `skip` line, and nothing is posted."""
+    alarm_scene(stub)
+    taken_by_other(stub, 9)
+    shown = [x for x in lines(look(proj, stub)) if x.startswith("skip #9: ")]
+    assert shown and shown[0].startswith("skip #9: taken by s-other"), shown
+    out = claim(proj, stub, 9)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert out.stdout.strip() == shown[0]
+    assert posts(stub) == []
+
+
+def test_1368_a_stale_red_alarm_is_refused_with_the_line_of_next(proj, stub):
+    """REQ-050: brief #1368 answer 1; a stale alarm is refused by `claim` as `next` refuses it."""
+    alarm_scene(stub)
+    listing(stub, [{**alarm(), "labels": [{"name": "agk-stale"}]}])
+    shown = [x for x in lines(look(proj, stub)) if x.startswith("skip #9: ")]
+    assert shown == ["skip #9: stale"], lines(look(proj, stub))
+    out = claim(proj, stub, 9)
+    assert out.returncode == 1 and out.stdout.strip() == "skip #9: stale"
+    assert posts(stub) == []
