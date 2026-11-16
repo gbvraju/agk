@@ -1,6 +1,6 @@
 # ADR-0588: The adapters run jobs in the background with a log each, and show a tab only with `show_jobs`
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1388, SPEC-0064 rules 3, 4, 5 and 16 (e), brief #1386 (ADR-0584), brief #1355 (ADR-0568), brief #1252 (ADR-0530), plan #661

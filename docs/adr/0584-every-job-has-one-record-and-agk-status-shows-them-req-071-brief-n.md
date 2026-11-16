@@ -1,6 +1,6 @@
 # ADR-0584: Every job has one record and one log, and `agk status` shows them
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1386, SPEC-0064 rules 3, 5, 10 and 16 (a), brief #1355 (ADR-0568), brief #1310 (ADR-0554), brief #1283 (ADR-0544), plan #661

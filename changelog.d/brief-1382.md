@@ -1,1 +1,0 @@
-- The steward speaks in short pointers: the first line is the ask or the answer, at most 5 bullets and three choices with one recommended, details only on request, inputs as one form with defaults; `steward_voice.py check` fails a reply naming the rule, `choose`, `form` and `confirm` render the shapes, and the daily list counts shortened replies (brief #1382, ADR-0582 Proposed)

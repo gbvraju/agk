@@ -1,1 +1,0 @@
-- `[flow] github_transport = "direct"` reads GitHub over one kept-alive connection per command, falling back to `gh` with one line; the default stays `"gh"`. The guarded merge reads through the shared cached reader (brief #1336, ADR-0566)

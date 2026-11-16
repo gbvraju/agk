@@ -1,6 +1,6 @@
 # ADR-0573: A claim judges a red alarm as `next` does, and a wait ends at its timeout
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-15
 - Deciders: maintainers
 - Related: brief #1368, found bug #1341, found bug #1297, brief #1052, brief #1316, SPEC-0050, plan #661

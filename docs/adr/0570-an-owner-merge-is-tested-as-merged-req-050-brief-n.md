@@ -1,6 +1,6 @@
 # ADR-0570: An owner merge is tested as merged
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: brief #1358, alarms #1338, #1344 and #1350, ADR-0297, ADR-0417, SPEC-0039 rule 5, SPEC-0050 rule 6, plan #661

@@ -1,6 +1,6 @@
 # ADR-0579: Docker is a choice of container engine beside Podman
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: ADR-0577, brief #1379, brief #1376, plan #661
