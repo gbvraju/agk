@@ -17,6 +17,7 @@ KIT_ONLY = {
     "scripts/agk/kit_hashes.py",
     "scripts/agk/check_release.py",
     "scripts/agk/check_tag.py",
+    "scripts/agk/plugin_snapshot.py",
     "scripts/agk/changelog_fragments.py",
     "scripts/agk/upgrade.py",
     "scripts/agk/uninstall.py",
@@ -108,6 +109,7 @@ def test_ac2_manifest_shape_and_version():
         "rendered",
         "adopt",
         "extendable",
+        "snapshot",
     }
     assert m["kit_tests"] == "tests/kit" and (KIT_ROOT / m["kit_tests"]).is_dir()
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])
