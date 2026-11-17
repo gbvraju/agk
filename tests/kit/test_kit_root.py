@@ -62,7 +62,8 @@ def plugin(tmp: Path, version: str = "0.0.1") -> Path:
     for name, code in (("check_one.py", 0), ("check_two.py", 0)):
         (scripts / name).write_text(
             "import pathlib, sys\n"
-            "pathlib.Path('ran.txt').open('a').write(" + repr(name) + " + ' ' + ' '.join(sys.argv[1:]) + '\\n')\n"
+            f"line = {name!r} + ' ' + ' '.join(sys.argv[1:]) + '\\n'\n"
+            "pathlib.Path('ran.txt').open('a').write(line)\n"
             f"sys.exit({code})\n",
             encoding="utf-8",
         )
@@ -169,7 +170,7 @@ def test_ac1_the_gate_stops_at_the_first_failing_check(tmp_path):
 
 
 def test_ac1_prepush_finds_the_gate_without_agk_mk(tmp_path, monkeypatch):
-    """REQ-078 AC1: the clean-install test's stop (`agk.mk is missing`) is gone in a clean project."""
+    """REQ-078 AC1: the clean-install test's stop (`agk.mk is missing`) is gone when clean."""
     root, plug = project(tmp_path, CLEAN), plugin(tmp_path)
     monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plug))
     step = prepush.governance(root, "origin/main")
