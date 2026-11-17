@@ -91,7 +91,7 @@ def table(tmp_path, capsys, text=None):
 def test_ac6_a_set_up_repository_passes_with_get_calls_only(tmp_path, capsys, monkeypatch):
     """REQ-072 AC6: rule 10: every check met, each row skipped, every call a `gh api -X GET`."""
     gh = Gh(monkeypatch, answers())
-    code, out = table(tmp_path, capsys)
+    code, out = table(tmp_path, capsys, 'execution = "hosted"\n[flow]\nauto_merge = true\n')
     assert code == 0 and out["pending"] == [] and out["missing"] == []
     assert [r["step"] for r in out["steps"]] == list(setup.CI_CHECKS)
     assert {r["result"] for r in out["steps"]} == {"skipped"}
