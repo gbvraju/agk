@@ -38,6 +38,7 @@ KIT_ONLY = {
     "scripts/agk/wsl.py",  # the skill runs the plugin's copy (ADR-0577)
     "scripts/agk/wsl_setup.ps1",  # the skill runs the plugin's copy on the Windows host (ADR-0577)
     "scripts/agk/setup.py",  # the skill runs the plugin's copy (ADR-0618)
+    "scripts/agk/setup_windows.ps1",  # the plugin's copy bootstraps native Windows (ADR-0620)
 }
 # Files under the law roots that belong to this repository only and are not installed in targets.
 REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md", ".github/workflows/agk-tag.yml"}

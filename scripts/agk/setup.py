@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: LicenseRef-AGK-Proprietary
 # AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
-"""/agk:setup's helper, build (a): read, size and print (SPEC-0065 rules 2, 3, 5, 6, 12; ADR-0618).
+"""/agk:setup's helper: read, size and print (build (a), SPEC-0065 rules 2, 3, 5, 6, 12; ADR-0618),
+ask and propose the project settings (build (b), rules 4 and 9; ADR-0619).
 
-    python3 setup.py plan|status [--json] [--builders N] [--machine FILE] [--github FILE]
-                                 [--root DIR]
+    python3 setup.py plan|status|ask|settings [--json] [--builders N] [--answer ID=CHOICE ...]
+                     [--yes] [--date YYYY-MM-DD] [--machine FILE] [--github FILE] [--root DIR]
 
 Run from the plugin root, never installed into a project. It reads the machine (OS, memory,
 cores, disk, administrator right, WSL, the tools and their versions, winget's policy, a proxy,
@@ -20,7 +21,12 @@ are the last steps, after the person's yes: `status` runs them; `plan` lists the
 runs none. `--json` prints `steps` (`step`, `result`, `note`), `pending`, `roles` (chosen by build
 (h), empty here) and `builders`. `--builders N` lowers the figure; above the cap it is refused. A
 remote's or a proxy's credentials are never read back. `--machine` and `--github` take a saved read
-(the tests' doubles). Exit 0, 1 on a refusal, 2 on a usage error.
+(the tests' doubles). `ask` prints at most five plain questions, each only when the machine and the
+project leave it unset, with a recommendation (`--json`: `questions`); `--answer` gives the person's
+choices back, and `plan` then names the settings in its last line. `settings --yes` writes the
+settings the project does not already hold to `agk.toml` with the project's next ADR on a new
+branch, and commits, pushes and merges nothing; all equal, or "for me only", writes nothing.
+Exit 0, 1 on a refusal, 2 on a usage error.
 """
 
 from __future__ import annotations
@@ -47,10 +53,21 @@ import wsl  # noqa: E402
 
 PLUGIN = Path(__file__).resolve().parents[2]
 GIB = 1024**3
-MINIMUM = {  # rule 7's one table; None until build (c) records it (verify)
-    "python": "3.11", "git": None, "gh": None, "claude": None, "node": "20",
-    "podman": None, "docker": None, "pwsh": None,
+MINIMUM = {  # rule 7's one table, read by every platform script and the tests (ADR-0620, verify)
+    "python": "3.11", "git": "2.43", "gh": "2.45", "claude": "2.0", "node": "20",
+    "podman": "4.9", "docker": None, "pwsh": "7.6", "wt": "1.23", "gitleaks": "8.30.1",
 }  # fmt: skip
+WINGET = {  # build (c): each tool's winget package, in the order installed (verify)
+    "python": "Python.Python.3.13", "git": "Git.Git", "gh": "GitHub.cli",
+    "node": "OpenJS.NodeJS.LTS", "pwsh": "Microsoft.PowerShell", "wt": "Microsoft.WindowsTerminal",
+    "gitleaks": "Gitleaks.Gitleaks", "podman": "RedHat.Podman",
+}  # fmt: skip
+CLAUDE_INSTALL = [  # Claude Code by its own installer (verify: the Windows installer command)
+    "powershell", "-NoProfile", "-Command", "irm https://claude.ai/install.ps1 | iex",
+]  # fmt: skip
+MACHINE_PATH = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+WINGET_FLAGS = ["--exact", "--source", "winget", "--accept-package-agreements",
+                "--accept-source-agreements", "--disable-interactivity", "--silent"]  # fmt: skip
 CHECKED = ("python", "git", "gh", "claude", "node")
 PROOF = ("doctor", "kit_test", "container", "dry_plan")
 RESULTS = ("done", "skipped", "waiting", "failed")
@@ -61,6 +78,19 @@ BROWSER_FILES = ("playwright.config.ts", "playwright.config.js", "playwright.con
 SMALL_IMAGE = "hello-world"  # (verify) the image of rule 12's container start
 WINGET_POLICY = r"SOFTWARE\Policies\Microsoft\Windows\AppInstaller"
 VERSION = re.compile(r"(\d+(?:\.\d+)+)")
+NUMBER = re.compile(r"\d+(?:\.\d+)*")  # a version as the table and a read hold it: "20", "2.43.0"
+ANSWERS = {  # rule 4's five questions and their choices, in the order asked
+    "where": ("hosted", "local", "personal"), "team": ("solo", "team"),
+    "autopilot": ("off", "assist", "on"), "engine": ("podman", "docker"),
+    "windows": ("wsl", "native"),
+}  # fmt: skip
+WHERE = {"hosted": "on GitHub's machines", "local": "on this machine", "personal": "for me only"}
+BRANCH = "agk/setup-settings"
+NAMES_PLACEHOLDER = (
+    "\n# The model names (/agk:setup's placeholder): name each tier's model, then remove the #"
+    " signs."
+    '\n# [models.names]\n# strongest = "<your strongest model>"\n# mid = "<your mid model>"\n'
+)
 
 
 def run_cmd(args: list[str], cwd: Path) -> int:
@@ -99,6 +129,8 @@ def proxy_state(env) -> str:
 def tool_version(name: str) -> str | None:
     if name == "python":
         return platform.python_version()
+    if name == "wt":  # `wt` opens a window: presence only (verify)
+        return "present" if shutil.which("wt") else None
     if not shutil.which(name):
         return None
     found = VERSION.search(capture([name, "--version"]) or "")
@@ -232,7 +264,7 @@ def size(available, total, cores, per_gb, reserve, max_builders, live=0) -> dict
 
 
 def older(found: str, least: str | None) -> bool:
-    if least is None or not VERSION.fullmatch(found):
+    if least is None or not NUMBER.fullmatch(found):
         return False
     return tuple(map(int, found.split("."))) < tuple(map(int, least.split(".")))
 
@@ -328,6 +360,301 @@ def table_lines(rows: list[dict]) -> list[str]:
     return [f"{r['step']:<10} {r['result']:<8} {r['note']}" for r in rows]
 
 
+def config_of(root: Path) -> tuple[str | None, dict]:
+    try:
+        text = (root / "agk.toml").read_text(encoding="utf-8")
+        return text, tomllib.loads(text)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None, {}
+
+
+def questions(machine: dict, repo: dict, config: dict, builders: dict) -> list[dict]:
+    """Rule 4: at most five, each only when unset, in plain words with a recommendation."""
+    found: list[dict] = []
+
+    def ask(qid: str, text: str, pick: str, reason: str) -> None:
+        said = WHERE.get(pick, pick) if qid == "where" else LABELS.get(pick, pick)
+        text = f"{text}? I recommend {said}: {reason}."
+        found.append({"id": qid, "text": text, "choices": list(ANSWERS[qid]), "recommend": pick})
+
+    room, known = builders["figure"], machine.get("memory_available_gb") is not None
+    if "execution" not in config:
+        why = f"it has room for {room} AI workers at once" if room else "its memory is too small"
+        ask("where", "Where should the AI work run: on GitHub's machines, on this machine, or for "
+            "me only, nothing in the project", "local" if known and room else "hosted",
+            why if known else "this machine's memory could not be read")  # fmt: skip
+    if repo["review_mode"] is None:
+        many = repo["verdict_authors"] > 1 or repo["members"] > 0
+        ask("team", "Will one person approve the AI's work, or a team", "team" if many else "solo",
+            "the project lists several people" if many else "no one else is listed yet",
+        )  # fmt: skip
+    if "autopilot" not in config:
+        ask("autopilot", "Should the AI start its work by itself: off, assist (it asks you before "
+            "each new task) or on", "assist", "you keep the say before new work starts",
+        )  # fmt: skip
+    tools = machine.get("tools", {})
+    if repo["engines"] and not (tools.get("podman") or tools.get("docker")):
+        ask("engine", "The project uses containers and this machine has no container engine: "
+            "Podman or Docker", "podman", "it runs without a background service")  # fmt: skip
+    if machine.get("os") == "Windows" and wsl.adapter_kind(config) == "unset":
+        can = machine.get("wsl") == "present" or machine.get("admin")
+        ask("windows", "Should the AI work run in Windows itself or in WSL 2, a Linux system "
+            "inside Windows", "wsl" if can else "native",
+            "it avoids failures that happen only on Windows" if can
+            else "turning WSL 2 on needs an administrator, and this account is not one",
+        )  # fmt: skip
+    return found
+
+
+LABELS = {"solo": "one person", "team": "a team", "podman": "Podman", "docker": "Docker",
+          "wsl": "WSL 2", "native": "Windows itself"}  # fmt: skip
+
+
+def proposals(config: dict, answers: dict, builders: dict, machine: dict) -> list[tuple]:
+    """Rule 9: each `(table, key, value)` the project does not already hold."""
+    out: list[tuple] = []
+    flow, cap = config.get("flow", {}), config.get("capacity", {})
+
+    def want(table: str | None, key: str, value) -> None:
+        if (config.get(table, {}) if table else config).get(key) != value:
+            out.append((table, key, value))
+
+    where = answers.get("where")
+    if where == "personal":
+        return out  # rule 16: personal mode proposes nothing to the project
+    if where in ("hosted", "local") and config.get("execution") not in ("hybrid", "pool"):
+        want(None, "execution", where)
+    if (where or config.get("execution", "hosted")) == "hosted":
+        return out  # rule 16: CI mode changes `execution` only, nothing sized from this machine
+    if "team" in answers:
+        want(None, "review_mode", answers["team"])
+    if builders["figure"] > 1:  # more than one builder under one login (brief #1461 answer 1)
+        want(None, "pr_mode", "flow")
+    solo = answers.get("team", config.get("review_mode")) == "solo"
+    if solo and builders["figure"] >= 1 and "max_builders" not in flow | cap:
+        want("flow", "max_builders", builders["figure"])
+    if "builder_memory_gb" not in flow | cap:
+        want("flow", "builder_memory_gb", builders["per_builder_gb"])
+    pick = {"wsl": "wsl", "native": "windows"}.get(answers.get("windows", ""))
+    local = (where or config.get("execution")) == "local"
+    if pick is None and machine.get("os") == "Linux" and local and not flow.get("launch_adapter"):
+        pick = "wsl"  # the background adapter (rule 10)
+    if pick:
+        want("flow", "launch_adapter", wsl.ADAPTERS[pick])
+    if "autopilot" in answers and "autopilot" not in config:
+        want("autopilot", "mode", answers["autopilot"])
+    return out
+
+
+def shown(item: tuple) -> str:
+    table, key, value = item
+    return f"{f'[{table}] ' if table else ''}{key} = {json.dumps(value)}"
+
+
+def set_key(text: str, table: str | None, key: str, value) -> str:
+    """TEXT with KEY of TABLE (None: the top level) set to VALUE; the rest unchanged."""
+    lines, line = text.splitlines(keepends=True), f"{key} = {json.dumps(value)}\n"
+    heads = [i for i, ln in enumerate(lines) if re.match(r"\s*\[", ln)]
+    if table is None:
+        start, end = -1, heads[0] if heads else len(lines)
+    else:
+        found = next((i for i in heads if lines[i].split("#")[0].strip() == f"[{table}]"), None)
+        if found is None:
+            lead = "" if not text or text.endswith("\n") else "\n"
+            return f"{text}{lead}\n[{table}]\n{line}"
+        start = found
+        end = next((i for i in heads if i > start), len(lines))
+    for i in range(start + 1, end):
+        if re.match(rf"\s*{key}\s*=", lines[i]):
+            lines[i] = line
+            return "".join(lines)
+    at = end if table is None else max(i + 1 for i in range(start, end) if lines[i].strip())
+    while table is None and at > 0 and lines[at - 1].lstrip().startswith("#"):
+        at -= 1  # a top-level key goes above the comment that opens the first table
+    if at and not lines[at - 1].endswith("\n"):
+        lines[at - 1] += "\n"
+    lines.insert(at, line)
+    return "".join(lines)
+
+
+def project_adr(number: int, items: list[tuple], today: str) -> str:
+    listed = [f"- `{shown(i)}`" for i in items]
+    return "\n".join([
+        f"# ADR-{number:04d}: The project settings chosen in /agk:setup", "",
+        "- Status: Proposed", f"- Date: {today}", "- Deciders: maintainers", "- Related: none",
+        f"- Requirements: {wsl.REQUIREMENT}", "", "Protected classes: `agk.toml`", "",
+        "## Context", "",
+        "The person ran `/agk:setup` and answered its questions; these settings live in "
+        "`agk.toml`, a protected path, so they come by pull request with this ADR.", "",
+        "## Decision", "", "Set in `agk.toml`, and nothing else:", "", *listed, "",
+        "## Consequences", "",
+        "- The sessions of this project read the new values after the merge.", "",
+        "## Residual", "",
+        f"- {today}: none; the maintainers review the change before the merge.",
+        "",
+    ])  # fmt: skip
+
+
+def write_settings(root: Path, find, today: str) -> list[str]:
+    """Rule 9: one change and its ADR on a new branch from the default branch; FIND gives the
+    settings the default branch's `agk.toml` lacks. The text is built and parsed first."""
+    ref = f"origin/{wsl.default_branch(config_of(root)[1])}"
+    unread = wsl.Refusal("the default branch's agk.toml cannot be read (path class: agk.toml)")
+    if not wsl.git(root, "rev-parse", "--verify", "--quiet", f"{ref}:agk.toml"):
+        raise unread
+    text = wsl.git(root, "show", f"{ref}:agk.toml")
+    text += "\n" if text else ""
+    try:
+        items = find(tomllib.loads(text))
+    except tomllib.TOMLDecodeError:
+        raise unread from None
+    if not items:
+        return ["every setting already matches: nothing written and no pull request is needed"]
+    for item in items:
+        text = set_key(text, *item)
+    try:
+        names = tomllib.loads(text).get("models", {}).get("names")
+    except tomllib.TOMLDecodeError:
+        bad = "the change would not parse; nothing written (path class: agk.toml)"
+        raise wsl.Refusal(bad) from None
+    text += "" if names or "# [models.names]" in text else NAMES_PLACEHOLDER
+    if wsl.git(root, "status", "--porcelain", "--untracked-files=no"):
+        raise wsl.Refusal("uncommitted changes in this folder (path class: the working tree)")
+    branch = f"{BRANCH}-{today}"
+    if wsl.git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"):
+        raise wsl.Refusal("that branch already exists (path class: the settings branch)")
+    wsl.git(root, "checkout", "-q", "-b", branch, ref)
+    if wsl.git(root, "branch", "--show-current") != branch:
+        raise wsl.Refusal("the new branch was not made (path class: the settings branch)")
+    number, adr = wsl.next_adr(root, "the-project-settings-chosen-in-setup")
+    (root / "agk.toml").write_text(text, encoding="utf-8")
+    adr.write_text(project_adr(number, items, today), encoding="utf-8")
+    req, rel = wsl.REQUIREMENT, adr.relative_to(root).as_posix()
+    body = "\n".join([
+        f"Advances: {req}", "Summary: Sets the project's AI workforce settings chosen in setup.",
+        f"Build-state row: {today} {req} unchanged, the settings chosen in /agk:setup",
+        f"Decisions taken: ADR-{number:04d} (Proposed) names the protected class `agk.toml`",
+        "Questions: none",
+        "Verified: `python3 scripts/agk/prepush.py --record` in this checkout", "",
+    ])  # fmt: skip
+    path = wsl.body_path(root).with_name("pr-body-setup.md")
+    path.write_text(body, encoding="utf-8")
+    message, opener = "agk: the project settings chosen in setup", wsl.__file__
+    return [
+        f"changed: agk.toml ({', '.join(shown(i) for i in items)})",
+        f"adr: wrote {rel} (ADR-{number:04d}, Proposed)", f"branch: {branch}", f"body: {path}", "",
+        "then you run, in this folder (setup commits, pushes and merges nothing):",
+        f'  git add agk.toml {rel} && git commit -m "{message}"',
+        f"  python3 scripts/agk/prepush.py --record --body {path}",
+        f"  git push -u origin {branch}",
+        f'  python3 {Path(opener).resolve().as_posix()} open --body {path} --branch {branch} '
+        '--title "The project settings chosen in setup"',
+    ]  # fmt: skip
+
+
+def tool_of(args: list[str]) -> str | None:
+    """The tool an install call is for: its winget package, or Claude Code's own installer."""
+    if args == CLAUDE_INSTALL:
+        return "claude"
+    ids = {v: k for k, v in WINGET.items()}
+    return ids.get(args[3]) if args[:3] == ["winget", "install", "--id"] else None
+
+
+def needs(found: str | None, least: str | None) -> bool:
+    """To install: missing, older than the floor, or with a floor and no version read."""
+    return not found or older(found, least) or bool(least and not NUMBER.fullmatch(found))
+
+
+def install_order(tools: dict, engines: bool) -> list[str]:
+    """Rule 7: the tools to install on native Windows, missing or older than the minimum."""
+    names = [n for n in WINGET if n != "podman"]
+    if engines and not tools.get("docker"):
+        names.append("podman")
+    return [n for n in [*names, "claude"] if needs(tools.get(n), MINIMUM[n])]
+
+
+def fresh_path() -> str:
+    """The machine's and the user's PATH as an install leaves them; this process keeps its own."""
+    try:  # winreg exists on Windows only
+        reg = vars(importlib.import_module("winreg"))
+        keys = [(reg["HKEY_LOCAL_MACHINE"], MACHINE_PATH),
+                (reg["HKEY_CURRENT_USER"], "Environment")]  # fmt: skip
+        parts = [reg["QueryValueEx"](reg["OpenKey"](h, k), "Path")[0] for h, k in keys]
+    except (ImportError, OSError, KeyError):
+        return os.environ.get("PATH", "")
+    return os.pathsep.join(os.path.expandvars(p) for p in parts)
+
+
+def installed_version(name: str) -> str | None:
+    """Read after an install, or when a version is unread: winget's own list for its packages,
+    else the tool on the PATH read again (an install does not refresh this process's PATH)."""
+    if name not in WINGET:
+        where = shutil.which(name, path=fresh_path())
+        out = capture([where, "--version"]) if where else None
+        version = VERSION.search(out or "")
+        return version[1] if version else ("present" if where else None)
+    out = capture(["winget", "list", "--id", WINGET[name], *WINGET_FLAGS[:3]]) or ""
+    line = next((ln for ln in out.splitlines() if WINGET[name] in ln), "")
+    found = VERSION.search(line.split(WINGET[name], 1)[-1])
+    return found[1] if found else None
+
+
+def stop_line(machine: dict, todo: list[str], root: Path) -> str | None:
+    """Rule 7: what IT must allow, read before the first install; None when nothing stops it."""
+    hand = f"or install {', '.join(todo)} by hand, then run /agk:setup again"
+    if not [t for t in todo if t in WINGET]:
+        return None
+    winget = machine.get("winget")
+    if winget != "allowed":
+        why = "winget is missing" if winget == "absent" else "winget is refused by policy"
+        return f"stop: {why}: allow winget (the App Installer), {hand}"
+    if not machine.get("admin"):
+        return f"stop: this account is not an administrator: ask IT for that right, {hand}"
+    first = WINGET[next(t for t in todo if t in WINGET)]
+    if run_cmd(["winget", "show", "--id", first, *WINGET_FLAGS[:3]], root):
+        return f"stop: the test download was refused: allow downloads from winget's source, {hand}"
+    return None
+
+
+def windows_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int, dict]:
+    """Rule 7's native Windows path: checked before, a stop before the first install, one winget
+    install per missing tool, checked after; a failure stops the run with the tool as it was."""
+    tools, engines = machine.get("tools", {}), bool(repo["engines"])
+    names = [n for n in WINGET if n != "podman"] + (["podman"] if engines else []) + ["claude"]
+    tools = {n: v if not v or NUMBER.fullmatch(v) or n not in WINGET else installed_version(n) or v
+             for n, v in tools.items()}  # a tool read only as present: winget's list names it
+    todo = install_order(tools, engines)
+    have = {n: tools.get(n) or (f"docker {tools.get('docker')}" if n == "podman" else "present")
+            for n in names}  # fmt: skip
+    rows = {n: row(n, "skipped", f"{have[n]} (at least {MINIMUM[n] or 'any version'})")
+            for n in names if n not in todo}  # fmt: skip
+    rows |= {n: row(n, "waiting", f"to install, at least {MINIMUM[n] or 'any version'}")
+             for n in todo}  # fmt: skip
+    stop = None
+    if machine.get("os") != "Windows":
+        stop = "stop: this form is the native Windows path only (setting: the platform)"
+    elif todo and not yes:
+        stop = "stop: nothing installed: installs run only after the person's yes (setting: --yes)"
+    elif todo:
+        stop = stop_line(machine, todo, root)
+    for name in [] if stop else todo:
+        least = MINIMUM[name]
+        args = CLAUDE_INSTALL if name == "claude" else ["winget", "install", "--id", WINGET[name],
+                                                         *WINGET_FLAGS]  # fmt: skip
+        code = run_cmd(args, root)
+        found = None if code else installed_version(name)
+        if found and not older(found, least):
+            rows[name] = row(name, "done", f"{found} (at least {least or 'any version'})")
+            continue
+        why = f"exit {code}" if code else f"reads {found or 'nothing'} after, below {least}"
+        rows[name] = row(name, "failed", f"{why}: left as it was (winget's own transaction)")
+        stop = f"stop: {name} did not install and nothing after it ran; then run /agk:setup again"
+        break
+    steps = [rows[n] for n in names]
+    pending = [r["step"] for r in steps if r["result"] in ("waiting", "failed")]
+    return (1 if stop else 0), {"steps": steps, "pending": pending, "stop": stop}
+
+
 def load(path: str | None):
     return json.loads(Path(path).read_text(encoding="utf-8")) if path else None
 
@@ -335,14 +662,22 @@ def load(path: str | None):
 def main(argv: list[str] | None = None) -> int:
     common.utf8_output()
     parser = argparse.ArgumentParser(prog="setup.py", add_help=True)
-    parser.add_argument("form", choices=("plan", "status"))
-    for flag in ("--machine", "--github", "--root"):
+    parser.add_argument("form", choices=("plan", "status", "ask", "settings", "install"))
+    for flag in ("--machine", "--github", "--root", "--date"):
         parser.add_argument(flag)
     parser.add_argument("--builders", type=int)
+    parser.add_argument("--answer", action="append", default=[])
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--yes", action="store_true")
     try:
         args = parser.parse_args(argv)
     except SystemExit:
+        return 2
+    answers = dict(a.split("=", 1) for a in args.answer if "=" in a)
+    today = args.date or datetime.now(UTC).date().isoformat()
+    bad = len(answers) != len(args.answer) or not wsl.DATE_RE.match(today)
+    if bad or any(v not in ANSWERS.get(k, ()) for k, v in answers.items()):
+        print("usage: --answer ID=CHOICE with an ID and a choice of setup.py ask", file=sys.stderr)
         return 2
     root = Path(args.root or ".").resolve()
     machine = load(args.machine) or read_machine(root)
@@ -363,13 +698,49 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: --builders above the cap of {cap}")
             return 1
         builders |= {"figure": args.builders, "limit": "person", "reason": "lowered by the person"}
-    rows = check_rows(machine, repo) + proof_rows(root, machine, repo, args.form == "status")
+    _, config = config_of(root)
+    if args.form == "install":
+        code, table = windows_install(root, machine, repo, args.yes)
+        said = "\n".join(table_lines(table["steps"]) + ([table["stop"]] if table["stop"] else []))
+        print(json.dumps(table, indent=2) if args.json else said)
+        return code
+    if args.form == "ask":
+        found = questions(machine, repo, config, builders)
+        text = [f"  {n}. {q['text']}" for n, q in enumerate(found, 1)]
+        none = ["No question: this machine and the project answer them all."]
+        listed = "\n".join(["Questions:", *text] if text else none)
+        out = {"questions": found} if args.json else listed
+        print(json.dumps(out, indent=2) if args.json else out)
+        return 0
+    items = proposals(config, answers, builders, machine)
+    if args.form == "settings":
+        if not args.yes:
+            print("setup: nothing written: the settings are written only after the person's yes "
+                  "(setting: --yes)")  # fmt: skip
+            return 1
+        if answers.get("where") == "personal":
+            print("for me only: nothing is proposed to the project (personal mode, no pull "
+                  "request)")  # fmt: skip
+            return 0
+        try:
+            find = lambda base: proposals(base, answers, builders, machine)  # noqa: E731
+            print("\n".join(write_settings(root, find, today)))
+        except wsl.Refusal as exc:
+            print(f"setup: {exc}")
+            return 1
+        return 0
+    rows =check_rows(machine, repo) + proof_rows(root, machine, repo, args.form == "status")
     pending = [r["step"] for r in rows if r["result"] == "waiting"]
     if args.json:
         table = {"steps": rows, "pending": pending, "roles": [], "builders": builders}
         print(json.dumps(table, indent=2))
         return 0
-    lines = plan_lines(machine, repo, builders, rows) + [""] if args.form == "plan" else []
+    lines = plan_lines(machine, repo, builders, rows) if args.form == "plan" else []
+    if lines and answers.get("where") == "personal":  # rule 16
+        lines.append("  For the developer: for me only, nothing is proposed to the project.")
+    elif lines and items:  # rule 4: the settings only in the plan's last line, for the developer
+        lines.append(f"  For the developer: {'; '.join(shown(i) for i in items)}.")
+    lines += [""] if lines else []
     print("\n".join(lines + table_lines(rows)))
     return 0
 
