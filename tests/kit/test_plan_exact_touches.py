@@ -310,22 +310,23 @@ def test_ac8_a_bad_setting_stops_the_plan_naming_the_setting(proj, stub):
 
 
 def test_two_briefs_adding_one_new_file_overlap(proj, stub):
-    """Amendment 141 item 2: an entry of `Adds:` is judged like any other, no second matcher."""
+    """Amendment 141 item 2, as ADR-0598 (brief #1425 answer 2) changes it: two waiting briefs
+    that add one file are a clash; neither starts until one is renamed."""
     one, two = brief("a.txt") + "Adds: new/one.py\n", brief("b.txt") + "Adds: new/one.py\n"
     listing(stub, [issue(5, one), issue(6, two)])
     free(stub, 5, 6)
     out = json.loads(plan(proj, stub, "--json").stdout)
-    assert [s["brief"] for s in out["start"]] == [5]
-    assert out["waits"][0]["brief"] == 6 and "new/one.py" in out["waits"][0]["why"]
+    assert out["start"] == []
+    assert out["clashes"][0]["briefs"] == [5, 6] and out["clashes"][0]["path"] == "new/one.py"
 
 
 def test_a_new_folder_holds_on_what_lies_under_it(proj, stub):
-    """Amendment 141 item 2: a new folder holds as a folder does."""
+    """Amendment 141 item 2, as ADR-0598 changes it: a new folder holds what lies under it."""
     one, two = brief("a.txt") + "Adds: new/\n", brief("b.txt") + "Adds: new/one.py\n"
     listing(stub, [issue(5, one), issue(6, two)])
     free(stub, 5, 6)
     out = json.loads(plan(proj, stub, "--json").stdout)
-    assert [s["brief"] for s in out["start"]] == [5]
+    assert out["start"] == [] and out["clashes"][0]["rename"] == 6
 
 
 class Reads:

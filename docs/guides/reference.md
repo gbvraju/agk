@@ -860,6 +860,22 @@ source headers and design links (rules 1 and 2), the plan's checks (rule 10) and
 (rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
 (rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.
 
+## Plan names
+
+    python3 scripts/agk/plan_names.py next --base PATH [--root DIR] [--issues FILE] [--pulls FILE]
+    python3 scripts/agk/plan_names.py batch FILE [--root DIR] [--issues FILE] [--pulls FILE]
+    python3 scripts/agk/plan_names.py impact PATH [--root DIR] [--issues FILE] [--pulls FILE]
+
+One owner per new path (brief #1425, ADR-0598). `next` prints the base when no file of the default branch, no open brief's
+`Adds:` or `Touches:` and no open pull request's added file holds it, else the base with `-2`, `-3` and so on; paths are
+compared ignoring case, `./`, a trailing `/` and backslashes. Name a new folder `<feature>-m<milestone>-<part>`
+(`access-control-m7-api`). `batch` names one base per line of FILE in one pass, so a batch never clashes with itself.
+`impact` lists every open brief and pull request that names a path and who renames it: the steward edits a brief not yet
+taken, a taken one gets a fix list. `--issues` and `--pulls` read saved lists (`[{"number", "brief", "added"}]` for pull
+requests) instead of one listing each. The brief check with `--root DIR [--open-briefs FILE] [--number N]` refuses an `Adds:`
+entry another open brief or pull request holds, naming it and a free name, and `session.py plan` prints
+`CLASH: #a and #b both add <path>; rename in the one not taken (#n, free: <name>)` and starts neither until one is renamed.
+
 ## Plan ceremony
 
     python3 scripts/agk/plan_ceremony.py planning|daily|review|retro --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N] [--stalls FILE] [--matches FILE]

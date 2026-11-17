@@ -37,6 +37,13 @@ Brief #982 (rule 4b): with `--root DIR`, a `Touches:` glob that meets a class of
 `DIR/config/protected-paths.txt` in a brief that reserves no ADR and names no `Covered-by:` is
 warned (`warning: ...` before `ok brief`, a `warnings` list in a passing event), never failed.
 
+Brief #1425 (ADR-0598): with `--root DIR` each `Adds:` entry is also compared with the `Adds:` of
+every other open brief and the files every open pull request adds (`plan_names.py`), read from
+`--open-briefs FILE` (a saved list of issues, or `{"briefs": [...], "pulls": [...]}`) or else from
+the plan's read cache, never by a request; a clash is refused naming the holder and a free name.
+`--number N` (the issue number in `--event`) leaves the brief itself out. Two `Adds:`, `Touches:`,
+`Reserved:` or `Expected:` lines are refused naming both and printing the one line to use.
+
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
 the label to clear and the wave.
@@ -54,6 +61,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_signoff
+import plan_names
 from common import REQ_HEADER, CheckError, config_source, run, utf8_output
 from session import (
     advances_ids,
@@ -69,7 +77,10 @@ from session_plan import touch_problems, touch_rules
 from config import brief_code_paths
 
 NAME = "brief"
-USAGE = "usage: check_brief.py (FILE | --event PAYLOAD) [--root DIR] [--waves N,N]"
+USAGE = (
+    "usage: check_brief.py (FILE | --event PAYLOAD) [--root DIR] [--waves N,N] "
+    "[--open-briefs FILE] [--number N]"
+)
 REQUIREMENTS = "docs/requirements.md"
 SCREENS = re.compile(r"Screens: ([vi][1-9]\d*) (\S.*)")
 PAIR = re.compile(r"([a-z0-9][a-z0-9-]*)/([a-z0-9][a-z0-9-]*|\*)")
@@ -82,7 +93,12 @@ BRIEF_LABEL = "agk-brief"
 INVALID_LABEL = "agk-brief-invalid"
 COMMENT_MARK = "<!-- agk-brief-check -->"
 EVENT_ACTIONS = ("opened", "edited", "labeled")
-FLAGS = ("--root", "--event", "--waves")
+FLAGS = ("--root", "--event", "--waves", "--open-briefs", "--number")
+ONE_LINE = ("Adds:", "Touches:", "Reserved:", "Expected:")  # brief #1425 answer 7
+SHAPE_OF = {
+    "Adds:": "rule 4: at most one line Adds:",
+    "Touches:": "rule 2: exactly one line Touches:",
+}
 WAVES = re.compile(r"[1-9]\d*(,[1-9]\d*)*")
 PROTECTED_PATHS = "config/protected-paths.txt"
 ADR_LINE = re.compile(r"(Reserved:.*\bADR-\d+|Covered-by:\s*ADR-\d+)")
@@ -230,28 +246,77 @@ def protected_warnings(body: str, root: Path | None) -> list[str]:
     return [WARN_4B.format(", ".join(named))] if named else []
 
 
-def body_problems(body: str, root: Path | None, waves: set[int] | None) -> list[str]:
-    """Every rule the body breaks: the shape first, then what needs the root."""
+def duplicate_problems(body: str) -> list[str]:
+    """Answer 7 of brief #1425: two lines of one key, naming both and the merged line to use."""
+    out = []
+    for key in ONE_LINE:
+        found = [(i + 1, x.rstrip()) for i, x in enumerate(body.splitlines()) if x.startswith(key)]
+        if len(found) < 2:
+            continue
+        lines = " and ".join(f"line {n}" for n, _ in found)
+        items = [e.strip() for _, x in found for e in x[len(key) :].split(",") if e.strip()]
+        use = f"use one line {key} {', '.join(dict.fromkeys(items))}"
+        rule = "rule 2" if key == "Touches:" else "rule 4"
+        tail = use if key != "Expected:" else "keep one"
+        out.append(f"{rule}: {lines} are both {key} lines; {tail}")
+    return out
+
+
+def open_holders(root: Path, path: str | None) -> plan_names.Holders:
+    """The open briefs and pull requests to compare with: the saved file, else the read cache."""
+    if path is None:
+        return plan_names.Holders(briefs=plan_names.cached_issues(root))
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise CheckError(
+            "rule 4: the open briefs file cannot be read (option: --open-briefs)"
+        ) from exc
+    briefs, pulls = (
+        (data, []) if isinstance(data, list) else (data.get("briefs"), data.get("pulls"))
+    )
+    if not isinstance(briefs, list) or not isinstance(pulls, list):
+        raise CheckError("rule 4: the open briefs file is not a list (option: --open-briefs)")
+    keep = [x for x in briefs if isinstance(x, dict) and "pull_request" not in x]
+    return plan_names.Holders(briefs=keep, pulls=[x for x in pulls if isinstance(x, dict)])
+
+
+def body_problems(
+    body: str, root: Path | None, waves: set[int] | None, opened: dict | None = None
+) -> list[str]:
+    """Every rule the body breaks: the shape first, then what needs the root. OPENED holds the
+    `--open-briefs` file and the brief's own number (brief #1425)."""
     limits = None if root is None else brief_code_paths(root)  # amendment 168
-    problems = brief_problems(body, limits) + contexts_line_problems(body)
+    twice = duplicate_problems(body)
+    keys = [k for k in SHAPE_OF if any(f" {k} lines" in p for p in twice)]
+    problems = [
+        p for p in brief_problems(body, limits) if not any(p.startswith(SHAPE_OF[k]) for k in keys)
+    ]
+    problems = twice + problems + contexts_line_problems(body)
     if root is None or problems:
         return problems
+    opened = opened or {}
     problems = (
         absent_requirements(body, root)
         or screens_problems(body, root)
         or touch_problems(body, touch_rules(root))
+        or plan_names.brief_problems(
+            opened.get("number"), body, open_holders(root, opened.get("file"))
+        )
     )
     if not problems and plan_issue_set(root):
         problems = wave_problems(body, waves)
     return problems
 
 
-def check(path: Path, root: Path | None = None, waves: set[int] | None = None) -> int:
+def check(
+    path: Path, root: Path | None = None, waves: set[int] | None = None, opened: dict | None = None
+) -> int:
     try:
         body = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise CheckError("the brief file cannot be read") from exc
-    problems = body_problems(body, root, waves)
+    problems = body_problems(body, root, waves, opened)
     if problems:
         raise CheckError("; ".join(problems))
     for warning in protected_warnings(body, root):
@@ -267,7 +332,9 @@ def event_comment(problems: list[str]) -> str:
     )
 
 
-def event_result(payload: dict, root: Path | None, waves: set[int] | None) -> dict:
+def event_result(
+    payload: dict, root: Path | None, waves: set[int] | None, opened: dict | None = None
+) -> dict:
     """What the job does for one saved `issues` event: the decision only, nothing is posted."""
     issue = payload.get("issue")
     labels = issue.get("labels") if isinstance(issue, dict) else None
@@ -283,7 +350,8 @@ def event_result(payload: dict, root: Path | None, waves: set[int] | None) -> di
         return {"action": "ignore"}
     raw = issue.get("body")
     body = raw if isinstance(raw, str) else ""
-    number, problems = issue.get("number"), body_problems(body, root, waves)
+    number = issue.get("number")
+    problems = body_problems(body, root, waves, {**(opened or {}), "number": number})
     if problems:
         return {
             "action": "fail",
@@ -297,12 +365,13 @@ def event_result(payload: dict, root: Path | None, waves: set[int] | None) -> di
     return {**result, "warnings": warnings} if warnings else result
 
 
-def run_event(path: Path, root: Path | None, waves: set[int] | None) -> int:
+def run_event(path: Path, root: Path | None, waves: set[int] | None, opened: dict) -> int:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         raise CheckError("the event file cannot be read") from exc
-    print(json.dumps(event_result(payload if isinstance(payload, dict) else {}, root, waves)))
+    found = payload if isinstance(payload, dict) else {}
+    print(json.dumps(event_result(found, root, waves, opened)))
     return 0
 
 
@@ -337,9 +406,13 @@ def main(argv: list[str] | None = None) -> int:
 
     def act() -> int:
         waves = wave_list(flags.get("--waves"))
+        number = flags.get("--number")
+        if number is not None and not number.isdigit():
+            raise CheckError("rule 4: --number is not an issue number")
+        opened = {"file": flags.get("--open-briefs"), "number": int(number) if number else None}
         if file is None:
-            return run_event(Path(flags["--event"]), root, waves)
-        return check(Path(file), root, waves)
+            return run_event(Path(flags["--event"]), root, waves, opened)
+        return check(Path(file), root, waves, opened)
 
     return run(NAME, act)
 
