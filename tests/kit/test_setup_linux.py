@@ -147,6 +147,7 @@ def test_ac4_docker_present_means_no_podman(tmp_path, capsys, monkeypatch):
     have = {t: setup.MINIMUM[t] for t in LINUX_TOOLS} | {"python": "3.12.3", "docker": "27.1.0"}
     code, _ = run(tmp_path, capsys, machine(tools=have), engines=True)
     assert code == 0 and stub.calls == []
+    (tmp_path / "project" / "compose.yaml").unlink()
     run(tmp_path, capsys, machine(tools={**have, "docker": None}))  # no containers: no engine
     assert stub.calls == []
 
@@ -219,9 +220,25 @@ def test_ac4_the_bootstrap_holds_no_version_or_url_of_its_own():
     version from setup.py's call, stops before its one install, and never reads a secret."""
     text = SH.read_text(encoding="utf-8")
     assert subprocess.run(["bash", "-n", str(SH)], check=False).returncode == 0  # nosec B603 B607
-    assert "MINIMUM" in text and "setup.py" in text and '"install"' in text
+    assert "MINIMUM" in text and "setup.py" in text and 'REST=(install --root' in text
     assert not re.search(r"\b\d+\.\d+\.\d+\b", text)  # no version of its own
     assert "nodesource" not in text and "claude.ai" not in text  # setup.py names each URL
     assert "sha256sum" in text  # gitleaks is checked against its published checksum file
     assert not re.search(r"(?i)password|token|read -s", text)
     assert text.index("stop") < text.index("install -y")
+
+
+def test_ac4_the_bootstrap_on_macos_prints_the_one_line(tmp_path):
+    """REQ-072 AC4: the bash bootstrap run on a stub macOS (`uname -s` says Darwin) prints
+    setup.py's line and exits 1 before any install; the stub folder is all it touches."""
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    (stubs / "uname").write_text("#!/bin/sh\necho Darwin\n", encoding="utf-8")
+    (stubs / "uname").chmod(0o755)
+    env = {"PATH": f"{stubs}:/usr/bin:/bin", "HOME": str(tmp_path)}
+    done = subprocess.run(  # nosec B603 B607 - the kit's own script, fixed arguments
+        ["bash", str(SH), "--yes"], cwd=tmp_path, env=env, capture_output=True, text=True,
+        check=False, timeout=30,
+    )  # fmt: skip
+    assert done.returncode == 1 and done.stdout.strip() == setup.MAC_LINE
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["bin"]

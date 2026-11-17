@@ -31,6 +31,10 @@ branch, and commits, pushes and merges nothing; all equal, or "for me only", wri
 nothing and checks the repository with `gh api -X GET` calls only (Actions, the kit's workflows, a
 ruleset or branch rule, the merge secret's presence with `auto_merge = true`, never its value),
 one `missing:` line per missing item naming its setting (`--json`: `missing`).
+`install` (rule 7) installs, after `--yes`, each tool missing or below the one `MINIMUM` table:
+native Windows through winget (build (c), ADR-0620); Linux and cloud virtual machines (build (e),
+ADR-0622) through apt or dnf, with Node.js, gitleaks and Claude Code by `setup_linux.sh`'s steps;
+on macOS it prints one line and changes nothing.
 Exit 0, 1 on a refusal, 2 on a usage error.
 """
 
@@ -70,6 +74,18 @@ WINGET = {  # build (c): each tool's winget package, in the order installed (ver
 CLAUDE_INSTALL = [  # Claude Code by its own installer (verify: the Windows installer command)
     "powershell", "-NoProfile", "-Command", "irm https://claude.ai/install.ps1 | iex",
 ]  # fmt: skip
+LINUX_PACKAGES = {  # build (e): the distribution's package of each tool, per package manager (verify)
+    "apt": {"git": "git", "gh": "gh", "podman": "podman"},
+    "dnf": {"git": "git", "gh": "gh", "podman": "podman"},
+}  # fmt: skip
+LINUX_INSTALL = {"apt": ["apt-get", "install", "-y", "-q"], "dnf": ["dnf", "install", "-y", "-q"]}
+LINUX_REFRESH = {"apt": ["apt-get", "update", "-q"], "dnf": ["dnf", "makecache", "-q"]}
+NODE_SETUP = {  # Node.js by wsl_setup.ps1's path: NodeSource's script, then its package (verify)
+    "apt": "https://deb.nodesource.com/setup_22.x", "dnf": "https://rpm.nodesource.com/setup_22.x",
+}  # fmt: skip
+CLAUDE_LINUX = "https://claude.ai/install.sh"  # Claude Code's own installer, as wsl_setup.ps1 runs it
+SETUP_SH = Path(__file__).resolve().parent / "setup_linux.sh"
+MAC_LINE = "stop: macOS is not covered by /agk:setup yet (setting: the platform); nothing was changed"
 MACHINE_PATH = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 WINGET_FLAGS = ["--exact", "--source", "winget", "--accept-package-agreements",
                 "--accept-source-agreements", "--disable-interactivity", "--silent"]  # fmt: skip
@@ -188,6 +204,8 @@ def read_machine(root: Path) -> dict:
         "memory_available_gb": avail / GIB if avail else None, "cores": os.cpu_count(),
         "disk_free_gb": disk[0] / GIB if disk else None, "admin": is_admin(),
         "tools": {n: tool_version(n) for n in MINIMUM}, "winget": winget_state(),
+        "package_manager": next((k for k, v in LINUX_INSTALL.items() if shutil.which(v[0])),
+                                "absent"), "sudo": bool(shutil.which("sudo")),
         "proxy": proxy_state(os.environ),
         "remote": remote_name(capture(["git", "-C", str(root), "remote", "get-url", "origin"])),
     }  # fmt: skip
@@ -631,13 +649,7 @@ def windows_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[i
         for n, v in tools.items()
     }  # a tool read only as present: winget's list names it
     todo = install_order(tools, engines)
-    have = {n: tools.get(n) or (f"docker {tools.get('docker')}" if n == "podman" else "present")
-            for n in names}  # fmt: skip
-    rows = {n: row(n, "skipped", f"{have[n]} (at least {MINIMUM[n] or 'any version'})")
-            for n in names if n not in todo}  # fmt: skip
-    rows |= {n: row(n, "waiting", f"to install, at least {MINIMUM[n] or 'any version'}")
-             for n in todo}  # fmt: skip
-    stop = None
+    rows, stop = first_rows(names, tools, todo), None
     if machine.get("os") != "Windows":
         stop = "stop: this form is the native Windows path only (setting: the platform)"
     elif todo and not yes:
@@ -657,9 +669,92 @@ def windows_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[i
         rows[name] = row(name, "failed", f"{why}: left as it was (winget's own transaction)")
         stop = f"stop: {name} did not install and nothing after it ran; then run /agk:setup again"
         break
+    return last_table(names, rows, stop)
+
+
+def first_rows(names: list[str], tools: dict, todo: list[str]) -> dict:
+    """Each tool's row before any install: `skipped` with what is there, or `waiting`."""
+    have = {n: tools.get(n) or (f"docker {tools.get('docker')}" if n == "podman" else "present")
+            for n in names}  # fmt: skip
+    rows = {n: row(n, "skipped", f"{have[n]} (at least {MINIMUM[n] or 'any version'})")
+            for n in names if n not in todo}  # fmt: skip
+    return rows | {n: row(n, "waiting", f"to install, at least {MINIMUM[n] or 'any version'}")
+                   for n in todo}  # fmt: skip
+
+
+def last_table(names: list[str], rows: dict, stop: str | None) -> tuple[int, dict]:
     steps = [rows[n] for n in names]
     pending = [r["step"] for r in steps if r["result"] in ("waiting", "failed")]
     return (1 if stop else 0), {"steps": steps, "pending": pending, "stop": stop}
+
+
+def unsudo(args: list[str]) -> list[str]:
+    return args[1:] if args[:1] == ["sudo"] else args
+
+
+def is_refresh(args: list[str]) -> bool:
+    """The package lists' refresh: the test download before the first Linux install."""
+    return unsudo(args) in LINUX_REFRESH.values()
+
+
+def linux_tool_of(args: list[str]) -> str | None:
+    """The tool a Linux install call is for: its distribution package, or a setup_linux.sh step."""
+    rest = unsudo(args)
+    if rest[:2] == ["bash", str(SETUP_SH)] and len(rest) > 2:
+        return rest[2]
+    for manager, verb in LINUX_INSTALL.items():
+        if rest[:-1] == verb and rest:
+            return {v: k for k, v in LINUX_PACKAGES[manager].items()}.get(rest[-1])
+    return None
+
+
+def linux_version(name: str) -> str | None:
+    """Read after an install: the PATH with the installers' own folders (this process keeps its
+    PATH); gitleaks tells its version by `gitleaks version`."""
+    extra = [os.environ.get("PATH", ""), str(Path.home() / ".local" / "bin"), "/usr/local/bin"]
+    where = shutil.which(name, path=os.pathsep.join(extra))
+    if not where:
+        return None
+    found = VERSION.search(capture([where, "version" if name == "gitleaks" else "--version"]) or "")
+    return found[1] if found else "present"
+
+
+def linux_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int, dict]:
+    """Rule 7's Linux and cloud path (build (e)): the distribution's packages through apt or dnf,
+    Node.js, gitleaks and Claude Code by setup_linux.sh's steps (wsl_setup.ps1's path), checked
+    before and after; a stop before the first install; a failure stops the run there."""
+    tools, engines = machine.get("tools", {}), bool(repo["engines"])
+    engine = ["podman"] if engines and not tools.get("docker") else []
+    names = ["python", "git", "gh", *engine, "node", "gitleaks", "claude"]
+    todo = [n for n in names[1:] if needs(tools.get(n), MINIMUM[n])]
+    rows, stop = first_rows(names, tools, todo), None
+    manager, sudo = machine.get("package_manager"), [] if machine.get("admin") else ["sudo"]
+    hand = f"or install {', '.join(todo)} by hand, then run /agk:setup again"
+    if todo and not yes:
+        stop = "stop: nothing installed: installs run only after the person's yes (setting: --yes)"
+    elif todo and manager not in LINUX_INSTALL:
+        stop = f"stop: no package manager this command knows (apt or dnf) is here: {hand}"
+    elif todo and sudo and not machine.get("sudo"):
+        stop = f"stop: this account is not root and has no sudo: ask for sudo, {hand}"
+    elif todo and run_cmd([*sudo, *LINUX_REFRESH[manager]], root):
+        stop = ("stop: the test download was refused: allow the distribution's package mirrors "
+                f"(a company proxy or certificate is the usual cause), {hand}")  # fmt: skip
+    steps = {"node": lambda: [manager, NODE_SETUP[manager]],
+             "gitleaks": lambda: [MINIMUM["gitleaks"]], "claude": lambda: [CLAUDE_LINUX]}  # fmt: skip
+    for name in [] if stop else todo:
+        package = LINUX_PACKAGES[manager].get(name)
+        args = ([*sudo, *LINUX_INSTALL[manager], package] if package
+                else ["bash", str(SETUP_SH), name, *steps[name]()])  # fmt: skip
+        code = run_cmd(args, root)
+        found = None if code else linux_version(name)
+        if found and not older(found, MINIMUM[name]):
+            rows[name] = row(name, "done", f"{found} (at least {MINIMUM[name]})")
+            continue
+        why = f"exit {code}" if code else f"reads {found or 'nothing'} after, below {MINIMUM[name]}"
+        rows[name] = row(name, "failed", f"{why}: left as it was (the installer's own transaction)")
+        stop = f"stop: {name} did not install and nothing after it ran; then run /agk:setup again"
+        break
+    return last_table(names, rows, stop)
 
 
 CI_CHECKS = {  # build (f), rule 10: each repository check of CI mode and the setting it names
@@ -801,7 +896,11 @@ def main(argv: list[str] | None = None) -> int:
         builders |= {"figure": args.builders, "limit": "person", "reason": "lowered by the person"}
     _, config = config_of(root)
     if args.form == "install":
-        code, table = windows_install(root, machine, repo, args.yes)
+        if machine.get("os") == "Darwin":  # rule 7, Q-S0065-3: one line, nothing changed
+            print(json.dumps({"steps": [], "pending": [], "stop": MAC_LINE}) if args.json else MAC_LINE)
+            return 1
+        install = linux_install if machine.get("os") == "Linux" else windows_install
+        code, table = install(root, machine, repo, args.yes)
         said = "\n".join(table_lines(table["steps"]) + ([table["stop"]] if table["stop"] else []))
         print(json.dumps(table, indent=2) if args.json else said)
         return code
