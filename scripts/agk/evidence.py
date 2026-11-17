@@ -87,6 +87,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import kit_root
 import lock as heavy_lock
 from common import CheckError, long_temp_dir, proof_areas, proof_timeout, temp_env, utf8_output
 from impact import impact
@@ -473,7 +474,7 @@ def rebuild(
             differ(name, "cwd")
             continue
         if name == "governance":
-            if recorded != GOVERNANCE:
+            if not known_gate(recorded, tree):
                 differ(name, "argv")
             continue  # always re-run on its own
         if name == "pr-body":
@@ -603,10 +604,27 @@ def rerun(unit: Unit, env: dict, limit: int) -> tuple[int | None, str]:
     return spawn(unit.argv or [], unit.cwd, env)
 
 
+def known_gate(argv: list, tree: Path) -> bool:
+    """The recorded gate is the one `kit_root.gate` gives this tree: today's make form, or in a
+    clean project the resolver from the plugin (ADR-0611, verdict item 2)."""
+    try:
+        clean = (kit_root.gate(tree) or GOVERNANCE) != GOVERNANCE
+    except kit_root.Refused:
+        return False
+    if not clean:
+        return argv == GOVERNANCE
+    shape = len(argv) == 3 and argv[0] == "python3" and argv[2] == "governance"
+    return shape and str(argv[1]).endswith("/kit_root.py")
+
+
 def governance(tree: Path, env: dict) -> tuple[int, str]:
-    if shutil.which("make") is None:
+    try:
+        gate = kit_root.gate(tree) or GOVERNANCE
+    except kit_root.Refused as exc:
+        raise Unreadable(f"evidence: {exc}") from exc
+    if gate[0] == "make" and shutil.which("make") is None:
         raise Unreadable("evidence: make is not installed; governance cannot run (tool: make)")
-    code, out = spawn(GOVERNANCE, tree, env)
+    code, out = spawn(gate, tree, env)
     return (127 if code is None else code), out
 
 

@@ -157,6 +157,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import kit_root
 import lock as heavy_lock
 from common import (
     GITLEAKS_INSTALL,
@@ -483,16 +484,20 @@ def fetch_record_comments(root: Path, base: str, folder: Path) -> Path | None:
 
 
 def governance(root: Path, base: str, body: Path | None = None) -> Step:
-    if not (root / "agk.mk").is_file():
+    try:
+        gate = kit_root.gate(root)  # a clean project's gate runs from the plugin (ADR-0611)
+    except kit_root.Refused as exc:
+        return Step("FAIL", str(exc))
+    if gate is None:
         return Step("FAIL", "agk.mk is missing; governance cannot run (path class: agk.mk)")
-    if shutil.which("make") is None:
+    if gate[0] == "make" and shutil.which("make") is None:
         return Step("skipped", "governance: not run (make is not installed)", not_run=True)
     env = {**os.environ, "AGK_BASE": base}
     if body is None:
-        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+        return ran_step(gate, root, env)
     env["AGK_PR_BODY"] = str(body.resolve())  # the body's `Covered-by:` line (ADR-0271)
     if not covers(body):
-        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+        return ran_step(gate, root, env)
     # a `Covered-by:` ADR a Final accepted needs its record's comment (brief #601, ADR-0293)
     folder = Path(tempfile.mkdtemp(prefix="agk-prepush-"))
     try:
@@ -501,7 +506,7 @@ def governance(root: Path, base: str, body: Path | None = None) -> Step:
             return Step("FAIL", NO_RECORD_COMMENTS)
         if path != folder:
             env[RECORD_COMMENTS] = str(path)
-        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+        return ran_step(gate, root, env)
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 
