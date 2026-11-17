@@ -5,8 +5,9 @@
 """/agk:setup's helper: read, size and print (build (a), SPEC-0065 rules 2, 3, 5, 6, 12; ADR-0618),
 ask and propose the project settings (build (b), rules 4 and 9; ADR-0619).
 
-    python3 setup.py plan|status|ask|settings [--json] [--builders N] [--answer ID=CHOICE ...]
-                     [--yes] [--date YYYY-MM-DD] [--machine FILE] [--github FILE] [--root DIR]
+    python3 setup.py plan|status|ask|settings|install|ci [--json] [--builders N]
+                     [--answer ID=CHOICE ...] [--yes] [--date YYYY-MM-DD] [--machine FILE]
+                     [--github FILE] [--root DIR]
 
 Run from the plugin root, never installed into a project. It reads the machine (OS, memory,
 cores, disk, administrator right, WSL, the tools and their versions, winget's policy, a proxy,
@@ -26,6 +27,10 @@ project leave it unset, with a recommendation (`--json`: `questions`); `--answer
 choices back, and `plan` then names the settings in its last line. `settings --yes` writes the
 settings the project does not already hold to `agk.toml` with the project's next ADR on a new
 branch, and commits, pushes and merges nothing; all equal, or "for me only", writes nothing.
+`ci` (build (f), rule 10; ADR-0623) is CI mode's form, for `execution = "hosted"` only: it installs
+nothing and checks the repository with `gh api -X GET` calls only (Actions, the kit's workflows, a
+ruleset or branch rule, the merge secret's presence with `auto_merge = true`, never its value),
+one `missing:` line per missing item naming its setting (`--json`: `missing`).
 Exit 0, 1 on a refusal, 2 on a usage error.
 """
 
@@ -621,8 +626,10 @@ def windows_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[i
     install per missing tool, checked after; a failure stops the run with the tool as it was."""
     tools, engines = machine.get("tools", {}), bool(repo["engines"])
     names = [n for n in WINGET if n != "podman"] + (["podman"] if engines else []) + ["claude"]
-    tools = {n: v if not v or NUMBER.fullmatch(v) or n not in WINGET else installed_version(n) or v
-             for n, v in tools.items()}  # a tool read only as present: winget's list names it
+    tools = {
+        n: v if not v or NUMBER.fullmatch(v) or n not in WINGET else installed_version(n) or v
+        for n, v in tools.items()
+    }  # a tool read only as present: winget's list names it
     todo = install_order(tools, engines)
     have = {n: tools.get(n) or (f"docker {tools.get('docker')}" if n == "podman" else "present")
             for n in names}  # fmt: skip
@@ -655,6 +662,93 @@ def windows_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[i
     return (1 if stop else 0), {"steps": steps, "pending": pending, "stop": stop}
 
 
+CI_CHECKS = {  # build (f), rule 10: each repository check of CI mode and the setting it names
+    "actions": "Actions permissions", "workflows": "the kit's workflows",
+    "rules": "kit/templates/ruleset.json", "secrets": "auto_merge",
+}  # fmt: skip
+
+
+PAGE = 100  # GitHub's largest page of a listing
+
+
+def gh_get(path: str):
+    """One GET of the GitHub API through `gh`; None when GitHub gives this sign-in no answer."""
+    out = capture(["gh", "api", "-X", "GET", path])
+    try:
+        return json.loads(out) if out else None
+    except ValueError:
+        return None
+
+
+def kit_workflows() -> list[str]:
+    """The kit's workflows: `kit/manifest.json`'s verbatim files under `.github/workflows/`."""
+    try:
+        manifest = json.loads((PLUGIN / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [f for f in manifest.get("verbatim", []) if f.startswith(".github/workflows/")]
+
+
+def workflow_pages(repo: str) -> list[dict] | None:
+    """Every page of the repository's workflows, 100 a page; None when a page goes unanswered."""
+    found: list[dict] = []
+    for page in range(1, 101):
+        listed = gh_get(f"{repo}/actions/workflows?per_page={PAGE}&page={page}")
+        if listed is None:
+            return None
+        batch = listed.get("workflows") or []
+        found += batch
+        if len(batch) < PAGE or len(found) >= (listed.get("total_count") or 0):
+            return found
+    return found
+
+
+def ci_checks(remote: str, config: dict) -> list[tuple[str, bool | None, str]]:
+    """Rule 10: (step, met or None when unknown, what is missing); GET only, no secret read."""
+    repo = f"repos/{remote}"
+    actions = gh_get(f"{repo}/actions/permissions")
+    enabled = None if actions is None else actions.get("enabled") is True
+    checks = [("actions", enabled, "GitHub Actions is off for this repository: turn it on")]
+    listed, lacking = workflow_pages(repo), []
+    if listed is not None:
+        active = {w.get("path") for w in listed if w.get("state") == "active"}
+        lacking = [Path(f).name for f in kit_workflows() if f not in active]
+    what = f"the kit's workflows absent or disabled: {', '.join(lacking)}; run /agk:upgrade"
+    checks.append(("workflows", None if listed is None else not lacking, what))
+    sets, branch = gh_get(f"{repo}/rulesets"), (gh_get(repo) or {}).get("default_branch")
+    shield = gh_get(f"{repo}/branches/{branch}") if branch else None
+    known = [bool(sets)] if sets is not None else []
+    known += [shield.get("protected") is True] if shield is not None else []
+    rules = any(known) if known else None
+    checks.append(("rules", rules, "no ruleset and no branch rule on the default branch"))
+    flow = config.get("flow")  # a `flow` that is not a table counts as unset
+    if isinstance(flow, dict) and flow.get("auto_merge") is True:
+        held = gh_get(f"{repo}/environments/merge/secrets")
+        met = None if held is None else bool(held.get("secrets"))  # counted, never kept
+        checks.append(("secrets", met, "the merge environment holds no secret for the merger"))
+    return checks
+
+
+def ci_mode(root: Path, remote: str | None) -> tuple[int, dict, list[str]]:
+    """Build (f): CI mode installs nothing and checks the repository, one line per missing item."""
+    _, config = config_of(root)
+    if not config or config.get("execution", "hosted") != "hosted":
+        return 1, {}, ["refused: the repository checks are CI mode's (setting: execution)"]
+    if not remote:
+        return 1, {}, ["stop: this folder has no GitHub remote to check (setting: the clone)"]
+    steps, missing = [], []
+    for step, met, what in ci_checks(remote, config):
+        if met is None:
+            steps.append(row(step, "waiting", "unknown: GitHub gave this sign-in no answer"))
+            continue
+        steps.append(row(step, "skipped" if met else "waiting", "present" if met else what))
+        missing += [] if met else [f"missing: {what} (setting: {CI_CHECKS[step]})"]
+    pending = [r["step"] for r in steps if r["result"] == "waiting"]
+    table = {"steps": steps, "pending": pending, "roles": [], "builders": None,
+             "missing": missing}  # fmt: skip
+    return (1 if pending else 0), table, table_lines(steps) + missing
+
+
 def load(path: str | None):
     return json.loads(Path(path).read_text(encoding="utf-8")) if path else None
 
@@ -662,7 +756,7 @@ def load(path: str | None):
 def main(argv: list[str] | None = None) -> int:
     common.utf8_output()
     parser = argparse.ArgumentParser(prog="setup.py", add_help=True)
-    parser.add_argument("form", choices=("plan", "status", "ask", "settings", "install"))
+    parser.add_argument("form", choices=("plan", "status", "ask", "settings", "install", "ci"))
     for flag in ("--machine", "--github", "--root", "--date"):
         parser.add_argument(flag)
     parser.add_argument("--builders", type=int)
@@ -680,6 +774,13 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: --answer ID=CHOICE with an ID and a choice of setup.py ask", file=sys.stderr)
         return 2
     root = Path(args.root or ".").resolve()
+    if args.form == "ci":  # build (f): nothing of the machine but its remote is read
+        saved = load(args.machine)
+        remote = saved.get("remote") if saved else remote_name(
+            capture(["git", "-C", str(root), "remote", "get-url", "origin"]))  # fmt: skip
+        code, table, shown_lines = ci_mode(root, remote)
+        print(json.dumps(table, indent=2) if args.json and table else "\n".join(shown_lines))
+        return code
     machine = load(args.machine) or read_machine(root)
     github = load(args.github)
     if github is None:
@@ -729,7 +830,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"setup: {exc}")
             return 1
         return 0
-    rows =check_rows(machine, repo) + proof_rows(root, machine, repo, args.form == "status")
+    rows = check_rows(machine, repo) + proof_rows(root, machine, repo, args.form == "status")
     pending = [r["step"] for r in rows if r["result"] == "waiting"]
     if args.json:
         table = {"steps": rows, "pending": pending, "roles": [], "builders": builders}
