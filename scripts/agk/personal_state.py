@@ -233,6 +233,21 @@ def installed(clone: Path) -> bool:
         return True
 
 
+ROOT_HINT = " (personal mode: pass --root <the sidecar's folder>)"
+
+
+def root_hint(where: Path) -> str:
+    """Brief #1452 answer 2: the refusal's tail when `where` is a clone with no `agk.toml` and a
+    sidecar; it names the option, never the path. Any failure to read gives no tail."""
+    try:
+        if installed(where) or read(where, "rev-parse", "--git-dir", check=False) is None:
+            return ""
+        pid = registry(agk_home()).get(common_dir(where))
+        return ROOT_HINT if pid and (agk_home() / PROJECTS / pid).is_dir() else ""
+    except (CheckError, OSError):
+        return ""
+
+
 def attach(clone: Path, home: Path, person: str | None, choice: str | None) -> int:
     if not person or not LOGIN.fullmatch(person):
         raise CheckError("attach needs the one person's login (option: --person)")

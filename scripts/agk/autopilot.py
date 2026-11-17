@@ -83,6 +83,7 @@ import metrics
 import session
 import session_plan
 from common import CheckError, personal_table, utf8_output
+from personal_state import root_hint
 
 import config
 
@@ -707,6 +708,14 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
             return 2
         root = Path(args[at + 1])
         del args[at : at + 2]
+    try:
+        return command(root, args, now)
+    except CheckError as exc:  # brief #1452 (ADR-0610): one line, never a traceback
+        print(f"refused: {exc}{root_hint(root)}", file=sys.stderr)
+        return 1
+
+
+def command(root: Path, args: list[str], now: datetime) -> int:
     if args in (["on"], ["off"]):
         return autopilot_on(root, args == ["on"])
     if args[:1] == ["budget"]:

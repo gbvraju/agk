@@ -320,6 +320,7 @@ from common import (
     verdict_problem,
 )
 from full_run import contained_in, covered
+from personal_state import root_hint
 from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
 
 import config
@@ -3649,9 +3650,6 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     plain = args in (["sweep"], ["watch"], ["watch", "--once"])
     guard = watchdog_args(args) if args[:1] == ["watchdog"] else None
     gate = review_args(args)
-    if guard is not None and guard[1]:
-        print(install_line(root or repo_root(), guard[0], sys.platform, guard[2]))
-        return 0
     if queue is None and routine is None and guard is None and gate is None and not plain:
         print(USAGE, file=sys.stderr)
         return 2
@@ -3659,6 +3657,9 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
         root = Path(routine[3])  # brief #1441: `--root DIR`
     try:
         root = repo_root() if root is None else root
+        if guard is not None and guard[1]:  # brief #1452: inside the one refusal line
+            print(install_line(root, guard[0], sys.platform, guard[2]))
+            return 0
         if queue is not None:
             return merge_queue(root, *queue)
         if routine is not None:
@@ -3685,7 +3686,7 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
         print(f"FAIL conductor: GitHub cannot be read ({exc})", file=sys.stderr)
         return merge_cleared.EXIT_UNREADABLE
     except CheckError as exc:
-        print(f"FAIL conductor: {exc}", file=sys.stderr)
+        print(f"FAIL conductor: {exc}{root_hint(Path.cwd())}", file=sys.stderr)  # ADR-0610
         return 1
 
 
