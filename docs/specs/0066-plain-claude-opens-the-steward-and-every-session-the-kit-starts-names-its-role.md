@@ -1,6 +1,6 @@
 # SPEC-0066: Plain claude opens the steward and every session the kit starts names its role
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-073
 
