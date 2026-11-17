@@ -1,0 +1,1 @@
+- The WSL setup (`/agk:wsl`) installs gitleaks at the version the governance workflow pins, checked against the release's published checksum, so a new WSL machine's first local push can run its secret scan; inside WSL the doctor names that step when gitleaks is missing (brief #1450)

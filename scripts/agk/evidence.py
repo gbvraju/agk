@@ -6,6 +6,7 @@
 
     python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]
     python3 scripts/agk/evidence.py check --head SHA [--sample N] [--json]
+    python3 scripts/agk/evidence.py push --branch BRANCH [--remote REMOTE]
 
 RECORD is the file that `prepush.py --record` wrote (schema 1, brief #374, ADR-0208). A record of
 another schema, or one whose fields are not those of schema 1, is refused (exit 2, naming the field,
@@ -51,9 +52,24 @@ missing it exits 3 with `evidence: no record for this head in the shared evidenc
 --record)`, naming the option, never a path. Without RECORD and without `--head` it is a usage
 error.
 
+Brief #1447 (ADR-0605): when that folder has no record of the head, the check runs one `git fetch
+origin +refs/notes/agk-evidence:refs/notes/agk-evidence-origin` and reads the note of the head from
+that ref, which `prepush.py --record` writes in local mode and `push` sends; it prints `evidence:
+record read from the note of the head (ref: refs/notes/agk-evidence)` and checks the note exactly as
+a record file, its printed digest being that of the note's bytes. No note, no remote or a refused
+fetch is the exit 3 above. `push --branch B [--remote R]` (default `origin`) merges the remote's
+notes into the clone's with the `ours` strategy (two machines that recorded the same head: this
+clone's note is kept) and pushes the branch and that ref; a branch or remote that is not a plain
+name (a leading `-` or `+`, a `:`, or one `git check-ref-format --branch` refuses) is a usage
+error, and a merge that fails pushes nothing (exit 1). When only the notes ref is refused it prints
+one line: run it again (exit 1) when the remote's notes moved since the fetch, else the line naming
+that setting and the fallback (the record copied by hand, exit 0); any other failure keeps git's
+exit code. A fetch or push never prompts.
+
 Exit 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O
 error (a record that cannot be read, a worktree that cannot be made, make not installed). It posts
-nothing, needs no network and changes nothing in the repository but the worktree it removes.
+nothing, needs no network but the notes fetch above and changes nothing in the repository but the
+worktree it removes (and the fetched notes ref).
 """
 
 from __future__ import annotations
@@ -76,6 +92,8 @@ from common import CheckError, long_temp_dir, proof_areas, proof_timeout, temp_e
 from impact import impact
 from prepush import (
     LOCK,
+    NOTE_NOT_PUSHED,
+    NOTES_REF,
     digest,
     regression_sets,
     safe_command,
@@ -88,8 +106,23 @@ from prepush import (
 from proof import WINDOWS, kill_tree, popen_options
 
 HERE = Path(__file__).resolve().parent
-USAGE = "usage: evidence.py check RECORD [--head SHA] [--sample N] [--json] | check --head SHA ..."
+USAGE = (
+    "usage: evidence.py check RECORD [--head SHA] [--sample N] [--json] | check --head SHA ..."
+    " | push --branch BRANCH [--remote REMOTE]"
+)
 NO_SHARED = "evidence: no record for this head in the shared evidence folder (option: --record)"
+FETCHED_REF = NOTES_REF + "-origin"  # the remote's notes, kept apart from the clone's own
+NOTE_READ = f"evidence: record read from the note of the head (ref: {NOTES_REF})"
+PUSH_USAGE = "usage: evidence.py push --branch BRANCH [--remote REMOTE]"
+BAD_NAME = "evidence: not a plain branch or remote name (option: --branch, --remote)"
+NOTE_MERGE_FAILED = (
+    f"evidence: the remote's notes cannot be merged into this clone's (setting: {NOTES_REF});"
+    " nothing was pushed"
+)
+NOTE_RACE = (
+    f"evidence: the branch is pushed but another machine pushed notes meanwhile (setting:"
+    f" {NOTES_REF}); run the same command again"
+)
 SCHEMA = 1
 DEFAULT_SAMPLE = 1
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -207,6 +240,11 @@ def load(path: Path) -> tuple[dict, str]:
         data = path.read_bytes()
     except OSError:
         raise Unreadable("evidence: the record cannot be read (option: RECORD)") from None
+    return parse(data)
+
+
+def parse(data: bytes) -> tuple[dict, str]:
+    """A record's bytes, from a file or a note, as `load` reads them (brief #1447 answer 3)."""
     try:
         record = json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
@@ -229,13 +267,101 @@ def load(path: Path) -> tuple[dict, str]:
     return record, hashlib.sha256(data).hexdigest()
 
 
-def load_shared(root: Path, head: str) -> tuple[dict, str]:
+def load_shared(root: Path, head: str, as_json: bool = False) -> tuple[dict, str]:
     """The record of HEAD in the clone's shared evidence folder (brief #1269), as `load` reads it;
     Unreadable naming the option when it is missing."""
     path = shared_record(root, head)
-    if path is None or not path.is_file():
+    if path is not None and path.is_file():
+        return load(path)
+    data = fetched_note(root, head)  # brief #1447: the folder first, then the pushed note
+    if data is None:
         raise Unreadable(NO_SHARED)
-    return load(path)
+    print(NOTE_READ, file=sys.stderr if as_json else sys.stdout)
+    return parse(data)
+
+
+def quiet_git(root: Path, *args: str) -> subprocess.CompletedProcess:
+    """git with bytes out and no prompt for credentials: a fetch or push never waits on a person."""
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, env=env
+    )
+
+
+def fetch_notes(root: Path, remote: str) -> bool:
+    """The remote's notes ref into `FETCHED_REF`; False when it has none or cannot be read."""
+    return quiet_git(root, "fetch", "-q", remote, f"+{NOTES_REF}:{FETCHED_REF}").returncode == 0
+
+
+def fetched_note(root: Path, head: str) -> bytes | None:
+    """The bytes of HEAD's note on `origin`, after one fetch of its notes ref, or None."""
+    if not fetch_notes(root, "origin"):
+        return None
+    listed = quiet_git(root, "notes", "--ref", FETCHED_REF, "list", head)
+    blob = listed.stdout.decode("ascii", errors="replace").split()
+    if listed.returncode != 0 or not blob:
+        return None
+    shown = quiet_git(root, "cat-file", "blob", blob[0])
+    return shown.stdout if shown.returncode == 0 else None
+
+
+def safe_name(root: Path, branch: str, remote: str) -> bool:
+    """True when BRANCH is a plain branch name git accepts and REMOTE no option: never a refspec
+    (`+`, `:`) or an option (`-`), so `push` pushes only the branch the person named."""
+    for value in (branch, remote):
+        if not value or value[0] in "-+" or ":" in value:
+            return False
+    return quiet_git(root, "check-ref-format", "--branch", branch).returncode == 0
+
+
+def remote_notes(root: Path, remote: str) -> str:
+    """The sha the remote's notes ref names now, or "" when it has none."""
+    found = quiet_git(root, "ls-remote", "--", remote, NOTES_REF).stdout.split()
+    return found[0].decode("ascii", errors="replace") if found else ""
+
+
+def push(root: Path, args: list[str]) -> int:
+    """`push --branch B [--remote R]` (brief #1447 answers 1 and 6): merge the remote's notes into
+    the clone's (`ours`: when two machines recorded the same head, this clone's note is kept), then
+    push the branch and the notes ref. When the branch landed and only the notes ref was refused,
+    print `NOTE_RACE` (exit 1) when the remote's notes moved since the fetch, else
+    `NOTE_NOT_PUSHED` (exit 0); a merge that fails pushes nothing (exit 1)."""
+    if len(args) % 2 or any(a not in ("--branch", "--remote") for a in args[::2]):
+        raise Usage(PUSH_USAGE)
+    options = dict(zip(args[::2], args[1::2], strict=True))
+    branch, remote = options.get("--branch", ""), options.get("--remote", "origin")
+    if not safe_name(root, branch, remote):
+        raise Usage(BAD_NAME)
+    has_notes = quiet_git(root, "rev-parse", "-q", "--verify", NOTES_REF).returncode == 0
+    seen = ""
+    if fetch_notes(root, remote):
+        seen = quiet_git(root, "rev-parse", FETCHED_REF).stdout.decode().strip()
+        if has_notes:
+            merged = quiet_git(
+                root, "notes", "--ref", NOTES_REF, "merge", "-q", "-s", "ours", FETCHED_REF
+            )
+            if merged.returncode != 0:
+                print(NOTE_MERGE_FAILED)
+                return 1
+        else:
+            has_notes = quiet_git(root, "update-ref", NOTES_REF, FETCHED_REF).returncode == 0
+    refs = [f"refs/heads/{branch}:refs/heads/{branch}"]
+    if has_notes:
+        refs.append(f"{NOTES_REF}:{NOTES_REF}")
+    pushed = quiet_git(root, "push", "-q", "--", remote, *refs)
+    sys.stdout.write((pushed.stdout + pushed.stderr).decode("utf-8", errors="replace"))
+    if pushed.returncode == 0:
+        return 0
+    there = quiet_git(root, "ls-remote", "--", remote, f"refs/heads/{branch}").stdout.split()
+    here = quiet_git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").stdout.strip()
+    if not (has_notes and there and there[0] == here):
+        return pushed.returncode
+    said = pushed.stderr.decode("utf-8", errors="replace")
+    if remote_notes(root, remote) != seen or "non-fast-forward" in said or "fetch first" in said:
+        print(NOTE_RACE)
+        return 1
+    print(NOTE_NOT_PUSHED)
+    return 0
 
 
 def resolve(root: Path, ref: str | None, given: bool) -> str:
@@ -636,17 +762,20 @@ def report(head: str, sha: str, found: list[str], ran: dict | None, as_json: boo
 
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
+    args = list(sys.argv[1:] if argv is None else argv)
     try:
-        options = parse_args(list(sys.argv[1:] if argv is None else argv))
+        options = parse_args(args) if args[:1] != ["push"] else {}
         top = git(Path.cwd(), "rev-parse", "--show-toplevel")
         if top.returncode != 0:
             raise Usage("evidence: not inside a git work tree (path class: root)")
         root = Path(top.stdout.strip())
+        if not options:
+            return push(root, args[1:])
         head = resolve(root, options["head"], options["head"] is not None)
         if options["record"] is not None:
             record, sha = load(Path(options["record"]))
         else:
-            record, sha = load_shared(root, head)
+            record, sha = load_shared(root, head, options["json"])
         found = problems(record, head)
         ran = None if found else in_worktree(root, record, head, options["sample"])
         return report(head, sha, found, ran, options["json"])

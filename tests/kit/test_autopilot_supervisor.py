@@ -91,6 +91,7 @@ def local(repo, tmp_path, monkeypatch):
         return facts["issues"] if "/issues?" in endpoint else facts["pulls"]
 
     monkeypatch.setattr(conductor, "lease", lease)
+    monkeypatch.setattr(conductor.launch, "conductor_refusal", lambda root: None)  # brief #1449
     monkeypatch.setattr(conductor, "plan_comments", lambda repo, issue: [])
     monkeypatch.setattr(conductor, "lease_holder", lambda c, a, now: ("conductor-local", TAKEN))
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
