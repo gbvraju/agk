@@ -161,6 +161,7 @@ tests = [
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_autopilot_settings.py",
   "tests/kit/test_autopilot_modes.py",
+  "tests/kit/test_autopilot_wsl.py",
 ]
 [[testing.map]]
 code = "scripts/agk/batch.py"
@@ -1103,7 +1104,7 @@ code = "scripts/agk/wsl.py"
 tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py"]
 [[testing.map]]
 code = "scripts/agk/wsl_setup.ps1"
-tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py"]
+tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py", "tests/kit/test_autopilot_wsl.py"]
 [[testing.map]]
 code = "skills/**"
 tests = [

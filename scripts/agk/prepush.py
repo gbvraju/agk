@@ -105,6 +105,13 @@ dirty, so the conductor finds it from the head alone (`evidence.py check --head 
 folder is made when missing. `--record FILE` writes FILE as before. A `--queue` run passes `auto`
 on, so the record is named by the head the job runs on.
 
+Brief #1447 (ADR-0605): in local mode (`execution = "local"`, no `[personal]` table) `--record` with
+no FILE also stores the record file's bytes unchanged as the git note of the head under
+`refs/notes/agk-evidence`, after `guard.scan_text` has read them, and prints the command that sends
+it with the branch, `python3 scripts/agk/evidence.py push --branch <branch>`. A finding writes no
+note and prints one line naming that path class, never the value; a note git cannot write prints
+one line naming that setting. Neither changes the exit code or the record.
+
 Brief #1360 (ADR-0572): the `Evidence:` line ends `... record <sha12> in the shared evidence
 folder` with no FILE, then one line names `evidence.py check --head <sha12>` as the way to read it;
 with a FILE it ends `... in the given file`. No path and no user name is printed.
@@ -154,7 +161,10 @@ import kit_root
 import lock as heavy_lock
 from common import (
     GITLEAKS_INSTALL,
+    PERSONAL_TABLE,
     CheckError,
+    config_source,
+    execution,
     final_records,
     git,
     load_config,
@@ -166,6 +176,7 @@ from common import (
     temp_env,
     utf8_output,
 )
+from guard import scan_text
 from impact import (
     NAMED,
     Impact,
@@ -198,6 +209,16 @@ USAGE = (
 SCHEMA = 1
 AUTO_RECORD = "auto"  # `--record` with no FILE (brief #1269, ADR-0536)
 EVIDENCE_FOLDER = "agk-evidence"  # in the git common dir, shared by every worktree of a clone
+NOTES_REF = "refs/notes/agk-evidence"  # the record as a note of the head (brief #1447, ADR-0605)
+NOTE_REFUSED = (
+    "prepush: the record was not written as a note: the secret guard found a finding in it"
+    f" (path class: {NOTES_REF})"
+)
+NOTE_FAILED = f"prepush: the record was not written as a note (setting: {NOTES_REF})"
+NOTE_NOT_PUSHED = (
+    f"evidence: the branch is pushed but the note was refused (setting: {NOTES_REF});"
+    " copy the record to the conductor by hand as before (option: --record FILE)"
+)
 OUTSIDE_LINE = (
     "prepush: record written outside the shared evidence folder; a conductor on this machine reads"
     " only that folder (option: --record with no FILE)"
@@ -1180,6 +1201,38 @@ def write_record(path: Path, record: dict) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def notes_wanted(root: Path) -> bool:
+    """True in local mode outside personal mode (brief #1447 answer 5): only there is the record
+    also a note. A setting that cannot be read writes no note; its own check refuses it."""
+    try:
+        return execution(root) == "local" and not isinstance(
+            config_source(root).get(PERSONAL_TABLE), dict
+        )
+    except (CheckError, OSError, ValueError):
+        return False
+
+
+def write_note(root: Path, head: str, data: bytes) -> str:
+    """Store DATA, the record file's bytes, unchanged as the note of HEAD under `NOTES_REF`, after
+    the secret guard has read them (brief #1447 answers 1 and 4); return the line to print."""
+    if scan_text(data.decode("utf-8", errors="replace")):
+        return NOTE_REFUSED
+    blob = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "hash-object", "-w", "--stdin"], cwd=root, input=data, capture_output=True
+    )
+    sha = blob.stdout.decode("ascii", errors="replace").strip()
+    if blob.returncode != 0 or not sha:
+        return NOTE_FAILED
+    code, _ = run(["git", "notes", "--ref", NOTES_REF, "add", "-f", "-C", sha, head], root)
+    if code != 0:
+        return NOTE_FAILED
+    branch = git(root, "symbolic-ref", "--short", "-q", "HEAD", check=False).strip() or "<branch>"
+    return (
+        "prepush: the record is also the note of the head; send it with the branch:"
+        f" python3 scripts/agk/evidence.py push --branch {branch}"
+    )
+
+
 def retired_keys_line(root: Path) -> str | None:
     """SPEC-0046 rule 11: the deprecation line of the retired run-folder keys, or None. A malformed
     `[testing]` table prints nothing here: the steps that read it refuse it naming the setting."""
@@ -1274,14 +1327,14 @@ def main(argv: list[str] | None = None) -> int:
             if result.text:
                 print(result.text)
             print(f"prepush: stopped at {name}; nothing after it ran")
-            return finish(record, record_path, not_run, "failed", 1, outside, given)
+            return finish(record, record_path, not_run, "failed", 1, outside, given, root)
         if result.outcome == "ok" and name in ("tests", "secret-scan") and result.text:
             print(result.text)
     if not_run:
         print(f"prepush: passed; not run: {', '.join(not_run)}")
     else:
         print("prepush: all steps passed")
-    return finish(record, record_path, not_run, "passed", 0, outside, given)
+    return finish(record, record_path, not_run, "passed", 0, outside, given, root)
 
 
 def finish(
@@ -1292,6 +1345,7 @@ def finish(
     code: int,
     outside: bool = False,
     given: bool = True,
+    root: Path | None = None,
 ) -> int:
     """Write the record when one was asked for and print the `Evidence:` line; keep the exit."""
     if record is None or path is None:
@@ -1310,6 +1364,8 @@ def finish(
     print(f"{line} in {where}")
     if not given:
         print(f"prepush: read it with python3 scripts/agk/evidence.py check --head {head}")
+        if root is not None and notes_wanted(root):  # brief #1447: the record rides the branch
+            print(write_note(root, record["head"], path.read_bytes()))
     if outside:
         print(OUTSIDE_LINE)
     return code
