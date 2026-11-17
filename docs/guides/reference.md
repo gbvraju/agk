@@ -325,7 +325,7 @@ daily list. Exit 2: a refused input; exit 4: the memory cannot be written.
     python3 scripts/agk/conductor.py sweep
     python3 scripts/agk/conductor.py merge-queue [--dry-run] [--max-batch N]
     python3 scripts/agk/conductor.py rerun --pr N [--apply]
-    python3 scripts/agk/conductor.py check-verdict FILE [--pr N]
+    python3 scripts/agk/conductor.py check-verdict FILE [--pr N] [--root DIR] [--open-briefs FILE]
     python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
     python3 scripts/agk/conductor.py watchdog [--session NAME] [--install] [--pass]
     python3 scripts/agk/conductor.py review --pr N [--start]
@@ -388,7 +388,10 @@ runtime's `ccr/convert_to_draft` and `ccr/ready_for_review` routes `(verify)`, a
 alone. `check-verdict FILE` prints `ok`, or the problem of the verdict's `Final:` lines by the router's own reading
 (`common.verdict_problem`), or that its first line is not a verdict or a `Correction:` with text; exit 1 on a problem, nothing
 read on GitHub. With `--pr N` it also refuses a verdict on another head, a `Final:` path the head does not have and a fix list
-with no item on a pull request with no Proposed ADR, and a read that fails is an error (brief #854, ADR-0388). `lease` is the active-conductor marker: one comment `Conductor: active <time> <name>` on the plan issue that
+with no item on a pull request with no Proposed ADR, and a read that fails is an error (brief #854, ADR-0388). A fix item or `MALFORMED:` line written
+`rename <old> to <new>` whose new name the tree, another open brief or an open pull request holds is refused, naming the item,
+the holder and a free name; the open briefs come from `--open-briefs FILE` or the read cache, `--root DIR` names the
+checkout (brief #1441, ADR-0602). `lease` is the active-conductor marker: one comment `Conductor: active <time> <name>` on the plan issue that
 `plan_issue` of the `[flow]` table names (absent: the lease is off), valid 10 minutes, renewed at every `watch` pass (`watch` returns within 5 minutes with `tick` and any `STALL` lines; ADR-0368, ADR-0402); `--take NAME` posts or edits it in place
 unless another name holds a valid lease (exit 3, naming the setting) and keeps the name in the git directory, `--release NAME`
 marks it released, `--show` prints `held by <name> until <time>` or `free`; `merge-queue` refuses to run while another name holds a
