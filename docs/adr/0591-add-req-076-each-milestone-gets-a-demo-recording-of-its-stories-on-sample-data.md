@@ -1,6 +1,6 @@
 # ADR-0591: Add REQ-076: Each milestone gets a demo recording of its stories on sample data
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: SPEC-0069, SPEC-0043, SPEC-0051, SPEC-0042, SPEC-0041, SPEC-0059, brief #1402, plan #661
