@@ -331,7 +331,10 @@ slower, and `doctor.py` says so (brief #1376, ADR-0577). In the runtime on the W
 plan of five lines or fewer, sets up WSL and the clone on your yes (each step skips what is done, so a stopped run
 resumes), tells you when to do the GitHub and runtime sign-ins in your browser, and makes the one pull request that sets
 `launch_adapter` to `bash scripts/start-session-local.sh`; it never merges. After you merge it, `/agk:wsl` again moves
-the watchdog into WSL and disables (never deletes) the Windows task. `/agk:wsl status` reports each part and
+the watchdog into WSL and disables (never deletes) the Windows task; with `[autopilot]` set on the default branch it
+runs `agk autopilot on` inside WSL instead, which registers the one Windows task `agk-autopilot (WSL)` through
+`schtasks.exe` to run whether or not you are signed in (Windows itself asks for your sign-in; declined, the task runs
+only while you are signed in and `on` warns), and `off` removes that task only (brief #1448, ADR-0606). `/agk:wsl status` reports each part and
 `/agk:wsl back` returns. Behind a company proxy a download fails until the company root certificate is given: the skill
 asks for its file. Screenshots that `design_compare.py` compares are captured again once on Linux, where fonts differ.
 
