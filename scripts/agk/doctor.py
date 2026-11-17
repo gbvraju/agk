@@ -501,6 +501,14 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "(python3 scripts/agk/autopilot.py on installs its own); they are read for one release "
         "while [autopilot] is absent (a change to agk.toml needs an ADR in the same pull request)",
     ),
+    "local-mode-switch": (
+        "warn",
+        "the local-mode switch-over is consistent",
+        "local mode (setting: execution) but the switch-over is not finished",
+        'follow docs/guides/local-mode.md, section "A kit\'s own repository goes private": the '
+        "owner runs `python3 scripts/agk/local_mode.py enter --write` and changes the ruleset's "
+        "required checks; a session changes neither (brief #1471, ADR-0626)",
+    ),
     "engines-keys": (
         "warn",
         "[engines] in agk.toml has only the keys vision, stack, design and review",
@@ -531,14 +539,6 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "engines.review is absent or names a skill the session can see",
         "engines.review is invalid, or names a skill the session cannot find",
         ENGINE_FIX,
-    ),
-    "local-mode-switch": (
-        "warn",
-        "the local-mode switch-over is consistent",
-        "local mode (setting: execution) but the switch-over is not finished",
-        'follow docs/guides/local-mode.md, section "A kit\'s own repository goes private": the '
-        "owner runs `python3 scripts/agk/local_mode.py enter --write` and changes the ruleset's "
-        "required checks; a session changes neither (brief #1471, ADR-0626)",
     ),
 }
 RULESET_IDS = [
