@@ -1,0 +1,1 @@
+- Only a machine signed in as a listed verdict author starts a conductor; any other machine prints one line naming the setting and runs builders only (brief #1449)
