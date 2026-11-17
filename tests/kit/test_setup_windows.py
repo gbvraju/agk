@@ -90,7 +90,7 @@ def test_ac4_the_table_names_every_tool_of_the_brief_with_a_minimum():
     """REQ-072 AC4: rule 7: one table in setup.py; each Windows tool has its winget package."""
     wanted = {"git", "gh", "python", "node", "wt", "pwsh", "gitleaks", "podman"}
     assert wanted <= set(setup.WINGET) and set(setup.WINGET) <= set(setup.MINIMUM)
-    assert all(setup.MINIMUM[t] for t in wanted)
+    assert all(setup.MINIMUM[t] for t in wanted | {"claude"})
     assert setup.MINIMUM["python"] == "3.11" and setup.MINIMUM["node"] == "20"
     assert setup.MINIMUM["gitleaks"] == setup.common.GITLEAKS_PIN
     assert "claude" not in setup.WINGET and setup.CLAUDE_INSTALL[0] == "powershell"
@@ -238,3 +238,52 @@ def test_ac4_the_bootstrap_is_kit_only_and_mapped():
     toml = (ROOT / "agk.toml").read_text(encoding="utf-8")
     assert re.search(r'code = "scripts/agk/setup_windows\.ps1"\ntests = \[[^\]]*test_setup_windows',
                      toml)  # fmt: skip
+
+
+WINGET_LIST = """Name                Id        Version   Available Source
+----------------------------------------------------------
+Git                 Git.Git   2.40.0    2.55.0    winget
+"""
+
+
+def test_ac4_the_after_check_reads_winget_list(monkeypatch):
+    """REQ-072 AC4: the installed version, not the available one, from a recorded `winget list`."""
+    seen: list[list[str]] = []
+    monkeypatch.setattr(setup, "capture", lambda args, cwd=None: seen.append(args) or WINGET_LIST)
+    assert setup.installed_version("git") == "2.40.0"
+    assert seen[0][:4] == ["winget", "list", "--id", "Git.Git"]
+    monkeypatch.setattr(setup, "capture", lambda args, cwd=None: "No installed package found.\n")
+    assert setup.installed_version("git") is None
+
+
+def test_ac4_claude_is_read_on_the_path_an_install_leaves(tmp_path, monkeypatch):
+    """REQ-072 AC4: Claude Code's after-check reads the machine's and the user's PATH again,
+    not this process's, which an install does not refresh."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    tool = bin_dir / "claude"
+    tool.write_text("#!/bin/sh\necho '2.1.5 (Claude Code)'\n", encoding="utf-8")
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    monkeypatch.setattr(setup, "fresh_path", lambda: str(bin_dir))
+    assert setup.installed_version("claude") == "2.1.5"
+
+
+@pytest.mark.parametrize(
+    ("listed", "installs"), [("1.20.1", True), ("1.24.3", False), (None, True)]
+)
+def test_ac4_a_tool_read_only_as_present_is_read_through_winget(
+    tmp_path, capsys, monkeypatch, listed, installs
+):
+    """REQ-072 AC4: a tool with a floor whose version was not read is read through winget's list;
+    below the floor, or still unread, it is installed."""
+    stub = Stub(monkeypatch)
+    stub.installed["wt"] = listed
+    have = {t: setup.MINIMUM[t] or "1.0" for t in setup.MINIMUM} | {"wt": "present"}
+    run(tmp_path, capsys, machine(have))
+    assert ("wt" in [setup.tool_of(c) for c in stub.installs()]) is installs
+
+
+def test_ac4_the_bootstrap_passes_the_projects_folder():
+    """REQ-072 AC4: the project's folder, not the plugin's, decides the container engine."""
+    assert re.search(r"'install', '--root', \$Root", ps1())

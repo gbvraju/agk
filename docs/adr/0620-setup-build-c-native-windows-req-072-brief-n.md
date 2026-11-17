@@ -16,25 +16,27 @@ the minimum versions and the stop lines (rule 7). Build (a) (ADR-0618) started t
 
 1. **One table in `setup.py`.** `MINIMUM` gains every tool of brief #1462 answer 1 and `WINGET` names each tool's winget
    package in install order: Python 3.11 (`pyproject.toml`), git 2.43, GitHub CLI 2.45, Node.js 20 (LTS), PowerShell
-   7.6, Windows Terminal 1.23, gitleaks 8.30.1 (`common.GITLEAKS_PIN`, CI's pin) and Podman 4.9; Docker and Claude Code
-   have no minimum. Each floor is at or below the vendor's current release, read once on 2026-11-17 (git 2.55, GitHub
+   7.6, Windows Terminal 1.23, gitleaks 8.30.1 (`common.GITLEAKS_PIN`, CI's pin), Podman 4.9 and Claude Code 2.0
+   `(verify)`; Docker has no minimum. Each floor is at or below the vendor's current release, read once on 2026-11-17 (git 2.55, GitHub
    CLI 2.95, PowerShell 7.7 with 7.6 its oldest supported line, Windows Terminal 1.24, Podman 5.8, gitleaks at CI's
    pin), and at or below what Ubuntu 24.04 ships (git 2.43, GitHub CLI 2.45, Podman 4.9), so build (e)'s distribution
    packages meet the same table `(verify)`. A newer floor is a later change to this one table. Claude Code is installed by its own installer (`CLAUDE_INSTALL`)
    `(verify: the Windows installer command)`.
 2. **`setup.py install`** (native Windows only; any other platform is refused by name and nothing runs). Checked before:
-   a tool missing or older than its minimum is to install; the container engine only when the project uses containers
+   a tool missing, older than its minimum, or with a minimum and no version read (read first through `winget list`,
+   as Windows Terminal is, whose `wt` is read only as present) is to install; the container engine only when the project uses containers
    and no Docker is present. Without `--yes` nothing runs (rule 5). Before the first install, and only when a winget
    tool is to install: winget missing or refused by its App Installer policy, no administrator right, or a refused test
    download (`winget show` of the first package) stops with one line naming what IT must allow and the tools to install
    by hand. Each install is one `winget install --id <package> --exact --source winget` with the agreements accepted on
-   the person's yes; checked after through `winget list` (this process's PATH is not refreshed by an install). A
+   the person's yes; checked after through `winget list`, and Claude Code on the machine's and the user's PATH read again
+   from the registry (this process's PATH is not refreshed by an install). A
    failed install or a version still below the minimum marks the step `failed`, stops the run and runs nothing after
    it; winget's own transaction leaves that tool as it was. A second run on a set-up machine installs nothing.
 3. **A kit-only bootstrap, `scripts/agk/setup_windows.ps1`**, for a machine with no Python to run `setup.py`: it reads
    Python's minimum and package from `setup.py`'s table as text, holds none of its own, applies the same four stops
    before its one install, installs Python alone through winget on `-Yes`, then hands every other tool to
-   `setup.py install`. It is named in `tests/kit_dev/test_kit_manifest.py`'s kit-only list, where the code keeps that
+   `setup.py install --root <the project's folder>`, so the project's containers decide the engine. It is named in `tests/kit_dev/test_kit_manifest.py`'s kit-only list, where the code keeps that
    list (the brief names `kit/manifest.json`).
 
 ## Consequences

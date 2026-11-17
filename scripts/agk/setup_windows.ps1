@@ -7,7 +7,8 @@
   /agk:setup's native Windows bootstrap (SPEC-0065 rule 7, build (c), ADR-0620).
 
 .DESCRIPTION
-  Kit-only: run from the plugin root, never installed into a project. A machine with nothing installed has no Python
+  Kit-only: run the plugin's copy from the project's folder (or name it with -Root); it is never installed into a
+  project. A machine with nothing installed has no Python
   to run setup.py, so this script installs Python alone through winget, then hands every other tool to
   `setup.py install`. It holds no version and no package name of its own: it reads both from the one table in setup.py
   (MINIMUM and WINGET). Before its one install it reads winget, winget's policy, the administrator right and a test
@@ -18,7 +19,7 @@
   pwsh -NoProfile -File scripts/agk/setup_windows.ps1 -Yes
 #>
 [CmdletBinding()]
-param([switch] $Yes, [switch] $Json)
+param([string] $Root = (Get-Location).Path, [switch] $Yes, [switch] $Json)
 
 $ErrorActionPreference = 'Continue'
 $Setup = Join-Path $PSScriptRoot 'setup.py'
@@ -73,7 +74,7 @@ if (-not $py) {
     if (-not $py) { Stop-Line "Python reads below $least after its install, $Hand" }
 }
 
-$rest = @('install')
+$rest = @('install', '--root', $Root)  # the project's folder: its containers decide the engine
 if ($Yes) { $rest += '--yes' }
 if ($Json) { $rest += '--json' }
 & $py $Setup @rest

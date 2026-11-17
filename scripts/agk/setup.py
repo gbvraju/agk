@@ -54,7 +54,7 @@ import wsl  # noqa: E402
 PLUGIN = Path(__file__).resolve().parents[2]
 GIB = 1024**3
 MINIMUM = {  # rule 7's one table, read by every platform script and the tests (ADR-0620, verify)
-    "python": "3.11", "git": "2.43", "gh": "2.45", "claude": None, "node": "20",
+    "python": "3.11", "git": "2.43", "gh": "2.45", "claude": "2.0", "node": "20",
     "podman": "4.9", "docker": None, "pwsh": "7.6", "wt": "1.23", "gitleaks": "8.30.1",
 }  # fmt: skip
 WINGET = {  # build (c): each tool's winget package, in the order installed (verify)
@@ -65,6 +65,7 @@ WINGET = {  # build (c): each tool's winget package, in the order installed (ver
 CLAUDE_INSTALL = [  # Claude Code by its own installer (verify: the Windows installer command)
     "powershell", "-NoProfile", "-Command", "irm https://claude.ai/install.ps1 | iex",
 ]  # fmt: skip
+MACHINE_PATH = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 WINGET_FLAGS = ["--exact", "--source", "winget", "--accept-package-agreements",
                 "--accept-source-agreements", "--disable-interactivity", "--silent"]  # fmt: skip
 CHECKED = ("python", "git", "gh", "claude", "node")
@@ -77,6 +78,7 @@ BROWSER_FILES = ("playwright.config.ts", "playwright.config.js", "playwright.con
 SMALL_IMAGE = "hello-world"  # (verify) the image of rule 12's container start
 WINGET_POLICY = r"SOFTWARE\Policies\Microsoft\Windows\AppInstaller"
 VERSION = re.compile(r"(\d+(?:\.\d+)+)")
+NUMBER = re.compile(r"\d+(?:\.\d+)*")  # a version as the table and a read hold it: "20", "2.43.0"
 ANSWERS = {  # rule 4's five questions and their choices, in the order asked
     "where": ("hosted", "local", "personal"), "team": ("solo", "team"),
     "autopilot": ("off", "assist", "on"), "engine": ("podman", "docker"),
@@ -262,7 +264,7 @@ def size(available, total, cores, per_gb, reserve, max_builders, live=0) -> dict
 
 
 def older(found: str, least: str | None) -> bool:
-    if least is None or not VERSION.fullmatch(found):
+    if least is None or not NUMBER.fullmatch(found):
         return False
     return tuple(map(int, found.split("."))) < tuple(map(int, least.split(".")))
 
@@ -559,7 +561,8 @@ def tool_of(args: list[str]) -> str | None:
 
 
 def needs(found: str | None, least: str | None) -> bool:
-    return not found or older(found, least)
+    """To install: missing, older than the floor, or with a floor and no version read."""
+    return not found or older(found, least) or bool(least and not NUMBER.fullmatch(found))
 
 
 def install_order(tools: dict, engines: bool) -> list[str]:
@@ -570,10 +573,26 @@ def install_order(tools: dict, engines: bool) -> list[str]:
     return [n for n in [*names, "claude"] if needs(tools.get(n), MINIMUM[n])]
 
 
+def fresh_path() -> str:
+    """The machine's and the user's PATH as an install leaves them; this process keeps its own."""
+    try:  # winreg exists on Windows only
+        reg = vars(importlib.import_module("winreg"))
+        keys = [(reg["HKEY_LOCAL_MACHINE"], MACHINE_PATH),
+                (reg["HKEY_CURRENT_USER"], "Environment")]  # fmt: skip
+        parts = [reg["QueryValueEx"](reg["OpenKey"](h, k), "Path")[0] for h, k in keys]
+    except (ImportError, OSError, KeyError):
+        return os.environ.get("PATH", "")
+    return os.pathsep.join(os.path.expandvars(p) for p in parts)
+
+
 def installed_version(name: str) -> str | None:
-    """Checked after: winget's own list (this process's PATH is not refreshed by an install)."""
+    """Read after an install, or when a version is unread: winget's own list for its packages,
+    else the tool on the PATH read again (an install does not refresh this process's PATH)."""
     if name not in WINGET:
-        return tool_version(name)
+        where = shutil.which(name, path=fresh_path())
+        out = capture([where, "--version"]) if where else None
+        version = VERSION.search(out or "")
+        return version[1] if version else ("present" if where else None)
     out = capture(["winget", "list", "--id", WINGET[name], *WINGET_FLAGS[:3]]) or ""
     line = next((ln for ln in out.splitlines() if WINGET[name] in ln), "")
     found = VERSION.search(line.split(WINGET[name], 1)[-1])
@@ -602,6 +621,8 @@ def windows_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[i
     install per missing tool, checked after; a failure stops the run with the tool as it was."""
     tools, engines = machine.get("tools", {}), bool(repo["engines"])
     names = [n for n in WINGET if n != "podman"] + (["podman"] if engines else []) + ["claude"]
+    tools = {n: v if not v or NUMBER.fullmatch(v) or n not in WINGET else installed_version(n) or v
+             for n, v in tools.items()}  # a tool read only as present: winget's list names it
     todo = install_order(tools, engines)
     have = {n: tools.get(n) or (f"docker {tools.get('docker')}" if n == "podman" else "present")
             for n in names}  # fmt: skip
