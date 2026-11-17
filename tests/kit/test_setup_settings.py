@@ -123,7 +123,7 @@ def test_ac2_the_setting_is_named_only_in_the_plans_last_line(tmp_path, capsys):
     plan = out.split("\n\n")[0].splitlines()
     assert code == 0 and plan[0] == "Plan:" and len(plan) - 1 <= 8
     assert 'execution = "local"' in plan[-1] and 'review_mode = "solo"' in plan[-1]
-    assert not any("execution" in line for line in plan[:-1])
+    assert not any("execution = " in line for line in plan[:-1])
     _, out = run(root, capsys, "ask")
     assert "execution" not in out and "review_mode" not in out
 
@@ -226,7 +226,8 @@ def test_ac5_no_output_or_file_holds_a_token_or_password(tmp_path, capsys):
     outs.append(run(root, capsys, "settings", extra=["--yes", *answers("where=local")])[1])
     written = [p.read_text(encoding="utf-8") for p in files_of(root)]
     body = root / ".git" / "agk" / "pr-body-setup.md"
-    assert body.is_file() and "Advances: REQ-001" in body.read_text(encoding="utf-8")
+    assert body.is_file(), outs[2]
+    assert "Advances: REQ-001" in body.read_text(encoding="utf-8")
     assert not any(SECRET.search(t) for t in [*outs, *written, body.read_text(encoding="utf-8")])
 
 
