@@ -296,12 +296,11 @@ def push(root: Path, args: list[str]) -> int:
     """`push --branch B [--remote R]` (brief #1447 answers 1 and 6): merge the remote's notes into
     the clone's (`ours`: notes are keyed by head), then push the branch and the notes ref. When the
     branch landed and only the notes ref was refused, print `NOTE_NOT_PUSHED` and exit 0."""
-    options = {"--branch": None, "--remote": "origin"}
-    if len(args) % 2 or any(a not in options for a in args[::2]):
+    if len(args) % 2 or any(a not in ("--branch", "--remote") for a in args[::2]):
         raise Usage(PUSH_USAGE)
-    options.update(dict(zip(args[::2], args[1::2], strict=True)))
-    branch, remote = options["--branch"], options["--remote"]
-    if not branch:
+    options = dict(zip(args[::2], args[1::2], strict=True))
+    branch, remote = options.get("--branch", ""), options.get("--remote", "origin")
+    if not branch or not remote:
         raise Usage(PUSH_USAGE)
     has_notes = quiet_git(root, "rev-parse", "-q", "--verify", NOTES_REF).returncode == 0
     if fetch_notes(root, remote):

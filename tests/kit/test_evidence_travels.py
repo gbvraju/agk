@@ -165,7 +165,7 @@ def test_a_note_the_guard_refuses_is_not_written_and_names_the_path_class(repo, 
     a, _ = machine_a(repo, outside)
     head = a.git("rev-parse", "HEAD").strip()
     planted = "ghp_" + "a1B2c3D4e5" * 4
-    line = prepush.write_note(a.root, head, ('{"argv": ["%s"]}\n' % planted).encode())
+    line = prepush.write_note(a.root, head, ('{"argv": ["' + planted + '"]}\n').encode())
     assert line == prepush.NOTE_REFUSED
     assert planted not in line and REF in line
     assert notes(a) == ""

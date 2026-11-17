@@ -175,6 +175,7 @@ from common import (
     temp_env,
     utf8_output,
 )
+from guard import scan_text
 from impact import (
     NAMED,
     Impact,
@@ -197,7 +198,6 @@ from impact import (
     workers_line,
     workers_setting,
 )
-from guard import scan_text
 from proof import area_command, execute, is_test_file, timeout_note
 from test_map import refresh
 
