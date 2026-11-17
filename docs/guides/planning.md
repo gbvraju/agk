@@ -113,6 +113,14 @@ checkout; the other scripts are installed under `scripts/agk/`.
    - **The formal gate.** The board's `Sign-off` is a reading aid, not a record: the plan's gate stays the owner's
      `Approve: plan <full head ID>` line of step 8.
 
+   **Dependency first, cycles to the owner.** Under the overlap rule a brief waits for running work that touches its
+   files, but never for work that waits on it: when a taken brief or its open pull request carries `Depends-on: #n`
+   (directly or down a chain of open briefs), brief #n starts ahead of it, and `plan`, `next` and `claim` print
+   `#n starts ahead of #h, which depends on it (overlap on <file> ignored)`. Every other overlapping holder still holds
+   it. When #n also waits on the holder, the plan prints `CYCLE: #a and #b wait on each other (Depends-on); the owner
+   chooses which goes first`, starts neither, and `plan --json` lists it under `cycles` with the one `Owner needed:`
+   line that names the `Depends-on:` lines to remove (brief #1432, ADR-0600).
+
 10. **Lock the scope for business.** `/agk:scope-lock` writes `docs/plan/scope-lock.md` from the plan in plain words for
    readers who are not technical: per milestone the screens it makes work, what a person can do there, its dates and
    estimated hours; the go-live date; what comes after go-live; what is not included, and why; the decisions; the
