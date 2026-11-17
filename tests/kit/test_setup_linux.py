@@ -13,6 +13,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import shutil
 import subprocess  # nosec B404 - bash -n only, on the kit's own file
 import sys
 from pathlib import Path
@@ -227,7 +228,6 @@ def test_ac4_the_bootstrap_holds_no_version_or_url_of_its_own():
     assert "nodesource" not in text and "claude.ai" not in text  # setup.py names each URL
     assert "sha256sum" in text  # gitleaks is checked against its published checksum file
     assert not re.search(r"(?i)password|token|read -s", text)
-    assert text.index("stop") < text.index("install -y")
 
 
 def test_ac4_the_bootstrap_on_macos_prints_the_one_line(tmp_path):
@@ -244,3 +244,104 @@ def test_ac4_the_bootstrap_on_macos_prints_the_one_line(tmp_path):
     )  # fmt: skip
     assert done.returncode == 1 and done.stdout.strip() == setup.MAC_LINE
     assert sorted(p.name for p in tmp_path.iterdir()) == ["bin"]
+
+
+def test_ac4_sudo_counts_only_when_it_runs_without_a_prompt(monkeypatch):
+    """REQ-072 AC4: the machine read probes `sudo -n true`; sudo present but refused, or asking
+    for its sign-in with no terminal, reads as not ready."""
+    calls = []
+    monkeypatch.setattr(setup.shutil, "which", lambda name, path=None: f"/usr/bin/{name}")
+    monkeypatch.setattr(setup, "capture", lambda args, cwd=None: calls.append(args))
+    assert setup.sudo_ready() is False and calls == [["sudo", "-n", "true"]]
+    monkeypatch.setattr(setup, "capture", lambda args, cwd=None: "")
+    assert setup.sudo_ready() is True
+
+
+def test_ac4_sudo_not_ready_stops_naming_sudo(tmp_path, capsys, monkeypatch):
+    """REQ-072 AC4: an account with sudo that cannot use it here stops naming sudo, not the
+    package mirrors, and nothing is downloaded."""
+    stub = Stub(monkeypatch)
+    code, out = run(tmp_path, capsys, machine(admin=False, sudo=False), as_json=False)
+    assert code == 1 and "sudo -v" in out and "mirrors" not in out and stub.calls == []
+
+
+def test_ac4_claude_code_alone_needs_no_root_and_no_refresh(tmp_path, capsys, monkeypatch):
+    """REQ-072 AC4: a machine that lacks only Claude Code (a user install) is not stopped for
+    sudo or apt, and refreshes no package list."""
+    stub = Stub(monkeypatch)
+    have = {t: setup.MINIMUM[t] for t in LINUX_TOOLS - {"claude"}} | {"python": "3.12.3"}
+    fake = machine(tools=have, admin=False, sudo=False, package_manager="absent")
+    code, table = run(tmp_path, capsys, fake)
+    assert code == 0 and [setup.linux_tool_of(c) for c in stub.calls] == ["claude"]
+    assert stub.calls[0] == ["bash", str(SH), "claude", setup.CLAUDE_LINUX]
+
+
+def test_ac4_a_failed_node_install_says_its_package_source_stays(tmp_path, capsys, monkeypatch):
+    """REQ-072 AC4: NodeSource's script adds a package source before `nodejs`; when `nodejs`
+    fails the row says that source stays (ADR-0622's residual)."""
+    Stub(monkeypatch, fail="node")
+    code, table = run(tmp_path, capsys, machine())
+    rows = {r["step"]: r for r in table["steps"]}
+    assert code == 1 and rows["node"]["result"] == "failed"
+    assert "NodeSource's package source it added stays" in rows["node"]["note"]
+
+
+def test_ac4_linux_version_reads_a_stub_tool(tmp_path, monkeypatch):
+    """REQ-072 AC4: the after-check reads each tool's real output: `gitleaks version`, else
+    `--version`; a tool nowhere on the PATH or the installers' folders is None."""
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    for name, text in (("gitleaks", '[ "$1" = version ] && echo 8.30.1'),
+                       ("git", '[ "$1" = --version ] && echo "git version 2.43.0"')):  # fmt: skip
+        (stubs / name).write_text(f"#!/bin/sh\n{text}\n", encoding="utf-8")
+        (stubs / name).chmod(0o755)
+    monkeypatch.setenv("PATH", str(stubs))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert setup.linux_version("gitleaks") == "8.30.1"
+    assert setup.linux_version("git") == "2.43.0"
+    assert setup.linux_version("example-tool-absent") is None
+
+
+def bootstrap(tmp_path: Path, *flags: str):
+    """setup_linux.sh on a stub machine: uid 1000, apt-get, sudo and a Python too old, no curl;
+    each stub call is logged."""
+    stubs, log = tmp_path / "bin", tmp_path / "calls.log"
+    stubs.mkdir(exist_ok=True)
+    for real in ("awk", "sed", "dirname", "uname"):
+        target = stubs / real
+        if not target.exists():
+            target.symlink_to(shutil.which(real))
+    fakes = {
+        "id": "echo 1000",
+        "apt-get": f'echo "apt-get $*" >> "{log}"',
+        "sudo": f'echo "sudo $*" >> "{log}"; [ "$1" = -n ] && exit 0; "$@"',
+        "python3": f'echo "python3 $*" >> "{log}"; exit 1',
+    }
+    for name, body in fakes.items():
+        (stubs / name).write_text(f"#!/bin/bash\n{body}\n", encoding="utf-8")
+        (stubs / name).chmod(0o755)
+    env = {"PATH": str(stubs), "HOME": str(tmp_path)}
+    done = subprocess.run(  # nosec B603 - the kit's own script, fixed arguments
+        ["/bin/bash", str(SH), *flags], cwd=tmp_path, env=env, capture_output=True, text=True,
+        check=False, timeout=30,
+    )  # fmt: skip
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return done, [c for c in calls if not c.startswith("python3")]
+
+
+def test_ac4_the_bootstrap_installs_nothing_without_a_yes(tmp_path):
+    """REQ-072 AC2 and AC4: a bare machine without --yes gets one stop line and no apt call."""
+    done, calls = bootstrap(tmp_path)
+    assert done.returncode == 1 and "--yes" in done.stdout
+    assert not [c for c in calls if "apt-get" in c]
+
+
+def test_ac4_the_bootstrap_refreshes_then_installs_python_and_curl_on_a_yes(tmp_path):
+    """REQ-072 AC4: on a yes, the package lists' refresh, then one install of Python and curl
+    through sudo; a Python still below the table's floor stops with one line naming it."""
+    done, calls = bootstrap(tmp_path, "--yes")
+    apt = [c for c in calls if c.startswith("apt-get")]
+    assert apt == ["apt-get update -q", "apt-get install -y -q python3 curl ca-certificates"]
+    assert "sudo apt-get update -q" in calls
+    stops = [ln for ln in done.stdout.splitlines() if ln.startswith("stop:")]
+    assert done.returncode == 1 and len(stops) == 1 and setup.MINIMUM["python"] in stops[0]

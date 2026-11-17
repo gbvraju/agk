@@ -18,7 +18,8 @@ distribution's packages, and Node.js and Claude Code by the path `wsl_setup.ps1`
 1. **`setup.py install` takes the platform from the machine read.** Native Windows keeps build (c)'s path; Linux
    (a cloud virtual machine, or a Linux machine in local mode) takes the new path; macOS prints one line
    (`MAC_LINE`), exits 1 and changes nothing (`Q-S0065-3`); any other platform is still refused by name. The
-   machine read gains `package_manager` (`apt`, `dnf` or `absent`) and `sudo` (present or not).
+   machine read gains `package_manager` (`apt`, `dnf` or `absent`) and `sudo` (ready only when `sudo -n true`
+   passes: sudo present but refused, or asking for its sign-in with no terminal, is not ready).
 2. **The Linux path, at the one table's minimums.** Checked before: git, GitHub CLI, Node.js, gitleaks and Claude Code,
    and Podman only when the project uses containers and no Docker is present; Python is the interpreter running
    `setup.py`, so it is read and skipped. git, GitHub CLI and Podman are the distribution's packages
@@ -26,9 +27,10 @@ distribution's packages, and Node.js and Claude Code by the path `wsl_setup.ps1`
    Node.js is NodeSource's setup script then the `nodejs` package (`NODE_SETUP`, wsl_setup.ps1's path); gitleaks is
    CI's pin (`common.GITLEAKS_PIN`) from its release, checked against its published checksum file (ADR-0608's
    path); Claude Code is its own installer (`CLAUDE_LINUX`, as wsl_setup.ps1 runs it) as the user. Without `--yes`
-   nothing runs. Before the first install: no apt nor dnf, an account that is neither root nor has sudo, or a refused
-   test download (the package lists' refresh) stops with one line naming what to allow and the tools to install by
-   hand. Each install is checked after on the PATH with the installers' folders; a failure or a version still below
+   nothing runs. Before the first install: no apt nor dnf (when a package or Node.js is to install), an account that
+   is not root and whose sudo is not ready (when any step but Claude Code's user install is to install; the line names
+   `sudo -v`), or a refused test download (the package lists' refresh, when a package or Node.js is to install) stops
+   with one line naming what to allow and the tools to install by hand. Each install is checked after on the PATH with the installers' folders; a failure or a version still below
    the minimum is `failed`, stops the run, and runs nothing after it, the package manager's transaction leaving that
    tool as it was. A second run installs nothing. Build (b)'s proposal of `launch_adapter = "bash
    scripts/start-session-local.sh"` on Linux in local mode is the background adapter of rule 10, unchanged.
@@ -54,5 +56,8 @@ nothing.
   machine; the pull request reports `Verified: (verify) run on Linux` until a person runs it (due 2027-03-31).
 - 2026-11-17 (verify): the dnf NodeSource URL, and that Debian 12's and older distributions' git and Podman packages
   read below the table (a `failed` row, not a silent pass), are not confirmed on those machines (due 2027-03-31).
+- 2026-11-17: when NodeSource's setup script has added its package source and the `nodejs` install then fails, that
+  source stays; the `failed` row says so, and removing it is left to the person, since its file names are the
+  script's own `(verify)` (due 2027-03-31).
 - 2026-11-17: the skill `skills/setup/SKILL.md` does not yet call the install form; build (d) wires the platform
   paths into the skill, as ADR-0620's residual says.

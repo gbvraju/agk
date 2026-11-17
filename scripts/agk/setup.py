@@ -184,6 +184,12 @@ def is_admin() -> bool:
         return False
 
 
+def sudo_ready() -> bool:
+    """sudo present and usable here without a prompt (`sudo -n true`): with no terminal, or an
+    account sudo refuses, a later install would fail; `sudo -v` in a terminal makes it ready."""
+    return bool(shutil.which("sudo")) and capture(["sudo", "-n", "true"]) is not None
+
+
 def wsl_state() -> str:
     if sys.platform.startswith("linux"):
         try:
@@ -207,7 +213,7 @@ def read_machine(root: Path) -> dict:
         "disk_free_gb": disk[0] / GIB if disk else None, "admin": is_admin(),
         "tools": {n: tool_version(n) for n in MINIMUM}, "winget": winget_state(),
         "package_manager": next((k for k, v in LINUX_INSTALL.items() if shutil.which(v[0])),
-                                "absent"), "sudo": bool(shutil.which("sudo")),
+                                "absent"), "sudo": sudo_ready(),
         "proxy": proxy_state(os.environ),
         "remote": remote_name(capture(["git", "-C", str(root), "remote", "get-url", "origin"])),
     }  # fmt: skip
@@ -733,13 +739,16 @@ def linux_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int
     manager = str(machine.get("package_manager") or "absent")
     sudo = [] if machine.get("admin") else ["sudo"]
     hand = f"or install {', '.join(todo)} by hand, then run /agk:setup again"
+    as_root = [n for n in todo if n != "claude"]  # Claude Code installs as the user
+    packaged = [n for n in as_root if n != "gitleaks"]  # the package manager's own steps
     if todo and not yes:
         stop = "stop: nothing installed: installs run only after the person's yes (setting: --yes)"
-    elif todo and manager not in LINUX_INSTALL:
+    elif packaged and manager not in LINUX_INSTALL:
         stop = f"stop: no package manager this command knows (apt or dnf) is here: {hand}"
-    elif todo and sudo and not machine.get("sudo"):
-        stop = f"stop: this account is not root and has no sudo: ask for sudo, {hand}"
-    elif todo and run_cmd([*sudo, *LINUX_REFRESH[manager]], root):
+    elif as_root and sudo and not machine.get("sudo"):
+        stop = ("stop: this account is not root and cannot use sudo here without a prompt: run "
+                f"`sudo -v` in a terminal first, or ask for sudo, {hand}")  # fmt: skip
+    elif packaged and run_cmd([*sudo, *LINUX_REFRESH[manager]], root):
         stop = ("stop: the test download was refused: allow the distribution's package mirrors "
                 f"(a company proxy or certificate is the usual cause), {hand}")  # fmt: skip
     steps: dict[str, list[str]] = {
@@ -747,7 +756,7 @@ def linux_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int
         "gitleaks": [str(MINIMUM["gitleaks"])],
     }  # fmt: skip
     for name in [] if stop else todo:
-        package = LINUX_PACKAGES[manager].get(name)
+        package = LINUX_PACKAGES.get(manager, {}).get(name)
         args = ([*sudo, *LINUX_INSTALL[manager], package] if package
                 else ["bash", str(SETUP_SH), name, *steps[name]])  # fmt: skip
         code = run_cmd(args, root)
@@ -756,7 +765,9 @@ def linux_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int
             rows[name] = row(name, "done", f"{found} (at least {MINIMUM[name]})")
             continue
         why = f"exit {code}" if code else f"reads {found or 'nothing'} after, below {MINIMUM[name]}"
-        rows[name] = row(name, "failed", f"{why}: left as it was (the installer's own transaction)")
+        kept = "; NodeSource's package source it added stays" if name == "node" else ""
+        note = f"{why}: left as it was (the installer's own transaction){kept}"
+        rows[name] = row(name, "failed", note)
         stop = f"stop: {name} did not install and nothing after it ran; then run /agk:setup again"
         break
     return last_table(names, rows, stop)

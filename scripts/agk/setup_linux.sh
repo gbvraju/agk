@@ -87,8 +87,8 @@ python_ok() {
 if ! python_ok || ! command -v curl >/dev/null; then
   pm="$(manager)"
   [ -n "$pm" ] || stop "no package manager this command knows (apt or dnf) is here: $HAND"
-  if [ "$(id -u)" != 0 ] && ! command -v sudo >/dev/null; then
-    stop "this account is not root and has no sudo: ask for sudo, $HAND"
+  if [ "$(id -u)" != 0 ] && ! { command -v sudo >/dev/null && sudo -n true 2>/dev/null; }; then
+    stop "this account is not root and cannot use sudo here without a prompt: run \`sudo -v\` in a terminal first, or ask for sudo, $HAND"
   fi
   [ "$YES" = 1 ] || stop "nothing installed: installs run only after the person's yes (setting: --yes)"
   if [ "$pm" = apt ]; then as_root apt-get update -q >/dev/null; else as_root dnf makecache -q >/dev/null; fi \
