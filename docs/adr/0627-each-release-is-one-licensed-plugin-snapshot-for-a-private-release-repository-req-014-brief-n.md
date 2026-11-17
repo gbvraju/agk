@@ -65,5 +65,5 @@ licensed plugin copies.
 - At v0.64.8 the build refuses: `guard.scan_text` finds an address, number or key shape in 54 files of the snapshot,
   each an invented or code value (test fixtures, `zip(args[::2], ...)` read as an address). Whether the scan stays as
   the brief states, scans fewer shapes, or the files change first is Q-1476-1.
-- Where the release check runs `verify` (the release pull request comes before the tag, and no workflow changes here)
-  is Q-1476-2.
+- `verify` stays the owner's documented step after the publish, not a row of the release pull request's check
+  (Q-1476-2, answered by the conductor 2026-11-17); a later brief may add it to a check once a workflow change is ruled.
