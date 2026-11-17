@@ -1,8 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
-SPDX-License-Identifier: LicenseRef-AGK-Proprietary
-AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
--->
 # ADR-0600: A dependency is never held back by its dependant
 
 - Status: Proposed
@@ -11,7 +6,7 @@ AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository na
 - Related: brief #1432, brief #1431, brief #1424, PR #1429, SPEC-0050 rules 2 and 4, ADR-0325
 - Requirements: REQ-050
 
-Protected classes: `scripts/agk/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -39,7 +34,8 @@ main stayed red until the owner answered by hand.
    brief, the brief itself or a malformed number is ignored for this rule, as `depends_on` ignores it.
 
 This narrows SPEC-0050 rule 2's overlap by one exception and keeps rule 4: the three commands still share one
-judgement.
+judgement. The new test file is added to the `[testing]` map of `agk.toml` for `scripts/agk/session.py` and
+`scripts/agk/session_plan.py`, as the test-map check requires.
 
 ## Consequences
 
