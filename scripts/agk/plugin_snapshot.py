@@ -138,8 +138,12 @@ def hashes_problem(root: Path, tag: str) -> str | None:
         env = {k: v for k, v in os.environ.items() if not k.startswith(("GITHUB_", "AGK_"))}
         env["AGK_BASE"] = git(tree, "rev-parse", "HEAD").strip()
         proc = subprocess.run(  # nosec B603 - the tag's own check, a fixed argument list
-            [sys.executable, HASH_CHECK, "--check"], cwd=tree, env=env, capture_output=True,
-            text=True, check=False,
+            [sys.executable, HASH_CHECK, "--check"],
+            cwd=tree,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
         )
     return None if proc.returncode == 0 else "kit/hashes.json fails its check (path class kit/)"
 
@@ -149,8 +153,10 @@ def top(rel: str) -> str:
 
 
 def digest(files: dict[str, tuple[int, bytes]]) -> str:
-    lines = [f"{rel}\0{mode:o}\0{hashlib.sha256(data).hexdigest()}\n" for rel, (mode, data) in
-             sorted(files.items())]
+    lines = [
+        f"{rel}\0{mode:o}\0{hashlib.sha256(data).hexdigest()}\n"
+        for rel, (mode, data) in sorted(files.items())
+    ]
     return hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
 
 

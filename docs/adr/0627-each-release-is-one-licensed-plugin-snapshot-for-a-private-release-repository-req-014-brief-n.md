@@ -57,3 +57,13 @@ licensed plugin copies.
   already installed, which the licence and the written grant cover.
 - The manifest gains one key, `snapshot`, which the manifest shape test names.
 - A release gains two owner steps (publish's commands and verify) and no session gains any power to push, tag or grant.
+
+## Residual
+
+- The owner creates the private release repository, names it in `[release] repository`, pushes the first snapshot and
+  grants access; nothing of that is done by this change.
+- At v0.64.8 the build refuses: `guard.scan_text` finds an address, number or key shape in 54 files of the snapshot,
+  each an invented or code value (test fixtures, `zip(args[::2], ...)` read as an address). Whether the scan stays as
+  the brief states, scans fewer shapes, or the files change first is Q-1476-1.
+- Where the release check runs `verify` (the release pull request comes before the tag, and no workflow changes here)
+  is Q-1476-2.

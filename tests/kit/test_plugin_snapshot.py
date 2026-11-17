@@ -28,8 +28,7 @@ REUSE = (
 SNAPSHOT = [".claude-plugin/", "LICENSE", "LICENSE-AGK", "REUSE.toml", "kit/", "scripts/agk/"]
 # The tag's own hash check, a stub: it fails when the tag holds `kit/hashes.fail`.
 HASH_STUB = HEAD + (
-    "import pathlib, sys\n"
-    "sys.exit(1 if pathlib.Path('kit/hashes.fail').exists() else 0)\n"
+    "import pathlib, sys\nsys.exit(1 if pathlib.Path('kit/hashes.fail').exists() else 0)\n"
 )
 ROWS = {"table": 1, "releases": {v: {"verbatim": {}} for v in ("0.9.0", "0.9.1", "1.0.0")}}
 
@@ -69,7 +68,9 @@ def gh_stub(tmp_path: Path) -> dict[str, str]:
 
 
 def files_of(folder: Path) -> dict[str, bytes]:
-    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+    return {
+        p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()
+    }
 
 
 def test_req014_the_snapshot_holds_only_the_allow_list(repo, tmp_path_factory):
@@ -98,10 +99,15 @@ def test_req014_every_release_row_of_the_hash_table_is_kept(repo, tmp_path_facto
     """REQ-014: the table built from the full history is copied, every row kept (uninstall)."""
     kit(repo)
     out = tmp_path_factory.mktemp("snap") / "s"
-    assert repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(out)).returncode == 0
+    assert (
+        repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(out)).returncode
+        == 0
+    )
     table = json.loads((out / "kit/hashes.json").read_text(encoding="utf-8"))
     assert sorted(table["releases"]) == ["0.9.0", "0.9.1", "1.0.0"]
-    assert (out / "kit/hashes.json").read_text(encoding="utf-8") == json.dumps(ROWS, indent=2) + "\n"
+    assert (out / "kit/hashes.json").read_text(encoding="utf-8") == json.dumps(
+        ROWS, indent=2
+    ) + "\n"
 
 
 def test_req014_two_builds_of_one_tag_give_one_digest(repo, tmp_path_factory):
@@ -127,7 +133,9 @@ def test_req014_a_file_without_the_licence_header_fails_and_writes_nothing(repo,
     out = tmp_path_factory.mktemp("snap") / "s"
     proc = repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(out))
     assert proc.returncode == 1
-    assert "scripts/agk/bare.py has no owner and licence header (path class scripts/)" in proc.stdout
+    assert (
+        "scripts/agk/bare.py has no owner and licence header (path class scripts/)" in proc.stdout
+    )
     assert "nothing written" in proc.stdout
     assert not out.exists()
 
@@ -158,7 +166,10 @@ def test_req014_verify_matches_a_clone_and_names_the_first_difference(repo, tmp_
     """REQ-014 answer 6: a clone equal to the build passes; one that differs names the path."""
     kit(repo)
     clone = tmp_path_factory.mktemp("clone") / "release"
-    assert repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(clone)).returncode == 0
+    assert (
+        repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(clone)).returncode
+        == 0
+    )
     (clone / ".git").mkdir()
     (clone / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
     ok = repo.run("plugin_snapshot.py", "verify", "--tag", "v1.0.0", "--clone", str(clone))
@@ -215,7 +226,14 @@ def test_req014_the_kit_manifest_snapshot_covers_every_installed_path():
         assert any(rel.startswith(a) if a.endswith("/") else rel == a for a in listed), rel
     for folder in (".claude-plugin/", "skills/", "scripts/agk/", "kit/", "config/", "tests/kit/"):
         assert folder in listed
-    for never in ("docs/adr/", "docs/specs/", "docs/runs/", "docs/briefs/", "changelog.d/", "tests/kit_dev/"):
+    for never in (
+        "docs/adr/",
+        "docs/specs/",
+        "docs/runs/",
+        "docs/briefs/",
+        "changelog.d/",
+        "tests/kit_dev/",
+    ):
         assert not any(a.startswith(never) and not a.endswith("TEMPLATE.md") for a in listed)
     assert ".github/workflows/agk-tag.yml" not in listed  # the kit's own workflow
     cfg = tomllib.loads((ROOT / "agk.toml").read_text(encoding="utf-8"))
