@@ -29,7 +29,9 @@ BRIEFS = "rule 3: the open briefs cannot be read"
 
 
 def git(where: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=where, check=True, capture_output=True)  # nosec B603 B607
+    subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=where, check=True, capture_output=True
+    )
 
 
 @pytest.fixture
