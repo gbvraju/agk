@@ -312,7 +312,7 @@ in this order. Each change to `agk.toml` is a protected change with an ADR in th
        mid = "<its mid model name>"
 
    Run the conductor itself on the strongest model, because it reviews. `python3 scripts/agk/doctor.py` warns
-   `model names: ...` when the autopilot is on and the table is unset.
+   `model names: ...` when the table is unset while the older start settings (see the note in step 4) are on; it does not read `[autopilot]`.
 
 ## Running the workforce in WSL 2
 
