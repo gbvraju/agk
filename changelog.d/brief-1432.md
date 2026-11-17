@@ -1,0 +1,1 @@
+- A brief that running work depends on is no longer held back by that work: `plan`, `next` and `claim` start it ahead of a holder whose brief or pull request carries `Depends-on:` for it, print why, and report a true cycle once as `CYCLE:` with the owner's line (brief #1432)
