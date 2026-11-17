@@ -647,13 +647,22 @@ def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
         if pr_brief(pr) == brief["number"]:
             continue
         if found := pull_conflict(s, pr, mine, shared):
-            file = found.split(" ", 2)[2]
+            file = conflict_file(found)
             if (
                 lifted := dependency_wait(s, brief["number"], pr_brief(pr), pr["number"], file)
             ) is True:
                 continue
             return lifted or {"brief": brief["number"], "pull_request": pr["number"], "why": found}
     return None
+
+
+CONFLICT_FILE = re.compile(r"it (?:changes|adds) (.+)")  # the two wordings of `file_conflict`
+
+
+def conflict_file(why: str) -> str:
+    """The path that a `file_conflict` reason names, read by its pattern (brief #1432); the whole
+    reason when its words ever change, so the `starts ahead of` line never raises."""
+    return found[1] if (found := CONFLICT_FILE.fullmatch(why)) else why
 
 
 def pull_conflict(s: Survey, pr: dict, mine: list[str], shared: list) -> str | None:

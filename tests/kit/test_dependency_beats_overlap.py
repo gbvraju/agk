@@ -239,3 +239,21 @@ def test_next_and_claim_print_the_reason_and_a_cycle_is_refused(tmp_path, repo, 
             "`Depends-on: #5` in #6, `Depends-on: #6` in #5",
         }
     ]
+
+
+@pytest.mark.parametrize("status", ["modified", "added"])
+def test_the_file_is_read_from_both_wordings(tmp_path, status):
+    """Fix list on d9e1694: `it changes <file>` and `it adds <file>` both name the file."""
+    s = scene([issue(24, "**"), issue(31, TEST)], pulls={29: (pull(29, 24, 31), TEST)})
+    s.files[29][0]["status"] = status
+    assert judge(tmp_path, s, 31) is None
+    assert ahead_lines(s, 31) == [
+        f"#31 starts ahead of #29, which depends on it (overlap on {TEST} ignored)"
+    ]
+
+
+def test_an_unknown_wording_is_kept_whole():
+    """Fix list on d9e1694: a reason in other words is kept, never raised on."""
+    assert session_plan.conflict_file("it changes a.py") == "a.py"
+    assert session_plan.conflict_file("it adds b/c.py") == "b/c.py"
+    assert session_plan.conflict_file("some other reason") == "some other reason"
