@@ -12,7 +12,7 @@ import re
 from datetime import timedelta
 
 import pytest
-from test_session import ISSUES, REPO, Stub, claim_posts, comment, issue, iso, listing, posts
+from test_session import ISSUES, REPO, Stub, claim_posts, comment, iso, issue, listing, posts
 from test_session import session as run
 from test_session_claim_overlap import alarm, red_fix_scene
 from test_session_flow import DAY, PULLS, brief, flow, pr
@@ -116,7 +116,8 @@ def test_a_stale_take_older_than_claim_hours_is_taken_over(proj, stub):
     """REQ-050: brief #1435 answer 7; a take older than `claim_hours` with no pull request."""
     two_briefs(stub, [*OLD])
     stub.serve(
-        f"{ISSUES}/6/comments", [comment(2, "x", "taken: s-gone 2026-01-01", iso(-timedelta(days=3)))]
+        f"{ISSUES}/6/comments",
+        [comment(2, "x", "taken: s-gone 2026-01-01", iso(-timedelta(days=3)))],
     )
     out = claim(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "claimed #6", out.stdout + out.stderr
@@ -171,7 +172,7 @@ def test_a_read_that_fails_still_stops_the_claim(proj, stub):
     assert READS.fullmatch((out.stderr.strip().splitlines() or [""])[-1]), out.stdout
 
 
-# --- answer 4: the reads line ----------------------------------------------------------------------
+# --- answer 4: the reads line ---------------------------------------------------------------
 
 
 def test_a_claim_ends_with_the_reads_line_of_the_plan(proj, stub):
