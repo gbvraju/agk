@@ -63,7 +63,8 @@ def test_the_skill_names_the_free_names_step_before_the_check():
 
 def test_the_skill_command_lines_are_the_ones_the_reference_lists():
     """REQ-050"""
-    found = re.findall(r'^python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/plan_names\.py" (.+)$', skill(), re.M)
+    pattern = r'^python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/plan_names\.py" (.+)$'
+    found = re.findall(pattern, skill(), re.M)
     lines = [f"plan_names.py {rest}" for rest in found]
     assert any(line.startswith("plan_names.py batch FILE") for line in lines)
     listed = [
@@ -87,7 +88,7 @@ def test_the_guide_names_the_skill_step():
 
 def test_an_intake_brief_still_writes_no_adds_line():
     """REQ-050: when `brief_text` gains an `Adds:` line it must take its names from
-    `plan_names.batch` for the whole intake (ADR-0603 decision 2); this test then changes with it."""
+    `plan_names.batch` for the whole intake (ADR-0603 decision 2); this test changes with it."""
     data = {"requirements": [{"key": "R1", "title": "Pay", "criteria": ["a card pays"]}]}
     b = {
         "key": "b1",
