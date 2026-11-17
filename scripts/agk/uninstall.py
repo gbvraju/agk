@@ -24,6 +24,8 @@ tests/kit/) is never deleted or edited; `--remove-docs` lists it for the person 
 A legacy install (kits 0.1.0 and 0.2.0, stamped `[tool.agk]` in pyproject.toml) loses that table.
 The GitHub side (answer 4) is printed, never done, in order (brief #1124, ADR-0481). `--pause`
 (answer 1) adds the top-level line `paused = true` to agk.toml.
+The report then lists, read only, the lines of the project's files kept that still name a removed
+kit path: settings to tidy by hand, then records to keep as written (brief #1443, ADR-0604).
 """
 
 from __future__ import annotations
@@ -110,6 +112,8 @@ class Plan:
     items: list[Item] = field(default_factory=list)
     entries: list[str] = field(default_factory=list)
     own: list[str] = field(default_factory=list)
+    left: list[tuple[str, int, str]] = field(default_factory=list)
+    skipped: int = 0
 
     def of(self, action: str) -> list[Item]:
         return [i for i in self.items if i.action == action]
@@ -451,7 +455,98 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
     makefile_item(target, plan)
     plan.items.sort(key=lambda i: i.rel)
     plan.own = own_files(target)
+    plan.left, plan.skipped = leftovers(target, plan)
     return plan
+
+
+# --- the lines left in the project's own files (brief #1443, ADR-0604) --------------------------
+
+LEFT_MAX, LEFT_BYTES = 40, 1024 * 1024
+RECORDS = ("docs/adr/", "docs/runs/", "CHANGELOG.md")
+SETTINGS = ("config/", ".github/", "agk.toml")
+
+
+TOKEN = re.compile(r"[\w./-]+")
+
+
+def emptied(target: Path, gone: set[str]) -> tuple[set[str], set[str]]:
+    """The directories the removal empties, and those of them that held a removed file."""
+    held = {rel.rsplit("/", 1)[0] for rel in gone if "/" in rel}
+    tops = {"/".join(d.split("/")[:n]) for d in held for n in range(1, d.count("/") + 2)}
+    empty = set()
+    for top in tops:
+        rest = (
+            p.relative_to(target).as_posix()
+            for p in (target / top).rglob("*")
+            if (p.is_file() or p.is_symlink()) and "__pycache__" not in p.parts
+        )
+        if all(r in gone for r in rest):
+            empty.add(top)
+    return empty, held & empty
+
+
+def names_removed(word: str, gone: set[str], empty: set[str], held: set[str]) -> bool:
+    """WORD names a removed path as whole segments: a removed file, an emptied directory, or a
+    path inside a directory that held a removed file (`scripts/agkx/` is none of them)."""
+    while word.startswith("./"):
+        word = word[2:]
+    word = word.rstrip(".,:;").rstrip("/")
+    if word in gone or word in empty:
+        return True
+    parts = word.split("/")
+    return any("/".join(parts[:n]) in held for n in range(1, len(parts)))
+
+
+def leftovers(target: Path, plan: Plan) -> tuple[list[tuple[str, int, str]], int]:
+    """The lines of files kept that name a path the plan removes; read only (answer 3). The
+    removed files and `.git/` are never read; binary, large or unreadable files are only counted."""
+    gone = {i.rel for i in plan.of("delete")}
+    if not gone:
+        return [], 0
+    empty, held = emptied(target, gone)
+    edited = {i.rel: i.content or b"" for i in plan.of("edit")}
+    found: list[tuple[str, int, str]] = []
+    skipped = 0
+    for root, dirs, files in os.walk(target):
+        dirs[:] = sorted(d for d in dirs if d not in (".git", "__pycache__"))
+        for name in sorted(files):
+            path = Path(root) / name
+            rel = path.relative_to(target).as_posix()
+            if rel in gone or path.is_symlink():
+                continue
+            if rel not in edited and not path.is_file():
+                continue  # a named pipe or a device file is never opened
+            try:
+                data = edited[rel] if rel in edited else path.read_bytes()
+                if len(data) > LEFT_BYTES or b"\0" in data[:8192]:
+                    raise UnicodeError
+                text = data.decode("utf-8")
+            except (UnicodeError, OSError):  # binary, large, or unreadable: counted only
+                skipped += 1
+                continue
+            for n, line in enumerate(text.splitlines(), 1):
+                if any(names_removed(w, gone, empty, held) for w in TOKEN.findall(line)):
+                    found.append((rel, n, line.strip()))
+    found.sort(key=lambda f: (f[0].startswith(RECORDS), not f[0].startswith(SETTINGS), f[0], f[1]))
+    return found, skipped
+
+
+def left_lines(plan: Plan) -> list[str]:
+    """`Left in your files:` (answers 1, 2 and 5): settings and other files first, then records."""
+    lines = [f"Left in your files: {len(plan.left)} lines name removed kit paths"]
+    if not plan.left:
+        lines = ["Left in your files: none"]
+    group = None
+    for rel, n, text in plan.left[:LEFT_MAX]:
+        now = "records, keep as written:" if rel.startswith(RECORDS) else "tidy by hand:"
+        if now != group:
+            lines.append(group := now)
+        lines.append(f"{rel}:{n}: {text}")
+    if len(plan.left) > LEFT_MAX:
+        lines.append(f"and {len(plan.left) - LEFT_MAX} more")
+    if plan.skipped:
+        lines.append(f"skipped: {plan.skipped} binary, large or unreadable files")
+    return lines
 
 
 def protected_classes(paths: list[str], entries: list[str]) -> list[str]:
@@ -518,6 +613,7 @@ def github_lines(kit_root: Path) -> list[str]:
 
 def report(plan: Plan, kit_root: Path, write: bool, docs: bool) -> list[str]:
     lines = [f"{i.action} {i.rel}{i.detail}" for i in plan.items]
+    lines += left_lines(plan)
     if docs:
         lines += [f"remove by hand: {rel}" for rel in plan.own]
         lines.append(
