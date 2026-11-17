@@ -2267,7 +2267,7 @@ def secret_scan_line(in_wsl: bool | None = None, in_cloud: bool | None = None) -
         fix = (
             f"run /agk:wsl again; it installs gitleaks {GITLEAKS_PIN}"
             if in_wsl
-            else f"the owner adds gitleaks {GITLEAKS_PIN} with this one line in the cloud "
+            else GITLEAKS_INSTALL + "; in a cloud session the owner adds this one line to the "
             "environment's setup script (verify: the environment setup script of the runtime), "
             "never a session: " + GITLEAKS_SETUP
             if in_cloud
