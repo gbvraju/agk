@@ -4,6 +4,16 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.64.7 (2026-11-16)
+
+- #1405 `conductor.py watchdog --pass` is the supervisor: one pass under the lock `autopilot`, no model and no plan or sweep read when nothing changed, one steward job with `AGK_STEWARD_START=conductor` for a waiting question, the stop rules said once in `agk status`; the conductor's role drops `/loop` and `steward_owner.py ready --start` leaves the conductor's start to the supervisor (brief #1387)
+- #1407 Builders run as short jobs where the supervisor runs: an ended builder waits for its event with no session open, the supervisor starts one `fix` job on a verdict, a correction, an answer, a conflict or a red check, and holds a job that failed twice (`held (failed twice)`) until its head or a listed author's comment changes; `session.py summary` refuses a working summary missing one of its fixed sections, naming it (brief #1389)
+- #1408 One `[autopilot] mode` setting (`off`, `assist`, `on`), `autopilot.py on|off` (`agk autopilot`) installs or removes the one scheduler entry and checks the machine, and a `daily_budget` that limits nothing unless set, relaxed with `budget off [--today]`; `agk doctor` warns `autopilot-settings` while the old settings are set (brief #1390)
+- #1412 Every hook refusal is kept on the machine, redacted, in the clone's git folder: `agk logs --refusals` prints it and `agk status` counts today's refusals by reason; an internal guard error names its kind and place, and a here-document with Windows line ends is no longer refused (brief #1410)
+- #1413 One machine runs at most one conductor: the watchdog, the supervisor pass, `launch.py role conductor` and both adapters start none beside a live one under any name, an idle one is replaced at most once an hour, extras are named once by the sweep, and no conductor or builder starts below `[flow] min_free_memory_mb` (brief #1409)
+- #1414 A defect of the kit itself is drafted in one form (`steward_owner.py defect`: version, machine, reason codes, redacted refusals, checked by the outbound guard) and filed labelled `agk-kit-defect`, which the plan never offers; the steward lists open ones, and a steward whose `gh api` reads are refused names the setting and the restoring step once (brief #1411)
+- #1417 Every mode runs the same autopilot jobs: in CI mode the launcher task is the supervisor (`autopilot.py jobs --claim` picks and claims each review, build and fix job, one short cloud session each), the conductor and builder task texts end after one job, and `agk next` (`autopilot.py next`) runs one job in the foreground and posts nothing, reading the files forge in personal mode (brief #1391)
+
 ## 0.64.6 (2026-11-16)
 
 - #1317 `stalls.py` and `conductor.py sweep` answer each unchanged brief's comments from the comment store that one repository-wide read of what changed keeps current, instead of asking GitHub for every open brief's pages, and the read-budget tests hold `stalls.py` to at most 15 counted calls on a 650-brief fixture; `github_reads = "full"` in the `[flow]` table of agk.toml returns to the old reads (brief #1314 build (b), ADR-0555)
