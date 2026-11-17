@@ -254,7 +254,7 @@ def test_the_cloud_texts_run_the_same_pass_and_short_jobs():
     session per `job:` line; the conductor and builder cloud forms end after one job; no text
     waits in the foreground or changes a workflow, the ruleset or a required check."""
     launcher = (RUNTIME / "launcher.txt").read_text(encoding="utf-8")
-    assert "python3 scripts/agk/autopilot.py jobs --claim" in launcher
+    assert "python3 <kit>/autopilot.py jobs --claim" in launcher
     for kind in ("job: review", "job: build", "job: fix"):
         assert kind in launcher, kind
     builder = (RUNTIME / "builder.txt").read_text(encoding="utf-8")

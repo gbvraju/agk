@@ -1,0 +1,1 @@
+- One resolver, `kit_root.py`, names where the kit's scripts are: the project's own `scripts/agk/`, or the plugin's in a clean project (`[kit] layout = "plugin"`); the session prompts name each script once as `python3 <kit>/<script>`, and prepush and evidence run the governance gate from the plugin when a clean project has no `agk.mk` (brief #1453)
