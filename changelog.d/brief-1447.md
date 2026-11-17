@@ -1,0 +1,1 @@
+- In local mode `prepush.py --record` also stores the record as a git note of the head, `evidence.py push --branch <b>` sends it with the branch and `evidence.py check --head <sha>` fetches it when the shared folder has none, so a conductor on another machine clears local-mode work without a file copied by hand (brief #1447)

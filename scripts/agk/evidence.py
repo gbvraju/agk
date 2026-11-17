@@ -6,6 +6,7 @@
 
     python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]
     python3 scripts/agk/evidence.py check --head SHA [--sample N] [--json]
+    python3 scripts/agk/evidence.py push --branch BRANCH [--remote REMOTE]
 
 RECORD is the file that `prepush.py --record` wrote (schema 1, brief #374, ADR-0208). A record of
 another schema, or one whose fields are not those of schema 1, is refused (exit 2, naming the field,
@@ -51,9 +52,20 @@ missing it exits 3 with `evidence: no record for this head in the shared evidenc
 --record)`, naming the option, never a path. Without RECORD and without `--head` it is a usage
 error.
 
+Brief #1447 (ADR-0605): when that folder has no record of the head, the check runs one `git fetch
+origin +refs/notes/agk-evidence:refs/notes/agk-evidence-origin` and reads the note of the head from
+that ref, which `prepush.py --record` writes in local mode and `push` sends; it prints `evidence:
+record read from the note of the head (ref: refs/notes/agk-evidence)` and checks the note exactly as
+a record file, its printed digest being that of the note's bytes. No note, no remote or a refused
+fetch is the exit 3 above. `push --branch B [--remote R]` (default `origin`) merges the remote's
+notes into the clone's with the `ours` strategy and runs `git push R B refs/notes/agk-evidence`;
+when only the notes ref is refused it prints one line naming that setting and the fallback (the
+record copied by hand) and exits 0, else git's exit code. A fetch or push never prompts.
+
 Exit 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O
 error (a record that cannot be read, a worktree that cannot be made, make not installed). It posts
-nothing, needs no network and changes nothing in the repository but the worktree it removes.
+nothing, needs no network but the notes fetch above and changes nothing in the repository but the
+worktree it removes (and the fetched notes ref).
 """
 
 from __future__ import annotations
@@ -76,6 +88,8 @@ from common import CheckError, long_temp_dir, proof_areas, proof_timeout, temp_e
 from impact import impact
 from prepush import (
     LOCK,
+    NOTE_NOT_PUSHED,
+    NOTES_REF,
     digest,
     regression_sets,
     safe_command,
@@ -88,8 +102,14 @@ from prepush import (
 from proof import WINDOWS, kill_tree, popen_options
 
 HERE = Path(__file__).resolve().parent
-USAGE = "usage: evidence.py check RECORD [--head SHA] [--sample N] [--json] | check --head SHA ..."
+USAGE = (
+    "usage: evidence.py check RECORD [--head SHA] [--sample N] [--json] | check --head SHA ..."
+    " | push --branch BRANCH [--remote REMOTE]"
+)
 NO_SHARED = "evidence: no record for this head in the shared evidence folder (option: --record)"
+FETCHED_REF = NOTES_REF + "-origin"  # the remote's notes, kept apart from the clone's own
+NOTE_READ = f"evidence: record read from the note of the head (ref: {NOTES_REF})"
+PUSH_USAGE = "usage: evidence.py push --branch BRANCH [--remote REMOTE]"
 SCHEMA = 1
 DEFAULT_SAMPLE = 1
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -207,6 +227,11 @@ def load(path: Path) -> tuple[dict, str]:
         data = path.read_bytes()
     except OSError:
         raise Unreadable("evidence: the record cannot be read (option: RECORD)") from None
+    return parse(data)
+
+
+def parse(data: bytes) -> tuple[dict, str]:
+    """A record's bytes, from a file or a note, as `load` reads them (brief #1447 answer 3)."""
     try:
         record = json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
@@ -229,13 +254,72 @@ def load(path: Path) -> tuple[dict, str]:
     return record, hashlib.sha256(data).hexdigest()
 
 
-def load_shared(root: Path, head: str) -> tuple[dict, str]:
+def load_shared(root: Path, head: str, as_json: bool = False) -> tuple[dict, str]:
     """The record of HEAD in the clone's shared evidence folder (brief #1269), as `load` reads it;
     Unreadable naming the option when it is missing."""
     path = shared_record(root, head)
-    if path is None or not path.is_file():
+    if path is not None and path.is_file():
+        return load(path)
+    data = fetched_note(root, head)  # brief #1447: the folder first, then the pushed note
+    if data is None:
         raise Unreadable(NO_SHARED)
-    return load(path)
+    print(NOTE_READ, file=sys.stderr if as_json else sys.stdout)
+    return parse(data)
+
+
+def quiet_git(root: Path, *args: str) -> subprocess.CompletedProcess:
+    """git with bytes out and no prompt for credentials: a fetch or push never waits on a person."""
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, env=env
+    )
+
+
+def fetch_notes(root: Path, remote: str) -> bool:
+    """The remote's notes ref into `FETCHED_REF`; False when it has none or cannot be read."""
+    return quiet_git(root, "fetch", "-q", remote, f"+{NOTES_REF}:{FETCHED_REF}").returncode == 0
+
+
+def fetched_note(root: Path, head: str) -> bytes | None:
+    """The bytes of HEAD's note on `origin`, after one fetch of its notes ref, or None."""
+    if not fetch_notes(root, "origin"):
+        return None
+    listed = quiet_git(root, "notes", "--ref", FETCHED_REF, "list", head)
+    blob = listed.stdout.decode("ascii", errors="replace").split()
+    if listed.returncode != 0 or not blob:
+        return None
+    shown = quiet_git(root, "cat-file", "blob", blob[0])
+    return shown.stdout if shown.returncode == 0 else None
+
+
+def push(root: Path, args: list[str]) -> int:
+    """`push --branch B [--remote R]` (brief #1447 answers 1 and 6): merge the remote's notes into
+    the clone's (`ours`: notes are keyed by head), then push the branch and the notes ref. When the
+    branch landed and only the notes ref was refused, print `NOTE_NOT_PUSHED` and exit 0."""
+    options = {"--branch": None, "--remote": "origin"}
+    if len(args) % 2 or any(a not in options for a in args[::2]):
+        raise Usage(PUSH_USAGE)
+    options.update(dict(zip(args[::2], args[1::2], strict=True)))
+    branch, remote = options["--branch"], options["--remote"]
+    if not branch:
+        raise Usage(PUSH_USAGE)
+    has_notes = quiet_git(root, "rev-parse", "-q", "--verify", NOTES_REF).returncode == 0
+    if fetch_notes(root, remote):
+        if has_notes:
+            quiet_git(root, "notes", "--ref", NOTES_REF, "merge", "-q", "-s", "ours", FETCHED_REF)
+        else:
+            has_notes = quiet_git(root, "update-ref", NOTES_REF, FETCHED_REF).returncode == 0
+    refs = [branch, NOTES_REF] if has_notes else [branch]
+    pushed = quiet_git(root, "push", "-q", remote, *refs)
+    sys.stdout.write((pushed.stdout + pushed.stderr).decode("utf-8", errors="replace"))
+    if pushed.returncode == 0:
+        return 0
+    there = quiet_git(root, "ls-remote", remote, f"refs/heads/{branch}").stdout.split()
+    here = quiet_git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").stdout.strip()
+    if has_notes and there and there[0] == here:
+        print(NOTE_NOT_PUSHED)
+        return 0
+    return pushed.returncode
 
 
 def resolve(root: Path, ref: str | None, given: bool) -> str:
@@ -636,17 +720,20 @@ def report(head: str, sha: str, found: list[str], ran: dict | None, as_json: boo
 
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
+    args = list(sys.argv[1:] if argv is None else argv)
     try:
-        options = parse_args(list(sys.argv[1:] if argv is None else argv))
+        options = parse_args(args) if args[:1] != ["push"] else {}
         top = git(Path.cwd(), "rev-parse", "--show-toplevel")
         if top.returncode != 0:
             raise Usage("evidence: not inside a git work tree (path class: root)")
         root = Path(top.stdout.strip())
+        if not options:
+            return push(root, args[1:])
         head = resolve(root, options["head"], options["head"] is not None)
         if options["record"] is not None:
             record, sha = load(Path(options["record"]))
         else:
-            record, sha = load_shared(root, head)
+            record, sha = load_shared(root, head, options["json"])
         found = problems(record, head)
         ran = None if found else in_worktree(root, record, head, options["sample"])
         return report(head, sha, found, ran, options["json"])
