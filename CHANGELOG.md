@@ -7,6 +7,8 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 ## 0.64.8 (2026-11-17)
 
 - #1423 Every kit file carries the owner and licence header (`LicenseRef-AGK-Proprietary`), `LICENSE` is the AGK Proprietary Licence installed in every project as `LICENSE-AGK`, `check_licence_notice.py` runs in governance and `doctor.py` warns about a missing, foreign or ended `[licence]` grant, or one it cannot compare with the origin remote (brief #1419)
+- #1437 A brief that running work depends on is no longer held back by that work: `plan`, `next` and `claim` start it ahead of a holder whose brief or pull request carries `Depends-on:` for it, print why, and report a true cycle once as `CYCLE:` with the owner's line (brief #1432)
+- #1438 `session.py claim` reads as the plan does: the open and recent closed pull requests, never every one ever, each listing once in the run, unchanged comments from the cache; it ends with the plan's `reads:` line, and a primary rate-limit wait names its end in local time (brief #1435)
 
 ## 0.64.7 (2026-11-16)
 
