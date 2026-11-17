@@ -32,6 +32,7 @@ COMMANDS = [
     "ruleset",
     "scope-lock",
     "scope-review",
+    "setup",
     "spec",
     "stack",
     "start",
@@ -55,6 +56,7 @@ USER_ONLY = [
     "ruleset",
     "scope-lock",
     "scope-review",
+    "setup",
     "spec",
     "stack",
     "start",
@@ -157,6 +159,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "scope-review": {"plan_intake"},
         "workflow-apply": {"workflow_apply"},
         "wsl": {"wsl"},
+        "setup": {"setup"},
     }
     for name, scripts in expected.items():
         assert {script for script, _ in calls(name)} == scripts, name

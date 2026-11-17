@@ -1104,7 +1104,10 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/wsl.py"
-tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py"]
+tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py", "tests/kit/test_setup_read.py"]
+[[testing.map]]
+code = "scripts/agk/setup.py"
+tests = ["tests/kit/test_setup_read.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_distribution.py"]
 [[testing.map]]
 code = "scripts/agk/wsl_setup.ps1"
 tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py", "tests/kit/test_autopilot_wsl.py"]
@@ -1115,7 +1118,7 @@ tests = [
   "tests/kit/test_playbook_split.py", "tests/kit/test_session_kind.py", "tests/kit/test_test_map_whole.py",
   "tests/kit_dev/test_confirm_skill.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_docs.py",
   "tests/kit_dev/test_engines_discovery.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_wsl_setup.py",
-  "tests/kit/test_wsl_docker.py",
+  "tests/kit/test_wsl_docker.py", "tests/kit/test_setup_read.py",
 ]
 [[testing.map]]
 code = ".claude/agents/*.md"
