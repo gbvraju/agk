@@ -1,6 +1,6 @@
 # ADR-0597: Add REQ-078: The kit runs from the plugin and a product repository keeps only its project
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: SPEC-0071, SPEC-0041, SPEC-0059, SPEC-0061, SPEC-0064, SPEC-0028, ADR-0203, brief #348, brief #1419, brief #1420, plan #661
