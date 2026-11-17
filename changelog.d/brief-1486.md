@@ -1,0 +1,1 @@
+- The default branch is green again: the kit's check that no law file depends on the plugin leaves out the one resolver whose job is to find the plugin, and a guard keeps it the only one (brief #1486)
