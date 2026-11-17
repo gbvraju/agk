@@ -23,8 +23,9 @@ licensed plugin copies.
 
 1. Each release builds one plugin snapshot with the kit-only script `scripts/agk/plugin_snapshot.py build --tag vX.Y.Z
    --out DIR`. It reads the tag only, by `git archive`, and writes exactly the paths of the allow list `snapshot` of
-   `kit/manifest.json` (the tag's, else the working tree's for a tag older than the list): an entry ending in `/` is a
-   folder, any other one file. The list is the plugin (`.claude-plugin/`, `skills/`, `scripts/agk/`, `.claude/agents/`,
+   the tag's own `kit/manifest.json`: an entry ending in `/` is a folder, any other one file. A `--tag` that is not a tag
+   (`refs/tags/<tag>`) and a tag without the list are refused, naming the setting, so a tag always gives the same
+   snapshot; the first release after this change is the first that builds. The list is the plugin (`.claude-plugin/`, `skills/`, `scripts/agk/`, `.claude/agents/`,
    `.claude/hooks/`), `kit/`, `config/`, `constitution/`, `tests/kit/`, `LICENSE`, `LICENSE-AGK`, `REUSE.toml` and
    every path the manifest installs into a project, so the installer and upgrade work from the snapshot. It holds no
    `docs/adr/`, `docs/specs/`, `docs/runs/`, `docs/briefs/`, `changelog.d/`, `tests/kit_dev/`, workflow of the kit's
@@ -33,7 +34,9 @@ licensed plugin copies.
    `check_licence_notice.py` defines kit files, read from the snapshot's own manifest and `REUSE.toml`) has no owner and
    licence header, when `guard.scan_text` finds a secret or personal-data shape in any file of the snapshot, and when the
    tag's own `kit_hashes.py --check` fails in a throwaway clone of the tag. `kit/hashes.json` is copied as the tag holds
-   it, with every release row, since uninstall and upgrade read them.
+   it, with every release row, since uninstall and upgrade read them. The header is checked on the kit files only: the
+   other files of the snapshot (`tests/kit/`, the kit-only lists of `config/`, `constitution/vision.md`) carry no header
+   in the kit either, and `LICENSE` and `LICENSE-AGK`, which the snapshot holds, cover them.
 3. The snapshot carries its own `.claude-plugin/marketplace.json`: one plugin `agk`, `"source": "."`, `version` the tag
    without its `v`. A customer adds `<owner>/<release repository>#vX.Y.Z` and installs `agk@agk`, pinned to the tag.
    The repository is the setting `[release] repository` in `agk.toml`; `publish` refuses while it is unset, naming the

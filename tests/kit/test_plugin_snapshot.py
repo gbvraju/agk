@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import stat
 import tomllib
 from pathlib import Path
@@ -198,7 +199,7 @@ def test_req014_publish_prints_and_never_runs(repo, tmp_path):
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     lines = proc.stdout.splitlines()
-    assert 'git -C /x/snap.release commit -m "Release v1.0.0"' in lines
+    assert "git -C /x/snap.release commit -m 'Release v1.0.0'" in lines
     assert "git -C /x/snap.release tag v1.0.0" in lines
     assert (
         "gh api --method PUT repos/example-owner/agk-release/collaborators/<login> "
@@ -207,6 +208,43 @@ def test_req014_publish_prints_and_never_runs(repo, tmp_path):
     assert not (tmp_path / "gh-called").exists()
     assert repo.git("tag") == tags
     assert not Path("/x/snap.release").exists()
+
+
+def test_req014_publish_quotes_a_folder_with_a_space(repo, tmp_path):
+    """REQ-014 answer 4: each value is quoted, so a pasted line never splits a folder."""
+    kit(repo)
+    proc = repo.run("plugin_snapshot.py", "publish", "--tag", "v1.0.0", "--dir", "/x/my snap")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = proc.stdout.splitlines()
+    assert "cp -a '/x/my snap/.' '/x/my snap.release'/" in lines
+    assert "git -C '/x/my snap.release' tag v1.0.0" in lines
+    assert all(shlex.split(line) for line in lines if "<login>" not in line)
+
+
+def test_req014_a_value_that_is_not_a_tag_is_refused(repo, tmp_path_factory):
+    """REQ-014 answer 1: a branch moves, so `--tag main` is refused naming the setting."""
+    kit(repo)
+    out = tmp_path_factory.mktemp("snap") / "s"
+    for command, flag in (("build", "--out"), ("verify", "--clone"), ("publish", "--dir")):
+        proc = repo.run("plugin_snapshot.py", command, "--tag", "main", flag, str(out))
+        assert proc.returncode == 1, command
+        assert "is not a tag of this repository (setting: --tag)" in proc.stdout
+    assert not out.exists()
+
+
+def test_req014_a_tag_without_the_list_is_refused(repo, tmp_path_factory):
+    """REQ-014 answer 1: the list is read from the tag only; a later list never changes a tag."""
+    kit(repo)
+    manifest = {"kit_version": "1.0.0", "verbatim": ["scripts/agk/tool.py"]}
+    repo.commit({"kit/manifest.json": json.dumps(manifest) + "\n"})
+    repo.git("tag", "v0.9.9")
+    manifest["snapshot"] = SNAPSHOT  # the working tree has the list again; the tag does not
+    repo.commit({"kit/manifest.json": json.dumps(manifest) + "\n"})
+    out = tmp_path_factory.mktemp("snap") / "s"
+    proc = repo.run("plugin_snapshot.py", "build", "--tag", "v0.9.9", "--out", str(out))
+    assert proc.returncode == 1
+    assert "the tag's kit/manifest.json has no list (setting: snapshot)" in proc.stdout
+    assert not out.exists()
 
 
 def test_req014_the_kit_manifest_snapshot_covers_every_installed_path():

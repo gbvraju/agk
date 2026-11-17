@@ -1085,7 +1085,7 @@ valid_until = 2027-06-30
 
 Customers install AGK from a second, private release repository, never from the development repository, so they never
 see its history, briefs or decisions (ADR-0627). Each release is one plugin snapshot of the tag, holding only the paths of
-`snapshot` in `kit/manifest.json`, every file licensed; the release repository holds one commit `Release vX.Y.Z` per
+`snapshot` in the tag's `kit/manifest.json` and `LICENSE` and `LICENSE-AGK`; the release repository holds one commit `Release vX.Y.Z` per
 release on top of the last. Its name is `[release] repository` in `agk.toml`.
 
     python3 scripts/agk/plugin_snapshot.py build --tag vX.Y.Z --out DIR
@@ -1094,7 +1094,9 @@ release on top of the last. Its name is `[release] repository` in `agk.toml`.
 
 `build` writes the snapshot from `git archive` of the tag with its own `marketplace.json` (one plugin, `"source": "."`,
 the tag's version) and prints its digest; two builds of one tag give one digest. It fails, naming the path class and
-writing nothing, on a file without the licence header, on a secret or personal-data shape (`guard.scan_text`) and when
+writing nothing, on a kit file (as `check_licence_notice.py` defines them) without the licence header (the other files,
+such as `tests/kit/`, carry none and are covered by the two licence files), on a `--tag` that is not a tag or a tag
+without the `snapshot` list, on a secret or personal-data shape (`guard.scan_text`) and when
 `kit_hashes.py --check` fails at the tag; `kit/hashes.json` keeps every release row. `publish` only prints the owner's
 commands: commit, tag and push to the release repository, and grant or revoke one person's read access. After the push
 the owner clones the release repository at the tag and runs `verify`, which fails naming the first path that differs.

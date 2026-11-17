@@ -10,14 +10,15 @@ ADR-0627, REQ-014). Kit-only: never installed.
     python3 scripts/agk/plugin_snapshot.py verify --tag vX.Y.Z --clone DIR
 
 `build` reads the tag only (`git archive`) and writes exactly the paths of the allow list
-`snapshot` of `kit/manifest.json` (the tag's, else the working tree's): a list entry ending in `/`
-is a folder, any other is one file. It writes `.claude-plugin/marketplace.json` with one plugin,
-`"source": "."`, at the tag's version, and prints `digest <sha256>` of the tree (each path, mode
-and file digest, sorted), so two builds of one tag give one digest. It fails, naming the path
-class and writing nothing, on a file without the owner and licence header
-(`check_licence_notice`), on a secret or personal-data shape (`guard.scan_text`) and when the
-tag's `scripts/agk/kit_hashes.py --check` fails in a throwaway clone of the tag; the tag's
-`kit/hashes.json` is copied as it is, every row kept.
+`snapshot` of the tag's own `kit/manifest.json` (a tag without one, or a `--tag` that is not a tag,
+is refused): a list entry ending in `/` is a folder, any other is one file. It writes
+`.claude-plugin/marketplace.json` with one plugin, `"source": "."`, at the tag's version, and
+prints `digest <sha256>` of the tree (each path, mode and file digest, sorted), so two builds of
+one tag give one digest. It fails, naming the path class and writing nothing, on a kit file
+(`check_licence_notice`'s kit files) without the owner and licence header, on a secret or
+personal-data shape (`guard.scan_text`) and when the tag's `scripts/agk/kit_hashes.py --check`
+fails in a throwaway clone of the tag; the tag's `kit/hashes.json` is copied as it is, every row
+kept.
 
 `publish` prints, and never runs, the owner's commands that commit DIR to the release repository
 (`[release] repository` in `agk.toml`) as one commit `Release vX.Y.Z` on top of the last, tag it,
@@ -32,6 +33,7 @@ import hashlib
 import io
 import json
 import os
+import shlex
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -57,23 +59,31 @@ SETTING = "[release] repository"
 HASH_CHECK = "scripts/agk/kit_hashes.py"
 
 
-def allow_list(root: Path, tag: str) -> list[str]:
-    """The `snapshot` list of the tag's manifest, else of the working tree's (an older tag)."""
-    for text in (git(root, "show", f"{tag}:{MANIFEST}"), (root / MANIFEST).read_text("utf-8")):
-        listed = json.loads(text).get("snapshot")
-        if isinstance(listed, list) and listed:
-            return [str(p) for p in listed]
-    raise CheckError(f"{MANIFEST} has no snapshot list (path class kit/)")
+def tag_ref(root: Path, tag: str) -> str:
+    """`refs/tags/<tag>`; a value that is not a tag (a branch moves) is refused."""
+    ref = f"refs/tags/{tag}"
+    if not git(root, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}", check=False).strip():
+        raise CheckError("the --tag value is not a tag of this repository (setting: --tag)")
+    return ref
+
+
+def allow_list(root: Path, ref: str) -> list[str]:
+    """The `snapshot` list of the tag's own manifest; a tag without one is refused."""
+    text = git(root, "show", f"{ref}:{MANIFEST}", check=False)
+    listed = json.loads(text).get("snapshot") if text.strip() else None
+    if not isinstance(listed, list) or not listed:
+        raise CheckError(f"the tag's {MANIFEST} has no list (setting: snapshot)")
+    return [str(p) for p in listed]
 
 
 def allowed(rel: str, listed: list[str]) -> bool:
     return any(rel.startswith(p) if p.endswith("/") else rel == p for p in listed)
 
 
-def tag_files(root: Path, tag: str, listed: list[str]) -> dict[str, tuple[int, bytes]]:
+def tag_files(root: Path, ref: str, listed: list[str]) -> dict[str, tuple[int, bytes]]:
     """path -> (mode, bytes) of the tag's files in the allow list; nothing else is read."""
     proc = subprocess.run(  # nosec B603 B607 - git with a fixed argument list
-        ["git", "-C", str(root), "archive", "--format=tar", f"{tag}^{{commit}}"],
+        ["git", "-C", str(root), "archive", "--format=tar", f"{ref}^{{commit}}"],
         capture_output=True,
         check=False,
     )
@@ -127,12 +137,12 @@ def secret_problems(files: dict[str, tuple[int, bytes]]) -> list[str]:
     return found
 
 
-def hashes_problem(root: Path, tag: str) -> str | None:
+def hashes_problem(root: Path, commit: str) -> str | None:
     """The tag's own `kit_hashes.py --check`, run in a throwaway clone at the tag."""
     with tempfile.TemporaryDirectory(prefix="agk-snapshot-") as place:
         tree = Path(place) / "tree"
         git(root, "clone", "-q", "--shared", "--no-checkout", "--", ".", str(tree))
-        git(tree, "checkout", "-q", "--detach", f"{tag}^{{commit}}")
+        git(tree, "checkout", "-q", "--detach", commit)
         if not (tree / HASH_CHECK).is_file():
             return f"{HASH_CHECK} is missing at the tag (path class scripts/agk/)"
         env = {k: v for k, v in os.environ.items() if not k.startswith(("GITHUB_", "AGK_"))}
@@ -162,13 +172,14 @@ def digest(files: dict[str, tuple[int, bytes]]) -> str:
 
 def snapshot(root: Path, tag: str) -> tuple[dict[str, tuple[int, bytes]], list[str]]:
     """The snapshot's files and its problems (empty: it may be written)."""
-    files = tag_files(root, tag, allow_list(root, tag))
+    ref = tag_ref(root, tag)
+    files = tag_files(root, ref, allow_list(root, ref))
     files[MARKETPLACE] = (0o644, marketplace(tag))
     with tempfile.TemporaryDirectory(prefix="agk-snapshot-") as place:
         write(files, Path(place))
         problems = licence_problems(files, Path(place))
     problems += secret_problems(files)
-    found = hashes_problem(root, tag)
+    found = hashes_problem(root, git(root, "rev-parse", f"{ref}^{{commit}}").strip())
     return files, problems + ([found] if found else [])
 
 
@@ -210,18 +221,20 @@ def release_repository(root: Path) -> str:
 
 def publish(root: Path, tag: str, folder: Path) -> int:
     """Prints the owner's commands; runs none of them."""
+    tag_ref(root, tag)
     repo = release_repository(root)
-    work = f"{folder}.release"
+    q = shlex.quote
+    work, src, name, tagq = q(f"{folder}.release"), q(f"{folder}/."), q(repo), q(tag)
     for line in (
-        f"gh repo clone {repo} {work}",
+        f"gh repo clone {name} {work}",
         f"git -C {work} rm -rq --ignore-unmatch .",
-        f"cp -a {folder}/. {work}/",
+        f"cp -a {src} {work}/",
         f"git -C {work} add -A",
-        f'git -C {work} commit -m "Release {tag}"',
-        f"git -C {work} tag {tag}",
-        f"git -C {work} push origin HEAD {tag}",
-        f"gh api --method PUT repos/{repo}/collaborators/<login> -f permission=pull",
-        f"gh api --method DELETE repos/{repo}/collaborators/<login>",
+        f"git -C {work} commit -m {q(f'Release {tag}')}",
+        f"git -C {work} tag {tagq}",
+        f"git -C {work} push origin HEAD {tagq}",
+        f"gh api --method PUT {q(f'repos/{repo}/collaborators')}/<login> -f permission=pull",
+        f"gh api --method DELETE {q(f'repos/{repo}/collaborators')}/<login>",
     ):
         print(line)
     return 0
