@@ -1121,7 +1121,7 @@ tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/k
   "tests/kit/test_setup_settings.py"]
 [[testing.map]]
 code = "scripts/agk/setup.py"
-tests = ["tests/kit/test_setup_read.py", "tests/kit/test_setup_settings.py", "tests/kit/test_setup_windows.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_distribution.py"]
+tests = ["tests/kit/test_setup_read.py", "tests/kit/test_setup_settings.py", "tests/kit/test_setup_windows.py", "tests/kit/test_setup_ci.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_distribution.py"]
 [[testing.map]]
 code = "scripts/agk/setup_windows.ps1"
 tests = ["tests/kit/test_setup_windows.py", "tests/kit_dev/test_kit_manifest.py"]
