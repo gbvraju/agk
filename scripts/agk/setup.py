@@ -53,10 +53,21 @@ import wsl  # noqa: E402
 
 PLUGIN = Path(__file__).resolve().parents[2]
 GIB = 1024**3
-MINIMUM = {  # rule 7's one table; None until build (c) records it (verify)
-    "python": "3.11", "git": None, "gh": None, "claude": None, "node": "20",
-    "podman": None, "docker": None, "pwsh": None,
+MINIMUM = {  # rule 7's one table, read by every platform script and the tests (ADR-0620, verify)
+    "python": "3.11", "git": "2.43", "gh": "2.45", "claude": "2.0", "node": "20",
+    "podman": "4.9", "docker": None, "pwsh": "7.6", "wt": "1.23", "gitleaks": "8.30.1",
 }  # fmt: skip
+WINGET = {  # build (c): each tool's winget package, in the order installed (verify)
+    "python": "Python.Python.3.13", "git": "Git.Git", "gh": "GitHub.cli",
+    "node": "OpenJS.NodeJS.LTS", "pwsh": "Microsoft.PowerShell", "wt": "Microsoft.WindowsTerminal",
+    "gitleaks": "Gitleaks.Gitleaks", "podman": "RedHat.Podman",
+}  # fmt: skip
+CLAUDE_INSTALL = [  # Claude Code by its own installer (verify: the Windows installer command)
+    "powershell", "-NoProfile", "-Command", "irm https://claude.ai/install.ps1 | iex",
+]  # fmt: skip
+MACHINE_PATH = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+WINGET_FLAGS = ["--exact", "--source", "winget", "--accept-package-agreements",
+                "--accept-source-agreements", "--disable-interactivity", "--silent"]  # fmt: skip
 CHECKED = ("python", "git", "gh", "claude", "node")
 PROOF = ("doctor", "kit_test", "container", "dry_plan")
 RESULTS = ("done", "skipped", "waiting", "failed")
@@ -67,6 +78,7 @@ BROWSER_FILES = ("playwright.config.ts", "playwright.config.js", "playwright.con
 SMALL_IMAGE = "hello-world"  # (verify) the image of rule 12's container start
 WINGET_POLICY = r"SOFTWARE\Policies\Microsoft\Windows\AppInstaller"
 VERSION = re.compile(r"(\d+(?:\.\d+)+)")
+NUMBER = re.compile(r"\d+(?:\.\d+)*")  # a version as the table and a read hold it: "20", "2.43.0"
 ANSWERS = {  # rule 4's five questions and their choices, in the order asked
     "where": ("hosted", "local", "personal"), "team": ("solo", "team"),
     "autopilot": ("off", "assist", "on"), "engine": ("podman", "docker"),
@@ -117,6 +129,8 @@ def proxy_state(env) -> str:
 def tool_version(name: str) -> str | None:
     if name == "python":
         return platform.python_version()
+    if name == "wt":  # `wt` opens a window: presence only (verify)
+        return "present" if shutil.which("wt") else None
     if not shutil.which(name):
         return None
     found = VERSION.search(capture([name, "--version"]) or "")
@@ -250,7 +264,7 @@ def size(available, total, cores, per_gb, reserve, max_builders, live=0) -> dict
 
 
 def older(found: str, least: str | None) -> bool:
-    if least is None or not VERSION.fullmatch(found):
+    if least is None or not NUMBER.fullmatch(found):
         return False
     return tuple(map(int, found.split("."))) < tuple(map(int, least.split(".")))
 
@@ -538,6 +552,109 @@ def write_settings(root: Path, find, today: str) -> list[str]:
     ]  # fmt: skip
 
 
+def tool_of(args: list[str]) -> str | None:
+    """The tool an install call is for: its winget package, or Claude Code's own installer."""
+    if args == CLAUDE_INSTALL:
+        return "claude"
+    ids = {v: k for k, v in WINGET.items()}
+    return ids.get(args[3]) if args[:3] == ["winget", "install", "--id"] else None
+
+
+def needs(found: str | None, least: str | None) -> bool:
+    """To install: missing, older than the floor, or with a floor and no version read."""
+    return not found or older(found, least) or bool(least and not NUMBER.fullmatch(found))
+
+
+def install_order(tools: dict, engines: bool) -> list[str]:
+    """Rule 7: the tools to install on native Windows, missing or older than the minimum."""
+    names = [n for n in WINGET if n != "podman"]
+    if engines and not tools.get("docker"):
+        names.append("podman")
+    return [n for n in [*names, "claude"] if needs(tools.get(n), MINIMUM[n])]
+
+
+def fresh_path() -> str:
+    """The machine's and the user's PATH as an install leaves them; this process keeps its own."""
+    try:  # winreg exists on Windows only
+        reg = vars(importlib.import_module("winreg"))
+        keys = [(reg["HKEY_LOCAL_MACHINE"], MACHINE_PATH),
+                (reg["HKEY_CURRENT_USER"], "Environment")]  # fmt: skip
+        parts = [reg["QueryValueEx"](reg["OpenKey"](h, k), "Path")[0] for h, k in keys]
+    except (ImportError, OSError, KeyError):
+        return os.environ.get("PATH", "")
+    return os.pathsep.join(os.path.expandvars(p) for p in parts)
+
+
+def installed_version(name: str) -> str | None:
+    """Read after an install, or when a version is unread: winget's own list for its packages,
+    else the tool on the PATH read again (an install does not refresh this process's PATH)."""
+    if name not in WINGET:
+        where = shutil.which(name, path=fresh_path())
+        out = capture([where, "--version"]) if where else None
+        version = VERSION.search(out or "")
+        return version[1] if version else ("present" if where else None)
+    out = capture(["winget", "list", "--id", WINGET[name], *WINGET_FLAGS[:3]]) or ""
+    line = next((ln for ln in out.splitlines() if WINGET[name] in ln), "")
+    found = VERSION.search(line.split(WINGET[name], 1)[-1])
+    return found[1] if found else None
+
+
+def stop_line(machine: dict, todo: list[str], root: Path) -> str | None:
+    """Rule 7: what IT must allow, read before the first install; None when nothing stops it."""
+    hand = f"or install {', '.join(todo)} by hand, then run /agk:setup again"
+    if not [t for t in todo if t in WINGET]:
+        return None
+    winget = machine.get("winget")
+    if winget != "allowed":
+        why = "winget is missing" if winget == "absent" else "winget is refused by policy"
+        return f"stop: {why}: allow winget (the App Installer), {hand}"
+    if not machine.get("admin"):
+        return f"stop: this account is not an administrator: ask IT for that right, {hand}"
+    first = WINGET[next(t for t in todo if t in WINGET)]
+    if run_cmd(["winget", "show", "--id", first, *WINGET_FLAGS[:3]], root):
+        return f"stop: the test download was refused: allow downloads from winget's source, {hand}"
+    return None
+
+
+def windows_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int, dict]:
+    """Rule 7's native Windows path: checked before, a stop before the first install, one winget
+    install per missing tool, checked after; a failure stops the run with the tool as it was."""
+    tools, engines = machine.get("tools", {}), bool(repo["engines"])
+    names = [n for n in WINGET if n != "podman"] + (["podman"] if engines else []) + ["claude"]
+    tools = {n: v if not v or NUMBER.fullmatch(v) or n not in WINGET else installed_version(n) or v
+             for n, v in tools.items()}  # a tool read only as present: winget's list names it
+    todo = install_order(tools, engines)
+    have = {n: tools.get(n) or (f"docker {tools.get('docker')}" if n == "podman" else "present")
+            for n in names}  # fmt: skip
+    rows = {n: row(n, "skipped", f"{have[n]} (at least {MINIMUM[n] or 'any version'})")
+            for n in names if n not in todo}  # fmt: skip
+    rows |= {n: row(n, "waiting", f"to install, at least {MINIMUM[n] or 'any version'}")
+             for n in todo}  # fmt: skip
+    stop = None
+    if machine.get("os") != "Windows":
+        stop = "stop: this form is the native Windows path only (setting: the platform)"
+    elif todo and not yes:
+        stop = "stop: nothing installed: installs run only after the person's yes (setting: --yes)"
+    elif todo:
+        stop = stop_line(machine, todo, root)
+    for name in [] if stop else todo:
+        least = MINIMUM[name]
+        args = CLAUDE_INSTALL if name == "claude" else ["winget", "install", "--id", WINGET[name],
+                                                         *WINGET_FLAGS]  # fmt: skip
+        code = run_cmd(args, root)
+        found = None if code else installed_version(name)
+        if found and not older(found, least):
+            rows[name] = row(name, "done", f"{found} (at least {least or 'any version'})")
+            continue
+        why = f"exit {code}" if code else f"reads {found or 'nothing'} after, below {least}"
+        rows[name] = row(name, "failed", f"{why}: left as it was (winget's own transaction)")
+        stop = f"stop: {name} did not install and nothing after it ran; then run /agk:setup again"
+        break
+    steps = [rows[n] for n in names]
+    pending = [r["step"] for r in steps if r["result"] in ("waiting", "failed")]
+    return (1 if stop else 0), {"steps": steps, "pending": pending, "stop": stop}
+
+
 def load(path: str | None):
     return json.loads(Path(path).read_text(encoding="utf-8")) if path else None
 
@@ -545,7 +662,7 @@ def load(path: str | None):
 def main(argv: list[str] | None = None) -> int:
     common.utf8_output()
     parser = argparse.ArgumentParser(prog="setup.py", add_help=True)
-    parser.add_argument("form", choices=("plan", "status", "ask", "settings"))
+    parser.add_argument("form", choices=("plan", "status", "ask", "settings", "install"))
     for flag in ("--machine", "--github", "--root", "--date"):
         parser.add_argument(flag)
     parser.add_argument("--builders", type=int)
@@ -582,6 +699,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         builders |= {"figure": args.builders, "limit": "person", "reason": "lowered by the person"}
     _, config = config_of(root)
+    if args.form == "install":
+        code, table = windows_install(root, machine, repo, args.yes)
+        said = "\n".join(table_lines(table["steps"]) + ([table["stop"]] if table["stop"] else []))
+        print(json.dumps(table, indent=2) if args.json else said)
+        return code
     if args.form == "ask":
         found = questions(machine, repo, config, builders)
         text = [f"  {n}. {q['text']}" for n, q in enumerate(found, 1)]
