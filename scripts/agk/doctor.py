@@ -63,7 +63,8 @@ agk.toml (`config.TABLE_KEYS`) but that stands at the top level or in another ta
 table it is in and the table it belongs to, never its value.
 Brief #1390 (ADR-0587): `autopilot-settings` names each of `[flow] auto_start`, `launch_adapter`
 and `[capacity]` still set, which `[autopilot]` replaces: read for one release while that table is
-absent, then from it only; never a value.
+absent, then from it only; never a value. Brief #1480 (ADR-0628): its fix names `[autopilot] adapter`,
+and `model-names` also warns for `[autopilot] mode = "on"` with an `adapter`.
 """
 
 from __future__ import annotations
@@ -494,8 +495,9 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "warn",
         "no setting that [autopilot] replaces is set",
         "agk.toml: ",
-        "set [autopilot] mode and remove the named settings and the watchdog's scheduler task "
-        "(python3 scripts/agk/autopilot.py on installs its own); they are read for one release "
+        "set [autopilot] mode (and [autopilot] adapter for launch_adapter) and remove the named "
+        "settings and the watchdog's scheduler task (python3 scripts/agk/autopilot.py on "
+        "installs its own); they are read for one release "
         "while [autopilot] is absent (a change to agk.toml needs an ADR in the same pull request)",
     ),
     "local-mode-switch": (
@@ -1433,22 +1435,28 @@ def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
 
 
 def model_names_result(root: Path) -> Result:
-    """Brief #1252 (ADR-0530): with `auto_start` on and `launch_adapter` set, a missing
+    """Brief #1252 (ADR-0530): with `auto_start` on and `launch_adapter` set, or (brief #1480,
+    ADR-0628) `[autopilot] mode = "on"` with its `adapter`, a missing
     `[models.names]` table starts every builder on the person's default model whatever its kind.
     A refused setting is named, never its value."""
     import launch
 
     try:
         auto, adapter = launch.launch_settings(root)
-        names = models.model_names(root) if auto and adapter is not None else None
+        pilot = models.autopilot_settings(root)  # brief #1480 (ADR-0628): [autopilot] adapter
+        on = pilot["mode"] == "on" and pilot["adapter"] is not None
+        started = (auto and adapter is not None) or on
+        names = models.model_names(root) if started else None
     except CheckError as err:
         return Result("fail", message=f"{err}")
     if names is None:
         return Result("ok", message="auto_start off or no launch_adapter")
     if not names:
+        first = "the autopilot is on with [autopilot] adapter" if on else (
+            "auto_start is on with a launch_adapter")
         return Result(
             "fail",
-            message="auto_start is on with a launch_adapter and [models.names] is unset, so "
+            message=f"{first} and [models.names] is unset, so "
             "every adapter-started builder runs on the default model whatever its kind",
         )
     return Result("ok", message="set")

@@ -64,8 +64,9 @@ another value is refused naming `setting: steward.<key>`, never the value.
 #1390, ADR-0587): `mode` (`off`, `assist` or `on`; `assist` when the table names none, None with no
 table, when today's `auto_start`, `launch_adapter` and `[capacity]` decide for one release),
 `interval_minutes` (5), `daily_budget` (absent or `"off"`: no limit; else whole tokens above 0) and
-`show_jobs`, with `legacy`, the names of those old settings still set. An unknown key or another
-value is refused naming `setting: autopilot.<key>`, never the value.
+`show_jobs`, with `legacy`, the names of those old settings still set, and `adapter` (brief #1480,
+ADR-0628: the launch adapter in `[flow] launch_adapter`'s form, None when unset or ""). An unknown
+key or another value is refused naming `setting: autopilot.<key>`, never the value.
 """
 
 from __future__ import annotations
@@ -694,7 +695,7 @@ def steward_settings(root: Path) -> dict:
 
 AUTOPILOT_MODES = ("off", "assist", "on")
 AUTOPILOT_INTERVAL = 5  # minutes between quiet passes (rule 2)
-AUTOPILOT_KEYS = ("mode", "interval_minutes", "daily_budget", "show_jobs")
+AUTOPILOT_KEYS = ("mode", "interval_minutes", "daily_budget", "show_jobs", "adapter")
 
 
 class AutopilotSettingError(CheckError):
@@ -716,14 +717,15 @@ def legacy_autopilot(source: dict) -> list[str]:
 def autopilot_settings(root: Path) -> dict:
     """`mode` (None with no table: today's settings decide for one release; `assist` when the
     table names none), `interval_minutes` (5), `daily_budget` (None when absent or `"off"`, else
-    a whole number of tokens above 0), `show_jobs` (false) and `legacy`, the old settings set."""
+    a whole number of tokens above 0), `show_jobs` (false), `legacy`, the old settings set, and
+    `adapter` (None when unset; brief #1480)."""
     try:
         source = config_source(root)
     except (OSError, ValueError):
         raise _refuse_autopilot() from None
     legacy = legacy_autopilot(source)
     found: dict = {"mode": None, "interval_minutes": AUTOPILOT_INTERVAL, "daily_budget": None}
-    found |= {"show_jobs": False, "legacy": legacy}
+    found |= {"show_jobs": False, "legacy": legacy, "adapter": None}
     if "autopilot" not in source:
         return found
     table = source["autopilot"]
@@ -750,6 +752,13 @@ def autopilot_settings(root: Path) -> dict:
         raise _refuse_autopilot("daily_budget")
     if not isinstance(found["show_jobs"], bool):
         raise _refuse_autopilot("show_jobs")
+    adapter = table.get("adapter")  # brief #1480 (ADR-0628): `[flow] launch_adapter`'s form
+    if adapter is not None and adapter != "" and (not isinstance(adapter, str) or not adapter.strip()):
+        raise AutopilotSettingError(
+            "adapter of the autopilot table must be a command, a non-empty string "
+            "(setting: autopilot.adapter)"
+        )
+    found["adapter"] = adapter or None
     return found
 
 
