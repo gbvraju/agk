@@ -1,6 +1,6 @@
 # ADR-0600: A dependency is never held back by its dependant
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1432, brief #1431, brief #1424, PR #1429, SPEC-0050 rules 2 and 4, ADR-0325
