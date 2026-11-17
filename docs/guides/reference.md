@@ -965,7 +965,8 @@ so a rule next to a change is visible. See `docs/specs/0003-reviewer-agent.md`, 
 
 Where the kit's scripts are for the project of the working directory (SPEC-0071 rules 2 and 3, ADR-0611). It prints the
 folder: the project's own `scripts/agk/`, or the plugin's in a clean project (`[kit] layout = "plugin"` in `agk.toml`).
-`--form` prints the command prefix the session prompts call `<kit>`: `scripts/agk` or `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"`.
+`--form` prints the command prefix the session prompts call `<kit>`: `scripts/agk` or `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"`,
+or the plugin's folder itself, quoted, when that variable is unset.
 `governance` runs the gate: `make -f agk.mk agk-governance` as today, or in a clean project the same checks from the
 plugin against the project, stopping at the first that fails; `prepush.py` and `evidence.py` find the gate through it.
 With no plugin root, or another `layout`, it refuses naming the setting (exit 1). The clean layout is not offered yet.

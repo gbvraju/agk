@@ -26,10 +26,13 @@ Nothing below depends on it: the variable is only the first place the resolver l
    of the working directory (its git top level). With no `[kit]` table, or `layout = "installed"`, that is the project's
    own `scripts/agk/`, as today. With `layout = "plugin"` it is the plugin's `scripts/agk/`. The plugin root is
    `CLAUDE_PLUGIN_ROOT`, else the plugin the resolver itself sits in, and must hold `.claude-plugin/plugin.json` and the
-   resolver, and differ from the project. With no such root, or another `layout`, it refuses with one line naming the
-   setting (`CLAUDE_PLUGIN_ROOT` or `layout`), never a value, exit 1. It never writes into the plugin's folder.
+   resolver, and differ from the project. With no such root, or another `layout` in a readable `[kit]` table, it
+   refuses with one line naming the setting (`CLAUDE_PLUGIN_ROOT` or `layout`), never a value, exit 1. An `agk.toml`
+   that cannot be read, or whose `kit` is not a table, keeps the installed layout. It never writes into the plugin's
+   folder.
 2. `kit_root.py --form` prints the command prefix: `scripts/agk`, or `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"` in a clean
-   project. The session prompts (`kit/templates/runtime/builder.txt`, `conductor.txt`, `launcher.txt`) define `<kit>`
+   project when that variable names the plugin found. With the variable unset it prints that plugin's folder itself,
+   quoted, so no command expands to `/scripts/agk`. The session prompts (`kit/templates/runtime/builder.txt`, `conductor.txt`, `launcher.txt`) define `<kit>`
    once in one `KIT:` line and name each script as `python3 <kit>/<script>`. In an installed project `<kit>` is
    `scripts/agk`, so every command a session runs is the same text as before.
 3. SPEC-0071 rule 3: from this ADR on, a rule of `config/session-rules.md` that names `python3 scripts/agk/<script>`
@@ -40,8 +43,8 @@ Nothing below depends on it: the variable is only the first place the resolver l
    `agk.mk` is missing, so `prepush.py` gives today's refusal byte for byte). In a clean project it is
    `python3 <plugin>/scripts/agk/kit_root.py governance`, which runs `governance_map.CHECKS` (the commands of the
    `agk-governance` recipe, in its order, ADR-0531) from the plugin against the project's root, stopping at the first
-   failure with its exit code. `prepush.py` and `evidence.py` run the gate this way. `evidence.py` accepts either form in
-   a record.
+   failure with its exit code. `prepush.py` and `evidence.py` run the gate this way. `evidence.py` accepts a record's
+   gate only when it is the one `kit_root.gate` gives the tree it re-runs.
 5. Not in this build: the guards' allowed forms, the agents' and the skills' command forms, and the hooks. They are in
    `.claude/` and `skills/`, which the brief's `Touches:` does not name (Q-1453-2). Until they change, a clean project's
    guards allow only today's form. Because of that, and SPEC-0071's residual, the clean layout is not offered: no

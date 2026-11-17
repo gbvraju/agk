@@ -195,12 +195,46 @@ def test_ac7_an_installed_project_runs_make_as_today(tmp_path):
     assert kit_root.gate(root) == evidence.GOVERNANCE
 
 
-def test_ac1_evidence_accepts_both_recorded_gates():
-    """REQ-078 AC1: a record's governance argv is the make form or the plugin's resolver form."""
-    assert evidence.known_gate(["make", "-f", "agk.mk", "agk-governance"])
-    assert evidence.known_gate(["python3", "<outside>/kit_root.py", "governance"])
-    assert not evidence.known_gate(["python3", "<outside>/other.py", "governance"])
-    assert not evidence.known_gate(["python3", "<outside>/kit_root.py", "governance", "--x"])
+def test_ac1_evidence_accepts_only_the_gate_of_the_tree(tmp_path, monkeypatch):
+    """REQ-078 AC1: a record's governance argv must be the gate this tree gives (verdict item 2)."""
+    make = ["make", "-f", "agk.mk", "agk-governance"]
+    plugin_form = ["python3", "<outside>/kit_root.py", "governance"]
+    installed = project(tmp_path, INSTALLED)
+    assert evidence.known_gate(make, installed)
+    assert not evidence.known_gate(plugin_form, installed)
+    (tmp_path / "c").mkdir()
+    clean, plug = project(tmp_path / "c", CLEAN), plugin(tmp_path / "c")
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plug))
+    assert evidence.known_gate(plugin_form, clean)
+    assert evidence.known_gate(["python3", "scripts/agk/kit_root.py", "governance"], clean)
+    assert not evidence.known_gate(make, clean)
+    assert not evidence.known_gate(["python3", "<outside>/other.py", "governance"], clean)
+    assert not evidence.known_gate([*plugin_form, "--x"], clean)
+
+
+def test_ac1_without_the_variable_the_form_is_the_found_folder(tmp_path):
+    """REQ-078 AC1: with `CLAUDE_PLUGIN_ROOT` unset (Q-1453-1) `--form` prints the plugin's own
+    folder, quoted, never a form that expands to `/scripts/agk` (verdict item 1)."""
+    root, plug = project(tmp_path, CLEAN), plugin(tmp_path)
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+    out = subprocess.run(  # nosec B603 - the kit's resolver, no shell
+        [sys.executable, str(plug / "scripts" / "agk" / "kit_root.py"), "--form"],
+        cwd=root, env=env, capture_output=True, text=True,
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == f'"{plug.resolve() / "scripts" / "agk"}"'
+    assert "CLAUDE_PLUGIN_ROOT" not in out.stdout
+
+
+@pytest.mark.parametrize("toml", ["not [valid toml", 'kit = "flat-example"\n'])
+def test_ac7_an_unreadable_agk_toml_keeps_the_installed_gate(tmp_path, toml):
+    """REQ-078 AC7: an installed project whose `agk.toml` cannot be read, or whose `kit` is not a
+    table, runs `make` as before and is never refused (verdict item 3)."""
+    root = project(tmp_path, toml)
+    (root / "agk.mk").write_text("agk-governance:\n\t@true\n", encoding="utf-8")
+    assert kit_root.layout(root) == "installed"
+    assert kit_root.gate(root) == ["make", "-f", "agk.mk", "agk-governance"]
+    assert prepush.governance(root, "origin/main").ran.argv == kit_root.MAKE_GATE
 
 
 def test_ac1_the_prompts_name_each_script_through_the_one_form():

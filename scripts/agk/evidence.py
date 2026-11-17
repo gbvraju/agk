@@ -348,7 +348,7 @@ def rebuild(
             differ(name, "cwd")
             continue
         if name == "governance":
-            if not known_gate(recorded):
+            if not known_gate(recorded, tree):
                 differ(name, "argv")
             continue  # always re-run on its own
         if name == "pr-body":
@@ -478,10 +478,17 @@ def rerun(unit: Unit, env: dict, limit: int) -> tuple[int | None, str]:
     return spawn(unit.argv or [], unit.cwd, env)
 
 
-def known_gate(argv: list) -> bool:
-    """Today's make form, or a clean project's resolver from the plugin (ADR-0611)."""
-    plugin = len(argv) == 3 and argv[0] == "python3" and argv[2] == "governance"
-    return argv == GOVERNANCE or (plugin and str(argv[1]).endswith("/kit_root.py"))
+def known_gate(argv: list, tree: Path) -> bool:
+    """The recorded gate is the one `kit_root.gate` gives this tree: today's make form, or in a
+    clean project the resolver from the plugin (ADR-0611, verdict item 2)."""
+    try:
+        clean = (kit_root.gate(tree) or GOVERNANCE) != GOVERNANCE
+    except kit_root.Refused:
+        return False
+    if not clean:
+        return argv == GOVERNANCE
+    shape = len(argv) == 3 and argv[0] == "python3" and argv[2] == "governance"
+    return shape and str(argv[1]).endswith("/kit_root.py")
 
 
 def governance(tree: Path, env: dict) -> tuple[int, str]:

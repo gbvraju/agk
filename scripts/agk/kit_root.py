@@ -7,15 +7,18 @@
 `python3 kit_root.py` prints the folder of the kit's scripts for the project of the working
 directory (its git top level): the plugin's `scripts/agk/` in a clean project (`[kit] layout =
 "plugin"` in `agk.toml`), else the project's own `scripts/agk/`. `--form` prints the command prefix
-the prompts name as `<kit>`: `scripts/agk` or `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"`. `governance`
-runs the gate: `make -f agk.mk agk-governance` in an installed project, as today, and in a clean
-one the checks of `governance_map.CHECKS` from the plugin, in order, against the project's root,
-stopping at the first that fails with its exit code. It never writes into the plugin's folder.
+the prompts name as `<kit>`: `scripts/agk`, or `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"`, or with that
+variable unset the plugin's folder itself, quoted. `governance` runs the gate: `make -f agk.mk
+agk-governance` in an installed project, as today, and in a clean one the checks of
+`governance_map.CHECKS` from the plugin, in order, against the project's root, stopping at the
+first that fails with its exit code. It never writes into the plugin's folder.
 
 The plugin root is `CLAUDE_PLUGIN_ROOT` `(verify: the variable is set for every session, hook and
 headless job the plugin serves)`, else the plugin this file sits in; either must hold
 `.claude-plugin/plugin.json` and this script, and differ from the project. Otherwise, or with
-another `layout`, it refuses with one line naming the setting, exit 1. Standard library; no network.
+another `layout` in a readable `[kit]` table, it refuses with one line naming the setting
+(exit 1). An `agk.toml` that cannot be read keeps the installed layout, as before. Standard
+library; no network.
 """
 
 from __future__ import annotations
@@ -54,10 +57,12 @@ def layout(root: Path) -> str:
     path = root / "agk.toml"
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise Refused("kit_root: agk.toml cannot be read (setting: layout)") from exc
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return "installed"  # an unreadable agk.toml keeps today's path (verdict item 3)
     kit = data.get("kit", {})
-    value = kit.get("layout", "installed") if isinstance(kit, dict) else None
+    if not isinstance(kit, dict):
+        return "installed"
+    value = kit.get("layout", "installed")
     if value not in LAYOUTS:
         raise Refused("kit_root: [kit] layout is neither installed nor plugin (setting: layout)")
     return value
@@ -86,10 +91,15 @@ def kit_dir(root: Path, env: dict | None = None) -> Path:
 
 
 def form(root: Path, env: dict | None = None) -> str:
+    """The prompts' `<kit>`: the variable's form only when the variable names the plugin found,
+    else that plugin's folder, quoted (verdict item 1)."""
     if layout(root) == "installed":
         return INSTALLED_FORM
-    plugin_root(root, env)  # a clean project with no plugin learns it at once
-    return PLUGIN_FORM
+    found = plugin_root(root, env)  # a clean project with no plugin learns it at once
+    named = (os.environ if env is None else env).get("CLAUDE_PLUGIN_ROOT", "")
+    if named and Path(named).resolve() == found:
+        return PLUGIN_FORM
+    return f'"{found / "scripts" / "agk"}"'
 
 
 def gate(root: Path, env: dict | None = None) -> list[str] | None:
