@@ -6,7 +6,7 @@
 - Related: brief #1442, ADR-0598, Q-1425-2
 - Requirements: REQ-050
 
-Protected classes: `skills/`, `tests/kit/`
+Protected classes: `skills/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -23,7 +23,8 @@ budget, so the step cannot live there (Q-1425-2).
    before it is filed.
 2. `plan_intake.py` is unchanged: `brief_text` writes no `Adds:` line. A test holds that, so a later change that adds
    one fails it and must take each new name from `plan_names.batch` for the whole intake in one pass.
-3. `docs/guides/planning.md` "New paths have one owner" names the skill's step.
+3. `tests/kit_dev/test_distribution.py` lists `plan_names` and `check_brief` among the scripts the `brief` skill runs.
+4. `docs/guides/planning.md` "New paths have one owner" names the skill's step.
 
 ## Consequences
 
