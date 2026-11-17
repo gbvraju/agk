@@ -59,8 +59,8 @@ prints a password or a sign-in secret. Save each `-Json` output to a file in the
 
    For each step that says `waiting`, tell the person exactly what its note says and where: the GitHub and Claude
    sign-ins are the normal sign-ins in the browser, started in the `AGK shell (WSL)` tab of Windows Terminal. When
-   `packages`, `gh_cli` or `nodejs` failed with a note about a certificate, ask the person for the path of the
-   company root certificate and run the setup again with `-CorpCaFile <path>`. When a step needs a restart of Windows
+   `packages`, `gitleaks`, `gh_cli` or `nodejs` failed with a note about a certificate, ask the person for the path of
+   the company root certificate and run the setup again with `-CorpCaFile <path>`. When a step needs a restart of Windows
    or a new window, say so and stop; the next `/agk:wsl` resumes.
 4. When every step is done or skipped and the plan's line says `pull request`, prepare the one adapter pull request
    in the clone inside WSL (the folder the status names), running each command there with

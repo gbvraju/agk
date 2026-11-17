@@ -206,7 +206,7 @@ def test_a_pin_not_read_fails_plainly(tmp_path):
     assert m.curl_calls() == []
 
 
-# --- the PowerShell side, read as text ------------------------------------------------------------
+# --- the PowerShell side, read as text --------------------------------------------------------
 
 
 def test_the_step_follows_packages_and_reads_the_one_pin():
@@ -223,7 +223,7 @@ def test_the_step_follows_packages_and_reads_the_one_pin():
     assert not re.search(r"8\.\d+\.\d+", text), "the version is never typed in the script"
 
 
-# --- the doctor (answer 4) -------------------------------------------------------------------------
+# --- the doctor (answer 4) ------------------------------------------------------------------------
 
 
 def test_the_doctor_names_the_step_inside_wsl(monkeypatch):
