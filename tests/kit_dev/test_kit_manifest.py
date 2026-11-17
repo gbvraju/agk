@@ -107,6 +107,7 @@ def test_ac2_manifest_shape_and_version():
         "rendered",
         "adopt",
         "extendable",
+        "snapshot",
     }
     assert m["kit_tests"] == "tests/kit" and (KIT_ROOT / m["kit_tests"]).is_dir()
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])

@@ -20,8 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "agk" / "parity.py"
 
-# The exception list may only shrink: lower this number in the pull request that removes a line.
-KIT_ONLY_CEILING = 9
+# The exception list may only shrink: lower this number in the pull request that removes a line. It rose
+# to 10 once, by ADR-0627 (brief #1476): the release snapshot builder, like kit_hashes.py, serves the kit's own release.
+KIT_ONLY_CEILING = 10
 
 
 def write(root: Path, rel: str, text: str) -> None:

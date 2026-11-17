@@ -134,7 +134,7 @@ def test_req014_a_file_without_the_licence_header_fails_and_writes_nothing(repo,
 
 def test_req014_a_secret_shape_in_a_template_fails(repo, tmp_path_factory):
     """REQ-014 answer 2: a personal-data shape anywhere in the snapshot fails it, never quoted."""
-    address = "member-example-1" + "@" + "example.com"  # built here, so no scanner sees one
+    address = "member-example-1" + "@" + "example.invalid"  # built here; example.com is exempt
     kit(repo, {"kit/templates/contact.md": f"write to {address}\n"})
     out = tmp_path_factory.mktemp("snap") / "s"
     proc = repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(out))

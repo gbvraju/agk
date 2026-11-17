@@ -1081,4 +1081,41 @@ valid_until = 2027-06-30
 `doctor.py` warns, and never blocks, when the table is missing, when `repository` is not the `origin` remote, and after
 `valid_until`, when it names the uninstall step (`/agk:uninstall`). It reads no network and no licence server.
 
+### The release repository
+
+Customers install AGK from a second, private release repository, never from the development repository, so they never
+see its history, briefs or decisions (ADR-0627). Each release is one plugin snapshot of the tag, holding only the paths of
+`snapshot` in `kit/manifest.json`, every file licensed; the release repository holds one commit `Release vX.Y.Z` per
+release on top of the last. Its name is `[release] repository` in `agk.toml`.
+
+    python3 scripts/agk/plugin_snapshot.py build --tag vX.Y.Z --out DIR
+    python3 scripts/agk/plugin_snapshot.py publish --tag vX.Y.Z --dir DIR
+    python3 scripts/agk/plugin_snapshot.py verify --tag vX.Y.Z --clone DIR
+
+`build` writes the snapshot from `git archive` of the tag with its own `marketplace.json` (one plugin, `"source": "."`,
+the tag's version) and prints its digest; two builds of one tag give one digest. It fails, naming the path class and
+writing nothing, on a file without the licence header, on a secret or personal-data shape (`guard.scan_text`) and when
+`kit_hashes.py --check` fails at the tag; `kit/hashes.json` keeps every release row. `publish` only prints the owner's
+commands: commit, tag and push to the release repository, and grant or revoke one person's read access. After the push
+the owner clones the release repository at the tag and runs `verify`, which fails naming the first path that differs.
+A session never creates the repository, pushes, tags or grants access.
+
+A customer installs a release with their own GitHub sign-in (Claude Code reads a private marketplace with the person's
+git credentials (verify)):
+
+    gh auth login
+    gh auth setup-git
+    /plugin marketplace add <owner>/<release repository>#vX.Y.Z
+    /plugin install agk@agk
+
+The owner grants and revokes one person's read access:
+
+    gh api --method PUT repos/<owner>/<release repository>/collaborators/<login> -f permission=pull
+    gh api --method DELETE repos/<owner>/<release repository>/collaborators/<login>
+
+A revoked person keeps the copy already on their machine; the licence and the written grant cover that copy, and
+revoking stops only new releases. Every mode (hosted, local, personal) installs the plugin from the release repository;
+CI mode still installs the kit files into the project (SPEC-0071 rule 5), and the development repository keeps its own
+marketplace for the maintainers.
+
 Licence: proprietary, all rights reserved (see LICENSE).
