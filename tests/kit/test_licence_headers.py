@@ -253,6 +253,23 @@ def test_doctor_warns_when_the_repository_differs_from_origin(repo):
     assert "example/other" not in lines[0]
 
 
+def test_doctor_warns_when_the_origin_remote_cannot_be_read(repo):
+    """REQ-014: an unknown origin is not a match: one warning that the granted repository could
+    not be compared, naming the setting and not the value."""
+    repo.commit(
+        {
+            "agk.toml": 'mode = "init"\nversion = "1.0.0"\n[licence]\ngrant = "G-1"\n'
+            'repository = "example/app"\nvalid_until = "2099-01-01"\n'
+        }
+    )
+    lines = doctor.licence_lines(repo.root, today=datetime.date(2026, 11, 16))
+    assert len(lines) == 1
+    assert lines[0].startswith("warn licence-grant:")
+    assert "could not be compared" in lines[0]
+    assert "[licence] repository" in lines[0]
+    assert "example/app" not in lines[0]
+
+
 def test_doctor_warns_after_valid_until_and_names_the_uninstall_step(repo):
     """REQ-014: an ended grant warns and names the uninstall step."""
     grant_repo(

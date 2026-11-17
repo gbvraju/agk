@@ -40,8 +40,9 @@ REUSE specification version)`.
    covered by one annotation in `REUSE.toml` at the repository root. The issue and pull request templates are
    annotated because a header in them would be copied into every issue and pull request body. Each workflow file
    carries the `#` header as its first comment lines as well, with no other change to what it does (Q-1419-1 (a),
-   the conductor's verdict of 2026-11-16): a builder never changes a workflow file, so the headed workflows are
-   proposed under `.agk/workflow-proposals/` and the owner applies them with `/agk:workflow-apply` (ADR-0505). The
+   the conductor's verdict of 2026-11-16): a builder never changes a workflow file, so the headed workflows were
+   proposed under `.agk/workflow-proposals/` and the owner applied them with `/agk:workflow-apply` (ADR-0505) at
+   5a3ee53 (2026-11-17, Q-1419-4). The
    document templates are copied by `new_spec.py` into a project's own
    ADRs, specs and briefs, which are not the kit's. `.gitignore` is annotated too: its text is the marked block of a
    project's own `.gitignore` (the extendable file of ADR-0164).
@@ -59,9 +60,9 @@ REUSE specification version)`.
    the annotation, naming the path class and never a value; in a project it needs `LICENSE-AGK` and the header in each
    file under `scripts/agk/`, and its `--write` adds the missing headers. It is a step of `agk-governance` (so of
    `prepush.py`), of `governance_map.py` (run for every change) and of `.github/workflows/governance.yml`, right
-   after `check_neutrality` (SPEC-0007 rule 13). A builder never changes a workflow file, so the workflow step is
-   proposed as `.agk/workflow-proposals/governance.yml` and the owner applies it with `/agk:workflow-apply` (ADR-0505;
-   the owner's answer to Q-1419-3, 2026-11-16).
+   after `check_neutrality` (SPEC-0007 rule 13). A builder never changes a workflow file, so the workflow step was
+   proposed as `.agk/workflow-proposals/governance.yml` and the owner applied it at 3277662 (ADR-0505; the owner's
+   answer to Q-1419-3, 2026-11-16).
 8. Templates under `kit/templates/` become a project's own files (its `agk.toml`, its requirements) and carry no
    header.
 
@@ -74,4 +75,5 @@ header adds three lines to each kit file, which the kit hashes record; the rule 
 ## Residual
 
 - The owner has the licence text reviewed by his legal counsel before the release (2026-11-16).
-- The headed workflows wait for the owner's `/agk:workflow-apply 1423` (2026-11-16, Q-1419-4).
+- The headed workflows waited for the owner's `/agk:workflow-apply 1423` (Q-1419-4); he applied the workflow step at
+  3277662 (2026-11-16) and the nine headed workflows at 5a3ee53 (2026-11-17), so nothing of this is left.

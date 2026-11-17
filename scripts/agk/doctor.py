@@ -1816,8 +1816,9 @@ def grant_repository(value: object) -> str | None:
 def licence_lines(root: Path, today: datetime.date | None = None) -> list[str]:
     """The licence grant of the project (brief #1419 answer 4, ADR-0596): a warning, never a block,
     when the `[licence]` table of agk.toml is missing, when its `repository` is not the `origin`
-    remote, or after its `valid_until`, naming the uninstall step. None in the kit's own
-    repository. Names the setting, never its value; no network."""
+    remote or the remote cannot be read (an unknown origin is not a match), or after its
+    `valid_until`, naming the uninstall step. None in the kit's own repository. Names the setting,
+    never its value; no network."""
     if (root / "kit" / "manifest.json").is_file():
         return []
     try:
@@ -1835,7 +1836,12 @@ def licence_lines(root: Path, today: datetime.date | None = None) -> list[str]:
     lines: list[str] = []
     origin = origin_repo(root)
     named = grant_repository(table.get("repository"))
-    if named is None or (origin is not None and named != origin.lower()):
+    if named is not None and origin is None:
+        lines.append(
+            "warn licence-grant: the granted repository could not be compared, the origin remote "
+            "cannot be read (setting: [licence] repository; see LICENSE-AGK)"
+        )
+    elif named is None or named != (origin or "").lower():
         lines.append(
             "warn licence-grant: the granted repository is not the origin remote "
             "(setting: [licence] repository; see LICENSE-AGK)"
