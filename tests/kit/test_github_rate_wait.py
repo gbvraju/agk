@@ -110,7 +110,8 @@ def test_a_spent_primary_limit_waits_until_the_reset_time(monkeypatch, clock, ca
                     ok())  # fmt: skip
     assert run(monkeypatch, double) == {"ok": True}
     assert clock.slept == [100.0 + session.RESET_SLACK]
-    assert "waiting 101 s (primary)" in capsys.readouterr().err
+    until = session.datetime.fromtimestamp(clock.now).strftime("%H:%M")  # brief #1435 answer 5
+    assert f"waiting 101 s (primary, until {until} local)" in capsys.readouterr().err
 
 
 def test_otherwise_sixty_seconds_doubled_on_each_further_try(monkeypatch, clock):

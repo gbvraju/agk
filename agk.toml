@@ -874,7 +874,7 @@ tests = [
   "tests/kit/test_session_paused.py", "tests/kit/test_session_plan.py", "tests/kit/test_session_plan_lanes.py",
   "tests/kit/test_session_plan_malformed.py", "tests/kit/test_session_plan_milestones.py",
   "tests/kit/test_session_plan_overlap.py", "tests/kit/test_session_plan_reads.py", "tests/kit/test_session_prompt.py", "tests/kit/test_session_resume.py", "tests/kit/test_session_review.py",
-  "tests/kit/test_rule18_claim.py",
+  "tests/kit/test_rule18_claim.py", "tests/kit/test_dependency_beats_overlap.py",
   "tests/kit/test_github_read_budget.py", "tests/kit/test_github_rate_wait.py",
   "tests/kit/test_github_direct_transport.py",
   "tests/kit/test_session_rules.py", "tests/kit/test_session_silent.py", "tests/kit/test_session_tell.py",
@@ -887,7 +887,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
 tests = [
-  "tests/kit/test_autopilot_status.py",
+  "tests/kit/test_autopilot_status.py", "tests/kit/test_dependency_beats_overlap.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_plan_questions.py",
