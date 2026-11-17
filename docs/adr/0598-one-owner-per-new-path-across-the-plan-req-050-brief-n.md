@@ -47,3 +47,10 @@ were refused without naming either line or the merge.
 A batch filed with `plan_names.py batch` cannot reuse an earlier batch's names, and a clash is caught at filing where
 the open briefs are known, or at the next plan run otherwise. The check reads no network: with no saved list and no
 cache it compares with the tree alone, as before.
+
+## Residual
+
+- The CI event check compares with the open briefs only once the brief workflow passes `--open-briefs` (decision 6),
+  a workflow change for the owner by `/agk:workflow-apply` in its own brief.
+- The conductor's fix-list lines and the steward's drafting (the `brief` skill) are prose: they are pointed at
+  `plan_names.py` by `docs/guides/planning.md` and by Q-1425-1 and Q-1425-2, not checked by a script here.
