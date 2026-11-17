@@ -27,8 +27,9 @@ did not mention them, so the person found them only by searching.
    empties, or a path inside a directory that held a removed file; a leading `./` and a trailing `.`, `,`, `:`, `;` or
    `/` are ignored. So `scripts/agkx/` and `src/scripts/agk/` do not count.
 4. The removed files and `.git/` are never read; a file the plan edits is read as the plan leaves it, so both runs give
-   the same section. Binary files (a NUL byte in the first 8 KiB, or not UTF-8) and files over 1 MB are skipped and
-   counted on one line `skipped: <n> binary or large files`.
+   the same section. A named pipe or a device file is never opened. Binary files (a NUL byte in the first 8 KiB, or
+   not UTF-8), files over 1 MB and files the account cannot read are skipped and counted on one line
+   `skipped: <n> binary, large or unreadable files`.
 5. The section is read only: the uninstall edits none of these lines and gains no flag to do so; `--remove-docs` keeps
    its meaning. This adds to the uninstall rule of ADR-0196 and changes none of its decisions.
 

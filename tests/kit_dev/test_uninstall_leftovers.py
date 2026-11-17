@@ -7,6 +7,7 @@ folder only; invented data, no network.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -104,7 +105,7 @@ def test_a_binary_and_a_large_file_are_skipped_and_counted(tmp_path, capsys):
     (target / "docs" / "big.md").write_text("agk.mk\n" + "x" * (1024 * 1024), encoding="utf-8")
     commit(target)
     found = section(run(capsys, target)[1])
-    assert found == ["Left in your files: none", "skipped: 2 binary or large files"]
+    assert found == ["Left in your files: none", "skipped: 2 binary, large or unreadable files"]
 
 
 def test_a_project_with_no_leftover_lines_says_none(tmp_path, capsys):
@@ -132,3 +133,29 @@ def test_settings_come_before_other_files_to_tidy(tmp_path, capsys):
     found = section(run(capsys, target)[1])
     assert found[2].startswith("config/reviewers.yaml:3:")
     assert found[4] == "README.md:1: Run make -f agk.mk" and found[5] == "records, keep as written:"
+
+
+def test_an_unreadable_file_is_skipped_and_counted(tmp_path, capsys, monkeypatch):
+    """REQ-009: brief #1443 answer 4 (verdict 6953292089 item 1: a file the account cannot read
+    is counted as skipped and the report goes on)."""
+    target = init_target(tmp_path, **MINE)
+    locked = target / "build" / "theirs.md"
+    locked.parent.mkdir()
+    locked.write_text("agk.mk\n", encoding="utf-8")
+    locked.chmod(0)
+    if os.geteuid() == 0:  # root reads it anyway: make the read fail as it would for a person
+        real = Path.read_bytes
+
+        def read_bytes(self: Path) -> bytes:
+            if self == locked:
+                raise PermissionError(13, "Permission denied")
+            return real(self)
+
+        monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    try:
+        code, out = run(capsys, target)
+    finally:
+        locked.chmod(0o644)
+    assert code == 0, out
+    found = section(out)
+    assert found[:-1] == SECTION and found[-1] == "skipped: 1 binary, large or unreadable files"

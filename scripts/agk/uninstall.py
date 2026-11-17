@@ -499,7 +499,7 @@ def names_removed(word: str, gone: set[str], empty: set[str], held: set[str]) ->
 
 def leftovers(target: Path, plan: Plan) -> tuple[list[tuple[str, int, str]], int]:
     """The lines of files kept that name a path the plan removes; read only (answer 3). The
-    removed files and `.git/` are never read; binary or large files are only counted."""
+    removed files and `.git/` are never read; binary, large or unreadable files are only counted."""
     gone = {i.rel for i in plan.of("delete")}
     if not gone:
         return [], 0
@@ -514,12 +514,14 @@ def leftovers(target: Path, plan: Plan) -> tuple[list[tuple[str, int, str]], int
             rel = path.relative_to(target).as_posix()
             if rel in gone or path.is_symlink():
                 continue
-            data = edited[rel] if rel in edited else path.read_bytes()
+            if rel not in edited and not path.is_file():
+                continue  # a named pipe or a device file is never opened
             try:
+                data = edited[rel] if rel in edited else path.read_bytes()
                 if len(data) > LEFT_BYTES or b"\0" in data[:8192]:
                     raise UnicodeError
                 text = data.decode("utf-8")
-            except UnicodeError:
+            except (UnicodeError, OSError):  # binary, large, or unreadable: counted only
                 skipped += 1
                 continue
             for n, line in enumerate(text.splitlines(), 1):
@@ -543,7 +545,7 @@ def left_lines(plan: Plan) -> list[str]:
     if len(plan.left) > LEFT_MAX:
         lines.append(f"and {len(plan.left) - LEFT_MAX} more")
     if plan.skipped:
-        lines.append(f"skipped: {plan.skipped} binary or large files")
+        lines.append(f"skipped: {plan.skipped} binary, large or unreadable files")
     return lines
 
 
