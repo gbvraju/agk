@@ -164,3 +164,78 @@ def test_the_holders_list_leaves_out_a_lifted_hold(tmp_path):
     s.builders[0]["updated_at"] = "2026-11-17T00:00:00Z"
     now = datetime(2026, 11, 17, tzinfo=UTC)
     assert session_plan.holders(tmp_path, s, [s.briefs[31]], now) == []
+
+
+def test_the_plan_prints_the_reason_and_starts_it(tmp_path, repo, monkeypatch):
+    """Answer 1: `session.py plan` prints the line and starts the brief; `--json` carries it."""
+    import json
+
+    from test_session import REPO as STUB_REPO
+    from test_session import Stub, listing
+    from test_session import issue as listed
+    from test_session_flow import PULLS, brief, pr
+    from test_session_plan import changed, free, plan
+
+    monkeypatch.undo()  # the plan runs as a process, through the `gh` stub
+    stub = Stub(tmp_path)
+    repo.git("remote", "add", "origin", f"https://github.com/{STUB_REPO}.git")
+    repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    holder = pr(20, 90)
+    holder["body"] += "Depends-on: #5\n"
+    stub.serve(PULLS, [holder])
+    changed(stub, 20, ("modified", "a.py"))
+    listing(stub, [listed(5, brief("a.py"))])
+    free(stub, 5)
+    out = plan(repo, stub)
+    assert "#5 starts ahead of #20, which depends on it (overlap on a.py ignored)" in out.stdout
+    assert "takes #5" in out.stdout, out.stdout + out.stderr
+    got = json.loads(plan(repo, stub, "--json").stdout)
+    assert got["ahead"] == ["#5 starts ahead of #20, which depends on it (overlap on a.py ignored)"]
+
+
+def test_next_and_claim_print_the_reason_and_a_cycle_is_refused(tmp_path, repo, monkeypatch):
+    """Answers 1 and 3: `next` and `claim` share the judgement and print the same line; with the
+    loop closed `claim` refuses with the CYCLE line and posts nothing, and `plan` prints the
+    line once and carries the owner's line."""
+    import json
+
+    from test_session import REPO as STUB_REPO
+    from test_session import Stub, comment, listing, posts, session
+    from test_session import issue as listed
+    from test_session_flow import DAY, PULLS, brief, pr
+    from test_session_plan import changed, plan
+
+    monkeypatch.undo()
+    stub = Stub(tmp_path)
+    repo.git("remote", "add", "origin", f"https://github.com/{STUB_REPO}.git")
+    repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    line = "#6 starts ahead of #20, which depends on it (overlap on a.py ignored)"
+    holder = pr(20, 5)
+    holder["body"] += "Depends-on: #6\n"
+    stub.serve(PULLS, [holder])
+    changed(stub, 20, ("modified", "a.py"))
+    listing(stub, [listed(5, brief("**")), listed(6, brief("a.py"))])
+    stub.serve(f"repos/{STUB_REPO}/issues/5/comments", [comment(1, "x", f"taken: s-other {DAY}")])
+    stub.serve(f"repos/{STUB_REPO}/issues/6/comments", [])
+    shown = session(repo, stub, "next", "--session", "s-me")
+    assert line in shown.stdout.splitlines(), shown.stdout + shown.stderr
+    out = session(repo, stub, "claim", "--session", "s-me", "--brief", "6")
+    assert line in out.stdout.splitlines() and "claimed #6" in out.stdout, out.stdout + out.stderr
+    listing(stub, [listed(5, brief("**")), listed(6, brief("a.py") + "Depends-on: #5\n")])
+    stub.serve(f"repos/{STUB_REPO}/issues/6/comments", [])
+    before = len(posts(stub))
+    out = session(repo, stub, "claim", "--session", "s-me", "--brief", "6")
+    cycle = "CYCLE: #5 and #6 wait on each other (Depends-on); the owner chooses which goes first"
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert out.stdout.strip() == f"skip #6: {cycle}"
+    assert len(posts(stub)) == before
+    shown = plan(repo, stub)
+    assert shown.stdout.splitlines().count(cycle) == 1, shown.stdout + shown.stderr
+    got = json.loads(plan(repo, stub, "--json").stdout)
+    assert got["cycles"] == [
+        {
+            "why": cycle,
+            "owner": "Owner needed: #5 and #6 wait on each other (Depends-on); remove one of: "
+            "`Depends-on: #5` in #6, `Depends-on: #6` in #5",
+        }
+    ]

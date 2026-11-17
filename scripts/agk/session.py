@@ -2479,7 +2479,8 @@ def claim_overlap(root, s: Survey, number: int, seen: dict) -> str | None:
     rules 2 to 4), or None. It reads the open briefs and pull requests as `next` does; a read that
     fails stops the claim (CheckError) and never passes as no overlap. The survey is kept in `seen`
     for the reservation, so that the briefs are read once."""
-    from session_plan import exempt, read_gone, running_conflict, settle_takes, wait_text
+    from session_plan import ahead_lines, exempt, read_gone, running_conflict, settle_takes
+    from session_plan import wait_text
 
     shared = exempt(root)
     issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
@@ -2499,6 +2500,8 @@ def claim_overlap(root, s: Survey, number: int, seen: dict) -> str | None:
     view.held = [h for h in view.held if h[0] not in freed]
     seen["survey"], seen["brief"] = view, brief
     found = running_conflict(root, view, {**brief, "number": number}, shared)
+    for line in [] if found else ahead_lines(view, number):  # brief #1432 answer 1
+        print(line)
     return wait_text(found) if found else None
 
 
@@ -3427,7 +3430,8 @@ def next_brief(root, me: str, taking: bool = False) -> int:
         return 1
     # The plan's rules decide (brief #345, ADR-0195): a stale claim holds nothing, overlap is
     # judged by files, and a skip names the plan's reason.
-    from session_plan import exempt, read_gone, running_conflict, settle_takes, wait_text
+    from session_plan import ahead_lines, exempt, read_gone, running_conflict, settle_takes
+    from session_plan import wait_text
 
     shared = exempt(root)  # SPEC-0050 rules 2 and 3: the one list `plan` and `claim` judge with
     read_gone(root, s)
@@ -3444,6 +3448,8 @@ def next_brief(root, me: str, taking: bool = False) -> int:
         if why:
             print(f"skip #{brief['number']}: {why}")
             continue
+        for line in [] if waits else ahead_lines(s, brief["number"]):  # brief #1432
+            print(line)
         print(f"brief #{brief['number']}\ntitle: {brief.get('title')}")
         print(f"address: {brief.get('html_url')}\n")
         print(brief["body"])

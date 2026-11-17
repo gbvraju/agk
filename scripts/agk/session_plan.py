@@ -529,22 +529,121 @@ def question_wait(s: Survey, brief: dict) -> dict | None:
     return None
 
 
+AHEAD = "#{n} starts ahead of #{h}, which depends on it (overlap on {file} ignored)"
+CYCLE = "CYCLE: #{a} and #{b} wait on each other (Depends-on); the owner chooses which goes first"
+
+
+def dependency_map(s: Survey) -> dict[int, set[int]]:
+    """Brief #1432 answers 1 and 4: open brief -> the open briefs that its body and its open
+    builder pull requests' bodies name in `Depends-on:`, from the survey's cached bodies (no GitHub
+    call), once per survey. A line naming a closed item, a pull request, the brief itself or a
+    malformed number is ignored, as `depends_on` ignores it."""
+    if (found := s.__dict__.get("dependency_map")) is not None:
+        return found
+    briefs = {n for n, b in s.briefs.items() if b.get("state", "open") == "open"}
+    found = {}
+    bodies = [(n, b.get("body")) for n, b in s.briefs.items() if n in briefs]
+    bodies += [(pr_brief(p), p.get("body")) for p in s.builders if pr_brief(p) is not None]
+    for number, body in bodies:
+        deps = {d for d in depends_on(str(body or "")) if d in briefs and d != number}
+        found.setdefault(number, set()).update(deps)
+    s.__dict__["dependency_map"] = found
+    return found
+
+
+def dependency_path(s: Survey, start: int | None, target: int) -> list[int] | None:
+    """The chain of `Depends-on:` lines from `start` down to `target`, else None."""
+    graph, parent, todo = dependency_map(s), {start: None}, [start]
+    while todo:
+        here = todo.pop(0)
+        for there in sorted(graph.get(here, ())):
+            if there in parent:
+                continue
+            parent[there] = here
+            if there == target:
+                path = [there]
+                while parent[path[-1]] is not None:
+                    path.append(parent[path[-1]])
+                return path[::-1]
+            todo.append(there)
+    return None
+
+
+def dependency_wait(s: Survey, number: int, holder: int | None, name: int, file: str):
+    """Brief #1432: None when the holder does not wait on the brief (the overlap holds), True
+    when it does (the overlap is lifted and the reason noted), or the cycle's wait."""
+    if holder is None or not (down := dependency_path(s, holder, number)):
+        return None
+    if not (back := dependency_path(s, number, holder)):
+        s.__dict__.setdefault("ahead", {}).setdefault(number, []).append(
+            AHEAD.format(n=number, h=name, file=file)
+        )
+        return True
+    return cycle_wait(number, holder, [*down, *back[1:]])
+
+
+def cycle_wait(number: int, other: int, chain: list[int]) -> dict:
+    """Answer 3: the wait of a true cycle, with the stable line and the owner's line, which
+    names the `Depends-on:` lines of the loop."""
+    a, b = sorted((other, number))
+    lines = ", ".join(f"`Depends-on: #{y}` in #{x}" for x, y in zip(chain, chain[1:]))
+    owner = f"Owner needed: #{a} and #{b} wait on each other (Depends-on); remove one of: {lines}"
+    return {"brief": number, "cycle": other, "why": CYCLE.format(a=a, b=b), "owner": owner}
+
+
+DEPENDS_OPEN = re.compile(r"depends on #(\d+), which is open")
+
+
+def cycle_skip(s: Survey, number: int, why: str) -> dict | None:
+    """Answer 3: a brief skipped as `depends on #d, which is open` whose `Depends-on:` chain
+    comes back from #d to it is a cycle, said as one (`next` and `plan` skip it before the
+    overlap is judged)."""
+    if not (found := DEPENDS_OPEN.fullmatch(why)):
+        return None
+    if back := dependency_path(s, int(found[1]), number):
+        return cycle_wait(number, int(found[1]), [number, *back])
+    return None
+
+
+def cycles_of(s: Survey, waits: list[dict]) -> list[dict]:
+    """Each cycle once (answer 3), from the waits and the skips, for the conductor's one
+    `Owner needed:` line: {"why", "owner"}, the lowest pair first."""
+    found = [w for w in waits if "cycle" in w]
+    found += s.__dict__.get("skip_cycles", [])
+    once: dict[str, dict] = {}
+    for w in found:
+        once.setdefault(w["why"], {"why": w["why"], "owner": w["owner"]})
+    return [once[k] for k in sorted(once)]
+
+
+def ahead_lines(s: Survey, number: int) -> list[str]:
+    """The `starts ahead of` lines of the brief's last judgement (brief #1432 answer 1)."""
+    return list(s.__dict__.get("ahead", {}).get(number, []))
+
+
 def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     """What running work the brief waits for: an open business question it names (brief #1196),
-    a taken brief or an open builder pull request."""
+    a taken brief or an open builder pull request. A holder that waits on the brief by
+    `Depends-on:` does not hold it back; a true cycle is the wait (brief #1432)."""
     if asked := question_wait(s, brief):
         return asked
+    s.__dict__.setdefault("ahead", {}).pop(brief["number"], None)
     mine = unshared(root, entries_of(root, touches_of(brief["body"])), shared)
     for number, theirs in s.held:
         if number == brief["number"]:
             continue  # another build of the same brief is not a rival
         if found := clash(mine, unshared(root, entries_of(root, theirs), shared)):
-            return {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
+            if (lifted := dependency_wait(s, brief["number"], number, number, found)) is True:
+                continue
+            return lifted or {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
     for pr in s.builders:
         if pr_brief(pr) == brief["number"]:
             continue
         if found := pull_conflict(s, pr, mine, shared):
-            return {"brief": brief["number"], "pull_request": pr["number"], "why": found}
+            file = found.split(" ", 2)[2]
+            if (lifted := dependency_wait(s, brief["number"], pr_brief(pr), pr["number"], file)) is True:
+                continue
+            return lifted or {"brief": brief["number"], "pull_request": pr["number"], "why": found}
     return None
 
 
@@ -576,6 +675,7 @@ def holders(root, s: Survey, held: list[dict], now: datetime) -> list[dict]:
             and pull_conflict(
                 s, pr, unshared(root, entries_of(root, touches_of(b["body"])), shared), shared
             )
+            and not dependency_path(s, pr_brief(pr), b["number"])  # brief #1432
         }
         if not briefs:
             continue
@@ -1136,7 +1236,7 @@ def read_gone(root, s: Survey, now: datetime | None = None) -> None:
 
 def wait_text(w: dict) -> str:
     """Why a brief waits, in the words of the plan and of the skips of `next` (brief #345)."""
-    if "held_by" in w or "waits_for_build" in w or "fixed_by" in w:
+    if "held_by" in w or "waits_for_build" in w or "fixed_by" in w or "cycle" in w:
         return str(w["why"])
     if "question" in w:  # brief #1196 answer 3
         why = "" if w["why"] == QUESTION_OPEN else f" ({w['why']})"
@@ -1161,7 +1261,9 @@ def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
     skipped: list[tuple[int, str]] = []
     for number, why in s.skipped:
         if not why.startswith("taken by"):
-            skipped.append((number, why))
+            if looped := cycle_skip(s, number, why):  # brief #1432 answer 3
+                s.__dict__.setdefault("skip_cycles", []).append(looped)
+            skipped.append((number, looped["why"] if looped else why))
             continue
         takes = holding(s, number, live_takes(s.comments.get(number, []), number, s.prs, s.hours))
         brief = s.briefs.get(number)
@@ -2030,6 +2132,8 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
         "start": [] if assigning else entries,
         "running": running_sessions(s),
         "waits": waits,
+        "ahead": [x for b in chosen for x in ahead_lines(s, b["number"])],  # brief #1432
+        "cycles": cycles_of(s, waits),
         "holders": ranked,
         "skipped": [
             {"brief": n, "why": why}
@@ -2351,8 +2455,11 @@ def words(plan: dict) -> str:
     ]
     lines += list(found.get("idle", []))
     lines += playbook_lines(plan)
+    lines += plan.get("ahead", [])
+    lines += [c["why"] for c in plan.get("cycles", [])]
     for w in plan["waits"]:
-        lines.append(f"#{w['brief']} {wait_text(w)}.")
+        if "cycle" not in w:  # a cycle is printed once above
+            lines.append(f"#{w['brief']} {wait_text(w)}.")
     for h in plan["holders"]:
         held = ", ".join(f"#{n}" for n in h["briefs"])
         lines.append(
