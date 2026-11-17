@@ -34,11 +34,14 @@ It printed no `reads:` line, and a primary rate-limit wait gave its seconds only
 
 ## Consequences
 
-A claim on this repository makes 18 calls (9 from cache) in about 12 s, against 29 in 18 s, and a claim of a brief this
-session already holds makes 9. Most of the rest is the closed pull requests of the 14-day window (5 pages here), which
-the plan reads too.
+A dry claim of brief #1435 on this repository, by a session that holds no take, with `session.run_gh` answering every
+write `{}` (the script is in the pull request body), makes 15 calls (5 from cache) in 15.4 s on this change's head,
+against 29 calls (20 from cache) in 18.0 s before it; the same claim by the session that holds the take makes 9. Six
+of the 15 are the pull request listings the plan reads too: one open page and five pages of pull requests closed
+within the 14 days.
 
 ## Residual
 
 - The brief's `Measured:` target of 12 calls or fewer is not met on this repository while 14 days of closed pull
-  requests fill 5 pages (Q-1435-1).
+  requests fill 5 pages. The conductor's answer to Q-1435-1 keeps the plan's 14 days; a narrower window would be its
+  own brief.
