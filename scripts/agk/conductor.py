@@ -2319,6 +2319,15 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
         return code
 
 
+def refused_here(root) -> bool:
+    """Brief #1449 (ADR-0607): True, with its one line printed, when this machine's signed-in
+    login is not a listed verdict author, so the kit starts no conductor here; builders still run."""
+    refused = launch.conductor_refusal(Path(root))
+    if refused:
+        print(f"watchdog: {refused}")
+    return refused is not None
+
+
 def watchdog_once(root, name: str, repo: str, adapter: str, issue: int) -> int:
     """Start the conductor through the adapter when its lease is free or expired (ADR-0525)."""
     holder = lease_holder(plan_comments(repo, issue), verdict_authors(root), datetime.now(UTC))
@@ -2326,6 +2335,8 @@ def watchdog_once(root, name: str, repo: str, adapter: str, issue: int) -> int:
         print(f"watchdog: lease held by {holder[0]} until {stamp_of(holder[1])}; nothing started")
         return 0
     print("watchdog: lease free")
+    if refused_here(root):
+        return 0
     line, allowed = memory_line(root)
     print(line)
     if not allowed:
@@ -2757,6 +2768,9 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     quiet, digest = change_reads(root, repo, state, now)
     if quiet:  # brief #1387 answer 1: no lease, no plan, no sweep and no model
         print("watchdog: nothing changed; no job started")
+        record_health({}, now)
+        return 0
+    if refused_here(root):  # before the lease: a member's machine posts no marker
         record_health({}, now)
         return 0
     code, said = session.quietly(lease, root, "--take", name, False)

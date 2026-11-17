@@ -576,6 +576,41 @@ def process_table(run=subprocess.run, platform: str | None = None) -> dict | Non
     return table
 
 
+# --- only a verdict author's machine starts a conductor (brief #1449, ADR-0607) -------------
+
+NOT_AUTHOR = (
+    "this login is {who}; conductor not started, builders only "
+    "(setting: verdict_authors in config/reviewers.yaml)"
+)
+LOGINS: dict[str, str | None] = {}  # the signed-in login, one `gh api user` read per run and root
+
+
+def signed_in_login(root: Path) -> str | None:
+    """The signed-in GitHub login in lower case, read once per run for ROOT; None when unread."""
+    key = str(Path(root).resolve())
+    if key not in LOGINS:
+        import session
+
+        user = session.gh("user")
+        name = user.get("login") if isinstance(user, dict) else None
+        LOGINS[key] = name.lower() if isinstance(name, str) and LOGIN.fullmatch(name) else None
+    return LOGINS[key]
+
+
+def conductor_refusal(root: Path) -> str | None:
+    """None when this machine's login is a listed verdict author (the list, else the `maintainers`
+    handle); otherwise the line that says why no conductor starts. It names the setting and never
+    the login. It governs only the starts the kit makes, never a person's own conductor."""
+    import reviewers
+
+    login = signed_in_login(root)
+    if login is None:
+        return NOT_AUTHOR.format(who="unknown")
+    if login in reviewers.verdict_authors(Path(root)):
+        return None
+    return NOT_AUTHOR.format(who="not a verdict author")
+
+
 # --- one conductor per machine (brief #1409, ADR-0592) --------------------------------------
 
 WINDOWS_LINES = (
@@ -829,6 +864,9 @@ def role_main(args: list[str], root: Path | None = None, extra: dict | None = No
     if role == "conductor":  # brief #1409: one conductor per machine, any name
         if alive := live_conductors(here):
             print(f"{stuck} (conductor {alive[0][0]} is running on this machine)")
+            return 1
+        if refused := conductor_refusal(here):  # brief #1449: a verdict author's machine only
+            print(f"{stuck} ({refused})")
             return 1
     try:
         shown = "true" if show_jobs(here) else "false"

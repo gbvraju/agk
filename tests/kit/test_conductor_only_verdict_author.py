@@ -35,7 +35,9 @@ def builders(monkeypatch):
 
 
 def signed_in(world, login: str | None) -> None:  # noqa: F811
-    if login is not None:
+    if login is None:
+        (world["stub"].dir / "user.GET.json").unlink()
+    else:
         world["stub"].serve("user", {"login": login, "id": 7})
 
 
@@ -86,7 +88,10 @@ def test_the_scripted_pass_of_a_member_takes_no_lease(world, capsys, builders, m
     """REQ-071: brief #1449 answer 1 (`watchdog --pass`: no lease marker, no job)."""
     import conductor
 
-    monkeypatch.setattr(conductor, "watchdog_pass", lambda *a: pytest.fail("a conductor pass ran"))
+    monkeypatch.setattr(conductor, "job_running", lambda *a: False)
+    monkeypatch.setattr(conductor, "change_reads", lambda *a: (False, {}))  # a pass with work
+    monkeypatch.setattr(conductor, "lease", lambda *a, **k: pytest.fail("a lease was taken"))
+    monkeypatch.setattr(conductor, "lock_base", lambda root: root.parent / "locks")
     signed_in(world, "member-example-1")
     free_lease(world)
     code, out, err = watchdog(world, capsys, "--pass")
