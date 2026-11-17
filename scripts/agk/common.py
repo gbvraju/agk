@@ -1758,6 +1758,49 @@ def proof_areas(root: Path) -> list[dict] | None:
     return areas
 
 
+# --- only a verdict author's machine starts a conductor (brief #1449, ADR-0607) -------------
+
+NOT_A_VERDICT_AUTHOR = (
+    "this login is {who}; conductor not started, builders only "
+    "(setting: verdict_authors in config/reviewers.yaml)"
+)
+GH_LOGIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,38}")
+SIGNED_IN: dict[str, str | None] = {}  # the signed-in login, one `gh api user` per run and root
+
+
+def signed_in_login(root: Path) -> str | None:
+    """The signed-in GitHub login in lower case, read once per run for ROOT with one
+    `gh api user`; None when it cannot be read."""
+    key = str(Path(root).resolve())
+    if key not in SIGNED_IN:
+        try:
+            done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+                ["gh", "api", "--method", "GET", "user"],
+                capture_output=True, text=True, encoding="utf-8", check=False, timeout=60,
+            )  # fmt: skip
+            user = json.loads(done.stdout) if done.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            user = None
+        name = user.get("login") if isinstance(user, dict) else None
+        good = name.lower() if isinstance(name, str) and GH_LOGIN.fullmatch(name) else None
+        SIGNED_IN[key] = good
+    return SIGNED_IN[key]
+
+
+def conductor_refusal(root: Path) -> str | None:
+    """None when this machine's login is a listed verdict author (the list, else the `maintainers`
+    handle); otherwise the line that says why no conductor starts. It names the setting and never
+    the login. It governs only the starts the kit makes, never a person's own conductor."""
+    import reviewers  # here, not at the top: reviewers imports this module
+
+    login = signed_in_login(root)
+    if login is None:
+        return NOT_A_VERDICT_AUTHOR.format(who="unknown")
+    if login in reviewers.verdict_authors(Path(root)):
+        return None
+    return NOT_A_VERDICT_AUTHOR.format(who="not a verdict author")
+
+
 def run(name: str, fn: Callable[[], int]) -> int:
     try:
         return fn()

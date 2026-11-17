@@ -21,7 +21,7 @@ machine; it says nothing about which machines may run one.
 ## Decision
 
 1. **Who may start a conductor.** Before a conductor start the kit makes, it reads the signed-in login with one
-   `gh api user` (`launch.signed_in_login`, cached for the run and the checkout, compared in lower case and never
+   `gh api user` (`common.signed_in_login`, cached for the run and the checkout, compared in lower case and never
    printed) and starts a conductor only when that login is in `verdict_authors` as `reviewers.authors_of` reads it: the
    list, else the user handle of the `maintainers` team. Otherwise it prints
    `watchdog: this login is not a verdict author; conductor not started, builders only (setting: verdict_authors in
