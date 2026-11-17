@@ -6,7 +6,7 @@
 - Related: brief #1453, SPEC-0071 rules 2, 3 and 12 (a), ADR-0531
 - Requirements: REQ-078
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `config/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`
 
 ## Context
 
@@ -32,8 +32,10 @@ Nothing below depends on it: the variable is only the first place the resolver l
    project. The session prompts (`kit/templates/runtime/builder.txt`, `conductor.txt`, `launcher.txt`) define `<kit>`
    once in one `KIT:` line and name each script as `python3 <kit>/<script>`. In an installed project `<kit>` is
    `scripts/agk`, so every command a session runs is the same text as before.
-3. `config/session-rules.md` says once, in its opening paragraph, that a rule naming `python3 scripts/agk/<script>`
-   means the resolver's plugin form in a clean project (SPEC-0071 rule 3). No numbered rule changes.
+3. SPEC-0071 rule 3: from this ADR on, a rule of `config/session-rules.md` that names `python3 scripts/agk/<script>`
+   means, in a clean project, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"`, the form `kit_root.py --form`
+   prints. That file's text is unchanged. Its word budget (REQ-037, `rules.budget_problems`) refuses any added words,
+   so the mapping is held here and in the prompts' `KIT:` line (Q-1453-3).
 4. The gate. `kit_root.gate(root)` is today's `make -f agk.mk agk-governance` in an installed project (none when
    `agk.mk` is missing, so `prepush.py` gives today's refusal byte for byte). In a clean project it is
    `python3 <plugin>/scripts/agk/kit_root.py governance`, which runs `governance_map.CHECKS` (the commands of the

@@ -124,7 +124,7 @@ def main(argv: list[str]) -> int:
             print(form(root))
         elif argv == ["governance"]:
             if layout(root) == "installed":
-                return subprocess.run(MAKE_GATE, cwd=root).returncode  # nosec B603 B607 - fixed
+                return subprocess.run(MAKE_GATE, cwd=root).returncode  # nosec B603 - fixed argv
             return run_checks(root, kit_dir(root))
         else:
             print(kit_dir(root))

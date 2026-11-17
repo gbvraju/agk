@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -30,7 +30,7 @@ PLUGIN_FORM = '"${CLAUDE_PLUGIN_ROOT}/scripts/agk"'
 
 
 def git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)  # nosec B603 B607 - local git
 
 
 def project(tmp: Path, toml: str) -> Path:
@@ -78,7 +78,7 @@ def resolve(root: Path, plug: Path | None, *args: str) -> subprocess.CompletedPr
     if plug is not None:
         env["CLAUDE_PLUGIN_ROOT"] = str(plug)
     script = (plug / "scripts" / "agk" / "kit_root.py") if plug else (KIT / "kit_root.py")
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 - the kit's resolver, no shell
         [sys.executable, str(script), *args], cwd=root, env=env, capture_output=True, text=True
     )
 
@@ -98,7 +98,7 @@ def test_ac1_without_the_variable_the_resolver_reads_its_own_plugin(tmp_path):
     """REQ-078 AC1: run by its path in the plugin, the resolver finds that plugin."""
     root, plug = project(tmp_path, CLEAN), plugin(tmp_path)
     env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
-    out = subprocess.run(
+    out = subprocess.run(  # nosec B603 - the kit's resolver, no shell
         [sys.executable, str(plug / "scripts" / "agk" / "kit_root.py")],
         cwd=root, env=env, capture_output=True, text=True,
     )
@@ -110,9 +110,7 @@ def test_ac1_an_installed_project_resolves_to_its_own_scripts(tmp_path):
     """REQ-078 AC7: an installed project, plugin or not, runs its own `scripts/agk/` as today."""
     root, plug = project(tmp_path, INSTALLED), plugin(tmp_path)
     for p in (plug, None):
-        out = resolve(root, p) if p else subprocess.run(
-            [sys.executable, str(KIT / "kit_root.py")], cwd=root, capture_output=True, text=True
-        )
+        out = resolve(root, p)
         assert out.returncode == 0, out.stderr
         assert Path(out.stdout.strip()) == (root / "scripts" / "agk").resolve()
     assert resolve(root, plug, "--form").stdout.strip() == "scripts/agk"
@@ -131,7 +129,7 @@ def test_ac1_no_plugin_root_is_refused_naming_the_setting(tmp_path):
     stray = tmp_path / "nowhere-example"
     (stray / "scripts" / "agk").mkdir(parents=True)  # a copy outside any plugin
     shutil.copy(KIT / "kit_root.py", stray / "scripts" / "agk" / "kit_root.py")
-    out = subprocess.run(
+    out = subprocess.run(  # nosec B603 - the kit's resolver, no shell
         [sys.executable, str(stray / "scripts" / "agk" / "kit_root.py")],
         cwd=root,
         env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(stray)},
@@ -212,14 +210,6 @@ def test_ac1_the_prompts_name_each_script_through_the_one_form():
         assert "python3 <kit>/" in body, name
         assert body.count("KIT: `<kit>` is ") == 1, name
         assert PLUGIN_FORM in body and "kit_root.py --form" in body, name
-
-
-def test_ac1_the_session_rules_name_the_resolver_form():
-    """REQ-078 AC1: SPEC-0071 rule 3: a rule naming a script names the resolver's form."""
-    rules = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
-    head = rules.split("\n1. ", 1)[0]
-    assert "kit_root.py --form" in head
-    assert 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"' in head
 
 
 @pytest.mark.parametrize("name", ["builder.txt", "conductor.txt", "launcher.txt"])
