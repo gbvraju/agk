@@ -115,7 +115,9 @@ def test_a_cleared_verdict_and_prose_without_the_form_are_not_read():
 
 def test_impact_matches_a_whole_segment_only():
     """REQ-050: answer 5."""
-    h = pn.Holders(briefs=[brief(1, "src/gaps10/"), brief(2, "src/gaps1/x.py"), brief(3, "src/gaps1.")])
+    h = pn.Holders(
+        briefs=[brief(1, "src/gaps10/"), brief(2, "src/gaps1/x.py"), brief(3, "src/gaps1.")]
+    )
     assert pn.impact("src/gaps1", h) == [
         "#2 brief: steward edits (not taken)",
         "#3 brief: steward edits (not taken)",

@@ -206,6 +206,36 @@ def _held(candidate: str, h: Holders, extra: list[str]) -> bool:
     )
 
 
+def holder_of(candidate: str, h: Holders, own: int | None = None) -> tuple[str, str] | None:
+    """Brief #1441 answer 1: who holds a new name, as (`main` or `#n`, their path), by the sources
+    and the reading of `_held`; the brief OWN and its pull requests are left out (answer 2)."""
+    rows = [("main", f) for f in h.tree]
+    rows += [
+        (f"#{b['number']}", a)
+        for b in h.briefs
+        if b.get("number") != own
+        for a in adds_of(str(b.get("body") or ""))
+    ]
+    rows += [
+        (f"#{p['number']}", f)
+        for p in h.pulls
+        if p.get("brief") != own
+        for f in p.get("added") or []
+        if not by_rule(f)
+    ]
+    found = next(((who, x) for who, x in rows if covers(candidate, x)), None)
+    return found or next(
+        (
+            (f"#{b['number']}", t)
+            for b in h.briefs
+            if b.get("number") != own
+            for t in touches_only(str(b.get("body") or ""))
+            if _at_or_below(t, candidate)
+        ),
+        None,
+    )
+
+
 def free(base: str, h: Holders, extra: list[str] | None = None) -> str:
     """Answer 5: the base when free, else the base with -2, -3, ... (folder slash kept)."""
     slash = "/" if base.replace("\\", "/").rstrip().endswith("/") else ""
@@ -230,18 +260,25 @@ def batch(bases: list[str], h: Holders) -> list[str]:
     return named
 
 
+def names(want: str, text: str) -> bool:
+    """TEXT names the path WANT as a whole segment: `gaps1` never matches `gaps10` or `gaps1.py`
+    (brief #1441 answer 5)."""
+    found = rf"(?<![\w.-]){re.escape(want)}(?=/|\.?(?:[^\w.-]|$))"
+    return re.search(found, text) is not None
+
+
 def impact(path: str, h: Holders) -> list[str]:
     """Answer 6: every open brief and pull request that names PATH, and who renames it."""
     want = norm(path)
     out = []
     for b in h.briefs:
         text = norm_text(str(b.get("body") or ""))
-        if want in text:
+        if names(want, text):
             who = "fix list (taken)" if is_taken(b) else "steward edits (not taken)"
             out.append(f"#{b['number']} brief: {who}")
     for p in h.pulls:
         text = norm_text(str(p.get("body") or "")) + " " + " ".join(map(norm, p.get("added") or []))
-        if want in text:
+        if names(want, text):
             out.append(f"#{p['number']} pull request: fix list")
     return out
 

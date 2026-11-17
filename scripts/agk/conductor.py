@@ -109,6 +109,12 @@ problem of the `Final:` lines by `common.verdict_problem` (the reading `route.py
 `Final:` path the head does not have, and a fix list with no numbered item and no `Final:` line on
 a pull request with no Proposed ADR (it must be `cleared`); a read that fails is an error, never
 `ok`. `conductor_guard.py` runs the same check before the comment and `route.py` after it.
+Brief #1441 (ADR-0602): each numbered fix item and each `MALFORMED` line written `rename <old> to
+<new>` is refused when `plan_names.py` holds `<new>` (the tree, another open brief's `Adds:` or a
+`Touches:` at or below it, a file an open pull request adds), naming the item, the holder and the
+free name `plan_names.free` gives; `--pr N` leaves its `Brief: #n` out. The open briefs come from
+`--open-briefs FILE` or the read cache (`check_brief.open_holders`), never a request; `--root DIR`
+names the checkout whose default-branch tree is compared, alone when neither is there.
 `lease` is the active-conductor marker, so that the hourly run and a live conductor never merge at
 once: one comment on the plan issue that `plan_issue` of the `[flow]` table names (absent: the
 lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 10
@@ -321,7 +327,8 @@ import config
 USAGE = (
     "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep | "
     "conductor.py merge-queue [--dry-run] [--max-batch N] | "
-    "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] | "
+    "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] "
+    "[--root DIR] [--open-briefs FILE] | "
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N | "
     "conductor.py reprove --pr N [--apply] | "
     "conductor.py watchdog [--session NAME] [--install] [--pass] | "
@@ -2009,7 +2016,75 @@ def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
     return head_problem(repo, number, body, head) or gate_problem(root, repo, number, head, body)
 
 
-def check_verdict(path: str, root=None, number: int | None = None) -> int:
+RENAME = re.compile(r"\brename\s+`?([^\s`]+?)`?\s+to\s+`?([^\s`]+?)`?(?=[\s,;:)]|\.(?:\s|$)|$)")
+RENAME_HELD = (
+    "brief #1441 answer 1: {where} renames to {new}, held by {who} ({theirs}); free: {free}"
+)
+
+
+def rename_lines(body: str) -> list[tuple[str, str]]:
+    """(where, text) of each numbered fix item and each `MALFORMED` line of a verdict."""
+    out = [(f"item {item.split('.')[0]}", item) for item in fix_items(body)]
+    return out + [
+        ("a MALFORMED line", line.strip())
+        for line in body.splitlines()
+        if line.strip().startswith("MALFORMED:")
+    ]
+
+
+def rename_problems(body: str, h, own: int | None = None) -> list[str]:
+    """Brief #1441 answers 1 and 2: each `rename <old> to <new>` whose `<new>` the plan holds,
+    naming where it is, the holder and the free name `plan_names.free` gives at the holder's level;
+    the pull request's own brief OWN holds nothing."""
+    import plan_names  # noqa: PLC0415 - read only for a verdict that renames
+
+    out = []
+    rest = plan_names.Holders(
+        h.tree,
+        [b for b in h.briefs if b.get("number") != own],
+        [p for p in h.pulls if p.get("brief") != own],
+    )
+    for where, text in rename_lines(body):
+        for _, new in RENAME.findall(text):
+            who = plan_names.holder_of(new, h, own)
+            if who is None:
+                continue
+            try:
+                name = plan_names.free(plan_names.rename_base(new, who[1]), rest)
+            except CheckError:
+                name = "none from this entry; name one with plan_names.py next"
+            out.append(
+                RENAME_HELD.format(where=where, new=new, who=who[0], theirs=who[1], free=name)
+            )
+    return out
+
+
+def verdict_holders(root, opened: str | None):
+    """The tree of the default branch, and the open briefs and pull requests from OPENED or the
+    read cache, never by a request (brief #1441 answer 1)."""
+    import check_brief  # noqa: PLC0415 - read only for a verdict that renames
+
+    h = check_brief.open_holders(Path(root), opened)
+    try:
+        ref = f"origin/{session_plan._default_branch(root)}"
+    except (CheckError, OSError, KeyError, ValueError):
+        ref = None
+    h.tree = session_plan.tree_files(root, ref)
+    return h
+
+
+def own_brief(root, number: int | None) -> int | None:
+    """The `Brief: #n` of pull request NUMBER (answer 2), None without one."""
+    if number is None:
+        return None
+    pull = read_one(f"repos/{session.repo_name(root)}/pulls/{number}", "the pull request")
+    found = re.search(r"(?m)^Brief: #(\d+)", str(pull.get("body") or ""))
+    return int(found.group(1)) if found else None
+
+
+def check_verdict(
+    path: str, root=None, number: int | None = None, opened: str | None = None
+) -> int:
     try:
         body = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
@@ -2019,6 +2094,9 @@ def check_verdict(path: str, root=None, number: int | None = None) -> int:
         if number is None
         else full_problem(session.repo_name(root), number, body, root)
     )
+    if problem is None and any(RENAME.search(t) for _, t in rename_lines(body)):
+        found = rename_problems(body, verdict_holders(root, opened), own_brief(root, number))
+        problem = found[0] if found else None
     print("ok" if problem is None else problem)
     return 0 if problem is None else 1
 
@@ -3523,11 +3601,13 @@ def routine_args(args: list[str]) -> tuple | None:
     if args[:2] == ["rerun", "--pr"] and len(args) in (3, 4) and PR_NUMBER.fullmatch(args[2]):
         if args[3:] in ([], ["--apply"]):
             return ("rerun", int(args[2]), args[3:] == ["--apply"])
-    if args[:1] == ["check-verdict"] and len(args) in (2, 4) and args[1] and args[1][0] != "-":
-        if len(args) == 2:
-            return ("check-verdict", args[1], None)
-        if args[2] == "--pr" and PR_NUMBER.fullmatch(args[3]):
-            return ("check-verdict", args[1], int(args[3]))
+    if args[:1] == ["check-verdict"] and len(args) % 2 == 0 and args[1] and args[1][0] != "-":
+        flags = dict(zip(args[2::2], args[3::2], strict=True))
+        if len(flags) * 2 == len(args) - 2 and set(flags) <= {"--pr", "--root", "--open-briefs"}:
+            if "--pr" not in flags or PR_NUMBER.fullmatch(flags["--pr"]):
+                number = int(flags["--pr"]) if "--pr" in flags else None
+                opened = flags.get("--open-briefs")
+                return ("check-verdict", args[1], number, flags.get("--root"), opened)
     if args[:1] == ["lease"]:
         if args[1:] == ["--show"]:
             return ("lease", "--show", None)
@@ -3575,6 +3655,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     if queue is None and routine is None and guard is None and gate is None and not plain:
         print(USAGE, file=sys.stderr)
         return 2
+    if routine is not None and routine[0] == "check-verdict" and routine[3]:
+        root = Path(routine[3])  # brief #1441: `--root DIR`
     try:
         root = repo_root() if root is None else root
         if queue is not None:
@@ -3583,7 +3665,7 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             if routine[0] == "rerun":
                 return rerun(root, routine[1], routine[2])
             if routine[0] == "check-verdict":
-                return check_verdict(routine[1], root, routine[2])
+                return check_verdict(routine[1], root, routine[2], routine[4])
             if routine[0] == "over":
                 return over(root, routine[1])
             if routine[0] == "reprove":
