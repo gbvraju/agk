@@ -101,6 +101,8 @@ Every incident of a conductor run is a row of the conductor catch log (`docs/run
 - On every notification run `conductor.py sweep`, then start `conductor.py watch --since <last line read>` (row 12).
 - Answer first every pull request `sweep` marks `LATE`; keep a wake-up timer of at most 25 minutes beside the watch (row 13).
 
+A rename in a fix list takes its new name from `plan_names.py next --base <feature>-m<milestone>-<part>` and is written `rename <old> to <new>`; `conductor.py check-verdict` refuses a held one (brief #1441).
+
 ## Reviewing
 
 Follow the protocol below, the architect's unchanged, for each pull request and write the verdict in the shape that follows it.

@@ -236,8 +236,10 @@ convention `<feature>-m<milestone>-<part>`, never a counter such as `gaps1`), an
 `python3 scripts/agk/check_brief.py FILE --root .`: an entry that another open brief or pull request already adds, or that
 differs from one only in case, is refused with a free name. The `brief` skill (`/agk:brief`) takes the same step: it runs
 `plan_names.py batch` before any `Adds:` line names a new path (brief #1442, ADR-0603). A fix that renames a folder proposes only a name from
-`plan_names.py next --base <path>`; `plan_names.py impact <path>` lists who renames it (the steward edits a brief not yet
-taken; a taken one gets a fix list, and its builder renames on its branch). The plan lists two older briefs that already
+`plan_names.py next --base <path>`, written `rename <old> to <new>`; `conductor.py check-verdict` refuses a held one
+with the holder and a free name (brief #1441). `plan_names.py impact <path>` lists who renames it, matching whole path
+segments only (the steward edits a brief not yet taken; a taken one gets a fix list, and its builder renames on its
+branch). The plan lists two older briefs that already
 clash as `CLASH:` and starts neither until one is renamed; nothing renames a merged path.
 
 ## When a step refuses

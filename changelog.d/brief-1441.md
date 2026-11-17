@@ -1,0 +1,1 @@
+- A suggested rename is always a free name: `conductor.py check-verdict` refuses a fix item or `MALFORMED` line written `rename <old> to <new>` whose new name another open brief, pull request or the tree holds, naming the item, the holder and a free name (`--root`, `--open-briefs`), and `plan_names.py impact` matches whole path segments only (brief #1441)
