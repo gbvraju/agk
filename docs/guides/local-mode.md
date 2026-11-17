@@ -300,7 +300,9 @@ change with an ADR in the same pull request.
    working one is `left (working)`; an idle one is stopped and one starts in its place, at most once an hour. A conductor
    a person started is never stopped. When more than one already runs, the sweep and `agk status` print
    `NEEDS-YOU: <n> conductors on this machine: keep <lease holder>, close <names>; stop with: <command>`. No conductor and
-   no builder restart starts below `[flow] min_free_memory_mb`; the next pass tries again.
+   no builder restart starts below `[flow] min_free_memory_mb`; the next pass tries again. Only a verdict author's
+   machine starts a conductor (brief #1449, ADR-0607): on any other login the pass prints `this login is not a verdict
+   author; conductor not started, builders only` and runs builders only.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then

@@ -66,6 +66,7 @@ def world(repo, stub, tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{stub.bin}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("GH_STUB_DIR", str(stub.dir))
     monkeypatch.delenv("ADAPTER_EXIT", raising=False)
+    stub.serve("user", {"login": "boss"})  # a verdict author's machine (brief #1449)
     monkeypatch.setattr(common, "available_memory", lambda: 16 * GIB)
     return {"repo": repo, "stub": stub, "log": log, "toml": toml}
 

@@ -440,6 +440,7 @@ def local(repo, tmp_path, monkeypatch):
         return 0
 
     monkeypatch.setattr(conductor, "lease", lease)
+    monkeypatch.setattr(conductor.launch, "conductor_refusal", lambda root: None)  # brief #1449
     monkeypatch.setattr(conductor, "plan_comments", lambda repo, issue: [])
     monkeypatch.setattr(conductor, "lease_holder", lambda comments, authors, now: facts["holder"])
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
