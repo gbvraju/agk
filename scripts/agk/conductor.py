@@ -2320,8 +2320,8 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
 
 
 def refused_here(root) -> bool:
-    """Brief #1449 (ADR-0607): True, with its one line printed, when this machine's signed-in
-    login is not a listed verdict author, so the kit starts no conductor here; builders still run."""
+    """Brief #1449 (ADR-0607): True, with its one line printed, when this machine's login
+    is not a listed verdict author: the kit starts no conductor here; builders still run."""
     refused = launch.conductor_refusal(Path(root))
     if refused:
         print(f"watchdog: {refused}")

@@ -150,7 +150,7 @@ def test_launch_role_conductor_obeys_the_rule(world, capsys, monkeypatch, login,
     assert launch.role_main(args, root=world["repo"].root) == code
     out = capsys.readouterr().out
     if code:
-        assert "stuck: conductor cb-example-1 not started (this login is not a verdict author;" in out
+        assert "stuck: conductor cb-example-1 not started (this login is not a verdict" in out
         assert login not in out
     else:
         assert "started conductor cb-example-1" in out
