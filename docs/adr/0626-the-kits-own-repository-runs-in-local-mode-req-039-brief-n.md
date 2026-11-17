@@ -54,3 +54,12 @@ repository as local: the conductor merges on evidence, and a builder's `--record
 `local-mode-switch` warns until the owner's steps are done. The release pull request's full-suite record read by
 `check_release.py` (answer 3) and the readings of the brief's questions are recorded on the pull request (Q-1471-n).
 Tests: `tests/kit/test_kit_repo_local_mode.py`; `tests/kit/test_doctor.py` counts the new check.
+
+## Residual
+
+- 2026-11-17: answer 3 (the release pull request's full-suite record, read by `check_release.py`) is not built here;
+  `check_release.py` is outside the brief's `Touches` (Q-1471-3 on the pull request).
+- 2026-11-17: with `execution = "local"`, `common.clone_shared_by` makes a cloud builder's own clone a shared one, so
+  `session.py claim` and `push-check` refuse its main folder; a builder starts in its own worktree (Q-1471-1).
+- 2026-11-17: in local mode `required-check-governance` and `drift-workflow-state` fail once the owner's steps are done,
+  which `local-mode-switch` asks for (Q-1471-2).
