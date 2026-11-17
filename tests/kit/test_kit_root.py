@@ -129,9 +129,10 @@ def test_ac1_no_plugin_root_is_refused_naming_the_setting(tmp_path):
     """REQ-078 AC1: a clean project with no plugin root is refused, exit 1, naming the setting."""
     root = project(tmp_path, CLEAN)
     stray = tmp_path / "nowhere-example"
-    stray.mkdir()
+    (stray / "scripts" / "agk").mkdir(parents=True)  # a copy outside any plugin
+    shutil.copy(KIT / "kit_root.py", stray / "scripts" / "agk" / "kit_root.py")
     out = subprocess.run(
-        [sys.executable, str(KIT / "kit_root.py")],
+        [sys.executable, str(stray / "scripts" / "agk" / "kit_root.py")],
         cwd=root,
         env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(stray)},
         capture_output=True,
@@ -217,7 +218,8 @@ def test_ac1_the_session_rules_name_the_resolver_form():
     """REQ-078 AC1: SPEC-0071 rule 3: a rule naming a script names the resolver's form."""
     rules = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
     head = rules.split("\n1. ", 1)[0]
-    assert "kit_root.py --form" in head and PLUGIN_FORM in head
+    assert "kit_root.py --form" in head
+    assert 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"' in head
 
 
 @pytest.mark.parametrize("name", ["builder.txt", "conductor.txt", "launcher.txt"])
