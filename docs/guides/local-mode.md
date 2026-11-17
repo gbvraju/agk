@@ -104,10 +104,15 @@ itself. With no FILE after `--record` the record goes to one fixed place (brief 
 of the clone shares, so every session on the machine can read it and the conductor finds it from the head alone. It is never
 tracked and never makes the tree dirty. A session on the same machine as the conductor runs `--record` with no FILE: the
 conductor's guard reads only that shared folder (`evidence.py check --head <sha>`) or a record in its own scratch folder, and
-prepush prints one line when a FILE lands anywhere else (brief #1329, ADR-0564). A session on another machine still passes a
-FILE (`--record <record file>`), kept outside the repository (a record inside it makes the tree dirty), and the file is copied
-into the conductor's scratch folder or the shared folder before the conductor runs `evidence.py check <file> --head <sha>`,
-the two places its guard reads. Run it on a clean
+prepush prints one line when a FILE lands anywhere else (brief #1329, ADR-0564). A session on another machine also runs
+`--record` with no FILE: in local mode prepush stores the record, unchanged, as a git note of the head under
+`refs/notes/agk-evidence` (the secret guard reads it first), and the session pushes with
+`python3 scripts/agk/evidence.py push --branch <branch>`, which sends that ref with the branch (brief #1447, ADR-0605). When
+the conductor's folder has no record of the head, `evidence.py check --head <sha>` fetches that ref from `origin` and checks the
+note exactly as a record file: the note is evidence to re-check, never a pass. When another machine pushed notes meanwhile, `push`
+says to run it again. If a ruleset refuses the notes ref, `push` says so naming the setting and the fallback is the copy by hand: pass a FILE (`--record <record file>`), kept outside the
+repository (a record inside it makes the tree dirty), and copy it into the conductor's scratch folder or the shared folder
+before the conductor runs `evidence.py check <file> --head <sha>`, the two places its guard reads. Run it on a clean
 tree: a record of a dirty tree is reported as such.
 
 In PowerShell write `$base = git merge-base HEAD origin/main` and `python` where `python3` is not on the path; the `lock.py`
@@ -230,7 +235,8 @@ in this order. Each change to `agk.toml` is a protected change with an ADR in th
    and writes the job's output to the worktree's `.agk-session.log` (brief #1388, ADR-0588). With `show_jobs = true` in the
    `[autopilot]` table of `agk.toml` (default false) a job also shows in a terminal tab that closes when it ends, its output
    still in the log. Each writes `<worktree>/.agk-session-exit` when its session ends. Try the one for the machine once by
-   hand, as [the getting-started guide](getting-started.md) shows ("Automatic starts after a review pass"):
+   hand, as [the getting-started guide](getting-started.md) shows ("Automatic starts after a review pass"). Where the
+   adapter is named for the autopilot is in the note after step 4:
 
        echo hello | AGK_SESSION=builder-x bash scripts/start-session-local.sh
 
@@ -254,6 +260,11 @@ in this order. Each change to `agk.toml` is a protected change with an ADR in th
    and the conductor's watchdog task (`python3 scripts/agk/conductor.py watchdog`) are read only while `[autopilot]` is
    absent; once it is set they are not read, and `doctor.py` fails `autopilot-settings` naming each one still set. Remove
    them in the pull request that sets `[autopilot]`.
+
+   **Until the autopilot has its own adapter setting** (the owner's ruling Q-1451-2 (b); a follow-up brief builds it, and
+   this guide then names it), the autopilot still starts its jobs through the adapter that the old setting names, so `agk
+   autopilot on` and `agk next` need it set and `doctor.py` fails `autopilot-settings` while it is. Treat that failure as
+   known until the follow-up lands; do not remove the setting meanwhile.
 
    **The watchdog, the older way: the scripted pass** (brief #1310, ADR-0554): `watchdog --pass` keeps the conductor's model asleep while nothing
    changed. It takes or renews the lease under its name itself (another live holder, such as an interactive conductor with
@@ -290,8 +301,9 @@ in this order. Each change to `agk.toml` is a protected change with an ADR in th
    working one is `left (working)`; an idle one is stopped and one starts in its place, at most once an hour. A conductor
    a person started is never stopped. When more than one already runs, the sweep and `agk status` print
    `NEEDS-YOU: <n> conductors on this machine: keep <lease holder>, close <names>; stop with: <command>`. No conductor and
-   no builder restart starts below `[flow] min_free_memory_mb`; the next pass tries again.
-
+   no builder restart starts below `[flow] min_free_memory_mb`; the next pass tries again. Only a verdict author's
+   machine starts a conductor (brief #1449, ADR-0607): on any other login the pass prints `this login is not a verdict
+   author; conductor not started, builders only` and runs builders only.
 5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
    `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
    is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then
@@ -322,7 +334,10 @@ slower, and `doctor.py` says so (brief #1376, ADR-0577). In the runtime on the W
 plan of five lines or fewer, sets up WSL and the clone on your yes (each step skips what is done, so a stopped run
 resumes), tells you when to do the GitHub and runtime sign-ins in your browser, and makes the one pull request that sets
 `launch_adapter` to `bash scripts/start-session-local.sh`; it never merges. After you merge it, `/agk:wsl` again moves
-the watchdog into WSL and disables (never deletes) the Windows task. `/agk:wsl status` reports each part and
+the watchdog into WSL and disables (never deletes) the Windows task; with `[autopilot]` set on the default branch it
+runs `agk autopilot on` inside WSL instead, which registers the one Windows task `agk-autopilot (WSL)` through
+`schtasks.exe` to run whether or not you are signed in (Windows itself asks for your sign-in; declined, the task runs
+only while you are signed in and `on` warns), and `off` removes that task only (brief #1448, ADR-0606). `/agk:wsl status` reports each part and
 `/agk:wsl back` returns. Behind a company proxy a download fails until the company root certificate is given: the skill
 asks for its file. Screenshots that `design_compare.py` compares are captured again once on Linux, where fonts differ.
 
