@@ -1,0 +1,1 @@
+- After an uninstall, the report lists under `Left in your files:` every line of the project's own files that still names a removed kit path, settings to tidy by hand first and records to keep as written after, at most 40 lines; it edits none of them (brief #1443)

@@ -448,7 +448,8 @@ only `agk.toml` (at `REF` when given) and calls no `gh`; a value other than `tru
 `/agk:uninstall` runs `scripts/agk/uninstall.py` from the plugin (or a kit checkout), never the copy in the repository, since
 the removal deletes it. Without `--write` it is a dry run and writes nothing. With `--write` it refuses a work tree with
 changes, makes one new branch (`agk-uninstall`, or `agk-pause` for `--pause`) and writes the change there, uncommitted: you
-review it, commit it, push it and open one pull request, which git can revert.
+review it, commit it, push it and open one pull request, which git can revert. The report lists the lines left in your own files that still name a removed kit path,
+settings to tidy by hand first, then records, which stay as written.
 
 - **Deleted:** every kit file whose content (CRLF read as LF) equals a copy that some release row of the kit's
   `kit/hashes.json` lists for its path, whatever release the project was installed at; `agk.toml` when it holds only the kit's
