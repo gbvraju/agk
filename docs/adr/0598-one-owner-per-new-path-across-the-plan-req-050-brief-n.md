@@ -3,10 +3,10 @@
 - Status: Proposed
 - Date: 2026-11-17
 - Deciders: maintainers
-- Related: brief #1425, ADR-0189, ADR-0529, ADR-0548
+- Related: brief #1425, ADR-0189, ADR-0529, ADR-0548, SPEC-0030 amendment 141 item 2
 - Requirements: REQ-050
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`
 
 ## Context
 
@@ -34,7 +34,10 @@ were refused without naming either line or the merge.
    the one line to use.
 4. `session.py plan` lists two open briefs whose `Adds:` already clash as `CLASH: #a and #b both add <path>; rename in
    the one not taken (#n, free: <name>)` and starts neither while it stands; a taken one keeps running. With no clash
-   the plan is as before.
+   the plan is as before. This changes amendment 141 item 2 for `Adds:` only: two waiting briefs adding one path no
+   longer start the earlier and hold the later; they are a clash to rename.
+7. `plan_names.py` is an installed script (`kit/manifest.json`) with its own map entry in the `[testing]` table of
+   `agk.toml`.
 5. Free names come from the feature: `plan_names.py next --base` returns the base or the base with `-2`, `-3` and so
    on, absent from all four sources; `batch` names a batch in one pass; `impact` lists every open brief and pull request
    that names a path and who renames it (the steward edits a brief not yet taken; a taken one gets a fix list). The

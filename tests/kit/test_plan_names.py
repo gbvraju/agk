@@ -189,3 +189,21 @@ def test_the_command_reads_saved_lists(tmp_path):
     assert cli("batch", str(tmp_path / "b.txt")).stdout.split() == ["src/gaps2-2", "src/gaps2-3"]
     assert "#1 brief" in cli("impact", "src/gaps2").stdout
     assert cli("bogus").returncode == 2
+
+
+def test_the_check_reads_the_open_briefs_from_the_read_cache_with_no_command(tmp_path, monkeypatch):
+    """REQ-050: answer 9, local mode: the plan's cached listing, the origin read from the file."""
+    folder = tmp_path / "cache"
+    folder.mkdir(mode=0o700)
+    endpoint = "repos/example/repo/issues?state=open&labels=agk-brief&per_page=100&page=1"
+    entry = {"etag": "x", "body": [brief(66, "src/gaps2/")], "at": 1.0}
+    (folder / "example__repo.json").write_text(json.dumps({"entries": {endpoint: entry}}))
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text(
+        '[remote "origin"]\n\turl = https://github.com/example/repo.git\n', encoding="utf-8"
+    )
+    monkeypatch.setenv("AGK_READ_CACHE", str(folder))
+    monkeypatch.setattr(pn.session, "CACHE", pn.session.ReadCache())
+    monkeypatch.setattr(pn.session, "run_gh", lambda *a, **k: pytest.fail("no command"))
+    assert [b["number"] for b in pn.cached_issues(tmp_path)] == [66]
+    assert pn.cached_issues(tmp_path / "nowhere") == []

@@ -59,6 +59,11 @@ BY_RULE = re.compile(
 )
 NAME_PART = re.compile(r"[a-z0-9][a-z0-9-]*")
 TAKEN_LABEL = "agk:taken"
+ORIGIN_URL = re.compile(
+    r'\[remote "origin"\][^\[]*?^\s*url\s*=\s*\S*github\.com[:/]'
+    r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?\s*$",
+    re.M,
+)
 
 
 def norm(path: str) -> str:
@@ -287,10 +292,13 @@ def clash_line(c: dict) -> str:
 def cached_issues(root: Path) -> list[dict]:
     """Answer 9: the open briefs from the read cache the plan already wrote, with no request; none
     when the repository or the cache cannot be read."""
-    try:
-        repo = session.repo_name(root)
-    except CheckError:
+    try:  # the origin from `.git/config` itself: the check runs no command
+        origin = ORIGIN_URL.search((Path(root) / ".git" / "config").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
         return []
+    if origin is None:
+        return []
+    repo = origin.group(1)
     found: list[dict] = []
     for page in range(1, 100):
         endpoint = f"repos/{repo}/issues?state=open&labels={session.LABEL}"
