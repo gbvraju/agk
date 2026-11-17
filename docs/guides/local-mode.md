@@ -454,8 +454,9 @@ The kit's own repository sets `execution = "local"` in `agk.toml` (brief #1471, 
 without paying for Actions minutes and without dropping a check: the builder runs every gate on its head with
 `python3 scripts/agk/prepush.py --record` (lint, governance, the secret scan, the selected tests and proof), the conductor
 runs `python3 scripts/agk/evidence.py check --head <sha>` on the note that travels with the head, and the merge still needs
-`Local evidence:` and `Evidence check: agrees` in the verdict. With that setting a builder starts in its own worktree
-(`git worktree add ../agk-<session> origin/main`), since the main folder of the clone counts as shared. In a cloud session
+`Local evidence:` and `Evidence check: agrees` in the verdict. With that setting the main folder of a clone that several
+sessions share counts as shared, so a builder there starts in its own worktree (`git worktree add ../agk-<session>
+origin/main`); a cloud session's own clone is exempt (Q-1471-1 (a)). In a cloud session
 without the secret scanner, `python3 scripts/agk/doctor.py` prints the one line the owner adds to the environment's setup script.
 
 The switch-over is the owner's, in this order. Each step is printed for the owner and never run by a session:

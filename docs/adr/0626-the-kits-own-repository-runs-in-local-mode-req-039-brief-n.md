@@ -54,10 +54,10 @@ dropping a check. What stops on main the moment this merges (read from `merge_cl
 never merges; the guarded merge reads `Local evidence:` and `Evidence check: agrees` in the verdict instead of the
 `governance` and `proof` checks, so every open pull request whose verdict relies on CI alone is held with `no local
 evidence for this head (rule 4)`; the router reads local mode without an issue read; `prepush.py --record` also writes
-the note; and `session.py claim` and `push-check` refuse the main folder of a clone (Q-1471-1). An open pull request then
+the note; and `session.py claim` and `push-check` refuse the main folder of a shared clone, a cloud session's own clone
+being exempt by the separate brief of Q-1471-1 (a), which merges before this decision. An open pull request then
 needs its builder to run `python3 scripts/agk/prepush.py --record` on its head and push, and the conductor to run
-`python3 scripts/agk/evidence.py check --head <sha>` and give a new verdict on that head that carries both lines; its
-builder works from its own worktree. The doctor shows the same in a cloud session of the kit's own repository only: a
+`python3 scripts/agk/evidence.py check --head <sha>` and give a new verdict on that head that carries both lines. The doctor shows the same in a cloud session of the kit's own repository only: a
 hosted or hybrid project's secret-scan line is unchanged (fix list item 1). The doctor's
 `local-mode-switch` warns until the owner's steps are done. The release pull request's full-suite record read by
 `check_release.py` (answer 3) and the readings of the brief's questions are recorded on the pull request (Q-1471-n).
@@ -74,6 +74,8 @@ Tests: `tests/kit/test_kit_repo_local_mode.py`; `tests/kit/test_doctor.py` count
 - 2026-11-17: answer 3 (the release pull request's full-suite record, read by `check_release.py`) is not built here;
   `check_release.py` is outside the brief's `Touches` (Q-1471-3 on the pull request).
 - 2026-11-17: with `execution = "local"`, `common.clone_shared_by` makes a cloud builder's own clone a shared one, so
-  `session.py claim` and `push-check` refuse its main folder; a builder starts in its own worktree (Q-1471-1).
+  `session.py claim` and `push-check` refuse its main folder. Maintainer answer Q-1471-1 (a), 2026-11-17: a cloud
+  session's own clone is exempt for local mode, as it is for `launch_adapter`, built by a small separate brief that merges
+  before this pull request; this pull request does not change `common.py`.
 - 2026-11-17: in local mode `required-check-governance` and `drift-workflow-state` fail once the owner's steps are done,
   which `local-mode-switch` asks for (Q-1471-2).
