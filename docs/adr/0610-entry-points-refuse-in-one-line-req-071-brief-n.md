@@ -30,8 +30,8 @@ kit's own refusal error, so a business user read a stack trace instead of what t
 ## Consequences
 
 Every mode reads one line instead of a traceback, and the personal-mode case says how to fix itself. The wording of
-the three lines stays different (Q-1452-1 asks whether to unify it on `refused:`).
+the three lines stays different (Q-1452-2 asks whether to unify it on `refused:`).
 
 ## Residual
 
-- Q-1452-1: one wording for all three entry points.
+- Q-1452-2: one wording for all three entry points.
