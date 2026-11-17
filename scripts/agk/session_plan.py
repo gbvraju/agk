@@ -586,7 +586,7 @@ def cycle_wait(number: int, other: int, chain: list[int]) -> dict:
     """Answer 3: the wait of a true cycle, with the stable line and the owner's line, which
     names the `Depends-on:` lines of the loop."""
     a, b = sorted((other, number))
-    lines = ", ".join(f"`Depends-on: #{y}` in #{x}" for x, y in zip(chain, chain[1:]))
+    lines = ", ".join(f"`Depends-on: #{y}` in #{x}" for x, y in zip(chain, chain[1:], strict=False))
     owner = f"Owner needed: #{a} and #{b} wait on each other (Depends-on); remove one of: {lines}"
     return {"brief": number, "cycle": other, "why": CYCLE.format(a=a, b=b), "owner": owner}
 
@@ -635,13 +635,19 @@ def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
         if found := clash(mine, unshared(root, entries_of(root, theirs), shared)):
             if (lifted := dependency_wait(s, brief["number"], number, number, found)) is True:
                 continue
-            return lifted or {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
+            return lifted or {
+                "brief": brief["number"],
+                "waits_for": number,
+                "why": f"both touch {found}",
+            }
     for pr in s.builders:
         if pr_brief(pr) == brief["number"]:
             continue
         if found := pull_conflict(s, pr, mine, shared):
             file = found.split(" ", 2)[2]
-            if (lifted := dependency_wait(s, brief["number"], pr_brief(pr), pr["number"], file)) is True:
+            if (
+                lifted := dependency_wait(s, brief["number"], pr_brief(pr), pr["number"], file)
+            ) is True:
                 continue
             return lifted or {"brief": brief["number"], "pull_request": pr["number"], "why": found}
     return None

@@ -2479,8 +2479,14 @@ def claim_overlap(root, s: Survey, number: int, seen: dict) -> str | None:
     rules 2 to 4), or None. It reads the open briefs and pull requests as `next` does; a read that
     fails stops the claim (CheckError) and never passes as no overlap. The survey is kept in `seen`
     for the reservation, so that the briefs are read once."""
-    from session_plan import ahead_lines, exempt, read_gone, running_conflict, settle_takes
-    from session_plan import wait_text
+    from session_plan import (
+        ahead_lines,
+        exempt,
+        read_gone,
+        running_conflict,
+        settle_takes,
+        wait_text,
+    )
 
     shared = exempt(root)
     issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
@@ -3430,8 +3436,14 @@ def next_brief(root, me: str, taking: bool = False) -> int:
         return 1
     # The plan's rules decide (brief #345, ADR-0195): a stale claim holds nothing, overlap is
     # judged by files, and a skip names the plan's reason.
-    from session_plan import ahead_lines, exempt, read_gone, running_conflict, settle_takes
-    from session_plan import wait_text
+    from session_plan import (
+        ahead_lines,
+        exempt,
+        read_gone,
+        running_conflict,
+        settle_takes,
+        wait_text,
+    )
 
     shared = exempt(root)  # SPEC-0050 rules 2 and 3: the one list `plan` and `claim` judge with
     read_gone(root, s)

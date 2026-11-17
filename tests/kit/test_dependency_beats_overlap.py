@@ -76,7 +76,9 @@ def test_the_holder_brief_body(tmp_path):
     """Answer 1: the taken holder brief's body names the brief (no pull request yet)."""
     s = scene([issue(24, "a.py", 31), issue(31, "a.py")], held=[24])
     assert judge(tmp_path, s, 31) is None
-    assert ahead_lines(s, 31) == ["#31 starts ahead of #24, which depends on it (overlap on a.py ignored)"]
+    assert ahead_lines(s, 31) == [
+        "#31 starts ahead of #24, which depends on it (overlap on a.py ignored)"
+    ]
 
 
 def test_the_pull_request_body_only(tmp_path):
@@ -112,9 +114,7 @@ def test_a_two_brief_cycle(tmp_path):
 
 def test_a_three_brief_cycle(tmp_path):
     """Answer 3: down a chain both ways."""
-    s = scene(
-        [issue(24, "a.py", 40), issue(40, "z.py", 31), issue(31, "a.py", 24)], held=[24]
-    )
+    s = scene([issue(24, "a.py", 40), issue(40, "z.py", 31), issue(31, "a.py", 24)], held=[24])
     found = judge(tmp_path, s, 31)
     assert found["cycle"] == 24
     assert found["owner"].endswith(
