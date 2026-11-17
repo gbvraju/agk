@@ -38,7 +38,7 @@ def section(text: str | None = None) -> str:
 
 
 def split_note(body: str) -> tuple[str, str]:
-    """The section without its one note, and the note (a paragraph that starts `**Older settings**`)."""
+    """The section without its one note, and the note (the paragraph of `**Older settings**`)."""
     paragraphs = re.split(r"\n\s*\n", body)
     notes = [p for p in paragraphs if p.lstrip().startswith(NOTE_START)]
     rest = "\n\n".join(p for p in paragraphs if p not in notes)
@@ -69,7 +69,7 @@ def test_the_guide_sets_autopilot_then_turns_it_on():
     set_at = rest.find("[autopilot]")
     on_at = rest.find("agk autopilot on")
     assert -1 < set_at < on_at, "the table is set before the command that turns it on"
-    # the old plain `watchdog --install` step is gone; the scripted pass keeps its own line (ADR-0568)
+    # the plain `watchdog --install` step is gone; the scripted pass keeps its own line
     assert not re.search(r"watchdog --install(?! --pass)", rest)
 
 
