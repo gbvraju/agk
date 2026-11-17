@@ -31,13 +31,16 @@ reviewed change.
    figure), `[flow] builder_memory_gb` (rule 6's figure, when unset, Q-S0065-7), `[flow] launch_adapter` (the Windows
    or WSL adapter from the Windows answer; on Linux in local mode the background adapter, when unset) and
    `[autopilot] mode` (when the table is absent). A commented `[models.names]` placeholder is added when the change is
-   made and the project names no models; the kit ships no model name.
-4. **One change on a new branch** `agk/setup-settings-<date>`: `agk.toml`, the project's next ADR (Proposed, naming
+   made and the project names no models; the kit ships no model name. On GitHub's machines (`execution = "hosted"`,
+   rule 16) only `execution` is proposed, nothing sized from this machine; for "for me only" nothing is proposed, and
+   the plan's last line says so.
+4. **One change on a new branch** `agk/setup-settings-<date>`, made from `origin/<default branch>` and only after the
+   new `agk.toml` text is built from the default branch's own file and parses: `agk.toml`, the project's next ADR (Proposed, naming
    `agk.toml`, `REQ-001`) and the body in `<git dir>/agk/pr-body-setup.md`; the command commits, pushes and merges
    nothing and prints the commit, `prepush.py --record`, push and `wsl.py open` commands the person runs (SPEC-0005
    rule 8, Q-S0065-10). When every setting already matches it writes nothing and says no pull request is needed. For
-   "for me only" (personal mode, rule 16) it writes nothing to the project. Uncommitted changes to `agk.toml` or
-   `docs/adr/`, or an existing branch of that name, refuse naming the path class.
+   "for me only" (personal mode, rule 16) it writes nothing to the project. Uncommitted changes to a tracked file, a
+   default branch whose `agk.toml` cannot be read, or an existing branch of that name refuse naming the path class.
 5. **The skill** asks the questions (the steward or Claude asks them as given) and runs `settings --yes` only after the
    person's yes to the plan.
 

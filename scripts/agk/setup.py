@@ -406,8 +406,12 @@ def proposals(config: dict, answers: dict, builders: dict, machine: dict) -> lis
             out.append((table, key, value))
 
     where = answers.get("where")
+    if where == "personal":
+        return out  # rule 16: personal mode proposes nothing to the project
     if where in ("hosted", "local") and config.get("execution") not in ("hybrid", "pool"):
         want(None, "execution", where)
+    if (where or config.get("execution", "hosted")) == "hosted":
+        return out  # rule 16: CI mode changes `execution` only, nothing sized from this machine
     if "team" in answers:
         want(None, "review_mode", answers["team"])
     if builders["figure"] > 1:  # more than one builder under one login (brief #1461 answer 1)
@@ -440,7 +444,7 @@ def set_key(text: str, table: str | None, key: str, value) -> str:
     if table is None:
         start, end = -1, heads[0] if heads else len(lines)
     else:
-        found = next((i for i in heads if lines[i].strip() == f"[{table}]"), None)
+        found = next((i for i in heads if lines[i].split("#")[0].strip() == f"[{table}]"), None)
         if found is None:
             lead = "" if not text or text.endswith("\n") else "\n"
             return f"{text}{lead}\n[{table}]\n{line}"
@@ -477,25 +481,37 @@ def project_adr(number: int, items: list[tuple], today: str) -> str:
     ])  # fmt: skip
 
 
-def write_settings(root: Path, items: list[tuple], today: str) -> list[str]:
-    """Rule 9: one change and its ADR on a new branch; the person commits, checks and pushes."""
+def write_settings(root: Path, find, today: str) -> list[str]:
+    """Rule 9: one change and its ADR on a new branch from the default branch; FIND gives the
+    settings the default branch's `agk.toml` lacks. The text is built and parsed first."""
+    ref = f"origin/{wsl.default_branch(config_of(root)[1])}"
+    unread = wsl.Refusal("the default branch's agk.toml cannot be read (path class: agk.toml)")
+    if not wsl.git(root, "rev-parse", "--verify", "--quiet", f"{ref}:agk.toml"):
+        raise unread
+    text = wsl.git(root, "show", f"{ref}:agk.toml")
+    text += "\n" if text else ""
+    try:
+        items = find(tomllib.loads(text))
+    except tomllib.TOMLDecodeError:
+        raise unread from None
     if not items:
         return ["every setting already matches: nothing written and no pull request is needed"]
-    text, _ = config_of(root)
-    if text is None:
-        raise wsl.Refusal("agk.toml cannot be read (path class: agk.toml)")
-    if wsl.git(root, "status", "--porcelain", "--", "agk.toml", "docs/adr"):
-        raise wsl.Refusal("uncommitted changes (path class: agk.toml or docs/adr/)")
+    for item in items:
+        text = set_key(text, *item)
+    try:
+        names = tomllib.loads(text).get("models", {}).get("names")
+    except tomllib.TOMLDecodeError:
+        bad = "the change would not parse; nothing written (path class: agk.toml)"
+        raise wsl.Refusal(bad) from None
+    text += "" if names or "# [models.names]" in text else NAMES_PLACEHOLDER
+    if wsl.git(root, "status", "--porcelain", "--untracked-files=no"):
+        raise wsl.Refusal("uncommitted changes in this folder (path class: the working tree)")
     branch = f"{BRANCH}-{today}"
     if wsl.git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"):
         raise wsl.Refusal("that branch already exists (path class: the settings branch)")
-    wsl.git(root, "checkout", "-q", "-b", branch)
+    wsl.git(root, "checkout", "-q", "-b", branch, ref)
     if wsl.git(root, "branch", "--show-current") != branch:
         raise wsl.Refusal("the new branch was not made (path class: the settings branch)")
-    for item in items:
-        text = set_key(text, *item)
-    names = tomllib.loads(text).get("models", {}).get("names")
-    text += "" if names or "# [models.names]" in text else NAMES_PLACEHOLDER
     number, adr = wsl.next_adr(root, "the-project-settings-chosen-in-setup")
     (root / "agk.toml").write_text(text, encoding="utf-8")
     adr.write_text(project_adr(number, items, today), encoding="utf-8")
@@ -585,7 +601,8 @@ def main(argv: list[str] | None = None) -> int:
                   "request)")  # fmt: skip
             return 0
         try:
-            print("\n".join(write_settings(root, items, today)))
+            find = lambda base: proposals(base, answers, builders, machine)  # noqa: E731
+            print("\n".join(write_settings(root, find, today)))
         except wsl.Refusal as exc:
             print(f"setup: {exc}")
             return 1
@@ -597,7 +614,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(table, indent=2))
         return 0
     lines = plan_lines(machine, repo, builders, rows) if args.form == "plan" else []
-    if lines and items:  # rule 4: the settings only in the plan's last line, for the developer
+    if lines and answers.get("where") == "personal":  # rule 16
+        lines.append("  For the developer: for me only, nothing is proposed to the project.")
+    elif lines and items:  # rule 4: the settings only in the plan's last line, for the developer
         lines.append(f"  For the developer: {'; '.join(shown(i) for i in items)}.")
     lines += [""] if lines else []
     print("\n".join(lines + table_lines(rows)))

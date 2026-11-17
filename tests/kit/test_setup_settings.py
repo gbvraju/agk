@@ -52,7 +52,11 @@ def git(root: Path, *args: str) -> str:
     return done.stdout.strip()
 
 
+WHO = ("-c", "user.email=member-example-1@example.com", "-c", "user.name=member-example-1")
+
+
 def project(tmp_path: Path, toml: str = "", files=()) -> Path:
+    """A scratch clone whose `origin` is a bare repository beside it: no network."""
     root = tmp_path / "project"
     (root / "docs" / "adr").mkdir(parents=True)
     (root / "agk.toml").write_text(toml, encoding="utf-8")
@@ -64,6 +68,11 @@ def project(tmp_path: Path, toml: str = "", files=()) -> Path:
         "add", ".")  # fmt: skip
     git(root, "-c", "user.email=member-example-1@example.com", "-c", "user.name=member-example-1",
         "commit", "-q", "-m", "example")  # fmt: skip
+    origin = tmp_path / "origin.git"
+    git(tmp_path, "init", "-q", "--bare", str(origin))
+    git(root, "remote", "add", "origin", str(origin))
+    git(root, "push", "-q", "origin", "main")
+    git(root, "fetch", "-q", "origin")
     return root
 
 
@@ -248,3 +257,58 @@ def test_ac5_one_builder_keeps_strict(tmp_path, capsys, figure):
     code, _ = run(root, capsys, "settings", extra=extra)
     assert code == 0
     assert "pr_mode" not in setup.tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+
+
+def test_ac6_ci_mode_proposes_execution_only(tmp_path, capsys):
+    """REQ-072 AC6: rule 16: on GitHub's machines nothing is sized from this machine."""
+    root = project(tmp_path, 'review_mode = "solo"\n')
+    code, _ = run(root, capsys, "settings", extra=["--yes", *answers("where=hosted")])
+    config = setup.tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    assert code == 0 and config["execution"] == "hosted"
+    assert "pr_mode" not in config and "flow" not in config and "autopilot" not in config
+
+
+def test_ac6_personal_mode_names_no_setting_in_the_plan(tmp_path, capsys):
+    """REQ-072 AC6: rule 16: for me only, the plan proposes nothing to the project."""
+    _, out = run(project(tmp_path), capsys, "plan", extra=answers("where=personal"))
+    last = out.split("\n\n")[0].splitlines()[-1]
+    assert "nothing is proposed" in last and " = " not in last
+
+
+def test_ac5_the_branch_starts_from_the_default_branch(tmp_path, capsys):
+    """REQ-072 AC5: rule 9: a feature branch's own commits stay out; a dirty tree refuses."""
+    root = project(tmp_path, 'review_mode = "solo"\n')
+    git(root, "checkout", "-q", "-b", "feature-example")
+    (root / "example.txt").write_text("example\n", encoding="utf-8")
+    git(root, "add", "example.txt")
+    git(root, *WHO, "commit", "-q", "-m", "feature")
+    (root / "example.txt").write_text("changed\n", encoding="utf-8")
+    code, out = run(root, capsys, "settings", extra=["--yes", *answers("where=local")])
+    assert code == 1 and "working tree" in out
+    assert git(root, "branch", "--show-current") == "feature-example"
+    git(root, "checkout", "-q", "--", "example.txt")
+    code, out = run(root, capsys, "settings", extra=["--yes", *answers("where=local")])
+    assert code == 0, out
+    assert git(root, "rev-parse", "HEAD") == git(root, "rev-parse", "origin/main")
+    assert not (root / "example.txt").exists()
+
+
+def test_ac5_a_table_line_with_a_comment_is_the_same_table(tmp_path, capsys):
+    """REQ-072 AC5: rule 9: `[flow]  # ...` is found, never doubled; the text parses first."""
+    toml = 'review_mode = "solo"\n[flow]  # the flow table\nmax_builders = 2\n'
+    root = project(tmp_path, toml)
+    code, out = run(root, capsys, "settings", extra=["--yes", *answers("where=local")])
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    assert code == 0, out
+    assert text.count("[flow]") == 1 and setup.tomllib.loads(text)["flow"]["builder_memory_gb"] == 3
+    assert setup.set_key("[a]\nx = 1\n", "a", "y", 2) == "[a]\nx = 1\ny = 2\n"
+
+
+def test_ac5_a_change_that_would_not_parse_makes_no_branch(tmp_path, capsys, monkeypatch):
+    """REQ-072 AC5: rule 9: the text is checked before the branch; nothing is left behind."""
+    root = project(tmp_path, 'review_mode = "solo"\n')
+    monkeypatch.setattr(setup, "set_key", lambda text, *item: text + "[broken\n")
+    code, out = run(root, capsys, "settings", extra=["--yes", *answers("where=local")])
+    assert code == 1 and "would not parse" in out
+    assert git(root, "branch", "--show-current") == "main"
+    assert git(root, "branch", "--list", "agk/*") == ""
