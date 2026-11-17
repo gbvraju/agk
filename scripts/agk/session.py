@@ -912,6 +912,7 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
         asked += ["-H", f"If-None-Match: {entry['etag']}"]
     if method != "GET":
         STORE.forget(endpoint)
+        forget_read(endpoint)
     fields = who_fields(endpoint, method, extra)  # a comment ends `Who: AGK` (ADR-0546)
     tries = 0
     for attempt in range(RATE_WAITS + 1):
@@ -949,11 +950,30 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
         tries += kind == "secondary"
         capped = kind == "secondary" and seconds > SECONDARY_CAP
         seconds = min(seconds, SECONDARY_CAP) if kind == "secondary" else seconds
-        print(f"github: limited, waiting {math.ceil(seconds)} s ({kind})", file=sys.stderr)
+        print(f"github: limited, waiting {math.ceil(seconds)} s ({wait_kind(kind, seconds)})",
+              file=sys.stderr)  # fmt: skip
         time.sleep(seconds)
         if capped:
             return None  # brief #1335 answer 4: the caller's unreadable path runs
     return None
+
+
+def wait_kind(kind: str, seconds: float) -> str:
+    """Brief #1435 answer 5: a primary wait names its end in the machine's local time."""
+    if kind != "primary":
+        return kind
+    return f"primary, until {datetime.fromtimestamp(time.time() + seconds):%H:%M} local"
+
+
+def forget_read(endpoint: str) -> None:
+    """A write ends this run's memo of what it changed (brief #1435 answer 2): the GETs of the
+    endpoint written, and for a comment posted, that issue's comment pages leave the pass's
+    unchanged set, so that a take posted is read back from GitHub."""
+    if MEMO is not None:
+        for key in [k for k in MEMO if str(k[0]).split("?")[0] == endpoint.split("?")[0]]:
+            del MEMO[key]
+    if CACHE.unchanged is not None and (found := re.search(r"/issues/(\d+)/comments", endpoint)):
+        CACHE.unchanged[1].add(int(found.group(1)))
 
 
 def pages(endpoint: str) -> list | None:
@@ -1988,9 +2008,15 @@ def recent_pulls(repo: str, hours: int) -> list | None:
 
 
 def survey(
-    root, repo: str, me: str, issues: list | None = None, walk: Walk | None = None
+    root,
+    repo: str,
+    me: str,
+    issues: list | None = None,
+    walk: Walk | None = None,
+    prs_read: list | None = None,
 ) -> Survey:
     """Everything `next`, `demand` and `ids` read: the pull requests, the briefs and their takes.
+    `prs_read`, when given, are the recent pull requests a claim already read (brief #1435).
 
     While the default branch is red only its brief is left (SPEC-0032 rule 7), with each fix brief
     of it (`session_plan.fix_briefs`, brief #1052) in `fixes`."""
@@ -2009,12 +2035,16 @@ def survey(
         prs = []
     elif walk is not None:
         prs = recent_pulls(repo, max(walk.hours, hours))
+    elif prs_read is not None:
+        prs = prs_read
     else:
         prs = pages(f"repos/{repo}/pulls?state=all")
     if prs is None:
         raise CheckError("rule 1: the pull requests cannot be read")
     builders = [p for p in prs if p.get("state") == "open" and brief_number(p) is not None]
-    found = Survey(repo, me, limit, hours, prs, builders, recent=walk is not None)
+    found = Survey(
+        repo, me, limit, hours, prs, builders, recent=walk is not None or prs_read is not None
+    )
     found.briefs = {i["number"]: i for i in issues if "pull_request" not in i}
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
     shape = brief_shape(root, repo)
@@ -2463,7 +2493,7 @@ def claim_reservation(root, s: Survey, number: int) -> list[str]:
     on c26b62e of brief #440): read from a survey that sees the open builder pull requests and the
     reservations of every live take. A read that fails reserves nothing, with a note."""
     try:
-        seen = survey(root, s.repo, s.me)
+        seen = survey(root, s.repo, s.me, prs_read=s.prs)
         brief = seen.briefs.get(number) or gh(f"repos/{s.repo}/issues/{number}")
         if not isinstance(brief, dict) or not isinstance(brief.get("body"), str):
             raise CheckError("rule 4: the brief cannot be read")
@@ -2497,7 +2527,8 @@ def claim_overlap(root, s: Survey, number: int, seen: dict) -> str | None:
     brief = brief or gh(f"repos/{s.repo}/issues/{number}")
     if not isinstance(brief, dict) or not isinstance(brief.get("body"), str):
         raise CheckError("rule 3: the brief cannot be read")
-    view = survey(root, s.repo, s.me, [i for i in briefs if i.get("number") != number])
+    others = [i for i in briefs if i.get("number") != number]
+    view = survey(root, s.repo, s.me, others, prs_read=s.prs)  # brief #1435: read once
     view.prs = s.prs  # the red-branch survey reads none; the overlap needs every open one
     view.builders = [p for p in s.prs if p.get("state") == "open" and brief_number(p) is not None]
     view.briefs[number], view.comments[number] = brief, s.comments[number]
@@ -2522,7 +2553,7 @@ def red_first(root, s: Survey, number: int) -> tuple[bool, str | None]:
     if any(i.get("number") == number and is_red(i) for i in issues):
         from session_plan import read_gone, settle_takes
 
-        view = survey(root, s.repo, s.me, issues)  # the survey `next` judges the alarm by
+        view = survey(root, s.repo, s.me, issues, prs_read=s.prs)  # as `next` judges the alarm
         read_gone(root, view)
         freed, skipped = settle_takes(view)
         why = next((w for n, w in skipped if n == number), None)
@@ -2560,44 +2591,59 @@ def main_folder_guard(root) -> bool:
 
 
 def claim(root, me: str, number: int, build: str | None) -> int:
+    """Read as the plan reads (brief #1435, ADR-0601): each GET once in the run (MEMO),
+    unchanged comment pages from the cache, and the plan's `reads:` line at the end."""
     if not main_folder_guard(root):
         return 1
-    repo = repo_name(root)
-    STORE.begin(root, repo)  # brief #1314: unchanged briefs answered from the store (ADR-0555)
-    comments = pages(f"repos/{repo}/issues/{number}/comments")
-    prs = pages(f"repos/{repo}/pulls?state=all")
-    if comments is None or prs is None:
-        raise CheckError("rule 5: the brief and the pull requests cannot be read")
-    if reason := hold_state(root, comments, number)[0]:
-        print(f"skip #{number}: {HELD_PREFIX}{reason}")
-        return 1
-    hours = flow_int(root, "claim_hours", CLAIM_HOURS, 1)
-    s = Survey(repo, me, 0, hours, prs, [], {number: comments})
-    if any(t[2] != me for t in live_takes(comments, number, prs, hours)):
-        stale_view(root, s, number)
-    seen: dict = {}
+    from session_plan import WINDOW_DAYS, reads_line
 
-    def reserve() -> list[str]:
-        if build is not None:
-            return []
-        if "survey" in seen:  # the survey of the overlap judgement, read once
-            return reservation(root, seen["survey"], seen["brief"])
-        return claim_reservation(root, s, number)
+    global MEMO
+    began, start = time.monotonic(), (CALLS, CACHED, WRITES)
+    MEMO = {}  # this run's reads only
+    try:
+        repo = repo_name(root)
+        changed_since_pass(repo)  # answer 3: no request for an unchanged comment page
+        STORE.begin(root, repo)  # brief #1314: unchanged briefs answered from the store (ADR-0555)
+        hours = flow_int(root, "claim_hours", CLAIM_HOURS, 1)
+        comments = pages(f"repos/{repo}/issues/{number}/comments")
+        prs = recent_pulls(repo, max(hours, WINDOW_DAYS * 24))  # answer 1: never every one ever
+        if comments is None or prs is None:
+            raise CheckError("rule 5: the brief and the pull requests cannot be read")
+        if reason := hold_state(root, comments, number)[0]:
+            print(f"skip #{number}: {HELD_PREFIX}{reason}")
+            return 1
+        s = Survey(repo, me, 0, hours, prs, [], {number: comments}, recent=True)
+        if any(t[2] != me for t in live_takes(comments, number, prs, hours)):
+            stale_view(root, s, number)
+        seen: dict = {}
 
-    def gate() -> str | None:
-        first, why = red_first(root, s, number)  # briefs #1052, #1368: the alarm and its fix
-        return why if first else claim_overlap(root, s, number, seen)
+        def reserve() -> list[str]:
+            if build is not None:
+                return []
+            if "survey" in seen:  # the survey of the overlap judgement, read once
+                return reservation(root, seen["survey"], seen["brief"])
+            return claim_reservation(root, s, number)
 
-    if why := take(s, {"number": number}, reserve, build, gate):
-        print(f"skip #{number}: {why}")
-        return 1
-    print(f"claimed #{number}" + (f" build ({build})" if build else ""))
-    label = gh(
-        f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={TAKEN_LABEL}", method="POST"
-    )
-    if label is None:  # ADR-0529 decision 3: a hint only; the take comment decides
-        print(f"note: the label {TAKEN_LABEL} could not be added; the take stands", file=sys.stderr)
-    return 0
+        def gate() -> str | None:
+            first, why = red_first(root, s, number)  # briefs #1052, #1368: the alarm and its fix
+            return why if first else claim_overlap(root, s, number, seen)
+
+        if why := take(s, {"number": number}, reserve, build, gate):
+            print(f"skip #{number}: {why}")
+            return 1
+        print(f"claimed #{number}" + (f" build ({build})" if build else ""))
+        label = gh(
+            f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={TAKEN_LABEL}", method="POST"
+        )
+        if label is None:  # ADR-0529 decision 3: a hint only; the take comment decides
+            note = f"note: the label {TAKEN_LABEL} could not be added; the take stands"
+            print(note, file=sys.stderr)
+        return 0
+    finally:
+        MEMO, CACHE.unchanged = None, None
+        spent = {"calls": CALLS - start[0], "cached": CACHED - start[1]}
+        spent["writes"] = WRITES - start[2]
+        print(reads_line({**spent, "seconds": round(time.monotonic() - began, 1)}), file=sys.stderr)
 
 
 def conductor_issue(repo: str) -> int:

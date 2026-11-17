@@ -1,0 +1,1 @@
+- `session.py claim` reads as the plan does: the open and recent closed pull requests, never every one ever, each listing once in the run, unchanged comments from the cache; it ends with the plan's `reads:` line, and a primary rate-limit wait names its end in local time (brief #1435)
