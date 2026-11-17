@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 # The check of a pushed tag (brief #212, build (b)): the tagged commit must be a release. It runs `scripts/agk/check_tag.py` from a
 # checkout of the tag with the full history; on a failure the job fails and the one issue `The tag <tag> is not a release` is opened
 # or updated as a plain issue labelled `agk-release` for a person (only a person can fix a tag). It deletes no tag, moves none, makes no release and no commit: the only write is that issue.

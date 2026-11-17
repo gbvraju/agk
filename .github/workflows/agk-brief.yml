@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 # The brief check on GitHub (brief #770, SPEC-0030 rule 4, ADR-0357): a brief is checked when it is filed or edited, not only by the
 # conductor's guard. It runs `scripts/agk/check_brief.py --event` from a checkout of the default branch, on the saved event file, so the
 # issue's text never reaches a command. On a failure the issue gets the label `agk-brief-invalid` and one comment naming each failing

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 # The merger job (SPEC-0039 rule 2, brief #765, ADR-0354): in GitHub mode with `[flow] auto_merge = true`, it runs the one
 # guarded command on a cleared head with no session. It starts only on `issue_comment`, `workflow_run` and `status`, which GitHub
 # always runs from this file on the default branch, never from a pull request's copy; no pull request's run can start it. Its
