@@ -15,6 +15,7 @@ from __future__ import annotations
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -68,6 +69,7 @@ def machine(monkeypatch):
     monkeypatch.setattr(autopilot, "run_command", found)
     monkeypatch.setattr(conductor, "memory_line", lambda root: ("watchdog: memory 16 GB", True))
     monkeypatch.setattr(autopilot, "day_spend", lambda root, day: 1000)
+    monkeypatch.setattr(autopilot, "PROC_VERSION", Path("/nonexistent/agk-example"))  # not WSL
     return found
 
 
