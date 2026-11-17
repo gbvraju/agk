@@ -109,8 +109,8 @@ prepush prints one line when a FILE lands anywhere else (brief #1329, ADR-0564).
 `refs/notes/agk-evidence` (the secret guard reads it first), and the session pushes with
 `python3 scripts/agk/evidence.py push --branch <branch>`, which sends that ref with the branch (brief #1447, ADR-0605). When
 the conductor's folder has no record of the head, `evidence.py check --head <sha>` fetches that ref from `origin` and checks the
-note exactly as a record file: the note is evidence to re-check, never a pass. If a ruleset refuses the notes ref, `push`
-says so naming the setting and the fallback is the copy by hand: pass a FILE (`--record <record file>`), kept outside the
+note exactly as a record file: the note is evidence to re-check, never a pass. When another machine pushed notes meanwhile, `push`
+says to run it again. If a ruleset refuses the notes ref, `push` says so naming the setting and the fallback is the copy by hand: pass a FILE (`--record <record file>`), kept outside the
 repository (a record inside it makes the tree dirty), and copy it into the conductor's scratch folder or the shared folder
 before the conductor runs `evidence.py check <file> --head <sha>`, the two places its guard reads. Run it on a clean
 tree: a record of a dirty tree is reported as such.

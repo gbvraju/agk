@@ -58,9 +58,13 @@ that ref, which `prepush.py --record` writes in local mode and `push` sends; it 
 record read from the note of the head (ref: refs/notes/agk-evidence)` and checks the note exactly as
 a record file, its printed digest being that of the note's bytes. No note, no remote or a refused
 fetch is the exit 3 above. `push --branch B [--remote R]` (default `origin`) merges the remote's
-notes into the clone's with the `ours` strategy and runs `git push R B refs/notes/agk-evidence`;
-when only the notes ref is refused it prints one line naming that setting and the fallback (the
-record copied by hand) and exits 0, else git's exit code. A fetch or push never prompts.
+notes into the clone's with the `ours` strategy (two machines that recorded the same head: this
+clone's note is kept) and pushes the branch and that ref; a branch or remote that is not a plain
+name (a leading `-` or `+`, a `:`, or one `git check-ref-format --branch` refuses) is a usage
+error, and a merge that fails pushes nothing (exit 1). When only the notes ref is refused it prints
+one line: run it again (exit 1) when the remote's notes moved since the fetch, else the line naming
+that setting and the fallback (the record copied by hand, exit 0); any other failure keeps git's
+exit code. A fetch or push never prompts.
 
 Exit 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O
 error (a record that cannot be read, a worktree that cannot be made, make not installed). It posts
@@ -110,6 +114,15 @@ NO_SHARED = "evidence: no record for this head in the shared evidence folder (op
 FETCHED_REF = NOTES_REF + "-origin"  # the remote's notes, kept apart from the clone's own
 NOTE_READ = f"evidence: record read from the note of the head (ref: {NOTES_REF})"
 PUSH_USAGE = "usage: evidence.py push --branch BRANCH [--remote REMOTE]"
+BAD_NAME = "evidence: not a plain branch or remote name (option: --branch, --remote)"
+NOTE_MERGE_FAILED = (
+    f"evidence: the remote's notes cannot be merged into this clone's (setting: {NOTES_REF});"
+    " nothing was pushed"
+)
+NOTE_RACE = (
+    f"evidence: the branch is pushed but another machine pushed notes meanwhile (setting:"
+    f" {NOTES_REF}); run the same command again"
+)
 SCHEMA = 1
 DEFAULT_SAMPLE = 1
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -292,33 +305,63 @@ def fetched_note(root: Path, head: str) -> bytes | None:
     return shown.stdout if shown.returncode == 0 else None
 
 
+def safe_name(root: Path, branch: str, remote: str) -> bool:
+    """True when BRANCH is a plain branch name git accepts and REMOTE no option: never a refspec
+    (`+`, `:`) or an option (`-`), so `push` pushes only the branch the person named."""
+    for value in (branch, remote):
+        if not value or value[0] in "-+" or ":" in value:
+            return False
+    return quiet_git(root, "check-ref-format", "--branch", branch).returncode == 0
+
+
+def remote_notes(root: Path, remote: str) -> str:
+    """The sha the remote's notes ref names now, or "" when it has none."""
+    found = quiet_git(root, "ls-remote", "--", remote, NOTES_REF).stdout.split()
+    return found[0].decode("ascii", errors="replace") if found else ""
+
+
 def push(root: Path, args: list[str]) -> int:
     """`push --branch B [--remote R]` (brief #1447 answers 1 and 6): merge the remote's notes into
-    the clone's (`ours`: notes are keyed by head), then push the branch and the notes ref. When the
-    branch landed and only the notes ref was refused, print `NOTE_NOT_PUSHED` and exit 0."""
+    the clone's (`ours`: when two machines recorded the same head, this clone's note is kept), then
+    push the branch and the notes ref. When the branch landed and only the notes ref was refused,
+    print `NOTE_RACE` (exit 1) when the remote's notes moved since the fetch, else
+    `NOTE_NOT_PUSHED` (exit 0); a merge that fails pushes nothing (exit 1)."""
     if len(args) % 2 or any(a not in ("--branch", "--remote") for a in args[::2]):
         raise Usage(PUSH_USAGE)
     options = dict(zip(args[::2], args[1::2], strict=True))
     branch, remote = options.get("--branch", ""), options.get("--remote", "origin")
-    if not branch or not remote:
-        raise Usage(PUSH_USAGE)
+    if not safe_name(root, branch, remote):
+        raise Usage(BAD_NAME)
     has_notes = quiet_git(root, "rev-parse", "-q", "--verify", NOTES_REF).returncode == 0
+    seen = ""
     if fetch_notes(root, remote):
+        seen = quiet_git(root, "rev-parse", FETCHED_REF).stdout.decode().strip()
         if has_notes:
-            quiet_git(root, "notes", "--ref", NOTES_REF, "merge", "-q", "-s", "ours", FETCHED_REF)
+            merged = quiet_git(
+                root, "notes", "--ref", NOTES_REF, "merge", "-q", "-s", "ours", FETCHED_REF
+            )
+            if merged.returncode != 0:
+                print(NOTE_MERGE_FAILED)
+                return 1
         else:
             has_notes = quiet_git(root, "update-ref", NOTES_REF, FETCHED_REF).returncode == 0
-    refs = [branch, NOTES_REF] if has_notes else [branch]
-    pushed = quiet_git(root, "push", "-q", remote, *refs)
+    refs = [f"refs/heads/{branch}:refs/heads/{branch}"]
+    if has_notes:
+        refs.append(f"{NOTES_REF}:{NOTES_REF}")
+    pushed = quiet_git(root, "push", "-q", "--", remote, *refs)
     sys.stdout.write((pushed.stdout + pushed.stderr).decode("utf-8", errors="replace"))
     if pushed.returncode == 0:
         return 0
-    there = quiet_git(root, "ls-remote", remote, f"refs/heads/{branch}").stdout.split()
+    there = quiet_git(root, "ls-remote", "--", remote, f"refs/heads/{branch}").stdout.split()
     here = quiet_git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").stdout.strip()
-    if has_notes and there and there[0] == here:
-        print(NOTE_NOT_PUSHED)
-        return 0
-    return pushed.returncode
+    if not (has_notes and there and there[0] == here):
+        return pushed.returncode
+    said = pushed.stderr.decode("utf-8", errors="replace")
+    if remote_notes(root, remote) != seen or "non-fast-forward" in said or "fetch first" in said:
+        print(NOTE_RACE)
+        return 1
+    print(NOTE_NOT_PUSHED)
+    return 0
 
 
 def resolve(root: Path, ref: str | None, given: bool) -> str:

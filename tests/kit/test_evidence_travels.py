@@ -25,6 +25,7 @@ from test_prepush import LINT_OK, MK_OK, TOML, path_with, scanner
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 
+import evidence  # noqa: E402
 import prepush  # noqa: E402
 
 REF = "refs/notes/agk-evidence"
@@ -53,9 +54,9 @@ def machine_a(repo, outside: Path, settings: str = LOCAL, tables: str = ""):
     return a, origin
 
 
-def machine_b(repo, outside: Path, origin: Path):
-    """Machine B: a second clone of the remote, as the conductor's machine."""
-    path = outside / "b"
+def machine_b(repo, outside: Path, origin: Path, name: str = "b"):
+    """Machine B: a second clone of the remote, as the conductor's machine (or a third, NAME)."""
+    path = outside / name
     repo.git("clone", "-q", str(origin), str(path))
     b = type(repo)(path)
     b.git("config", "user.email", "member-example-1@example.com")
@@ -187,8 +188,70 @@ def test_a_refused_notes_push_leaves_the_branch_pushed_and_names_the_fallback(re
     assert a.git("ls-remote", str(origin), REF) == ""
 
 
+@pytest.mark.parametrize("name", ["--force", "+feature:main", "feature:main", "-x", "bad..name"])
+def test_push_refuses_a_branch_that_is_not_a_plain_name(repo, outside, name):
+    """REQ-039: brief #1447 answer 1 (verdict on d0db4e5c7fa7, item 1): `--branch` is never a
+    refspec or an option, and nothing is pushed."""
+    a, origin = machine_a(repo, outside)
+    proc = a.run("evidence.py", "push", "--branch", name)
+    assert proc.returncode == 2 and proc.stderr.strip() == evidence.BAD_NAME
+    assert a.git("ls-remote", str(origin), "refs/heads/*").split()[1::2] == ["refs/heads/main"]
+    assert a.run("evidence.py", "push", "--branch", "feature", "--remote", "-x").returncode == 2
+
+
+def test_notes_pushed_by_another_machine_meanwhile_say_run_again_and_a_rerun_lands(
+    repo, outside
+):
+    """REQ-039: brief #1447 answer 6 (verdict on d0db4e5c7fa7, item 2): another machine pushes
+    notes between this fetch and this push; the line says run it again (exit 1), not the ruleset
+    fallback, and the second run sends both machines' notes."""
+    a, origin = machine_a(repo, outside)
+    c = machine_b(repo, outside, origin, "c")
+    main = c.git("rev-parse", "origin/main").strip()
+    mark = outside / "raced"
+    hook = Path(a.git("rev-parse", "--git-common-dir").strip())
+    hook = (hook if hook.is_absolute() else a.root / hook) / "hooks" / "pre-push"
+    hook.write_text(
+        "#!/bin/sh\n"
+        f'[ -e "{mark}" ] && exit 0\n'
+        f'touch "{mark}"\n'
+        "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\n"
+        f'git -C "{c.root}" notes --ref agk-evidence add -f -m other {main}\n'
+        f'git -C "{c.root}" push -q origin refs/notes/agk-evidence\n'
+        "exit 0\n"
+    )
+    hook.chmod(0o755)
+    made = a.run("prepush.py", "--record", PATH=path_with(scanner(outside / "bin", 0)))
+    assert made.returncode == 0, made.stdout + made.stderr
+    first = a.run("evidence.py", "push", "--branch", "feature")
+    assert first.returncode == 1, first.stdout + first.stderr
+    assert first.stdout.strip().splitlines()[-1] == evidence.NOTE_RACE
+    second = a.run("evidence.py", "push", "--branch", "feature")
+    assert second.returncode == 0, second.stdout + second.stderr
+    b = machine_b(repo, outside, origin)
+    b.git("fetch", "-q", "origin", f"{REF}:{REF}")
+    head = a.git("rev-parse", "HEAD").strip()
+    assert head in notes(b) and main in notes(b)
+
+
+def test_two_machines_recording_the_same_head_keep_this_clones_note(repo, outside):
+    """REQ-039: brief #1447 answer 1 (verdict on d0db4e5c7fa7, item 3): `ours` keeps the pushing
+    clone's note when the remote holds another for the same head."""
+    a, origin = machine_a(repo, outside)
+    a.git("push", "-q", "origin", "feature")
+    head = a.git("rev-parse", "HEAD").strip()
+    c = machine_b(repo, outside, origin, "c")
+    c.git("notes", "--ref", "agk-evidence", "add", "-f", "-m", "from-c", head)
+    c.git("push", "-q", "origin", REF)
+    record_and_push(a, outside, scanner(outside / "bin", 0))
+    b = machine_b(repo, outside, origin)
+    b.git("fetch", "-q", "origin", f"{REF}:{REF}")
+    assert '"schema": 1' in b.git("notes", "--ref", "agk-evidence", "show", head)
+
+
 @pytest.mark.parametrize(
-    "settings,tables", [("", ""), ('execution = "hybrid"\n', ""), (LOCAL, PERSONAL)]
+    "settings,tables",
+    [("", ""), ('execution = "hybrid"\n', ""), ('execution = "pool"\n', ""), (LOCAL, PERSONAL)],
 )
 def test_hosted_hybrid_and_personal_mode_write_no_note(repo, outside, settings, tables):
     """REQ-039: brief #1447 answers 5 and 7 (hosted and personal mode write no note); the folder

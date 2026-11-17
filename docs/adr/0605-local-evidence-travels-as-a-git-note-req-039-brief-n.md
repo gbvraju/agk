@@ -25,12 +25,16 @@ and `docs/guides/local-mode.md` told a builder on another machine to copy its re
    line naming the same setting. Neither changes the exit code or the record. On success prepush prints the command
    that sends it: `python3 scripts/agk/evidence.py push --branch <branch>`. `--record FILE`, hosted, hybrid and pool
    mode and personal mode write no note.
-2. `scripts/agk/evidence.py push --branch <b> [--remote <r>]` (default `origin`) fetches the remote's notes ref into
-   `refs/notes/agk-evidence-origin`, merges it into the local ref with the `ours` strategy (notes are keyed by head, so
-   two machines never write the same one), then runs `git push <r> <b> refs/notes/agk-evidence`. When the branch
-   reached the remote and only the notes ref was refused, it prints one line naming the setting
-   `refs/notes/agk-evidence` and the fallback, the record copied by hand as before, and exits 0; any other failure
-   keeps git's exit code.
+2. `scripts/agk/evidence.py push --branch <b> [--remote <r>]` (default `origin`) refuses a branch or remote that is not
+   a plain name (a leading `-` or `+`, a `:`, or a branch `git check-ref-format --branch` refuses), exit 2, so it never
+   pushes a refspec or takes an option. It fetches the remote's notes ref into `refs/notes/agk-evidence-origin` and
+   merges it into the local ref with the `ours` strategy: notes of different heads are joined, and when two machines
+   recorded the same head this clone's note is kept. A merge that fails pushes nothing (exit 1). Then it pushes
+   `refs/heads/<b>` and `refs/notes/agk-evidence`. When the branch reached the remote and only the notes ref was
+   refused, it prints one line: when the remote's notes moved since the fetch (another machine pushed meanwhile), or git
+   names a non-fast-forward, to run the same command again (exit 1); otherwise the line naming the setting
+   `refs/notes/agk-evidence` and the fallback, the record copied by hand as before (exit 0). Any other failure keeps
+   git's exit code.
 3. `scripts/agk/evidence.py check --head <sha>` with no RECORD reads the shared folder first, so one machine makes no
    fetch. When the folder has no record it runs one `git fetch origin +refs/notes/agk-evidence:refs/notes/agk-evidence-origin`
    and reads the note of that head from the fetched ref, printing `evidence: record read from the note of the head
@@ -55,4 +59,7 @@ default branch. Tests: `tests/kit/test_evidence_travels.py`. Protected path clas
 
 - 2026-11-17: the fetch in rule 3 uses a separate ref (`refs/notes/agk-evidence-origin`) where the brief named the local
   ref itself, so that a conductor's own notes are never overwritten (Q-1447-1).
+- 2026-11-17: the check trusts the record's `base`, as for a record file; a note anyone with push access can write makes
+  that reachable from another machine. Refusing a `base` that is not the merge base of the head with the default branch
+  is left to a later brief (verdict on d0db4e5c7fa7, Gaps).
 - 2026-11-17: notes of old heads stay on the remote until a person removes the ref; each is one small record.
