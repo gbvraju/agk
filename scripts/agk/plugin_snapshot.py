@@ -90,7 +90,7 @@ def tag_files(root: Path, ref: str, listed: list[str]) -> dict[str, tuple[int, b
     if proc.returncode:
         raise CheckError("the tag does not resolve (path class tag)")
     files: dict[str, tuple[int, bytes]] = {}
-    with tarfile.open(fileobj=io.BytesIO(proc.stdout)) as tar:
+    with tarfile.TarFile(fileobj=io.BytesIO(proc.stdout)) as tar:  # a plain tar of `git archive`
         for member in tar.getmembers():
             if member.isfile() and allowed(member.name, listed):
                 data = tar.extractfile(member)
@@ -153,6 +153,7 @@ def hashes_problem(root: Path, commit: str) -> str | None:
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
     return None if proc.returncode == 0 else "kit/hashes.json fails its check (path class kit/)"
