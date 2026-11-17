@@ -30,7 +30,8 @@ SKILL = ROOT / "skills" / "setup" / "SKILL.md"
 TOOLS = {"python": "3.12.1", "git": "2.43.0", "gh": "2.50.0", "claude": "2.1.0", "node": "20.11.0"}
 SECRET = re.compile(r"gh[pousr]_[A-Za-z0-9]{16,}|github_pat_|password\s*[=:]", re.IGNORECASE)
 SET = 'execution = "local"\nreview_mode = "solo"\npr_mode = "flow"\n'
-SET += '[flow]\nmax_builders = 2\nbuilder_memory_gb = 3\nlaunch_adapter = "bash scripts/start-session-local.sh"\n'
+SET += '[flow]\nmax_builders = 2\nbuilder_memory_gb = 3\n'
+SET += 'launch_adapter = "bash scripts/start-session-local.sh"\n'
 SET += '[autopilot]\nmode = "assist"\n'
 
 
@@ -55,7 +56,7 @@ def project(tmp_path: Path, toml: str = "", files=()) -> Path:
     root = tmp_path / "project"
     (root / "docs" / "adr").mkdir(parents=True)
     (root / "agk.toml").write_text(toml, encoding="utf-8")
-    (root / "docs" / "adr" / "0001-example.md").write_text("# ADR-0001: example\n", encoding="utf-8")
+    (root / "docs" / "adr" / "0001-example.md").write_text("# ADR-0001\n", encoding="utf-8")
     for name in files:
         (root / name).write_text("example\n", encoding="utf-8")
     git(root, "init", "-q", "-b", "main")
@@ -145,7 +146,8 @@ def test_ac5_the_settings_go_on_a_new_branch_with_an_adr_never_committed(tmp_pat
     code, out = run(root, capsys, "settings", extra=extra)
     assert code == 0, out
     assert git(root, "branch", "--show-current") == "agk/setup-settings-2026-11-17"
-    assert git(root, "rev-parse", "HEAD") == head and git(root, "rev-list", "--count", "HEAD") == "1"
+    assert git(root, "rev-parse", "HEAD") == head
+    assert git(root, "rev-list", "--count", "HEAD") == "1"
     assert git(root, "show", "main:agk.toml") == 'review_mode = "team"'
     config = setup.tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
     assert config["execution"] == "local" and config["review_mode"] == "team"
