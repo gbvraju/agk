@@ -1,6 +1,7 @@
-"""/agk:setup build (d): on Windows with WSL 2 chosen, the setup calls `/agk:wsl`'s script and helper
-unchanged, then the scheduler through that script's own watchdog step, so one command and one yes
-set up the WSL workforce (brief #1463, SPEC-0065 rules 7 and 17, ADR-0621; REQ-072 AC4 and AC8).
+"""/agk:setup build (d): on Windows with WSL 2 chosen, the setup calls `/agk:wsl`'s script and
+helper unchanged, then the scheduler through that script's own watchdog step, so one command and
+one yes set up the WSL workforce (brief #1463, SPEC-0065 rules 7 and 17, ADR-0621; REQ-072 AC4
+and AC8).
 
 A fake machine read, saved GitHub answers and a stub runtime that records every command and answers
 `wsl_setup.ps1 -Json` and `wsl.py` as they print; no Windows, no WSL, no network, no model. Invented
@@ -51,7 +52,7 @@ class Runtime:
             return self.ps1(args)
         if args[1:2] == [HELPER]:
             if args[2] == "plan":
-                return 0, f"machine: WSL 2 with Ubuntu-24.04\nadapter: already the WSL adapter\n{self.watchdog}\n"
+                return 0, f"machine: WSL 2 with Ubuntu-24.04\nadapter: WSL\n{self.watchdog}\n"
             return 0, "wsl: on\nwatchdog: the WSL task\n"
         return 1, ""
 
