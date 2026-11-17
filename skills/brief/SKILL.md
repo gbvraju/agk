@@ -29,5 +29,20 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" split --goal "TITLE"
 ```
 
 `--kind KIND` shows one kind alone. A brief's `Kind:` line names one kind of `brief_order`; its `Depends-on:` names the
-earlier brief once that brief is filed. Then help the user fill in the items; the maintainers decide their content. Do
-not commit or push.
+earlier brief once that brief is filed. Then help the user fill in the items; the maintainers decide their content.
+
+Before an `Adds:` line names a new folder or file, write one base per line to FILE, by the convention
+`<feature>-m<milestone>-<part>` (never a counter such as `gaps1`), name the whole batch in one pass and use the names it
+prints (brief #1442, ADR-0603); one new brief alone uses `next --base PATH` instead.
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_names.py" batch FILE
+```
+
+Then check each saved brief before it is filed:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_brief.py" BRIEF --root .
+```
+
+Do not commit or push.

@@ -63,8 +63,8 @@ def test_the_skill_names_the_free_names_step_before_the_check():
 
 def test_the_skill_command_lines_are_the_ones_the_reference_lists():
     """REQ-050"""
-    lines = re.findall(r"^python3 \"\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/(plan_names\.py .+)$",
-                       skill(), re.M)
+    found = re.findall(r'^python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/plan_names\.py" (.+)$', skill(), re.M)
+    lines = [f"plan_names.py {rest}" for rest in found]
     assert any(line.startswith("plan_names.py batch FILE") for line in lines)
     listed = [
         ln.strip().removeprefix("python3 scripts/agk/")
