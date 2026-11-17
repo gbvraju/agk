@@ -52,6 +52,10 @@ rule_tags_from = "2026-12-06"
 # high. `conductor = "strongest"` (the one value) pins every pass to strongest; this repository keeps the defaults. A change needs an ADR.
 # [models]
 # conductor = "strongest"
+# The private release repository that holds one licensed plugin snapshot per release (brief #1476, ADR-0627), as
+# `owner/name`. The owner creates it, pushes to it and grants access; `plugin_snapshot.py publish` refuses while it is empty.
+[release]
+repository = ""
 [flow]
 # "next" by the owner's direction of 2026-11-11 (brief #1029, ADR-0438): a finished builder takes its next brief at once;
 # the slots s<n> still act on Assign: lines (builder_start below is unchanged).
@@ -725,6 +729,9 @@ tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
   "tests/kit/test_playbook_split.py",
 ]
+[[testing.map]]
+code = "scripts/agk/plugin_snapshot.py"
+tests = ["tests/kit/test_plugin_snapshot.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/pr_body.py"
 tests = [
