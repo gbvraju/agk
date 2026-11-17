@@ -103,6 +103,7 @@
     "scripts/agk/guard_rules.json",
     "scripts/agk/heavy_queue.py",
     "scripts/agk/impact.py",
+    "scripts/agk/kit_root.py",
     "scripts/agk/launch.py",
     "scripts/agk/lessons.py",
     "scripts/agk/local_mode.py",

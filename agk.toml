@@ -495,8 +495,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/evidence.py"
 tests = [
-  "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py", "tests/kit/test_long_temp_dir.py",
-  "tests/kit/test_test_timing.py",
+  "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py", "tests/kit/test_kit_root.py",
+  "tests/kit/test_long_temp_dir.py", "tests/kit/test_test_timing.py",
 ]
 [[testing.map]]
 code = "scripts/agk/execution.py"
@@ -751,10 +751,13 @@ tests = [
 code = "scripts/agk/pr_state.py"
 tests = ["tests/kit/test_pr_state.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/kit_root.py"
+tests = ["tests/kit/test_kit_root.py"]
+[[testing.map]]
 code = "scripts/agk/prepush.py"
 tests = [
   "tests/kit/test_batch.py", "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py",
-  "tests/kit/test_kit_suite_selection.py", "tests/kit/test_lock.py", "tests/kit/test_lock_slots.py",
+  "tests/kit/test_kit_root.py", "tests/kit/test_kit_suite_selection.py", "tests/kit/test_lock.py", "tests/kit/test_lock_slots.py",
   "tests/kit/test_long_temp_dir.py", "tests/kit/test_prepush.py", "tests/kit/test_prepush_lint_missing_tool.py",
   "tests/kit/test_prepush_lock_inherited.py", "tests/kit/test_prepush_proof_timeout_warning.py",
   "tests/kit/test_prepush_queue.py", "tests/kit/test_prepush_record.py", "tests/kit/test_prepush_regression.py",
