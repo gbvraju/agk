@@ -1305,17 +1305,18 @@ def is_main_worktree(root: Path) -> bool:
 
 def clone_shared_by(root: Path) -> str | None:
     """What makes ROOT's clone one that several sessions share, named as a setting, or None:
-    `execution = "local"`; a `[flow] launch_adapter`, except in a cloud session, whose clone is
-    its own (brief #1301 mode check CI, Q-1301-1); another worktree whose folder is `agk-*`."""
+    `execution = "local"` or a `[flow] launch_adapter`, each except in a cloud session, whose
+    clone is its own (Q-1301-1, brief #1482, Q-1471-1); another worktree whose folder is `agk-*`."""
     try:
         settings = config_source(root)
     except (OSError, ValueError, tomllib.TOMLDecodeError):
         settings = {}
-    if settings.get("execution") == "local":
+    cloud = os.environ.get(REMOTE_RUNTIME) == "true"
+    if settings.get("execution") == "local" and not cloud:
         return "setting: execution"
     flow = settings.get("flow")
     adapter = flow.get("launch_adapter") if isinstance(flow, dict) else None
-    if isinstance(adapter, str) and adapter.strip() and os.environ.get(REMOTE_RUNTIME) != "true":
+    if isinstance(adapter, str) and adapter.strip() and not cloud:
         return "setting: [flow] launch_adapter"
     if any(p.name.startswith("agk-") for p in worktree_paths(root)[1:]):
         return "found: another agk-* worktree"

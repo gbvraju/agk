@@ -859,6 +859,9 @@ tests = ["tests/kit/test_sbom.py"]
 code = "scripts/agk/scorecard.py"
 tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
+code = "scripts/agk/common.py"
+tests = ["tests/kit/test_cloud_clone_local_mode.py", "tests/kit/test_shared_main.py"]
+[[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
   "tests/kit/test_autopilot_build_jobs.py",
