@@ -9,8 +9,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+import test_uninstall
 from conftest import snapshot
-from test_uninstall import REVIEWERS, commit, init_target, kit, run  # noqa: F401  (kit is a fixture)
+from test_uninstall import REVIEWERS, commit, init_target, run
+
+kit = test_uninstall.kit  # the fixture kit, used by every test below
+pytestmark = pytest.mark.usefixtures("kit")
 
 # The probe's case (answer 6): 2 settings lines, 6 record lines, and lines that must not count.
 MINE = {
@@ -52,7 +57,7 @@ def section(out: list[str]) -> list[str]:
     return found[:end]
 
 
-def test_the_probes_case_lists_settings_then_records(tmp_path, kit, capsys):
+def test_the_probes_case_lists_settings_then_records(tmp_path, capsys):
     """REQ-009: brief #1443 answers 1, 2 and 4 (two groups; whole path segments only)."""
     target = init_target(tmp_path, **MINE)
     code, out = run(capsys, target)
@@ -61,7 +66,7 @@ def test_the_probes_case_lists_settings_then_records(tmp_path, kit, capsys):
     assert out.index(SECTION[0]) > max(i for i, ln in enumerate(out) if ln.startswith("delete "))
 
 
-def test_a_dry_run_and_a_write_run_give_the_same_section_and_edit_none(tmp_path, kit, capsys):
+def test_a_dry_run_and_a_write_run_give_the_same_section_and_edit_none(tmp_path, capsys):
     """REQ-009: brief #1443 answers 3 and 6 (the same section; the lines stay as written)."""
     target = init_target(tmp_path, **MINE)
     dry = section(run(capsys, target)[1])
@@ -72,7 +77,7 @@ def test_a_dry_run_and_a_write_run_give_the_same_section_and_edit_none(tmp_path,
         assert (target / rel).read_text(encoding="utf-8") == text
 
 
-def test_a_pause_prints_no_such_section(tmp_path, kit, capsys):
+def test_a_pause_prints_no_such_section(tmp_path, capsys):
     """REQ-009: brief #1443 answer 6 (`--pause` removes nothing)."""
     target = init_target(tmp_path, **MINE)
     for args in (("--pause",), ("--pause", "--write")):
@@ -81,7 +86,7 @@ def test_a_pause_prints_no_such_section(tmp_path, kit, capsys):
         assert not any(ln.startswith("Left in your files") for ln in out), out
 
 
-def test_more_than_forty_lines_end_with_how_many_more(tmp_path, kit, capsys):
+def test_more_than_forty_lines_end_with_how_many_more(tmp_path, capsys):
     """REQ-009: brief #1443 answer 1 (at most 40 lines, then `and <k> more`)."""
     many = "".join(f"step {n}: include agk.mk\n" for n in range(1, 46))
     target = init_target(tmp_path, **{"docs/runs/log.md": many})
@@ -92,7 +97,7 @@ def test_more_than_forty_lines_end_with_how_many_more(tmp_path, kit, capsys):
     assert found[-1] == "and 5 more"
 
 
-def test_a_binary_and_a_large_file_are_skipped_and_counted(tmp_path, kit, capsys):
+def test_a_binary_and_a_large_file_are_skipped_and_counted(tmp_path, capsys):
     """REQ-009: brief #1443 answer 4 (binary and over 1 MB skipped, counted on one line)."""
     target = init_target(tmp_path)
     (target / "docs" / "logo.png").write_bytes(b"\x89PNG\0\0 agk.mk\n")
@@ -102,7 +107,7 @@ def test_a_binary_and_a_large_file_are_skipped_and_counted(tmp_path, kit, capsys
     assert found == ["Left in your files: none", "skipped: 2 binary or large files"]
 
 
-def test_a_project_with_no_leftover_lines_says_none(tmp_path, kit, capsys):
+def test_a_project_with_no_leftover_lines_says_none(tmp_path, capsys):
     """REQ-009: brief #1443 answer 5 (`Left in your files: none`)."""
     target = init_target(tmp_path)
     before = snapshot(target)
@@ -111,7 +116,7 @@ def test_a_project_with_no_leftover_lines_says_none(tmp_path, kit, capsys):
     assert snapshot(target) == before
 
 
-def test_the_removed_kit_files_and_git_are_never_searched(tmp_path, kit, capsys):
+def test_the_removed_kit_files_and_git_are_never_searched(tmp_path, capsys):
     """REQ-009: brief #1443 answer 4 (the kit's removed files and `.git/` are not searched)."""
     target = init_target(tmp_path)
     assert (target / "agk.mk").is_file()  # names Makefile targets, and is removed
@@ -119,3 +124,11 @@ def test_the_removed_kit_files_and_git_are_never_searched(tmp_path, kit, capsys)
     found = section(run(capsys, target)[1])
     assert found == ["Left in your files: none"]
     assert Path(target / ".git" / "agk-note").is_file()
+
+
+def test_settings_come_before_other_files_to_tidy(tmp_path, capsys):
+    """REQ-009: brief #1443 answer 2 (settings first under `tidy by hand:`, other files after)."""
+    target = init_target(tmp_path, **{"README.md": "Run make -f agk.mk\n", **MINE})
+    found = section(run(capsys, target)[1])
+    assert found[2].startswith("config/reviewers.yaml:3:")
+    assert found[4] == "README.md:1: Run make -f agk.mk" and found[5] == "records, keep as written:"
