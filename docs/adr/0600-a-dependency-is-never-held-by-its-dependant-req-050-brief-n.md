@@ -22,7 +22,7 @@ main stayed red until the owner answered by hand.
    body or its open pull request's body has `Depends-on: #n`, or either depends on #n down a chain of `Depends-on:`
    lines among open briefs. The chain is built once per survey from the bodies already read (no GitHub call). The
    brief starts with the line `#n starts ahead of #h, which depends on it (overlap on <file> ignored)`, printed by
-   `plan` (and in `plan --json` under `ahead`), `next` and `claim`.
+   `plan` (and in `plan --json` under `ahead`, a key present only when a dependency is lifted, so the plan is otherwise as before), `next` and `claim`.
 2. **Only the dependency is lifted.** Every other overlapping holder still holds the brief; the holder is neither
    restarted nor stopped. The plan's `Holds` lines leave out a lifted hold, so they agree with the judgement.
 3. **A real cycle is reported.** When #n also waits on the holder, the wait is

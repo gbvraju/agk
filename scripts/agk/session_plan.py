@@ -2150,8 +2150,6 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
         "start": [] if assigning else entries,
         "running": running_sessions(s),
         "waits": waits,
-        "ahead": [x for b in chosen for x in ahead_lines(s, b["number"])],  # brief #1432
-        "cycles": cycles_of(s, waits),
         "holders": ranked,
         "skipped": [
             {"brief": n, "why": why}
@@ -2205,6 +2203,10 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
         found["held"] = held
     if ignored_holds:
         found["ignored_holds"] = ignored_holds
+    if starts := [x for b in chosen for x in ahead_lines(s, b["number"])]:
+        found["ahead"] = starts  # brief #1432: with no dependency lifted the plan is as before
+    if cycles := cycles_of(s, waits):
+        found["cycles"] = cycles
     return found, bool(s.unread) and (
         count < fillable or ahead(s, pb, ready, chosen[:count], active)
     )
