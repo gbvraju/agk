@@ -1,6 +1,6 @@
 # ADR-0578: Add REQ-072: One command sets up any machine as a ready, correctly sized AI workforce
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: SPEC-0065, SPEC-0005, SPEC-0041, SPEC-0059, SPEC-0061, SPEC-0062, SPEC-0063, SPEC-0064, ADR-0577, brief #1376, brief #1378, plan #661

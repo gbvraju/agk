@@ -1,6 +1,6 @@
 # ADR-0601: A claim reads like the plan
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1435, ADR-0529, ADR-0548, ADR-0555, ADR-0565

@@ -1,6 +1,6 @@
 # ADR-0580: Add REQ-073: Plain claude opens the steward and every session the kit starts names its role
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-16
 - Deciders: maintainers
 - Related: SPEC-0066, SPEC-0041, SPEC-0059, SPEC-0061, SPEC-0062, SPEC-0063, SPEC-0064, SPEC-0065, SPEC-0071, ADR-0559, ADR-0578, brief #1378, brief #1380, brief #1381, brief #1382, plan #661
