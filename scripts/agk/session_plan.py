@@ -553,7 +553,10 @@ def dependency_map(s: Survey) -> dict[int, set[int]]:
 
 def dependency_path(s: Survey, start: int | None, target: int) -> list[int] | None:
     """The chain of `Depends-on:` lines from `start` down to `target`, else None."""
-    graph, parent, todo = dependency_map(s), {start: None}, [start]
+    if start is None:
+        return None
+    graph, todo = dependency_map(s), [start]
+    parent: dict[int, int | None] = {start: None}
     while todo:
         here = todo.pop(0)
         for there in sorted(graph.get(here, ())):
@@ -562,8 +565,8 @@ def dependency_path(s: Survey, start: int | None, target: int) -> list[int] | No
             parent[there] = here
             if there == target:
                 path = [there]
-                while parent[path[-1]] is not None:
-                    path.append(parent[path[-1]])
+                while (up := parent[path[-1]]) is not None:
+                    path.append(up)
                 return path[::-1]
             todo.append(there)
     return None
