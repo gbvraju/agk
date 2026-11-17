@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The governance checks a set of changed paths needs (brief #1254, ADR-0531).
 
 Read by `.claude/hooks/stop_check.py`. Installed: a verbatim entry of `kit/manifest.json`.
@@ -29,6 +33,7 @@ CHECKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("numbers", ("scripts/agk/check_numbers.py",)),
     ("specs", ("scripts/agk/check_specs.py",)),
     ("neutrality", ("scripts/agk/check_neutrality.py",)),
+    ("licence-notice", ("scripts/agk/check_licence_notice.py",)),
     ("build-state", ("scripts/agk/check_build_state.py",)),
     ("kit-tests", ("scripts/agk/check_kit_tests.py",)),
     ("design", ("scripts/agk/check_design.py",)),
@@ -43,7 +48,14 @@ CHECKS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 ALWAYS: frozenset[str] = frozenset(
-    {"protected-changes", "neutrality", "build-state", "pr-mode", "final-clearance"}
+    {
+        "protected-changes",
+        "neutrality",
+        "licence-notice",
+        "build-state",
+        "pr-mode",
+        "final-clearance",
+    }
 )
 
 # A path or folder, and the checks besides ALWAYS that read it (from the paths each check and the

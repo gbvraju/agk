@@ -3,6 +3,11 @@ name: launch
 description: Show the plan of which builder sessions to start (session.py plan), ask the person to confirm it, and start one session per slot through an adapter. Starts nothing without a yes; creates no recurring task.
 disable-model-invocation: true
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 # /agk:launch
 

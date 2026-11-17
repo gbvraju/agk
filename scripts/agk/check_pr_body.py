@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """PR body must carry `Advances: REQ-nnn` and a dated `Build-state row:` (file or stdin).
 
 An optional `Behaviour:` line must be exactly `Behaviour: unchanged` (SPEC-0010 rule 18).

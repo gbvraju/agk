@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The cap of a builder pull request and what the build used (SPEC-0049 rules 3, 5 to 7, brief
 #714, ADR-0324). Read-only: GET only, posts nothing and writes no file.
 

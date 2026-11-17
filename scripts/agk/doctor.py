@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """agk doctor (SPEC-0006): report what is misconfigured in a repository that agk governs.
 
 Standard library only. Read-only: it reads local files and runs `git` only to read, and `gh api`
@@ -1781,6 +1785,77 @@ def read_config(root: Path) -> dict:
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)", 3) from None
 
 
+LICENCE_TABLE = "licence"
+LICENCE_UNINSTALL = "/agk:uninstall (docs/guides/reference.md, Removing the kit)"
+
+
+def grant_date(value: object) -> datetime.date | None:
+    """`valid_until` as a date: a TOML date or a `YYYY-MM-DD` string; None otherwise."""
+    if isinstance(value, datetime.datetime):
+        return value.date()
+    if isinstance(value, datetime.date):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.date.fromisoformat(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def grant_repository(value: object) -> str | None:
+    """`owner/name` of the `repository` setting (a slug or a GitHub URL), lower case."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    match = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", text)
+    slug = match.group(1) if match else text.removesuffix(".git").strip("/")
+    return slug.lower() if re.fullmatch(r"[^/\s]+/[^/\s]+", slug) else None
+
+
+def licence_lines(root: Path, today: datetime.date | None = None) -> list[str]:
+    """The licence grant of the project (brief #1419 answer 4, ADR-0596): a warning, never a block,
+    when the `[licence]` table of agk.toml is missing, when its `repository` is not the `origin`
+    remote or the remote cannot be read (an unknown origin is not a match), or after its
+    `valid_until`, naming the uninstall step. None in the kit's own repository. Names the setting,
+    never its value; no network."""
+    if (root / "kit" / "manifest.json").is_file():
+        return []
+    try:
+        config = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    table = config.get(LICENCE_TABLE)
+    if not isinstance(table, dict) or not all(
+        table.get(key) for key in ("grant", "repository", "valid_until")
+    ):
+        return [
+            "warn licence-grant: agk.toml names no written grant of the AGK Proprietary Licence "
+            "(setting: [licence] grant, repository, valid_until; see LICENSE-AGK)"
+        ]
+    lines: list[str] = []
+    origin = origin_repo(root)
+    named = grant_repository(table.get("repository"))
+    if named is not None and origin is None:
+        lines.append(
+            "warn licence-grant: the granted repository could not be compared, the origin remote "
+            "cannot be read (setting: [licence] repository; see LICENSE-AGK)"
+        )
+    elif named is None or named != (origin or "").lower():
+        lines.append(
+            "warn licence-grant: the granted repository is not the origin remote "
+            "(setting: [licence] repository; see LICENSE-AGK)"
+        )
+    until = grant_date(table.get("valid_until"))
+    day = today or datetime.datetime.now(datetime.UTC).date()
+    if until is None or day > until:
+        lines.append(
+            "warn licence-grant: the grant has ended (setting: [licence] valid_until); stop using "
+            f"AGK and remove it with {LICENCE_UNINSTALL}, see LICENSE-AGK"
+        )
+    return lines
+
+
 def no_kit(root: Path) -> bool:
     """True after a removal (answer 5): a git work tree with no agk.toml, no `[tool.agk]` stamp in
     pyproject.toml and none of the kit's files (KIT_TRACES)."""
@@ -2234,6 +2309,7 @@ def render_text(
     deprecation: list[str] | None = None,
     skills: list[str] | None = None,
     design: list[str] | None = None,
+    licence: list[str] | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -2249,6 +2325,7 @@ def render_text(
     # (`extra`) stay last, right before the summary (its rule 7's test).
     lines += [tidy] if tidy else []
     lines += deprecation or []
+    lines += licence or []  # the licence grant (ADR-0596), a warning only
     lines += [scan] if scan else []
     lines += [work] if work else []
     lines += skills or []
@@ -2268,6 +2345,7 @@ def render_json(
     deprecation: list[str] | None = None,
     skills: list[str] | None = None,
     design: list[str] | None = None,
+    licence: list[str] | None = None,
 ) -> str:
     data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
     if scan:
@@ -2280,6 +2358,8 @@ def render_json(
         data["design_import"] = design
     if tidy:
         data["tidy"] = tidy
+    if licence:
+        data["licence"] = licence
     if extra or deprecation:  # `tests` carries the suite and deprecation lines, as before
         data["tests"] = (extra or []) + (deprecation or [])
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
@@ -2363,6 +2443,7 @@ def main(argv: list[str] | None = None) -> int:
             + line_ending_lines(root.resolve())
             + machine_wsl_lines(root.resolve())
         )
+        licence = licence_lines(root.resolve())
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())
@@ -2375,9 +2456,11 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra, scan, work, deprecation, skills, design)
+        render_json(report, version, tidy, extra, scan, work, deprecation, skills, design, licence)
         if options["json"]
-        else render_text(report, version, tidy, extra, scan, work, deprecation, skills, design)
+        else render_text(
+            report, version, tidy, extra, scan, work, deprecation, skills, design, licence
+        )
     )
     return 1 if work_failed else exit_code(report)
 

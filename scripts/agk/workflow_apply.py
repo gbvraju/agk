@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Apply a builder's proposed workflow file to its pull request's branch (brief #1189, ADR-0505).
 
     python3 scripts/agk/workflow_apply.py --pr N [--yes --head SHA] [--repo OWNER/REPO]

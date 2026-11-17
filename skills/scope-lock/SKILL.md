@@ -4,6 +4,11 @@ description: Write the plan's business scope lock, docs/plan/scope-lock.md, in p
 disable-model-invocation: true
 argument-hint: "[project name]"
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 # /agk:scope-lock
 

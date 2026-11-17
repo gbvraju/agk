@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The milestone estimator (SPEC-0043 rules 12 to 16 and 26; REQ-050). Installed:
 `kit/manifest.json` lists it in `verbatim`. Build (e) of SPEC-0043 rule 27 (ADR-0465).
 

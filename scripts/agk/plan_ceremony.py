@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The iteration and its four ceremonies, printed from measured facts (SPEC-0043 rules 23, 24 and
 26, amendment 164 item 4; REQ-050). Installed: `kit/manifest.json` lists it in `verbatim`. Build
 (h) of SPEC-0043 rule 27 (brief #1096, ADR-0468).

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Build and check kit/hashes.json (SPEC-0008 rules 1, 2, 22, 25). Kit-only: never installed.
 
 The table keeps, for every released kit version, the SHA-256 of every file an installer writes, so

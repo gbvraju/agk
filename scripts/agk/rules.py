@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The rule budget, the rules agents drop, and the cut of the rule set (brief 647, ADR-0310,
 ADR-0404). Installed in projects.
 
@@ -42,6 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from check_licence_notice import without_header
 from common import (
     CheckError,
     agent_apps,
@@ -88,7 +93,9 @@ USAGE = (
 
 
 def counts(text: str) -> tuple[int, int]:
-    """(words of the whole file, rule lines outside the front matter and fenced code)."""
+    """(words of the whole file, rule lines outside the front matter and fenced code). The owner
+    and licence header is not counted (ADR-0596)."""
+    text = without_header(text)
     lines = text.splitlines()
     start = 0
     if lines and lines[0].strip() == "---":

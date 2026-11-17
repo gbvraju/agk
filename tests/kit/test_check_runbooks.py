@@ -341,12 +341,13 @@ def test_ac4_a_scan_finding_is_refused_and_never_printed(tree: Path) -> None:
 
 
 def test_the_script_reads_files_only() -> None:
-    """REQ-063 AC3: rule 5, standard library, `common.py` and the `guard.py` of rule 7."""
+    """REQ-063 AC3: rule 5, standard library, `common.py`, the `guard.py` of rule 7 and the
+    header reader of ADR-0596."""
     tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
     nodes = list(ast.walk(tree))
     names = {a.name.split(".")[0] for n in nodes if isinstance(n, ast.Import) for a in n.names}
     names |= {n.module.split(".")[0] for n in nodes if isinstance(n, ast.ImportFrom) and n.module}
-    assert names - set(sys.stdlib_module_names) == {"common", "guard"}
+    assert names - set(sys.stdlib_module_names) == {"check_licence_notice", "common", "guard"}
     assert not names & {"subprocess", "socket", "urllib", "http", "ssl", "os"}
 
 

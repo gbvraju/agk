@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Check a local evidence record against the head and re-run a sample of it (brief #434, ADR-0233).
 
     python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]

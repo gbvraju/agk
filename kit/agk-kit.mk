@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 # The kit repository only (never installed). Included by agk.mk when this file exists.
 # The kit's own tests: its tests of the checks and the kit-only tests of the installers.
 # The full suite takes `[testing] workers` of agk.toml as prepush and project_tests.py do (brief #631, ADR-0305):

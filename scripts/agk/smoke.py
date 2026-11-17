@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The smoke run after a merge, chosen by what changed (SPEC-0044 rule 8, brief #923, ADR-0270).
 
     python3 scripts/agk/smoke.py [--base REF] [--head REF] [--run]

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """agk upgrade (SPEC-0008): bring an init or adopt target from kit version X to this kit.
 
 Kit-only (never installed): run it from the kit checkout or the plugin root, as init.py and

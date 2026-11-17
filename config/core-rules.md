@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 # Core rules
 
 The page a session reads first (ADR-0247). It names the core rules by number and file, each with one plain sentence that

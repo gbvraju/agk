@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 # One step per governance check, each named by its check id (SPEC-0007 rule 13); the job name `governance` is the
 # required status check and does not change. Each check step runs unless the run is cancelled, so every failure shows
 # on its own step; the job still fails if any step fails. From `PR body file` on, every step runs unless the run is
@@ -261,6 +265,9 @@ jobs:
       - name: check_neutrality
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_neutrality.py
+      - name: check_licence_notice
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
+        run: python scripts/agk/check_licence_notice.py
       - name: check_build_state
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_build_state.py

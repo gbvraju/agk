@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """PreToolUse hook: the data guard's layer 1 (SPEC-0042 rules 1 to 6 and 9, brief #589).
 
 Contract (SPEC-0042 rule 2; the input fields are `(verify)` there): the hook receives JSON on stdin
