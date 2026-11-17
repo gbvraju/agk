@@ -92,7 +92,10 @@ def machine(**over) -> dict:
     return found | over
 
 
-def run(tmp_path, capsys, fake=None, yes=True, answers=("windows=wsl",), toml='review_mode = "solo"\n'):
+LOCAL = 'review_mode = "solo"\nexecution = "local"\n'
+
+
+def run(tmp_path, capsys, fake=None, yes=True, answers=("windows=wsl",), toml=LOCAL):
     root = tmp_path / "project"
     root.mkdir(exist_ok=True)
     (root / "agk.toml").write_text(toml, encoding="utf-8")
@@ -212,10 +215,10 @@ def test_ac8_personal_mode_adds_no_scheduler(tmp_path, capsys, monkeypatch):
 @pytest.mark.parametrize(
     ("fake", "answers", "toml", "said"),
     [
-        (machine(os="Linux"), ("windows=wsl",), 'review_mode = "solo"\n', "the platform"),
-        (machine(), ("windows=native",), 'review_mode = "solo"\n', "windows"),
-        (machine(), ("windows=wsl", "where=hosted"), 'review_mode = "solo"\n', "execution"),
-        (machine(), ("windows=wsl",), 'execution = "hosted"\n', "execution"),
+        (machine(os="Linux"), ("windows=wsl",), LOCAL, "the platform"),
+        (machine(), ("windows=native",), LOCAL, "windows"),
+        (machine(), ("windows=wsl", "where=hosted"), LOCAL, "execution"),
+        (machine(), ("windows=wsl",), 'review_mode = "solo"\n', "execution"),  # hosted by default
     ],
 )
 def test_ac4_only_windows_with_wsl_chosen_takes_this_path(

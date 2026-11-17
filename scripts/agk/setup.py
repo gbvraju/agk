@@ -5,7 +5,7 @@
 """/agk:setup's helper: read, size and print (build (a), SPEC-0065 rules 2, 3, 5, 6, 12; ADR-0618),
 ask and propose the project settings (build (b), rules 4 and 9; ADR-0619).
 
-    python3 setup.py plan|status|ask|settings|install|ci [--json] [--builders N]
+    python3 setup.py plan|status|ask|settings|install|ci|wsl [--json] [--builders N]
                      [--answer ID=CHOICE ...] [--yes] [--date YYYY-MM-DD] [--machine FILE]
                      [--github FILE] [--root DIR]
 
@@ -31,6 +31,11 @@ branch, and commits, pushes and merges nothing; all equal, or "for me only", wri
 nothing and checks the repository with `gh api -X GET` calls only (Actions, the kit's workflows, a
 ruleset or branch rule, the merge secret's presence with `auto_merge = true`, never its value),
 one `missing:` line per missing item naming its setting (`--json`: `missing`).
+`wsl` (build (d), rules 7 and 17; ADR-0621) is the WSL path on the Windows host, with WSL 2 chosen:
+it runs `/agk:wsl`'s `wsl_setup.ps1 -Status -Json` and `wsl.py plan`, and after the yes one
+`wsl_setup.ps1 -Json` pass and `wsl.py status`, both from this plugin and unchanged; the pass carries
+`-InstallWatchdog` only when `wsl.py plan` says the WSL task goes on (that script then hands the
+scheduler to `autopilot.py on` inside WSL when `[autopilot]` is set), never in personal mode.
 Exit 0, 1 on a refusal, 2 on a usage error.
 """
 
@@ -45,6 +50,7 @@ import re
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -107,6 +113,17 @@ def run_cmd(args: list[str], cwd: Path) -> int:
         return proc.returncode
     except (OSError, subprocess.SubprocessError):
         return 127
+
+
+def run_out(args: list[str], cwd: Path) -> tuple[int, str]:
+    """A command's exit code and output, for the WSL path's two kit scripts; the tests replace it."""
+    try:
+        proc = subprocess.run(  # nosec B603 - fixed argument lists only, no shell
+            args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", timeout=3600
+        )
+    except (OSError, subprocess.SubprocessError):
+        return 127, ""
+    return proc.returncode, proc.stdout or ""
 
 
 def capture(args: list[str], cwd: Path | None = None) -> str | None:
@@ -749,6 +766,82 @@ def ci_mode(root: Path, remote: str | None) -> tuple[int, dict, list[str]]:
     return (1 if pending else 0), table, table_lines(steps) + missing
 
 
+WSL_SCRIPT = PLUGIN / "scripts" / "agk" / "wsl_setup.ps1"  # /agk:wsl's, called and never copied
+WSL_HELPER = PLUGIN / "scripts" / "agk" / "wsl.py"
+WATCHDOG_ON = "the WSL task on"  # `wsl.py plan`'s watchdog line when the adapter is merged
+
+
+def wsl_pass(root: Path, flags: list[str], state: Path) -> dict | None:
+    """One `wsl_setup.ps1 ... -Json` pass, its table saved to STATE for `wsl.py`; None: no table."""
+    code, out = run_out(["pwsh", "-NoProfile", "-File", str(WSL_SCRIPT), *flags, "-Json"], root)
+    try:
+        table = json.loads(out) if out.strip() else None
+    except ValueError:
+        table = None
+    if not isinstance(table, dict) or not isinstance(table.get("steps"), list):
+        return None
+    state.write_text(json.dumps(table), encoding="utf-8")
+    return table | {"exit": code}
+
+
+def wsl_helper(root: Path, form: str, state: Path) -> list[str]:
+    args = [sys.executable, str(WSL_HELPER), form, "--state", str(state), "--root", str(root)]
+    return [ln for ln in run_out(args, root)[1].splitlines() if ln.strip()]
+
+
+def wsl_steps(table: dict) -> list[dict]:
+    """The script's own rows, each `step`, `result` (one of RESULTS, else failed) and `note`."""
+    found = [s for s in table.get("steps", []) if isinstance(s, dict)]
+    return [row(str(s.get("step")), s.get("result") if s.get("result") in RESULTS else "failed",
+                str(s.get("note") or "")) for s in found]  # fmt: skip
+
+
+def wsl_path(root: Path, machine: dict, config: dict, answers: dict, yes: bool) -> dict:
+    """Build (d): the WSL path of rule 7, `/agk:wsl` called unchanged (rule 17), then the one
+    scheduler task through that script's watchdog step (brief #1463 answer 1)."""
+    table = {"steps": [], "pending": [], "plan": [], "status": [], "roles": [], "builders": None}
+    where = answers.get("where") or config.get("execution", "hosted")
+    if machine.get("os") != "Windows":
+        stop = "stop: the WSL path runs on the Windows host (setting: the platform)"
+    elif answers.get("windows") != "wsl":
+        stop = "refused: the WSL path is for WSL 2 chosen (setting: windows)"
+    elif where == "hosted":
+        stop = "refused: CI mode installs nothing on this machine (setting: execution)"
+    else:
+        stop = None
+    if stop:
+        return table | {"stop": stop}
+    engine, personal = answers.get("engine", "podman"), where == "personal"
+    with tempfile.TemporaryDirectory() as folder:
+        state = Path(folder) / "wsl-state.json"
+        flags = ["-Engine", engine]
+        checked = wsl_pass(root, ["-Status", *flags], state)
+        if checked is None:
+            no = "stop: wsl_setup.ps1 gave no table: install PowerShell 7, then run /agk:setup again"
+            return table | {"stop": no}
+        table["plan"] = wsl_helper(root, "plan", state)
+        line = next((ln for ln in table["plan"] if ln.startswith("watchdog:")), "watchdog: none")
+        task = WATCHDOG_ON in line and not personal
+        done = checked
+        if yes:
+            done = wsl_pass(root, flags + (["-InstallWatchdog"] if task else []), state)
+            if done is None:
+                return table | {"stop": "stop: wsl_setup.ps1 gave no table; run /agk:setup again"}
+            table["status"] = wsl_helper(root, "status", state)
+    steps = wsl_steps(done)
+    if personal:
+        steps.append(row("scheduler", "skipped", "for me only: no scheduler task (personal mode)"))
+    elif not task:
+        steps.append(row("scheduler", "waiting", line.removeprefix("watchdog: ")))
+    failed = next((r["step"] for r in steps if r["result"] == "failed"), None)
+    if not yes:
+        stop = "stop: nothing set up: the WSL setup runs only after the person's yes (setting: --yes)"
+    elif failed:
+        stop = f"stop: {failed} did not finish; run /agk:setup again to resume from it"
+    pending = [r["step"] for r in steps if r["result"] in ("waiting", "failed")]
+    return table | {"steps": steps, "pending": pending, "stop": stop}
+
+
 def load(path: str | None):
     return json.loads(Path(path).read_text(encoding="utf-8")) if path else None
 
@@ -756,7 +849,7 @@ def load(path: str | None):
 def main(argv: list[str] | None = None) -> int:
     common.utf8_output()
     parser = argparse.ArgumentParser(prog="setup.py", add_help=True)
-    parser.add_argument("form", choices=("plan", "status", "ask", "settings", "install", "ci"))
+    parser.add_argument("form", choices=("plan", "status", "ask", "settings", "install", "ci", "wsl"))
     for flag in ("--machine", "--github", "--root", "--date"):
         parser.add_argument(flag)
     parser.add_argument("--builders", type=int)
@@ -800,6 +893,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         builders |= {"figure": args.builders, "limit": "person", "reason": "lowered by the person"}
     _, config = config_of(root)
+    if args.form == "wsl":
+        table = wsl_path(root, machine, config, answers, args.yes)
+        lines = table["plan"] + table_lines(table["steps"]) + table["status"]
+        said = "\n".join(lines + ([table["stop"]] if table["stop"] else []))
+        print(json.dumps(table, indent=2) if args.json else said)
+        return 1 if table["stop"] else 0
     if args.form == "install":
         code, table = windows_install(root, machine, repo, args.yes)
         said = "\n".join(table_lines(table["steps"]) + ([table["stop"]] if table["stop"] else []))
