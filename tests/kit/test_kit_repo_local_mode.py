@@ -1,10 +1,10 @@
-"""Brief #1471 (REQ-039, ADR-0626): the kit's own repository runs in local mode, every gate recorded.
+"""Brief #1471 (REQ-039, ADR-0626): the kit's own repository runs in local mode, gates recorded.
 
-The kit's agk.toml sets `execution = "local"`; the doctor's `local-mode-switch` line warns while the
-switch-over is unfinished (a workflow still active, no open record issue, the ruleset still requiring
-checks from Actions), naming the setting, never a value; a cloud session without gitleaks is told the
-one setup line the owner adds, never running it; the local-mode guide gains the owner's six steps.
-Saved GitHub answers only (example names), no network, no model. REQ-039
+The kit's agk.toml sets `execution = "local"`; the doctor's `local-mode-switch` line warns while
+the switch-over is unfinished (a workflow still active, no open record issue, the ruleset still
+requiring checks from Actions), naming the setting, never a value; a cloud session without
+gitleaks is told the one setup line the owner adds, never running it; the local-mode guide gains
+the owner's six steps. Saved GitHub answers only (example names), no network, no model. REQ-039
 """
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ def test_the_line_is_in_the_report(tmp_path):
 
 
 def test_a_cloud_session_without_gitleaks_is_told_the_setup_line(monkeypatch):
-    """REQ-039: brief #1471 answers 4 and 8 (named with the pin; never downloaded by the session)."""
+    """REQ-039: brief #1471 answers 4 and 8 (named with the pin; never downloaded here)."""
     monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
 
     def refuse(*_args, **_kwargs):
