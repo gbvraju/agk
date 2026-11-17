@@ -2181,13 +2181,21 @@ def outside_test_dirs_lines(root: Path) -> list[str]:
     ]
 
 
-def secret_scan_line() -> str:
-    """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306)."""
+def secret_scan_line(in_wsl: bool | None = None) -> str:
+    """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306). Missing inside
+    WSL, the line names the setup's `gitleaks` step (brief #1450, ADR-0608)."""
     tool = shutil.which("gitleaks")
     if tool is None:
+        if in_wsl is None:
+            in_wsl = sys.platform.startswith("linux") and inside_wsl()
+        fix = (
+            f"run /agk:wsl again; it installs gitleaks {GITLEAKS_PIN}"
+            if in_wsl
+            else GITLEAKS_INSTALL
+        )
         return (
             "secret scan: gitleaks is not installed; prepush fails until it is (tool: gitleaks); "
-            + GITLEAKS_INSTALL
+            + fix
         )
     try:
         proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
