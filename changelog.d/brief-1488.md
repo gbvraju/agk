@@ -1,0 +1,1 @@
+- `kit_root.py`, the resolver of the kit's scripts, writes UTF-8 on a Windows console, runs under isolated mode and reads `git` output as UTF-8, and `plugin_snapshot.py` reads its check's output as UTF-8, as every other installed script does (brief #1488)

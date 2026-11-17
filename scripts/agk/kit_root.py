@@ -29,6 +29,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 HERE = Path(__file__).resolve().parent
 INSTALLED_FORM = "scripts/agk"
 PLUGIN_FORM = '"${CLAUDE_PLUGIN_ROOT}/scripts/agk"'
@@ -45,7 +47,11 @@ def project_root(cwd: Path | None = None) -> Path:
     here = Path.cwd() if cwd is None else cwd
     try:
         out = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["git", "rev-parse", "--show-toplevel"], cwd=here, capture_output=True, text=True
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=here,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
         )
     except OSError:
         return here.resolve()
@@ -124,7 +130,23 @@ def run_checks(root: Path, kit: Path) -> int:
     return 0
 
 
+def utf8_output() -> None:
+    """`common.utf8_output` (brief #1233, ADR-0524), kept here: a stub plugin holds this resolver
+    alone, so it runs copied without `common` (brief #1488). Reconfigures stdout and stderr to
+    UTF-8 when they are text streams in another encoding."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
+        if reconfigure is None or encoding in ("utf-8", "utf8"):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
+
+
 def main(argv: list[str]) -> int:
+    utf8_output()
     if len(argv) > 1 or (argv and argv[0] not in ("--form", "governance")):
         print(USAGE, file=sys.stderr)
         return 2
