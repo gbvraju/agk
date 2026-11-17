@@ -201,6 +201,7 @@ from common import (
     paused,
     repo_root,
     required_checks,
+    root_hint,
     shared_main,
     show,
     utf8_output,
@@ -4885,6 +4886,12 @@ def fallback(root, kind: str, after: str | None) -> int:
     return 0
 
 
+def refused(exc: CheckError) -> int:
+    """Brief #1452 (ADR-0610): the one refusal line, with the personal-mode tail of `--root`."""
+    print(f"FAIL {NAME}: {exc}{root_hint(Path.cwd())}")
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = sys.argv[1:] if argv is None else argv
@@ -4905,8 +4912,7 @@ def main(argv: list[str] | None = None) -> int:
                 repo_root(), "--json" in flags, "--record" in flags, "--if-changed" in flags
             )
         except CheckError as exc:
-            print(f"FAIL {NAME}: {exc}")
-            return 2
+            return refused(exc)
     if args[:1] == ["tidy"]:
         flags = args[1:]
         if len(set(flags)) != len(flags) or not set(flags) <= {"--apply", "--json"}:
@@ -4919,8 +4925,7 @@ def main(argv: list[str] | None = None) -> int:
                 return PAUSED_EXIT
             return tidy(root, "--apply" in flags, "--json" in flags)
         except CheckError as exc:
-            print(f"FAIL {NAME}: {exc}")
-            return 2
+            return refused(exc)
     if args[:1] == ["review-queue"]:
         if args[1:] not in ([], ["--all"], ["--fingerprint"]):
             print(USAGE)
@@ -4928,8 +4933,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             return review_queue(repo_root(), args[1] if args[1:] else "")
         except CheckError as exc:
-            print(f"FAIL {NAME}: {exc}")
-            return 2
+            return refused(exc)
     # `--take` is the one flag without a value, of `next` only (brief #440, ADR-0236).
     take_flag = args[:1] == ["next"] and args.count("--take") == 1
     if take_flag:
@@ -5079,8 +5083,7 @@ def main(argv: list[str] | None = None) -> int:
             return mine(root, opts["--session"], number.get("--pr"), number.get("--brief"))
         return next_brief(root, opts["--session"], take_flag)
     except CheckError as exc:
-        print(f"FAIL {NAME}: {exc}")
-        return 2
+        return refused(exc)
 
 
 if __name__ == "__main__":
