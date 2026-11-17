@@ -78,7 +78,8 @@ def test_a_claim_never_reads_every_pull_request_and_reads_each_listing_once(proj
     assert len([e for e in got if e.startswith(f"{PULLS}?state=open")]) == 1, got
     assert len([e for e in got if e.startswith(f"{PULLS}?state=closed")]) == 1, got
     assert len([e for e in got if e.startswith(LISTING)]) == 1, got
-    assert len(got) == len(set(got)), got  # no GET is asked twice in one claim
+    again = [e for e in got if got.count(e) > 1]
+    assert set(again) == {f"{ISSUES}/6/comments?per_page=100&page=1"}, got  # the take read back
 
 
 def test_old_closed_pull_requests_change_no_verdict(proj, stub, tmp_path):
