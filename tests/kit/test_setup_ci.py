@@ -25,6 +25,7 @@ assert _spec.loader is not None
 _spec.loader.exec_module(setup)
 
 REPO = "repos/example-org/example-project"
+WORKFLOWS = f"{REPO}/actions/workflows?per_page=100&page="
 SECRET = re.compile(r"gh[pousr]_[A-Za-z0-9]{16,}|github_pat_|password\s*[=:]", re.IGNORECASE)
 FAKE_VALUE = "ghp_" + "Example0123456789Example"  # token-shaped, served by the stub, never shown
 
@@ -38,9 +39,7 @@ def answers(**over) -> dict:
     saved = {
         REPO: {"default_branch": "main"},
         f"{REPO}/actions/permissions": {"enabled": True},
-        f"{REPO}/actions/workflows": {
-            "workflows": [{"path": p, "state": "active"} for p in kit_workflows()]
-        },
+        f"{WORKFLOWS}1": {"workflows": [{"path": p, "state": "active"} for p in kit_workflows()]},
         f"{REPO}/rulesets": [{"name": "agk", "enforcement": "active"}],
         f"{REPO}/branches/main": {"name": "main", "protected": True},
         f"{REPO}/environments/merge/secrets": {
@@ -113,7 +112,8 @@ def test_ac6_ci_mode_installs_nothing_and_writes_nothing(tmp_path, capsys, monke
     ("over", "step", "setting"),
     [
         ({"actions/permissions": {"enabled": False}}, "actions", "Actions permissions"),
-        ({"actions/workflows": {"workflows": []}}, "workflows", "the kit's workflows"),
+        ({"actions/workflows?per_page=100&page=1": {"workflows": []}}, "workflows",
+         "the kit's workflows"),
         ({"rulesets": [], "branches/main": {"name": "main", "protected": False}}, "rules",
          "kit/templates/ruleset.json"),
         ({"environments/merge/secrets": {"secrets": []}}, "secrets", "auto_merge"),
@@ -138,7 +138,7 @@ def test_ac6_a_missing_workflow_is_named_and_a_disabled_one_counts_as_missing(
     """REQ-072 AC6: rule 10: each absent or disabled kit workflow is named in the one line."""
     found = [{"path": p, "state": "active"} for p in kit_workflows()[1:]]
     found[0]["state"] = "disabled_manually"
-    Gh(monkeypatch, answers(**{f"{REPO}/actions/workflows": {"workflows": found}}))
+    Gh(monkeypatch, answers(**{f"{WORKFLOWS}1": {"workflows": found}}))
     _, out = table(tmp_path, capsys)
     line = out["missing"][0]
     assert Path(kit_workflows()[0]).name in line and Path(kit_workflows()[1]).name in line
@@ -197,3 +197,28 @@ def test_ac5_no_output_holds_a_token_or_a_secret_value(tmp_path, capsys, monkeyp
     Gh(monkeypatch, answers(**{f"{REPO}/environments/merge/secrets": {"secrets": []}}))
     outs += [run(tmp_path, capsys, extra, flow)[1] for extra in ([], ["--json"])]
     assert not any(SECRET.search(o) or FAKE_VALUE in o or "AGK_MERGE_TOKEN" in o for o in outs)
+
+
+def test_ac6_every_page_of_the_workflows_is_read(tmp_path, capsys, monkeypatch):
+    """REQ-072 AC6: rule 10: the kit's workflows on a second page of the listing are found."""
+    own = [{"path": f".github/workflows/own-{n}.yml", "state": "active"} for n in range(100)]
+    kit = [{"path": p, "state": "active"} for p in kit_workflows()]
+    total = len(own) + len(kit)
+    gh = Gh(monkeypatch, answers(**{
+        f"{WORKFLOWS}1": {"total_count": total, "workflows": own},
+        f"{WORKFLOWS}2": {"total_count": total, "workflows": kit},
+    }))  # fmt: skip
+    _, out = table(tmp_path, capsys)
+    assert out["missing"] == [] and [c[4] for c in gh.calls].count(f"{WORKFLOWS}2") == 1
+    Gh(monkeypatch, answers(**{f"{WORKFLOWS}1": {"total_count": total, "workflows": own}}))
+    _, out = table(tmp_path, capsys)
+    row = next(r for r in out["steps"] if r["step"] == "workflows")
+    assert row["result"] == "waiting" and "unknown" in row["note"] and out["missing"] == []
+
+
+def test_ac6_a_flow_that_is_not_a_table_counts_as_unset(tmp_path, capsys, monkeypatch):
+    """REQ-072 AC6: rule 10: `flow = 1` is read as no `auto_merge`, never a crash."""
+    gh = Gh(monkeypatch, answers())
+    code, out = table(tmp_path, capsys, 'execution = "hosted"\nflow = 1\n')
+    assert code == 0 and "secrets" not in [r["step"] for r in out["steps"]]
+    assert not any("secrets" in c[4] for c in gh.calls)

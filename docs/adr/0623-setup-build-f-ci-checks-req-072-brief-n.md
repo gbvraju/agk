@@ -19,9 +19,9 @@ by its setting and never creating, reading, printing or storing a secret or toke
    default when the key is absent); any other value, or no `agk.toml`, is refused naming the setting `execution`, and
    nothing is called. A folder with no GitHub remote stops with one line and no call.
 2. **Four checks, each a `gh api -X GET` call and nothing else:** `actions` (`actions/permissions`: enabled),
-   `workflows` (`actions/workflows`: each workflow of `kit/manifest.json`'s `verbatim` list under `.github/workflows/`
+   `workflows` (`actions/workflows`, every page of 100: each workflow of `kit/manifest.json`'s `verbatim` list under `.github/workflows/`
    present and `active`), `rules` (`rulesets` non-empty, or the default branch read from the repository shown as
-   `protected`) and `secrets` (only with `[flow] auto_merge = true`: a secret listed in the `merge` environment, the
+   `protected`) and `secrets` (only with `[flow] auto_merge = true`, a `flow` that is not a table counting as unset: a secret listed in the `merge` environment, the
    merger's; only the list is read, by count, and no name or value is kept or printed). Each row is `skipped` when met
    and `waiting` when not, as the table of rule 2 is; `--json` prints `steps`, `pending`, `roles` (empty), `builders`
    (none: nothing is sized from this machine in CI mode) and `missing`.

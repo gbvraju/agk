@@ -668,6 +668,9 @@ CI_CHECKS = {  # build (f), rule 10: each repository check of CI mode and the se
 }  # fmt: skip
 
 
+PAGE = 100  # GitHub's largest page of a listing
+
+
 def gh_get(path: str):
     """One GET of the GitHub API through `gh`; None when GitHub gives this sign-in no answer."""
     out = capture(["gh", "api", "-X", "GET", path])
@@ -686,15 +689,29 @@ def kit_workflows() -> list[str]:
     return [f for f in manifest.get("verbatim", []) if f.startswith(".github/workflows/")]
 
 
+def workflow_pages(repo: str) -> list[dict] | None:
+    """Every page of the repository's workflows, 100 a page; None when a page goes unanswered."""
+    found: list[dict] = []
+    for page in range(1, 101):
+        listed = gh_get(f"{repo}/actions/workflows?per_page={PAGE}&page={page}")
+        if listed is None:
+            return None
+        batch = listed.get("workflows") or []
+        found += batch
+        if len(batch) < PAGE or len(found) >= (listed.get("total_count") or 0):
+            return found
+    return found
+
+
 def ci_checks(remote: str, config: dict) -> list[tuple[str, bool | None, str]]:
     """Rule 10: (step, met or None when unknown, what is missing); GET only, no secret read."""
     repo = f"repos/{remote}"
     actions = gh_get(f"{repo}/actions/permissions")
     enabled = None if actions is None else actions.get("enabled") is True
     checks = [("actions", enabled, "GitHub Actions is off for this repository: turn it on")]
-    listed, lacking = gh_get(f"{repo}/actions/workflows"), []
+    listed, lacking = workflow_pages(repo), []
     if listed is not None:
-        active = {w.get("path") for w in listed.get("workflows", []) if w.get("state") == "active"}
+        active = {w.get("path") for w in listed if w.get("state") == "active"}
         lacking = [Path(f).name for f in kit_workflows() if f not in active]
     what = f"the kit's workflows absent or disabled: {', '.join(lacking)}; run /agk:upgrade"
     checks.append(("workflows", None if listed is None else not lacking, what))
@@ -704,7 +721,8 @@ def ci_checks(remote: str, config: dict) -> list[tuple[str, bool | None, str]]:
     known += [shield.get("protected") is True] if shield is not None else []
     rules = any(known) if known else None
     checks.append(("rules", rules, "no ruleset and no branch rule on the default branch"))
-    if config.get("flow", {}).get("auto_merge") is True:
+    flow = config.get("flow")  # a `flow` that is not a table counts as unset
+    if isinstance(flow, dict) and flow.get("auto_merge") is True:
         held = gh_get(f"{repo}/environments/merge/secrets")
         met = None if held is None else bool(held.get("secrets"))  # counted, never kept
         checks.append(("secrets", met, "the merge environment holds no secret for the merger"))
