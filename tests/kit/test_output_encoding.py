@@ -24,7 +24,7 @@ ARROW = "→"
 HELPER = "utf8_output"
 MANIFEST = ROOT / "kit" / "manifest.json"
 # They must run without `common` (their own tests say why), so each keeps a copy of the helper.
-COPIES = ("front_door.py", "new_spec.py", "product_report.py")
+COPIES = ("front_door.py", "kit_root.py", "new_spec.py", "product_report.py")
 
 
 def console_env(cp1252: bool) -> dict[str, str]:
@@ -192,8 +192,9 @@ def test_every_installed_script_that_prints_calls_the_helper_first():
 @pytest.mark.parametrize("name", COPIES)
 def test_each_own_copy_is_the_helper(name):
     """REQ-014: `product_report.py` imports no module of the kit (its rule 13), `new_spec.py` only
-    the standard library, and `front_door.py` runs copied without `common`; each keeps its own
-    `utf8_output`, whose body, without the docstring, is the helper's."""
+    the standard library, and `front_door.py` and `kit_root.py` run copied without `common` (a stub
+    plugin holds the resolver alone, brief #1488); each keeps its own `utf8_output`, whose body,
+    without the docstring, is the helper's."""
 
     def body(path: Path) -> list[str]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
