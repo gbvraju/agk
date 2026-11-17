@@ -753,7 +753,8 @@ def autopilot_settings(root: Path) -> dict:
     if not isinstance(found["show_jobs"], bool):
         raise _refuse_autopilot("show_jobs")
     adapter = table.get("adapter")  # brief #1480 (ADR-0628): `[flow] launch_adapter`'s form
-    if adapter is not None and adapter != "" and (not isinstance(adapter, str) or not adapter.strip()):
+    blank = isinstance(adapter, str) and adapter != "" and not adapter.strip()
+    if blank or (adapter is not None and not isinstance(adapter, str)):
         raise AutopilotSettingError(
             "adapter of the autopilot table must be a command, a non-empty string "
             "(setting: autopilot.adapter)"

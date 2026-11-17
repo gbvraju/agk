@@ -63,8 +63,8 @@ agk.toml (`config.TABLE_KEYS`) but that stands at the top level or in another ta
 table it is in and the table it belongs to, never its value.
 Brief #1390 (ADR-0587): `autopilot-settings` names each of `[flow] auto_start`, `launch_adapter`
 and `[capacity]` still set, which `[autopilot]` replaces: read for one release while that table is
-absent, then from it only; never a value. Brief #1480 (ADR-0628): its fix names `[autopilot] adapter`,
-and `model-names` also warns for `[autopilot] mode = "on"` with an `adapter`.
+absent, then from it only; never a value. Brief #1480 (ADR-0628): its fix names
+`[autopilot] adapter`, and `model-names` also warns for `[autopilot] mode = "on"` with an `adapter`.
 """
 
 from __future__ import annotations

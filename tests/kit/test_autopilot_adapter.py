@@ -26,12 +26,13 @@ sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 
 import autopilot  # noqa: E402
 import conductor  # noqa: E402
-import config  # noqa: E402
 import doctor  # noqa: E402
 import launch  # noqa: E402
 import personal_state as ps  # noqa: E402
 from common import CheckError  # noqa: E402
 from forge import FilesForge  # noqa: E402
+
+import config  # noqa: E402
 
 NOW = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
 RUNS = f"{sys.executable} -c pass"
@@ -188,7 +189,8 @@ def test_the_doctor_names_launch_adapter_beside_the_table_and_fixes_to_the_new_k
     """REQ-071: both set fails naming `launch_adapter`; the fix names `[autopilot] adapter`."""
     toml = f'[flow]\nlaunch_adapter = "{RUNS}"\n[autopilot]\nadapter = "{RUNS}"\n'
     found = doctor.autopilot_settings_result(project(tmp_path, toml))
-    assert found.status == "fail" and "launch_adapter (not read: [autopilot] is set)" in found.message
+    assert found.status == "fail"
+    assert "launch_adapter (not read: [autopilot] is set)" in found.message
     assert RUNS not in found.message
     assert "[autopilot] adapter" in doctor.CHECKS["autopilot-settings"][3]
 
@@ -212,7 +214,7 @@ def test_model_names_warn_when_the_autopilot_is_on_with_an_adapter(tmp_path, tom
 
 
 def test_the_guide_names_the_autopilot_adapter():
-    """REQ-071: getting-started names `[autopilot] adapter` where it describes `agk autopilot on`."""
+    """REQ-071: getting-started names `[autopilot] adapter` beside `agk autopilot on`."""
     text = (ROOT / "docs" / "guides" / "getting-started.md").read_text(encoding="utf-8")
     line = next(x for x in text.splitlines() if "agk autopilot on" in x and "scheduler" in x)
     assert "[autopilot] adapter" in line
