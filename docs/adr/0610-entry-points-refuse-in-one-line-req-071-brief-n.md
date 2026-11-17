@@ -24,7 +24,8 @@ kit's own refusal error, so a business user read a stack trace instead of what t
    standard output, exit 2; `FAIL conductor: <message>` on standard error, exit 1), so no caller or test that reads
    them changes; the conductor's `watchdog --install` reads the root inside the same handler.
 3. In all three, when the folder is a clone with no `agk.toml` with a version and a sidecar is registered for it
-   under `AGK_HOME` (`personal_state.root_hint`), the line ends `(personal mode: pass --root <the sidecar's folder>)`,
+   under `AGK_HOME` (`common.root_hint`, which reads the registry first and runs no process when there is none, and
+   imports the kit-only `personal_state` only when it is there), the line ends `(personal mode: pass --root <the sidecar's folder>)`,
    naming the option and never the path or the project id. A failure to read the clone or the registry adds nothing.
 
 ## Consequences

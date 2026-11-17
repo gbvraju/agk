@@ -201,6 +201,7 @@ from common import (
     paused,
     repo_root,
     required_checks,
+    root_hint,
     shared_main,
     show,
     utf8_output,
@@ -209,7 +210,6 @@ from common import (
 )
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
-from personal_state import root_hint
 from reviewers import APPROVE, spec_approvers, verdict_authors
 
 from config import (

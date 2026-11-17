@@ -84,8 +84,7 @@ import launch
 import metrics
 import session
 import session_plan
-from common import CheckError, personal_table, utf8_output
-from personal_state import root_hint
+from common import CheckError, personal_table, root_hint, utf8_output
 
 import config
 

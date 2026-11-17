@@ -316,11 +316,11 @@ from common import (
     CheckError,
     fix_items,
     repo_root,
+    root_hint,
     utf8_output,
     verdict_problem,
 )
 from full_run import contained_in, covered
-from personal_state import root_hint
 from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
 
 import config

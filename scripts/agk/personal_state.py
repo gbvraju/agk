@@ -240,9 +240,12 @@ def root_hint(where: Path) -> str:
     """Brief #1452 answer 2: the refusal's tail when `where` is a clone with no `agk.toml` and a
     sidecar; it names the option, never the path. Any failure to read gives no tail."""
     try:
-        if installed(where) or read(where, "rev-parse", "--git-dir", check=False) is None:
+        clones = registry(agk_home())  # read first: no registry, no git process
+        if not clones or installed(where):
             return ""
-        pid = registry(agk_home()).get(common_dir(where))
+        if read(where, "rev-parse", "--git-dir", check=False) is None:
+            return ""
+        pid = clones.get(common_dir(where))
         return ROOT_HINT if pid and (agk_home() / PROJECTS / pid).is_dir() else ""
     except (CheckError, OSError):
         return ""
