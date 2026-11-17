@@ -61,7 +61,9 @@ pid=,ppid=,args=`; on Windows `Get-CimInstance Win32_Process` with its command l
 
 from __future__ import annotations
 
+import configparser
 import json
+import os
 import re
 import shlex
 import shutil
@@ -298,6 +300,9 @@ STATE_FILE = "autopilot.json"  # beside the lease mark, in the git directory: ne
 RUN_LINE = "python3 scripts/agk/conductor.py watchdog --pass"
 NO_CRONTAB = re.compile(r"^no crontab for ", re.MULTILINE)  # the one failed read that is empty
 WINDOWS_RUN_LINE = "python scripts\\agk\\conductor.py watchdog --pass"
+PROC_VERSION = Path("/proc/version")  # names Microsoft inside WSL, as `doctor.inside_wsl` reads it
+WSL_CONF = Path("/etc/wsl.conf")  # `[interop] enabled = false` turns Windows interop off
+WSL_TASK = "agk-autopilot (WSL)"  # the one Windows task of a WSL checkout (brief #1448, ADR-0606)
 OWNER_JOBS = ("review", "steward", "conductor")  # rule 8: never stopped by the budget
 
 
@@ -420,8 +425,70 @@ def entry_line(root: Path, interval: int) -> str:
     return f"*/{interval} * * * * cd {folder} && git fetch -q origin && {RUN_LINE} {ENTRY_TAG}"
 
 
+def run_shown(argv: list[str]) -> int:
+    """Run one fixed command on the person's own terminal: what Windows asks there (the task's
+    stored sign-in) goes to Windows, never through this script; 127 when it cannot run."""
+    try:
+        return subprocess.run(argv, check=False).returncode  # nosec B603 - fixed list, no shell
+    except OSError:
+        return 127
+
+
+def inside_wsl() -> bool:
+    if PLATFORM != "linux":
+        return False
+    try:
+        return "microsoft" in PROC_VERSION.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return False
+
+
+def interop_on() -> bool:
+    found = configparser.ConfigParser(strict=False, interpolation=None)
+    try:
+        found.read_string(WSL_CONF.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, configparser.Error):
+        return True  # no readable file: WSL's default, interop on
+    value = found.get("interop", "enabled", fallback="true").strip().lower()
+    return value not in ("false", "0", "no", "off")
+
+
+def set_wsl_task(root: Path, interval: int | None) -> int:
+    """Brief #1448 (ADR-0606): inside WSL the one entry is the Windows task WSL_TASK, registered
+    through interop to run whether or not the person is signed in; Windows asks for the stored
+    sign-in (`/RP *`) and a declined one leaves a signed-in-only task `(verify: on Windows)`."""
+    if not interop_on():
+        print(
+            "autopilot: Windows interop is off in this distro; nothing written "
+            "(setting: [interop] enabled in /etc/wsl.conf)"
+        )
+        return 1
+    if interval is None:
+        return run_command(["schtasks.exe", "/Delete", "/TN", WSL_TASK, "/F"])[0]
+    distro = os.environ.get("WSL_DISTRO_NAME", "").strip()
+    code, user = run_command(["whoami.exe"])
+    if not distro or code != 0 or not user.strip():
+        print("autopilot: the distro or the Windows account cannot be read; nothing written "
+              "(setting: WSL_DISTRO_NAME)")  # fmt: skip
+        return 1
+    run = f'wsl.exe -d {distro} --cd {Path(root).resolve()} -- bash -lc "git fetch -q origin && {RUN_LINE}"'
+    argv = ["schtasks.exe", "/Create", "/SC", "MINUTE", "/MO", str(interval), "/TN", WSL_TASK]
+    argv += ["/TR", run, "/F"]
+    signed_out = [*argv, "/RU", user.strip(), "/RP", "*"]
+    print(f"autopilot: {shlex.join(signed_out)}")
+    if run_shown(signed_out) == 0:
+        print("ok: the task runs whether or not you are signed in")
+        return 0
+    code, _ = run_command(argv)
+    if code == 0:
+        print("warn: runs only while you are signed in (setting: the task's sign-in option)")
+    return code
+
+
 def set_entry(root: Path, interval: int | None) -> int:
     """Install (INTERVAL) or remove (None) the one scheduler entry of this checkout."""
+    if inside_wsl():
+        return set_wsl_task(root, interval)
     if PLATFORM == "win32":
         if interval is None:
             code, _ = run_command(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"])
@@ -452,7 +519,8 @@ def machine_checks(root: Path) -> list[str]:
         )
         out.append("warn: sleep cannot be read here (setting: power sleep) (verify: per OS)")
     else:
-        out.append("ok: the cron entry runs while nobody is signed in")
+        if not inside_wsl():  # inside WSL `set_wsl_task` printed the task's sign-in line
+            out.append("ok: the cron entry runs while nobody is signed in")
         code, text = 127, ""
         if PLATFORM == "linux":  # a read: `is-enabled` changes nothing
             code, text = run_command(["systemctl", "is-enabled", "sleep.target"])

@@ -1,0 +1,1 @@
+- Inside WSL, `agk autopilot on` registers one Windows task `agk-autopilot (WSL)` through `schtasks.exe` that runs whether or not you are signed in (Windows asks for the sign-in; declined, it warns), refuses when interop is off, `off` removes only that task, and `/agk:wsl` hands its watchdog step to it when `[autopilot]` is set (brief #1448)

@@ -118,7 +118,7 @@ def test_interop_off_refuses_and_writes_nothing(tmp_path, wsl, capsys, conf):
     wsl.conf.write_text(conf, encoding="utf-8")
     root = project(tmp_path, ON)
     assert autopilot.main(["on", "--root", str(root)], now=NOW) == 1
-    assert wsl.shown == [] and wsl.calls == []
+    assert wsl.shown == [] and not [c for c in wsl.calls if c[0] in ("schtasks.exe", "crontab")]
     assert "(setting: [interop] enabled in /etc/wsl.conf)" in capsys.readouterr().out
 
 

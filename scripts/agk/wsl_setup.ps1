@@ -62,6 +62,7 @@ $script:LinuxUser = ''
 $script:Engines = $null
 $WslTask = 'AGK conductor watchdog (WSL)'
 $WindowsTask = 'AGK conductor watchdog'
+$AutopilotTask = 'agk-autopilot (WSL)'
 
 function Say([string]$Text, [string]$Color = 'Gray') {
     if (-not $Json) { Write-Host $Text -ForegroundColor $Color }
@@ -154,14 +155,33 @@ function Invoke-Phase([string]$User, [string]$Path, [string[]]$Environment) {
     }
 }
 
+# Brief #1448 (ADR-0606): with [autopilot] on the default branch the one scheduler is autopilot.py's task.
+function Test-AutopilotSet {
+    & wsl.exe -d $Distro --cd $script:ProjectDir -- bash -lc "git show origin/HEAD:agk.toml 2>/dev/null | grep -q '^\[autopilot\]'"
+    $LASTEXITCODE -eq 0
+}
+
 function Test-WslTasks([bool]$WantWsl) {
     $wsl = Get-ScheduledTask -TaskName $WslTask -ErrorAction SilentlyContinue
     $win = Get-ScheduledTask -TaskName $WindowsTask -ErrorAction SilentlyContinue
+    if ($WantWsl -and (Test-AutopilotSet)) {
+        $auto = Get-ScheduledTask -TaskName $AutopilotTask -ErrorAction SilentlyContinue
+        return $auto -and (-not $wsl -or $wsl.State -eq 'Disabled') -and (-not $win -or $win.State -eq 'Disabled')
+    }
     if ($WantWsl) { return ($wsl -and $wsl.State -ne 'Disabled') -and (-not $win -or $win.State -eq 'Disabled') }
     return (-not $wsl -or $wsl.State -eq 'Disabled') -and (-not $win -or $win.State -ne 'Disabled')
 }
 
 function Set-WslWatchdog {
+    if (Test-AutopilotSet) {
+        # Windows itself asks for the task's stored sign-in on this console (verify: on Windows).
+        $run = Start-Process -FilePath 'wsl.exe' -ArgumentList "-d $Distro --cd $($script:ProjectDir) -- python3 scripts/agk/autopilot.py on" -NoNewWindow -Wait -PassThru
+        if ($run.ExitCode -ne 0) { return 'python3 scripts/agk/autopilot.py on failed inside WSL' }
+        foreach ($old in @($WslTask, $WindowsTask)) {
+            if (Get-ScheduledTask -TaskName $old -ErrorAction SilentlyContinue) { Disable-ScheduledTask -TaskName $old | Out-Null }
+        }
+        return "$AutopilotTask from autopilot.py on; $WslTask and $WindowsTask disabled (not deleted)"
+    }
     $arg = "-d $Distro -- bash -lc `"cd $($script:ProjectDir) && git fetch -q origin && python3 scripts/agk/conductor.py watchdog --pass`""
     $action = New-ScheduledTaskAction -Execute 'wsl.exe' -Argument $arg
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 10)
