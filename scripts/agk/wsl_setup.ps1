@@ -341,6 +341,33 @@ set_packages() {
   apt-get install -y -qq $PACKAGES >/dev/null
 }
 
+# --- gitleaks (brief #1450, ADR-0608): the version the governance workflow pins, checked against its checksum file ---
+GITLEAKS_DIR="${AGK_GITLEAKS_DIR:-/usr/local/bin}"
+GITLEAKS_URL=https://github.com/gitleaks/gitleaks/releases/download
+has_gitleaks() { [ -n "${AGK_GITLEAKS:-}" ] && [ "$(gitleaks version 2>/dev/null | head -1 | sed 's/^v//')" = "$AGK_GITLEAKS" ]; }
+set_gitleaks() {
+  local v="${AGK_GITLEAKS:-}" arch tmp archive sums
+  [ -n "$v" ] || { echo "the pinned gitleaks version could not be read from scripts/agk/common.py"; return 1; }
+  case "$(uname -m)" in
+    x86_64 | amd64) arch=x64 ;;
+    aarch64 | arm64) arch=arm64 ;;
+    *) echo "no gitleaks release for this machine's architecture; nothing was installed"; return 1 ;;
+  esac
+  archive="gitleaks_${v}_linux_${arch}.tar.gz"; sums="gitleaks_${v}_checksums.txt"; tmp="$(mktemp -d)"
+  if ! curl -fsSL -o "$tmp/$archive" "$GITLEAKS_URL/v$v/$archive" || ! curl -fsSL -o "$tmp/$sums" "$GITLEAKS_URL/v$v/$sums"; then
+    rm -rf "$tmp"
+    echo "the gitleaks download failed: allow github.com release downloads, or run /agk:wsl with -CorpCaFile; nothing was installed"
+    return 1
+  fi
+  # The archive's SHA-256 against the release's own checksum file, before anything is unpacked.
+  if ! (cd "$tmp" && grep " $archive\$" "$sums" | sha256sum --check --strict --status); then
+    rm -rf "$tmp"; echo "the gitleaks archive does not match its published checksum; nothing was installed"; return 1
+  fi
+  tar -xzf "$tmp/$archive" -C "$tmp" gitleaks && install -m 0755 "$tmp/gitleaks" "$GITLEAKS_DIR/gitleaks"
+  rm -rf "$tmp"
+}
+# --- end gitleaks ---
+
 has_gh_cli() { command -v gh >/dev/null; }
 set_gh_cli() {
   install -d -m 0755 /etc/apt/keyrings
@@ -372,6 +399,7 @@ set_podman() {
 step wsl_conf has_wsl_conf set_wsl_conf
 step company_ca has_company_ca set_company_ca
 step packages has_packages set_packages
+step gitleaks has_gitleaks set_gitleaks
 step gh_cli has_gh_cli set_gh_cli
 step nodejs has_nodejs set_nodejs
 # Docker Engine from Docker's own repository (verify: the names on Docker's install page), with the Compose plugin.
@@ -411,9 +439,13 @@ $check = if ($Status) { '1' } else { '0' }
 $rootless = if ($DockerRootless) { '1' } else { '0' }
 $podmanFlag = if ($SkipPodman) { '0' } else { '1' }
 $playFlag = if ($SkipPlaywright) { '0' } else { '1' }
+# The gitleaks version the governance workflow pins, read from the one place the kit names it (brief #1450).
+$gitleaksPin = ''
+$pinLine = Select-String -Path (Join-Path $PSScriptRoot 'common.py') -Pattern '^GITLEAKS_PIN = "([^"]+)"' -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($pinLine) { $gitleaksPin = $pinLine.Matches[0].Groups[1].Value }
 Say 'System packages inside WSL (a few minutes on the first run)...'
 $rootLinux = Write-LinuxScript 'agk-wsl-root.sh' $rootScript
-Invoke-Phase 'root' $rootLinux @("AGK_USER=$($script:LinuxUser)", "AGK_CA=$caLinux", "AGK_PODMAN=$podmanFlag", "AGK_ENGINE=$Engine", "AGK_ROOTLESS=$rootless", "AGK_CHECK_ONLY=$check")
+Invoke-Phase 'root' $rootLinux @("AGK_USER=$($script:LinuxUser)", "AGK_CA=$caLinux", "AGK_PODMAN=$podmanFlag", "AGK_ENGINE=$Engine", "AGK_ROOTLESS=$rootless", "AGK_GITLEAKS=$gitleaksPin", "AGK_CHECK_ONLY=$check")
 if ($script:Results | Where-Object { $_.Step -eq 'wsl_conf' -and $_.Result -eq 'done' -and -not $Status }) { $script:Restart = $true }
 
 Invoke-Step -Name 'restart' -Done { -not $script:Restart } -Do { & wsl.exe --shutdown; Start-Sleep -Seconds 8; $script:Restart = $false; 'WSL restarted so the new settings apply' } | Out-Null

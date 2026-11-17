@@ -55,7 +55,8 @@ STATE_KEYS = (
 RESULTS = ("done", "skipped", "waiting", "failed")
 MACHINE = (
     "windows", "wsl", "distro", "wsl2", "linux_user", "wslconfig", "wsl_conf", "company_ca",
-    "packages", "gh_cli", "nodejs", "one_engine", "podman", "docker", "desktop_wsl", "restart",
+    "packages", "gitleaks", "gh_cli", "nodejs", "one_engine", "podman", "docker", "desktop_wsl",
+    "restart",
 )  # fmt: skip
 PROJECT = (
     "git_config", "claude_code", "clone", "worktrees", "kit_tools", "trust", "plugin",
