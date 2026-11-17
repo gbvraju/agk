@@ -26,7 +26,7 @@ _spec.loader.exec_module(setup)
 
 REPO = "repos/example-org/example-project"
 SECRET = re.compile(r"gh[pousr]_[A-Za-z0-9]{16,}|github_pat_|password\s*[=:]", re.IGNORECASE)
-FAKE_VALUE = "ghp_" + "Example0123456789Example"  # a token-shaped value the stub serves, never shown
+FAKE_VALUE = "ghp_" + "Example0123456789Example"  # token-shaped, served by the stub, never shown
 
 
 def kit_workflows() -> list[str]:
