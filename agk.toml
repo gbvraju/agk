@@ -25,6 +25,8 @@ experimental_reviewer = true
 pr_mode = "flow"
 # The checks the router judges a pull request (and the default branch) by: the latest run of each listed check, and the latest status of each listed context. A check that is not listed (a preview build of a hosting service, say) never labels a pull request red; a listed check that has not reported keeps it running. A change needs an ADR.
 required_checks = ["proof", "governance"]
+# Where the heavy checks run (ADR-0237): "local" by the owner's direction of 2026-11-17 (brief #1471): every gate runs on the builder's and the conductor's machines and is recorded as evidence (prepush.py --record, evidence.py check --head), and required_checks is read from that evidence; the owner's switch-over steps are in docs/guides/local-mode.md. A change needs an ADR (ADR-0626).
+execution = "local"
 # The GitHub Apps an agent posts through (slugs). A comment GitHub records as posted through one of them never counts as a person's approval, and while the list is not empty a review never counts either (a review shows no app); a project that wants reviews to count sets an empty list. A change needs an ADR.
 agent_apps = ["claude"]
 # Who reviews a pull request: "team" (the default: a verdict by a listed author, and a separate Approve: by a spec approver) or "solo"
