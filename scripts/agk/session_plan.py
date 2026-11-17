@@ -126,6 +126,11 @@ Exact `Touches:` (amendment 141 item 1, brief #772): `touch_problems` is the one
 refused unless the brief has one `Broad:` line, and an `Adds:` entry may not name an existing file.
 `reservation_refusals` refuses a `Reserved:` number held elsewhere (item 5).
 
+Brief #1425 (ADR-0598): two open briefs whose `Adds:` already clash (filed before
+`check_brief.py` compared them) are listed `CLASH: #a and #b both add <path>; rename in the one not
+taken (#n, free: <name>)` (`plan_names.plan_clashes`); neither starts until one is renamed, and a
+taken one keeps running. With no clash the plan is as before.
+
 Brief #1411 (ADR-0594): an open issue labelled `agk-kit-defect` is a defect of the kit itself and
 never product work: `plan_briefs` leaves it out of the briefs the plan reads, even with `agk-brief`.
 """
@@ -2056,6 +2061,9 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
     ready = [b for b in ready if b not in inactive]
     unblocks = unblocked_hours(issues)
     ready = milestone_order(pb, ready, unblocks)
+    clashes = adds_clashes(root, s, issues, default)
+    blocked = {n for c in clashes for n in c["briefs"] if n not in c["taken"]}
+    ready = [b for b in ready if b["number"] not in blocked]
     chosen, waits = waves(root, s, ready)
     ranked = holders(root, s, [b for b in ready if b not in chosen], now)
     if record:
@@ -2207,9 +2215,24 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
         found["ahead"] = starts  # brief #1432: with no dependency lifted the plan is as before
     if cycles := cycles_of(s, waits):
         found["cycles"] = cycles
+    if clashes:
+        found["clashes"] = clashes  # brief #1425: with no clash the plan is as before
     return found, bool(s.unread) and (
         count < fillable or ahead(s, pb, ready, chosen[:count], active)
     )
+
+
+def adds_clashes(root, s: Survey, issues: list, default: str) -> list[dict]:
+    """Brief #1425 answer 2: the open briefs whose `Adds:` already clash, read from the listing
+    the plan already holds; the taken ones are those with a live take or an open pull request."""
+    import plan_names  # noqa: PLC0415 - read only by the plan
+
+    taken = {n for n, _ in s.held} | {n for p in s.builders if (n := pr_brief(p)) is not None}
+    taken |= {i["number"] for i in issues if isinstance(i, dict) and plan_names.is_taken(i)}
+    briefs = [i for i in issues if isinstance(i, dict) and "number" in i]
+    if not any(plan_names.adds_of(str(i.get("body") or "")) for i in briefs):
+        return []
+    return plan_names.plan_clashes(briefs, taken, tree_files(root, f"origin/{default}"))
 
 
 def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
@@ -2477,6 +2500,10 @@ def words(plan: dict) -> str:
     lines += playbook_lines(plan)
     lines += plan.get("ahead", [])
     lines += [c["why"] for c in plan.get("cycles", [])]
+    if plan.get("clashes"):
+        import plan_names  # noqa: PLC0415 - read only for a clash
+
+        lines += [plan_names.clash_line(c) + "." for c in plan["clashes"]]
     for w in plan["waits"]:
         if "cycle" not in w:  # a cycle is printed once above
             lines.append(f"#{w['brief']} {wait_text(w)}.")

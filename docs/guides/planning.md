@@ -228,6 +228,17 @@ it under `docs/plan/iterations/<n>/`. AGK runs no meeting, posts nothing and fil
 Estimates are ranges from this project's own history, not promises; AGK drafts from the sources and the person owns scope.
 The first iterations are uncalibrated, AGK never contacts the customer, and it never reads a source you did not provide.
 
+## New paths have one owner
+
+A path a brief adds (`Adds:`) belongs to that brief from filing until it merges or closes (brief #1425, ADR-0598). Before
+filing a batch, name every new folder with `python3 scripts/agk/plan_names.py batch FILE` (one base per line, by the
+convention `<feature>-m<milestone>-<part>`, never a counter such as `gaps1`), and check each saved brief with
+`python3 scripts/agk/check_brief.py FILE --root .`: an entry that another open brief or pull request already adds, or that
+differs from one only in case, is refused with a free name. A fix that renames a folder proposes only a name from
+`plan_names.py next --base <path>`; `plan_names.py impact <path>` lists who renames it (the steward edits a brief not yet
+taken; a taken one gets a fix list, and its builder renames on its branch). The plan lists two older briefs that already
+clash as `CLASH:` and starts neither until one is renamed; nothing renames a merged path.
+
 ## When a step refuses
 
 Every refusal names the rule and the file, the item's key or the setting, never a value. Fix the source, the map or the

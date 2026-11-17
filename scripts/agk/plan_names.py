@@ -51,6 +51,7 @@ USAGE = (
     "[--root DIR] [--issues FILE] [--pulls FILE]"
 )
 MAX_PATH = 200
+MAX_TRIES = 999
 RESERVED = {"con", "prn", "aux", "nul"} | {f"{p}{n}" for p in ("com", "lpt") for n in range(1, 10)}
 BY_RULE = re.compile(
     r"changelog\.d/brief-\d+\.md|docs/(adr|specs)/\d{4}-[^/]+\.md|docs/runs/decisions/.+"
@@ -204,15 +205,15 @@ def free(base: str, h: Holders, extra: list[str] | None = None) -> str:
     slash = "/" if base.replace("\\", "/").rstrip().endswith("/") else ""
     path = norm(base)
     head, _, last = path.rpartition("/")
-    if not NAME_PART.fullmatch(last):
+    stem, dot, ext = last.partition(".")
+    if not NAME_PART.fullmatch(stem) or (dot and not re.fullmatch(r"[a-z0-9.]+", ext)):
         raise CheckError("rule 5: the base's last part is not lower case [a-z0-9-]")
     prefix = f"{head}/" if head else ""
-    n = 1
-    while True:
-        name = f"{prefix}{last}{'' if n == 1 else f'-{n}'}"
+    for n in range(1, MAX_TRIES + 1):
+        name = f"{prefix}{stem}{'' if n == 1 else f'-{n}'}{dot}{ext}"
         if not _held(name, h, extra or []):
             return name + slash
-        n += 1
+    raise CheckError(f"rule 5: no free name within {MAX_TRIES} tries of the base")
 
 
 def batch(bases: list[str], h: Holders) -> list[str]:
@@ -245,35 +246,30 @@ def norm_text(text: str) -> str:
 
 def plan_clashes(issues: list[dict], taken: set[int], tree: list[str] | None = None) -> list[dict]:
     """Answer 2: two open briefs whose `Adds:` already clash (filed before this check), each
-    pair once, with the free name for the one not taken."""
+    pair once, with a free name for the one not taken (the later one when neither is)."""
     out: list[dict] = []
-    seen: set[tuple[int, int]] = set()
-    for a in issues:
-        for b in issues:
-            pair = (a["number"], b["number"])
-            if pair[0] >= pair[1] or pair in seen:
-                continue
-            hit = next(
-                (
-                    (x, y)
-                    for x in adds_of(str(a.get("body")))
-                    for y in adds_of(str(b.get("body")))
-                    if covers(x, y)
-                ),
-                None,
-            )
+    added = [(i, adds_of(str(i.get("body") or ""))) for i in issues]
+    added = sorted(((i, a) for i, a in added if a), key=lambda x: x[0]["number"])
+    for k, (a, mine) in enumerate(added):
+        for b, theirs in added[k + 1 :]:
+            hit = next(((x, y) for x in mine for y in theirs if covers(x, y)), None)
             if hit is None:
                 continue
-            seen.add(pair)
-            rename = b if b["number"] not in taken else a
+            rename, keep = (
+                (a, hit) if b["number"] in taken and a["number"] not in taken else (b, hit[::-1])
+            )
             rest = Holders(tree or [], [i for i in issues if i["number"] != rename["number"]])
+            try:
+                name = free(rename_base(keep[0], keep[1]), rest)
+            except CheckError:
+                name = "none from this entry; name one with plan_names.py next"
             out.append(
                 {
-                    "briefs": list(pair),
+                    "briefs": [a["number"], b["number"]],
                     "path": hit[0],
                     "rename": rename["number"],
-                    "free": free(hit[0] if rename is a else hit[1], rest),
-                    "taken": [n for n in pair if n in taken],
+                    "free": name,
+                    "taken": [n for n in (a["number"], b["number"]) if n in taken],
                 }
             )
     return out
@@ -285,6 +281,52 @@ def clash_line(c: dict) -> str:
         f"CLASH: #{a} and #{b} both add {c['path']}; rename in the one not taken "
         f"(#{c['rename']}, free: {c['free']})"
     )
+
+
+def cached_issues(root: Path) -> list[dict]:
+    """Answer 9: the open briefs from the read cache the plan already wrote, with no request; none
+    when the repository or the cache cannot be read."""
+    try:
+        repo = session.repo_name(root)
+    except CheckError:
+        return []
+    found: list[dict] = []
+    for page in range(1, 100):
+        endpoint = f"repos/{repo}/issues?state=open&labels={session.LABEL}"
+        entry = session.CACHE.entry(f"{endpoint}&per_page={session.PAGE}&page={page}")
+        body = entry.get("body") if entry else None
+        if not isinstance(body, list):
+            break
+        found += [x for x in body if isinstance(x, dict) and "pull_request" not in x]
+        if len(body) < session.PAGE:
+            break
+    return found
+
+
+def rename_base(mine: str, theirs: str) -> str:
+    """The level to rename: where the two paths meet, so a file under a held folder gets a free
+    folder and not a free file name that the folder still covers."""
+    a, b = norm(mine).split("/"), norm(theirs).split("/")
+    if _wild(norm(theirs)) or len(a) <= len(b):
+        return mine
+    return "/".join(a[: len(b)]) + "/"
+
+
+def brief_problems(number: int | None, body: str, h: Holders) -> list[str]:
+    """Answers 1 to 3 for one brief: what another open brief or pull request holds, each with a
+    free name, and the names answer 3 refuses."""
+    entries = adds_of(body)
+    out = [p for e in entries for p in name_problems(e)]
+    for c in clashes(number, entries, h):
+        rest = Holders(h.tree, [b for b in h.briefs if b.get("number") != number], h.pulls)
+        try:
+            name = free(rename_base(c["path"], c["theirs"]), rest)
+        except CheckError:
+            name = "none from this entry; name one with plan_names.py next"
+        out.append(
+            f"rule 4: Adds entry {c['path']} is held by {c['holder']} ({c['theirs']}); free: {name}"
+        )
+    return out
 
 
 def load_json(path: str, what: str) -> list:

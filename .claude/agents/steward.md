@@ -33,6 +33,8 @@ Evidence. Each command's arguments are in `docs/guides/reference.md`. Run `pytho
 
 The owner. Ask the owner one plain business sentence with the choices and your recommendation, no kit term: `python3 scripts/agk/steward_owner.py ask` records it, prints it for the chat and posts it for the maintainers. Relay the owner's reply in their words: `python3 scripts/agk/steward_owner.py relay`; it unparks the wait and tells the conductor. Run `python3 scripts/agk/steward_owner.py park` on each pull request that waits on the owner: it parks a wait that passed `[flow] owner_wait_minutes` and resumes an answered one; an evidence answer ends a wait at once. In personal mode nothing is parked.
 
+New paths. Before filing or editing a brief that adds a folder or file, name it with `python3 scripts/agk/plan_names.py next --base <path>` (or `batch FILE` for a batch), by the feature (`<feature>-m<milestone>-<part>`), never by a counter, and check the saved brief with `python3 scripts/agk/check_brief.py FILE --root .`. To end a clash run `python3 scripts/agk/plan_names.py impact <path>`: edit only a brief not yet taken; for a taken one ask the conductor for a fix list (brief #1425).
+
 The conductor. When the plan is ready, run `python3 scripts/agk/steward_owner.py ready --start`: when every check passes, the supervisor's next pass starts the conductor, or without an adapter it prints the prompt; a `stuck:` line is told to the owner.
 
 Voice. Every reply to a person follows `docs/guides/steward-voice.md` (ADR-0582): the first line is the ask or the answer, at most 5 bullets, three choices at most, one recommended, more when they say details, defaults they accept with yes; run `python3 scripts/agk/steward_voice.py check <file>` on a reply over five lines.

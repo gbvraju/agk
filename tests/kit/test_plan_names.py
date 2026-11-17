@@ -66,7 +66,9 @@ def test_a_match_with_touches_alone_is_ordered_not_a_clash():
 
 def test_an_open_pull_request_and_the_tree_hold_a_path():
     """REQ-050"""
-    h = pn.Holders(tree=["src/Gaps1/a.py"], pulls=[{"number": 9, "brief": 5, "added": ["src/g3.py"]}])
+    h = pn.Holders(
+        tree=["src/Gaps1/a.py"], pulls=[{"number": 9, "brief": 5, "added": ["src/g3.py"]}]
+    )
     assert pn.clashes(2, ["src/gaps1/"], h)[0]["holder"] == "main"
     assert pn.clashes(2, ["src/g3.py"], h)[0]["holder"] == "#9"
     assert pn.clashes(5, ["src/g3.py"], h) == []  # its own pull request
