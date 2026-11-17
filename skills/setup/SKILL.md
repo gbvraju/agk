@@ -37,8 +37,9 @@ missing tool shows as `waiting` with what to install, and the later builds insta
 
 2. The builders line names the figure, the limit that applied and why. When the person wants fewer builders, run the
    plan again with `--builders <n>`; a figure above the cap is refused, and you say so in one line.
-3. For each `waiting` step, tell the person in one line what its note says. For each `failed` proof step, name it and
-   suggest `/agk:doctor`.
+3. For each `waiting` step, tell the person in one line what its note says. The proof steps are listed as not yet run: the
+   plan runs none of them. In `/agk:setup status`, which runs them, name each `failed` proof step and suggest
+   `/agk:doctor`.
 4. For the steward or a script, the same table is `--json`: `steps` (`step`, `result`, `note`), `pending`, `roles` and
    `builders`.
 

@@ -14,12 +14,13 @@ the clone's remote) and the repository (`execution`, `review_mode`, `[flow]`, `[
 builders through `conductor.py lease --show` and one `session.py plan --json`; a live steward from
 the steward's own cache, no call). It asks nothing. `plan` prints the plan (eight lines or fewer)
 and the table; `status` the table only. Each check row is `skipped` when it is already met and
-`waiting` when it is not: this build installs nothing and writes no file. The proof rows run the
-doctor, one small kit test, one container start when the project uses containers, and the dry
-plan. `--json` prints `steps` (`step`, `result`, `note`), `pending`, `roles` (chosen by build (h),
-empty here) and `builders`. `--builders N` lowers the figure; above the cap it is refused. A
-remote's or a proxy's credentials are never read back. `--machine` and `--github` take a saved
-read (the tests' doubles). Exit 0, 1 on a refusal, 2 on a usage error.
+`waiting` when it is not: this build installs nothing and writes no file. The proof rows (the
+doctor, one small kit test, one container start when the project uses containers, and the dry plan)
+are the last steps, after the person's yes: `status` runs them; `plan` lists them as not yet run and
+runs none. `--json` prints `steps` (`step`, `result`, `note`), `pending`, `roles` (chosen by build
+(h), empty here) and `builders`. `--builders N` lowers the figure; above the cap it is refused. A
+remote's or a proxy's credentials are never read back. `--machine` and `--github` take a saved read
+(the tests' doubles). Exit 0, 1 on a refusal, 2 on a usage error.
 """
 
 from __future__ import annotations
@@ -53,6 +54,7 @@ MINIMUM = {  # rule 7's one table; None until build (c) records it (verify)
 CHECKED = ("python", "git", "gh", "claude", "node")
 PROOF = ("doctor", "kit_test", "container", "dry_plan")
 RESULTS = ("done", "skipped", "waiting", "failed")
+NOT_YET = "runs after your yes, and in /agk:setup status"  # rules 5 and 12: never in `plan`
 MAX_BUILDERS = 3  # the default of `[flow] max_builders`, as `session.py` reads it
 DEFAULT_RESERVE = 0.25
 BROWSER_FILES = ("playwright.config.ts", "playwright.config.js", "playwright.config.mjs")
@@ -259,8 +261,11 @@ def check_rows(machine: dict, repo: dict) -> list[dict]:
     return [*rows, either("kit", repo["kit"], "agk.toml present", no_kit)]
 
 
-def proof_rows(root: Path, machine: dict, repo: dict) -> list[dict]:
-    """Rule 12: the doctor, one small kit test, one container start, the dry plan."""
+def proof_rows(root: Path, machine: dict, repo: dict, run: bool = True) -> list[dict]:
+    """Rule 12: the doctor, one small kit test, one container start, the dry plan; with RUN
+    false (`plan`, before the yes of rule 5) each is listed as not yet run and none runs."""
+    if not run:
+        return [row(name, "skipped", NOT_YET) for name in PROOF]
     py, scripts = sys.executable, str(PLUGIN / "scripts" / "agk")
 
     def proof(name: str, args: list[str], what: str, skip: str | None = None) -> dict:
@@ -315,7 +320,7 @@ def plan_lines(machine: dict, repo: dict, builders: dict, rows: list[dict]) -> l
         f"{repo['steward'] or 'none seen'}.",
         f"  Builders: {builders['figure']} {one} of {builders['per_builder_gb']:g} GB "
         f"(limit {builders['limit']}; {builders['reason']}).",
-        "  This run installs and changes nothing; /agk:setup status shows the table again.",
+        "  This run installs, runs and changes nothing; /agk:setup status runs the proofs.",
     ]
 
 
@@ -358,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: --builders above the cap of {cap}")
             return 1
         builders |= {"figure": args.builders, "limit": "person", "reason": "lowered by the person"}
-    rows = check_rows(machine, repo) + proof_rows(root, machine, repo)
+    rows = check_rows(machine, repo) + proof_rows(root, machine, repo, args.form == "status")
     pending = [r["step"] for r in rows if r["result"] == "waiting"]
     if args.json:
         table = {"steps": rows, "pending": pending, "roles": [], "builders": builders}

@@ -31,7 +31,8 @@ form. ADR-0578 added REQ-072 and names only `docs/requirements.md`, so this buil
 4. **This build installs nothing and writes no file.** Each check row is `skipped` when met and `waiting` with what to
    install when not, so a second run changes nothing and a stopped run resumes at its first unmet step. The proof rows
    (rule 12) run `doctor.py`, `tests/kit/test_doctor.py` where present, one container start when the project uses
-   containers and `session.py plan`. Rule 7's minimum-version table starts in `setup.py` with Python 3.11 and Node.js 20.
+   containers and `session.py plan`; they are the last steps, after the person's yes (rule 5), so `status` runs them
+   and `plan` lists them as `skipped` (not yet run) and runs none. Rule 7's minimum-version table starts in `setup.py` with Python 3.11 and Node.js 20.
 5. **The skill** `skills/setup/SKILL.md` has the forms `/agk:setup` and `/agk:setup status`, user-invoked only
    (`disable-model-invocation: true`) until build (g) gives the steward its hand-off.
 

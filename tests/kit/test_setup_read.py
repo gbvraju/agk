@@ -59,7 +59,7 @@ def files_of(root: Path) -> dict:
 
 
 def test_ac1_a_set_up_double_skips_every_check_and_writes_nothing(tmp_path, capsys, monkeypatch):
-    """REQ-072 AC1: rule 2: every check row skipped, the proof rows run, nothing written."""
+    """REQ-072 AC1: rule 2: every check row skipped, the proof rows listed, nothing written."""
     root = project(tmp_path)
     before = files_of(root)
     code, out, _ = run(root, capsys, monkeypatch, extra=["--json"])
@@ -96,6 +96,21 @@ def test_ac1_status_prints_the_table_and_changes_nothing(tmp_path, capsys, monke
     assert code == 0 and files_of(root) == before
     assert "Plan:" not in out and "doctor" in out and "skipped" in out
     assert any("doctor.py" in " ".join(c) for c in calls)
+
+
+def test_ac1_plan_runs_no_proof_and_lists_the_proof_rows_as_not_yet_run(
+    tmp_path, capsys, monkeypatch
+):
+    """REQ-072 AC1: rules 5 and 12: the proofs run after the yes and in `status`, not in `plan`."""
+    root = project(tmp_path, files=("Containerfile",))
+    for extra in ((), ("--json",)):
+        code, out, calls = run(root, capsys, monkeypatch, extra=extra)
+        assert code == 0 and calls == []
+    rows = {s["step"]: s for s in json.loads(out)["steps"]}
+    assert all(rows[p]["result"] == "skipped" for p in setup.PROOF)
+    assert all(rows[p]["note"] == setup.NOT_YET for p in setup.PROOF)
+    _, _, calls = run(root, capsys, monkeypatch, form="status")
+    assert any(c[1:3] == ["run", "--rm"] for c in calls)
 
 
 def test_ac2_reads_first_asks_nothing_and_the_plan_has_at_most_eight_lines(
