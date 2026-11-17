@@ -6,7 +6,7 @@
 - Related: brief #1425, ADR-0189, ADR-0529, ADR-0548
 - Requirements: REQ-050
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`
+Protected classes: `scripts/agk/`, `tests/kit/`
 
 ## Context
 

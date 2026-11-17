@@ -164,10 +164,8 @@ def test_650_open_briefs_are_read_from_one_listing(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pn.session, "pages", pages)
     monkeypatch.setattr(pn.session, "repo_name", lambda root: "example/repo")
-    import session_plan
-
-    monkeypatch.setattr(session_plan, "tree_files", lambda root, ref=None: [])
-    monkeypatch.setattr(session_plan, "_default_branch", lambda root: "main")
+    monkeypatch.setattr(pn.session_plan, "tree_files", lambda root, ref=None: [])
+    monkeypatch.setattr(pn.session_plan, "_default_branch", lambda root: "main")
     h = pn.read_holders(tmp_path, None, None)
     assert len(h.briefs) == 650 and sum("/issues?" in c for c in calls) == 1
     assert pn.free("src/f7/", h) == "src/f7-2/"

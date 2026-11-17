@@ -43,6 +43,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import session
+import session_plan
 from common import CheckError, run, utf8_output
 
 NAME = "plan-names"
@@ -341,17 +342,16 @@ def load_json(path: str, what: str) -> list:
 
 def read_holders(root: Path, issues: str | None, pulls: str | None) -> Holders:
     """The four sources, each read once: a saved file where given, else one listing."""
-    from session_plan import _default_branch, plan_briefs, tree_files  # noqa: PLC0415
-
-    tree = tree_files(root, f"origin/{_default_branch(root)}")
+    tree = session_plan.tree_files(root, f"origin/{session_plan._default_branch(root)}")
     repo = None if issues and pulls else session.repo_name(root)
-    if issues:
-        briefs = load_json(issues, "the issues file")
-    else:
-        briefs = session.pages(f"repos/{repo}/issues?state=open&labels={session.LABEL}")
-        if briefs is None:
-            raise CheckError("the open briefs cannot be read")
-    briefs = plan_briefs([b for b in briefs if "pull_request" not in b])
+    listed = (
+        load_json(issues, "the issues file")
+        if issues
+        else session.pages(f"repos/{repo}/issues?state=open&labels={session.LABEL}")
+    )
+    if listed is None:
+        raise CheckError("the open briefs cannot be read")
+    briefs = session_plan.plan_briefs([b for b in listed if "pull_request" not in b])
     if pulls:
         prs = load_json(pulls, "the pulls file")
     else:

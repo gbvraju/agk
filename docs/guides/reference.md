@@ -872,7 +872,7 @@ compared ignoring case, `./`, a trailing `/` and backslashes. Name a new folder 
 (`access-control-m7-api`). `batch` names one base per line of FILE in one pass, so a batch never clashes with itself.
 `impact` lists every open brief and pull request that names a path and who renames it: the steward edits a brief not yet
 taken, a taken one gets a fix list. `--issues` and `--pulls` read saved lists (`[{"number", "brief", "added"}]` for pull
-requests) instead of one listing each. `check_brief.py --root DIR [--open-briefs FILE] [--number N]` refuses an `Adds:`
+requests) instead of one listing each. The brief check with `--root DIR [--open-briefs FILE] [--number N]` refuses an `Adds:`
 entry another open brief or pull request holds, naming it and a free name, and `session.py plan` prints
 `CLASH: #a and #b both add <path>; rename in the one not taken (#n, free: <name>)` and starts neither until one is renamed.
 
