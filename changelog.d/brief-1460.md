@@ -1,0 +1,1 @@
+- `/agk:setup` (first form): reads the machine and the project, sizes the builders from memory and cores with the cap that applied and why, and prints the plan and the setup table; `/agk:setup status` and `--json` print the table and change nothing (brief #1460)

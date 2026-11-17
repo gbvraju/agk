@@ -19,7 +19,8 @@ SCRIPTS = ROOT / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 _spec = importlib.util.spec_from_file_location("agk_setup", SCRIPTS / "setup.py")
 setup = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(setup)  # type: ignore[union-attr]
+assert _spec.loader is not None
+_spec.loader.exec_module(setup)
 
 SKILL = ROOT / "skills" / "setup" / "SKILL.md"
 TOOLS = {"python": "3.12.1", "git": "2.43.0", "gh": "2.50.0", "claude": "2.1.0", "node": "20.11.0"}
@@ -78,7 +79,9 @@ def test_ac1_a_stopped_run_resumes_at_the_next_step(tmp_path, capsys, monkeypatc
     """REQ-072 AC1: rule 2: the steps done before a stop are skipped; the next one waits."""
     names = list(TOOLS)
     tools = {n: (TOOLS[n] if i < k else None) for i, n in enumerate(names)} | {"podman": None}
-    _, out, _ = run(project(tmp_path), capsys, monkeypatch, fake=machine(tools=tools), extra=["--json"])
+    _, out, _ = run(
+        project(tmp_path), capsys, monkeypatch, fake=machine(tools=tools), extra=["--json"]
+    )
     rows = {s["step"]: s["result"] for s in json.loads(out)["steps"]}
     assert [rows[n] for n in names[:k]] == ["skipped"] * k
     assert rows[names[k]] == "waiting"
@@ -146,7 +149,9 @@ def test_ac3_unreadable_memory_gives_one_and_says_unknown():
         ("[flow]\nbuilder_memory_gb = 6\n", ("Dockerfile",), 6),
     ],
 )
-def test_ac3_memory_per_builder_comes_from_the_project(tmp_path, capsys, monkeypatch, toml, files, per):
+def test_ac3_memory_per_builder_comes_from_the_project(
+    tmp_path, capsys, monkeypatch, toml, files, per
+):
     """REQ-072 AC3: rule 6: the project's value, else 4 GB with browsers or containers, else 3."""
     _, out, _ = run(project(tmp_path, toml, files), capsys, monkeypatch, extra=["--json"])
     assert json.loads(out)["builders"]["per_builder_gb"] == per
