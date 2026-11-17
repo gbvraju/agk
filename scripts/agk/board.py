@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Make the plan's GitHub Project board and add every brief to it (brief #1190, ADR-0506), copied
 from the owner's template board and carrying the business fields (brief #1195, ADR-0507).
 

@@ -4,6 +4,11 @@ description: Make the plan's GitHub Project board once and keep it in step - cop
 disable-model-invocation: true
 argument-hint: "[--title TEXT] [--owner LOGIN] [--project N] [--template OWNER/NUMBER] [--yes]"
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 # /agk:board
 

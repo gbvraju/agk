@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 # agk commands. Included by the Makefile of an installed repository, or called directly:
 #   make -f agk.mk agk-governance | agk-lint | agk-test | agk-project-test | agk-traceability
 PY ?= python3
@@ -14,6 +18,7 @@ agk-governance:
 	$(PY) scripts/agk/check_numbers.py
 	$(PY) scripts/agk/check_specs.py
 	$(PY) scripts/agk/check_neutrality.py
+	$(PY) scripts/agk/check_licence_notice.py
 	$(PY) scripts/agk/check_build_state.py
 	$(PY) scripts/agk/check_kit_tests.py
 	$(PY) scripts/agk/check_design.py

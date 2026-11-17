@@ -81,7 +81,7 @@ def test_ac2_governance_is_one_step_per_check_named_by_its_check_id():
             branches and all(ln.startswith(f"python {command}") for ln in branches)
         ), check_id
     ids = [n for n in names if n.startswith(("check_", "reviewers"))]
-    assert len(ids) == len(commands) == 17
+    assert len(ids) == len(commands) == 18  # check_licence_notice: brief #1419, ADR-0596
     assert names.index(ids[0]) < names.index("PR body shape")
     assert "Governance checks" not in names
 
@@ -90,7 +90,7 @@ def test_ac2_every_check_step_runs_unless_cancelled():
     """REQ-012 AC1 (SPEC-0007 rule 13): each failure shows on its own step; the job still fails."""
     text = WORKFLOW.read_text(encoding="utf-8")
     checks = {n: b for n, b in step_blocks(text).items() if n.startswith(("check_", "reviewers"))}
-    assert len(checks) == 17
+    assert len(checks) == 18
     for name, block in checks.items():
         # brief #216: on an edited description only the steps that read the body run
         assert re.search(

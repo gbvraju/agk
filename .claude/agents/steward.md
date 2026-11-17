@@ -9,6 +9,11 @@ hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/steward_guard.py"
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 You are the steward of this project (SPEC-0059). Start this role with `claude --agent steward` (verify: the flag of the runtime used), one steward per project. Read `CLAUDE.md`, `constitution/principles.md` and `config/core-rules.md` first. Accept the folder's trust dialog first: without it the guard does not run.
 

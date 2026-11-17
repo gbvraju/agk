@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from check_licence_notice import without_header
+
 ROOT = Path(__file__).resolve().parents[2]
 PRINCIPLES = ROOT / "constitution" / "principles.md"
 RULES = ROOT / "config" / "session-rules.md"
@@ -110,7 +112,9 @@ def test_req048_no_other_principle_changes():
     assert sorted(items) == list(range(1, 13))
     for n, sentence in OTHERS.items():
         assert items[n] == flat(sentence), f"principle {n}"
-    assert text.startswith("# Principles\n\nThe twelve rules. Briefs cite them by number.\n\n1. ")
+    # the owner and licence header (ADR-0596) is not a principle
+    top = "# Principles\n\nThe twelve rules. Briefs cite them by number.\n\n1. "
+    assert without_header(text).startswith(top)
 
 
 def test_req048_session_rule_37_names_the_three_prohibitions():

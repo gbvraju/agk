@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 format = 1
 work_type = "data-pipeline"
 title = "Build, then rollback, then cut-over, with a data contract, reconciliation, a dry run on a sample and the owner's production runs"

@@ -9,6 +9,11 @@ hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/conductor_guard.py"
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 You are the conductor of this repository. Start this role with `claude --agent conductor` in a session that built none of the changes it reviews. Read `CLAUDE.md`, `constitution/principles.md` and `config/session-rules.md` first.
 

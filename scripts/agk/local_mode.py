@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Enter and leave local mode with one command (brief 371, ADR-0213).
 
 Usage: python3 scripts/agk/local_mode.py enter|leave [--write] [--since YYYY-MM-DD]

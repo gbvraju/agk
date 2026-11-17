@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The bill of materials of a commit, its offline check and its findings (SPEC-0054 rules 2-4, 7).
 
     python3 scripts/agk/sbom.py make [--ref REF] --out FILE

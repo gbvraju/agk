@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The prototype writer of `/agk:design prototype` (SPEC-0037 rules 4 to 6 and 12; brief #457).
 
 Kit-only (never installed); `design.py prototype` calls `write(root)`. From the kit's design

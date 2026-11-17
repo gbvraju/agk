@@ -1,0 +1,25 @@
+AGK (Agentic Governance Kit) Proprietary Licence. Copyright (c) 2026 Balavardhi Raju Gangula. All rights reserved.
+
+1. Ownership. AGK, its source code, scripts, prompts, agents, hooks, workflows, playbooks, guides and documentation (the Software) are built and owned by Balavardhi Raju Gangula (the Owner).
+
+2. No licence without a written grant. No right to use, copy, modify, distribute or create derivative works of the Software is granted, except by a written grant signed by the Owner that names the repository and the term.
+
+3. One repository only. A grant covers only the repository it names. No user of any repository may copy or use the Software, in whole or in part, in any other repository, project, product or organisation without the Owner's prior written permission.
+
+4. End of use. When the grant's term ends or the project is delivered, whichever comes first, the grantee stops using the Software and removes it from the repository and from every machine it was installed on, and the history of the repository is cleaned of it as the Owner and the grantee agree.
+
+5. Confidentiality. The Software is confidential information of the Owner.
+
+6. No warranty. The Software is provided as is, without warranty of any kind, and the Owner is not liable for any damages arising from its use.
+
+Files without a header. The kit files that carry no header of their own are covered by this
+annotation, the one the kit's REUSE.toml holds:
+
+    SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+    SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+    path: **/*.json
+    path: .gitignore
+    path: .github/**
+    path: docs/adr/TEMPLATE.md
+    path: docs/briefs/TEMPLATE.md
+    path: docs/specs/TEMPLATE.md

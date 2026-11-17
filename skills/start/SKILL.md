@@ -4,6 +4,11 @@ description: Turn a written problem statement into a vision and a project charte
 disable-model-invocation: true
 argument-hint: "\"<problem statement, at most 1,500 characters>\""
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 # /agk:start
 

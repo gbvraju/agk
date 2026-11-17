@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
+from check_licence_notice import without_header
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -281,7 +282,7 @@ def flat(text: str) -> str:
 def test_req001_principle_1_changed_by_exactly_the_one_sentence():
     """REQ-001: brief #545 answer 1 (principle 1 is the one sentence; the rest is unchanged)."""
     text = (ROOT / "constitution" / "principles.md").read_text(encoding="utf-8")
-    lines = text.splitlines()
+    lines = without_header(text).splitlines()  # the licence header is not a principle (ADR-0596)
     assert PRINCIPLE_1 in lines
     old = OLD_PRINCIPLES.splitlines()
     assert lines[: len(old) - 1] == old[:-1]

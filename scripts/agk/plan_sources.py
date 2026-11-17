@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The planning sources of a project that starts from an idea (SPEC-0043 rule 2b as amendment 174
 item 2 proposes; REQ-050; brief #1216, ADR-0515). Installed: `kit/manifest.json` lists it in
 `verbatim`.

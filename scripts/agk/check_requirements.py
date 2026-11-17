@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Requirements file: unique ids, valid Status, a test marker for every `done` requirement and, per
 the `ac_coverage` setting (`warn` or `block`), for every criterion `ACn` of it (SPEC-0010). A
 `retired` requirement has no marker left: the check names the requirement and the files

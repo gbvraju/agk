@@ -3,6 +3,11 @@ name: review-pass
 description: The conductor's one review pass. Reviews exactly the pull requests that session.py review-queue lists, posts at most one verdict per head, and ends with one line per pull request. Safe to run again and again, by hand or from a timed loop.
 disable-model-invocation: true
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 # /agk:review-pass
 

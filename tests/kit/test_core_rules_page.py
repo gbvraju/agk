@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from check_licence_notice import without_header
+
 ROOT = Path(__file__).resolve().parents[2]
 PAGE = ROOT / "config" / "core-rules.md"
 CLAUDE = ROOT / "CLAUDE.md"
@@ -128,14 +130,15 @@ def summary_lines(text: str, title: str) -> dict[tuple[str, int], str]:
 
 
 def test_req039_the_page_exists_and_fits_one_page():
-    """REQ-039: brief #388 answer 4 (at most 60 lines)."""
-    lines = read(PAGE).splitlines()
+    """REQ-039: brief #388 answer 4 (at most 60 lines; the licence header of ADR-0596 is not the
+    page's)."""
+    lines = without_header(read(PAGE)).splitlines()
     assert 0 < len(lines) <= 60, len(lines)
 
 
 def test_req039_the_page_says_the_numbered_rules_win():
     """REQ-039: brief #388 answer 1 (its top says the numbered rules win over the summaries)."""
-    top = flat("\n".join(read(PAGE).splitlines()[:8]))
+    top = flat("\n".join(without_header(read(PAGE)).splitlines()[:8]))
     assert "The numbered rules win over the summaries" in top
 
 

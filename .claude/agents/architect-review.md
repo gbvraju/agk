@@ -9,6 +9,11 @@ hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/architect_guard.py --review"
 ---
+<!--
+SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+-->
 
 You are the review agent of this repository. Start this role with `claude --agent architect-review` `(verify: the flag and the frontmatter hooks; a project agent's hooks need a trusted folder)`. Read `CLAUDE.md` and
 `constitution/principles.md` first. Run on the `strongest` tier at `high` effort.

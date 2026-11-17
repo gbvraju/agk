@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Fail when a protected path changes without an ADR in the same change set that names its class.
 
 Brief #545 (ADR-0271): with the pull request body (`--body FILE`, or the file that `AGK_PR_BODY`
