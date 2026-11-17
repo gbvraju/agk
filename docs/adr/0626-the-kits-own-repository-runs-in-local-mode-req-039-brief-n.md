@@ -49,13 +49,27 @@ reads from another machine. The kit's own repository has never run in it. A clou
 ## Consequences
 
 The kit's own repository can be made private once the owner has taken the six steps, without metered minutes and without
-dropping a check. From the merge of this decision, `merge_cleared.py`, the router and `prepush.py` read the kit's own
-repository as local: the conductor merges on evidence, and a builder's `--record` also writes the note. The doctor's
+dropping a check. What stops on main the moment this merges (read from `merge_cleared.py`, `route.py`, `prepush.py` and
+`common.py` on main): the merger job stops (`github_mode`: "local mode: the conductor merges"); the sweep only reports and
+never merges; the guarded merge reads `Local evidence:` and `Evidence check: agrees` in the verdict instead of the
+`governance` and `proof` checks, so every open pull request whose verdict relies on CI alone is held with `no local
+evidence for this head (rule 4)`; the router reads local mode without an issue read; `prepush.py --record` also writes
+the note; and `session.py claim` and `push-check` refuse the main folder of a clone (Q-1471-1). An open pull request then
+needs its builder to run `python3 scripts/agk/prepush.py --record` on its head and push, and the conductor to run
+`python3 scripts/agk/evidence.py check --head <sha>` and give a new verdict on that head that carries both lines; its
+builder works from its own worktree. The doctor shows the same in a cloud session of the kit's own repository only: a
+hosted or hybrid project's secret-scan line is unchanged (fix list item 1). The doctor's
 `local-mode-switch` warns until the owner's steps are done. The release pull request's full-suite record read by
 `check_release.py` (answer 3) and the readings of the brief's questions are recorded on the pull request (Q-1471-n).
 Tests: `tests/kit/test_kit_repo_local_mode.py`; `tests/kit/test_doctor.py` counts the new check.
 
 ## Residual
+
+- 2026-11-17, ends by 2026-12-31 or at the owner's step 2, whichever comes first: `prepush.py` still accepts
+  `Secret-scan: deferred to CI` in local mode, and after step 2 no CI runs that scan. The guide's step 2 therefore asks
+  the owner first to add the doctor's gitleaks setup line to the cloud environment, so every builder runs the scan
+  itself. Refusing the deferral when `execution = "local"` is a change to `prepush.py`, outside this brief's `Touches`;
+  it is its own brief (fix list item 3 on 0285fbba6bb8).
 
 - 2026-11-17: answer 3 (the release pull request's full-suite record, read by `check_release.py`) is not built here;
   `check_release.py` is outside the brief's `Touches` (Q-1471-3 on the pull request).

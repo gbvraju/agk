@@ -461,7 +461,9 @@ without the secret scanner, `python3 scripts/agk/doctor.py` prints the one line 
 The switch-over is the owner's, in this order. Each step is printed for the owner and never run by a session:
 
 1. Brief #1447 and brief #1471 are merged while Actions still runs, so both are proven in CI.
-2. The owner runs `python3 scripts/agk/local_mode.py enter --write`: it disables the workflows and opens the record issue.
+2. The owner first adds the one setup line that `python3 scripts/agk/doctor.py` prints for the secret scanner to each
+   cloud environment's setup script, since `Secret-scan: deferred to CI` defers to a check that no longer runs; then the
+   owner runs `python3 scripts/agk/local_mode.py enter --write`: it disables the workflows and opens the record issue.
 3. The owner changes the ruleset's required checks so that a merge no longer waits for `proof` and `governance` from
    Actions; the guarded merge still requires the evidence lines.
 4. The owner makes the repository private, after reading `python3 scripts/agk/minutes.py --line` and the plan costs of

@@ -130,9 +130,6 @@ GITLEAKS_SETUP = (
     f'"{GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum --check --strict && '
     "tar -xzf gitleaks.tgz -C /usr/local/bin gitleaks"
 )
-RECORD_PREFIX = (
-    "Local mode since"  # the local-mode record issue's title (merge_cleared.RECORD_TITLE)
-)
 NO_RECORD = "tests: the prepush record cannot be read; nothing about the suite (option: --record)"
 USAGE = (
     "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] "
@@ -859,6 +856,21 @@ def workflow_state_result(reads: Reads, report_installed: bool) -> Result:
     return Result("cannot-check", reasons[0]) if reasons else Result("ok")
 
 
+def open_issues(reads: Reads) -> tuple[Any, str]:
+    """Every page of the open issues (100 a page), so the record issue never falls off a full
+    first page (brief #1471 fix list item 4); (None, reason) when a page cannot be read."""
+    found: list = []
+    for page in range(1, 1000):
+        name = "issues-open" if page == 1 else f"issues-open-{page}"
+        data, why = reads.get(name, f"/issues?state=open&per_page=100&page={page}")
+        if not isinstance(data, list):
+            return None, why or "bad-response"
+        found += data
+        if len(data) < 100:
+            break
+    return found, ""
+
+
 def local_switch_result(reads: Reads, config: dict) -> Result:
     """`local-mode-switch` (brief #1471 answer 6, ADR-0626): with `execution = "local"`, warns
     while a workflow is still active, no open issue is the record issue, or an active ruleset of
@@ -868,7 +880,7 @@ def local_switch_result(reads: Reads, config: dict) -> Result:
         return Result("ok", message=" (not applicable: execution is not local)")
     repo_data, why = reads.get("repo", "", raw=True)
     flows, why_flows = reads.get("workflows", "/actions/workflows?per_page=100")
-    issues, why_issues = reads.get("issues-open", "/issues?state=open&per_page=100")
+    issues, why_issues = open_issues(reads)
     listing, why_rules = reads.get("rulesets", "/rulesets", raw=True)
     if not isinstance(repo_data, dict) or not isinstance(flows, dict):
         return Result(
@@ -902,7 +914,9 @@ def local_switch_result(reads: Reads, config: dict) -> Result:
         if isinstance(w, dict) and w.get("state") == "active"
     )
     parts = [f"{running} workflow{'s' if running != 1 else ''} still active"] if running else []
-    if not merge_cleared.titled([x for x in issues if isinstance(x, dict)], RECORD_PREFIX):
+    if not merge_cleared.titled(
+        [x for x in issues if isinstance(x, dict)], merge_cleared.RECORD_TITLE
+    ):
         parts.append("no open record issue")
     if still:
         plural = "s" if still != 1 else ""
@@ -2254,16 +2268,20 @@ def outside_test_dirs_lines(root: Path) -> list[str]:
     ]
 
 
-def secret_scan_line(in_wsl: bool | None = None, in_cloud: bool | None = None) -> str:
+def secret_scan_line(
+    in_wsl: bool | None = None, in_cloud: bool | None = None, local: bool = False
+) -> str:
     """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306). Missing inside
     WSL, the line names the setup's `gitleaks` step (brief #1450, ADR-0608); missing in a cloud
-    session, the one setup-script line the owner adds, printed and never run (brief #1471)."""
+    session of a project with `execution = "local"` (LOCAL), the one setup-script line the owner
+    adds, printed and never run (brief #1471); hosted and hybrid projects keep their line."""
     tool = shutil.which("gitleaks")
     if tool is None:
         if in_wsl is None:
             in_wsl = sys.platform.startswith("linux") and inside_wsl()
         if in_cloud is None:
-            in_cloud = os.environ.get(REMOTE_RUNTIME) == "true"
+            in_cloud = local and os.environ.get(REMOTE_RUNTIME) == "true"
+        in_cloud = in_cloud and local
         fix = (
             f"run /agk:wsl again; it installs gitleaks {GITLEAKS_PIN}"
             if in_wsl
@@ -2533,7 +2551,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         licence = licence_lines(root.resolve())
         deprecation = deprecation_lines(root.resolve())
-        scan = secret_scan_line()
+        scan = secret_scan_line(local=read_config(root.resolve()).get("execution") == "local")
         work, work_failed = work_type_line(root.resolve())
         skills = skill_lines(root.resolve(), Path(options["kit"]) if options["kit"] else None)
         design = design_import_lines(root.resolve())

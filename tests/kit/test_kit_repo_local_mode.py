@@ -113,6 +113,23 @@ def test_each_unfinished_step_warns_naming_the_setting(tmp_path, over, words):
     assert "setting: execution" in doctor.CHECKS["local-mode-switch"][2]
 
 
+def test_the_record_issue_on_a_later_page_is_found(tmp_path):
+    """REQ-039: brief #1471 fix list item 4 (every page of the open issues is read)."""
+    full = [{"number": n, "title": f"Issue {n}"} for n in range(100, 200)]
+    reads = answers(tmp_path, **{"issues-open": full, "issues-open-2": [RECORD]})
+    assert doctor.local_switch_result(reads, LOCAL).status == "ok"
+    (reads.api_dir / "issues-open-2.json").unlink()
+    later = doctor.Reads("example-owner/example-repo", reads.api_dir)
+    assert doctor.local_switch_result(later, LOCAL).status == "cannot-check"
+
+
+def test_the_record_title_is_the_mergers():
+    """REQ-039: brief #1471 fix list item 5 (one title, read from merge_cleared)."""
+    source = (KIT_ROOT / "scripts" / "agk" / "doctor.py").read_text(encoding="utf-8")
+    assert "merge_cleared.RECORD_TITLE" in source and '"Local mode since"' not in source
+    assert RECORD["title"].startswith(merge_cleared.RECORD_TITLE)
+
+
 def test_a_read_that_fails_is_cannot_check_never_ok(tmp_path):
     """REQ-039: brief #1471 answer 6 (GET calls only; an unread answer is never ok)."""
     reads = answers(tmp_path)
@@ -139,12 +156,12 @@ def test_a_cloud_session_without_gitleaks_is_told_the_setup_line(monkeypatch):
         raise AssertionError("the doctor runs nothing for a missing gitleaks")
 
     monkeypatch.setattr(doctor.subprocess, "run", refuse)
-    line = doctor.secret_scan_line(in_wsl=False, in_cloud=True)
+    line = doctor.secret_scan_line(in_wsl=False, in_cloud=True, local=True)
     assert "(tool: gitleaks)" in line and doctor.GITLEAKS_PIN in line
     assert doctor.GITLEAKS_SETUP in line and "(verify" in line
     assert doctor.GITLEAKS_SHA256 in doctor.GITLEAKS_SETUP
     assert "sha256sum --check" in doctor.GITLEAKS_SETUP
-    outside = doctor.secret_scan_line(in_wsl=False, in_cloud=False)
+    outside = doctor.secret_scan_line(in_wsl=False, in_cloud=False, local=True)
     assert doctor.GITLEAKS_SETUP not in outside and "(tool: gitleaks)" in outside
 
 
@@ -159,9 +176,30 @@ def test_the_cloud_is_read_from_the_runtime_variable(monkeypatch):
     """REQ-039: brief #1471 answer 4 (`CLAUDE_CODE_REMOTE`, the variable common.py reads)."""
     monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
     monkeypatch.setenv("CLAUDE_CODE_REMOTE", "true")
-    assert doctor.GITLEAKS_SETUP in doctor.secret_scan_line(in_wsl=False)
+    assert doctor.GITLEAKS_SETUP in doctor.secret_scan_line(in_wsl=False, local=True)
     monkeypatch.delenv("CLAUDE_CODE_REMOTE")
-    assert doctor.GITLEAKS_SETUP not in doctor.secret_scan_line(in_wsl=False)
+    assert doctor.GITLEAKS_SETUP not in doctor.secret_scan_line(in_wsl=False, local=True)
+
+
+def test_a_hosted_project_in_a_cloud_session_keeps_its_line(monkeypatch):
+    """REQ-039: brief #1471 answer 7 and fix list item 1 (only `execution = "local"` adds it)."""
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
+    monkeypatch.setenv("CLAUDE_CODE_REMOTE", "true")
+    for line in (
+        doctor.secret_scan_line(in_wsl=False),
+        doctor.secret_scan_line(in_wsl=False, in_cloud=True),
+        doctor.secret_scan_line(in_wsl=False, in_cloud=True, local=False),
+    ):
+        assert doctor.GITLEAKS_SETUP not in line
+        assert line.endswith(doctor.GITLEAKS_INSTALL)
+
+
+def test_the_doctor_passes_the_projects_setting():
+    """REQ-039: brief #1471 fix list item 1 (the report reads `execution` from agk.toml)."""
+    source = (KIT_ROOT / "scripts" / "agk" / "doctor.py").read_text(encoding="utf-8")
+    assert 'secret_scan_line(local=read_config(root.resolve()).get("execution") == "local")' in (
+        source
+    )
 
 
 # --- answer 5: the guide ------------------------------------------------------------------------
