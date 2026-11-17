@@ -238,6 +238,16 @@ def git(root: Path, *args: str, check: bool = True) -> str:
     return proc.stdout
 
 
+def root_hint(where: Path) -> str:
+    """Brief #1452 (ADR-0610): the personal-mode tail of a refusal line, or "". The sidecar
+    reader is kit-only, so an install without it adds nothing."""
+    try:
+        import personal_state  # noqa: PLC0415 - kit-only, guarded: an install has no sidecar
+    except ImportError:
+        return ""
+    return personal_state.root_hint(Path(where))
+
+
 def repo_root() -> Path:
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8"

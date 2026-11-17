@@ -160,6 +160,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/autopilot.py"
 tests = [
+  "tests/kit/test_entry_points_refuse.py",
   "tests/kit/test_autopilot_status.py",
   "tests/kit/test_one_conductor_per_machine.py",
   "tests/kit/test_autopilot_supervisor.py",
@@ -359,6 +360,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_entry_points_refuse.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_one_conductor_per_machine.py",
   "tests/kit/test_autopilot_supervisor.py",
@@ -684,7 +686,10 @@ code = "scripts/agk/personal.py"
 tests = ["tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/personal_state.py"
-tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit/test_entry_points_refuse.py", "tests/kit/test_personal_state.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "scripts/agk/plan_intake.py"
 tests = [
@@ -868,6 +873,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_entry_points_refuse.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_autopilot_status.py",
   "tests/kit/test_steward_owner_question.py",
