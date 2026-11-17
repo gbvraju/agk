@@ -1,0 +1,1 @@
+- Briefs drafted in a batch get free folder names: the `brief` skill names every new `Adds:` path with `plan_names.py batch` (one brief alone with `next --base`) and checks the saved brief with `check_brief.py`, and the planning guide names the step (brief #1442)
