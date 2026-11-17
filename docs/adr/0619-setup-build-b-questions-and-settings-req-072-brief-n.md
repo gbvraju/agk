@@ -45,7 +45,7 @@ reviewed change.
 
 One reviewed change, made by the person, sets the project's settings. The engine answer is recorded for builds (c)
 and (d), which install it. Protected path classes changed: `scripts/agk/` (`setup.py`), `skills/`
-(`skills/setup/SKILL.md`), `tests/kit/` (`test_setup_settings.py`) and `agk.toml` (the `[[testing.map]]` entry). No
+(`skills/setup/SKILL.md`), `tests/kit/` (`test_setup_settings.py`) and `agk.toml` (the new test in the `[[testing.map]]` entries of `setup.py`, `wsl.py` and `skills/**`). No
 workflow, ruleset, required check or secret changes.
 
 ## Residual
