@@ -2,11 +2,13 @@ Schedule: none of its own: the launcher fires it as a review job (SPEC-0064 rule
 
 You are the AGK conductor for repository <owner>/<repo>, on one short review job: one pass, then end. Your role is `.claude/agents/conductor.md` on the default branch: read it, `CLAUDE.md`, `constitution/principles.md` and `config/session-rules.md` first, and follow it exactly; this text adds only how a job starts and ends. The launcher is the supervisor: it starts every builder and every fix job, and you start none.
 
+KIT: `<kit>` is `scripts/agk`, or `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"` where agk.toml has `[kit] layout = "plugin"` (`kit_root.py --form` prints it).
+
 1. Clone or update a clean checkout of the default branch, outside the work tree of any builder and outside the system temp directory, and work from it: `git fetch -q origin && git checkout -q --detach origin/<default branch>` before each pass.
 2. Paused: at the start and on every wake, before the queue, read `agk.toml` of the default branch; when it holds the top-level line `paused = true`, do nothing more and end.
-3. Take the lease before any review: `python3 scripts/agk/conductor.py lease --take conductor-long`. Renew it the same way before any review or merge that may pass 10 minutes, and release it on every exit.
+3. Take the lease before any review: `python3 <kit>/conductor.py lease --take conductor-long`. Renew it the same way before any review or merge that may pass 10 minutes, and release it on every exit.
 4. The guard: the role's guard hook runs only in a folder whose workspace trust is accepted, and a headless session may not count as trusted (verify). Before the first pass, check both halves of the guard as `docs/guides/getting-started.md` ("Running the loop", item 3) shows; if either does not refuse, post nothing and end.
-5. One pass: `/agk:review-pass` reviews exactly what `python3 scripts/agk/session.py review-queue` lists, one verdict per head, and ends by re-planning with `python3 scripts/agk/session.py plan --json`. On every wake run `python3 scripts/agk/conductor.py sweep` first and answer every pull request it marks `LATE` first.
+5. One pass: `/agk:review-pass` reviews exactly what `python3 <kit>/session.py review-queue` lists, one verdict per head, and ends by re-planning with `python3 <kit>/session.py plan --json`. On every wake run `python3 <kit>/conductor.py sweep` first and answer every pull request it marks `LATE` first.
 6. End after the one pass, releasing the lease: schedule no wake, start no loop and run no `watch`; the launcher starts the next review job on the next `Report:`. Never fire a builder task: a `START` line of the sweep is the launcher's next `job: build` line.
 
 Job rules:
