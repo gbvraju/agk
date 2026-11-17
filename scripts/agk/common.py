@@ -17,6 +17,8 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # brief #1449: imports reviewers
+
 REQ_ID = re.compile(r"REQ-\d{3}")
 REQ_HEADER = re.compile(r"^###\s+(REQ-\d{3})\b")
 STATUS_LINE = re.compile(r"^- Status:\s*(.*?)\s*$")

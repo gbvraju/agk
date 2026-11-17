@@ -10,6 +10,8 @@ and goes on to the builder checks; an unreadable login is `unknown` and starts n
 
 from __future__ import annotations
 
+import conductor  # imported before a fixture patches common's functions
+import launch
 import pytest
 from test_conductor_watchdog import PLAN, marker, starts, stub, watchdog, world  # noqa: F401
 from test_session import comment, iso
@@ -27,8 +29,6 @@ UNKNOWN = (
 @pytest.fixture
 def builders(monkeypatch):
     """Records each builder pass, so a test sees that the builders still run."""
-    import conductor
-
     ran: list[str] = []
     monkeypatch.setattr(conductor, "builder_pass", lambda root, repo, adapter: ran.append(repo))
     return ran
@@ -86,8 +86,6 @@ def test_an_unreadable_login_starts_no_conductor(world, capsys, builders):  # no
 
 def test_the_scripted_pass_of_a_member_takes_no_lease(world, capsys, builders, monkeypatch):  # noqa: F811
     """REQ-071: brief #1449 answer 1 (`watchdog --pass`: no lease marker, no job)."""
-    import conductor
-
     monkeypatch.setattr(conductor, "job_running", lambda *a: False)
     monkeypatch.setattr(conductor, "change_reads", lambda *a: (False, {}))  # a pass with work
     monkeypatch.setattr(conductor, "lease", lambda *a, **k: pytest.fail("a lease was taken"))
@@ -128,8 +126,6 @@ def test_the_maintainers_team_fallback_counts(world, capsys, builders, login, co
 
 def test_the_login_is_read_once_per_run(world):  # noqa: F811
     """REQ-071: brief #1449 answer 1 (one `gh api user`, cached for the run)."""
-    import launch
-
     signed_in(world, "boss")
     root = world["repo"].root
     assert launch.conductor_refusal(root) is None
@@ -142,8 +138,6 @@ def test_the_login_is_read_once_per_run(world):  # noqa: F811
 def test_launch_role_conductor_obeys_the_rule(world, capsys, monkeypatch, login, code):  # noqa: F811
     """REQ-071: brief #1449 answers 1 and 5 (`launch.py role --role conductor`, used by the
     autopilot and the hosted start)."""
-    import launch
-
     monkeypatch.setattr(launch, "live_conductors", lambda root: [])
     signed_in(world, login)
     args = ["role", "--role", "conductor", "--session", "cb-example-1", "--adapter", "true"]
@@ -158,8 +152,6 @@ def test_launch_role_conductor_obeys_the_rule(world, capsys, monkeypatch, login,
 
 def test_a_steward_start_reads_no_login(world, capsys, monkeypatch):  # noqa: F811
     """REQ-071: brief #1449 answer 1 governs conductor starts only."""
-    import launch
-
     args = ["role", "--role", "steward", "--session", "cb-example-1", "--adapter", "true"]
     assert launch.role_main(args, root=world["repo"].root) == 0
     assert [c for c in world["stub"].calls() if c[1] == "user"] == []
