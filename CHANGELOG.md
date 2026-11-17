@@ -4,6 +4,10 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.64.8 (2026-11-17)
+
+- #1423 Every kit file carries the owner and licence header (`LicenseRef-AGK-Proprietary`), `LICENSE` is the AGK Proprietary Licence installed in every project as `LICENSE-AGK`, `check_licence_notice.py` runs in governance and `doctor.py` warns about a missing, foreign or ended `[licence]` grant, or one it cannot compare with the origin remote (brief #1419)
+
 ## 0.64.7 (2026-11-16)
 
 - #1405 `conductor.py watchdog --pass` is the supervisor: one pass under the lock `autopilot`, no model and no plan or sweep read when nothing changed, one steward job with `AGK_STEWARD_START=conductor` for a waiting question, the stop rules said once in `agk status`; the conductor's role drops `/loop` and `steward_owner.py ready --start` leaves the conductor's start to the supervisor (brief #1387)
