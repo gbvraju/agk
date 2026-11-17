@@ -92,7 +92,8 @@ def test_ac4_the_linux_table_reads_the_one_minimum_table():
         assert {"git", "gh", "podman"} == set(packages)
     assert all(setup.MINIMUM[t] for t in LINUX_TOOLS | {"podman"})
     assert set(setup.NODE_SETUP) == {"apt", "dnf"}
-    assert all(u.startswith("https://") and "nodesource.com" in u for u in setup.NODE_SETUP.values())
+    urls = setup.NODE_SETUP.values()
+    assert all(u.startswith("https://") and "nodesource.com" in u for u in urls)
     assert setup.CLAUDE_LINUX == "https://claude.ai/install.sh"
     ps1 = (SCRIPTS / "wsl_setup.ps1").read_text(encoding="utf-8")
     assert setup.CLAUDE_LINUX in ps1 and setup.NODE_SETUP["apt"] in ps1  # the same path
@@ -112,7 +113,8 @@ def test_ac4_nothing_installed_gets_one_install_per_missing_tool(
         tool = setup.linux_tool_of(call)
         if tool in setup.LINUX_PACKAGES[manager]:
             assert call[-1] == setup.LINUX_PACKAGES[manager][tool] and "-y" in call
-            assert (manager == "apt") == ("apt-get" in call) and (manager == "dnf") == ("dnf" in call)
+            assert (manager == "apt") == ("apt-get" in call)
+            assert (manager == "dnf") == ("dnf" in call)
         else:
             assert call[:2] == ["bash", str(SH)]
     node = next(c for c in stub.installs() if setup.linux_tool_of(c) == "node")
@@ -125,7 +127,7 @@ def test_ac4_nothing_installed_gets_one_install_per_missing_tool(
 
 
 def test_ac4_without_root_the_package_installs_go_through_sudo(tmp_path, capsys, monkeypatch):
-    """REQ-072 AC4: an account that is not root installs through sudo; the password is sudo's own."""
+    """REQ-072 AC4: an account that is not root installs through sudo, which asks its own."""
     stub = Stub(monkeypatch)
     code, _ = run(tmp_path, capsys, machine(admin=False))
     packages = [c for c in stub.installs() if c[0] == "sudo"]
@@ -219,7 +221,7 @@ def test_ac4_the_bootstrap_holds_no_version_or_url_of_its_own():
     """REQ-072 AC4: setup_linux.sh reads Python's floor from setup.py's table, takes each URL and
     version from setup.py's call, stops before its one install, and never reads a secret."""
     text = SH.read_text(encoding="utf-8")
-    assert subprocess.run(["bash", "-n", str(SH)], check=False).returncode == 0  # nosec B603 B607
+    assert subprocess.run(["bash", "-n", str(SH)], check=False).returncode == 0  # nosec B603 B607 - bash -n of the kit file
     assert "MINIMUM" in text and "setup.py" in text and 'REST=(install --root' in text
     assert not re.search(r"\b\d+\.\d+\.\d+\b", text)  # no version of its own
     assert "nodesource" not in text and "claude.ai" not in text  # setup.py names each URL

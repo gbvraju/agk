@@ -74,7 +74,7 @@ WINGET = {  # build (c): each tool's winget package, in the order installed (ver
 CLAUDE_INSTALL = [  # Claude Code by its own installer (verify: the Windows installer command)
     "powershell", "-NoProfile", "-Command", "irm https://claude.ai/install.ps1 | iex",
 ]  # fmt: skip
-LINUX_PACKAGES = {  # build (e): the distribution's package of each tool, per package manager (verify)
+LINUX_PACKAGES = {  # build (e): each tool's distribution package, per package manager (verify)
     "apt": {"git": "git", "gh": "gh", "podman": "podman"},
     "dnf": {"git": "git", "gh": "gh", "podman": "podman"},
 }  # fmt: skip
@@ -83,9 +83,11 @@ LINUX_REFRESH = {"apt": ["apt-get", "update", "-q"], "dnf": ["dnf", "makecache",
 NODE_SETUP = {  # Node.js by wsl_setup.ps1's path: NodeSource's script, then its package (verify)
     "apt": "https://deb.nodesource.com/setup_22.x", "dnf": "https://rpm.nodesource.com/setup_22.x",
 }  # fmt: skip
-CLAUDE_LINUX = "https://claude.ai/install.sh"  # Claude Code's own installer, as wsl_setup.ps1 runs it
+CLAUDE_LINUX = "https://claude.ai/install.sh"  # Claude Code's own installer (wsl_setup.ps1's)
 SETUP_SH = Path(__file__).resolve().parent / "setup_linux.sh"
-MAC_LINE = "stop: macOS is not covered by /agk:setup yet (setting: the platform); nothing was changed"
+MAC_LINE = (
+    "stop: macOS is not covered by /agk:setup yet (setting: the platform); nothing was changed"
+)
 MACHINE_PATH = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 WINGET_FLAGS = ["--exact", "--source", "winget", "--accept-package-agreements",
                 "--accept-source-agreements", "--disable-interactivity", "--silent"]  # fmt: skip
@@ -728,7 +730,8 @@ def linux_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int
     names = ["python", "git", "gh", *engine, "node", "gitleaks", "claude"]
     todo = [n for n in names[1:] if needs(tools.get(n), MINIMUM[n])]
     rows, stop = first_rows(names, tools, todo), None
-    manager, sudo = machine.get("package_manager"), [] if machine.get("admin") else ["sudo"]
+    manager = str(machine.get("package_manager") or "absent")
+    sudo = [] if machine.get("admin") else ["sudo"]
     hand = f"or install {', '.join(todo)} by hand, then run /agk:setup again"
     if todo and not yes:
         stop = "stop: nothing installed: installs run only after the person's yes (setting: --yes)"
@@ -739,12 +742,14 @@ def linux_install(root: Path, machine: dict, repo: dict, yes: bool) -> tuple[int
     elif todo and run_cmd([*sudo, *LINUX_REFRESH[manager]], root):
         stop = ("stop: the test download was refused: allow the distribution's package mirrors "
                 f"(a company proxy or certificate is the usual cause), {hand}")  # fmt: skip
-    steps = {"node": lambda: [manager, NODE_SETUP[manager]],
-             "gitleaks": lambda: [MINIMUM["gitleaks"]], "claude": lambda: [CLAUDE_LINUX]}  # fmt: skip
+    steps: dict[str, list[str]] = {
+        "node": [manager, NODE_SETUP.get(manager, "")], "claude": [CLAUDE_LINUX],
+        "gitleaks": [str(MINIMUM["gitleaks"])],
+    }  # fmt: skip
     for name in [] if stop else todo:
         package = LINUX_PACKAGES[manager].get(name)
         args = ([*sudo, *LINUX_INSTALL[manager], package] if package
-                else ["bash", str(SETUP_SH), name, *steps[name]()])  # fmt: skip
+                else ["bash", str(SETUP_SH), name, *steps[name]])  # fmt: skip
         code = run_cmd(args, root)
         found = None if code else linux_version(name)
         if found and not older(found, MINIMUM[name]):
@@ -897,7 +902,8 @@ def main(argv: list[str] | None = None) -> int:
     _, config = config_of(root)
     if args.form == "install":
         if machine.get("os") == "Darwin":  # rule 7, Q-S0065-3: one line, nothing changed
-            print(json.dumps({"steps": [], "pending": [], "stop": MAC_LINE}) if args.json else MAC_LINE)
+            mac = {"steps": [], "pending": [], "stop": MAC_LINE}
+            print(json.dumps(mac) if args.json else MAC_LINE)
             return 1
         install = linux_install if machine.get("os") == "Linux" else windows_install
         code, table = install(root, machine, repo, args.yes)
