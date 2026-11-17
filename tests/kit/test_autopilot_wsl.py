@@ -5,9 +5,9 @@ REQ-071. Criterion: `on` inside a WSL double registers one task through `schtask
 crontab line; the task runs whether or not the person is signed in, with the stored sign-in asked by
 Windows itself (never this script); a declined sign-in leaves a signed-in-only task and a warning
 naming the setting; interop off refuses naming `[interop] enabled`; `off` removes that task by name
-only; a native Linux machine keeps its crontab line; `/agk:wsl` hands its watchdog step to `autopilot.py
-on` when `[autopilot]` is set and keeps today's task otherwise. A stub `schtasks.exe`, a fake
-`/proc/version` and `/etc/wsl.conf`, a fake clock; invented names (`cb-example-1`, example.com).
+only; a native Linux machine keeps its crontab line; `/agk:wsl` hands its watchdog step to
+`autopilot.py on` when `[autopilot]` is set and keeps today's task otherwise. A stub `schtasks.exe`,
+a fake `/proc/version` and `/etc/wsl.conf`, a fake clock; invented names (example.com).
 """
 
 from __future__ import annotations

@@ -471,7 +471,8 @@ def set_wsl_task(root: Path, interval: int | None) -> int:
         print("autopilot: the distro or the Windows account cannot be read; nothing written "
               "(setting: WSL_DISTRO_NAME)")  # fmt: skip
         return 1
-    run = f'wsl.exe -d {distro} --cd {Path(root).resolve()} -- bash -lc "git fetch -q origin && {RUN_LINE}"'
+    inner = f'"git fetch -q origin && {RUN_LINE}"'
+    run = f"wsl.exe -d {distro} --cd {Path(root).resolve()} -- bash -lc {inner}"
     argv = ["schtasks.exe", "/Create", "/SC", "MINUTE", "/MO", str(interval), "/TN", WSL_TASK]
     argv += ["/TR", run, "/F"]
     signed_out = [*argv, "/RU", user.strip(), "/RP", "*"]
