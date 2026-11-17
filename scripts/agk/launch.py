@@ -94,7 +94,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, available_memory, utf8_output
+from common import CheckError, available_memory, conductor_refusal, utf8_output
 
 import config
 
@@ -829,6 +829,9 @@ def role_main(args: list[str], root: Path | None = None, extra: dict | None = No
     if role == "conductor":  # brief #1409: one conductor per machine, any name
         if alive := live_conductors(here):
             print(f"{stuck} (conductor {alive[0][0]} is running on this machine)")
+            return 1
+        if refused := conductor_refusal(here):  # brief #1449: a verdict author's machine only
+            print(f"{stuck} ({refused})")
             return 1
     try:
         shown = "true" if show_jobs(here) else "false"
