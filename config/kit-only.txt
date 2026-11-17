@@ -5,6 +5,7 @@ config/kit-only.txt this list: it is read only where kit/manifest.json is, in th
 config/mypy-baseline.txt the type check baseline of the kit's own scripts, read by a kit test
 scripts/agk/check_tag.py checks the kit's own release tags, run by the kit's tag workflow
 scripts/agk/kit_hashes.py builds the kit's own release table kit/hashes.json
+scripts/agk/plugin_snapshot.py builds the kit's own release snapshot for the private release repository (ADR-0627)
 config/rule-budget.txt gap: Q-680-2, the rule budget is not installed in a project
 config/rule-plan.txt the kit's own plan for `rules.py consolidate`; a project writes its own, and a missing plan is an empty one
 docs/runs/conductor-catches-*.md gap: Q-680-4, the conductor's catch log is not a project file

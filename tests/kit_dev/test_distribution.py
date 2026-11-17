@@ -312,10 +312,40 @@ def test_ac2_review_skill_runs_the_review_scripts_in_order():
     assert "reviewer" in skill("review") and "never an approval" in skill("review")
 
 
+# The one exception: the resolver finds the plugin, so it alone names the variable
+# (SPEC-0071 rule 2, ADR-0611, ADR-0630).
+PLUGIN_RESOLVER = "scripts/agk/kit_root.py"
+
+
+def plugin_namers(verbatim, root=None):
+    """The verbatim files outside tests/kit/ that name the plugin variable."""
+    root = root or KIT_ROOT
+    return [
+        rel
+        for rel in verbatim
+        if not rel.startswith("tests/kit/")
+        and "CLAUDE_PLUGIN" in (root / rel).read_text(encoding="utf-8")
+    ]
+
+
+def test_ac3_only_the_resolver_names_the_plugin_variable():
+    """REQ-014 AC3: the exception is the resolver alone (ADR-0630)."""
+    assert plugin_namers(manifest()["verbatim"]) == [PLUGIN_RESOLVER]
+
+
+def test_ac3_a_second_file_naming_the_plugin_variable_is_caught(tmp_path):
+    """REQ-014 AC3: a second verbatim script naming it is named by the guard."""
+    files = {PLUGIN_RESOLVER: "CLAUDE_PLUGIN_ROOT", "scripts/agk/other.py": "CLAUDE_PLUGIN_ROOT"}
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    assert plugin_namers(list(files), tmp_path) == [PLUGIN_RESOLVER, "scripts/agk/other.py"]
+
+
 def test_ac3_no_law_file_depends_on_the_plugin():
     """REQ-014 AC3: rule 2 (the checks, hooks, workflows and scripts name no plugin variable)."""
     for rel in manifest()["verbatim"]:
-        if rel.startswith("tests/kit/"):
+        if rel.startswith("tests/kit/") or rel == PLUGIN_RESOLVER:
             continue
         text = (KIT_ROOT / rel).read_text(encoding="utf-8")
         assert "CLAUDE_PLUGIN" not in text, rel
