@@ -62,7 +62,7 @@ def test_rule31_skip_floor_is_refused_naming_the_setting(tmp_path):
     ['level = "lightest-secret-value"', "level = 3", "level = true", 'level = ["light"]'],
 )
 def test_rule31_an_unknown_value_or_a_wrong_type_is_refused(tmp_path, body):
-    """REQ-048 AC1: rule 31 (an unknown value or a wrong type names the setting, never the value)."""
+    """REQ-048 AC1: rule 31 (an unknown value or a wrong type names the setting only)."""
     root = write(tmp_path, f"[governance]\n{body}\n")
     assert refusal(root) == "not an accepted value (setting: governance.level)"
 

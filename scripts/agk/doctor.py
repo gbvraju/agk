@@ -106,12 +106,12 @@ from common import (  # noqa: E402
     ROUTER_WORKFLOW,
     CheckError,
     experimental_enabled,
+    governance_level,
     jobs_of,
     load_config,
     main_folder_line,
     minutes_warn,
     paused,
-    governance_level,
     personal_table,
     proof_timeout,
     router_names,
@@ -2592,12 +2592,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(
-            report, version, tidy, extra, scan, work, deprecation, skills, design, licence, governance
-        )
-        if options["json"]
-        else render_text(
-            report, version, tidy, extra, scan, work, deprecation, skills, design, licence, governance
+        (render_json if options["json"] else render_text)(
+            report, version, tidy, extra, scan, work, deprecation, skills, design, licence,
+            governance=governance,
         )
     )
     return 1 if work_failed else exit_code(report)
