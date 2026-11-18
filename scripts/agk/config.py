@@ -67,6 +67,10 @@ table, when today's `auto_start`, `launch_adapter` and `[capacity]` decide for o
 `show_jobs`, with `legacy`, the names of those old settings still set, and `adapter` (brief #1480,
 ADR-0628: the launch adapter in `[flow] launch_adapter`'s form, None when unset or ""). An unknown
 key or another value is refused naming `setting: autopilot.<key>`, never the value.
+
+`TABLE_KEYS["kit"]` names the `[kit]` table of a clean project (SPEC-0071 rules 2 and 6, briefs
+#1453 and #1455, ADR-0613): `layout` and `plugin_version`, which `kit_root.py` reads; the start
+check is `kit_root.pin_refusal`, run by `common` on import.
 """
 
 from __future__ import annotations
@@ -847,6 +851,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
     "design": frozenset({"pixel_tolerance", "render", "ui_paths"}),
     "delivery": frozenset({"work_type"}),
     "steward": frozenset(STEWARD_DEFAULTS),
+    "kit": frozenset({"layout", "plugin_version"}),
 }
 TOP_LEVEL = "top level"
 
