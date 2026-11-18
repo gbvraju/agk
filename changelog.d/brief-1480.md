@@ -1,0 +1,1 @@
+- `[autopilot] adapter` names the launch adapter the autopilot starts jobs with; with `[autopilot]` set, `agk autopilot on`'s check and `agk next` read it and never `[flow] launch_adapter`, and `agk doctor`'s fix names it (brief #1480)
