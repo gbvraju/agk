@@ -960,6 +960,12 @@ tests = [
   "tests/kit/test_steward_guard.py", "tests/kit/test_steward_outbound_guard.py", "tests/kit/test_kit_defect_report.py",
 ]
 [[testing.map]]
+code = ".claude/hooks/plugin_hooks.py"
+tests = ["tests/kit/test_plugin_hooks.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = ".claude-plugin/plugin.json"
+tests = ["tests/kit/test_plugin_hooks.py"]
+[[testing.map]]
 code = "scripts/agk/steward_outbound.py"
 tests = ["tests/kit/test_steward_outbound_guard.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
