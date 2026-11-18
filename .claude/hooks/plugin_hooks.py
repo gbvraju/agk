@@ -53,6 +53,7 @@ def project_root(start: Path) -> Path:
             cwd=start,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=GUARD_SECONDS,
         )
     except (OSError, subprocess.TimeoutExpired):
