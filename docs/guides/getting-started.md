@@ -242,7 +242,7 @@ report has six headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`, 
 Once the first spec is built by hand you can let sessions find their own work. Three roles take part: a builder session, the conductor and you. The working rule of a session is in `config/session-rules.md`; read it once.
 
 **With the autopilot.** One supervisor per machine starts every session as a short job (SPEC-0064), so you start no conductor or builder by hand (items 2 and 3 are the manual way):
-- On each machine run `agk autopilot on` (`python3 scripts/agk/autopilot.py on`) once: it installs the supervisor's scheduler entry, checks the machine and prints the `[autopilot] mode` line to set by pull request.
+- On each machine run `agk autopilot on` (`python3 scripts/agk/autopilot.py on`) once: it installs the supervisor's scheduler entry, checks the machine and prints the `[autopilot] mode` line to set by pull request. With `[autopilot]` set, the jobs start through `[autopilot] adapter` (the command `[flow] launch_adapter` held, which is not read then).
 - `agk status` shows the running jobs, the queue and what waits on you.
 - `agk next` (`python3 scripts/agk/autopilot.py next`) runs the next review, fix or build job in the foreground and ends, posting nothing; `agk next --brief <n>` builds brief n. In personal mode it is the way to run jobs.
 - In CI mode the launcher task (`kit/templates/runtime/launcher.txt`) is the supervisor and starts each job as a cloud session.
