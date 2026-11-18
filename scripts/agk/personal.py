@@ -463,7 +463,8 @@ def place(path: Path, value) -> None:
 def move_status(path: Path, old: str, new: str) -> str:
     """Rewrite the first `- Status:` line (read by `STATUS_LINE`, as `record_of` reads it) from
     OLD to `- Status: NEW`, its line ending kept; the text before. Refused when nothing moved."""
-    text = path.read_text(encoding="utf-8")
+    with open(path, encoding="utf-8", newline="") as handle:  # each line ending as it is
+        text = handle.read()
     lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
         bare = line.rstrip("\r\n")

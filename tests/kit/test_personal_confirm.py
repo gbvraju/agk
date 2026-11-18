@@ -389,6 +389,19 @@ def test_req_048_a_status_line_with_more_spaces_moves_or_is_not_confirmed(tmp_pa
         assert "- Status:  Draft" in (root / SPEC_PATH).read_text(encoding="utf-8")
 
 
+def test_req_048_a_crlf_record_keeps_every_line_ending(tmp_path):
+    """REQ-048 AC4: rule 15 (only the status line changes; Windows line endings are kept)."""
+    root = holding(tmp_path / "s")
+    (root / ADR_PATH).write_bytes(ADR.replace("\n", "\r\n").encode("utf-8"))
+    commit(root, "crlf")
+    code, out, _ = confirm(root, "ADR-0001")
+    assert code == 0, out
+    data = (root / ADR_PATH).read_bytes()
+    assert data == ADR.replace("- Status: Proposed", "- Status: Accepted").replace(
+        "\n", "\r\n"
+    ).encode("utf-8")
+
+
 def test_req_048_a_status_that_does_not_move_is_refused(tmp_path):
     """REQ-048 AC4: rule 15 (`move_status` refuses when nothing changed)."""
     path = tmp_path / "x.md"
