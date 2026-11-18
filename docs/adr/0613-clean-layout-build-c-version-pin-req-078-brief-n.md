@@ -28,21 +28,26 @@ versions would both run, and a teammate with no plugin would fail with an error 
    the git top level of the working directory, found by walking up to `.git` without running git, so an offline
    machine and a second worktree behave the same. A partial copy of the scripts without `kit_root.py` (a test's stub
    project) skips the check, since a plugin carries the whole manifest. `kit_root.py`, which holds no `common` (a stub plugin carries it
-   alone), runs the check itself after finding the plugin, before `--form`, the folder or the gate. The gate's checks
-   then run from that plugin and check again. A session is covered by its first command (`doctor.py --paused`, which
-   imports `common`). A hook that imports the kit's scripts is covered the same way. The hooks themselves, in
-   `.claude/`, move to the plugin in build (b).
-3. `config.TABLE_KEYS` names the `[kit]` table (`layout`, `plugin_version`), so the doctor's misplaced-settings warning
+   alone), runs the check itself before `--form`, the folder or the gate. With no plugin it gives the pin's line with the
+   install command, not the plugin root's refusal. The gate's checks then run from that plugin and check again. A
+   session is covered by its first command (`doctor.py --paused`, which imports `common`).
+3. The hooks are not checked in this build. A hook that exits 1 does not block its tool call `(verify)`, so a guard
+   stopped by the pin would let the call run. `pin_gate` therefore never stops a main program under `.claude/hooks/`,
+   and the guards keep guarding. The hooks' own start check, which must turn a refusal into the hook's deny, is build
+   (b)'s, with the hooks in the plugin.
+4. `config.TABLE_KEYS` names the `[kit]` table (`layout`, `plugin_version`), so the doctor's misplaced-settings warning
    names a pin written at the top level or in another table. `kit/templates/agk.toml` documents the table, commented
    out at the end of the file: `init` and `adopt` keep the installed layout, and only the migration of rule 8 writes it.
-4. Raising the pin is a release pull request (SPEC-0028 rule 4), since the pin must equal `version`.
+5. Raising the pin is a release pull request (SPEC-0028 rule 4), since the pin must equal `version`.
 
 ## Consequences
 
 An installed project, the kit's own repository and personal mode are unchanged: with no `[kit] layout = "plugin"` the
-check returns at once, and it reads only `agk.toml` and `.git`, so it adds no git call and no network to any script.
+check returns at once. It reads only `agk.toml` and `.git`, and parses `agk.toml` only when it names a `kit` table, so it
+adds no git call and no network to any script. In the kit's own repository it costs about 0.5 ms per start (8 ms with a
+full parse of `agk.toml`, measured 2026-11-18).
 In a clean project a teammate on another version, or with no plugin, is stopped at the first command with the setting
-to fix. The 13 other scripts under `scripts/agk/` that do not import `common` (such as `governance_map.py` and
+to fix. The hooks are not checked (decision 3). The 13 other scripts under `scripts/agk/` that do not import `common` (such as `governance_map.py` and
 `guard.py`) are not checked when one is run alone; that is left to a later build.
 
 ## Residual

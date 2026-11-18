@@ -183,7 +183,8 @@ review_mode = "team"
 # conductor = "strongest"
 # The clean layout (SPEC-0071): only `/agk:upgrade --clean-repo` writes this table, last in the file. With
 # layout = "plugin" the kit runs from the plugin, and plugin_version pins it: equal to `version`, it must also be the running
-# plugin's version, or every session, hook and kit script refuses at start naming the setting. Raising it is a release pull request.
+# plugin's version, or each kit script that imports common, and the resolver kit_root.py, refuses at start naming the setting
+# (a session's first command is one; the hooks are not checked yet). Raising it is a release pull request.
 # [kit]
 # layout = "plugin"
 # plugin_version = "<the version above>"

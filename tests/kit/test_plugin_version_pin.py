@@ -141,6 +141,20 @@ def test_ac2_a_clean_project_must_pin_its_own_version(tmp_path, toml):
         refused(out, PIN, "0.9.0")
 
 
+@pytest.mark.parametrize(
+    "toml",
+    [
+        f'version = "{PIN}"\nkit = {{ layout = "plugin", plugin_version = "{PIN}" }}\n',
+        f'version = "{PIN}"\nkit.layout = "plugin"\nkit.plugin_version = "{PIN}"\n',
+    ],
+    ids=["inline-table", "dotted-keys"],
+)
+def test_ac2_every_form_of_the_table_is_read(tmp_path, toml):
+    """REQ-078 AC2: the quick test before the parse (verdict's cost note) misses no TOML form."""
+    root, plug = project(tmp_path, toml), plugin(tmp_path, "0.9.0")
+    refused(run(probe(plug), root), PIN, "0.9.0")
+
+
 def test_ac2_the_resolver_refuses_another_version_before_the_gate(tmp_path):
     """REQ-078 AC2: `kit_root.py` (the gate's entry, which holds no `common`) checks the pin too."""
     root, plug = project(tmp_path, clean()), plugin(tmp_path, "0.9.0")
@@ -148,6 +162,36 @@ def test_ac2_the_resolver_refuses_another_version_before_the_gate(tmp_path):
         out = run(plug / "scripts" / "agk" / "kit_root.py", root, *args)
         refused(out, PIN, "0.9.0")
         assert out.stdout == ""
+
+
+def test_ac2_the_resolver_with_no_plugin_names_the_install_command(tmp_path):
+    """REQ-078 AC2: `kit_root.py` outside any plugin is refused naming `plugin_version` and the
+    install command, not only the plugin root (rule 10, verdict item 2)."""
+    root = project(tmp_path, clean())
+    stray = tmp_path / "nowhere-example" / "scripts" / "agk"
+    stray.mkdir(parents=True)
+    shutil.copy(KIT / "kit_root.py", stray / "kit_root.py")
+    for args in ((), ("--form",), ("governance",)):
+        out = run(stray / "kit_root.py", root, *args)
+        refused(out, PIN)
+        assert kit_root.INSTALL in out.stderr and out.stdout == ""
+
+
+def test_ac2_a_hook_is_not_stopped_by_the_pin(tmp_path):
+    """REQ-078 AC2: a hook that imports `common` keeps running on a refused pin, since a hook
+    that exits 1 does not block its tool call (verdict item 1); the hooks' check is build (b)'s."""
+    root, plug = project(tmp_path, clean()), plugin(tmp_path, "0.9.0")
+    hooks = root / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    (hooks / "guard_example.py").write_text(
+        f"import sys\nsys.path.insert(0, {str(plug / 'scripts' / 'agk')!r})\n"
+        "import common\nprint('guard-example still guards')\n",
+        encoding="utf-8",
+    )
+    out = run(hooks / "guard_example.py", root)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == "guard-example still guards\n"
+    refused(run(probe(plug), root), PIN, "0.9.0")  # the same pin stops a kit script
 
 
 def test_ac2_a_second_worktree_reads_the_same_plugin(tmp_path):

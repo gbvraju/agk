@@ -41,13 +41,27 @@ GITLEAKS_INSTALL = (
 )
 
 
+# `[kit]`, `kit = { ... }` or `kit.layout = ...`: only then is agk.toml parsed (ADR-0613 decision 2)
+KIT_TABLE = re.compile(r"^\s*(\[\s*kit\s*\]|kit\s*[.=])", re.MULTILINE)
+
+
+def _run_by_hook() -> bool:
+    main = getattr(sys.modules.get("__main__"), "__file__", None) or ""
+    parts = Path(main).parts
+    return any(parts[i : i + 2] == (".claude", "hooks") for i in range(len(parts) - 1))
+
+
 def pin_gate(cwd: Path | None = None) -> None:
     """The start check of SPEC-0071 rule 6 (brief #1455, ADR-0613), run on import so that every kit
     script that imports this module stops before any work: in a clean project (the git top level
     of the working directory, found without running git) whose `[kit] plugin_version` is not the
     version of the plugin this file runs from, it prints `kit_root.pin_refusal`'s one line and
     exits 1. Anywhere else it does nothing, and so does a partial copy of the scripts that holds
-    no `kit_root.py` (a test's stub project; a plugin carries the whole manifest)."""
+    no `kit_root.py` (a test's stub project; a plugin carries the whole manifest). A hook (a main
+    program under `.claude/hooks/`) is never stopped here: a hook that exits 1 does not block its
+    tool call `(verify)`, so a guard must keep guarding; the hooks' own check is build (b)'s."""
+    if _run_by_hook():
+        return
     try:
         import kit_root  # standalone, so no cycle
     except ImportError:
@@ -58,7 +72,13 @@ def pin_gate(cwd: Path | None = None) -> None:
     except OSError:
         return
     root = next((d for d in (here, *here.parents) if (d / ".git").exists()), None)
-    if root is None or not (root / "agk.toml").is_file():
+    if root is None:
+        return
+    try:
+        text = (root / "agk.toml").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return
+    if not KIT_TABLE.search(text):  # no `[kit]` table: nothing to parse (an installed project)
         return
     line = kit_root.pin_refusal(root, Path(__file__).resolve().parents[2])
     if line:

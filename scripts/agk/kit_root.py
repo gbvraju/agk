@@ -204,7 +204,11 @@ def main(argv: list[str]) -> int:
     root = project_root()
     try:
         if layout(root) == "plugin":
-            line = pin_refusal(root, plugin_root(root))
+            try:
+                found: Path | None = plugin_root(root)
+            except Refused:
+                found = None  # no plugin: the pin's line names the install command (rule 10)
+            line = pin_refusal(root, found)
             if line:
                 raise Refused(line)
         if argv == ["--form"]:
