@@ -26,7 +26,8 @@ versions would both run, and a teammate with no plugin would fail with an error 
 2. Where it runs. `common` runs it on import (`pin_gate`), so every kit script that imports `common` (108 of the 123
    under `scripts/agk/`) stops, exit 1, before any work. The running plugin is the one the file sits in. The project is
    the git top level of the working directory, found by walking up to `.git` without running git, so an offline
-   machine and a second worktree behave the same. `kit_root.py`, which holds no `common` (a stub plugin carries it
+   machine and a second worktree behave the same. A partial copy of the scripts without `kit_root.py` (a test's stub
+   project) skips the check, since a plugin carries the whole manifest. `kit_root.py`, which holds no `common` (a stub plugin carries it
    alone), runs the check itself after finding the plugin, before `--form`, the folder or the gate. The gate's checks
    then run from that plugin and check again. A session is covered by its first command (`doctor.py --paused`, which
    imports `common`). A hook that imports the kit's scripts is covered the same way. The hooks themselves, in

@@ -34,7 +34,7 @@ PROBE = "import common\nprint('probe-example worked')\n"
 
 
 def git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)  # nosec B603 B607
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)  # nosec B603 B607 - local git
 
 
 def project(tmp: Path, toml: str) -> Path:

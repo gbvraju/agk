@@ -46,8 +46,12 @@ def pin_gate(cwd: Path | None = None) -> None:
     script that imports this module stops before any work: in a clean project (the git top level
     of the working directory, found without running git) whose `[kit] plugin_version` is not the
     version of the plugin this file runs from, it prints `kit_root.pin_refusal`'s one line and
-    exits 1. Anywhere else it does nothing."""
-    import kit_root  # standalone, so no cycle
+    exits 1. Anywhere else it does nothing, and so does a partial copy of the scripts that holds
+    no `kit_root.py` (a test's stub project; a plugin carries the whole manifest)."""
+    try:
+        import kit_root  # standalone, so no cycle
+    except ImportError:
+        return
 
     try:
         here = (Path.cwd() if cwd is None else cwd).resolve()
