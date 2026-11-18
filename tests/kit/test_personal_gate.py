@@ -385,7 +385,9 @@ def test_req_048_team_refs_on_gives_no_warning(tmp_path):
 
 
 def upstream(clone: Path, branch: str) -> None:
-    """The branch's upstream is `origin/<branch>` at its head, set without a remote or a fetch."""
+    """The branch's upstream is `origin/<branch>` at its head, set with no push and no fetch."""
+    if "origin" not in git(clone, "remote").split():
+        git(clone, "remote", "add", "origin", "https://example.com/shop.git")
     git(clone, "update-ref", f"refs/remotes/origin/{branch}", git(clone, "rev-parse", branch))
     git(clone, "config", f"branch.{branch}.remote", "origin")
     git(clone, "config", f"branch.{branch}.merge", f"refs/heads/{branch}")
