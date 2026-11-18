@@ -191,9 +191,10 @@ def test_ac4_an_install_below_the_minimum_after_is_failed(tmp_path, capsys, monk
 
 
 def test_ac4_only_native_windows_takes_this_path(tmp_path, capsys, monkeypatch):
-    """REQ-072 AC4: another platform is refused by name and nothing is called."""
+    """REQ-072 AC4: a platform with no path of its own (Linux has build (e)'s, macOS its line) is
+    refused by name and nothing is called."""
     stub = Stub(monkeypatch)
-    code, table = run(tmp_path, capsys, machine(os="Linux"))
+    code, table = run(tmp_path, capsys, machine(os="FreeBSD"))
     assert code == 1 and stub.calls == [] and "native Windows" in table["stop"]
 
 
