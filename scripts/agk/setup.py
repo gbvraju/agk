@@ -528,6 +528,9 @@ def set_key(text: str, table: str | None, key: str, value) -> str:
     for i in range(start + 1, end):
         if re.match(rf"\s*{key}\s*=", lines[i]):
             lines[i : i + 1] = [] if value is None else [line]
+            rest = [ln for ln in lines[start + 1 : end - 1] if ln.split("#")[0].strip()]
+            if value is None and table is not None and not rest:
+                del lines[start]  # a table left with no key goes too: `[autopilot]` alone is set
             return "".join(lines)
     if value is None:
         return text
@@ -551,7 +554,8 @@ def project_adr(number: int, items: list[tuple], today: str, back: bool = False)
         "- Status: Proposed", f"- Date: {today}", "- Deciders: maintainers", "- Related: none",
         f"- Requirements: {wsl.REQUIREMENT}", "", "Protected classes: `agk.toml`", "",
         "## Context", "",
-        f"{why}these settings live in `agk.toml`, a protected path, so they come by pull request with this ADR.", "",
+        f"{why}these settings live in `agk.toml`, a protected path, so they come by pull request "
+        "with this ADR.", "",
         "## Decision", "", "Set in `agk.toml`, and nothing else:", "", *listed, "",
         "## Consequences", "",
         "- The sessions of this project read the new values after the merge.", "",
@@ -565,6 +569,7 @@ def write_settings(root: Path, find, today: str, back: bool = False) -> list[str
     """Rule 9: one change and its ADR on a new branch from the default branch; FIND gives the
     settings the default branch's `agk.toml` lacks (BACK: rule 13's reverse, each recorded on the
     proposal). The text is built and parsed first."""
+    load_record(root)  # an unreadable record is refused before any branch is made
     ref = f"origin/{wsl.default_branch(config_of(root)[1])}"
     unread = wsl.Refusal("the default branch's agk.toml cannot be read (path class: agk.toml)")
     if not wsl.git(root, "rev-parse", "--verify", "--quiet", f"{ref}:agk.toml"):
@@ -705,9 +710,13 @@ def back(root: Path, today: str, yes: bool) -> tuple[int, dict, list[str]]:
     gone = [n for n in tasks if n not in kept]
     if tasks:
         save_record(root, record | {"tasks": kept})
-    steps = [row("tasks", "failed", f"not removed: {', '.join(kept)}; run /agk:setup back again")
-             if kept else row("tasks", "done", f"removed: {', '.join(gone)}") if gone
-             else row("tasks", "skipped", "setup added no scheduler task on this machine")]  # fmt: skip
+    if kept:
+        again = f"not removed: {', '.join(kept)}; run /agk:setup back again"
+        steps = [row("tasks", "failed", again)]
+    elif gone:
+        steps = [row("tasks", "done", f"removed: {', '.join(gone)}")]
+    else:
+        steps = [row("tasks", "skipped", "setup added no scheduler task on this machine")]
     lines: list[str] = []
     branch = f"{BACK_BRANCH}-{today}"
     if not settings:
@@ -1111,12 +1120,12 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root or ".").resolve()
     if args.form == "back":  # build (g): nothing of the machine is read
         try:
-            code, table, said = back(root, today, args.yes)
+            code, undone, notes = back(root, today, args.yes)
         except wsl.Refusal as exc:
             print(f"setup: {exc}")
             return 1
-        print(json.dumps(table | {"lines": said}, indent=2) if args.json
-              else "\n".join(table_lines(table["steps"]) + said))  # fmt: skip
+        print(json.dumps(undone | {"lines": notes}, indent=2) if args.json
+              else "\n".join(table_lines(undone["steps"]) + notes))  # fmt: skip
         return code
     if args.form == "ci":  # build (f): nothing of the machine but its remote is read
         saved = load(args.machine)

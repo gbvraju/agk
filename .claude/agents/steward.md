@@ -35,7 +35,7 @@ The owner. Ask the owner one plain business sentence with the choices and your r
 
 The conductor. When the plan is ready, run `python3 scripts/agk/steward_owner.py ready --start`: when every check passes, the supervisor's next pass starts the conductor, or without an adapter it prints the prompt; a `stuck:` line is told to the owner.
 
-Setup. When a person asks in plain words to set up this machine for the project, or to undo that setup (SPEC-0065 rule 2), follow the `setup` skill's steps (`/agk:setup`, and `/agk:setup back` to undo): ask its questions in your voice, show its plan, act only on the person's yes, and never run the commands it prints for the person (commit, `prepush.py --record`, push).
+Setup. When a person asks in plain words to set up this machine, or to undo it, use the `setup` skill (SPEC-0065 rule 2): its questions in your voice, its plan, the person's yes; never run the commands it prints for them.
 
 Voice. Every reply to a person follows `docs/guides/steward-voice.md` (ADR-0582): the first line is the ask or the answer, at most 5 bullets, three choices at most, one recommended, more when they say details, defaults they accept with yes; run `python3 scripts/agk/steward_voice.py check <file>` on a reply over five lines.
 

@@ -16,10 +16,11 @@ no data deleted.
 
 ## Decision
 
-1. **The steward's hand-off.** `.claude/agents/steward.md` gains one paragraph and one row of its stage-to-skill
-   table (`setup`): when a person asks in plain words to set up this machine, or to undo it, the steward follows the
-   `setup` skill's steps, asks its questions in its own voice, acts only on the person's yes and never runs the
-   commands the skill prints for the person (commit, `prepush.py --record`, push).
+1. **The steward's hand-off.** `.claude/agents/steward.md` gains one short paragraph and one row of its
+   stage-to-skill table (`setup`): when a person asks in plain words to set up this machine, or to undo it, the steward
+   uses the `setup` skill, asks its questions in its own voice, acts only on the person's yes and never runs the
+   commands the skill prints for the person (commit, `prepush.py --record`, push). Like every law file, it names no
+   plugin command.
 2. **The record.** `setup.py` keeps what it added on this machine in `<git dir>/agk/setup.json`
    (`git rev-parse --absolute-git-dir`): `tasks`, the names of the scheduler tasks its WSL pass added (the pass's
    `watchdog` row `done`; the name is `wsl_setup.ps1`'s WSL task, or autopilot's WSL task when `[autopilot]` is
@@ -41,8 +42,9 @@ no data deleted.
 
 A business user can ask the steward to be set up, and anyone can undo a setup without losing a tool, a worktree or a
 file. Protected path classes changed: `scripts/agk/` (`setup.py`), `tests/kit/` (`test_setup_back.py`), `.claude/`
-(`.claude/agents/steward.md`), `skills/` (`skills/setup/SKILL.md`) and `agk.toml` (the `[[testing.map]]` entry for
-`setup.py` gains the new test file).
+(`.claude/agents/steward.md`), `skills/` (`skills/setup/SKILL.md`), `config/` (`config/rule-budget.txt`: the steward
+file's baseline rises 889 to 943 words, under ten percent with no new rule line, by ADR-0583's standing ruling) and
+`agk.toml` (the `[[testing.map]]` entry for `setup.py` gains the new test file).
 
 ## Residual
 

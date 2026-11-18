@@ -201,7 +201,8 @@ def test_ac8_an_unreadable_record_is_refused(tmp_path, capsys, monkeypatch):
 
 
 def proposed_and_merged(root: Path, capsys) -> None:
-    extra = ("--yes", "--date", "2026-11-17", "--answer", "where=local", "--answer", "team=solo")
+    extra = ("--yes", "--date", "2026-11-17", "--answer", "where=local", "--answer", "team=solo",
+             "--answer", "autopilot=assist")  # fmt: skip
     code, out = run(root, capsys, "settings", *extra)
     assert code == 0, out
     git(root, *WHO, "add", "-A")
@@ -226,6 +227,7 @@ def test_ac8_back_prepares_the_reverse_change_with_its_adr(tmp_path, capsys, mon
     config = setup.tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
     assert config["review_mode"] == "team" and "execution" not in config
     assert config["flow"] == {"max_builders": 2}
+    assert "autopilot" not in config  # a table setup added goes with its last key
     adr = sorted((root / "docs" / "adr").glob("0003-*.md"))
     assert len(adr) == 1
     text = adr[0].read_text(encoding="utf-8")
@@ -249,10 +251,11 @@ def test_ac8_a_setting_changed_since_is_not_reversed(tmp_path, capsys, monkeypat
 
 
 def test_ac8_the_steward_hands_a_plain_ask_to_setup():
-    """REQ-072 AC8: rules 2 and 17: the steward runs `/agk:setup` when asked in plain words, and
-    `back` to undo, as the person's yes allows; the table names the `setup` skill."""
+    """REQ-072 AC8: rules 2 and 17: the steward uses the `setup` skill when asked in plain words to
+    set up or to undo, on the person's yes; its table names the skill."""
     text = AGENT.read_text(encoding="utf-8")
-    assert "/agk:setup" in text and "/agk:setup back" in text and "plain words" in text
+    assert "plain words" in text and "the `setup` skill" in text and "undo" in text
+    assert "/agk:" not in text  # a law file never names the plugin's command
     assert re.search(r"^\| [^|]*set[^|]* \| `setup` \|$", text, re.M)
     assert steward_evidence.skill_line(ROOT, "setting up a machine") == "skill: `setup`"
 
