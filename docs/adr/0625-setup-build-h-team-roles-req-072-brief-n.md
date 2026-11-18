@@ -16,17 +16,17 @@ it may run a conductor or a steward.
 ## Decision
 
 1. **The roles of a machine.** `setup.py` reads the signed-in login with brief #1449's reader (`common.signed_in_login`,
-   one `gh api user` per run), compares it with `verdict_authors` through `common.is_verdict_author`, the one comparison
-   that `common.conductor_refusal` now also calls, and with `spec_approvers` of `config/reviewers.yaml`, keeps only the
-   result (`author`, `reviewer`, `other`, `unknown`) and never prints or stores the login. The roles follow rule 14:
-   every role in solo mode; the steward only for a listed reviewer and only while no steward is live; the conductor only
-   for a verdict author and only when the lease reads `free` (a held, `off` or unreadable lease starts no conductor, so
-   there is never a second one); builders on every machine, sized by rule 6 and capped by `max_builders` less the team's
-   live builders. `review_mode` decides solo or team; the person's `team` answer counts only while it is unset, so an
-   answer never widens the roles. A non-reviewer's machine with no live conductor gets builders only and the line `the
-   conductor waits for a verdict author's machine`. For me only and on GitHub's machines no role runs here (rule 16).
-   `--json` prints `roles` and `roles_why`; the plan's last line names them. `--roles A,B` lowers the set; a role
-   outside it is refused naming the settings.
+   one `gh api user` per run), compares it with `verdict_authors` through `common.conductor_refusal` itself, the
+   conductor's own check (a saved login stands in for its one read), and with `spec_approvers` of
+   `config/reviewers.yaml`, keeps only the result (`author`, `reviewer`, `other`, `unknown`) and never prints or stores
+   the login. The roles follow rule 14: every role in solo mode; the steward only for a listed reviewer and only while
+   no steward is live; the conductor only for a verdict author and only when the lease reads `free` (a held, `off` or
+   unreadable lease starts no conductor, so there is never a second one); builders on every machine, sized by rule 6 and
+   capped by `max_builders` less the team's live builders. `review_mode` decides solo or team; the person's `team`
+   answer counts only while it is unset, so an answer never widens the roles. A non-reviewer's machine with no live
+   conductor gets builders only and the line `the conductor waits for a verdict author's machine`. For me only and on
+   GitHub's machines no role runs here (rule 16). `--json` prints `roles` and `roles_why`; the plan's last line names
+   them. `--roles A,B` lowers the set; a role outside it is refused naming the settings.
 2. **The restart.** A new form `setup.py restart` restarts exactly those roles: without `--yes` it names them and starts
    nothing (exit 1); with `--yes` the conductor by one `conductor.py watchdog --conductor-only` start, which checks the
    lease and the verdict author again (ADR-0607) and, with the new flag, runs no builder pass, so no builder restarts
@@ -43,11 +43,11 @@ it may run a conductor or a steward.
 
 ## Consequences
 
-Any team member can run `/agk:setup` and get only the roles the repository allows, restart them after a stop and see
-the whole team, with no second conductor and no steward for a non-reviewer. Protected path classes changed:
-`scripts/agk/` (`setup.py`; `conductor.py`, the `--conductor-only` flag of `watchdog`; `common.py`,
-`is_verdict_author`), `tests/kit/` (`test_setup_team_roles.py`), `skills/` (`skills/setup/SKILL.md`) and
-`agk.toml` (the `[[testing.map]]` entries for `setup.py`, `conductor.py` and `common.py` gain the new test file).
+Any team member can run `/agk:setup` and get only the roles the repository allows, restart them after a stop and see the
+whole team, with no second conductor and no steward for a non-reviewer. Protected path classes changed: `scripts/agk/`
+(`setup.py`; `conductor.py`, the `--conductor-only` flag of `watchdog`), `tests/kit/` (`test_setup_team_roles.py`),
+`skills/` (`skills/setup/SKILL.md`) and `agk.toml` (the `[[testing.map]]` entries for `setup.py` and `conductor.py` gain
+the new test file).
 
 ## Residual
 

@@ -262,17 +262,16 @@ def test_ac7_a_team_answer_never_widens_the_roles_of_a_team_repository(
     assert table["roles"] == ALL
 
 
-def test_ac7_setup_and_the_conductor_share_one_verdict_author_check(tmp_path, monkeypatch):
-    """REQ-072 AC7: rule 14: `login_state` and `conductor_refusal` read `is_verdict_author`."""
+def test_ac7_setup_reads_the_conductors_own_verdict_author_check(tmp_path, monkeypatch):
+    """REQ-072 AC7: rule 14: `login_state` calls `common.conductor_refusal`, so the two agree."""
     import common
 
     root = project(tmp_path)
-    seen: list[str] = []
-    monkeypatch.setattr(common, "is_verdict_author", lambda r, login: seen.append(login) or True)
-    monkeypatch.setattr(common, "signed_in_login", lambda r: "member-example-1")
+    monkeypatch.setattr(common, "conductor_refusal", lambda r: None)
     assert setup.login_state(root, "member-example-1") == "author"
-    assert common.conductor_refusal(root) is None
-    assert seen == ["member-example-1", "member-example-1"]
+    monkeypatch.setattr(common, "conductor_refusal", lambda r: "refused")
+    assert setup.login_state(root, "author-example-1") == "other"
+    assert setup.login_state(root, "approver-example-1") == "reviewer"
 
 
 def test_ac7_the_conductor_only_watchdog_runs_no_builder_pass(monkeypatch, tmp_path):

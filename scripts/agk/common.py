@@ -1804,20 +1804,14 @@ def conductor_refusal(root: Path) -> str | None:
     """None when this machine's login is a listed verdict author (the list, else the `maintainers`
     handle); otherwise the line that says why no conductor starts. It names the setting and never
     the login. It governs only the starts the kit makes, never a person's own conductor."""
+    import reviewers  # here, not at the top: reviewers imports this module
+
     login = signed_in_login(root)
     if login is None:
         return NOT_A_VERDICT_AUTHOR.format(who="unknown")
-    if is_verdict_author(root, login):
+    if login in reviewers.verdict_authors(Path(root)):
         return None
     return NOT_A_VERDICT_AUTHOR.format(who="not a verdict author")
-
-
-def is_verdict_author(root: Path, login: str) -> bool:
-    """Whether LOGIN is a listed verdict author of the repository at ROOT: the one comparison of
-    `conductor_refusal` and `/agk:setup`'s roles (brief #1467, ADR-0625)."""
-    import reviewers  # here, not at the top: reviewers imports this module
-
-    return login.lstrip("@").lower() in reviewers.verdict_authors(Path(root))
 
 
 def run(name: str, fn: Callable[[], int]) -> int:

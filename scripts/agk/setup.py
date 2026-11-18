@@ -318,7 +318,9 @@ def login_state(root: Path, login) -> str:
     `author` (in `verdict_authors`), `reviewer` (a spec approver only), `other` or `unknown`."""
     if not isinstance(login, str) or not login:
         return "unknown"
-    if common.is_verdict_author(root, login):  # the conductor's own check (#1449)
+    key = str(Path(root).resolve())  # a saved login stands in for the one `gh api user` read
+    common.SIGNED_IN[key] = login.lower() if common.GH_LOGIN.fullmatch(login) else None
+    if common.conductor_refusal(root) is None:  # the conductor's own check (#1449, ADR-0607)
         return "author"
     return "reviewer" if login.lstrip("@").lower() in reviewers.spec_approvers(root) else "other"
 
