@@ -23,7 +23,9 @@ spec for its own ADR naming its classes; this is build (g), part 1 (the terminal
    (`local_mode.SESSION_SETTING`), when standard input is not a terminal, and when the sidecar's work tree is not
    clean, each refusal naming the setting or the rule. It shows three lines (the record and its title, its file at
    `<C>`, the status move), asks yes or no, and on anything but yes writes nothing. `<C>` is the sidecar's `HEAD` when
-   `confirm` starts.
+   `confirm` starts. The files forge's lock is held from reading `<C>` to the commit, and `HEAD` is read again after
+   the yes and before the commit: when another commit landed meanwhile, `confirm` refuses, undoes only its own
+   writes and keeps that commit.
 2. On yes it writes, under the files forge's lock and without its per-write commit, `forge/pulls/<n>.json` (head
    `<C>`, title `confirm <id>`, a body that says what the record proves) and `forge/comments-<n>.json` holding the one
    confirmation of rule 8 in its order, ending `confirmed by <login> at a terminal at <UTC time>`; moves a spec's
@@ -31,7 +33,10 @@ spec for its own ADR naming its classes; this is build (g), part 1 (the terminal
    with `--base <C>` and `--comments forge/comments-<n>.json`; and only when the reader exits 0 makes one commit, the
    child of `<C>`, of the status line and the two forge files. Otherwise it restores the work tree to `<C>`, commits
    nothing and exits 1 naming the reader. With `[personal] sign = true` the commit is signed (`git commit -S`) with
-   the person's own key; off by default.
+   the person's own key and git identity; off by default, when the commit takes the files forge's identity. The status
+   line is the first one `STATUS_LINE` reads, rewritten as `- Status: <new>` with its line ending kept, and a status
+   that does not move is refused. A requirement's entry, compared by the reading of decision 4, ends at its last
+   non-blank line.
 3. `reviewers.terminal_confirmations(comments, agent_apps, person)` returns the comments with, after each terminal
    confirmation of rule 8's exact shape by the one listed person and not marked with an app of `agent_apps`, one
    derived comment `Approve: <C> SPEC-nnnn`, `Accept: <C> ADR-nnnn` or `Confirm: <C> REQ-nnn`, only where `Record:`

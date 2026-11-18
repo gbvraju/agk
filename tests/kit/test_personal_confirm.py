@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
@@ -314,10 +315,108 @@ def test_req_048_a_reader_failure_restores_c_and_commits_nothing(tmp_path):
 
 
 def test_req_048_sign_is_off_by_default_and_signs_when_set(tmp_path):
-    """REQ-048 AC4: rule 15 (`[personal] sign = true` signs the commit with the person's key)."""
-    assert "-S" not in personal.commit_options(holding(tmp_path / "a"))
-    signed = personal.commit_options(holding(tmp_path / "b", "sign = true\n"))
+    """REQ-048 AC4: rule 15 (`[personal] sign = true` signs with the person's own identity)."""
+    unsigned = personal.commit_options(holding(tmp_path / "a"), PERSON)
+    assert "-S" not in unsigned and "commit.gpgsign=false" in unsigned
+    assert f"user.email={PERSON}@personal.invalid" in unsigned
+    signed = personal.commit_options(holding(tmp_path / "b", "sign = true\n"), PERSON)
     assert "-S" in signed and "commit.gpgsign=false" not in signed
+    assert not any(x.startswith(("user.email=", "user.name=")) for x in signed)
+
+
+@pytest.mark.skipif(shutil.which("gpg") is None, reason="gpg is not installed")
+def test_req_048_a_signed_confirmation_is_one_signed_commit(tmp_path, monkeypatch):
+    """REQ-048 AC4: rule 15 (with `sign = true` the commit is signed with the person's key)."""
+    home = tmp_path / "g"
+    home.mkdir(mode=0o700)
+    monkeypatch.setenv("GNUPGHOME", str(home))
+    email = f"{PERSON}@example.com"
+    made = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase", "",
+         "--quick-gen-key", f"Member Example <{email}>", "ed25519", "sign", "1d"],
+        capture_output=True, check=False,
+    )  # fmt: skip
+    if made.returncode != 0:
+        pytest.skip("gpg cannot make a key here")
+    try:
+        root = holding(tmp_path / "s", "sign = true\n")
+        git(root, "config", "user.name", "Member Example")
+        git(root, "config", "user.email", email)
+        git(root, "config", "user.signingkey", email)
+        git(root, "config", "gpg.format", "openpgp")
+        code, out, _ = confirm(root, "ADR-0001", env={**TERMINAL, "GNUPGHOME": str(home)})
+        assert code == 0, out
+        assert "-----BEGIN PGP SIGNATURE-----" in git(root, "cat-file", "-p", "HEAD")
+        assert git(root, "log", "-1", "--format=%G?") in ("G", "U")
+        assert git(root, "log", "-1", "--format=%ae") == email
+    finally:
+        subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["gpgconf", "--kill", "gpg-agent"], capture_output=True, check=False
+        )
+
+
+def test_req_048_a_commit_made_while_asking_is_refused_and_kept(tmp_path):
+    """REQ-048 AC4: rule 8 (`HEAD` is read again after the yes; another commit is never lost)."""
+    root = holding(tmp_path / "s")
+
+    def meanwhile(where: Path) -> str:
+        (where / "records" / "note.txt").write_text("x", encoding="utf-8")
+        commit(where, "meanwhile")
+        return "yes"
+
+    code, out, _ = confirm(root, "SPEC-0001", answer=meanwhile)
+    assert code == 1 and "moved" in out and "SPEC-0041 rule 8" in out
+    assert git(root, "log", "-1", "--format=%s") == "meanwhile"
+    assert git(root, "status", "--porcelain") == ""
+    assert "- Status: Draft" in (root / SPEC_PATH).read_text(encoding="utf-8")
+
+
+def test_req_048_a_status_line_with_more_spaces_moves_or_is_not_confirmed(tmp_path):
+    """REQ-048 AC4: rule 15 (the line `STATUS_LINE` read is rewritten; never confirmed unmoved)."""
+    root = holding(tmp_path / "s")
+    set_status(root, ADR_PATH, "- Status: Proposed", "- Status:  Proposed")
+    set_status(root, SPEC_PATH, "- Status: Draft", "- Status:  Draft")
+    commit(root, "spaces")
+    code, out, _ = confirm(root, "ADR-0001")
+    assert code == 0, out
+    assert "- Status: Accepted\n" in (root / ADR_PATH).read_text(encoding="utf-8")
+    head = git(root, "rev-parse", "HEAD")
+    code, out, _ = confirm(root, "SPEC-0001")
+    if code == 0:
+        assert "- Status: Approved\n" in (root / SPEC_PATH).read_text(encoding="utf-8")
+    else:
+        assert "confirmed" not in out.splitlines()[-1] and git(root, "rev-parse", "HEAD") == head
+        assert "- Status:  Draft" in (root / SPEC_PATH).read_text(encoding="utf-8")
+
+
+def test_req_048_a_status_that_does_not_move_is_refused(tmp_path):
+    """REQ-048 AC4: rule 15 (`move_status` refuses when nothing changed)."""
+    path = tmp_path / "x.md"
+    path.write_text("# X\n\n- Status: Accepted\n", encoding="utf-8")
+    with pytest.raises(personal.CheckError, match="SPEC-0041 rule 15"):
+        personal.move_status(path, "Proposed", "Accepted")
+    assert path.read_text(encoding="utf-8") == "# X\n\n- Status: Accepted\n"
+
+
+def test_req_048_a_later_entry_leaves_a_confirmed_entry_unchanged(tmp_path):
+    """REQ-048 AC2: rule 8 (the blank lines before the next entry are not part of an entry)."""
+    root = holding(tmp_path / "s")
+    c = git(root, "rev-parse", "HEAD")
+    req = root / "docs" / "requirements.md"
+    later = "\n### REQ-102 — A customer can pay\n\n- Acceptance: AC1 it pays\n- Status: planned\n"
+    req.write_text(req.read_text(encoding="utf-8") + later, encoding="utf-8")
+    commit(root, "a later entry")
+    base = git(root, "rev-parse", "HEAD")
+    text = req.read_text(encoding="utf-8")
+    req.write_text(
+        text.replace("- Status: planned\n\n### REQ-102", "- Status: done\n\n### REQ-102"), "utf-8"
+    )
+    assert req.read_text(encoding="utf-8") != text
+    items = [terminal(c, "REQ-101", "Confirm: REQ-101")]
+    done = run_check(
+        root, "check_requirements", "--base", base, "--comments", comments_file(root, items)
+    )
+    assert done.returncode == 0, done.stdout
 
 
 def test_req_048_confirm_writes_nothing_in_the_product_clone(tmp_path):

@@ -380,6 +380,7 @@ RECORD_ID = re.compile(r"(SPEC-(\d{4})|ADR-(\d{4})|REQ-\d{3})")
 MOVES = {"SPEC": ("Draft", "Approved"), "ADR": ("Proposed", "Accepted")}
 READERS = {"SPEC": "check_specs", "ADR": "check_adrs", "REQ": "check_requirements"}
 WORDS = {"SPEC": "Approve", "ADR": "Accept", "REQ": "Confirm"}
+MOVED = "the sidecar's head moved while confirming; nothing written (SPEC-0041 rule 8)"
 PROVES = (
     "A confirmation typed by the person at their own terminal (SPEC-0041 rules 8 and 15). It "
     "proves that the yes was typed at a terminal with no agent session's mark, and nothing more."
@@ -436,11 +437,13 @@ def confirmation_body(head: str, rid: str, shown: list[str], login: str, at: str
     )
 
 
-def commit_options(sidecar: Path) -> list[str]:
-    """Signed with the person's own key only with `[personal] sign = true` (off by default)."""
+def commit_options(sidecar: Path, person: str) -> list[str]:
+    """Signed with the person's own key and git identity only with `[personal] sign = true`
+    (off by default); unsigned, the commit takes the files forge's identity, as its writes do."""
     if (personal_table(sidecar) or {}).get("sign") is True:
         return ["commit", "-q", "--no-verify", "-S"]
-    return ["-c", "commit.gpgsign=false", "commit", "-q", "--no-verify"]
+    identity = ["-c", f"user.name={person}", "-c", f"user.email={person}@personal.invalid"]
+    return [*identity, "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify"]
 
 
 def place(path: Path, value) -> None:
@@ -457,13 +460,26 @@ def place(path: Path, value) -> None:
         Path(tmp).unlink(missing_ok=True)
 
 
-def move_status(path: Path, old: str, new: str) -> None:
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+def move_status(path: Path, old: str, new: str) -> str:
+    """Rewrite the first `- Status:` line (read by `STATUS_LINE`, as `record_of` reads it) from
+    OLD to `- Status: NEW`, its line ending kept; the text before. Refused when nothing moved."""
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
-        if STATUS_LINE.match(line.rstrip("\r\n")):
-            lines[i] = line.replace(f"- Status: {old}", f"- Status: {new}", 1)
+        bare = line.rstrip("\r\n")
+        found = STATUS_LINE.match(bare)
+        if found:
+            if found.group(1) == old:
+                lines[i] = f"- Status: {new}{line[len(bare) :]}"
             break
-    path.write_text("".join(lines), encoding="utf-8")
+    if "".join(lines) == text:
+        raise CheckError(f"the status line did not move to {new} (SPEC-0041 rule 15)")
+    path.write_text("".join(lines), encoding="utf-8", newline="")
+    return text
+
+
+def head_of_sidecar(sidecar: Path) -> str:
+    return _sidecar_git(sidecar, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
 
 
 def confirm(sidecar: Path, rid: str, ask=input, tty=None, env=None) -> tuple[int, list[str]]:
@@ -475,6 +491,8 @@ def confirm(sidecar: Path, rid: str, ask=input, tty=None, env=None) -> tuple[int
 
 
 def _confirm(sidecar: Path, rid: str, ask, tty, env) -> tuple[int, list[str]]:
+    """The forge's lock is held from reading `<C>` to the commit, and `HEAD` is read again after
+    the yes and before the commit: a commit made meanwhile is refused and never thrown away."""
     from forge import FilesForge  # noqa: PLC0415 - `confirm` only
     from local_mode import SESSION_SETTING  # noqa: PLC0415
 
@@ -484,56 +502,72 @@ def _confirm(sidecar: Path, rid: str, ask, tty, env) -> tuple[int, list[str]]:
     if not (os.isatty(0) if tty is None else tty()):
         raise CheckError("confirm needs a terminal on standard input (SPEC-0041 rule 15)")
     files = FilesForge(sidecar, env=env)
-    state = _sidecar_git(sidecar, "status", "--porcelain")
-    head = _sidecar_git(sidecar, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
-    if state.returncode != 0 or state.stdout.strip() or not re.fullmatch(r"[0-9a-f]{40}", head):
-        raise CheckError("confirm needs a clean sidecar work tree at a commit (SPEC-0041 rule 8)")
-    rel, title, status = record_of(sidecar, rid)
-    shown = shown_lines(rid, rel, title, status, head)
-    if ask("\n".join([*shown, f"confirm {rid}? [yes/no] "])).strip().lower() not in ("y", "yes"):
-        return 1, [*shown, f"confirm: nothing written for {rid}"]
+    with files.locked():
+        state = _sidecar_git(sidecar, "status", "--porcelain")
+        head = head_of_sidecar(sidecar)
+        if state.returncode != 0 or state.stdout.strip() or not re.fullmatch(r"[0-9a-f]{40}", head):
+            raise CheckError(
+                "confirm needs a clean sidecar work tree at a commit (SPEC-0041 rule 8)"
+            )
+        rel, title, status = record_of(sidecar, rid)
+        shown = shown_lines(rid, rel, title, status, head)
+        answer = ask("\n".join([*shown, f"confirm {rid}? [yes/no] "]))
+        if answer.strip().lower() not in ("y", "yes"):
+            return 1, [*shown, f"confirm: nothing written for {rid}"]
+        if head_of_sidecar(sidecar) != head:
+            raise CheckError(MOVED)
+        return _write(sidecar, files, rid, rel, shown, head)
+
+
+def _write(sidecar: Path, files, rid: str, rel: str, shown: list[str], head: str):
+    """The two forge files and the status line, the reader, then one commit or a restore."""
     kind = rid.split("-")[0]
     branch = _sidecar_git(sidecar, "symbolic-ref", "--short", "-q", "HEAD").stdout.strip() or "main"
-    with files.locked():
-        number = files.next_number()
-        pull = files.base_record(number, f"confirm {rid}", PROVES)
-        pull.update(draft=False, merged=False, merged_at=None)
-        pull.update(head={"sha": head, "ref": branch}, base={"ref": branch})
-        at = files.now()
-        body = confirmation_body(head, rid, shown, files.person, at)
-        entry = {"id": number * 1_000_000 + 1, "body": body, "user": {"login": files.person}}
-        entry.update(created_at=at, updated_at=at, performed_via_github_app=None)
-        paths = [f"forge/pulls/{number}.json", f"forge/comments-{number}.json"]
-        place(sidecar / paths[0], pull)
-        place(sidecar / paths[1], [entry])
+    number = files.next_number()
+    pull = files.base_record(number, f"confirm {rid}", PROVES)
+    pull.update(draft=False, merged=False, merged_at=None)
+    pull.update(head={"sha": head, "ref": branch}, base={"ref": branch})
+    at = files.now()
+    body = confirmation_body(head, rid, shown, files.person, at)
+    entry = {"id": number * 1_000_000 + 1, "body": body, "user": {"login": files.person}}
+    entry.update(created_at=at, updated_at=at, performed_via_github_app=None)
+    paths = [f"forge/pulls/{number}.json", f"forge/comments-{number}.json"]
+    place(sidecar / paths[0], pull)
+    place(sidecar / paths[1], [entry])
+    before = None
+    try:
         if kind in MOVES:
-            move_status(sidecar / rel, *MOVES[kind])
+            before = move_status(sidecar / rel, *MOVES[kind])
             paths.append(rel)
-        reader = READERS[kind]
-        script = Path(__file__).resolve().parent / f"{reader}.py"
-        check = subprocess.run(  # nosec B603 - the kit's own reader, fixed argument list, no shell
-            [sys.executable, str(script), "--base", head, "--comments", paths[1]],
-            cwd=sidecar, capture_output=True, text=True, encoding="utf-8", check=False,
-        )  # fmt: skip
-        done = None
-        if check.returncode == 0:
-            identity = ["-c", f"user.name={files.person}"]
-            identity += ["-c", f"user.email={files.person}@personal.invalid"]
-            _sidecar_git(sidecar, "add", "--", *paths)
-            done = _sidecar_git(sidecar, *identity, *commit_options(sidecar),
-                                "-m", f"personal: confirm {rid}", "--", *paths)  # fmt: skip
-        if done is None or done.returncode != 0:
-            _sidecar_git(sidecar, "reset", "-q", "--hard", head)
-            for rel_path in paths[:2]:
-                (sidecar / rel_path).unlink(missing_ok=True)
-            why = f"the reader {reader} failed" if done is None else "the sidecar commit failed"
-            said = [x for x in check.stdout.splitlines() if x.startswith("FAIL ")]
-            return 1, [
-                *shown,
-                *said,
-                f"confirm: {why}; nothing committed, the sidecar is at {head}",
-            ]
-    return 0, [*shown, f"confirm: {rid} confirmed at a terminal in pull {number}"]
+    except CheckError:
+        for rel_path in paths[:2]:
+            (sidecar / rel_path).unlink(missing_ok=True)
+        raise
+    reader = READERS[kind]
+    script = Path(__file__).resolve().parent / f"{reader}.py"
+    check = subprocess.run(  # nosec B603 - the kit's own reader, fixed argument list, no shell
+        [sys.executable, str(script), "--base", head, "--comments", paths[1]],
+        cwd=sidecar, capture_output=True, text=True, encoding="utf-8", check=False,
+    )  # fmt: skip
+    same = head_of_sidecar(sidecar) == head
+    done = None
+    if check.returncode == 0 and same:
+        _sidecar_git(sidecar, "add", "--", *paths)
+        options = commit_options(sidecar, files.person)
+        done = _sidecar_git(sidecar, *options, "-m", f"personal: confirm {rid}", "--", *paths)
+    if done is not None and done.returncode == 0:
+        return 0, [*shown, f"confirm: {rid} confirmed at a terminal in pull {number}"]
+    if same:
+        _sidecar_git(sidecar, "reset", "-q", "--hard", head)
+    elif before is not None:  # another commit landed: undo only this command's writes
+        (sidecar / rel).write_text(before, encoding="utf-8", newline="")
+    for rel_path in paths[:2]:
+        (sidecar / rel_path).unlink(missing_ok=True)
+    if not same:
+        raise CheckError(MOVED)
+    why = f"the reader {reader} failed" if done is None else "the sidecar commit failed"
+    said = [x for x in check.stdout.splitlines() if x.startswith("FAIL ")]
+    return 1, [*shown, *said, f"confirm: {why}; nothing committed, the sidecar is at {head}"]
 
 
 def parse(args: list[str]) -> dict | None:

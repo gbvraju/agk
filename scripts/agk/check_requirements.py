@@ -56,7 +56,8 @@ def dirs_arg(argv: list[str]) -> list[str]:
 
 
 def entries(text: str) -> dict[str, str]:
-    """REQ id -> its entry: the header line up to the next heading, line endings kept."""
+    """REQ id -> its entry: the header line up to the next heading, line endings kept and the
+    blank lines before that heading left out, so appending a later entry changes none."""
     found: dict[str, str] = {}
     current: str | None = None
     for line in text.splitlines(keepends=True):
@@ -68,7 +69,14 @@ def entries(text: str) -> dict[str, str]:
             current = None
         if current is not None:
             found[current] += line
-    return found
+    return {rid: trimmed(text) for rid, text in found.items()}
+
+
+def trimmed(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "".join(lines)
 
 
 def terminal_failures(root: Path, argv: list[str], reqs: list[dict]) -> list[str]:
