@@ -1,0 +1,1 @@
+- The conductor's and the architect's guards allow the plugin's form of each kit command they allow, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"`, in a clean project only, with the same arguments; nothing else widens (brief #1500)

@@ -958,6 +958,19 @@ tests = ["tests/kit/test_steward_onboarding.py", "tests/kit_dev/test_kit_manifes
 code = ".claude/hooks/steward_guard.py"
 tests = [
   "tests/kit/test_steward_guard.py", "tests/kit/test_steward_outbound_guard.py", "tests/kit/test_kit_defect_report.py",
+  "tests/kit/test_guard_plugin_forms.py",
+]
+[[testing.map]]
+code = ".claude/hooks/architect_guard.py"
+tests = ["tests/kit/test_architect_guard.py", "tests/kit/test_guard_plugin_forms.py"]
+[[testing.map]]
+code = ".claude/hooks/conductor_guard.py"
+tests = [
+  "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_commands.py",
+  "tests/kit/test_conductor_guard_confirmed.py", "tests/kit/test_conductor_guard_issue.py",
+  "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
+  "tests/kit/test_conductor_guard_tell.py", "tests/kit/test_conductor_guard_verdict.py",
+  "tests/kit/test_guard_plugin_forms.py",
 ]
 [[testing.map]]
 code = ".claude/hooks/plugin_hooks.py"

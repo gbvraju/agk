@@ -130,6 +130,9 @@ temporary worktree with the conductor's environment, so it is allowed only while
 local mode, judged as for `route.py` above; in CI mode it is refused with a message naming the
 setting. Another subcommand or option, a second RECORD, a record elsewhere and another copy of the
 script stay denied.
+In a clean project (`[kit] layout = "plugin"`) each `python3 scripts/agk/<script>` above is also
+allowed as `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"`, the plugin's regular file, with
+the same arguments; the two forms are the architect guard's one table (brief #1500, ADR-0631).
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -159,6 +162,7 @@ from architect_guard import (
     git_allowed,
     keep_refusal,
     origin_repo,
+    plugin_script,
     project_root,
     tokens_of,
 )
@@ -552,9 +556,12 @@ def what_if_form(args: list[str]) -> bool:
 
 
 def own_script(path: str, cwd: object, script: str) -> bool:
-    """`path` names the regular file `script` of the project directory itself, never a link."""
+    """`path` names the regular file `script` of the project directory itself, never a link, or,
+    in a clean project, is the plugin's form of `script` (brief #1500, ADR-0631)."""
     if not path or "\0" in path or path.startswith("-"):
         return False
+    if path.startswith("${"):
+        return plugin_script(path, script)
     base = cwd if isinstance(cwd, str) and os.path.isabs(cwd) else os.getcwd()
     full = os.path.join(base, path)
     own = os.path.join(os.path.realpath(project_root()), script)

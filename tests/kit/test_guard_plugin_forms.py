@@ -166,19 +166,23 @@ OTHER_FORMS = [
 
 @pytest.mark.parametrize("command", OTHER_FORMS)
 def test_no_other_form_of_the_plugin_path_passes(clean, command):
-    """REQ-078: brief #1500 answers 1 and 4 (another variable, an absolute path, a quoted variant)."""
+    """REQ-078: brief #1500 answers 1 and 4 (another variable, path or quoting)."""
     assert denied(decision("conductor_guard.py", clean, command)), command
 
 
 def test_the_plugin_form_is_refused_in_an_installed_project(installed):
     """REQ-078: brief #1500 answer 3 (installed projects are unchanged)."""
     assert denied(decision("conductor_guard.py", installed, f"python3 {SESSION} plan --json"))
-    assert allowed(decision("conductor_guard.py", installed, "python3 scripts/agk/session.py plan --json"))
+    assert allowed(
+        decision("conductor_guard.py", installed, "python3 scripts/agk/session.py plan --json")
+    )
 
 
 def test_the_installed_form_is_refused_in_a_clean_project(clean):
     """REQ-078: brief #1500 answer 2 (a clean project has no own scripts to run)."""
-    assert denied(decision("conductor_guard.py", clean, "python3 scripts/agk/session.py plan --json"))
+    assert denied(
+        decision("conductor_guard.py", clean, "python3 scripts/agk/session.py plan --json")
+    )
 
 
 MERGE = f"--pr 7 --sha {FULL}"
@@ -203,19 +207,27 @@ def test_the_merge_command_passes_in_both_forms(clean, installed):
 )
 def test_nothing_else_of_the_merge_command_passes_in_the_plugin_form(clean, args):
     """REQ-078: brief #1500 answer 4 (the merge command and nothing else)."""
-    assert denied(decision("conductor_guard.py", clean, f'python3 {PLUGIN}merge_cleared.py" {args}'))
+    assert denied(
+        decision("conductor_guard.py", clean, f'python3 {PLUGIN}merge_cleared.py" {args}')
+    )
 
 
 def test_the_shadows_slot_passes_in_the_plugin_form(clean):
     """REQ-078: brief #1500 answer 1 (the shadow's two slot forms, as today)."""
-    assert allowed(decision("conductor_guard.py", clean, f"python3 {SESSION} slot --next s-shadow", "--shadow"))
-    assert denied(decision("conductor_guard.py", clean, f"python3 {SESSION} slot --next s-other", "--shadow"))
+    assert allowed(
+        decision("conductor_guard.py", clean, f"python3 {SESSION} slot --next s-shadow", "--shadow")
+    )
+    assert denied(
+        decision("conductor_guard.py", clean, f"python3 {SESSION} slot --next s-other", "--shadow")
+    )
 
 
 # --- the architect and the review agent ------------------------------------------------------
 
 
-@pytest.mark.parametrize("command", [f'python3 {PLUGIN}doctor.py"', f'python3 {PLUGIN}check_specs.py"'])
+@pytest.mark.parametrize(
+    "command", [f'python3 {PLUGIN}doctor.py"', f'python3 {PLUGIN}check_specs.py"']
+)
 def test_the_architects_read_only_scripts_pass_in_the_plugin_form(clean, command):
     """REQ-078: brief #1500 answer 1 (the architect's read-only scripts)."""
     assert allowed(decision("architect_guard.py", clean, command)), command
@@ -244,8 +256,12 @@ def test_the_architect_refuses_the_plugin_form_in_an_installed_project(installed
 
 def test_the_reviewers_slot_passes_in_the_plugin_form(clean):
     """REQ-078: brief #1500 answer 1 (the review agent's slot step)."""
-    assert allowed(decision("architect_guard.py", clean, f"python3 {SESSION} slot --next r1", "--review"))
-    assert denied(decision("architect_guard.py", clean, f"python3 {SESSION} slot --next s1", "--review"))
+    assert allowed(
+        decision("architect_guard.py", clean, f"python3 {SESSION} slot --next r1", "--review")
+    )
+    assert denied(
+        decision("architect_guard.py", clean, f"python3 {SESSION} slot --next s1", "--review")
+    )
 
 
 # --- the steward -----------------------------------------------------------------------------
