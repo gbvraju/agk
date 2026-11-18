@@ -2,8 +2,9 @@
 ADR-0631; REQ-078).
 
 In a clean project (`[kit] layout = "plugin"`) the conductor's, the architect's and the steward's
-guards allow `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"` wherever they allow
-`python3 scripts/agk/<script>` today, with the same arguments, and nothing more. The plugin is this
+guards allow `python3 "<plugin>/scripts/agk/<script>"`, the plugin's folder written out in full as
+the resolver finds it (Q-1500-3 (a)), wherever they allow `python3 scripts/agk/<script>` today, with
+the same arguments, and nothing more; `${CLAUDE_PLUGIN_ROOT}` is refused. The plugin is this
 repository (it holds `.claude-plugin/plugin.json`); the projects are trees of invented data. No
 network, no gh, no model.
 """
@@ -20,8 +21,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 HOOKS = ROOT / ".claude" / "hooks"
-PLUGIN = '"${CLAUDE_PLUGIN_ROOT}/scripts/agk/'
+PLUGIN = f'"{ROOT}/scripts/agk/'
 SESSION = PLUGIN + 'session.py"'
+VARIABLE = '"${CLAUDE_PLUGIN_ROOT}/scripts/agk/'
 FULL = "a1b2c3d4e5" * 4
 CLEAN = '[kit]\nlayout = "plugin"\n'
 FLOW_ON = '[flow]\nauto_merge = true\nauto_merge_method = "squash"\n'
@@ -152,6 +154,7 @@ def test_todays_refusals_hold_in_the_plugin_form(clean, args):
 
 
 OTHER_FORMS = [
+    f"python3 {VARIABLE}session.py\" plan --json",
     'python3 "${HOME}/scripts/agk/session.py" plan --json',
     'python3 "$CLAUDE_PLUGIN_ROOT/scripts/agk/session.py" plan --json',
     "python3 '${CLAUDE_PLUGIN_ROOT}/scripts/agk/session.py' plan --json",
@@ -162,15 +165,37 @@ OTHER_FORMS = [
     'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/session.py"x plan --json',
     'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/session.py" plan --json; id',
     'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/session.py" plan --json "${HOME}"',
-    f"python3 {ROOT}/scripts/agk/session.py plan --json",
-    f'python3 "{ROOT}/scripts/agk/session.py" plan --json',
+    f'python {PLUGIN}session.py" plan --json',
+    f'python3 "{ROOT}/scripts/agk/../agk/session.py" plan --json',
+    f'python3 "{ROOT}/scripts//agk/session.py" plan --json',
+    f'python3 "{ROOT}/./scripts/agk/session.py" plan --json',
+    f'python3 "{ROOT}/scripts/agk/session.py/" plan --json',
+    f'python3 {PLUGIN}session.py" plan --json; id',
 ]
 
 
 @pytest.mark.parametrize("command", OTHER_FORMS)
 def test_no_other_form_of_the_plugin_path_passes(clean, command):
-    """REQ-078: brief #1500 answers 1 and 4 (another variable, path or quoting)."""
+    """REQ-078: brief #1500 answers 1 and 4, Q-1500-3 (a) (a variable, another path or quoting)."""
     assert denied(decision("conductor_guard.py", clean, command)), command
+
+
+def test_the_plugin_path_without_quotes_names_the_same_file(clean):
+    """REQ-078: Q-1500-3 (a) (the words bash passes are judged, not the quoting)."""
+    command = f"python3 {ROOT}/scripts/agk/session.py plan --json"
+    assert allowed(decision("conductor_guard.py", clean, command))
+
+
+def test_a_copy_or_a_link_of_the_plugins_folder_is_refused(tmp_path, clean):
+    """REQ-078: Q-1500-3 (a) (only the folder the resolver finds, which the guard checked)."""
+    copy = tmp_path / "copy" / "scripts" / "agk"
+    copy.mkdir(parents=True)
+    shutil.copy(ROOT / "scripts" / "agk" / "session.py", copy / "session.py")
+    link = tmp_path / "link"
+    link.symlink_to(ROOT)
+    for folder in (copy, link / "scripts" / "agk"):
+        command = f'python3 "{folder}/session.py" plan --json'
+        assert denied(decision("conductor_guard.py", clean, command)), folder
 
 
 def test_the_plugin_form_is_refused_in_an_installed_project(installed):
@@ -243,7 +268,8 @@ def test_the_architects_read_only_scripts_pass_in_the_plugin_form(clean, command
         f'python3 {PLUGIN}check_specs.py" --write',
         f'python3 {PLUGIN}merge_cleared.py" {MERGE}',
         'python3 "${HOME}/scripts/agk/doctor.py"',
-        f"python3 {ROOT}/scripts/agk/doctor.py",
+        f'python3 {VARIABLE}doctor.py"',
+        f'python3 "{ROOT}/scripts/agk/../agk/doctor.py"',
     ],
 )
 def test_the_architects_refusals_hold_in_the_plugin_form(clean, command):
@@ -283,16 +309,18 @@ def stub_plugin(tmp_path: Path, link: bool) -> Path:
 
 @pytest.mark.parametrize("link", [False, True])
 @pytest.mark.parametrize(
-    "hook, command, flags",
+    "hook, args, flags",
     [
-        ("architect_guard.py", f'python3 {PLUGIN}doctor.py"', ()),
-        ("architect_guard.py", f"python3 {SESSION} slot --next r1", ("--review",)),
-        ("conductor_guard.py", f"python3 {SESSION} plan --json", ()),
+        ("architect_guard.py", "doctor.py", ()),
+        ("architect_guard.py", "session.py slot --next r1", ("--review",)),
+        ("conductor_guard.py", "session.py plan --json", ()),
     ],
 )
-def test_a_plugin_word_needs_the_plugins_regular_file(tmp_path, clean, link, hook, command, flags):
+def test_a_plugin_word_needs_the_plugins_regular_file(tmp_path, clean, link, hook, args, flags):
     """REQ-078: brief #1500 answer 1, verdict on 1b4e725 item 1 (a missing script or a link)."""
     stub = stub_plugin(tmp_path, link)
+    script, _, rest = args.partition(" ")
+    command = f'python3 "{stub.resolve()}/scripts/agk/{script}" {rest}'.strip()
     assert denied(decision(hook, clean, command, *flags, plugin=stub)), (hook, command, link)
 
 
@@ -304,6 +332,7 @@ def test_the_steward_allows_the_plugin_form_and_refuses_the_merge_in_it(clean):
     assert allowed(decision("steward_guard.py", clean, f"python3 {SESSION} plan"))
     for command in (
         f'python3 {PLUGIN}merge_cleared.py" {MERGE}',
+        f'python3 {VARIABLE}merge_cleared.py" {MERGE}',
         f"python3 scripts/agk/merge_cleared.py {MERGE}",
     ):
         assert denied(decision("steward_guard.py", clean, command)), command

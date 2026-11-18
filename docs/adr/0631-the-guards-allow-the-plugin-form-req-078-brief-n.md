@@ -20,27 +20,35 @@ so it already allowed the plugin's form.
 
 ## Decision
 
+The maintainers answered Q-1500-3 (a) on pull request #1516 (2026-11-18): the guards allow the plugin's folder written out
+in full, the path the guard has checked, in place of the variable. The variable form of the brief's answer 1 is
+refused: by ADR-0612 fact 4 the Bash tool's shell has no `CLAUDE_PLUGIN_ROOT`, so a command that names it runs another
+file than the one a guard could check.
+
 1. **One table.** `architect_guard.py` holds the two forms of a kit command, and the conductor's guard imports them:
-   `scripts/agk/<script>` (or `./scripts/agk/<script>`), and exactly `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"`.
-   The second form is the variable in braces inside double quotes, followed by a space or the end. `tokens_of` reads it as
-   the words `python3`, `${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>` and the words of the rest, and judges the rest as it
-   judges any command. Every other `$` still makes a command unreadable, so it is denied. That covers another variable,
-   `$CLAUDE_PLUGIN_ROOT` without braces, single quotes, no quotes and `python` instead of `python3`.
+   `scripts/agk/<script>` (or `./scripts/agk/<script>`), and `python3 "<plugin>/scripts/agk/<script>"`, where `<plugin>`
+   is exactly the folder the resolver finds (`kit_root.plugin_root`, the form `kit_root.py --form` prints with the
+   variable unset). `tokens_of` returns that script word as `${plugin}/scripts/agk/<script>`. No command can carry that
+   word, because a command with a `$` is never read. Every check matches it as it matches `scripts/agk/<script>`, and the
+   rest of the command is judged as before. Quoting does not matter: the guards judge the words bash passes.
 2. **Only in a clean project.** The form is read only when the resolver (`kit_root.layout`) reads `plugin` for the
    project. An installed project, an unreadable `agk.toml` or a guard with no resolver keep today's behaviour: the
-   plugin's form is refused.
+   plugin's path is refused.
 3. **The same arguments.** Each check that names a script matches either form, with the same arguments as today. For the
    architect these are the read-only scripts, the evidence check, the review bundle and the slot and check-verdict steps.
-   For the conductor they go through `own_script`. In both guards the plugin's form is read only when the plugin that the
-   resolver finds (`kit_root.plugin_root`) holds the script as a regular file and not a link (`plugin_script`, checked in
-   `tokens_of`, and again by the conductor's `own_script`); a missing script or a link is denied. The
-   conductor's merge (`merge_cleared.py --pr N --sha S`, with `auto_merge` on in both places) passes in both forms and
-   nothing else does.
-4. **No absolute plugin path.** A resolved absolute path to the plugin's scripts is not the project's own file, so it
-   stays refused, quoted or not.
-5. The steward's guard is unchanged: tests show that it allows the plugin's form and refuses the merge in both forms.
+   For the conductor they go through `own_script`. The plugin's path is read only when the plugin holds the script as a
+   regular file and not a link (`plugin_file`, checked in `tokens_of` and again by the conductor's `own_script`); a
+   missing script or a link is denied. The conductor's merge (`merge_cleared.py --pr N --sha S`, with `auto_merge` on in
+   both places) passes in both forms and nothing else does. Only `python3` takes the plugin's form.
+4. **Nothing else.** `${CLAUDE_PLUGIN_ROOT}` and every other variable, another folder holding a copy of the scripts, a
+   link to the plugin's folder, a `..`, a doubled `/` and a `./` inside the path are refused (tested).
+5. The steward's guard is unchanged: tests show that it allows the plugin's form and refuses the merge in every form.
 6. `agk.toml` maps the architect's and the conductor's guards to their tests and the new
-   `tests/kit/test_guard_plugin_forms.py`, and adds that test to the steward's guard entry.
+   `tests/kit/test_guard_plugin_forms.py`, and adds that test to the entries of the steward's guard and of the scripts it
+   names.
+7. SPEC-0071 rule 4 says the guards allow "the resolver's command forms"; this ADR records that in a clean project the
+   allowed form is the resolved folder, not the variable. The wording of the Approved spec is its reviewers' to patch
+   (principle 6); this pull request changes no spec.
 
 ## Consequences
 
@@ -51,9 +59,8 @@ clone's own scripts. A clean project's clone has none, so they still fail closed
 
 ## Residual
 
-- 2026-11-18: ADR-0612 fact 4 found that the Bash tool's shell has no `CLAUDE_PLUGIN_ROOT`. The form allowed here then
-  expands to `/scripts/agk/<script>`, which runs nothing in a normal machine's root, so it fails at run time rather than
-  in the guard. Whether prompts print this form or the resolved folder is for the build that changes the prompts
-  (Q-1500-2) (due 2027-01-31).
-- 2026-11-18: the conductor's clean-environment runs in a clean project (decision above), left to the build that moves
+- 2026-11-18: `kit_root.py --form` still prints `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"` when the variable names the plugin,
+  a form the guards now refuse; the build that changes the prompts makes them print the resolved folder (Q-1500-2) (due
+  2027-01-31).
+- 2026-11-18: the conductor's clean-environment runs in a clean project (Consequences), left to the build that moves
   scratch runs to the resolver (due 2027-01-31).

@@ -1,1 +1,1 @@
-- The conductor's and the architect's guards allow the plugin's form of each kit command they allow, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"`, in a clean project only, with the same arguments; nothing else widens (brief #1500)
+- In a project that runs the kit from the plugin, the conductor's and the architect's guards allow each kit command they allow with the plugin's folder written out in full, `python3 "<plugin>/scripts/agk/<script>"`, with the same arguments; a variable, another folder or a link is refused (brief #1500)

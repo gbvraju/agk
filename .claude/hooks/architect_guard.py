@@ -44,10 +44,11 @@ The message names the rule, never the command or the path. Standard library only
 
 The two forms of a kit command (SPEC-0071 rule 4, brief #1500, ADR-0631), one table for the
 conductor's guard too: `scripts/agk/<script>` (or `./scripts/agk/<script>`), and, in a clean project
-only (`[kit] layout = "plugin"`, read by the resolver `kit_root.layout`), exactly
-`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"`, the variable in braces inside double quotes,
-with the same arguments as the first form. Any other variable, quoting or absolute plugin path is
-denied.
+only (`[kit] layout = "plugin"`, read by the resolver `kit_root.layout`), `python3
+"<plugin>/scripts/agk/<script>"`, where <plugin> is the plugin's folder written out in full, exactly
+as the resolver finds it (`kit_root.plugin_root`), with the same arguments as the first form
+(Q-1500-3 (a)). A variable (`${CLAUDE_PLUGIN_ROOT}`, empty in the Bash tool's shell, ADR-0612 fact
+4), another folder, a `..` or a link is denied: the guard allows only the file it has checked.
 """
 
 from __future__ import annotations
@@ -80,7 +81,7 @@ READ_ONLY_SCRIPTS = frozenset(
     }
 )
 # Brief #982: the review agent alone re-runs the evidence check, in this one form.
-REVIEW_SCRIPT = re.compile(r"(?:(?:\./)?|\$\{CLAUDE_PLUGIN_ROOT\}/)scripts/agk/evidence\.py")
+REVIEW_SCRIPT = re.compile(r"(?:(?:\./)?|\$\{plugin\}/)scripts/agk/evidence\.py")
 EVIDENCE_VALUES = {"--head": re.compile(r"[0-9a-fA-F]{7,40}"), "--sample": re.compile(r"[1-9]\d*")}
 READ_GIT = frozenset(
     {
@@ -109,10 +110,12 @@ COMMENT_ENDPOINT = re.compile(r"^/?repos/([^/\s]+)/([^/\s]+)/issues/\d+/comments
 FIELD_FLAGS = frozenset({"-f", "--raw-field", "-F", "--field", "--input"})
 UNSAFE = re.compile(r"[$`\n\r]")
 # The two forms of a kit command, one table (brief #1500, ADR-0631): the word that names a kit
-# script, as `tokens_of` returns it, starts with one of these.
-PLUGIN_WORD = "${CLAUDE_PLUGIN_ROOT}/"
-KIT_WORD = r"(?:(?:\./)?|\$\{CLAUDE_PLUGIN_ROOT\}/)scripts/agk/"
-PLUGIN_COMMAND = re.compile(r'python3 "\$\{CLAUDE_PLUGIN_ROOT\}/(scripts/agk/\w+\.py)"(?= |$)')
+# script, as `tokens_of` returns it, starts with one of these. `tokens_of` writes the plugin's
+# checked script as PLUGIN_WORD + `scripts/agk/<name>.py`, a word no command can carry, since a
+# command with a `$` is never read (UNSAFE).
+PLUGIN_WORD = "${plugin}/"
+KIT_WORD = r"(?:(?:\./)?|\$\{plugin\}/)scripts/agk/"
+PLUGIN_SCRIPT = re.compile(r"\w+\.py")
 KIT_SCRIPTS = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "agk"
 )
@@ -217,32 +220,44 @@ def clean_project() -> bool:
         return False
 
 
-def plugin_script(word: str, script: str) -> bool:
-    """`word` is the plugin's form of `script` (`scripts/agk/<name>.py`) in a clean project, and the
-    plugin that the resolver finds holds it as a regular file, never a link (ADR-0631)."""
-    if word != PLUGIN_WORD + script.replace(os.sep, "/") or not clean_project():
-        return False
+def plugin_file(name: str) -> Path | None:
+    """The plugin's `scripts/agk/<name>` in a clean project, as the resolver finds the plugin, when
+    it is a regular file and never a link; else None (ADR-0631, verdict on 1b4e725 item 1)."""
+    if not PLUGIN_SCRIPT.fullmatch(name) or not clean_project():
+        return None
     resolver = kit_resolver()
     try:
-        full = resolver.plugin_root(Path(project_root())) / script
+        full = resolver.plugin_root(Path(project_root())) / "scripts" / "agk" / name
     except resolver.Refused:
+        return None
+    return full if full.is_file() and not full.is_symlink() else None
+
+
+def plugin_script(word: str, script: str) -> bool:
+    """`word` is the plugin's checked form of `script` (`scripts/agk/<name>.py`), as `tokens_of`
+    writes it, and the plugin still holds that regular file (ADR-0631)."""
+    wanted = script.replace(os.sep, "/")
+    if word != PLUGIN_WORD + wanted or not wanted.startswith("scripts/agk/"):
         return False
-    return full.is_file() and not full.is_symlink()
+    return plugin_file(wanted.removeprefix("scripts/agk/")) is not None
+
+
+def plugin_marked(word: str) -> str:
+    """The plugin's script named by its full path (`<plugin>/scripts/agk/<name>.py`, exactly the
+    folder the resolver finds) as PLUGIN_WORD + `scripts/agk/<name>.py`; any other word as it is."""
+    if not os.path.isabs(word):
+        return word
+    folder, name = os.path.split(word)
+    found = plugin_file(name)
+    return PLUGIN_WORD + "scripts/agk/" + name if found and str(found.parent) == folder else word
 
 
 def tokens_of(command: str) -> list[str] | None:
     """The words of a simple command, or None when it has an operator, a substitution or a `#`
     outside a quoted string (brief #351: the words are the words bash would pass). In a clean
-    project the plugin's form `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<name>.py" ...` is read
-    as `python3`, `${CLAUDE_PLUGIN_ROOT}/scripts/agk/<name>.py` and the words of the rest, which
-    is judged as any other command, when the plugin holds that script as a regular file (brief
-    #1500, ADR-0631, verdict on 1b4e725 item 1); no other `$` is read."""
-    plugin = PLUGIN_COMMAND.match(command)
-    if plugin and clean_project():
-        if not plugin_script(PLUGIN_WORD + plugin.group(1), plugin.group(1)):
-            return None  # the plugin holds no such regular file: no check reads the word
-        rest = tokens_of(command[plugin.end() :])
-        return None if rest is None else ["python3", PLUGIN_WORD + plugin.group(1), *rest]
+    project the script word of `python3 "<plugin>/scripts/agk/<name>.py" ...` is returned as
+    PLUGIN_WORD + `scripts/agk/<name>.py` when <plugin> is the folder the resolver finds and the
+    script a regular file there (brief #1500, ADR-0631, Q-1500-3 (a))."""
     if UNSAFE.search(command) or hash_outside_quotes(command):
         return None
     lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
@@ -254,6 +269,8 @@ def tokens_of(command: str) -> list[str] | None:
         return None
     if any(w and all(c in "();<>|&" for c in w) for w in words):
         return None
+    if len(words) > 1 and words[0] == "python3":
+        words[1] = plugin_marked(words[1])
     return words
 
 

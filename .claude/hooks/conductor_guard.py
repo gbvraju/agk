@@ -131,8 +131,9 @@ local mode, judged as for `route.py` above; in CI mode it is refused with a mess
 setting. Another subcommand or option, a second RECORD, a record elsewhere and another copy of the
 script stay denied.
 In a clean project (`[kit] layout = "plugin"`) each `python3 scripts/agk/<script>` above is also
-allowed as `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"`, the plugin's regular file, with
-the same arguments; the two forms are the architect guard's one table (brief #1500, ADR-0631).
+allowed as `python3 "<plugin>/scripts/agk/<script>"`, the plugin's folder written out in full as the
+resolver finds it and its regular file, with the same arguments; the two forms are the architect
+guard's one table (brief #1500, ADR-0631, Q-1500-3 (a)).
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
