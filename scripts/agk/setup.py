@@ -318,10 +318,9 @@ def login_state(root: Path, login) -> str:
     `author` (in `verdict_authors`), `reviewer` (a spec approver only), `other` or `unknown`."""
     if not isinstance(login, str) or not login:
         return "unknown"
-    name = login.lstrip("@").lower()
-    if name in reviewers.verdict_authors(root):
+    if common.is_verdict_author(root, login):  # the conductor's own check (#1449)
         return "author"
-    return "reviewer" if name in reviewers.spec_approvers(root) else "other"
+    return "reviewer" if login.lstrip("@").lower() in reviewers.spec_approvers(root) else "other"
 
 
 ROLES = ("steward", "conductor", "builders")
@@ -339,7 +338,7 @@ def machine_roles(repo: dict, answers: dict) -> tuple[list[str], str]:
                     else "the AI work runs on GitHub's machines: no role here")  # fmt: skip
     team = f"the team's builders stay within max_builders {repo['max_builders']}"
     team += f" ({repo['running'] or 0} live)"
-    if (answers.get("team") or repo["review_mode"] or "team") == "solo":
+    if (repo["review_mode"] or answers.get("team") or "team") == "solo":  # the answer only if unset
         return list(ROLES), "one person: this machine runs every role"
     state, lease = repo["login"], repo["lease"] or ""
     said = {"author": "this login is a verdict author", "reviewer": "this login is a listed "
@@ -373,11 +372,15 @@ def restart(root: Path, roles: list[str], yes: bool) -> tuple[int, dict, list[st
     for role in roles:
         if role == "conductor":
             watchdog = [sys.executable, str(PLUGIN / "scripts" / "agk" / "conductor.py"),
-                        "watchdog"]  # fmt: skip
+                        "watchdog", "--conductor-only"]  # fmt: skip  (no builder pass: rule 15)
             code, out = run_out(watchdog, root)
-            lines += out.strip().splitlines()
-            steps.append(row(role, "failed" if code else "done", f"conductor.py watchdog: exit "
-                             f"{code}" if code else "the watchdog's start"))  # fmt: skip
+            said = out.strip().splitlines()
+            lines += said
+            started = [x for x in said if x.startswith("watchdog: started ")]
+            last = said[-1] if said else "the watchdog printed nothing"
+            result = "failed" if code else "done" if started else "waiting"
+            steps.append(row(role, result, f"conductor.py watchdog: exit {code}: {last}" if code
+                             else started[0] if started else last))  # fmt: skip
         elif role == "steward":
             steps.append(row(role, "waiting", f"open it in a new terminal: {STEWARD_OPEN}"))
         else:

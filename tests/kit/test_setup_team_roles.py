@@ -57,12 +57,15 @@ def github(login, lease="free", steward=None, running=0, **over):
     return found | over
 
 
-def run(root, capsys, monkeypatch, gh, form="plan", extra=(), code_of=0):
+STARTED = "watchdog: lease free\nwatchdog: started conductor-local\n"
+
+
+def run(root, capsys, monkeypatch, gh, form="plan", extra=(), code_of=0, said=STARTED):
     calls: list[list[str]] = []
 
     def fake(args, cwd):
         calls.append(list(args))
-        return code_of, "watchdog: lease free\n"
+        return code_of, said
 
     monkeypatch.setattr(setup, "run_cmd", lambda args, cwd: calls.append(list(args)) or 0)
     monkeypatch.setattr(setup, "run_out", fake)
@@ -179,9 +182,10 @@ def test_ac7_a_restart_of_a_first_reviewer_machine_restarts_every_role(
     code, out, calls = run(root, capsys, monkeypatch, github("author-example-1"),
                            form="restart", extra=["--yes", "--json"])  # fmt: skip
     table = json.loads(out)
-    assert code == 0 and [c[-1] for c in calls] == ["watchdog"]
+    assert code == 0 and [c[-2:] for c in calls] == [["watchdog", "--conductor-only"]]
     rows = {r["step"]: r for r in table["steps"]}
-    assert rows["conductor"]["result"] == "done"
+    assert rows["conductor"] == {"step": "conductor", "result": "done",
+                                 "note": "watchdog: started conductor-local"}  # fmt: skip
     assert "claude --agent steward" in rows["steward"]["note"]
     assert "/agk:launch" in rows["builders"]["note"]
 
@@ -219,3 +223,72 @@ def test_ac7_the_skill_restarts_and_shows_the_team():
     text = SKILL.read_text(encoding="utf-8")
     assert 'setup.py" restart' in text and "claude --agent steward" in text
     assert "--roles" in text
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "watchdog: lease held by cb-example-9 until 2026-11-18T05:00Z; nothing started\n",
+        "watchdog: lease free\nwatchdog: this login is not a verdict author; conductor not "
+        "started, builders only (setting: verdict_authors in config/reviewers.yaml)\n",
+        "watchdog: lease free\nwatchdog: conductor cb-example-4 is running on this machine; "
+        "nothing started\n",
+        "",
+    ],
+)
+def test_ac7_a_restart_that_starts_no_conductor_is_never_done(tmp_path, capsys, monkeypatch, said):
+    """REQ-072 AC7: rule 15: `done` only on the watchdog's `started` line; else `waiting` with
+    the watchdog's own last line."""
+    root = project(tmp_path)
+    code, out, _ = run(root, capsys, monkeypatch, github("author-example-1"), form="restart",
+                       extra=["--yes", "--json", "--roles", "conductor"], said=said)  # fmt: skip
+    row = json.loads(out)["steps"][0]
+    assert code == 0 and row["step"] == "conductor" and row["result"] == "waiting"
+    assert row["note"] == (said.strip().splitlines() or ["the watchdog printed nothing"])[-1]
+
+
+def test_ac7_a_team_answer_never_widens_the_roles_of_a_team_repository(
+    tmp_path, capsys, monkeypatch
+):
+    """REQ-072 AC7: rule 14: `--answer team=solo` counts only while `review_mode` is unset."""
+    root = project(tmp_path)
+    table = roles_of(root, capsys, monkeypatch, github("member-example-1"),
+                     ["--answer", "team=solo"])  # fmt: skip
+    assert table["roles"] == ["builders"]
+    (tmp_path / "unset").mkdir()
+    unset = project(tmp_path / "unset", TEAM.replace('review_mode = "team"\n', ""))
+    table = roles_of(unset, capsys, monkeypatch, github("member-example-1"),
+                     ["--answer", "team=solo"])  # fmt: skip
+    assert table["roles"] == ALL
+
+
+def test_ac7_setup_and_the_conductor_share_one_verdict_author_check(tmp_path, monkeypatch):
+    """REQ-072 AC7: rule 14: `login_state` and `conductor_refusal` read `is_verdict_author`."""
+    import common
+
+    root = project(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(common, "is_verdict_author", lambda r, login: seen.append(login) or True)
+    monkeypatch.setattr(common, "signed_in_login", lambda r: "member-example-1")
+    assert setup.login_state(root, "member-example-1") == "author"
+    assert common.conductor_refusal(root) is None
+    assert seen == ["member-example-1", "member-example-1"]
+
+
+def test_ac7_the_conductor_only_watchdog_runs_no_builder_pass(monkeypatch, tmp_path):
+    """REQ-072 AC7: rule 15: `watchdog --conductor-only` starts the conductor and never the
+    builder pass, so a restart restarts no builder without `/agk:launch`'s yes."""
+    import conductor
+
+    ran: list[str] = []
+    monkeypatch.setattr(conductor.session, "paused_default", lambda root: False)
+    monkeypatch.setattr(conductor.launch, "default_branch", lambda root: "main")
+    monkeypatch.setattr(conductor.launch, "launch_settings", lambda root, ref=None: (True, "x"))
+    monkeypatch.setattr(conductor, "plan_issue", lambda root: 7)
+    monkeypatch.setattr(conductor.session, "repo_name", lambda root: "example-org/example")
+    monkeypatch.setattr(conductor, "watchdog_once", lambda *a: ran.append("conductor") or 0)
+    monkeypatch.setattr(conductor, "builder_pass", lambda *a: ran.append("builders"))
+    assert conductor.main(["watchdog", "--conductor-only"], root=tmp_path) == 0
+    assert ran == ["conductor"]
+    assert conductor.main(["watchdog"], root=tmp_path) == 0
+    assert ran == ["conductor", "conductor", "builders"]
