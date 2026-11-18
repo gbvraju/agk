@@ -5,10 +5,17 @@
 """Requirements file: unique ids, valid Status, a test marker for every `done` requirement and, per
 the `ac_coverage` setting (`warn` or `block`), for every criterion `ACn` of it (SPEC-0010). A
 `retired` requirement has no marker left: the check names the requirement and the files
-(brief 244)."""
+(brief 244).
+
+In a sidecar only (SPEC-0041 rule 8, brief #1502), `--comments FILE [--base REF]` also fails a
+requirement with a `- Source: observed in code` line that moves to `done` from the merge base
+without the `Confirm: <C> REQ-nnn` line of the person's terminal confirmation at a `<C>` of the
+head's history where its entry equals the current one apart from its status line. Team and solo
+mode take no such reading."""
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -16,19 +23,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import (
     ALLOWED_STATUS,
+    REQ_HEADER,
     CheckError,
     ac_coverage_mode,
     ac_markers_for,
     ac_shortfalls,
+    agent_apps,
+    base_arg,
+    base_context,
     markers_for,
     parse_requirements,
+    personal_table,
     repo_root,
     run,
+    show,
     utf8_output,
 )
 
 NAME = "requirements"
 PATH = "docs/requirements.md"
+OBSERVED = re.compile(r"^- Source: observed in code\b")
 
 
 def dirs_arg(argv: list[str]) -> list[str]:
@@ -39,6 +53,57 @@ def dirs_arg(argv: list[str]) -> list[str]:
                 raise CheckError("--tests-dir needs a value")
             dirs.append(argv[i + 1])
     return dirs
+
+
+def entries(text: str) -> dict[str, str]:
+    """REQ id -> its entry: the header line up to the next heading, line endings kept."""
+    found: dict[str, str] = {}
+    current: str | None = None
+    for line in text.splitlines(keepends=True):
+        header = REQ_HEADER.match(line)
+        if header:
+            current = header.group(1)
+            found.setdefault(current, "")
+        elif line.startswith("#"):
+            current = None
+        if current is not None:
+            found[current] += line
+    return found
+
+
+def terminal_failures(root: Path, argv: list[str], reqs: list[dict]) -> list[str]:
+    """SPEC-0041 rule 8: an observed requirement that moves to `done` needs its confirmation."""
+    if "--comments" not in argv or personal_table(root) is None:
+        return []
+    from check_final_clearance import comments_of  # noqa: PLC0415 - the sidecar reading only
+    from check_specs import in_history  # noqa: PLC0415
+    from reviewers import derived_only, solo_person, status_moved_only, terminal_shas
+
+    at = argv.index("--comments") + 1
+    if at >= len(argv):
+        raise CheckError("--comments needs a value")
+    mb = base_context(root, NAME, base_arg(argv))
+    if mb is None:
+        return []
+    derived = derived_only(comments_of(Path(argv[at])), agent_apps(root), solo_person(root))
+    now = entries((root / PATH).read_text(encoding="utf-8"))
+    before = {r["id"]: r["status"] for r in parse_requirements(show(root, mb, PATH) or "")}
+    problems: list[str] = []
+    for req in reqs:
+        rid, entry = req["id"], now.get(req["id"], "")
+        observed = any(OBSERVED.match(line) for line in entry.splitlines())
+        if req["status"] != "done" or before.get(rid) == "done" or not observed:
+            continue
+        shas = terminal_shas(derived, rid)
+        if not shas:
+            problems.append(f"{rid}: SPEC-0041 rule 8: no Confirm line of a terminal confirmation")
+        elif not any(
+            in_history(root, sha)
+            and status_moved_only(entries(show(root, sha, PATH) or "").get(rid, ""), entry)
+            for sha in shas
+        ):
+            problems.append(f"{rid}: SPEC-0041 rule 8: the entry changed after the confirmed sha")
+    return problems
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -73,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
             # removes its tests or retags them; the message names files, never the tests' text
             files = ", ".join(markers[rid])
             problems.append(f"{rid}: retired requirement still has a test marker in {files}")
+    problems += terminal_failures(root, argv, reqs)
     shortfalls = [text for _, text in ac_shortfalls(reqs, ac_markers_for(root, dirs))]
     problems += shortfalls if mode == "block" else []
     for problem in problems:

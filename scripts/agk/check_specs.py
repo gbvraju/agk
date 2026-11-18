@@ -20,7 +20,9 @@ the one spec the pull request sets Approved or the one its first line names). Th
 head must equal the approved text apart from its status line. With `review_mode = "solo"` an
 `Approve: SPEC-<n>` line of the one listed person's confirmation approves the text at its confirmed
 sha, which must be the head of the latest run before the comment, as for a short line (brief 277,
-`reviewers.confirmed_comments`). Without `--comments` the approval is
+`reviewers.confirmed_comments`). In a sidecar (SPEC-0041 rule 8, brief #1502) only the
+`Approve: <C> SPEC-<n>` line that `reviewers.terminal_confirmations` derives from the person's
+terminal confirmation approves, never a plain comment. Without `--comments` the approval is
 not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
@@ -52,6 +54,7 @@ from common import (
     find_questions,
     frozen_log_problems,
     git,
+    personal_table,
     read_text,
     repo_root,
     run,
@@ -59,7 +62,13 @@ from common import (
     status_flip_only,
     utf8_output,
 )
-from reviewers import approval_shas, confirmed_comments, solo_person, spec_approvers
+from reviewers import (
+    approval_shas,
+    confirmed_comments,
+    derived_only,
+    solo_person,
+    spec_approvers,
+)
 
 NAME = "specs"
 SPEC_PREFIX = "docs/specs/"
@@ -346,9 +355,13 @@ def main(argv: list[str] | None = None) -> int:
         reviews = file_arg(argv, "--reviews")
         runs = file_arg(argv, "--runs")
         pinned = runs_of(root, runs)
-        items = confirmed_comments(  # brief 277: the head by the rule of a short Approve: line
-            comments_of(Path(comments)), agent_apps(root), solo_person(root), runs=pinned
-        )
+        saved = comments_of(Path(comments))
+        if personal_table(root) is not None:  # SPEC-0041 rule 8: a terminal confirmation only
+            items = derived_only(saved, agent_apps(root), solo_person(root))
+        else:
+            items = confirmed_comments(  # brief 277: the head by the rule of a short Approve: line
+                saved, agent_apps(root), solo_person(root), runs=pinned
+            )
         approvals = approval_shas(
             items,
             comments_of(Path(reviews)) if reviews else [],

@@ -1,4 +1,6 @@
-"""SPEC-0041 build (g), part 1: the person confirms each record at a terminal (brief #1502, REQ-048).
+"""SPEC-0041 build (g), part 1: the person confirms each record at a terminal (brief #1502).
+
+Advances REQ-048 (AC2 and AC4).
 
 Rule 15: `personal.py confirm <id>` is refused in an agent session, without a terminal and on a
 dirty sidecar; on yes it writes the pull record and the confirmation of rule 8 and makes one
@@ -76,7 +78,11 @@ None.
 """
 SPEC_PATH = "docs/specs/0001-empty-cart.md"
 ADR_PATH = "docs/adr/0001-empty-cart.md"
-SHOWN = ("SPEC-0001: A customer can empty the cart", f"{SPEC_PATH} at abc", "status: Draft -> Approved")
+SHOWN = (
+    "SPEC-0001: A customer can empty the cart",
+    f"{SPEC_PATH} at abc",
+    "status: Draft -> Approved",
+)
 
 
 def git(root: Path, *args: str) -> str:
@@ -118,7 +124,9 @@ def team_repo(path: Path) -> Path:
     (path / SPEC_PATH).write_text(SPEC, encoding="utf-8")
     (path / ADR_PATH).write_text(ADR, encoding="utf-8")
     (path / "tests").mkdir()
-    (path / "tests" / "test_cart.py").write_text("def test_t():  # REQ-101 AC1\n    pass\n", "utf-8")
+    (path / "tests" / "test_cart.py").write_text(
+        "def test_t():  # REQ-101 AC1\n    pass\n", "utf-8"
+    )
     commit(path, "records")
     return path
 
@@ -148,14 +156,24 @@ def confirm(root: Path, rid: str, answer="yes", env=None, tty=True):
 
 
 def set_status(root: Path, rel: str, old: str, new: str) -> None:
+    """Replace the last OLD of the file (REQ-101 is the last entry of the requirements)."""
     path = root / rel
-    path.write_text(path.read_text(encoding="utf-8").replace(old, new, 1), encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    at = text.rindex(old)
+    path.write_text(text[:at] + new + text[at + len(old) :], encoding="utf-8")
 
 
 def terminal(sha: str, rid: str, line: str, login=PERSON, last=None, verdict="cleared") -> dict:
     body = "\n".join(
-        [f"Confirmed: {sha}", f"Verdict: {verdict} {sha}", f"Record: {rid}", line, "Shown:",
-         *SHOWN, last or f"confirmed by {login} at a terminal at {AT}"]  # fmt: skip
+        [
+            f"Confirmed: {sha}",
+            f"Verdict: {verdict} {sha}",
+            f"Record: {rid}",
+            line,
+            "Shown:",
+            *SHOWN,
+            last or f"confirmed by {login} at a terminal at {AT}",
+        ]  # fmt: skip
     )
     return {"id": 1, "body": body, "user": {"login": login}, "created_at": AT,
             "performed_via_github_app": None}  # fmt: skip
@@ -192,7 +210,8 @@ def test_req_048_confirm_without_a_terminal_is_refused(tmp_path):
     root = holding(tmp_path / "s")
     head = git(root, "rev-parse", "HEAD")
     done = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(SCRIPTS / "personal.py"), "confirm", "SPEC-0001", "--sidecar", str(root)],
+        [sys.executable, str(SCRIPTS / "personal.py"), "confirm", "SPEC-0001", "--sidecar",
+         str(root)],
         cwd=root, input="yes\n", capture_output=True, text=True, env=TERMINAL,
     )  # fmt: skip
     assert done.returncode == 1 and "terminal" in done.stdout and "SPEC-0041 rule 15" in done.stdout
@@ -202,7 +221,7 @@ def test_req_048_confirm_without_a_terminal_is_refused(tmp_path):
 
 
 def test_req_048_confirm_on_a_dirty_sidecar_is_refused(tmp_path):
-    """REQ-048 AC4: rule 8 (`<C>` is the head of a clean work tree, else refused naming the rule)."""
+    """REQ-048 AC4: rule 8 (`<C>` is the head of a clean work tree, else refused)."""
     root = holding(tmp_path / "s")
     (root / "records" / "note.txt").write_text("x", encoding="utf-8")
     code, out, asked = confirm(root, "SPEC-0001")
@@ -247,13 +266,16 @@ def test_req_048_answering_no_writes_nothing(tmp_path):
     ],
 )
 def test_req_048_yes_writes_the_records_and_one_commit_child_of_c(tmp_path, rid, rel, moved, line):
-    """REQ-048 AC4: rules 8 and 15 (the pull record, the confirmation, one commit after the reader)."""
+    """REQ-048 AC4: rules 8 and 15 (the pull record, the confirmation, one commit)."""
     root = holding(tmp_path / "s")
     c = git(root, "rev-parse", "HEAD")
     code, out, asked = confirm(root, rid)
     assert code == 0, out
     assert len(asked) == 1 and git(root, "status", "--porcelain") == ""
-    assert git(root, "rev-parse", "HEAD^") == c and git(root, "rev-list", "--count", f"{c}..HEAD") == "1"
+    assert (
+        git(root, "rev-parse", "HEAD^") == c
+        and git(root, "rev-list", "--count", f"{c}..HEAD") == "1"
+    )
     changed = set(git(root, "diff", "--name-only", c, "HEAD").splitlines())
     number = json.loads(git(root, "show", f"HEAD:forge/pulls/{max(_pulls(root))}.json"))["number"]
     forge = {f"forge/pulls/{number}.json", f"forge/comments-{number}.json"}
@@ -277,7 +299,7 @@ def _pulls(root: Path) -> list[int]:
 
 
 def test_req_048_a_reader_failure_restores_c_and_commits_nothing(tmp_path):
-    """REQ-048 AC4: rule 15 (the record edited between the summary and the yes: exit 1, at `<C>`)."""
+    """REQ-048 AC4: rule 15 (the record edited before the yes: exit 1, at `<C>`)."""
     root = holding(tmp_path / "s")
     c = git(root, "rev-parse", "HEAD")
 
@@ -333,18 +355,34 @@ def test_req_048_terminal_confirmations_give_one_line_of_each_kind(rid, line, de
 @pytest.mark.parametrize(
     "item",
     [
-        terminal(C, "SPEC-0001", "Approve: SPEC-0001", last=f"confirmed by {PERSON} in a session at {AT}"),
+        terminal(
+            C, "SPEC-0001", "Approve: SPEC-0001", last=f"confirmed by {PERSON} in a session at {AT}"
+        ),
         terminal(C, "SPEC-0001", "Approve: SPEC-0002"),
         terminal(C, "SPEC-0001", "Accept: SPEC-0001"),
         terminal(C, "ADR-0001", "Approve: ADR-0001"),
         terminal(C, "SPEC-0001", "Approve: SPEC-0001", login=OTHER),
-        {**terminal(C, "SPEC-0001", "Approve: SPEC-0001"), "performed_via_github_app": {"slug": "claude"}},
+        {
+            **terminal(C, "SPEC-0001", "Approve: SPEC-0001"),
+            "performed_via_github_app": {"slug": "claude"},
+        },
         terminal(C, "SPEC-0001", "Approve: SPEC-0001", verdict="fix list"),
-        terminal(C, "SPEC-0001", "Approve: SPEC-0001", last=f"confirmed by {OTHER} at a terminal at {AT}"),
+        terminal(
+            C, "SPEC-0001", "Approve: SPEC-0001", last=f"confirmed by {OTHER} at a terminal at {AT}"
+        ),
         {**terminal(C, "SPEC-0001", "Approve: SPEC-0001"), "user": {"login": OTHER}},
     ],
-    ids=["session", "other-id", "wrong-word", "adr-approve", "other-login", "agent", "fix-list",
-         "signed-other", "author-other"],  # fmt: skip
+    ids=[
+        "session",
+        "other-id",
+        "wrong-word",
+        "adr-approve",
+        "other-login",
+        "agent",
+        "fix-list",
+        "signed-other",
+        "author-other",
+    ],  # fmt: skip
 )
 def test_req_048_any_other_comment_gives_nothing(item):
     """REQ-048 AC2: rule 8 (another shape, person, id pair, agent mark or verdict gives nothing)."""
@@ -354,11 +392,13 @@ def test_req_048_any_other_comment_gives_nothing(item):
 
 def test_req_048_a_session_confirmation_is_not_read_as_a_terminal_one():
     """REQ-048 AC2: rule 8 (the two readers never read each other's confirmation)."""
-    session = terminal(C, "SPEC-0001", "Approve: SPEC-0001", last=f"confirmed by {PERSON} in a session at {AT}")
+    session = terminal(
+        C, "SPEC-0001", "Approve: SPEC-0001", last=f"confirmed by {PERSON} in a session at {AT}"
+    )
     assert reviewers.terminal_confirmations([session], ["claude"], PERSON) == [session]
 
 
-# --- rule 8: the three sidecar readings ------------------------------------------------------------
+# --- rule 8: the three sidecar readings ---------------------------------------------------
 
 
 def flipped(root: Path, kind: str) -> tuple[str, str]:
@@ -381,7 +421,9 @@ def flipped(root: Path, kind: str) -> tuple[str, str]:
         ("req", "check_requirements", "REQ-101", "Confirm: REQ-101"),
     ],
 )
-def test_req_048_each_sidecar_reading_needs_the_terminal_confirmation(tmp_path, kind, check, rid, line):
+def test_req_048_each_sidecar_reading_needs_the_terminal_confirmation(
+    tmp_path, kind, check, rid, line
+):
     """REQ-048 AC2: rule 8 (passes with it; fails without it, with an agent's or a plain line)."""
     root = holding(tmp_path / "s")
     c, base = flipped(root, kind)
@@ -408,8 +450,13 @@ def test_req_048_a_record_changed_after_c_fails(tmp_path, kind, check, rid, line
     root = holding(tmp_path / "s")
     c, base = flipped(root, kind)
     path = root / rel
-    path.write_text(path.read_text(encoding="utf-8").replace("the cart empties", "it empties"), "utf-8")
-    done = run_check(root, check, "--base", base, "--comments", comments_file(root, [terminal(c, rid, line)]))
+    text = path.read_text(encoding="utf-8")
+    edited = text.replace("src/cart.py:10-20", "src/cart.py:11-20").replace("Invented.", "Edited.")
+    assert edited != text
+    path.write_text(edited, "utf-8")
+    done = run_check(
+        root, check, "--base", base, "--comments", comments_file(root, [terminal(c, rid, line)])
+    )
     assert done.returncode == 1 and rid in done.stdout, done.stdout
 
 

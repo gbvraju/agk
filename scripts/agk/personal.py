@@ -7,6 +7,7 @@
     python3 personal.py baseline [--clone DIR] [--sidecar DIR] [--approve]
     python3 personal.py floor [--clone DIR] [--sidecar DIR] [--base REF] [--approve]
     python3 personal.py report [--week YYYY-Www] [--clone DIR] [--sidecar DIR]
+    python3 personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]
 
 SPEC-0041 build (h), first part, rule 16. `baseline` prints the test command it would run: the
 sidecar's `[personal] test_command`, else the one test command the survey's inventory declares
@@ -28,6 +29,14 @@ Rule 23 (build (k), first part): a floor with `--approve` appends one line `{hea
 time}` to the sidecar's `metrics/events.jsonl`; `report` counts, for one ISO week, the defects the
 floor caught before a push (a failed head followed by a passed head that descends from it), with
 `unknown` under two events. It reads files and git only; build (k)'s second part adds the rest.
+
+`confirm` (build (g), part 1, rules 8 and 15, brief #1502) is the person's own terminal act: it is
+refused while `CLAUDECODE` is set, when standard input is not a terminal and on a sidecar whose work
+tree is not clean. It shows three lines, asks yes or no, and on yes writes `forge/pulls/<n>.json`
+(head `<C>`, the sidecar's `HEAD`) and the confirmation of rule 8 in `forge/comments-<n>.json`,
+moves a spec to `Approved` or an ADR to `Accepted` (a requirement's status does not move), runs the
+kind's reader with `--base <C>` and `--comments`, and makes one commit, the child of `<C>`, only
+when the reader passes; else it restores the work tree to `<C>` and exits 1 naming the reader.
 """
 
 from __future__ import annotations
@@ -41,18 +50,26 @@ import shutil
 import subprocess  # nosec B404 - fixed git argument lists and the person's approved command, no shell
 import sys
 import tarfile
+import tempfile
 import xml.parsers.expat
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table, utf8_output  # noqa: E402
+from common import (  # noqa: E402
+    STATUS_LINE,
+    CheckError,
+    parse_requirements,
+    personal_table,
+    utf8_output,
+)
 from survey import INVENTORY, find_sidecar, write_private  # noqa: E402
 
 USAGE = (
     "usage: personal.py baseline|floor|report [--clone DIR] [--sidecar DIR] [--base REF] "
-    "[--week YYYY-Www] [--approve]"
+    "[--week YYYY-Www] [--approve]\n"
+    "       personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]"
 )
 SETTING = "personal.test_command"
 JUNIT = "{junit}"
@@ -359,7 +376,169 @@ def report(clone: Path, sidecar: Path, week: str | None) -> str:
     return "\n".join(lines)
 
 
+RECORD_ID = re.compile(r"(SPEC-(\d{4})|ADR-(\d{4})|REQ-\d{3})")
+MOVES = {"SPEC": ("Draft", "Approved"), "ADR": ("Proposed", "Accepted")}
+READERS = {"SPEC": "check_specs", "ADR": "check_adrs", "REQ": "check_requirements"}
+WORDS = {"SPEC": "Approve", "ADR": "Accept", "REQ": "Confirm"}
+PROVES = (
+    "A confirmation typed by the person at their own terminal (SPEC-0041 rules 8 and 15). It "
+    "proves that the yes was typed at a terminal with no agent session's mark, and nothing more."
+)
+
+
+def _sidecar_git(sidecar: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(  # nosec B603 B607 - fixed git argument list, no shell
+        ["git", *args], cwd=sidecar, capture_output=True, text=True, check=False
+    )
+
+
+def record_of(sidecar: Path, rid: str) -> tuple[str, str, str]:
+    """(path, title, status) of a record of the sidecar, else refused naming the rule."""
+    found = RECORD_ID.fullmatch(rid)
+    if found is None:
+        raise CheckError("name a record as REQ-nnn, SPEC-nnnn or ADR-nnnn (SPEC-0041 rule 15)")
+    kind = rid.split("-")[0]
+    if kind == "REQ":
+        rel = "docs/requirements.md"
+        text = (sidecar / rel).read_text(encoding="utf-8") if (sidecar / rel).is_file() else ""
+        reqs = [r for r in parse_requirements(text) if r["id"] == rid]
+        if len(reqs) != 1 or reqs[0]["status_count"] != 1:
+            raise CheckError("no such record in the sidecar (SPEC-0041 rule 15)")
+        return rel, reqs[0]["title"] or "", reqs[0]["status"]
+    folder = "specs" if kind == "SPEC" else "adr"
+    paths = sorted((sidecar / "docs" / folder).glob(f"{found[2] or found[3]}-*.md"))
+    if len(paths) != 1:
+        raise CheckError("no such record in the sidecar (SPEC-0041 rule 15)")
+    lines = paths[0].read_text(encoding="utf-8").splitlines()
+    title = lines[0].split(": ", 1)[1] if lines and ": " in lines[0] else ""
+    status = next((m[1] for x in lines if (m := STATUS_LINE.match(x))), None)
+    if status != MOVES[kind][0]:
+        raise CheckError(f"only a {MOVES[kind][0]} record can be confirmed (SPEC-0041 rule 15)")
+    return paths[0].relative_to(sidecar).as_posix(), title, status
+
+
+def shown_lines(rid: str, rel: str, title: str, status: str, head: str) -> list[str]:
+    """The three lines the person is shown, which the confirmation's `Shown:` lines record."""
+    kind = rid.split("-")[0]
+    if kind == "REQ":
+        move = f"status: {status}, unchanged (the confirmation lets it move to done, rule 14)"
+    else:
+        move = f"status: {MOVES[kind][0]} -> {MOVES[kind][1]}"
+    return [f"{rid}: {title}", f"{rel} at {head}", move]
+
+
+def confirmation_body(head: str, rid: str, shown: list[str], login: str, at: str) -> str:
+    """Rule 8's shape, in order, one item per line."""
+    word = WORDS[rid.split("-")[0]]
+    return "\n".join(
+        [f"Confirmed: {head}", f"Verdict: cleared {head}", f"Record: {rid}", f"{word}: {rid}"]
+        + ["Shown:", *shown, f"confirmed by {login} at a terminal at {at}"]
+    )
+
+
+def commit_options(sidecar: Path) -> list[str]:
+    """Signed with the person's own key only with `[personal] sign = true` (off by default)."""
+    if (personal_table(sidecar) or {}).get("sign") is True:
+        return ["commit", "-q", "--no-verify", "-S"]
+    return ["-c", "commit.gpgsign=false", "commit", "-q", "--no-verify"]
+
+
+def place(path: Path, value) -> None:
+    """One forge file: a temporary file and a rename, as the files forge writes."""
+    from forge import dump  # noqa: PLC0415 - `confirm` only
+
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    handle, tmp = tempfile.mkstemp(dir=path.parent, prefix="tmp")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write(dump(value))
+        os.replace(tmp, path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
+
+def move_status(path: Path, old: str, new: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if STATUS_LINE.match(line.rstrip("\r\n")):
+            lines[i] = line.replace(f"- Status: {old}", f"- Status: {new}", 1)
+            break
+    path.write_text("".join(lines), encoding="utf-8")
+
+
+def confirm(sidecar: Path, rid: str, ask=input, tty=None, env=None) -> tuple[int, list[str]]:
+    """Rule 15: the person's yes at a terminal, read by the kind's reader before one commit."""
+    try:
+        return _confirm(sidecar, rid, ask, tty, env)
+    except CheckError as exc:
+        return 1, [f"refused: {exc}"]
+
+
+def _confirm(sidecar: Path, rid: str, ask, tty, env) -> tuple[int, list[str]]:
+    from forge import FilesForge  # noqa: PLC0415 - `confirm` only
+    from local_mode import SESSION_SETTING  # noqa: PLC0415
+
+    env = os.environ if env is None else env
+    if env.get(SESSION_SETTING):
+        raise CheckError(f"confirm runs only at the person's terminal (setting: {SESSION_SETTING})")
+    if not (sys.stdin.isatty() if tty is None else tty()):
+        raise CheckError("confirm needs a terminal on standard input (SPEC-0041 rule 15)")
+    files = FilesForge(sidecar, env=env)
+    state = _sidecar_git(sidecar, "status", "--porcelain")
+    head = _sidecar_git(sidecar, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
+    if state.returncode != 0 or state.stdout.strip() or not re.fullmatch(r"[0-9a-f]{40}", head):
+        raise CheckError("confirm needs a clean sidecar work tree at a commit (SPEC-0041 rule 8)")
+    rel, title, status = record_of(sidecar, rid)
+    shown = shown_lines(rid, rel, title, status, head)
+    if ask("\n".join([*shown, f"confirm {rid}? [yes/no] "])).strip().lower() not in ("y", "yes"):
+        return 1, [*shown, f"confirm: nothing written for {rid}"]
+    kind = rid.split("-")[0]
+    branch = _sidecar_git(sidecar, "symbolic-ref", "--short", "-q", "HEAD").stdout.strip() or "main"
+    with files.locked():
+        number = files.next_number()
+        pull = files.base_record(number, f"confirm {rid}", PROVES)
+        pull.update(draft=False, merged=False, merged_at=None)
+        pull.update(head={"sha": head, "ref": branch}, base={"ref": branch})
+        at = files.now()
+        body = confirmation_body(head, rid, shown, files.person, at)
+        entry = {"id": number * 1_000_000 + 1, "body": body, "user": {"login": files.person}}
+        entry.update(created_at=at, updated_at=at, performed_via_github_app=None)
+        paths = [f"forge/pulls/{number}.json", f"forge/comments-{number}.json"]
+        place(sidecar / paths[0], pull)
+        place(sidecar / paths[1], [entry])
+        if kind in MOVES:
+            move_status(sidecar / rel, *MOVES[kind])
+            paths.append(rel)
+        reader = READERS[kind]
+        script = Path(__file__).resolve().parent / f"{reader}.py"
+        check = subprocess.run(  # nosec B603 - the kit's own reader, fixed argument list, no shell
+            [sys.executable, str(script), "--base", head, "--comments", paths[1]],
+            cwd=sidecar, capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        done = None
+        if check.returncode == 0:
+            identity = ["-c", f"user.name={files.person}"]
+            identity += ["-c", f"user.email={files.person}@personal.invalid"]
+            _sidecar_git(sidecar, "add", "--", *paths)
+            done = _sidecar_git(sidecar, *identity, *commit_options(sidecar),
+                                "-m", f"personal: confirm {rid}", "--", *paths)  # fmt: skip
+        if done is None or done.returncode != 0:
+            _sidecar_git(sidecar, "reset", "-q", "--hard", head)
+            for rel_path in paths[:2]:
+                (sidecar / rel_path).unlink(missing_ok=True)
+            why = f"the reader {reader} failed" if done is None else "the sidecar commit failed"
+            said = [x for x in check.stdout.splitlines() if x.startswith("FAIL ")]
+            return 1, [
+                *shown,
+                *said,
+                f"confirm: {why}; nothing committed, the sidecar is at {head}",
+            ]
+    return 0, [*shown, f"confirm: {rid} confirmed at a terminal in pull {number}"]
+
+
 def parse(args: list[str]) -> dict | None:
+    if args and args[0] == "confirm":
+        return parse_confirm(args[1:])
     if not args or args[0] not in ("baseline", "floor", "report"):
         return None
     out: dict = {"command": args.pop(0), "clone": ".", "sidecar": None, "base": None}
@@ -380,6 +559,19 @@ def parse(args: list[str]) -> dict | None:
     return out
 
 
+def parse_confirm(args: list[str]) -> dict | None:
+    out: dict = {"command": "confirm", "clone": ".", "sidecar": None, "record": None}
+    while args:
+        flag = args.pop(0)
+        if flag in ("--clone", "--sidecar") and args:
+            out[flag[2:]] = args.pop(0)
+        elif not flag.startswith("-") and out["record"] is None:
+            out["record"] = flag
+        else:
+            return None
+    return out if out["record"] else None
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     options = parse(list(sys.argv[1:] if argv is None else argv))
@@ -387,6 +579,10 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE, file=sys.stderr)
         return 2
     try:
+        if options["command"] == "confirm" and options["sidecar"]:  # the clone is not read
+            code, lines = confirm(Path(options["sidecar"]), options["record"])
+            print("\n".join(lines))
+            return code
         probe = _git(Path(options["clone"]), "rev-parse", "--show-toplevel")
         if probe.returncode != 0:
             raise CheckError("the clone cannot be read as a git repository (option: --clone)")
@@ -395,6 +591,10 @@ def main(argv: list[str] | None = None) -> int:
         if options["command"] == "baseline":
             print(baseline(clone, sidecar, options["approve"]))
             return 0
+        if options["command"] == "confirm":
+            code, lines = confirm(sidecar, options["record"])
+            print("\n".join(lines))
+            return code
         if options["command"] == "report":
             print(report(clone, sidecar, options["week"]))
             return 0

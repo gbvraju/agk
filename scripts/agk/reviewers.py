@@ -18,7 +18,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, load_config, read_list, repo_root, review_mode, run, utf8_output
+from common import (
+    STATUS_LINE,
+    CheckError,
+    load_config,
+    read_list,
+    repo_root,
+    review_mode,
+    run,
+    utf8_output,
+)
 
 NAME = "reviewers"
 CONFIG = "config/reviewers.yaml"
@@ -420,6 +429,74 @@ def confirmed_comments(
             elif (plan and plan[1] == sha[1]) or (scope and scope[2] == sha[1]):
                 found.append({**item, "body": line.strip()})
     return found
+
+
+TERMINAL_BY = re.compile(  # SPEC-0041 rule 8: never `CONFIRMED_BY`, so neither reads the other
+    r"confirmed by @?([A-Za-z0-9_.-]+) at a terminal at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
+)
+TERMINAL_VERDICT = re.compile(r"Verdict: cleared ([0-9a-f]{40})")
+RECORD = re.compile(r"Record: (SPEC-\d{4}|ADR-\d{4}|REQ-\d{3})")
+TERMINAL_WORD = {"SPEC": "Approve", "ADR": "Accept", "REQ": "Confirm"}
+TERMINAL_LINES = 9  # Confirmed, Verdict, Record, the kind's line, Shown: and three, the signature
+
+
+def terminal_confirmations(
+    comments: list[dict], agent_apps: tuple[str, ...] | list[str], person: str | None
+) -> list[dict]:
+    """The comments with what each terminal confirmation stands for added after it (SPEC-0041
+    rule 8, brief #1502). A terminal confirmation is a comment by PERSON, the one listed person,
+    not posted through an app of `agent_apps`, of exactly these lines: `Confirmed: <C>` (40 hex),
+    `Verdict: cleared <C>`, `Record: <id>`, then `Approve: SPEC-nnnn`, `Accept: ADR-nnnn` or
+    `Confirm: REQ-nnn` naming the same id, `Shown:` and three lines, and last
+    `confirmed by <login> at a terminal at <YYYY-MM-DDTHH:MM:SSZ>` with the comment's author. It
+    adds, as the same author at the same time, `Approve: <C> SPEC-nnnn`, `Accept: <C> ADR-nnnn` or
+    `Confirm: <C> REQ-nnn`. `confirmed_comments` is unchanged and reads none of these."""
+    found: list[dict] = []
+    for item in comments:
+        found.append(item)
+        if not person or not isinstance(item, dict) or via_agent(item, agent_apps):
+            continue
+        if login_of(item) != person.lstrip("@").lower():
+            continue
+        lines = [x.strip() for x in str(item.get("body") or "").strip().splitlines()]
+        if len(lines) != TERMINAL_LINES or lines[4] != SHOWN or not all(lines[5:8]):
+            continue
+        sha, named = CONFIRMED.fullmatch(lines[0]), TERMINAL_VERDICT.fullmatch(lines[1])
+        record, signed = RECORD.fullmatch(lines[2]), TERMINAL_BY.fullmatch(lines[8])
+        if not sha or not named or not record or not signed or named[1] != sha[1]:
+            continue
+        rid = record[1]
+        word = TERMINAL_WORD[rid.split("-")[0]]
+        if lines[3] != f"{word}: {rid}" or signed[1].lower() != login_of(item):
+            continue
+        found.append({**item, "body": f"{word}: {sha[1]} {rid}"})
+    return found
+
+
+def terminal_shas(derived: list[dict], rid: str) -> list[str]:
+    """The `<C>` of each derived line `<word>: <C> <rid>` among DERIVED (terminal_confirmations)."""
+    word = TERMINAL_WORD[rid.split("-")[0]]
+    line = re.compile(rf"{word}: ([0-9a-f]{{40}}) {re.escape(rid)}")
+    return [m[1] for item in derived if (m := line.fullmatch(first_line(item)))]
+
+
+def derived_only(comments: list[dict], agent_apps, person: str | None) -> list[dict]:
+    """Only the lines `terminal_confirmations` derived: in a sidecar a plain comment approves
+    nothing, whoever wrote it (brief #1502 answer 3: the readers accept only that confirmation)."""
+    seen = {id(item) for item in comments}
+    return [x for x in terminal_confirmations(comments, agent_apps, person) if id(x) not in seen]
+
+
+def status_moved_only(old: str, new: str) -> bool:
+    """NEW is OLD apart from the text of its first `- Status:` line (line endings count)."""
+    before, after = old.splitlines(keepends=True), new.splitlines(keepends=True)
+    if len(before) != len(after):
+        return False
+    first = next((i for i, a in enumerate(before) if STATUS_LINE.match(a.rstrip("\r\n"))), None)
+    differ = [i for i, (a, b) in enumerate(zip(before, after, strict=True)) if a != b]
+    return not differ or (
+        differ == [first] and STATUS_LINE.match(after[first].rstrip("\r\n")) is not None
+    )
 
 
 def design_approvals(
