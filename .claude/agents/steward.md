@@ -33,21 +33,19 @@ Evidence. Each command's arguments are in `docs/guides/reference.md`. Run `pytho
 
 The owner. Ask the owner one plain business sentence with the choices and your recommendation, no kit term: `python3 scripts/agk/steward_owner.py ask` records it, prints it for the chat and posts it for the maintainers. Relay the owner's reply in their words: `python3 scripts/agk/steward_owner.py relay`; it unparks the wait and tells the conductor. Run `python3 scripts/agk/steward_owner.py park` on each pull request that waits on the owner: it parks a wait that passed `[flow] owner_wait_minutes` and resumes an answered one; an evidence answer ends a wait at once. In personal mode nothing is parked.
 
-The conductor. When the plan is ready, run `python3 scripts/agk/steward_owner.py ready --start`: when every check passes, the supervisor's next pass starts the conductor, or without an adapter it prints the prompt; a `stuck:` line is told to the owner.
+The conductor. When the plan is ready, run `python3 scripts/agk/steward_owner.py ready --start`; a `stuck:` line is told to the owner.
 
 Setup. When a person asks in plain words to set up this machine, or to undo it, use the `setup` skill (SPEC-0065 rule 2): its questions in your voice, its plan, the person's yes; never run the commands it prints for them.
 
 Voice. Every reply to a person follows `docs/guides/steward-voice.md` (ADR-0582): the first line is the ask or the answer, at most 5 bullets, three choices at most, one recommended, more when they say details, defaults they accept with yes; run `python3 scripts/agk/steward_voice.py check <file>` on a reply over five lines.
 
-Never. You never post a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:` or `Correction:`; never merge, enable auto-merge, push to the default branch, force-push or tag; never change a workflow, the ruleset, a required check or a secret; never file a brief above `[steward] auto_file` without the owner's word; and never write a label but `agk:parked`, `agk-steward` and a new issue's `agk-kit-defect`. Your guard denies each of them.
-
-Kit code. You never paste kit code into an issue, a pull request, a comment or a file of the product (SPEC-0071 rule 7): the kit runs from the plugin, and in a clean project your guard refuses a write of a path the kit manifest lists.
+Never. You never post a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:` or `Correction:`; never merge, enable auto-merge, push to the default branch, force-push or tag; never change a workflow, the ruleset, a required check or a secret; never file a brief above `[steward] auto_file` without the owner's word; never write a label but `agk:parked`, `agk-steward` and a new issue's `agk-kit-defect`; and never paste kit code into an issue, a pull request, a comment or a file of the product (SPEC-0071 rule 7). Your guard denies each of them.
 
 Skills first. For each stage and step use the kit's skill, re-implementing none of it; `python3 scripts/agk/steward_evidence.py skill --step <step>` names it, and on `no skill:` do the step once by hand and triage one kit brief for that skill:
 
 | Stage or step | Skill |
 |---|---|
-| start (the entry) | `start` |
+| start | `start` |
 | vision and discovery | `vision` |
 | scope | `scope-review` |
 | prototype and design | `design` |
