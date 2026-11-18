@@ -340,6 +340,7 @@ tests = ["tests/kit/test_check_runbooks.py"]
 [[testing.map]]
 code = "scripts/agk/check_specs.py"
 tests = [
+  "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_agent_apps.py", "tests/kit/test_agent_apps_check.py", "tests/kit/test_approval_same_text.py",
   "tests/kit/test_approve_short.py", "tests/kit/test_architect_guard.py", "tests/kit/test_brief_contexts.py",
   "tests/kit/test_check_specs.py", "tests/kit/test_check_specs_lifecycle.py", "tests/kit/test_core_audit.py",
@@ -633,6 +634,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_direct_transport.py",
   "tests/kit/test_steward_guard.py",
   "tests/kit/test_pr_state_lifecycle.py",
@@ -881,6 +883,7 @@ tests = ["tests/kit/test_cloud_clone_local_mode.py", "tests/kit/test_shared_main
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_entry_points_refuse.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_autopilot_status.py",
