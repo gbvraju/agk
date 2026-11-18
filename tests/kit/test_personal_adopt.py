@@ -151,7 +151,8 @@ def test_a_blob_of_an_older_commit_is_accepted(tmp_path):
 def test_render_writes_cited_records_in_one_sidecar_commit_and_lists_confirm(tmp_path):
     """REQ-048 AC2: SPEC-0041 rule 14 (planned with Source, Draft, Proposed with Kind: recorded)."""
     root, side = product(tmp_path), sidecar_of(tmp_path)
-    before, head = snapshot(root), git(side, "rev-parse", "HEAD")
+    status, head = git(root, "status", "--porcelain"), git(side, "rev-parse", "HEAD")
+    before = snapshot(root)
     code, out = run("render", proposals(tmp_path, full(root)), "--clone", root, "--sidecar", side,
                     "--today", TODAY)  # fmt: skip
     assert code == 0, out
@@ -167,7 +168,7 @@ def test_render_writes_cited_records_in_one_sidecar_commit_and_lists_confirm(tmp
     assert "- Status: Proposed\n" in adr and "- Kind: recorded\n" in adr
     assert f"- Date: {TODAY}\n" in adr and "- Related: SPEC-0001\n" in adr
     assert "clearing its items (verify) (observed in code at" in adr
-    assert snapshot(root) == before and not git(root, "status", "--porcelain")
+    assert snapshot(root) == before and git(root, "status", "--porcelain") == status
 
 
 def test_rendered_records_pass_the_sidecar_checks(tmp_path):

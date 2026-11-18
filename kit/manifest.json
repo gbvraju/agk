@@ -115,6 +115,7 @@
     "scripts/agk/new_spec.py",
     "scripts/agk/parity.py",
     "scripts/agk/personal.py",
+    "scripts/agk/personal_adopt.py",
     "scripts/agk/plan_ceremony.py",
     "scripts/agk/plan_estimate.py",
     "scripts/agk/plan_intake.py",
