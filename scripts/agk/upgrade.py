@@ -25,6 +25,12 @@ the file and writes nothing.
 `Upgrade agk from X to Y`, with a `Requirements:` line), prints the commit message and a pull
 request body that passed the target's body check (`pr_body.py`); it writes only that body, in the
 target's git directory.
+
+`--clean-repo [--rehearsal] [--write]` (SPEC-0071 rule 8, brief #1456, ADR-0614) moves an installed
+local-mode project to the clean layout: see `clean_main`. It refuses, naming the setting, outside
+`execution = "local"`, in personal mode, until the rehearsal's proof is written (rule 11) unless
+`--rehearsal`, and when the project's version has no row of the table or is not this kit's. A dry
+run is the default; `--write` makes one new branch with `git switch -c` and commits nothing.
 """
 
 from __future__ import annotations
@@ -33,6 +39,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
 from dataclasses import dataclass, field
@@ -73,7 +80,8 @@ from init import KIT_ROOT as KIT_ROOT  # noqa: PLC0414 - tests point it at an ol
 
 USAGE = (
     "usage: upgrade.py TARGET [--dry-run] [--write-adr [--date D]] | "
-    "TARGET --next-steps [--brief N|none] [--issues FILE] [--date D]"
+    "TARGET --next-steps [--brief N|none] [--issues FILE] [--date D] | "
+    "TARGET --clean-repo [--rehearsal] [--write]"
 )
 NEXT_FLAGS = ("--brief", "--issues", "--date")
 UPGRADE_TITLE = re.compile(r"^# ADR-(\d{4}): Upgrade agk from (\S+) to (\S+)\s*$")
@@ -925,6 +933,267 @@ def next_steps(target: Path, kit_root: Path, opts: dict[str, str]) -> int:
     return 0
 
 
+# --- the clean layout (SPEC-0071 rule 8, brief #1456, ADR-0614) ---------------------------------
+
+CLEAN_BRANCH = "agk-clean-repo"
+CLEAN_TEMPLATE = "kit/templates/clean-claude.md"
+CLEAN_FLAGS = ("--clean-repo", "--rehearsal", "--write")
+# Rule 2 (Q-S0071-5): the manifest files a clean project keeps; CLAUDE.md is rewritten short.
+CLEAN_KEEPS = (
+    ".gitignore",
+    ".github/ISSUE_TEMPLATE/",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "agk.toml",
+)
+LOCAL_RULES = ".claude/settings.local.json"  # ADR-0612 decision 4: uncommitted, this machine's
+# Rule 11: build (g) writes the rehearsal's four figures to SPEC-0071's proof and sets this.
+CLEAN_PROOF_HELD = False
+PLUGIN_PATH = re.compile(r'"?\$\{CLAUDE_PLUGIN_ROOT\}"?/[\w./*<>-]*')
+WORD = re.compile(r"[\w./-]+")
+CLEAN_SHOWN = 40  # the lines of the proof shown, as uninstall.py shows its leftovers
+
+
+def clean_refusal(data: dict, version: str, kit_version: str, table: dict, rehearsal: bool) -> None:
+    """Each refusal of rule 8 and rule 11, naming the setting or the path class, never a value."""
+    if "personal" in data:
+        raise Refusal("personal mode keeps the kit out of the product already (setting: forge)")
+    if data.get("execution", "hosted") != "local":
+        raise Refusal("the clean layout runs only in local mode (setting: execution)")
+    if not rehearsal and not CLEAN_PROOF_HELD:
+        raise Refusal(
+            "the rehearsal's four figures are not written yet (the proof of SPEC-0071 rule 11); "
+            "only --rehearsal on a sample project runs"
+        )
+    if version not in table.get("releases", {}):
+        raise Refusal(f"version in agk.toml is not in the table (path class {TABLE})")
+    if version != kit_version:
+        raise Refusal(
+            "the project is not at this plugin's version; run /agk:upgrade first (setting: version)"
+        )
+    if "kit" in data:
+        raise Refusal("agk.toml has a [kit] table already (setting: layout)")
+
+
+def clean_plan(target: Path, kit_root: Path, rehearsal: bool):
+    """(uninstall plan with CLAUDE.md and agk.toml as edits, version): the released kit files are
+    deleted, a changed one is listed as `changed` and kept (Q-S0071-8), rule 2's files stay."""
+    import uninstall  # noqa: PLC0415 - only this command
+
+    try:
+        text = (target / "agk.toml").read_text(encoding="utf-8")
+        data = tomllib.loads(text)
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise Refusal("agk.toml is missing or not readable TOML (path class agk.toml)") from None
+    version = installed_version(target) or ""
+    manifest = json.loads((kit_root / MANIFEST).read_text(encoding="utf-8"))
+    table = uninstall.load_table(kit_root)
+    clean_refusal(data, version, str(manifest["kit_version"]), table, rehearsal)
+    listed = target / "config" / "protected-paths.txt"
+    plan = uninstall.Plan(entries=read_list(listed.read_text("utf-8")) if listed.is_file() else [])
+    reader = uninstall.Reader(target, kit_root)
+    for rel in sorted(set(reader.verbatim) | set(manifest["verbatim"])):
+        if rel.startswith((*KIT_ONLY, *CLEAN_KEEPS)) or rel in KIT_ONLY_FILES:
+            continue
+        if not uninstall.own_work(rel) and (
+            item := uninstall.classify(target, rel, reader, plan.entries)
+        ):
+            plan.items.append(item)
+    uninstall.makefile_item(target, plan)
+    old = next((i for i in plan.items if i.rel == "CLAUDE.md"), None)
+    if old is None or old.action != "changed":  # a changed CLAUDE.md is listed and kept
+        variables = {"project": slug(target.name), "kit_version": version}
+        short = render((kit_root / CLEAN_TEMPLATE).read_text("utf-8"), variables, CLEAN_TEMPLATE)
+        rest = (old.content or b"").decode("utf-8") if old and old.action == "edit" else ""
+        content = (short + ("\n" + rest if rest.strip() else "")).encode("utf-8")
+        plan.items = [i for i in plan.items if i is not old]
+        plan.items.append(uninstall.Item("CLAUDE.md", "edit", " (the short CLAUDE.md)", content))
+    sep = "" if text.endswith("\n") else "\n"
+    table_text = f'{text}{sep}\n[kit]\nlayout = "plugin"\nplugin_version = "{version}"\n'
+    detail = " ([kit] layout and plugin_version added last)"
+    plan.items.append(uninstall.Item("agk.toml", "edit", detail, table_text.encode("utf-8")))
+    plan.items.sort(key=lambda i: i.rel)
+    return plan, version
+
+
+def tracked(target: Path) -> list[str]:
+    out = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "ls-files", "-z"], cwd=target, capture_output=True, check=False
+    )
+    if out.returncode != 0:
+        raise Refusal("git cannot list the tracked files (path class .git/)")
+    return sorted(p for p in out.stdout.decode("utf-8", "replace").split("\0") if p)
+
+
+def dangling(target: Path, plan) -> list[tuple[str, int]]:
+    """Rule 8's proof: each line of a tracked text file that remains (with its planned content)
+    naming a removed file or a folder the removal empties; the plugin's paths are excepted."""
+    import uninstall  # noqa: PLC0415 - only this command
+
+    gone = {i.rel for i in plan.of("delete")}
+    empty, _held = uninstall.emptied(target, gone)
+    own = uninstall.OWN_DIRS  # the folders of the project's own records stay (rule 2)
+    names = gone | {
+        d for d in empty if not any(f"{d}/".startswith(o) or o.startswith(f"{d}/") for o in own)
+    }
+    edited = {i.rel: i.content or b"" for i in plan.of("edit")}
+    found: list[tuple[str, int]] = []
+    for rel in tracked(target):
+        path = target / rel
+        if rel in gone or (rel not in edited and (path.is_symlink() or not path.is_file())):
+            continue
+        try:
+            data = edited[rel] if rel in edited else path.read_bytes()
+            if b"\0" in data[:8192]:
+                continue  # a binary file names no path
+            text = data.decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            words = (
+                w.lstrip("./").rstrip(".,:;/") for w in WORD.findall(PLUGIN_PATH.sub(" ", line))
+            )
+            if any(w in names for w in words):
+                found.append((rel, n))
+    return found
+
+
+def local_rules(kit_root: Path) -> bytes | None:
+    """The plugin's permission rules naming this machine's plugin folder (ADR-0612 decision 4)."""
+    try:
+        data = json.loads((kit_root / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    folder = (kit_root / "scripts" / "agk").as_posix() + "/"
+    rules = {
+        kind: [r.replace("scripts/agk/", folder) if r.startswith("Bash(") else r for r in rows]
+        for kind, rows in (data.get("permissions") or {}).items()
+        if isinstance(rows, list)
+    }
+    return (json.dumps({"permissions": rules}, indent=2) + "\n").encode("utf-8")
+
+
+def clean_adr(target: Path, plan, version: str, today: str) -> tuple[Path, str]:
+    folder = target / "docs" / "adr"
+    numbers = [int(m.group(1)) for p in folder.glob("*.md") if (m := ADR_FILE.match(p.name))]
+    number = max(numbers, default=0) + 1
+    import uninstall  # noqa: PLC0415 - only this command
+
+    touched = [i.rel for i in plan.items if i.action in ("delete", "edit")]
+    classes = uninstall.protected_classes(touched, plan.entries)
+    named = ", ".join(f"`{c}`" for c in classes) if classes else "none"
+    kept = ", ".join(f"`{i.rel}`" for i in plan.of("changed")) or "none"
+    text = "\n".join(
+        [
+            f"# ADR-{number:04d}: Move agk {version} to the clean layout",
+            "",
+            "- Status: Proposed",
+            f"- Date: {today}",
+            "- Deciders: maintainers",
+            "- Related: none",
+            f"- Requirements: {ADR_REQUIREMENT}",
+            "",
+            f"Protected classes: {named}",
+            "",
+            "## Context",
+            "",
+            f"`upgrade.py --clean-repo` moves this project to the clean layout: agk {version} "
+            f"runs from the plugin. It deletes {len(plan.of('delete'))} kit files and edits "
+            f"{len(plan.of('edit'))}, in protected classes that need an ADR in the same pull "
+            "request.",
+            "",
+            "## Decision",
+            "",
+            f'Set `[kit] layout = "plugin"` and `plugin_version = "{version}"` in `agk.toml`, '
+            "keep the project's own files, and keep these changed kit files for the person to "
+            f"decide: {kept}.",
+            "",
+            "## Consequences",
+            "",
+            "- Every machine needs the pinned plugin; reverting this one commit restores the "
+            "install.",
+            "",
+            "## Residual",
+            "",
+            f"- {today}: none; the maintainers review the move before the merge.",
+            "",
+        ]
+    )
+    return folder / f"{number:04d}-move-agk-to-the-clean-layout.md", text
+
+
+def clean_main(args: list[str], kit_root: Path) -> int:
+    """`TARGET --clean-repo [--rehearsal] [--write]`: the report, then with --write the branch."""
+    import uninstall  # noqa: PLC0415 - only this command
+
+    rest = [a for a in args if a not in CLEAN_FLAGS]
+    if len(rest) != 1 or rest[0].startswith("-") or len(set(args)) != len(args):
+        print(USAGE, file=sys.stderr)
+        return 2
+    write = "--write" in args
+    try:
+        target = Path(rest[0])
+        if not (target.is_dir() and (target / ".git").exists()):
+            raise Refusal("TARGET is not a git work tree (path class .git/)")
+        target = target.resolve()
+        if target == kit_root.resolve() or kit_root.resolve() in target.parents:
+            raise Refusal("TARGET is the kit checkout or inside it (path class kit/)")
+        plan, version = clean_plan(target, kit_root, "--rehearsal" in args)
+        found = dangling(target, plan)
+    except Refusal as exc:
+        print(f"refused: {exc}")
+        return 1
+    except (OSError, ValueError, KeyError):
+        print("error: cannot read the target or the kit sources (path class: the target root)")
+        return 3
+    for item in plan.items:
+        print(f"{item.action} {item.rel}{item.detail}")
+    for rel, n in found[:CLEAN_SHOWN]:
+        print(f"names a removed kit path: {rel}:{n} (path class {path_class(rel, plan.entries)})")
+    if len(found) > CLEAN_SHOWN:
+        print(f"and {len(found) - CLEAN_SHOWN} more lines")
+    if found:
+        classes = ", ".join(dict.fromkeys(path_class(r, plan.entries) for r, _ in found))
+        print(
+            f"refused: {len({r for r, _ in found})} tracked files name a removed kit path "
+            f"(path class {classes}); tidy them, then run again; nothing was written"
+        )
+        return 1
+    print("proof: no tracked file names a removed kit path")
+    kept = [i.rel for i in plan.of("changed")]
+    if kept:
+        print(f"name each kept file in the pull request body: {', '.join(kept)}")
+    adr, text = clean_adr(target, plan, version, datetime.now(UTC).date().isoformat())
+    rules = local_rules(kit_root)
+    if not write:
+        print(f"adr: would write {adr.relative_to(target).as_posix()} (Proposed)")
+        print("dry run: nothing was written; next: run again with --write to build the branch")
+        return 0
+    try:
+        uninstall.new_branch(target, CLEAN_BRANCH)
+        uninstall.apply(target, plan)
+        write_atomic(adr, text.encode("utf-8"))
+        local = target / LOCAL_RULES
+        if rules is not None and not local.exists():
+            write_atomic(local, rules)
+            print(
+                f"write {LOCAL_RULES} (the plugin's permission rules for this machine; uncommitted)"
+            )
+        elif rules is not None:
+            print(f"kept {LOCAL_RULES}: add the plugin's permission rules to it by hand")
+    except Refusal as exc:
+        print(f"refused: {exc}")
+        return 1
+    except OSError:
+        print("error: cannot write the target (path class: the target root)")
+        return 3
+    print(f"adr: wrote {adr.relative_to(target).as_posix()} (Proposed)")
+    print(
+        f"next: review the branch {CLEAN_BRANCH}, commit it as one commit, push it and open one "
+        "pull request; reverting that commit undoes the move"
+    )
+    return 0
+
+
 def parse_next(args: list[str]) -> tuple[str, dict[str, str]] | None:
     """`TARGET --next-steps [flags]` as (target, options), or None for a usage error."""
     rest = [a for a in args if a != "--next-steps"]
@@ -938,6 +1207,8 @@ def parse_next(args: list[str]) -> tuple[str, dict[str, str]] | None:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    if "--clean-repo" in args:
+        return clean_main(args, Path(KIT_ROOT))
     if "--next-steps" in args:
         parsed = parse_next(args)
         if parsed is None or "--dry-run" in args:

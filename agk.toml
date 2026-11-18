@@ -1002,13 +1002,15 @@ code = "scripts/agk/traceability.py"
 tests = ["tests/kit/test_check_requirements.py", "tests/kit/test_retired_requirements.py"]
 [[testing.map]]
 code = "scripts/agk/uninstall.py"
-tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_uninstall.py"]
+tests = [
+  "tests/kit/test_upgrade_clean_repo.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_uninstall.py",
+]
 [[testing.map]]
 code = "scripts/agk/upgrade.py"
 tests = [
   "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers_approvers_install.py",
-  "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_adr.py", "tests/kit/test_upgrade_project_mk.py",
-  "tests/kit_dev/test_experimental_reviewer.py",
+  "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_adr.py", "tests/kit/test_upgrade_clean_repo.py",
+  "tests/kit/test_upgrade_project_mk.py", "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_kit_hashes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
   "tests/kit_dev/test_pyproject_installs_as_nothing.py", "tests/kit_dev/test_reviewer_wiring.py",
   "tests/kit_dev/test_route_concurrency_install.py", "tests/kit_dev/test_route_finishes_install.py",

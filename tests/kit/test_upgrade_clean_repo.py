@@ -44,11 +44,13 @@ KIT = {
     "constitution/principles.md": "# Principles\n",
     "Makefile": "include agk.mk\n",
     "agk.mk": "agk-governance:\n\ttrue\n",
+    "docs/specs/TEMPLATE.md": "# SPEC-NNNN: Title\n",
 }
 PROJECT = {
     "README.md": "A sample product of example.com.\n",
     "src/app.py": "print(1)\n",
     "docs/adr/0001-mine.md": "# ADR-0001: mine\n",
+    "docs/index.md": "The specs live in docs/specs/, which the project keeps.\n",
     "config/protected-paths.txt": "config/\nagk.toml\n",
 }
 LOCAL = 'mode = "init"\nversion = "2.0.0"\nexecution = "local"\n'
@@ -130,6 +132,7 @@ def test_the_migration_removes_the_kit_writes_the_clean_files_and_reverts(tmp_pa
         "Makefile",
         "agk.mk",
         "constitution/principles.md",
+        "docs/specs/TEMPLATE.md",
     ):
         assert not (root / rel).exists(), rel
     for rel in (
