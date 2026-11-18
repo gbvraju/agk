@@ -19,11 +19,17 @@ and the table; `status` the table only. Each check row is `skipped` when it is a
 `waiting` when it is not: this build installs nothing and writes no file. The proof rows (the
 doctor, one small kit test, one container start when the project uses containers, and the dry plan)
 are the last steps, after the person's yes: `status` runs them; `plan` lists them as not yet run and
-runs none. `--json` prints `steps` (`step`, `result`, `note`), `pending`, `roles` (chosen by build
-(h), empty here) and `builders`. `--builders N` lowers the figure; above the cap it is refused. A
-remote's or a proxy's credentials are never read back. `--machine` and `--github` take a saved read
-(the tests' doubles). `ask` prints at most five plain questions, each only when the machine and the
-project leave it unset, with a recommendation (`--json`: `questions`); `--answer` gives the person's
+runs none. `--json` prints `steps` (`step`, `result`, `note`), `pending`, `roles`, `roles_why` and
+`builders`. `roles` (build (h), rule 14; ADR-0625) are this machine's, from `review_mode`, the
+signed-in login (one `gh api user`, compared and never printed) against `verdict_authors` and
+`spec_approvers`, the lease and the live steward; `--roles A,B` lowers them, never raises them.
+`restart` (rule 15) restarts exactly those roles after `--yes`: the conductor by one
+`conductor.py watchdog`, the builders by `/agk:launch`'s line, the steward by its open command.
+`status` adds the team as the repository records it (`--json`: `team`), read-only.
+`--builders N` lowers the figure; above the cap it is refused. A remote's or a proxy's
+credentials are never read back. `--machine` and `--github` take a saved read (the tests'
+doubles). `ask` prints at most five plain questions, each only when the machine and the project
+leave it unset, with a recommendation (`--json`: `questions`); `--answer` gives the person's
 choices back, and `plan` then names the settings in its last line. `settings --yes` writes the
 settings the project does not already hold to `agk.toml` with the project's next ADR on a new
 branch, and commits, pushes and merges nothing; all equal, or "for me only", writes nothing.
@@ -251,10 +257,18 @@ def read_github(root: Path) -> dict:
     lease = capture([py, str(scripts / "conductor.py"), "lease", "--show"], root)
     plan = capture([py, str(scripts / "session.py"), "plan", "--json"], root)
     try:
-        running = json.loads(plan)["capacity"]["running"] if plan else None
+        found = json.loads(plan) if plan else {}
+        running, waiting = found["capacity"]["running"], found["capacity"]["waiting_for_verdict"]
+        sessions = [{"session": r["session"], "brief": r["brief"]} for r in found["running"]]
     except (ValueError, KeyError, TypeError):
-        running = None
-    return {"lease": (lease or "").strip().removeprefix("lease: ") or None, "running": running}
+        running, waiting, sessions = None, None, []
+    return {
+        "lease": (lease or "").strip().removeprefix("lease: ") or None,
+        "running": running,
+        "sessions": sessions,
+        "waiting": waiting,
+        "login": common.signed_in_login(root),  # compared by login_state, never printed
+    }
 
 
 def live_steward(root: Path) -> str | None:
@@ -294,8 +308,107 @@ def read_repository(root: Path, github: dict) -> dict:
         "spec_approvers": len(reviewers.spec_approvers(root)),
         "members": len(toml.get("team", {}).get("members", [])),
         "lease": github.get("lease"), "running": github.get("running"),
-        "steward": github.get("steward"),
+        "steward": github.get("steward"), "sessions": github.get("sessions") or [],
+        "waiting": github.get("waiting"), "login": login_state(root, github.get("login")),
     }  # fmt: skip
+
+
+def login_state(root: Path, login) -> str:
+    """Rule 14: the signed-in login compared with the reviewer lists, never kept or printed:
+    `author` (in `verdict_authors`), `reviewer` (a spec approver only), `other` or `unknown`."""
+    if not isinstance(login, str) or not login:
+        return "unknown"
+    name = login.lstrip("@").lower()
+    if name in reviewers.verdict_authors(root):
+        return "author"
+    return "reviewer" if name in reviewers.spec_approvers(root) else "other"
+
+
+ROLES = ("steward", "conductor", "builders")
+WAITS = "the conductor waits for a verdict author's machine"
+LISTS = "(setting: verdict_authors and spec_approvers in config/reviewers.yaml)"
+STEWARD_OPEN = "claude --agent steward"
+
+
+def machine_roles(repo: dict, answers: dict) -> tuple[list[str], str]:
+    """Rule 14: this machine's roles and the one line that says why; rule 16: none for me only
+    or on GitHub's machines. A lease that is not read `free` starts no conductor here."""
+    where = answers.get("where") or ("hosted" if repo["execution"] == "hosted" else "local")
+    if where != "local":
+        return [], ("for me only: no roles, nothing is posted" if where == "personal"
+                    else "the AI work runs on GitHub's machines: no role here")  # fmt: skip
+    team = f"the team's builders stay within max_builders {repo['max_builders']}"
+    team += f" ({repo['running'] or 0} live)"
+    if (answers.get("team") or repo["review_mode"] or "team") == "solo":
+        return list(ROLES), "one person: this machine runs every role"
+    state, lease = repo["login"], repo["lease"] or ""
+    said = {"author": "this login is a verdict author", "reviewer": "this login is a listed "
+            "reviewer, not a verdict author", "other": "this login is not a listed reviewer",
+            "unknown": "this login is unknown"}[state]  # fmt: skip
+    steward = state in ("author", "reviewer") and not repo["steward"]
+    if lease.startswith("held by"):
+        why = "another machine holds the conductor's lease"
+    elif lease != "free":
+        why = "the conductor's lease cannot be read as free"
+    else:
+        why = None if state == "author" else WAITS
+    if state in ("author", "reviewer") and repo["steward"]:
+        said += ", and a steward is already live"
+    roles = [r for r, ok in zip(ROLES, (steward, why is None, True), strict=True) if ok]
+    return roles, "; ".join(x for x in (said, why, team) if x)
+
+
+def restart(root: Path, roles: list[str], yes: bool) -> tuple[int, dict, list[str]]:
+    """Rule 15: restart exactly the roles of rule 14: the conductor through the watchdog's start,
+    the builders through /agk:launch's plan and yes, the steward by the command that opens it."""
+    if not roles:
+        return 0, {"steps": [], "pending": []}, ["nothing to restart: this machine runs no role"]
+    if not yes:
+        named = ", ".join(roles)
+        return 1, {"steps": [], "pending": []}, [
+            f"restart would start: {named}; nothing started before the person's yes "
+            "(setting: --yes)"]  # fmt: skip
+    steps, lines = [], []
+    for role in roles:
+        if role == "conductor":
+            watchdog = [sys.executable, str(PLUGIN / "scripts" / "agk" / "conductor.py"),
+                        "watchdog"]  # fmt: skip
+            code, out = run_out(watchdog, root)
+            lines += out.strip().splitlines()
+            steps.append(row(role, "failed" if code else "done", f"conductor.py watchdog: exit "
+                             f"{code}" if code else "the watchdog's start"))  # fmt: skip
+        elif role == "steward":
+            steps.append(row(role, "waiting", f"open it in a new terminal: {STEWARD_OPEN}"))
+        else:
+            steps.append(
+                row(role, "waiting", "run /agk:launch: it shows its plan and asks your yes")
+            )
+    pending = [r["step"] for r in steps if r["result"] != "done"]
+    return 0, {"steps": steps, "pending": pending}, lines
+
+
+def team_view(repo: dict, roles: list[str]) -> dict:
+    """Rule 15: the team as the repository records it, read-only; logins are never shown."""
+    return {"lease": repo["lease"] or "unknown", "steward": repo["steward"],
+            "builders": repo["sessions"], "members": repo["members"],
+            "waiting": repo["waiting"], "here": roles}  # fmt: skip
+
+
+def team_lines(team: dict) -> list[str]:
+    built = ", ".join(f"{b['session']} #{b['brief']}" for b in team["builders"]) or "none running"
+    waiting = team["waiting"]
+    waits = "unknown" if waiting is None else (
+        f"{waiting} pull request{'' if waiting == 1 else 's'} wait{'s' if waiting == 1 else ''} "
+        "for a verdict")  # fmt: skip
+    one = "member" if team["members"] == 1 else "members"
+    return [
+        "Team (read only, nothing posted):",
+        f"  conductor lease: {team['lease']}",
+        f"  steward: {team['steward'] + ' live' if team['steward'] else 'none live seen'}",
+        f"  builders: {built}",
+        f"  {team['members']} {one} listed; on the owner: {waits}",
+        f"  this machine: {', '.join(team['here']) or 'no role'}",
+    ]
 
 
 def size(available, total, cores, per_gb, reserve, max_builders, live=0) -> dict:
@@ -385,7 +498,7 @@ def gb(value) -> str:
     return "unknown" if value is None else f"{value:.0f} GB"
 
 
-def plan_lines(machine: dict, repo: dict, builders: dict, rows: list[dict]) -> list[str]:
+def plan_lines(machine: dict, repo: dict, builders: dict, rows: list[dict], roles) -> list[str]:
     """Rule 5: one plan of at most eight lines; nothing is asked."""
     m, tools = machine, machine.get("tools", {})
     total, avail = m.get("memory_total_gb"), m.get("memory_available_gb")
@@ -409,7 +522,8 @@ def plan_lines(machine: dict, repo: dict, builders: dict, rows: list[dict]) -> l
         f"{repo['steward'] or 'none seen'}.",
         f"  Builders: {builders['figure']} {one} of {builders['per_builder_gb']:g} GB "
         f"(limit {builders['limit']}; {builders['reason']}).",
-        "  This run installs, runs and changes nothing; /agk:setup status runs the proofs.",
+        f"  Roles here: {', '.join(roles[0]) or 'none'} ({roles[1]}). This run changes "
+        "nothing; /agk:setup status runs the proofs.",
     ]
 
 
@@ -1099,9 +1213,9 @@ def load(path: str | None):
 def main(argv: list[str] | None = None) -> int:
     common.utf8_output()
     parser = argparse.ArgumentParser(prog="setup.py", add_help=True)
-    forms = ("plan", "status", "ask", "settings", "install", "ci", "wsl", "back")
+    forms = ("plan", "status", "ask", "settings", "install", "ci", "wsl", "back", "restart")
     parser.add_argument("form", choices=forms)
-    for flag in ("--machine", "--github", "--root", "--date"):
+    for flag in ("--machine", "--github", "--root", "--date", "--roles"):
         parser.add_argument(flag)
     parser.add_argument("--builders", type=int)
     parser.add_argument("--answer", action="append", default=[])
@@ -1152,6 +1266,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: --builders above the cap of {cap}")
             return 1
         builders |= {"figure": args.builders, "limit": "person", "reason": "lowered by the person"}
+    roles = machine_roles(repo, answers)
+    if args.roles is not None:  # rule 14: fewer roles, never more than the repository allows
+        chosen = [r for r in ROLES if r in args.roles.split(",")]
+        if set(args.roles.split(",")) - set(roles[0]) or not chosen:
+            print(f"refused: --roles names a role this machine may not run here {LISTS}")
+            return 1
+        roles = (chosen, f"{roles[1]}; lowered by the person")
+    if args.form == "restart":
+        code, table, said = restart(root, roles[0], args.yes)
+        table |= {"roles": roles[0], "roles_why": roles[1], "builders": builders}
+        print(json.dumps(table, indent=2) if args.json else
+              "\n".join(said + table_lines(table["steps"])))  # fmt: skip
+        return code
     _, config = config_of(root)
     if args.form == "wsl":
         table = wsl_path(root, machine, config, answers, args.yes)
@@ -1196,17 +1323,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     rows = check_rows(machine, repo) + proof_rows(root, machine, repo, args.form == "status")
     pending = [r["step"] for r in rows if r["result"] == "waiting"]
+    team = team_view(repo, roles[0])
     if args.json:
-        table = {"steps": rows, "pending": pending, "roles": [], "builders": builders}
+        table = {
+            "steps": rows,
+            "pending": pending,
+            "roles": roles[0],
+            "roles_why": roles[1],
+            "builders": builders,
+        } | ({"team": team} if args.form == "status" else {})
         print(json.dumps(table, indent=2))
         return 0
-    lines = plan_lines(machine, repo, builders, rows) if args.form == "plan" else []
+    lines = plan_lines(machine, repo, builders, rows, roles) if args.form == "plan" else []
     if lines and answers.get("where") == "personal":  # rule 16
         lines.append("  For the developer: for me only, nothing is proposed to the project.")
     elif lines and items:  # rule 4: the settings only in the plan's last line, for the developer
         lines.append(f"  For the developer: {'; '.join(shown(i) for i in items)}.")
     lines += [""] if lines else []
-    print("\n".join(lines + table_lines(rows)))
+    shown_team = ["", *team_lines(team)] if args.form == "status" else []
+    print("\n".join(lines + table_lines(rows) + shown_team))
     return 0
 
 

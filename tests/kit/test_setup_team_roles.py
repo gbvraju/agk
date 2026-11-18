@@ -26,11 +26,11 @@ _spec.loader.exec_module(setup)
 
 SKILL = ROOT / "skills" / "setup" / "SKILL.md"
 TOOLS = {"python": "3.12.1", "git": "2.43.0", "gh": "2.50.0", "claude": "2.1.0", "node": "20.11.0"}
-REVIEWERS = (
-    "verdict_authors: [author-example-1]\n"
-    "spec_approvers: [approver-example-1]\n"
+REVIEWERS = "verdict_authors: [author-example-1]\nspec_approvers: [approver-example-1]\n"
+TEAM = (
+    'execution = "local"\nreview_mode = "team"\n[flow]\nmax_builders = 4\n'
+    '[team]\nmembers = ["member-example-1"]\n'
 )
-TEAM = 'execution = "local"\nreview_mode = "team"\n[flow]\nmax_builders = 4\n[team]\nmembers = ["member-example-1"]\n'
 HELD = "held by cb-example-9 until 2026-11-18T05:00Z"
 ALL = ["steward", "conductor", "builders"]
 
@@ -109,7 +109,7 @@ def test_ac7_each_role_case_gets_exactly_the_roles_of_rule_14(
 def test_ac7_a_non_reviewer_hears_the_conductor_waits_and_no_login_is_printed(
     tmp_path, capsys, monkeypatch
 ):
-    """REQ-072 AC7: rule 14: builders only, the waiting line, the login compared and never printed."""
+    """REQ-072 AC7: rule 14: builders only, the waiting line, the login compared, never printed."""
     root = project(tmp_path)
     code, out, _ = run(root, capsys, monkeypatch, github("member-example-1"))
     assert code == 0
@@ -217,5 +217,5 @@ def test_ac7_status_shows_the_team_and_posts_nothing(tmp_path, capsys, monkeypat
 def test_ac7_the_skill_restarts_and_shows_the_team():
     """REQ-072 AC7: rule 15: the skill names the restart form and the team status."""
     text = SKILL.read_text(encoding="utf-8")
-    assert "setup.py\" restart" in text and "claude --agent steward" in text
+    assert 'setup.py" restart' in text and "claude --agent steward" in text
     assert "--roles" in text
