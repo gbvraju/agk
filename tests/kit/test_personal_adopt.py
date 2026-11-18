@@ -176,13 +176,15 @@ def test_render_writes_cited_records_in_one_sidecar_commit_and_lists_confirm(tmp
 def test_rendered_records_pass_the_sidecar_checks(tmp_path):
     """REQ-048 AC2: SPEC-0041 rules 2 and 14 (the sidecar's file checks run unchanged on them)."""
     root, side = product(tmp_path), sidecar_of(tmp_path)
+    base = git(side, "rev-parse", "HEAD")
     assert (
         run("render", proposals(tmp_path, full(root)), "--clone", root, "--sidecar", side)[0] == 0
     )
+    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BASE", "GITHUB_BASE_REF")}
     for check in ("check_adrs", "check_requirements", "check_specs"):
         done = subprocess.run(  # nosec B603 - the kit's own check, fixed argument list
-            [sys.executable, str(SCRIPTS / f"{check}.py")], cwd=side, capture_output=True,
-            text=True, check=False, env={**os.environ, "CLAUDECODE": ""},
+            [sys.executable, str(SCRIPTS / f"{check}.py"), "--base", base], cwd=side,
+            capture_output=True, text=True, check=False, env={**env, "CLAUDECODE": ""},
         )  # fmt: skip
         assert done.returncode == 0, (check, done.stdout, done.stderr)
 
