@@ -25,7 +25,10 @@ import upgrade
 ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = "kit/templates/clean-claude.md"
 SETTINGS = {
-    "permissions": {"allow": ["Read", "Bash(python3 scripts/agk/*)"], "deny": ["Bash(gh pr merge:*)"]},
+    "permissions": {
+        "allow": ["Read", "Bash(python3 scripts/agk/*)"],
+        "deny": ["Bash(gh pr merge:*)"],
+    },
     "hooks": {},
 }
 KIT = {
@@ -120,14 +123,28 @@ def test_the_migration_removes_the_kit_writes_the_clean_files_and_reverts(tmp_pa
     head = git(root, "rev-parse", "HEAD").strip()
     code, out = run(capsys, root, "--rehearsal", "--write")
     assert code == 0, out
-    for rel in ("scripts/agk/check_x.py", ".claude/settings.json", ".github/workflows/governance.yml",
-                "Makefile", "agk.mk", "constitution/principles.md"):
+    for rel in (
+        "scripts/agk/check_x.py",
+        ".claude/settings.json",
+        ".github/workflows/governance.yml",
+        "Makefile",
+        "agk.mk",
+        "constitution/principles.md",
+    ):
         assert not (root / rel).exists(), rel
-    for rel in (".gitignore", ".github/PULL_REQUEST_TEMPLATE.md", ".github/ISSUE_TEMPLATE/problem.md",
-                "README.md", "src/app.py", "docs/adr/0001-mine.md"):
+    for rel in (
+        ".gitignore",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/ISSUE_TEMPLATE/problem.md",
+        "README.md",
+        "src/app.py",
+        "docs/adr/0001-mine.md",
+    ):
         assert (root / rel).is_file(), rel
     claude = (root / "CLAUDE.md").read_text(encoding="utf-8")
-    assert len(claude.splitlines()) <= 30 and "${CLAUDE_PLUGIN_ROOT}" in claude and "2.0.0" in claude
+    assert (
+        len(claude.splitlines()) <= 30 and "${CLAUDE_PLUGIN_ROOT}" in claude and "2.0.0" in claude
+    )
     data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
     assert data["kit"] == {"layout": "plugin", "plugin_version": "2.0.0"}
     assert data["version"] == "2.0.0"
@@ -158,7 +175,9 @@ def test_a_changed_kit_file_is_listed_and_kept(tmp_path, kit, capsys):
 
 
 def test_a_remaining_file_that_names_a_removed_path_fails_and_writes_nothing(tmp_path, kit, capsys):
-    root = sample(tmp_path, over={"README.md": "Run scripts/agk/check_x.py, then make governance.\n"})
+    root = sample(
+        tmp_path, over={"README.md": "Run scripts/agk/check_x.py, then make governance.\n"}
+    )
     code, out = run(capsys, root, "--rehearsal", "--write")
     assert code == 1, out
     assert "names a removed kit path: README.md:1 (path class (repository root))" in out
@@ -175,7 +194,10 @@ def test_a_protected_setting_naming_a_removed_folder_names_its_class(tmp_path, k
 
 
 def test_a_plugin_path_is_not_a_removed_path(tmp_path, kit, capsys):
-    root = sample(tmp_path, over={"README.md": 'Run python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_x.py".\n'})
+    root = sample(
+        tmp_path,
+        over={"README.md": 'Run python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_x.py".\n'},
+    )
     code, out = run(capsys, root, "--rehearsal")
     assert code == 0, out
     assert "proof: no tracked file names a removed kit path" in out
@@ -185,7 +207,11 @@ def test_a_plugin_path_is_not_a_removed_path(tmp_path, kit, capsys):
 @pytest.mark.parametrize(
     ("toml", "args", "named"),
     [
-        ('mode = "init"\nversion = "2.0.0"\nexecution = "hosted"\n', ["--rehearsal"], "(setting: execution)"),
+        (
+            'mode = "init"\nversion = "2.0.0"\nexecution = "hosted"\n',
+            ["--rehearsal"],
+            "(setting: execution)",
+        ),
         ('mode = "init"\nversion = "2.0.0"\n', ["--rehearsal"], "(setting: execution)"),
         (LOCAL + '\n[personal]\nforge = "files"\n', ["--rehearsal"], "(setting: forge)"),
         (LOCAL, [], "SPEC-0071 rule 11"),
@@ -194,11 +220,13 @@ def test_a_plugin_path_is_not_a_removed_path(tmp_path, kit, capsys):
         (LOCAL + '\n[kit]\nlayout = "installed"\n', ["--rehearsal"], "(setting: layout)"),
     ],
 )
-def test_each_refusal_names_the_setting_and_writes_nothing(tmp_path, kit, capsys, toml, args, named):
+def test_each_refusal_names_the_setting_and_writes_nothing(
+    tmp_path, kit, capsys, toml, args, named
+):
     root = sample(tmp_path, toml)
     code, out = run(capsys, root, *args, "--write")
     assert code == 1 and out.startswith("refused: ") and named in out, out
-    assert "hosted" not in out and "files\"" not in out and "1.5.0" not in out
+    assert "hosted" not in out and 'files"' not in out and "1.5.0" not in out
     assert git(root, "status", "--porcelain") == "" and (root / "Makefile").is_file()
 
 
