@@ -1,7 +1,8 @@
 """Tests of the plugin's hooks and agents (SPEC-0071 rule 4, brief #1454, ADR-0612; REQ-078).
 
-A stub plugin root is a copy of the plugin's `.claude-plugin/`, `.claude/hooks/` and `scripts/agk/` in
-tmp_path; the projects are saved git-free trees of invented data. No network, no gh, no model.
+A stub plugin root is a copy of the plugin's `.claude-plugin/`, `.claude/hooks/` and
+`scripts/agk/` in tmp_path; the projects are git-free trees of invented data. No network, no
+gh, no model.
 """
 
 from __future__ import annotations
@@ -18,8 +19,20 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SECRET_SAMPLES = (".env", ".env.local", "x.pem", "x.key", "x.p12", "x.pfx", "id_rsa", "x.tfstate",
-                  "x.tfstate.1", "secrets.json", "x.log", "x.log.1")  # data_guard.SAMPLES
+SECRET_SAMPLES = (
+    ".env",
+    ".env.local",
+    "x.pem",
+    "x.key",
+    "x.p12",
+    "x.pfx",
+    "id_rsa",
+    "x.tfstate",
+    "x.tfstate.1",
+    "secrets.json",
+    "x.log",
+    "x.log.1",
+)  # data_guard.SAMPLES
 MATCHER = "Read|Grep|Glob|Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit"
 PUSH = "git push origin HEAD:main"
 
@@ -41,21 +54,31 @@ def project(base: Path, layout: str, plugin: Path | None = None) -> Path:
     elif layout == "installed":
         (root / "agk.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
         for part in (".claude/hooks", "scripts/agk"):
-            shutil.copytree(plugin / part, root / part, ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(
+                plugin / part, root / part, ignore=shutil.ignore_patterns("__pycache__")
+            )
     return root
 
 
 def hook(script: Path, root: Path, payload: dict, *args: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root), "HOME": str(root)}
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(script), *args], input=json.dumps(payload), capture_output=True,
-        text=True, env=env, cwd=root,
+        [sys.executable, str(script), *args],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=root,
     )
 
 
 def pre(root: Path, tool: str, agent: str | None = None, **tool_input) -> dict:
-    payload = {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input,
-               "cwd": str(root)}
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": tool,
+        "tool_input": tool_input,
+        "cwd": str(root),
+    }
     return {**payload, "agent_type": agent} if agent else payload
 
 
@@ -80,7 +103,9 @@ def test_ac1_the_plugin_registers_its_hooks_and_the_manifest_agents():
     (pre_entry,) = data["hooks"]["PreToolUse"]
     (pre_hook,) = pre_entry["hooks"]
     assert pre_entry["matcher"] == MATCHER
-    assert pre_hook["command"] == 'python3 "${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin_hooks.py" pre'
+    assert (
+        pre_hook["command"] == 'python3 "${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin_hooks.py" pre'
+    )
     assert pre_hook["timeout"] == 10 and pre_hook["onFailure"] == "block"
     ((stop_hook,),) = [e["hooks"] for e in data["hooks"]["Stop"]]
     assert stop_hook["command"].endswith('/.claude/hooks/plugin_hooks.py" stop')
@@ -93,7 +118,9 @@ def test_ac1_the_plugin_registers_its_hooks_and_the_manifest_agents():
 
 def test_ac1_every_guarded_agent_has_its_guard_in_the_plugin_hook():
     """REQ-078 AC1: each agent whose file names a guard is guarded the same way as `agk:<name>`."""
-    spec = importlib.util.spec_from_file_location("plugin_hooks", ROOT / ".claude/hooks/plugin_hooks.py")
+    spec = importlib.util.spec_from_file_location(
+        "plugin_hooks", ROOT / ".claude/hooks/plugin_hooks.py"
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for path in sorted((ROOT / ".claude" / "agents").glob("*.md")):
@@ -113,7 +140,10 @@ def test_ac1_the_data_guard_refuses_each_secret_shape_alike_in_both_layouts(tmp_
     seen = []
     for root in (clean, installed):
         (root / name).write_text("invented\n", encoding="utf-8")
-        for payload in (pre(root, "Read", file_path=str(root / name)), pre(root, "Bash", command=f"cat {name}")):
+        for payload in (
+            pre(root, "Read", file_path=str(root / name)),
+            pre(root, "Bash", command=f"cat {name}"),
+        ):
             if root is clean:
                 seen.append(reason(plugin_pre(plugin, root, payload)))
             else:
@@ -130,12 +160,17 @@ def test_ac1_a_key_shaped_value_in_an_example_file_is_refused_in_a_clean_project
     line = reason(plugin_pre(plugin, root, pre(root, "Read", file_path=str(root / ".env.example"))))
     assert line and line.startswith("data guard: secret-file")
     (root / ".env.example").write_text("API_KEY=\n", encoding="utf-8")
-    assert reason(plugin_pre(plugin, root, pre(root, "Read", file_path=str(root / ".env.example")))) is None
+    assert (
+        reason(plugin_pre(plugin, root, pre(root, "Read", file_path=str(root / ".env.example"))))
+        is None
+    )
 
 
 @pytest.mark.parametrize("layout", ["installed", "none", "kit"])
-def test_ac7_the_plugin_adds_no_second_data_guard_where_the_project_runs_its_own(tmp_path, plugin, layout):
-    """REQ-078 AC7: an installed project, a non-agk project and the kit's own tree keep their own."""
+def test_ac7_the_plugin_adds_no_second_data_guard_where_the_project_runs_its_own(
+    tmp_path, plugin, layout
+):
+    """REQ-078 AC7: an installed project, a non-agk project and the kit's tree keep their own."""
     root = ROOT if layout == "kit" else project(tmp_path, layout, plugin)
     payload = pre(root, "Bash", command="cat .env")
     proc = plugin_pre(plugin, root, payload)
@@ -147,20 +182,32 @@ def test_ac7_the_plugin_adds_no_second_data_guard_where_the_project_runs_its_own
 
 @pytest.mark.parametrize("layout", ["clean", "installed"])
 def test_ac1_a_plugin_conductor_gets_its_guard_in_both_layouts(tmp_path, plugin, layout):
-    """REQ-078 AC1: `agk:conductor` is refused a push; `agk:steward` and `agk:architect` likewise."""
+    """REQ-078 AC1: `agk:conductor` is refused a push; the steward and architect likewise."""
     root = project(tmp_path, layout, plugin)
-    for agent in ("agk:conductor", "agk:shadow", "agk:steward", "agk:architect", "agk:architect-review"):
+    for agent in (
+        "agk:conductor",
+        "agk:shadow",
+        "agk:steward",
+        "agk:architect",
+        "agk:architect-review",
+    ):
         line = reason(plugin_pre(plugin, root, pre(root, "Bash", agent, command=PUSH)))
         assert line, agent
     assert reason(plugin_pre(plugin, root, pre(root, "Bash", None, command="git status"))) is None
 
 
 def test_ac7_a_project_agent_and_an_unguarded_tool_get_no_plugin_guard(tmp_path, plugin):
-    """REQ-078 AC7: the project's own `conductor` keeps its frontmatter hook; Read is not matched."""
+    """REQ-078 AC7: the project's own `conductor` keeps its own hook; Read is not matched."""
     root = project(tmp_path, "installed", plugin)
     assert reason(plugin_pre(plugin, root, pre(root, "Bash", "conductor", command=PUSH))) is None
-    assert reason(plugin_pre(plugin, root, pre(root, "Read", "agk:conductor", file_path="README.md"))) is None
-    assert reason(plugin_pre(plugin, root, pre(root, "Bash", "agk:drift-auditor", command=PUSH))) is None
+    assert (
+        reason(plugin_pre(plugin, root, pre(root, "Read", "agk:conductor", file_path="README.md")))
+        is None
+    )
+    assert (
+        reason(plugin_pre(plugin, root, pre(root, "Bash", "agk:drift-auditor", command=PUSH)))
+        is None
+    )
 
 
 @pytest.mark.parametrize("stdin, event", [("not json", "pre"), ("[]", "pre"), ("{}", "other")])
@@ -168,8 +215,12 @@ def test_ac1_input_it_cannot_read_denies(tmp_path, plugin, stdin, event):
     """REQ-078 AC1: the plugin hook fails closed, naming no value."""
     root = project(tmp_path, "clean")
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(plugin / ".claude/hooks/plugin_hooks.py"), event], input=stdin,
-        capture_output=True, text=True, cwd=root, env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)},
+        [sys.executable, str(plugin / ".claude/hooks/plugin_hooks.py"), event],
+        input=stdin,
+        capture_output=True,
+        text=True,
+        cwd=root,
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)},
     )
     if event == "pre":
         assert reason(proc).startswith("plugin hooks: cannot-judge")
@@ -181,20 +232,26 @@ def test_ac1_input_it_cannot_read_denies(tmp_path, plugin, stdin, event):
 
 def load_stop(plugin: Path):
     sys.path.insert(0, str(plugin / "scripts" / "agk"))
-    spec = importlib.util.spec_from_file_location("stop_check_b", plugin / ".claude/hooks/stop_check.py")
+    spec = importlib.util.spec_from_file_location(
+        "stop_check_b", plugin / ".claude/hooks/stop_check.py"
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def test_ac1_the_stop_check_runs_the_gate_and_scripts_from_the_plugin(tmp_path, plugin, monkeypatch):
+def test_ac1_the_stop_check_runs_the_gate_and_scripts_from_the_plugin(
+    tmp_path, plugin, monkeypatch
+):
     """REQ-078 AC1: in a clean project the gate is the plugin's resolver; installed keeps make."""
     monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    monkeypatch.delitem(sys.modules, "kit_root", raising=False)  # the stub plugin's own copy
+    monkeypatch.setattr(sys, "path", list(sys.path))
     stop = load_stop(plugin)
     clean, installed = project(tmp_path, "clean"), project(tmp_path, "installed", plugin)
-    gate, moved = stop.kit_forms(str(clean), [("scripts/agk/check_adrs.py", "--x")])
+    gate, moved = stop.kit_forms(str(clean), [("scripts/agk/check_example.py", "--x")])
     kit = (plugin / "scripts" / "agk").resolve()
     assert gate[1:] == [str(kit / "kit_root.py"), "governance"]
-    assert moved == [(str(kit / "check_adrs.py"), "--x")]
+    assert moved == [(str(kit / "check_example.py"), "--x")]
     assert stop.kit_forms(str(installed), None) == (stop.MAKE_GATE, None)
     assert stop.kit_forms(str(installed), [("scripts/agk/a.py",)])[1] == [("scripts/agk/a.py",)]

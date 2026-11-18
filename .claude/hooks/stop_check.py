@@ -171,7 +171,7 @@ def run_commands(root: str, env: dict, commands: list[tuple[str, ...]] | None):
     """(return code, output, failing command) of the full recipe (None) or of each command."""
     gate, commands = kit_forms(root, commands)
     if commands is None:
-        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        proc = subprocess.run(  # nosec B603 - a fixed list: make or the plugin gate, no shell
             gate,
             cwd=root,
             env=env,
@@ -180,7 +180,8 @@ def run_commands(root: str, env: dict, commands: list[tuple[str, ...]] | None):
             encoding="utf-8",
             timeout=TIMEOUT_SECONDS,
         )
-        return proc.returncode, proc.stdout + proc.stderr, " ".join(gate if gate == MAKE_GATE else gate[-2:])
+        failed = " ".join(gate if gate == MAKE_GATE else gate[-2:])
+        return proc.returncode, proc.stdout + proc.stderr, failed
     deadline = time.monotonic() + TIMEOUT_SECONDS
     for argv in commands:
         left = max(1.0, deadline - time.monotonic())

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: LicenseRef-AGK-Proprietary
 # AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
-"""The plugin's one hook: runs the five guards from the plugin (SPEC-0071 rule 4, brief #1454, ADR-0612).
+"""The plugin's one hook: the five guards from the plugin (SPEC-0071 rule 4, #1454, ADR-0612).
 
 `.claude-plugin/plugin.json` registers it as `plugin_hooks.py pre` (PreToolUse) and `plugin_hooks.py
 stop` (Stop). It runs the guard of this folder, the plugin's own copy, with the hook's input on its
@@ -68,8 +68,11 @@ def plan(event: str, payload: dict, root: Path) -> list[tuple[str, ...]]:
 
 def deny(event: str) -> int:
     if event == "pre":
-        out = {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-               "permissionDecisionReason": DENY}
+        out = {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": DENY,
+        }
         print(json.dumps({"hookSpecificOutput": out}))
     return 0
 

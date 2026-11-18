@@ -6,12 +6,12 @@
 - Related: brief #1454, SPEC-0071 rules 4 and 12 (b), ADR-0611
 - Requirements: REQ-078
 
-Protected classes: `.claude/`, `.claude-plugin/`, `tests/kit/`, `kit/`
+Protected classes: `.claude/`, `.claude-plugin/`, `tests/kit/`, `kit/`, `agk.toml`
 
 ## Context
 
 SPEC-0071 rule 4 marks three facts `(verify)` and says a recorded run settles each before build (b) changes anything.
-The runs were made on 2026-11-18 from 01:29Z to 01:37Z, in a cloud scheduled session, with Claude Code 2.1.327 run
+The runs were made on 2026-11-18 from 01:29Z to 02:05Z, in a cloud scheduled session, with Claude Code 2.1.327 run
 headless (`claude -p`). The model was a stub: a Messages API on `127.0.0.1` that asks for one Bash call, then ends. No
 model and no network outside the machine. The plugin was a stub with its own `.claude-plugin/plugin.json`, loaded with
 `--plugin-dir`, and once installed at user scope from a local directory marketplace; then this repository itself, loaded
@@ -25,7 +25,8 @@ What the runs showed, for this version of Claude Code:
    `CLAUDE_PROJECT_DIR` (the project, or the worktree). The hook's input carries `agent_type` (`agk:conductor`) when the
    session runs an agent.
 2. **A plugin agent is named `<plugin>:<name>`.** `--agent agk:conductor` ran the plugin's agent: its prompt and only its
-   `tools:`. With no project agent of that name, `--agent conductor` ran it too. An agent file listed in `plugin.json`'s
+   `tools:`. With no project agent of that name, `--agent conductor` ran it too; with a project
+   `.claude/agents/conductor.md`, `--agent conductor` ran the project's agent (`agent_type` `conductor`). An agent file listed in `plugin.json`'s
    `agents` is loaded; the list replaces the default `agents/` folder. **A plugin agent's own frontmatter `hooks` do not
    fire**: the agent's `PreToolUse` hook wrote nothing while the plugin's hook wrote its line.
 3. **A plugin cannot carry a permission rule, and a rule names a plugin path only by its absolute path.** An `allow`
@@ -38,7 +39,10 @@ What the runs showed, for this version of Claude Code:
    cannot name the variable (Q-1453-1, for the headless shell).
 5. **The guards fire from the plugin in a clean project.** With this repository as the plugin, in a project whose
    `agk.toml` has `[kit] layout = "plugin"` and no `.claude/`, `cat .env` was refused by the data guard
-   (`data guard: secret-file (env file): ...`) and the Stop hook ran the stop check.
+   (`data guard: secret-file (env file): ...`), the same line the project's own data guard gave in an installed copy of
+   this repository; `--agent agk:conductor` was refused `git push origin HEAD:main` by the conductor's guard in both
+   projects; and the Stop hook ran the stop check. Before decision 3 the stop check ran `make -f agk.mk
+   agk-governance` there and blocked every stop, since a clean project has no `agk.mk`.
 
 ## Decision
 
@@ -62,6 +66,8 @@ What the runs showed, for this version of Claude Code:
 5. Not in this build: the guards' allowed command forms. In a clean project the conductor's and the architect's guards
    still allow only today's `scripts/agk/` forms and the project's own files, so they refuse the plugin's form: they
    fail closed (Q-1454-2). The clean layout stays not offered (SPEC-0071 residual).
+
+6. `kit/manifest.json` lists `plugin_hooks.py`; `agk.toml` maps it and `plugin.json` to `tests/kit/test_plugin_hooks.py`.
 
 ## Consequences
 
