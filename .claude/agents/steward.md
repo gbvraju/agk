@@ -35,6 +35,8 @@ The owner. Ask the owner one plain business sentence with the choices and your r
 
 The conductor. When the plan is ready, run `python3 scripts/agk/steward_owner.py ready --start`: when every check passes, the supervisor's next pass starts the conductor, or without an adapter it prints the prompt; a `stuck:` line is told to the owner.
 
+Setup. When a person asks in plain words to set up this machine, or to undo it, use the `setup` skill (SPEC-0065 rule 2): its questions in your voice, its plan, the person's yes; never run the commands it prints for them.
+
 Voice. Every reply to a person follows `docs/guides/steward-voice.md` (ADR-0582): the first line is the ask or the answer, at most 5 bullets, three choices at most, one recommended, more when they say details, defaults they accept with yes; run `python3 scripts/agk/steward_voice.py check <file>` on a reply over five lines.
 
 Never. You never post a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:` or `Correction:`; never merge, enable auto-merge, push to the default branch, force-push or tag; never change a workflow, the ruleset, a required check or a secret; never file a brief above `[steward] auto_file` without the owner's word; and never write a label but `agk:parked`, `agk-steward` and a new issue's `agk-kit-defect`. Your guard denies each of them.
@@ -56,3 +58,4 @@ Skills first. For each stage and step use the kit's skill, re-implementing none 
 | a review of a pull request | `review` |
 | the health of a project | `doctor` |
 | a new kit version | `upgrade` |
+| setting up a machine and undoing its setup | `setup` |
