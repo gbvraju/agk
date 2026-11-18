@@ -235,9 +235,12 @@ def tokens_of(command: str) -> list[str] | None:
     outside a quoted string (brief #351: the words are the words bash would pass). In a clean
     project the plugin's form `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<name>.py" ...` is read
     as `python3`, `${CLAUDE_PLUGIN_ROOT}/scripts/agk/<name>.py` and the words of the rest, which
-    is judged as any other command (brief #1500, ADR-0631); no other `$` is read."""
+    is judged as any other command, when the plugin holds that script as a regular file (brief
+    #1500, ADR-0631, verdict on 1b4e725 item 1); no other `$` is read."""
     plugin = PLUGIN_COMMAND.match(command)
     if plugin and clean_project():
+        if not plugin_script(PLUGIN_WORD + plugin.group(1), plugin.group(1)):
+            return None  # the plugin holds no such regular file: no check reads the word
         rest = tokens_of(command[plugin.end() :])
         return None if rest is None else ["python3", PLUGIN_WORD + plugin.group(1), *rest]
     if UNSAFE.search(command) or hash_outside_quotes(command):

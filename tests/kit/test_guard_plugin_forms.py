@@ -11,6 +11,7 @@ network, no gh, no model.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
@@ -73,13 +74,15 @@ def installed(tmp_path: Path) -> Path:
     return make_project(tmp_path, FLOW_ON, installed=True)
 
 
-def decision(hook: str, root: Path, command: str, *flags: str) -> dict | None:
+def decision(
+    hook: str, root: Path, command: str, *flags: str, plugin: Path = ROOT
+) -> dict | None:
     temp = root.parent / "systmp"
     temp.mkdir(exist_ok=True)
     env = {
         "PATH": "/usr/bin:/bin",
         "CLAUDE_PROJECT_DIR": str(root),
-        "CLAUDE_PLUGIN_ROOT": str(ROOT),
+        "CLAUDE_PLUGIN_ROOT": str(plugin),
         "TMPDIR": str(temp),
         "HOME": str(temp),
     }
@@ -262,6 +265,35 @@ def test_the_reviewers_slot_passes_in_the_plugin_form(clean):
     assert denied(
         decision("architect_guard.py", clean, f"python3 {SESSION} slot --next s1", "--review")
     )
+
+
+def stub_plugin(tmp_path: Path, link: bool) -> Path:
+    """A plugin the resolver accepts whose `doctor.py` and `session.py` are missing, or are links
+    to this repository's files."""
+    stub = tmp_path / "plugin"
+    (stub / ".claude-plugin").mkdir(parents=True)
+    (stub / "scripts" / "agk").mkdir(parents=True)
+    shutil.copy(ROOT / ".claude-plugin" / "plugin.json", stub / ".claude-plugin" / "plugin.json")
+    shutil.copy(ROOT / "scripts" / "agk" / "kit_root.py", stub / "scripts" / "agk" / "kit_root.py")
+    if link:
+        for name in ("doctor.py", "session.py"):
+            (stub / "scripts" / "agk" / name).symlink_to(ROOT / "scripts" / "agk" / name)
+    return stub
+
+
+@pytest.mark.parametrize("link", [False, True])
+@pytest.mark.parametrize(
+    "hook, command, flags",
+    [
+        ("architect_guard.py", f'python3 {PLUGIN}doctor.py"', ()),
+        ("architect_guard.py", f"python3 {SESSION} slot --next r1", ("--review",)),
+        ("conductor_guard.py", f"python3 {SESSION} plan --json", ()),
+    ],
+)
+def test_a_plugin_word_needs_the_plugins_regular_file(tmp_path, clean, link, hook, command, flags):
+    """REQ-078: brief #1500 answer 1, verdict on 1b4e725 item 1 (a missing script or a link)."""
+    stub = stub_plugin(tmp_path, link)
+    assert denied(decision(hook, clean, command, *flags, plugin=stub)), (hook, command, link)
 
 
 # --- the steward -----------------------------------------------------------------------------

@@ -31,8 +31,9 @@ so it already allowed the plugin's form.
    plugin's form is refused.
 3. **The same arguments.** Each check that names a script matches either form, with the same arguments as today. For the
    architect these are the read-only scripts, the evidence check, the review bundle and the slot and check-verdict steps.
-   For the conductor they go through `own_script`. In a clean project, `own_script` accepts the plugin's form only when the
-   plugin that the resolver finds (`kit_root.plugin_root`) holds the script as a regular file and not a link. The
+   For the conductor they go through `own_script`. In both guards the plugin's form is read only when the plugin that the
+   resolver finds (`kit_root.plugin_root`) holds the script as a regular file and not a link (`plugin_script`, checked in
+   `tokens_of`, and again by the conductor's `own_script`); a missing script or a link is denied. The
    conductor's merge (`merge_cleared.py --pr N --sha S`, with `auto_merge` on in both places) passes in both forms and
    nothing else does.
 4. **No absolute plugin path.** A resolved absolute path to the plugin's scripts is not the project's own file, so it
