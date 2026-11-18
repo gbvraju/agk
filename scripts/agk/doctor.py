@@ -63,7 +63,8 @@ agk.toml (`config.TABLE_KEYS`) but that stands at the top level or in another ta
 table it is in and the table it belongs to, never its value.
 Brief #1390 (ADR-0587): `autopilot-settings` names each of `[flow] auto_start`, `launch_adapter`
 and `[capacity]` still set, which `[autopilot]` replaces: read for one release while that table is
-absent, then from it only; never a value.
+absent, then from it only; never a value. Brief #1480 (ADR-0628): its fix names
+`[autopilot] adapter`, and `model-names` also warns for `[autopilot] mode = "on"` with an `adapter`.
 """
 
 from __future__ import annotations
@@ -101,6 +102,7 @@ from common import (  # noqa: E402
     GITLEAKS_INSTALL,
     GITLEAKS_PIN,
     PAUSED_LINE,
+    REMOTE_RUNTIME,
     ROUTER_WORKFLOW,
     CheckError,
     experimental_enabled,
@@ -120,6 +122,15 @@ from tree_walk import FRONTEND_PATTERNS, SKIP_DIRS, walked_dirs  # noqa: E402
 
 import config as models  # noqa: E402
 
+# The digest governance.yml pins beside GITLEAKS_PIN (ADR-0158), and the one line the owner adds to
+# a cloud environment's setup script (brief #1471 answer 4, ADR-0626); printed, never run.
+GITLEAKS_SHA256 = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+GITLEAKS_SETUP = (
+    f'cd "$(mktemp -d)" && curl -sSfL -o gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/'
+    f"download/v{GITLEAKS_PIN}/gitleaks_{GITLEAKS_PIN}_linux_x64.tar.gz && echo "
+    f'"{GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum --check --strict && '
+    "tar -xzf gitleaks.tgz -C /usr/local/bin gitleaks"
+)
 NO_RECORD = "tests: the prepush record cannot be read; nothing about the suite (option: --record)"
 USAGE = (
     "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] "
@@ -484,9 +495,18 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "warn",
         "no setting that [autopilot] replaces is set",
         "agk.toml: ",
-        "set [autopilot] mode and remove the named settings and the watchdog's scheduler task "
-        "(python3 scripts/agk/autopilot.py on installs its own); they are read for one release "
+        "set [autopilot] mode (and [autopilot] adapter for launch_adapter) and remove the named "
+        "settings and the watchdog's scheduler task (python3 scripts/agk/autopilot.py on "
+        "installs its own); they are read for one release "
         "while [autopilot] is absent (a change to agk.toml needs an ADR in the same pull request)",
+    ),
+    "local-mode-switch": (
+        "warn",
+        "the local-mode switch-over is consistent",
+        "local mode (setting: execution) but the switch-over is not finished",
+        'follow docs/guides/local-mode.md, section "A kit\'s own repository goes private": the '
+        "owner runs `python3 scripts/agk/local_mode.py enter --write` and changes the ruleset's "
+        "required checks; a session changes neither (brief #1471, ADR-0626)",
     ),
     "engines-keys": (
         "warn",
@@ -836,6 +856,74 @@ def workflow_state_result(reads: Reads, report_installed: bool) -> Result:
     if any(s != "active" for s in states):
         return Result("fail")
     return Result("cannot-check", reasons[0]) if reasons else Result("ok")
+
+
+def open_issues(reads: Reads) -> tuple[Any, str]:
+    """Every page of the open issues (100 a page), so the record issue never falls off a full
+    first page (brief #1471 fix list item 4); (None, reason) when a page cannot be read."""
+    found: list = []
+    for page in range(1, 1000):
+        name = "issues-open" if page == 1 else f"issues-open-{page}"
+        data, why = reads.get(name, f"/issues?state=open&per_page=100&page={page}")
+        if not isinstance(data, list):
+            return None, why or "bad-response"
+        found += data
+        if len(data) < 100:
+            break
+    return found, ""
+
+
+def local_switch_result(reads: Reads, config: dict) -> Result:
+    """`local-mode-switch` (brief #1471 answer 6, ADR-0626): with `execution = "local"`, warns
+    while a workflow is still active, no open issue is the record issue, or an active ruleset of
+    the default branch still requires a check of required_checks. GET only; counts, never values;
+    without the setting it reads nothing."""
+    if config.get("execution") != "local":
+        return Result("ok", message=" (not applicable: execution is not local)")
+    repo_data, why = reads.get("repo", "", raw=True)
+    flows, why_flows = reads.get("workflows", "/actions/workflows?per_page=100")
+    issues, why_issues = open_issues(reads)
+    listing, why_rules = reads.get("rulesets", "/rulesets", raw=True)
+    if not isinstance(repo_data, dict) or not isinstance(flows, dict):
+        return Result(
+            "cannot-check",
+            (why if not isinstance(repo_data, dict) else why_flows) or "bad-response",
+        )
+    if not isinstance(issues, list) or not isinstance(listing, list):
+        return Result("cannot-check", why_issues or why_rules or "bad-response")
+    branch = repo_data.get("default_branch") or config.get("default_branch", "main")
+    details = []
+    for entry in listing:
+        if isinstance(entry, dict) and entry.get("target") == "branch":
+            data, why = reads.get(
+                f"ruleset-{entry.get('id')}", f"/rulesets/{entry.get('id')}", raw=True
+            )
+            if not isinstance(data, dict):
+                return Result("cannot-check", why or "bad-response")
+            details.append(data)
+    active = [d for d in details if targets_default(d, branch) and d.get("enforcement") == "active"]
+    contexts = {
+        c.get("context")
+        for p in rule_params(active, "required_status_checks")
+        for c in (p.get("required_status_checks") or [])
+        if isinstance(c, dict)
+    }
+    required = config.get("required_checks", DEFAULT_REQUIRED)
+    still = len(contexts & {x.strip() for x in required if isinstance(x, str)})
+    running = sum(
+        1
+        for w in flows.get("workflows") or []
+        if isinstance(w, dict) and w.get("state") == "active"
+    )
+    parts = [f"{running} workflow{'s' if running != 1 else ''} still active"] if running else []
+    if not merge_cleared.titled(
+        [x for x in issues if isinstance(x, dict)], merge_cleared.RECORD_TITLE
+    ):
+        parts.append("no open record issue")
+    if still:
+        plural = "s" if still != 1 else ""
+        parts.append(f"the ruleset still requires {still} check{plural} of required_checks")
+    return Result("fail", message=f" ({'; '.join(parts)})") if parts else Result("ok")
 
 
 def issues_result(repo_data: Any, reason: str, writers: list[str]) -> Result:
@@ -1347,22 +1435,28 @@ def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
 
 
 def model_names_result(root: Path) -> Result:
-    """Brief #1252 (ADR-0530): with `auto_start` on and `launch_adapter` set, a missing
+    """Brief #1252 (ADR-0530): with `auto_start` on and `launch_adapter` set, or (brief #1480,
+    ADR-0628) `[autopilot] mode = "on"` with its `adapter`, a missing
     `[models.names]` table starts every builder on the person's default model whatever its kind.
     A refused setting is named, never its value."""
     import launch
 
     try:
         auto, adapter = launch.launch_settings(root)
-        names = models.model_names(root) if auto and adapter is not None else None
+        pilot = models.autopilot_settings(root)  # brief #1480 (ADR-0628): [autopilot] adapter
+        on = pilot["mode"] == "on" and pilot["adapter"] is not None
+        started = (auto and adapter is not None) or on
+        names = models.model_names(root) if started else None
     except CheckError as err:
         return Result("fail", message=f"{err}")
     if names is None:
         return Result("ok", message="auto_start off or no launch_adapter")
     if not names:
+        first = "the autopilot is on with [autopilot] adapter" if on else (
+            "auto_start is on with a launch_adapter")
         return Result(
             "fail",
-            message="auto_start is on with a launch_adapter and [models.names] is unset, so "
+            message=f"{first} and [models.names] is unset, so "
             "every adapter-started builder runs on the default model whatever its kind",
         )
     return Result("ok", message="set")
@@ -1965,6 +2059,7 @@ def run_checks(
     results["model-names"] = model_names_result(root)
     results["misplaced-settings"] = misplaced_settings_result(config)
     results["autopilot-settings"] = autopilot_settings_result(root)
+    results["local-mode-switch"] = local_switch_result(reads, config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]
@@ -2181,16 +2276,27 @@ def outside_test_dirs_lines(root: Path) -> list[str]:
     ]
 
 
-def secret_scan_line(in_wsl: bool | None = None) -> str:
+def secret_scan_line(
+    in_wsl: bool | None = None, in_cloud: bool | None = None, local: bool = False
+) -> str:
     """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306). Missing inside
-    WSL, the line names the setup's `gitleaks` step (brief #1450, ADR-0608)."""
+    WSL, the line names the setup's `gitleaks` step (brief #1450, ADR-0608); missing in a cloud
+    session of a project with `execution = "local"` (LOCAL), the one setup-script line the owner
+    adds, printed and never run (brief #1471); hosted and hybrid projects keep their line."""
     tool = shutil.which("gitleaks")
     if tool is None:
         if in_wsl is None:
             in_wsl = sys.platform.startswith("linux") and inside_wsl()
+        if in_cloud is None:
+            in_cloud = local and os.environ.get(REMOTE_RUNTIME) == "true"
+        in_cloud = in_cloud and local
         fix = (
             f"run /agk:wsl again; it installs gitleaks {GITLEAKS_PIN}"
             if in_wsl
+            else GITLEAKS_INSTALL + "; in a cloud session the owner adds this one line to the "
+            "environment's setup script (verify: the environment setup script of the runtime), "
+            "never a session: " + GITLEAKS_SETUP
+            if in_cloud
             else GITLEAKS_INSTALL
         )
         return (
@@ -2453,7 +2559,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         licence = licence_lines(root.resolve())
         deprecation = deprecation_lines(root.resolve())
-        scan = secret_scan_line()
+        scan = secret_scan_line(local=read_config(root.resolve()).get("execution") == "local")
         work, work_failed = work_type_line(root.resolve())
         skills = skill_lines(root.resolve(), Path(options["kit"]) if options["kit"] else None)
         design = design_import_lines(root.resolve())

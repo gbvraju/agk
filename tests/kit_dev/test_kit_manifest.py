@@ -17,6 +17,7 @@ KIT_ONLY = {
     "scripts/agk/kit_hashes.py",
     "scripts/agk/check_release.py",
     "scripts/agk/check_tag.py",
+    "scripts/agk/plugin_snapshot.py",
     "scripts/agk/changelog_fragments.py",
     "scripts/agk/upgrade.py",
     "scripts/agk/uninstall.py",
@@ -36,6 +37,9 @@ KIT_ONLY = {
     "scripts/agk/workflow_apply.py",  # the skill runs the plugin's copy (ADR-0505)
     "scripts/agk/wsl.py",  # the skill runs the plugin's copy (ADR-0577)
     "scripts/agk/wsl_setup.ps1",  # the skill runs the plugin's copy on the Windows host (ADR-0577)
+    "scripts/agk/setup.py",  # the skill runs the plugin's copy (ADR-0618)
+    "scripts/agk/setup_windows.ps1",  # the plugin's copy bootstraps native Windows (ADR-0620)
+    "scripts/agk/setup_linux.sh",  # the plugin's copy bootstraps Linux machines (ADR-0622)
 }
 # Files under the law roots that belong to this repository only and are not installed in targets.
 REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md", ".github/workflows/agk-tag.yml"}
@@ -107,6 +111,7 @@ def test_ac2_manifest_shape_and_version():
         "rendered",
         "adopt",
         "extendable",
+        "snapshot",
     }
     assert m["kit_tests"] == "tests/kit" and (KIT_ROOT / m["kit_tests"]).is_dir()
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])

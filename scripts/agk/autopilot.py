@@ -84,7 +84,7 @@ import launch
 import metrics
 import session
 import session_plan
-from common import CheckError, personal_table, utf8_output
+from common import CheckError, personal_table, root_hint, utf8_output
 
 import config
 
@@ -540,12 +540,12 @@ def machine_checks(root: Path) -> list[str]:
     code, _ = run_command(["gh", "auth", "status"])
     signed = "ok: gh is signed in"
     out.append(signed if code == 0 else "warn: gh is not signed in (setting: gh auth login)")
-    adapter = launch.launch_settings(root)[1]
+    adapter, setting = launch.autopilot_adapter(root)  # brief #1480: [autopilot] adapter
     first = shlex.split(adapter)[0] if adapter and adapter.strip() else None
     if first and (shutil.which(first) or Path(first).is_file()):
         out.append("ok: the adapter is set and runs")
     else:
-        out.append("warn: the adapter is unset or does not run (setting: flow.launch_adapter)")
+        out.append(f"warn: the adapter is unset or does not run (setting: {setting})")
     return out
 
 
@@ -735,9 +735,9 @@ def next_command(root: Path, brief: int | None, now: datetime) -> int:
         why = f"held by {held[0]['by']}" if held else "no job is due"
         print(f"next: nothing started ({why})")
         return 0
-    adapter = launch.launch_settings(root)[1]
+    adapter, setting = launch.autopilot_adapter(root)  # brief #1480: [autopilot] adapter
     if not adapter or not adapter.strip():
-        print("next: nothing started (setting: flow.launch_adapter)")
+        print(f"next: nothing started (setting: {setting})")
         return 2
     name, item = job["session"], job["item"]
     print(f"next: {job['kind']} #{item} {name}")
@@ -776,6 +776,14 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
             return 2
         root = Path(args[at + 1])
         del args[at : at + 2]
+    try:
+        return command(root, args, now)
+    except CheckError as exc:  # brief #1452 (ADR-0610): one line, never a traceback
+        print(f"refused: {exc}{root_hint(root)}", file=sys.stderr)
+        return 1
+
+
+def command(root: Path, args: list[str], now: datetime) -> int:
     if args in (["on"], ["off"]):
         return autopilot_on(root, args == ["on"])
     if args[:1] == ["budget"]:

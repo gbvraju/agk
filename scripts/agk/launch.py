@@ -252,6 +252,22 @@ def launch_settings(root: Path, ref: str | None = None) -> tuple[bool, str | Non
     return auto, adapter
 
 
+def autopilot_adapter(root: Path) -> tuple[str | None, str]:
+    """(the adapter the autopilot starts jobs with, the setting it is read from): with an
+    `[autopilot]` table its `adapter` (`autopilot.adapter`) and never `[flow] launch_adapter`;
+    without one, today's `launch_adapter` (`flow.launch_adapter`), for one release (brief #1480,
+    ADR-0628). A refused value names the setting, never the value."""
+    import config
+
+    try:
+        has_table = "autopilot" in config.config_source(root)
+    except (OSError, ValueError):
+        has_table = False
+    if has_table:
+        return config.autopilot_settings(root)["adapter"], "autopilot.adapter"
+    return launch_settings(root)[1], "flow.launch_adapter"
+
+
 def show_jobs(root: Path) -> bool:
     """`[autopilot] show_jobs` of the checkout's agk.toml (false when unset), true or false."""
     text = checkout_text(root)

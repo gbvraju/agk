@@ -959,6 +959,18 @@ and never approves or merges; the context and the report are local files and are
 context. The context holds the full current text of every changed file and the operating rules of `CLAUDE.md`,
 so a rule next to a change is visible. See `docs/specs/0003-reviewer-agent.md`, ADR-0011 and `docs/runs/shadow-review-template.md`.
 
+## The kit resolver
+
+    python3 scripts/agk/kit_root.py [--form | governance]
+
+Where the kit's scripts are for the project of the working directory (SPEC-0071 rules 2 and 3, ADR-0611). It prints the
+folder: the project's own `scripts/agk/`, or the plugin's in a clean project (`[kit] layout = "plugin"` in `agk.toml`).
+`--form` prints the command prefix the session prompts call `<kit>`: `scripts/agk` or `"${CLAUDE_PLUGIN_ROOT}/scripts/agk"`,
+or the plugin's folder itself, quoted, when that variable is unset.
+`governance` runs the gate: `make -f agk.mk agk-governance` as today, or in a clean project the same checks from the
+plugin against the project, stopping at the first that fails; `prepush.py` and `evidence.py` find the gate through it.
+With no plugin root, or another `layout`, it refuses naming the setting (exit 1). The clean layout is not offered yet.
+
 ## Plugin
 
 The workflow commands are also a Claude Code plugin; this repository is its marketplace. The repository works without it
@@ -1080,5 +1092,44 @@ valid_until = 2027-06-30
 
 `doctor.py` warns, and never blocks, when the table is missing, when `repository` is not the `origin` remote, and after
 `valid_until`, when it names the uninstall step (`/agk:uninstall`). It reads no network and no licence server.
+
+### The release repository
+
+Customers install AGK from a second, private release repository, never from the development repository, so they never
+see its history, briefs or decisions (ADR-0627). Each release is one plugin snapshot of the tag, holding only the paths of
+`snapshot` in the tag's `kit/manifest.json` and `LICENSE` and `LICENSE-AGK`; the release repository holds one commit `Release vX.Y.Z` per
+release on top of the last. Its name is `[release] repository` in `agk.toml`.
+
+    python3 scripts/agk/plugin_snapshot.py build --tag vX.Y.Z --out DIR
+    python3 scripts/agk/plugin_snapshot.py publish --tag vX.Y.Z --dir DIR
+    python3 scripts/agk/plugin_snapshot.py verify --tag vX.Y.Z --clone DIR
+
+`build` writes the snapshot from `git archive` of the tag with its own `marketplace.json` (one plugin, `"source": "."`,
+the tag's version) and prints its digest; two builds of one tag give one digest. It fails, naming the path class and
+writing nothing, on a kit file (as `check_licence_notice.py` defines them) without the licence header (the other files,
+such as `tests/kit/`, carry none and are covered by the two licence files), on a `--tag` that is not a tag or a tag
+without the `snapshot` list, on a secret or personal-data shape (`guard.scan_text`) and when
+`kit_hashes.py --check` fails at the tag; `kit/hashes.json` keeps every release row. `publish` only prints the owner's
+commands: commit, tag and push to the release repository, and grant or revoke one person's read access. After the push
+the owner clones the release repository at the tag and runs `verify`, which fails naming the first path that differs.
+A session never creates the repository, pushes, tags or grants access.
+
+A customer installs a release with their own GitHub sign-in (Claude Code reads a private marketplace with the person's
+git credentials (verify)):
+
+    gh auth login
+    gh auth setup-git
+    /plugin marketplace add <owner>/<release repository>#vX.Y.Z
+    /plugin install agk@agk
+
+The owner grants and revokes one person's read access:
+
+    gh api --method PUT repos/<owner>/<release repository>/collaborators/<login> -f permission=pull
+    gh api --method DELETE repos/<owner>/<release repository>/collaborators/<login>
+
+A revoked person keeps the copy already on their machine; the licence and the written grant cover that copy, and
+revoking stops only new releases. Every mode (hosted, local, personal) installs the plugin from the release repository;
+CI mode still installs the kit files into the project (SPEC-0071 rule 5), and the development repository keeps its own
+marketplace for the maintainers.
 
 Licence: proprietary, all rights reserved (see LICENSE).
