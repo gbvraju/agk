@@ -206,9 +206,34 @@ def test_ac2_plugin_ships_no_hook_server_monitor_bin_or_agent():
     for rel in ("hooks", "bin", "agents", "commands", "monitors", ".mcp.json", ".lsp.json"):
         assert not (KIT_ROOT / rel).exists(), rel
     plugin = load(PLUGIN / "plugin.json")
-    for key in ("hooks", "mcpServers", "lspServers", "monitors", "agents", "commands", "bin"):
+    # `hooks` and `agents` are allowed by ADR-0612 decision 1; the hooks run only the plugin's hook (ADR-0641).
+    for key in ("mcpServers", "lspServers", "monitors", "commands", "bin"):
         assert key not in plugin, key
+    assert other_hook_commands(plugin) == []
     assert sorted(p.name for p in PLUGIN.iterdir()) == ["marketplace.json", "plugin.json"]
+
+
+PLUGIN_HOOK = '"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin_hooks.py"'
+
+
+def other_hook_commands(plugin: dict) -> list[str]:
+    """The hook commands of `plugin.json` that do not run `.claude/hooks/plugin_hooks.py` (ADR-0641)."""
+    commands = [
+        hook.get("command", "")
+        for groups in plugin.get("hooks", {}).values()
+        for group in groups
+        for hook in group.get("hooks", [])
+    ]
+    return [c for c in commands if not c.startswith(f"python3 {PLUGIN_HOOK} ")]
+
+
+def test_ac2_a_second_plugin_hook_command_is_named():
+    """REQ-014 AC2: rule 7 as ADR-0612 decision 1 changed it (ADR-0641)."""
+    plugin = load(PLUGIN / "plugin.json")
+    assert other_hook_commands(plugin) == []
+    extra = "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/agk/example.py\""
+    plugin["hooks"]["Stop"][0]["hooks"].append({"type": "command", "command": extra})
+    assert other_hook_commands(plugin) == [extra]
 
 
 def test_ac2_plugin_paths_are_protected_classes_and_not_installed():
