@@ -1,0 +1,1 @@
+- The local-mode guide's "Running unattended" now sets `[autopilot]` (`mode`, `interval_minutes`, `daily_budget`) and runs `agk autopilot on`, as doctor expects; `auto_start`, `launch_adapter`, `[capacity]` and the watchdog task appear only in one note, and a kit test keeps the guide and doctor together (brief #1451)

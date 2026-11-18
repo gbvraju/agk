@@ -1,0 +1,1 @@
+- The plugin carries its own hooks and agents: one plugin hook runs the data guard and the stop check in a clean project (`[kit] layout = "plugin"`) and the guard of a plugin agent (`agk:conductor` and the others) in any project, and the stop check runs the governance gate from the plugin there; an installed project keeps its own `.claude/settings.json` hooks (brief #1454)

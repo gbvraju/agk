@@ -1,0 +1,1 @@
+- The plugin's hook file is kept with Unix line endings and reads `git` output as UTF-8 like every installed script, and the distribution test allows the hooks and agents the plugin declares (brief #1518)
