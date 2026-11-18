@@ -346,6 +346,7 @@ def machine_roles(repo: dict, answers: dict) -> tuple[list[str], str]:
             "reviewer, not a verdict author", "other": "this login is not a listed reviewer",
             "unknown": "this login is unknown"}[state]  # fmt: skip
     steward = state in ("author", "reviewer") and not repo["steward"]
+    why: str | None
     if lease.startswith("held by"):
         why = "another machine holds the conductor's lease"
     elif lease != "free":
@@ -1274,10 +1275,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         roles = (chosen, f"{roles[1]}; lowered by the person")
     if args.form == "restart":
-        code, table, said = restart(root, roles[0], args.yes)
+        code, table, notes = restart(root, roles[0], args.yes)
         table |= {"roles": roles[0], "roles_why": roles[1], "builders": builders}
         print(json.dumps(table, indent=2) if args.json else
-              "\n".join(said + table_lines(table["steps"])))  # fmt: skip
+              "\n".join(notes + table_lines(table["steps"])))  # fmt: skip
         return code
     _, config = config_of(root)
     if args.form == "wsl":
