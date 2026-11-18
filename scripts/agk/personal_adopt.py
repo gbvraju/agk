@@ -47,7 +47,9 @@ USAGE = (
     "usage: personal_adopt.py check|render FILE [--clone DIR] [--sidecar DIR] [--today YYYY-MM-DD]"
 )
 KINDS = {"requirements": "docs/requirements.md", "specs": "docs/specs/", "adrs": "docs/adr/"}
-CITATION = re.compile(r"(?P<path>[^@\s]+):(?P<start>\d+)-(?P<end>\d+)@(?P<blob>[0-9a-f]{40}|[0-9a-f]{64})")
+CITATION = re.compile(
+    r"(?P<path>[^@\s]+):(?P<start>\d+)-(?P<end>\d+)@(?P<blob>[0-9a-f]{40}|[0-9a-f]{64})"
+)
 QUOTE_MIN = 8  # a cited line shorter than this, stripped, is not counted as an excerpt
 PROJECT_FIRST_REQ = 101  # the sidecar's text keeps REQ-001 to REQ-099 for AGK (Q-1504-1)
 SHAPE = "the proposals file is not of the shape of SPEC-0041 rule 13"
@@ -62,7 +64,7 @@ DIRTY = "render needs a clean sidecar work tree (SPEC-0041 rule 14)"
 OWNER = "reviewer group (a team from config/reviewers.yaml)"
 CONTEXTS = (
     "- personal: the sidecar holds this spec, drafted from the product's code\n"
-    "- kit, github, local, stacks: not applicable: drafted in personal mode from the code (verify)\n"
+    "- kit, github, local, stacks: not applicable: drafted in personal mode from code (verify)\n"
 )
 
 
@@ -86,19 +88,29 @@ def load(path: Path) -> dict:
         raise CheckError(SHAPE) from None
     if not isinstance(data, dict) or not data or not set(data) <= set(KINDS):
         raise CheckError(SHAPE)
-    for kind, links in (("requirements", ()), ("specs", ("requirements",)), ("adrs", ("specs", "requirements"))):
+    for kind, links in (
+        ("requirements", ()),
+        ("specs", ("requirements",)),
+        ("adrs", ("specs", "requirements")),
+    ):
         records = data.get(kind, [])
         if not isinstance(records, list):
             raise CheckError(SHAPE)
         for record in records:
             claims = record.get("claims") if isinstance(record, dict) else None
-            if not _nonempty_text(record.get("title") if claims else None) or not isinstance(claims, list):
+            if not _nonempty_text(record.get("title") if claims else None) or not isinstance(
+                claims, list
+            ):
                 raise CheckError(SHAPE)
             for item in claims:
                 if not isinstance(item, dict) or not _nonempty_text(item.get("statement")):
                     raise CheckError(SHAPE)
                 cites = item.get("citations")
-                if not isinstance(cites, list) or not cites or not all(isinstance(c, str) for c in cites):
+                if (
+                    not isinstance(cites, list)
+                    or not cites
+                    or not all(isinstance(c, str) for c in cites)
+                ):
                     raise CheckError(SHAPE)
                 if not isinstance(item.get("verify", False), bool):
                     raise CheckError(SHAPE)
@@ -112,7 +124,7 @@ def one_line(text: str) -> str:
 
 
 class Clone:
-    """Read-only views of the product clone: its index, the blobs of a path in history, a blob's lines."""
+    """Read-only views of the clone: its index, the blobs of a path in history, a blob's lines."""
 
     def __init__(self, root: Path):
         self.root = root
@@ -174,7 +186,7 @@ def claim_problem(clone: Clone, item: dict, quote_lines: int, where: str) -> str
 
 
 def review(clone: Clone, data: dict, quote_lines: int) -> tuple[dict, list[str], int, int]:
-    """{(kind, index): the claims left}, the refusal lines, the refused count and the claim count."""
+    """{(kind, index): the claims left}, the refusal lines, the refused and the claim counts."""
     kept, said, refused, total = {}, [], 0, 0
     for kind, where in KINDS.items():
         for i, record in enumerate(data.get(kind, [])):
@@ -207,7 +219,7 @@ def citations_of(claims: list[dict]) -> list[str]:
 
 
 def existing(sidecar: Path) -> dict[tuple[str, str, tuple[str, ...]], str]:
-    """(kind, title, citations) -> id of each record already in the sidecar, so none is rendered twice."""
+    """(kind, title, citations) -> id of each record in the sidecar, so none is rendered twice."""
     out = {}
     req = sidecar / KINDS["requirements"]
     text = req.read_text(encoding="utf-8") if req.is_file() else ""
@@ -243,7 +255,7 @@ def points(claims: list[dict]) -> list[str]:
 def observed(claims: list[dict]) -> list[str]:
     return [
         f"{i}. {p} (observed in code at {', '.join(sorted(c['citations']))})"
-        for i, (p, c) in enumerate(zip(points(claims), claims), 1)
+        for i, (p, c) in enumerate(zip(points(claims), claims, strict=True), 1)
     ]
 
 
@@ -261,19 +273,24 @@ def requirement_text(rid: str, title: str, claims: list[dict]) -> str:
 
 def spec_text(sid: str, title: str, claims: list[dict], reqs: list[str]) -> str:
     return (
-        f"# {sid}: {one_line(title)}\n\n- Status: Draft\n- Owner: {OWNER}\n- Requirements: {named(reqs)}\n\n"
-        f"Drafted from the product's code by `/agk:personal-adopt`; nothing here is decided until the "
+        f"# {sid}: {one_line(title)}\n\n- Status: Draft\n- Owner: {OWNER}\n"
+        f"- Requirements: {named(reqs)}\n\n"
+        f"Drafted from the product's code by `/agk:personal-adopt`; nothing here is decided until "
+        "the "
         f"person runs `personal.py confirm {sid}` at their own terminal.\n\n## Rules\n\n"
         + "\n".join(observed(claims)) + f"\n\n## Contexts\n\n{CONTEXTS}"
     )  # fmt: skip
 
 
-def adr_text(aid: str, title: str, claims: list[dict], specs: list[str], reqs: list[str], today: str) -> str:
+def adr_text(
+    aid: str, title: str, claims: list[dict], specs: list[str], reqs: list[str], today: str
+) -> str:
     return (
         f"# {aid}: {one_line(title)}\n\n- Status: Proposed\n- Date: {today}\n"
         f"- Deciders: the person, at `personal.py confirm {aid}`\n- Related: {named(specs)}\n"
         f"- Requirements: {named(reqs)}\n- Kind: recorded\n\n## Context\n\n"
-        "A decision already in the product's code, recorded by `/agk:personal-adopt` from the lines "
+        "A decision already in the product's code, recorded by `/agk:personal-adopt` from the "
+        "lines "
         "it cites.\n\n## Decision\n\n" + "\n".join(observed(claims)) + "\n\n## Consequences\n\n"
         "Not shown by the citations (verify).\n\n## Residual\n\nNone recorded.\n"
     )  # fmt: skip
@@ -300,17 +317,25 @@ def plan(sidecar: Path, data: dict, kept: dict, today: str) -> tuple[dict[str, s
                 continue
             n = number[kind]
             number[kind] += 1
-            reqs = [ids[("requirements", x)] for x in record.get("requirements", []) if ("requirements", x) in ids]
+            reqs = [
+                ids[("requirements", x)]
+                for x in record.get("requirements", [])
+                if ("requirements", x) in ids
+            ]
             if kind == "requirements":
                 rid = ids[(kind, i)] = f"REQ-{n:03d}"
                 appended += requirement_text(rid, title, claims)
             elif kind == "specs":
                 rid = ids[(kind, i)] = f"SPEC-{n:04d}"
-                writes[f"{KINDS[kind]}{n:04d}-{slug(title)}.md"] = spec_text(rid, title, claims, reqs)
+                writes[f"{KINDS[kind]}{n:04d}-{slug(title)}.md"] = spec_text(
+                    rid, title, claims, reqs
+                )
             else:
                 rid = ids[(kind, i)] = f"ADR-{n:04d}"
                 specs = [ids[("specs", x)] for x in record.get("specs", []) if ("specs", x) in ids]
-                writes[f"{KINDS[kind]}{n:04d}-{slug(title)}.md"] = adr_text(rid, title, claims, specs, reqs, today)
+                writes[f"{KINDS[kind]}{n:04d}-{slug(title)}.md"] = adr_text(
+                    rid, title, claims, specs, reqs, today
+                )
             have[key] = rid
             new.append(rid)
     if appended:
@@ -343,7 +368,7 @@ def restore(sidecar: Path, before: dict[str, str | None]) -> None:
 
 
 def render(sidecar: Path, data: dict, kept: dict, today: str) -> tuple[list[str], list[str]]:
-    """Rule 14: the planned writes, the guard over each, then one sidecar commit; (new ids, lines)."""
+    """Rule 14: the planned writes, the guard over each, then one commit; (new ids, lines)."""
     from forge import FilesForge  # noqa: PLC0415 - `render` only
     from personal import commit_options  # noqa: PLC0415 - `render` only
 
@@ -362,14 +387,21 @@ def render(sidecar: Path, data: dict, kept: dict, today: str) -> tuple[list[str]
         before = place(sidecar, writes)
         _sidecar_git(sidecar, "add", "--", *writes)
         subject = f"personal: adopt {', '.join(new)}"
-        done = _sidecar_git(sidecar, *commit_options(sidecar, files.person), "-m", subject, "--", *writes)
+        done = _sidecar_git(
+            sidecar, *commit_options(sidecar, files.person), "-m", subject, "--", *writes
+        )
         if done.returncode != 0:
             _sidecar_git(sidecar, "reset", "-q", "--", *writes)
             restore(sidecar, before)
             raise CheckError("the sidecar commit failed; nothing written (SPEC-0041 rule 14)")
     script = shlex.quote(str(Path(__file__).resolve().parent / "personal.py"))
-    lines = [f"rendered: {', '.join(new)}", "next, at your own terminal (never in an agent session):"]
-    lines += [f"  python3 {script} confirm {rid} --sidecar {shlex.quote(str(sidecar))}" for rid in new]
+    lines = [
+        f"rendered: {', '.join(new)}",
+        "next, at your own terminal (never in an agent session):",
+    ]
+    lines += [
+        f"  python3 {script} confirm {rid} --sidecar {shlex.quote(str(sidecar))}" for rid in new
+    ]
     return new, lines
 
 

@@ -1,4 +1,4 @@
-"""SPEC-0041 build (g), part 2: `/agk:personal-adopt` drafts records with citations that exist (brief #1504).
+"""SPEC-0041 build (g), part 2: `/agk:personal-adopt` drafts cited records (brief #1504).
 
 Advances REQ-048 (AC2: the model's reading of the code becomes cited Draft and Proposed records in
 the sidecar for the person to confirm, and every uncited claim is refused with its position).
@@ -51,7 +51,7 @@ def commit(root: Path, subject: str = "change") -> str:
 
 
 def product(tmp_path: Path) -> Path:
-    """An invented product clone: one tracked file of 20 lines, committed, and one untracked file."""
+    """An invented clone: one tracked file of 20 lines, committed, and one untracked file."""
     root = tmp_path / "clone"
     (root / "src").mkdir(parents=True)
     git(root, "init", "-q", "-b", "main")
@@ -74,7 +74,9 @@ def sidecar_of(tmp_path: Path, extra: str = "") -> Path:
     return path
 
 
-def cite(root: Path, start: int = 10, end: int = 14, rel: str = "src/cart.py", sha: str = "") -> str:
+def cite(
+    root: Path, start: int = 10, end: int = 14, rel: str = "src/cart.py", sha: str = ""
+) -> str:
     return f"{rel}:{start}-{end}@{sha or blob(root, rel)}"
 
 
@@ -126,7 +128,7 @@ def full(root: Path) -> dict:
     ],
 )
 def test_a_citation_that_does_not_exist_is_refused_by_its_position(tmp_path, make, why):
-    """REQ-048 AC2: SPEC-0041 rule 13 (each refusal names the rule and the position, never the text)."""
+    """REQ-048 AC2: SPEC-0041 rule 13 (a refusal names the rule and position, not the text)."""
     root, side = product(tmp_path), sidecar_of(tmp_path)
     data = {"requirements": [{"title": "A cart", "claims": [claim(cite(root)), claim(make(root))]}]}
     code, out = run("check", proposals(tmp_path, data), "--clone", root, "--sidecar", side)
@@ -174,7 +176,9 @@ def test_render_writes_cited_records_in_one_sidecar_commit_and_lists_confirm(tmp
 def test_rendered_records_pass_the_sidecar_checks(tmp_path):
     """REQ-048 AC2: SPEC-0041 rules 2 and 14 (the sidecar's file checks run unchanged on them)."""
     root, side = product(tmp_path), sidecar_of(tmp_path)
-    assert run("render", proposals(tmp_path, full(root)), "--clone", root, "--sidecar", side)[0] == 0
+    assert (
+        run("render", proposals(tmp_path, full(root)), "--clone", root, "--sidecar", side)[0] == 0
+    )
     for check in ("check_adrs", "check_requirements", "check_specs"):
         done = subprocess.run(  # nosec B603 - the kit's own check, fixed argument list
             [sys.executable, str(SCRIPTS / f"{check}.py")], cwd=side, capture_output=True,
@@ -258,7 +262,9 @@ def test_a_proposals_file_of_another_shape_is_refused_whole(tmp_path, data):
     path = tmp_path / "proposals.json"
     path.write_text(data, encoding="utf-8")
     code, out = run("check", path, "--clone", root, "--sidecar", side)
-    assert code == 1 and out == ["refused: the proposals file is not of the shape of SPEC-0041 rule 13"]
+    assert code == 1 and out == [
+        "refused: the proposals file is not of the shape of SPEC-0041 rule 13"
+    ]
 
 
 def test_render_refuses_a_dirty_sidecar_and_usage_errors(tmp_path):
@@ -266,7 +272,9 @@ def test_render_refuses_a_dirty_sidecar_and_usage_errors(tmp_path):
     root, side = product(tmp_path), sidecar_of(tmp_path)
     (side / "docs" / "adr" / "stray.md").write_text("x\n", encoding="utf-8")
     code, out = run("render", proposals(tmp_path, full(root)), "--clone", root, "--sidecar", side)
-    assert code == 1 and out == ["refused: render needs a clean sidecar work tree (SPEC-0041 rule 14)"]
+    assert code == 1 and out == [
+        "refused: render needs a clean sidecar work tree (SPEC-0041 rule 14)"
+    ]
     assert run("nothing")[0] == 2 and run("check")[0] == 2
 
 
