@@ -213,6 +213,7 @@ tests = [
   "tests/kit/test_final_accepts.py", "tests/kit/test_personal_state.py", "tests/kit/test_review_context.py",
   "tests/kit/test_rule3a_record_comments.py", "tests/kit_dev/test_doctor_wiring.py", "tests/kit_dev/test_intake.py",
   "tests/kit_dev/test_new_spec.py", "tests/kit_dev/test_release_check.py", "tests/kit/test_upgrade_adr.py",
+  "tests/kit/test_upgrade_clean_repo.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_names.py"
