@@ -6,5 +6,38 @@
     "name": "agk maintainers"
   },
   "license": "LicenseRef-AGK-Proprietary",
-  "repository": "https://github.com/gbvraju/agk"
+  "repository": "https://github.com/gbvraju/agk",
+  "agents": [
+    "./.claude/agents/architect.md",
+    "./.claude/agents/architect-review.md",
+    "./.claude/agents/conductor.md",
+    "./.claude/agents/drift-auditor.md",
+    "./.claude/agents/shadow.md",
+    "./.claude/agents/steward.md"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin_hooks.py\" pre",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin_hooks.py\" stop"
+          }
+        ]
+      }
+    ]
+  }
 }

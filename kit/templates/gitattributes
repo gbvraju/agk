@@ -16,6 +16,7 @@ scripts/agk/** text eol=lf
 .claude/agents/steward.md text eol=lf
 .claude/hooks/architect_guard.py text eol=lf
 .claude/hooks/conductor_guard.py text eol=lf
+.claude/hooks/plugin_hooks.py text eol=lf
 .claude/hooks/data_guard.py text eol=lf
 .claude/hooks/steward_guard.py text eol=lf
 .claude/hooks/stop_check.py text eol=lf
