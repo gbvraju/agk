@@ -388,7 +388,7 @@ PROVES = (
 
 def _sidecar_git(sidecar: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(  # nosec B603 B607 - fixed git argument list, no shell
-        ["git", *args], cwd=sidecar, capture_output=True, text=True, check=False
+        ["git", *args], cwd=sidecar, capture_output=True, text=True, encoding="utf-8", check=False
     )
 
 
@@ -481,7 +481,7 @@ def _confirm(sidecar: Path, rid: str, ask, tty, env) -> tuple[int, list[str]]:
     env = os.environ if env is None else env
     if env.get(SESSION_SETTING):
         raise CheckError(f"confirm runs only at the person's terminal (setting: {SESSION_SETTING})")
-    if not (sys.stdin.isatty() if tty is None else tty()):
+    if not (os.isatty(0) if tty is None else tty()):
         raise CheckError("confirm needs a terminal on standard input (SPEC-0041 rule 15)")
     files = FilesForge(sidecar, env=env)
     state = _sidecar_git(sidecar, "status", "--porcelain")
@@ -513,7 +513,7 @@ def _confirm(sidecar: Path, rid: str, ask, tty, env) -> tuple[int, list[str]]:
         script = Path(__file__).resolve().parent / f"{reader}.py"
         check = subprocess.run(  # nosec B603 - the kit's own reader, fixed argument list, no shell
             [sys.executable, str(script), "--base", head, "--comments", paths[1]],
-            cwd=sidecar, capture_output=True, text=True, check=False,
+            cwd=sidecar, capture_output=True, text=True, encoding="utf-8", check=False,
         )  # fmt: skip
         done = None
         if check.returncode == 0:

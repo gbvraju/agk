@@ -494,9 +494,9 @@ def status_moved_only(old: str, new: str) -> bool:
         return False
     first = next((i for i, a in enumerate(before) if STATUS_LINE.match(a.rstrip("\r\n"))), None)
     differ = [i for i, (a, b) in enumerate(zip(before, after, strict=True)) if a != b]
-    return not differ or (
-        differ == [first] and STATUS_LINE.match(after[first].rstrip("\r\n")) is not None
-    )
+    if not differ or first is None:
+        return not differ
+    return differ == [first] and STATUS_LINE.match(after[first].rstrip("\r\n")) is not None
 
 
 def design_approvals(
