@@ -206,7 +206,8 @@ def test_ac2_plugin_ships_no_hook_server_monitor_bin_or_agent():
     for rel in ("hooks", "bin", "agents", "commands", "monitors", ".mcp.json", ".lsp.json"):
         assert not (KIT_ROOT / rel).exists(), rel
     plugin = load(PLUGIN / "plugin.json")
-    # `hooks` and `agents` are allowed by ADR-0612 decision 1; the hooks run only the plugin's hook (ADR-0641).
+    # `hooks` and `agents` are allowed by ADR-0612 decision 1;
+    # the hooks run only the plugin's own hook (ADR-0641).
     for key in ("mcpServers", "lspServers", "monitors", "commands", "bin"):
         assert key not in plugin, key
     assert other_hook_commands(plugin) == []
@@ -217,7 +218,7 @@ PLUGIN_HOOK = '"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin_hooks.py"'
 
 
 def other_hook_commands(plugin: dict) -> list[str]:
-    """The hook commands of `plugin.json` that do not run `.claude/hooks/plugin_hooks.py` (ADR-0641)."""
+    """The hook commands of `plugin.json` that do not run `plugin_hooks.py` (ADR-0641)."""
     commands = [
         hook.get("command", "")
         for groups in plugin.get("hooks", {}).values()
