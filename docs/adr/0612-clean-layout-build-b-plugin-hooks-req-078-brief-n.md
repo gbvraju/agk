@@ -66,8 +66,10 @@ What the runs showed, for this version of Claude Code:
    installed project runs `make -f agk.mk agk-governance` as today.
 4. Permission rules: by fact 3 the plugin cannot carry them, and a project rule that names the plugin must name its
    absolute folder, which differs on each machine. A committed project `.claude/settings.json` of plugin paths
-   (`Q-S0071-6`) therefore cannot be written as the same text for every machine. This build writes none; Q-1454-1 asks
-   the maintainers for the form before build (d) writes one.
+   (`Q-S0071-6`) therefore cannot be written as the same text for every machine. The maintainers' answer to Q-1454-1
+   (option (a), on pull request #1498, 2026-11-18) settles the form: the migration of build (d) writes the plugin's
+   permission rules, naming that machine's absolute plugin folder, to the uncommitted `.claude/settings.local.json` of
+   each machine, never to a committed file. This build writes none, since no migration exists yet.
 5. Not in this build: the guards' allowed command forms. In a clean project the conductor's and the architect's guards
    still allow only today's `scripts/agk/` forms and the project's own files, so they refuse the plugin's form: they
    fail closed (Q-1454-2). The clean layout stays not offered (SPEC-0071 residual).
@@ -85,4 +87,4 @@ guarded plugin agent) gets that agent's guard from the plugin, which it would no
 
 - 2026-11-18: the facts above hold for Claude Code 2.1.327 headless; an interactive session and a Windows machine were
   not run (due 2027-01-31).
-- 2026-11-18: the form of a clean project's permission rules is open (Q-1454-1) (due 2027-01-31).
+- 2026-11-18: build (d) writes the per-machine `.claude/settings.local.json` of decision 4 (Q-1454-1 (a)) (due 2027-01-31).
