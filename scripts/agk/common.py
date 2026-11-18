@@ -46,8 +46,7 @@ KIT_TABLE = re.compile(r"^\s*(\[\s*kit\s*\]|kit\s*[.=])", re.MULTILINE)
 
 
 def _run_by_hook() -> bool:
-    main = getattr(sys.modules.get("__main__"), "__file__", None) or ""
-    parts = Path(main).parts
+    parts = Path(sys.argv[0] if sys.argv and sys.argv[0] else "").parts  # the program run
     return any(parts[i : i + 2] == (".claude", "hooks") for i in range(len(parts) - 1))
 
 
