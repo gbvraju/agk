@@ -5,7 +5,7 @@
 """/agk:setup's helper: read, size and print (build (a), SPEC-0065 rules 2, 3, 5, 6, 12; ADR-0618),
 ask and propose the project settings (build (b), rules 4 and 9; ADR-0619).
 
-    python3 setup.py plan|status|ask|settings|install|ci|wsl [--json] [--builders N]
+    python3 setup.py plan|status|ask|settings|install|ci|wsl|back [--json] [--builders N]
                      [--answer ID=CHOICE ...] [--yes] [--date YYYY-MM-DD] [--machine FILE]
                      [--github FILE] [--root DIR]
 
@@ -37,6 +37,10 @@ it runs `/agk:wsl`'s `wsl_setup.ps1 -Status -Json` and `wsl.py plan`, and after 
 carries `-InstallWatchdog` only when `wsl.py plan` says the WSL task goes on (that script then
 hands the scheduler to `autopilot.py on` inside WSL when `[autopilot]` is set), never in personal
 mode.
+`back` (build (g), rule 13; ADR-0624) undoes what this command added on this machine, as kept in
+`<git dir>/agk/setup.json`: with `--yes` it deletes each recorded scheduler task by its name and
+prepares the reverse of each proposed setting the default branch still holds, on a new branch with
+the project's next ADR; it uninstalls nothing, deletes no file and commits or pushes nothing.
 `install` (rule 7) installs, after `--yes`, each tool missing or below the one `MINIMUM` table:
 native Windows through winget (build (c), ADR-0620); Linux and cloud virtual machines (build (e),
 ADR-0622) through apt or dnf, with Node.js, gitleaks and Claude Code by `setup_linux.sh`'s steps;
@@ -116,6 +120,10 @@ ANSWERS = {  # rule 4's five questions and their choices, in the order asked
 }  # fmt: skip
 WHERE = {"hosted": "on GitHub's machines", "local": "on this machine", "personal": "for me only"}
 BRANCH = "agk/setup-settings"
+BACK_BRANCH = "agk/setup-back"
+RECORD = ("agk", "setup.json")  # <git dir>/agk/setup.json: what this command added (rule 13)
+WSL_TASKS = {False: "AGK conductor watchdog (WSL)", True: "agk-autopilot (WSL)"}  # the WSL script's
+KEPT = "back uninstalled nothing, removed no worktree and deleted no file"
 NAMES_PLACEHOLDER = (
     "\n# The model names (/agk:setup's placeholder): name each tier's model, then remove the #"
     " signs."
@@ -497,17 +505,21 @@ def proposals(config: dict, answers: dict, builders: dict, machine: dict) -> lis
 
 def shown(item: tuple) -> str:
     table, key, value = item
-    return f"{f'[{table}] ' if table else ''}{key} = {json.dumps(value)}"
+    said = "removed" if value is None else f"= {json.dumps(value)}"
+    return f"{f'[{table}] ' if table else ''}{key} {said}"
 
 
 def set_key(text: str, table: str | None, key: str, value) -> str:
-    """TEXT with KEY of TABLE (None: the top level) set to VALUE; the rest unchanged."""
+    """TEXT with KEY of TABLE (None: the top level) set to VALUE (None: removed); the rest
+    unchanged."""
     lines, line = text.splitlines(keepends=True), f"{key} = {json.dumps(value)}\n"
     heads = [i for i, ln in enumerate(lines) if re.match(r"\s*\[", ln)]
     if table is None:
         start, end = -1, heads[0] if heads else len(lines)
     else:
         found = next((i for i in heads if lines[i].split("#")[0].strip() == f"[{table}]"), None)
+        if found is None and value is None:
+            return text
         if found is None:
             lead = "" if not text or text.endswith("\n") else "\n"
             return f"{text}{lead}\n[{table}]\n{line}"
@@ -515,8 +527,10 @@ def set_key(text: str, table: str | None, key: str, value) -> str:
         end = next((i for i in heads if i > start), len(lines))
     for i in range(start + 1, end):
         if re.match(rf"\s*{key}\s*=", lines[i]):
-            lines[i] = line
+            lines[i : i + 1] = [] if value is None else [line]
             return "".join(lines)
+    if value is None:
+        return text
     at = end if table is None else max(i + 1 for i in range(start, end) if lines[i].strip())
     while table is None and at > 0 and lines[at - 1].lstrip().startswith("#"):
         at -= 1  # a top-level key goes above the comment that opens the first table
@@ -526,15 +540,18 @@ def set_key(text: str, table: str | None, key: str, value) -> str:
     return "".join(lines)
 
 
-def project_adr(number: int, items: list[tuple], today: str) -> str:
+def project_adr(number: int, items: list[tuple], today: str, back: bool = False) -> str:
     listed = [f"- `{shown(i)}`" for i in items]
+    title = "reversed by /agk:setup back" if back else "chosen in /agk:setup"
+    why = ("The person ran `/agk:setup back`, which reverses the settings `/agk:setup` proposed "
+           "and the default branch still holds; ") if back else (
+           "The person ran `/agk:setup` and answered its questions; ")  # fmt: skip
     return "\n".join([
-        f"# ADR-{number:04d}: The project settings chosen in /agk:setup", "",
+        f"# ADR-{number:04d}: The project settings {title}", "",
         "- Status: Proposed", f"- Date: {today}", "- Deciders: maintainers", "- Related: none",
         f"- Requirements: {wsl.REQUIREMENT}", "", "Protected classes: `agk.toml`", "",
         "## Context", "",
-        "The person ran `/agk:setup` and answered its questions; these settings live in "
-        "`agk.toml`, a protected path, so they come by pull request with this ADR.", "",
+        f"{why}these settings live in `agk.toml`, a protected path, so they come by pull request with this ADR.", "",
         "## Decision", "", "Set in `agk.toml`, and nothing else:", "", *listed, "",
         "## Consequences", "",
         "- The sessions of this project read the new values after the merge.", "",
@@ -544,9 +561,10 @@ def project_adr(number: int, items: list[tuple], today: str) -> str:
     ])  # fmt: skip
 
 
-def write_settings(root: Path, find, today: str) -> list[str]:
+def write_settings(root: Path, find, today: str, back: bool = False) -> list[str]:
     """Rule 9: one change and its ADR on a new branch from the default branch; FIND gives the
-    settings the default branch's `agk.toml` lacks. The text is built and parsed first."""
+    settings the default branch's `agk.toml` lacks (BACK: rule 13's reverse, each recorded on the
+    proposal). The text is built and parsed first."""
     ref = f"origin/{wsl.default_branch(config_of(root)[1])}"
     unread = wsl.Refusal("the default branch's agk.toml cannot be read (path class: agk.toml)")
     if not wsl.git(root, "rev-parse", "--verify", "--quiet", f"{ref}:agk.toml"):
@@ -554,9 +572,12 @@ def write_settings(root: Path, find, today: str) -> list[str]:
     text = wsl.git(root, "show", f"{ref}:agk.toml")
     text += "\n" if text else ""
     try:
-        items = find(tomllib.loads(text))
+        base = tomllib.loads(text)
+        items = find(base)
     except tomllib.TOMLDecodeError:
         raise unread from None
+    if not items and back:
+        return ["nothing to reverse: the default branch holds none of the settings setup proposed"]
     if not items:
         return ["every setting already matches: nothing written and no pull request is needed"]
     for item in items:
@@ -566,29 +587,34 @@ def write_settings(root: Path, find, today: str) -> list[str]:
     except tomllib.TOMLDecodeError:
         bad = "the change would not parse; nothing written (path class: agk.toml)"
         raise wsl.Refusal(bad) from None
-    text += "" if names or "# [models.names]" in text else NAMES_PLACEHOLDER
+    text += "" if back or names or "# [models.names]" in text else NAMES_PLACEHOLDER
     if wsl.git(root, "status", "--porcelain", "--untracked-files=no"):
         raise wsl.Refusal("uncommitted changes in this folder (path class: the working tree)")
-    branch = f"{BRANCH}-{today}"
+    branch = f"{BACK_BRANCH if back else BRANCH}-{today}"
     if wsl.git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"):
         raise wsl.Refusal("that branch already exists (path class: the settings branch)")
     wsl.git(root, "checkout", "-q", "-b", branch, ref)
     if wsl.git(root, "branch", "--show-current") != branch:
         raise wsl.Refusal("the new branch was not made (path class: the settings branch)")
-    number, adr = wsl.next_adr(root, "the-project-settings-chosen-in-setup")
+    what = "reversed by setup back" if back else "chosen in setup"
+    number, adr = wsl.next_adr(root, f"the-project-settings-{what.replace(' ', '-')}")
     (root / "agk.toml").write_text(text, encoding="utf-8")
-    adr.write_text(project_adr(number, items, today), encoding="utf-8")
+    adr.write_text(project_adr(number, items, today, back), encoding="utf-8")
+    if not back:
+        remember(root, "settings", [{"table": t, "key": k, "value": v, "before": lookup(base, t, k)}
+                                    for t, k, v in items])  # fmt: skip
     req, rel = wsl.REQUIREMENT, adr.relative_to(root).as_posix()
+    summary = "Returns" if back else "Sets"
     body = "\n".join([
-        f"Advances: {req}", "Summary: Sets the project's AI workforce settings chosen in setup.",
-        f"Build-state row: {today} {req} unchanged, the settings chosen in /agk:setup",
+        f"Advances: {req}", f"Summary: {summary} the project's AI workforce settings {what}.",
+        f"Build-state row: {today} {req} unchanged, the settings {what}",
         f"Decisions taken: ADR-{number:04d} (Proposed) names the protected class `agk.toml`",
         "Questions: none",
         "Verified: `python3 scripts/agk/prepush.py --record` in this checkout", "",
     ])  # fmt: skip
     path = wsl.body_path(root).with_name("pr-body-setup.md")
     path.write_text(body, encoding="utf-8")
-    message, opener = "agk: the project settings chosen in setup", wsl.__file__
+    message, opener = f"agk: the project settings {what}", wsl.__file__
     return [
         f"changed: agk.toml ({', '.join(shown(i) for i in items)})",
         f"adr: wrote {rel} (ADR-{number:04d}, Proposed)", f"branch: {branch}", f"body: {path}", "",
@@ -597,8 +623,106 @@ def write_settings(root: Path, find, today: str) -> list[str]:
         f"  python3 scripts/agk/prepush.py --record --body {path}",
         f"  git push -u origin {branch}",
         f'  python3 {Path(opener).resolve().as_posix()} open --body {path} --branch {branch} '
-        '--title "The project settings chosen in setup"',
+        f'--title "The project settings {what}"',
     ]  # fmt: skip
+
+
+def lookup(config: dict, table: str | None, key: str):
+    found = config.get(table, {}) if table else config
+    return found.get(key) if isinstance(found, dict) else None
+
+
+def record_path(root: Path) -> Path | None:
+    found = wsl.git(root, "rev-parse", "--absolute-git-dir")
+    return Path(found).joinpath(*RECORD) if found else None
+
+
+def load_record(root: Path) -> dict:
+    """Rule 13's record; a folder that is not a clone has none. Unreadable: refused."""
+    path = record_path(root)
+    if path is None or not path.is_file():
+        return {}
+    try:
+        found = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        found = None
+    tasks = found.get("tasks", []) if isinstance(found, dict) else None
+    settings = found.get("settings", []) if isinstance(found, dict) else None
+    if not (isinstance(tasks, list) and all(isinstance(t, str) for t in tasks)
+            and isinstance(settings, list) and all(isinstance(s, dict) for s in settings)):
+        raise wsl.Refusal("the record cannot be read; nothing done (setting: setup.json)")
+    return found
+
+
+def remember(root: Path, key: str, items: list) -> None:
+    """Add ITEMS to the record's KEY, none twice; a folder that is not a clone keeps nothing."""
+    if record_path(root) is None or not items:
+        return
+    record = load_record(root)
+    record[key] = record.get(key, []) + [i for i in items if i not in record.get(key, [])]
+    save_record(root, record)
+
+
+def save_record(root: Path, record: dict) -> None:
+    path = record_path(root)
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+
+
+def reverse(recorded: list[dict]):
+    """Rule 13: each recorded setting the default branch still holds goes back to its before."""
+
+    def find(base: dict) -> list[tuple]:
+        out: list[tuple] = []
+        for s in recorded:
+            item = (s.get("table"), s.get("key"), s.get("before"))
+            if isinstance(item[1], str) and lookup(base, item[0], item[1]) == s.get("value"):
+                out += [] if item in out else [item]
+        return out
+
+    return find
+
+
+def back(root: Path, today: str, yes: bool) -> tuple[int, dict, list[str]]:
+    """Build (g), rule 13: remove the recorded scheduler tasks by name, then prepare the reverse
+    settings change; nothing uninstalled, no worktree removed, no file deleted."""
+    record = load_record(root)
+    tasks, settings = record.get("tasks", []), record.get("settings", [])
+    table: dict = {"steps": [], "pending": [], "roles": [], "builders": None}
+    if not tasks and not settings:
+        return 0, table, ["nothing to undo: /agk:setup recorded nothing on this machine"]
+    if not yes:
+        table["steps"] = [
+            row("tasks", "waiting", f"would remove {', '.join(tasks)}") if tasks
+            else row("tasks", "skipped", "no scheduler task to remove"),
+            row("settings", "waiting", "would prepare the reverse of the settings setup proposed")
+            if settings else row("settings", "skipped", "no setting to reverse"),
+        ]  # fmt: skip
+        table["pending"] = [r["step"] for r in table["steps"] if r["result"] == "waiting"]
+        return 1, table, ["stop: nothing changed: back runs only after your yes (setting: --yes)"]
+    kept = [n for n in tasks if run_cmd(["schtasks", "/Delete", "/TN", n, "/F"], root) != 0]
+    gone = [n for n in tasks if n not in kept]
+    if tasks:
+        save_record(root, record | {"tasks": kept})
+    steps = [row("tasks", "failed", f"not removed: {', '.join(kept)}; run /agk:setup back again")
+             if kept else row("tasks", "done", f"removed: {', '.join(gone)}") if gone
+             else row("tasks", "skipped", "setup added no scheduler task on this machine")]  # fmt: skip
+    lines: list[str] = []
+    branch = f"{BACK_BRANCH}-{today}"
+    if not settings:
+        steps.append(row("settings", "skipped", "setup proposed no setting from this machine"))
+    elif wsl.git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"):
+        steps.append(row("settings", "skipped", f"the reverse change is already on {branch}"))
+    else:
+        try:
+            lines = write_settings(root, reverse(settings), today, back=True)
+            done = "skipped" if lines[0].startswith("nothing to reverse") else "done"
+            steps.append(row("settings", done, lines[0]))
+        except wsl.Refusal as exc:
+            steps.append(row("settings", "failed", str(exc)))
+    pending = [r["step"] for r in steps if r["result"] in ("waiting", "failed")]
+    return (1 if pending else 0), table | {"steps": steps, "pending": pending}, lines + [KEPT]
 
 
 def tool_of(args: list[str]) -> str | None:
@@ -942,6 +1066,9 @@ def wsl_path(root: Path, machine: dict, config: dict, answers: dict, yes: bool) 
             if ran is None:
                 return table | {"stop": "stop: wsl_setup.ps1 gave no table; run /agk:setup again"}
             done, table["status"] = ran, wsl_helper(root, "status", state)
+            if task and any(s.get("step") == "watchdog" and s.get("result") == "done"
+                            for s in wsl_steps(ran)):  # fmt: skip
+                remember(root, "tasks", [WSL_TASKS["autopilot" in config]])  # rule 13
     steps = wsl_steps(done)
     if personal:
         steps.append(row("scheduler", "skipped", "for me only: no scheduler task (personal mode)"))
@@ -963,7 +1090,7 @@ def load(path: str | None):
 def main(argv: list[str] | None = None) -> int:
     common.utf8_output()
     parser = argparse.ArgumentParser(prog="setup.py", add_help=True)
-    forms = ("plan", "status", "ask", "settings", "install", "ci", "wsl")
+    forms = ("plan", "status", "ask", "settings", "install", "ci", "wsl", "back")
     parser.add_argument("form", choices=forms)
     for flag in ("--machine", "--github", "--root", "--date"):
         parser.add_argument(flag)
@@ -982,6 +1109,15 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: --answer ID=CHOICE with an ID and a choice of setup.py ask", file=sys.stderr)
         return 2
     root = Path(args.root or ".").resolve()
+    if args.form == "back":  # build (g): nothing of the machine is read
+        try:
+            code, table, said = back(root, today, args.yes)
+        except wsl.Refusal as exc:
+            print(f"setup: {exc}")
+            return 1
+        print(json.dumps(table | {"lines": said}, indent=2) if args.json
+              else "\n".join(table_lines(table["steps"]) + said))  # fmt: skip
+        return code
     if args.form == "ci":  # build (f): nothing of the machine but its remote is read
         saved = load(args.machine)
         remote = saved.get("remote") if saved else remote_name(
