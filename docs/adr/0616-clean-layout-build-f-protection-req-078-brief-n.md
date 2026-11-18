@@ -32,7 +32,8 @@ full doctor run, which a session does not make at start.
 3. In a clean project `steward_guard.py` denies a write of a kit manifest path (decision 1's list) into the product,
    naming `SPEC-0071 rule 7` and the path class. A write is either a write tool (`Edit`, `Write`, `MultiEdit`,
    `NotebookEdit`) or a Bash command that is not a read (`cat`, `ls`, `head`, `tail`, `grep`, `rg`, `wc`, `diff`,
-   `stat`, `git`, `gh`) and names such a path as a word or a redirection target. The manifest is the one of the plugin
+   `stat`, `git`, `gh`) and names such a path as a word, or any command, a read too, whose output redirection
+   (`>`, `>>`, `2>`) targets such a path. The manifest is the one of the plugin
    the guard runs from. When it cannot be read, the write tools are denied (fail closed) and Bash is not checked
    for this rule.
 4. The steward's role file (`.claude/agents/steward.md`) says that the steward never pastes kit code into an issue, a

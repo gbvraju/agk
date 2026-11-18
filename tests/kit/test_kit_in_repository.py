@@ -7,6 +7,7 @@ own `.claude-plugin/plugin.json` and `kit/manifest.json`; invented data only; no
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -158,6 +159,9 @@ def guard(plugin: Path, root: Path, tool: str, tool_input: dict) -> str | None:
         ("Bash", {"command": "cp /tmp/x.py scripts/agk/example_check.py"}),
         ("Bash", {"command": f"echo {CONTENT} > Makefile"}),
         ("Bash", {"command": "tee -a tests/kit/test_x.py < /tmp/x"}),
+        ("Bash", {"command": "cat a.py > scripts/agk/example_check.py"}),
+        ("Bash", {"command": "git show HEAD:x >scripts/agk/example_check.py"}),
+        ("Bash", {"command": "grep -h x a.md 2>&1 >> Makefile"}),
     ],
 )
 def test_req078_the_steward_guard_refuses_a_kit_file_written_into_the_product(
@@ -183,6 +187,7 @@ def test_req078_the_steward_guard_refuses_a_kit_file_written_into_the_product(
         ("Write", {"file_path": "CLAUDE.md", "content": "x"}),
         ("Bash", {"command": "cat scripts/agk/example_check.py"}),
         ("Bash", {"command": "grep -n x Makefile"}),
+        ("Bash", {"command": "cat < Makefile > docs/runs/copy.txt 2>&1"}),
         ("Bash", {"command": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/example_check.py"'}),
     ],
 )
@@ -207,3 +212,13 @@ def test_req078_the_steward_prompt_says_it_never_writes_kit_code_into_the_produc
     text = (KIT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
     assert "never paste kit code into an issue, a pull request, a comment or a file" in text
     assert "SPEC-0071 rule 7" in text
+
+
+def test_req078_the_doctor_and_the_guard_keep_the_same_files():
+    """REQ-078 AC5: rule 2's kept files are written twice; the two lists cannot drift apart."""
+    spec = importlib.util.spec_from_file_location("steward_guard_kept", GUARD)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.KEEPS == doctor.CLEAN_KEEPS
+    assert module.KEEPS_UNDER == doctor.CLEAN_KEEPS_UNDER

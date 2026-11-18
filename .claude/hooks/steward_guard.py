@@ -84,6 +84,17 @@ KEEPS = (".gitignore", "CLAUDE.md", "LICENSE-AGK", ".github/PULL_REQUEST_TEMPLAT
 KEEPS_UNDER = (".github/ISSUE_TEMPLATE/",)
 READERS = frozenset({"cat", "ls", "head", "tail", "grep", "rg", "wc", "diff", "stat", "git", "gh"})
 REDIRECT = re.compile(r"^\d*[<>]+&?")
+OUTPUT = re.compile(r"^\d*>>?\|?&?")  # an output redirection, by any command, readers too
+
+
+def redirect_targets(words: list[str]) -> list[str]:
+    """The files a segment's output redirections write (`> f`, `>f`, `>> f`, `2> f`)."""
+    out = []
+    for i, word in enumerate(words):
+        if found := OUTPUT.match(word):
+            rest = word[found.end() :]
+            out.append(rest or (words[i + 1] if i + 1 < len(words) else ""))
+    return out
 
 
 def reason(what: str, where: str) -> str:
@@ -424,9 +435,12 @@ def command_problem(words: list[str], cwd: Path, project: Path, depth: int) -> s
     if (inner := unwrap(words)) is not None:
         return command_problem(inner, cwd, project, depth + 1) if depth < 8 else None
     name = os.path.basename(words[0])
-    if name not in READERS and kit_paths_known(project):
-        for word in words[1:]:
-            if (named := REDIRECT.sub("", word)) and (problem := kit_write(named, cwd, project)):
+    if kit_paths_known(project):
+        named = redirect_targets(words)
+        if name not in READERS:
+            named += [REDIRECT.sub("", word) for word in words[1:]]
+        for word in named:
+            if word and (problem := kit_write(word, cwd, project)):
                 return problem
     if name == "find":
         found = [i for i, w in enumerate(words) if w in ("-exec", "-execdir", "-ok", "-okdir")]

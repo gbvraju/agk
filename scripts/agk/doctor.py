@@ -1457,11 +1457,8 @@ def model_names_result(root: Path) -> Result:
     if names is None:
         return Result("ok", message="auto_start off or no launch_adapter")
     if not names:
-        first = (
-            "the autopilot is on with [autopilot] adapter"
-            if on
-            else ("auto_start is on with a launch_adapter")
-        )
+        first = "the autopilot is on with [autopilot] adapter" if on else (
+            "auto_start is on with a launch_adapter")
         return Result(
             "fail",
             message=f"{first} and [models.names] is unset, so "
