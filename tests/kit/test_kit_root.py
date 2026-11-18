@@ -70,7 +70,8 @@ def plugin(tmp: Path, version: str = "0.0.1") -> Path:
     return root
 
 
-CLEAN = '[kit]\nlayout = "plugin"\n'
+# A clean project pins its plugin (brief #1455, ADR-0613): the stub plugin's version.
+CLEAN = 'version = "0.0.1"\n\n[kit]\nlayout = "plugin"\nplugin_version = "0.0.1"\n'
 INSTALLED = 'version = "0.0.1"\n'
 
 

@@ -25,8 +25,9 @@ ROOT = Path(__file__).resolve().parents[2]
 KIT = ROOT / "scripts" / "agk"
 sys.path.insert(0, str(KIT))
 
-import config  # noqa: E402
 import kit_root  # noqa: E402
+
+import config  # noqa: E402
 
 PIN = "0.9.1"
 PROBE = "import common\nprint('probe-example worked')\n"
@@ -152,8 +153,9 @@ def test_ac2_the_resolver_refuses_another_version_before_the_gate(tmp_path):
 def test_ac2_a_second_worktree_reads_the_same_plugin(tmp_path):
     """REQ-078 AC2: a builder worktree of the sample is held to the same pin (rule 10)."""
     root, plug = project(tmp_path, clean()), plugin(tmp_path)
-    git(root, "-c", "user.name=cb-example-1", "-c", "user.email=cb@example.com", "add", ".")
-    git(root, "-c", "user.name=cb-example-1", "-c", "user.email=cb@example.com", "commit", "-qm", "s")
+    who = ("-c", "user.name=cb-example-1", "-c", "user.email=cb@example.com")
+    git(root, *who, "add", ".")
+    git(root, *who, "commit", "-qm", "sample")
     git(root, "worktree", "add", "-q", str(tmp_path / "worktree-example"))
     tree = tmp_path / "worktree-example"
     (tree / "sub").mkdir()

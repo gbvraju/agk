@@ -181,3 +181,9 @@ review_mode = "team"
 # high. `conductor = "strongest"` (the one value) pins every pass to strongest. A change needs an ADR.
 # [models]
 # conductor = "strongest"
+# The clean layout (SPEC-0071, ADR-0611, ADR-0613): only `/agk:upgrade --clean-repo` writes this table, last in the file. With
+# layout = "plugin" the kit runs from the plugin, and plugin_version pins it: equal to `version`, it must also be the running
+# plugin's version, or every session, hook and kit script refuses at start naming the setting. Raising it is a release pull request.
+# [kit]
+# layout = "plugin"
+# plugin_version = "<the version above>"

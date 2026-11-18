@@ -31,9 +31,9 @@ def found(text: str) -> list[tuple[str, str, tuple[str, ...]]]:
 # --- answer 2: the known keys, listed once ----------------------------------------------------
 
 
-def test_the_list_names_the_seven_tables():
+def test_the_list_names_the_eight_tables():
     """REQ-039: brief #1245 answer 2; the `[steward]` table of brief #1320 (ADR-0557) is the
-    seventh (brief #1338)."""
+    seventh (brief #1338); the `[kit]` table of SPEC-0071 (brief #1455, ADR-0613) the eighth."""
     assert set(config.TABLE_KEYS) == {
         "flow",
         "testing",
@@ -42,6 +42,7 @@ def test_the_list_names_the_seven_tables():
         "design",
         "delivery",
         "steward",
+        "kit",
     }
     assert {"auto_start", "launch_adapter", "min_free_memory_mb"} <= config.TABLE_KEYS["flow"]
     assert config.TABLE_KEYS["delivery"] == frozenset({"work_type"})

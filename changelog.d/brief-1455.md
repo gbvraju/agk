@@ -1,0 +1,1 @@
+- `[kit] plugin_version` pins the plugin in a clean project: every kit script and the resolver refuse at start, naming the setting, when the running plugin is another version or there is none (and then name the install command), or when the pin is missing or differs from `version` (brief #1455)
