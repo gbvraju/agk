@@ -938,13 +938,17 @@ def next_steps(target: Path, kit_root: Path, opts: dict[str, str]) -> int:
 CLEAN_BRANCH = "agk-clean-repo"
 CLEAN_TEMPLATE = "kit/templates/clean-claude.md"
 CLEAN_FLAGS = ("--clean-repo", "--rehearsal", "--write")
-# Rule 2 (Q-S0071-5): the manifest files a clean project keeps; CLAUDE.md is rewritten short.
-CLEAN_KEEPS = (
+# Rule 2 (Q-S0071-5, brief #1419): the one list of the files a clean project keeps, for other
+# scripts to import; CLAUDE.md is kept rewritten short, so the plan skips only the rest.
+CLEAN_KEPT = (
     ".gitignore",
+    "CLAUDE.md",
+    "LICENSE-AGK",
     ".github/ISSUE_TEMPLATE/",
     ".github/PULL_REQUEST_TEMPLATE.md",
     "agk.toml",
 )
+CLEAN_KEEPS = tuple(rel for rel in CLEAN_KEPT if rel != "CLAUDE.md")
 LOCAL_RULES = ".claude/settings.local.json"  # ADR-0612 decision 4: uncommitted, this machine's
 # Rule 11: build (g) writes the rehearsal's four figures to SPEC-0071's proof and sets this.
 CLEAN_PROOF_HELD = False

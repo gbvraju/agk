@@ -14,8 +14,8 @@ Run a kit script as `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/<script>"` from 
 repository.
 
 This repository keeps only the project: `agk.toml`, its requirements, specs, ADRs, build state, run records,
-briefs, vision and design documents, its own code and tests, `.gitignore` and the issue and pull request
-templates.
+briefs, vision and design documents, its own code and tests, `LICENSE-AGK`, `.gitignore` and the issue
+and pull request templates.
 
 ## The project's own rules
 

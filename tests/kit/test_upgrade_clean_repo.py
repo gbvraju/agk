@@ -41,6 +41,7 @@ KIT = {
     ".github/ISSUE_TEMPLATE/problem.md": "a problem\n",
     ".gitignore": "__pycache__/\n.claude/settings.local.json\n",
     "CLAUDE.md": "# rules\nRead constitution/principles.md first.\n",
+    "LICENSE-AGK": "The licence of example.com's kit.\n",
     "constitution/principles.md": "# Principles\n",
     "Makefile": "include agk.mk\n",
     "agk.mk": "agk-governance:\n\ttrue\n",
@@ -165,6 +166,36 @@ def test_the_migration_removes_the_kit_writes_the_clean_files_and_reverts(tmp_pa
     git(root, "commit", "-q", "-m", "clean layout")
     git(root, "revert", "--no-edit", "HEAD")
     assert git(root, "diff", head, "HEAD", "--stat") == ""  # reverting its one commit undoes it
+
+
+# SPEC-0071 rule 2: the files a clean project keeps (brief #1419 for the licence, Q-S0071-5).
+RULE_2_KEPT = (
+    ".gitignore",
+    "CLAUDE.md",
+    "LICENSE-AGK",
+    ".github/ISSUE_TEMPLATE/",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "agk.toml",
+)
+
+
+def test_the_plan_never_deletes_the_licence(tmp_path, kit, capsys):
+    root = sample(tmp_path)
+    code, out = run(capsys, root, "--rehearsal", "--write")
+    assert code == 0, out
+    assert (root / "LICENSE-AGK").read_text(encoding="utf-8") == KIT["LICENSE-AGK"]
+    assert not [ln for ln in out.splitlines() if "LICENSE-AGK" in ln and "delete" in ln], out
+    assert "LICENSE-AGK" not in git(root, "status", "--porcelain")
+
+
+def test_the_kept_files_are_one_list_and_rule_2s():
+    assert upgrade.CLEAN_KEPT == RULE_2_KEPT
+    assert set(upgrade.CLEAN_KEEPS) == set(RULE_2_KEPT) - {"CLAUDE.md"}  # rewritten short
+    spec = next((ROOT / "docs" / "specs").glob("0071-*.md")).read_text(encoding="utf-8")
+    rule = next(ln for ln in spec.splitlines() if "**In the repository:**" in ln)
+    for rel in (".gitignore", "CLAUDE.md", "LICENSE-AGK", "agk.toml"):
+        assert rel in rule, rel
+    assert "the issue and pull request templates under `.github/`" in rule
 
 
 def test_a_changed_kit_file_is_listed_and_kept(tmp_path, kit, capsys):

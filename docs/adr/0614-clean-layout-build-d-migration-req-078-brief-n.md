@@ -26,8 +26,9 @@ and pinned its version (ADR-0613), but nothing writes the `[kit]` table or remov
    Until build (g), `CLEAN_PROOF_HELD` in `upgrade.py` is false, so only `--rehearsal` runs; the script cannot tell
    a sample from a customer project, so the flag is the person's statement.
 3. What it removes: every path that the manifest's `verbatim` list or any release row of the table names (the
-   table's full history), except the kit-only paths and rule 2's files (`.gitignore`, the issue and pull request
-   templates, `agk.toml`) and the project's own work as `uninstall.py` reads it. Each is matched as `uninstall.py`
+   table's full history), except the kit-only paths and rule 2's files (`.gitignore`, `LICENSE-AGK`, the issue
+   and pull request templates, `agk.toml`; `CLAUDE.md` is rewritten as decision 4 says), held in one list,
+   `upgrade.CLEAN_KEPT`, that other scripts import, and the project's own work as `uninstall.py` reads it. Each is matched as `uninstall.py`
    matches it (`classify`): a released copy is deleted, a marked agk block is taken out of a file with the
    project's own lines, and a file that differs from every released copy is listed as `changed` and kept, named
    for the pull request body (Q-S0071-8). `include agk.mk` leaves a kept `Makefile`.
