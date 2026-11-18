@@ -235,12 +235,12 @@ in this order. Each change to `agk.toml` is a protected change with an ADR in th
    and writes the job's output to the worktree's `.agk-session.log` (brief #1388, ADR-0588). With `show_jobs = true` in the
    `[autopilot]` table of `agk.toml` (default false) a job also shows in a terminal tab that closes when it ends, its output
    still in the log. Each writes `<worktree>/.agk-session-exit` when its session ends. Try the one for the machine once by
-   hand, as [the getting-started guide](getting-started.md) shows ("Automatic starts after a review pass"). Where the
-   adapter is named for the autopilot is in the note after step 4:
+   hand, as [the getting-started guide](getting-started.md) shows ("Automatic starts after a review pass"). Then set the
+   command that starts one session as `adapter` in the `[autopilot]` table (step 2; the note after step 4 says more):
 
        echo hello | AGK_SESSION=builder-x bash scripts/start-session-local.sh
 
-2. **The `[autopilot]` table.** In `agk.toml` set `mode` (`off`, `assist` or `on`; `assist` starts reviews, the steward and the
+2. **The `[autopilot]` table.** In `agk.toml` set `adapter` (the command from step 1), `mode` (`off`, `assist` or `on`; `assist` starts reviews, the steward and the
    conductor, and a build only on your yes), `interval_minutes` (5 when unset) and `daily_budget` (a whole number of tokens;
    absent or `"off"` means no limit):
 
@@ -248,6 +248,7 @@ in this order. Each change to `agk.toml` is a protected change with an ADR in th
        mode = "on"
        interval_minutes = 5
        daily_budget = 2000000
+       adapter = "bash scripts/start-session-local.sh"
 
 3. **Turn it on.** Run `python3 scripts/agk/autopilot.py on` (`agk autopilot on`) once on the machine: it installs the
    supervisor's one scheduler entry (a crontab line, or on Windows the task `agk-autopilot`), checks the machine and prints the
@@ -261,10 +262,10 @@ in this order. Each change to `agk.toml` is a protected change with an ADR in th
    absent; once it is set they are not read, and `doctor.py` fails `autopilot-settings` naming each one still set. Remove
    them in the pull request that sets `[autopilot]`.
 
-   **Until the autopilot has its own adapter setting** (the owner's ruling Q-1451-2 (b); a follow-up brief builds it, and
-   this guide then names it), the autopilot still starts its jobs through the adapter that the old setting names, so `agk
-   autopilot on` and `agk next` need it set and `doctor.py` fails `autopilot-settings` while it is. Treat that failure as
-   known until the follow-up lands; do not remove the setting meanwhile.
+   **The adapter setting.** The autopilot starts its jobs through `adapter` in the `[autopilot]` table (brief #1480,
+   ADR-0628), the same command form as the older setting in the `[flow]` table, for example `adapter = "bash scripts/start-session-local.sh"`;
+   `agk autopilot on` and `agk next` read it from there and nothing else. The older one is not read once `[autopilot]`
+   is set (see the note above): remove it in the pull request that sets `adapter`.
 
    **The watchdog, the older way: the scripted pass** (brief #1310, ADR-0554): `watchdog --pass` keeps the conductor's model asleep while nothing
    changed. It takes or renews the lease under its name itself (another live holder, such as an interactive conductor with
