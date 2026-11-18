@@ -225,47 +225,49 @@ prints the same as JSON. The conductor runs `tidy --apply` at its start and afte
 ## Running unattended
 
 In local mode nothing in the cloud starts a session: the launcher tasks of the cloud need Actions and cloud sessions. So that a
-night is not lost when a builder or the conductor dies of a crash or a memory hit while nobody is watching, set up these
-things on the machine that runs the sessions, in this order (brief #1237, ADR-0525). Each change to `agk.toml` is a protected
-change with an ADR in the same pull request.
+night is not lost when a builder or the conductor dies of a crash or a memory hit while nobody is watching, one supervisor per
+machine starts every session as a short job (SPEC-0064, ADR-0587, ADR-0589). Set it up on the machine that runs the sessions,
+in this order. Each change to `agk.toml` is a protected change with an ADR in the same pull request.
 
 1. **The adapter.** The kit installs two launch adapters, which a project then owns: `scripts/start-session-windows.ps1`
    (Windows; it needs PowerShell 7) and `scripts/start-session-local.sh` (Linux and macOS), each starting one session per call
    in its own worktree. Each runs its job headless in the background, with no terminal tab and no Windows Terminal needed,
    and writes the job's output to the worktree's `.agk-session.log` (brief #1388, ADR-0588). With `show_jobs = true` in the
    `[autopilot]` table of `agk.toml` (default false) a job also shows in a terminal tab that closes when it ends, its output
-   still in the log. Each writes `<worktree>/.agk-session-exit` when its session ends. Set the one for the machine in the
-   `[flow]` table, and try it once by hand as [the getting-started guide](getting-started.md) shows ("Automatic starts after
-   a review pass"):
+   still in the log. Each writes `<worktree>/.agk-session-exit` when its session ends. Try the one for the machine once by
+   hand, as [the getting-started guide](getting-started.md) shows ("Automatic starts after a review pass"). Then set the
+   command that starts one session as `adapter` in the `[autopilot]` table (step 2; the note after step 4 says more):
 
-       launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"
-       launch_adapter = "bash scripts/start-session-local.sh"
+       echo hello | AGK_SESSION=builder-x bash scripts/start-session-local.sh
 
-   `python3 scripts/agk/doctor.py` prints `launch adapter: auto_start is on and ...` with the file and the line to set when
-   `auto_start` is on and the adapter is missing.
-2. **`auto_start = true`** in the same table. The conductor then restarts a builder whose pull request is handed over or
-   silent through that adapter, and the watchdog below starts the conductor through it; with it off, nothing starts.
-3. **The capacity.** `[capacity] profile = "auto"`, with `builder_memory_gb` (in `[flow]` or `[capacity]`; the smaller
-   counts) set to the memory one builder needs with its containers, so that the plan starts no more builders than the
-   machine's free memory holds.
-4. **The watchdog.** `python3 scripts/agk/conductor.py watchdog` is one pass, never a loop. It starts nothing while the project
-   is paused, or unless `auto_start` and `launch_adapter` are set in the checkout and on the default branch alike. It reads the
-   conductor's lease on the plan issue (`plan_issue` of the `[flow]` table; without it, nothing starts): while a live
-   conductor holds it, it prints `watchdog: lease held by <name> until <time>; nothing started`. When the lease is free or
-   expired, it prints the machine's free memory against `builder_memory_gb`, starts nothing when that is below one builder
-   (`nothing started: free memory is below one builder`), and otherwise starts one conductor through the adapter, named
-   `conductor-local` (or `--session NAME`), which takes the lease itself; the lease keeps two from running. It posts nothing.
-   To run it every 30 minutes, print the one scheduler line for the machine and run that line yourself; the command runs
-   nothing:
+2. **The `[autopilot]` table.** In `agk.toml` set `adapter` (the command from step 1), `mode` (`off`, `assist` or `on`; `assist` starts reviews, the steward and the
+   conductor, and a build only on your yes), `interval_minutes` (5 when unset) and `daily_budget` (a whole number of tokens;
+   absent or `"off"` means no limit):
 
-       python3 scripts/agk/conductor.py watchdog --install
+       [autopilot]
+       mode = "on"
+       interval_minutes = 5
+       daily_budget = 2000000
+       adapter = "bash scripts/start-session-local.sh"
 
-   On Windows it is a `schtasks /Create /SC MINUTE /MO 30 /TN "AGK conductor watchdog" ...` line, elsewhere a crontab line
-   (add it with `crontab -e`). Each runs `git fetch` in the checkout and then the pass `(verify: a scheduled task and a cron
-   job start with a short PATH; check that python, git, gh and the adapter's terminal are found, and that the task runs
-   while you are signed in, which a terminal tab needs)`.
+3. **Turn it on.** Run `python3 scripts/agk/autopilot.py on` (`agk autopilot on`) once on the machine: it installs the
+   supervisor's one scheduler entry (a crontab line, or on Windows the task `agk-autopilot`), checks the machine and prints the
+   `[autopilot] mode` line to set by pull request. `agk autopilot off` removes the entry, and `agk status` shows the running
+   jobs and what waits on you. `python3 scripts/agk/doctor.py` passes the setup when no replaced setting is still set.
+4. **The capacity.** Set `builder_memory_gb` in the `[flow]` table to the memory one builder needs with its containers, so
+   that the plan starts no more builders than the machine's free memory holds.
 
-   **The scripted pass** (brief #1310, ADR-0554): `watchdog --pass` keeps the conductor's model asleep while nothing
+   **Older settings** (kept for one release). `auto_start` and `launch_adapter` in the `[flow]` table, the `[capacity]` table
+   and the conductor's watchdog task (`python3 scripts/agk/conductor.py watchdog`) are read only while `[autopilot]` is
+   absent; once it is set they are not read, and `doctor.py` fails `autopilot-settings` naming each one still set. Remove
+   them in the pull request that sets `[autopilot]`.
+
+   **The adapter setting.** The autopilot starts its jobs through `adapter` in the `[autopilot]` table (brief #1480,
+   ADR-0628), the same command form as the older setting in the `[flow]` table, for example `adapter = "bash scripts/start-session-local.sh"`;
+   `agk autopilot on` and `agk next` read it from there and nothing else. The older one is not read once `[autopilot]`
+   is set (see the note above): remove it in the pull request that sets `adapter`.
+
+   **The watchdog, the older way: the scripted pass** (brief #1310, ADR-0554): `watchdog --pass` keeps the conductor's model asleep while nothing
    changed. It takes or renews the lease under its name itself (another live holder, such as an interactive conductor with
    `/loop`, starts nothing), runs `session.py review-queue --fingerprint`, the plan and `conductor.py sweep` as scripts, and
    starts one conductor job through the adapter only when the fingerprint or the sweep's lines (without their ages) differ
@@ -323,7 +325,7 @@ change with an ADR in the same pull request.
        mid = "<its mid model name>"
 
    Run the conductor itself on the strongest model, because it reviews. `python3 scripts/agk/doctor.py` warns
-   `model names: ...` when `auto_start` is on with a `launch_adapter` and the table is unset.
+   `model names: ...` when the table is unset while the older start settings (see the note in step 4) are on; it does not read `[autopilot]`.
 
 ## Running the workforce in WSL 2
 
