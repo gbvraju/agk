@@ -587,8 +587,37 @@ def test_req_048_a_team_mode_repository_takes_neither_new_reading(tmp_path, chec
     assert with_comments.stdout == without.stdout
 
 
-def test_req_048_without_comments_a_sidecar_reads_as_before(tmp_path):
-    """REQ-048 AC2: rule 8 (a local run has no comments: the confirmation is not checked)."""
+@pytest.mark.parametrize(
+    ("kind", "check", "rid"),
+    [
+        ("spec", "check_specs", "SPEC-0001"),
+        ("adr", "check_adrs", "ADR-0001"),
+        ("req", "check_requirements", "REQ-101"),
+    ],
+)
+def test_req_048_without_comments_a_sidecar_status_move_is_refused(tmp_path, kind, check, rid):
+    """REQ-048 AC2: rule 15, Q-1502-1 answer (a) (no comments: refused, never skipped)."""
     root = holding(tmp_path / "s")
-    _, base = flipped(root, "adr")
-    assert run_check(root, "check_adrs", "--base", base).returncode == 0
+    _, base = flipped(root, kind)
+    done = run_check(root, check, "--base", base)
+    assert done.returncode == 1 and rid in done.stdout and "option: --comments" in done.stdout
+
+
+@pytest.mark.parametrize("check", ["check_specs", "check_adrs", "check_requirements"])
+def test_req_048_without_a_base_a_sidecar_fails_closed(tmp_path, check):
+    """REQ-048 AC2: rule 15, Q-1502-1 answer (a) (no base resolves: the sidecar check fails)."""
+    root = holding(tmp_path / "s")
+    git(root, "branch", "-m", "main", "work")
+    done = run_check(root, check, "--comments", comments_file(root, []))
+    assert done.returncode == 1 and "option: --base" in done.stdout, done.stdout
+
+
+def test_req_048_without_comments_team_mode_reads_as_before(tmp_path):
+    """REQ-048 AC2: rule 8 (in team mode no comments still means the approval is not checked)."""
+    root = team_repo(tmp_path / "t")
+    base = git(root, "rev-parse", "HEAD")
+    set_status(root, SPEC_PATH, "- Status: Draft", "- Status: Approved")
+    set_status(root, ADR_PATH, "- Status: Proposed", "- Status: Accepted")
+    for check in ("check_specs", "check_adrs"):
+        done = run_check(root, check, "--base", base)
+        assert done.returncode == 0, (check, done.stdout)

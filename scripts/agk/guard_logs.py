@@ -102,7 +102,11 @@ def refused_text(payload: object) -> str:
 
 
 def record_refusal(
-    payload: object, hook: str, reason: str, role: str, error: dict | None = None,
+    payload: object,
+    hook: str,
+    reason: str,
+    role: str,
+    error: dict | None = None,
     now: datetime | None = None,
 ) -> bool:
     """Append one redacted line for a denial; False when it cannot, which changes nothing."""

@@ -18,7 +18,8 @@ HEAD's history, one a line, so that the governance workflow can fetch those comm
 
 In a sidecar only (SPEC-0041 rule 8, brief #1502), `check_adrs.py --comments FILE` also fails an ADR
 whose status line moves to `Accepted` without the `Accept: <C> ADR-nnnn` line of the person's
-terminal confirmation at a `<C>` where the ADR equals its text apart from its status line.
+terminal confirmation at a `<C>` where the ADR equals its text apart from its status line; without
+`--comments`, or without a base, such a move fails rather than being skipped (Q-1502-1 answer (a)).
 """
 
 from __future__ import annotations
@@ -207,19 +208,28 @@ def pending(
 
 
 def terminal_failures(root: Path, mb: str, args: list[str]) -> list[str]:
-    """SPEC-0041 rule 8, in a sidecar with `--comments FILE` only (brief #1502): an ADR whose
-    status line moves to `Accepted` needs an `Accept: <C> ADR-nnnn` line that
-    `reviewers.terminal_confirmations` derives, at a `<C>` of the head's history where the ADR
-    equals its text apart from its status line. Team and solo mode take no such reading."""
-    if "--comments" not in args or personal_table(root) is None:
+    """SPEC-0041 rule 8, in a sidecar only (brief #1502): an ADR whose status line moves to
+    `Accepted` needs an `Accept: <C> ADR-nnnn` line that `reviewers.terminal_confirmations`
+    derives from `--comments FILE`, at a `<C>` of the head's history where the ADR equals its text
+    apart from its status line; without `--comments` it fails (Q-1502-1 answer (a)). Team and
+    solo mode take no such reading."""
+    if personal_table(root) is None:
         return []
     from check_specs import in_history  # noqa: PLC0415 - the sidecar reading only
-    from reviewers import derived_only, solo_person, status_moved_only, terminal_shas
+    from reviewers import (  # noqa: PLC0415
+        SIDECAR_NO_COMMENTS,
+        derived_only,
+        solo_person,
+        status_moved_only,
+        terminal_shas,
+    )
 
-    at = args.index("--comments") + 1
-    if at >= len(args):
+    given = "--comments" in args
+    at = args.index("--comments") + 1 if given else 0
+    if given and at >= len(args):
         raise CheckError("--comments needs a value")
-    derived = derived_only(read_comments(args[at]) or [], agent_apps(root), solo_person(root))
+    saved = (read_comments(args[at]) or []) if given else []
+    derived = derived_only(saved, agent_apps(root), solo_person(root))
     problems: list[str] = []
     for path, state in sorted(changed_files(root, mb).items()):
         number = FILE_RE.match(path.removeprefix("docs/adr/"))
@@ -231,7 +241,9 @@ def terminal_failures(root: Path, mb: str, args: list[str]) -> list[str]:
             continue
         rid = f"ADR-{number.group(1)}"
         shas = terminal_shas(derived, rid)
-        if not shas:
+        if not given:  # Q-1502-1 answer (a): refused, never skipped
+            problems.append(f"{rid}: {SIDECAR_NO_COMMENTS}")
+        elif not shas:
             problems.append(f"{rid}: SPEC-0041 rule 8: no Accept line of a terminal confirmation")
         elif not any(
             in_history(root, sha) and status_moved_only(show(root, sha, path) or "", new)
@@ -317,6 +329,10 @@ def main(argv: list[str] | None = None) -> int:
     base = resolve_base(root, base_arg(argv))
     if base is None:
         print(f"{NAME}: no base ref available outside CI; immutability check skipped")
+        if personal_table(root) is not None:  # Q-1502-1 answer (a): a sidecar fails closed
+            from reviewers import SIDECAR_NO_BASE  # noqa: PLC0415
+
+            problems.append(SIDECAR_NO_BASE)
     else:
         mb = merge_base(root, base)
         recorded = accepted_by_final(root, mb)

@@ -10,8 +10,9 @@ the `ac_coverage` setting (`warn` or `block`), for every criterion `ACn` of it (
 In a sidecar only (SPEC-0041 rule 8, brief #1502), `--comments FILE [--base REF]` also fails a
 requirement with a `- Source: observed in code` line that moves to `done` from the merge base
 without the `Confirm: <C> REQ-nnn` line of the person's terminal confirmation at a `<C>` of the
-head's history where its entry equals the current one apart from its status line. Team and solo
-mode take no such reading."""
+head's history where its entry equals the current one apart from its status line; without
+`--comments`, or without a base, such a move fails rather than being skipped (Q-1502-1 answer
+(a)). Team and solo mode take no such reading."""
 
 from __future__ import annotations
 
@@ -81,19 +82,28 @@ def trimmed(text: str) -> str:
 
 def terminal_failures(root: Path, argv: list[str], reqs: list[dict]) -> list[str]:
     """SPEC-0041 rule 8: an observed requirement that moves to `done` needs its confirmation."""
-    if "--comments" not in argv or personal_table(root) is None:
+    if personal_table(root) is None:
         return []
     from check_final_clearance import comments_of  # noqa: PLC0415 - the sidecar reading only
     from check_specs import in_history  # noqa: PLC0415
-    from reviewers import derived_only, solo_person, status_moved_only, terminal_shas
+    from reviewers import (  # noqa: PLC0415
+        SIDECAR_NO_BASE,
+        SIDECAR_NO_COMMENTS,
+        derived_only,
+        solo_person,
+        status_moved_only,
+        terminal_shas,
+    )
 
-    at = argv.index("--comments") + 1
-    if at >= len(argv):
+    given = "--comments" in argv
+    at = argv.index("--comments") + 1 if given else 0
+    if given and at >= len(argv):
         raise CheckError("--comments needs a value")
     mb = base_context(root, NAME, base_arg(argv))
-    if mb is None:
-        return []
-    derived = derived_only(comments_of(Path(argv[at])), agent_apps(root), solo_person(root))
+    if mb is None:  # Q-1502-1 answer (a): a sidecar fails closed
+        return [SIDECAR_NO_BASE]
+    saved = comments_of(Path(argv[at])) if given else []
+    derived = derived_only(saved, agent_apps(root), solo_person(root))
     now = entries((root / PATH).read_text(encoding="utf-8"))
     before = {r["id"]: r["status"] for r in parse_requirements(show(root, mb, PATH) or "")}
     problems: list[str] = []
@@ -103,7 +113,9 @@ def terminal_failures(root: Path, argv: list[str], reqs: list[dict]) -> list[str
         if req["status"] != "done" or before.get(rid) == "done" or not observed:
             continue
         shas = terminal_shas(derived, rid)
-        if not shas:
+        if not given:  # Q-1502-1 answer (a): refused, never skipped
+            problems.append(f"{rid}: {SIDECAR_NO_COMMENTS}")
+        elif not shas:
             problems.append(f"{rid}: SPEC-0041 rule 8: no Confirm line of a terminal confirmation")
         elif not any(
             in_history(root, sha)

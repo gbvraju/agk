@@ -476,9 +476,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.yes and not (args.head and re.fullmatch(r"[0-9a-f]{40}", args.head)):
         parser.error("--yes needs --head <the 40-character head commit the dry run printed>")
-    top = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8"
-    ) if shutil.which("git") else None
+    top = (
+        subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if shutil.which("git")
+        else None
+    )
     if top is None or top.returncode != 0:
         print("refused: run it inside the repository's checkout (git is needed)")
         return 1

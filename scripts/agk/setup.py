@@ -653,8 +653,12 @@ def load_record(root: Path) -> dict:
         found = None
     tasks = found.get("tasks", []) if isinstance(found, dict) else None
     settings = found.get("settings", []) if isinstance(found, dict) else None
-    if not (isinstance(tasks, list) and all(isinstance(t, str) for t in tasks)
-            and isinstance(settings, list) and all(isinstance(s, dict) for s in settings)):
+    if not (
+        isinstance(tasks, list)
+        and all(isinstance(t, str) for t in tasks)
+        and isinstance(settings, list)
+        and all(isinstance(s, dict) for s in settings)
+    ):
         raise wsl.Refusal("the record cannot be read; nothing done (setting: setup.json)")
     return found
 

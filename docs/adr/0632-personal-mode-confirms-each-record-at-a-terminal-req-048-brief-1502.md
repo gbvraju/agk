@@ -47,8 +47,11 @@ spec for its own ADR naming its classes; this is build (g), part 1 (the terminal
    status line moves to `Accepted` without an `Accept: <C> ADR-nnnn` line at a `<C>` of the head's history where the
    ADR equals its text apart from its status line; `check_requirements.py --comments FILE` fails a requirement with a
    `- Source: observed in code` line that moves to `done` without a `Confirm: <C> REQ-nnn` line at a `<C>` where its
-   entry equals the current one apart from its status line. A team-mode or solo-mode repository takes neither new
-   reading and reads exactly as before.
+   entry equals the current one apart from its status line. In a sidecar each of these three moves fails, never
+   skipped, when the check runs without `--comments`, and each check fails closed when no base resolves (the owner's
+   answer `Q-1502-1 (a)`, 2026-11-18): only `confirm`, which passes both, sets such a status. A team-mode or
+   solo-mode repository takes neither new reading and reads exactly as before. The owner's answer `Q-1502-2 (a)`
+   keeps decision 4's first sentence: a plain written approval does not count in a sidecar.
 5. `agk.toml` maps `scripts/agk/personal.py` and the three checks to `tests/kit/test_personal_confirm.py`.
 
 ## Consequences

@@ -437,6 +437,14 @@ TERMINAL_BY = re.compile(  # SPEC-0041 rule 8: never `CONFIRMED_BY`, so neither 
 TERMINAL_VERDICT = re.compile(r"Verdict: cleared ([0-9a-f]{40})")
 RECORD = re.compile(r"Record: (SPEC-\d{4}|ADR-\d{4}|REQ-\d{3})")
 TERMINAL_WORD = {"SPEC": "Approve", "ADR": "Accept", "REQ": "Confirm"}
+SIDECAR_NO_COMMENTS = (  # Q-1502-1 answer (a): in a sidecar a status move is refused, never skipped
+    "SPEC-0041 rule 15: no comments file; in a sidecar only a terminal confirmation sets it "
+    "(option: --comments)"
+)
+SIDECAR_NO_BASE = (
+    "SPEC-0041 rule 15: no base ref; in a sidecar a status change cannot go unchecked "
+    "(option: --base)"
+)
 TERMINAL_LINES = 9  # Confirmed, Verdict, Record, the kind's line, Shown: and three, the signature
 
 
