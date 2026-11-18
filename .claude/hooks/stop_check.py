@@ -44,6 +44,7 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
 
 TAIL_LINES = 30
+MAKE_GATE = ["make", "-f", "agk.mk", "agk-governance"]
 TIMEOUT_SECONDS = 300
 GH_TIMEOUT_SECONDS = 20
 
@@ -150,11 +151,28 @@ def selection(root: str, branch: str) -> tuple[list[tuple[str, ...]] | None, int
     return governance_map.select(paths), len(paths), full
 
 
+def kit_forms(root: str, commands: list[tuple[str, ...]] | None):
+    """(the full gate, the commands): today's make form and the map's paths, or in a clean project
+    (`[kit] layout = "plugin"`) the gate and the scripts of the plugin (brief #1454, ADR-0612)."""
+    try:
+        import kit_root
+
+        if kit_root.layout(Path(root)) != "plugin":
+            return list(MAKE_GATE), commands
+        kit = kit_root.kit_dir(Path(root))
+        gate = kit_root.gate(Path(root))
+    except Exception:  # noqa: BLE001 - today's form, which fails closed where it cannot run
+        return list(MAKE_GATE), commands
+    moved = None if commands is None else [(str(kit / Path(c[0]).name), *c[1:]) for c in commands]
+    return gate, moved
+
+
 def run_commands(root: str, env: dict, commands: list[tuple[str, ...]] | None):
     """(return code, output, failing command) of the full recipe (None) or of each command."""
+    gate, commands = kit_forms(root, commands)
     if commands is None:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["make", "-f", "agk.mk", "agk-governance"],
+            gate,
             cwd=root,
             env=env,
             capture_output=True,
@@ -162,7 +180,7 @@ def run_commands(root: str, env: dict, commands: list[tuple[str, ...]] | None):
             encoding="utf-8",
             timeout=TIMEOUT_SECONDS,
         )
-        return proc.returncode, proc.stdout + proc.stderr, "make -f agk.mk agk-governance"
+        return proc.returncode, proc.stdout + proc.stderr, " ".join(gate if gate == MAKE_GATE else gate[-2:])
     deadline = time.monotonic() + TIMEOUT_SECONDS
     for argv in commands:
         left = max(1.0, deadline - time.monotonic())
