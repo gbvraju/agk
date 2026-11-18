@@ -1,8 +1,8 @@
 ---
 name: setup
-description: Read this machine and this project, size the AI workforce from memory and cores, ask at most five plain questions, show the plan and the setup table, and on the person's yes propose the project settings as one change for review and, on Windows with WSL 2 chosen, set up the WSL workforce through /agk:wsl's own script (agk setup); the status form changes nothing. It never commits, pushes or merges.
+description: Read this machine and this project, size the AI workforce from memory and cores, ask at most five plain questions, show the plan and the setup table, and on the person's yes propose the project settings as one change for review and, on Windows with WSL 2 chosen, set up the WSL workforce through /agk:wsl's own script (agk setup); the status form changes nothing, and the back form removes only the scheduler tasks it added and prepares the reverse settings change. It never commits, pushes or merges.
 disable-model-invocation: true
-argument-hint: "[status]"
+argument-hint: "[status|back]"
 ---
 <!--
 SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
@@ -12,9 +12,10 @@ AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository na
 
 # /agk:setup
 
-Run it from Claude Code in the project's folder (`claude "/agk:setup"`, or typed in a session). Two forms: `/agk:setup`
-(read the machine and the project and show the plan) and `/agk:setup status` (show the table again). The work is one
-kit helper, `setup.py`, run from this plugin and never installed into the project. It reads everything it can itself
+Run it from Claude Code in the project's folder (`claude "/agk:setup"`, or typed in a session). Three forms:
+`/agk:setup` (read the machine and the project and show the plan), `/agk:setup status` (show the table again) and
+`/agk:setup back` (undo what it added). The work is one kit helper, `setup.py`, run from this plugin and never installed
+into the project. It reads everything it can itself
 and asks nothing that it can read. A missing tool shows as `waiting` with what to install. On Windows with WSL 2
 chosen, step 6 sets the machine up through `/agk:wsl`'s own script and helper, called unchanged, after the person's
 yes. The only project file it writes is the project-settings change of step 5, on a new branch, after the yes.
@@ -81,6 +82,26 @@ yes. The only project file it writes is the project-settings change of step 5, o
    ```
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/setup.py" plan --json
    ```
+
+## /agk:setup back
+
+1. Show what back would do, changing nothing: the scheduler tasks this command added on this machine, and whether
+   there are project settings to reverse.
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/setup.py" back
+   ```
+
+2. Ask for one yes. On anything but a yes, stop: nothing changes. On the yes, run it with `--yes`:
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/setup.py" back --yes
+   ```
+
+   It removes only the scheduler tasks it recorded, by their names, and prepares the reverse of the settings it
+   proposed that the project still holds, with the project's ADR, on a new branch; show the printed commands for the
+   person to run. It never uninstalls a tool, never removes a worktree and never deletes data, and you never run those
+   commands yourself. A `failed` row names what to run again.
 
 Never ask for, store or print a password or a sign-in secret; the command never shows a remote's or a proxy's
 credentials.
