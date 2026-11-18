@@ -213,6 +213,7 @@ tests = [
   "tests/kit/test_final_accepts.py", "tests/kit/test_personal_state.py", "tests/kit/test_review_context.py",
   "tests/kit/test_rule3a_record_comments.py", "tests/kit_dev/test_doctor_wiring.py", "tests/kit_dev/test_intake.py",
   "tests/kit_dev/test_new_spec.py", "tests/kit_dev/test_release_check.py", "tests/kit/test_upgrade_adr.py",
+  "tests/kit/test_personal_confirm.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_names.py"
@@ -326,7 +327,7 @@ code = "scripts/agk/check_requirements.py"
 tests = [
   "tests/kit/test_agk_config.py", "tests/kit/test_check_requirements.py", "tests/kit/test_check_requirements_ac.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_retired_requirements.py",
-  "tests/kit/test_review_context.py", "tests/kit_dev/test_adopt.py",
+  "tests/kit/test_review_context.py", "tests/kit_dev/test_adopt.py", "tests/kit/test_personal_confirm.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_review_report.py"
@@ -346,7 +347,7 @@ tests = [
   "tests/kit/test_core_parallel_specs.py", "tests/kit/test_core_release_specs.py",
   "tests/kit/test_core_report_specs.py", "tests/kit/test_decision_files.py", "tests/kit/test_personal_state.py",
   "tests/kit/test_review_context.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_flip_approval.py",
-  "tests/kit/test_workflow.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_workflow.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_tag.py"
@@ -689,7 +690,9 @@ code = "scripts/agk/parity.py"
 tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/personal.py"
-tests = ["tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",
+]
 [[testing.map]]
 code = "scripts/agk/personal_state.py"
 tests = [
@@ -835,7 +838,7 @@ tests = [
   "tests/kit/test_agent_apps.py", "tests/kit/test_agk_mk.py", "tests/kit/test_approve_short.py",
   "tests/kit/test_approved_spec_not_draft.py", "tests/kit/test_check_kit_tests.py",
   "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py",
-  "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers.py",
+  "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers.py", "tests/kit/test_personal_confirm.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
