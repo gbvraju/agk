@@ -70,7 +70,8 @@ def plugin(tmp: Path, version: str = "0.0.1") -> Path:
     return root
 
 
-CLEAN = '[kit]\nlayout = "plugin"\n'
+# A clean project pins its plugin (brief #1455, ADR-0613): the stub plugin's version.
+CLEAN = 'version = "0.0.1"\n\n[kit]\nlayout = "plugin"\nplugin_version = "0.0.1"\n'
 INSTALLED = 'version = "0.0.1"\n'
 
 
@@ -138,7 +139,8 @@ def test_ac1_no_plugin_root_is_refused_naming_the_setting(tmp_path):
         text=True,
     )
     assert out.returncode == 1 and out.stdout == ""
-    assert "(setting: CLAUDE_PLUGIN_ROOT)" in out.stderr
+    # brief #1455 (ADR-0613): with no plugin the pin's line names the setting and the command
+    assert "(setting: plugin_version)" in out.stderr and kit_root.INSTALL in out.stderr
     assert str(stray) not in out.stderr
 
 
