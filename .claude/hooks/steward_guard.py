@@ -18,8 +18,11 @@ to a file under `.github/`, the ruleset, a required check or a secret; an issue 
 comment or issue body it cannot read (fail closed); a GraphQL
 call (`CLAUDE.md item 10`); a post to the kit repository from another project whose title or body
 the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6, ADR-0561) matches or cannot
-check. Each denial names the rule and the setting or path class, never the
-value. It reads the command, the files a body names and `agk.toml`; no network, nothing stored.
+check; in a clean project (`[kit] layout = "plugin"`), a write of a path the plugin's kit manifest
+lists into the product, by a write tool or a Bash command that is not a read (SPEC-0071 rule 7,
+brief #1458, ADR-0616; an unreadable manifest denies the write tools). Each denial names the rule
+and the setting or path class, never the value. It reads the command, the files a body names,
+`agk.toml` and the plugin's kit manifest; no network, nothing stored.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ import os
 import re
 import shlex
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 RULE = "SPEC-0059 rule 11"
@@ -75,6 +79,13 @@ API_DENIED = (
 )
 
 
+KIT_RULE = "SPEC-0071 rule 7"
+KEEPS = (".gitignore", "CLAUDE.md", "LICENSE-AGK", ".github/PULL_REQUEST_TEMPLATE.md")  # rule 2
+KEEPS_UNDER = (".github/ISSUE_TEMPLATE/",)
+READERS = frozenset({"cat", "ls", "head", "tail", "grep", "rg", "wc", "diff", "stat", "git", "gh"})
+REDIRECT = re.compile(r"^\d*[<>]+&?")
+
+
 def reason(what: str, where: str) -> str:
     return f"steward guard: {RULE} denies {what} (path class: {where})"
 
@@ -87,6 +98,60 @@ def default_branch(project: Path) -> str:
         return str(value.get("default_branch") or "main")
     except (OSError, ValueError, ImportError):
         return "main"
+
+
+@lru_cache(maxsize=4)
+def kit_paths(project: str) -> tuple[frozenset[str], str] | None:
+    """In a clean project, the plugin's manifest paths a product never holds and its kit tests'
+    folder; None in an installed project. Raises ValueError when the manifest cannot be read."""
+    try:
+        import tomllib
+
+        kit = tomllib.loads((Path(project) / "agk.toml").read_text(encoding="utf-8")).get("kit")
+    except (OSError, ValueError, ImportError):
+        return None
+    if not isinstance(kit, dict) or kit.get("layout") != "plugin":
+        return None
+    path = Path(__file__).resolve().parents[2] / "kit" / "manifest.json"
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        listed = [*manifest.get("verbatim", []), *manifest.get("experimental", [])]
+        tests = str(manifest.get("kit_tests") or "").strip("/")
+    except (OSError, ValueError, AttributeError, TypeError):
+        raise ValueError("manifest") from None
+    keep = [p for p in listed if p not in KEEPS and not p.startswith(KEEPS_UNDER)]
+    return frozenset(keep), tests
+
+
+def kit_paths_known(project: Path) -> bool:
+    """True in a clean project whose manifest was read (Bash is then checked word by word)."""
+    try:
+        return kit_paths(str(project)) is not None
+    except ValueError:
+        return False
+
+
+def kit_write(target: str, cwd: Path, project: Path) -> str | None:
+    """The denial of a write of `target` when it is a kit manifest path in a clean product."""
+    try:
+        found = kit_paths(str(project))
+    except ValueError:
+        where = "kit/manifest.json"
+        return f"steward guard: {KIT_RULE} denies a write it cannot check (path class: {where})"
+    if found is None or not target:
+        return None
+    path = Path(target)
+    rel = os.path.relpath(path if path.is_absolute() else cwd / path, project).replace("\\", "/")
+    paths, tests = found
+    if rel in paths:
+        where = rel.rsplit("/", 1)[0] + "/" if "/" in rel else rel
+    elif tests and rel.startswith(tests + "/"):
+        where = tests + "/"
+    else:
+        return None
+    return (
+        f"steward guard: {KIT_RULE} denies kit code written into the product (path class: {where})"
+    )
 
 
 def read_value(value: str, cwd: Path) -> str | None:
@@ -320,7 +385,7 @@ def decide(payload: dict) -> str | None:
         rel = os.path.relpath(target if target.is_absolute() else cwd / target, project)
         if rel.replace("\\", "/").startswith(".github/"):
             return reason("a change to a workflow file", "`.github/`")
-        return None
+        return kit_write(str(target), cwd, project)
     if tool != "Bash":
         return None
     return bash_problem(str(data.get("command") or ""), cwd, project, 0)
@@ -359,6 +424,10 @@ def command_problem(words: list[str], cwd: Path, project: Path, depth: int) -> s
     if (inner := unwrap(words)) is not None:
         return command_problem(inner, cwd, project, depth + 1) if depth < 8 else None
     name = os.path.basename(words[0])
+    if name not in READERS and kit_paths_known(project):
+        for word in words[1:]:
+            if (named := REDIRECT.sub("", word)) and (problem := kit_write(named, cwd, project)):
+                return problem
     if name == "find":
         found = [i for i, w in enumerate(words) if w in ("-exec", "-execdir", "-ok", "-okdir")]
         return next(

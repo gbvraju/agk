@@ -183,7 +183,7 @@ def test_req078_the_steward_guard_refuses_a_kit_file_written_into_the_product(
         ("Write", {"file_path": "CLAUDE.md", "content": "x"}),
         ("Bash", {"command": "cat scripts/agk/example_check.py"}),
         ("Bash", {"command": "grep -n x Makefile"}),
-        ("Bash", {"command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/agk/example_check.py\""}),
+        ("Bash", {"command": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/example_check.py"'}),
     ],
 )
 def test_req078_the_steward_guard_allows_the_projects_own_files_and_reads(

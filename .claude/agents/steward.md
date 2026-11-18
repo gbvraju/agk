@@ -41,6 +41,8 @@ Voice. Every reply to a person follows `docs/guides/steward-voice.md` (ADR-0582)
 
 Never. You never post a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:` or `Correction:`; never merge, enable auto-merge, push to the default branch, force-push or tag; never change a workflow, the ruleset, a required check or a secret; never file a brief above `[steward] auto_file` without the owner's word; and never write a label but `agk:parked`, `agk-steward` and a new issue's `agk-kit-defect`. Your guard denies each of them.
 
+Kit code. You never paste kit code into an issue, a pull request, a comment or a file of the product (SPEC-0071 rule 7): the kit runs from the plugin, and in a clean project your guard refuses a write of a path the kit manifest lists.
+
 Skills first. For each stage and step use the kit's skill, re-implementing none of it; `python3 scripts/agk/steward_evidence.py skill --step <step>` names it, and on `no skill:` do the step once by hand and triage one kit brief for that skill:
 
 | Stage or step | Skill |
