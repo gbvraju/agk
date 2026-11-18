@@ -136,7 +136,7 @@ class Clone:
         if path not in self.history:
             done = _git(self.root, "log", "--all", "-m", "--no-renames", "--format=", "--raw",
                         "--no-abbrev", "-z", "--", path)  # fmt: skip
-            found = set()
+            found: set[str] = set()
             for part in done.stdout.decode("utf-8", "surrogateescape").split("\0"):
                 fields = part.split()
                 if part.startswith(":") and len(fields) >= 4:
@@ -218,7 +218,7 @@ def citations_of(claims: list[dict]) -> list[str]:
     return sorted({c for item in claims for c in item["citations"]})
 
 
-def existing(sidecar: Path) -> dict[tuple[str, str, tuple[str, ...]], str]:
+def existing(sidecar: Path) -> dict[tuple, str]:
     """(kind, title, citations) -> id of each record in the sidecar, so none is rendered twice."""
     out = {}
     req = sidecar / KINDS["requirements"]

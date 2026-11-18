@@ -6,7 +6,7 @@
 - Related: ADR-0267, ADR-0632, SPEC-0041, brief #1504
 - Requirements: REQ-048
 
-Protected classes: `scripts/agk/`, `skills/`, `kit/`, `agk.toml`, `tests/kit/`
+Protected classes: `scripts/agk/`, `skills/`, `kit/`, `agk.toml`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -41,8 +41,8 @@ classes; this is build (g), part 2.
 4. The skill `/agk:personal-adopt`, shipped in the plugin, runs every script from `${CLAUDE_PLUGIN_ROOT}`, writes the
    proposals file under the sidecar's ignored `cache/`, tells the person the coverage line and the count refused,
    renders only after the person agrees and lists the `confirm` commands; it never runs `confirm`.
-5. `personal_adopt.py` joins the manifest's `verbatim` list and `agk.toml` maps it to
-   `tests/kit/test_personal_adopt.py`.
+5. `personal_adopt.py` joins the manifest's `verbatim` list, `agk.toml` maps it to
+   `tests/kit/test_personal_adopt.py`, and `tests/kit_dev/test_distribution.py` lists the new skill.
 
 ## Consequences
 
