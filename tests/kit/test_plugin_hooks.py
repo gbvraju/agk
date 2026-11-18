@@ -40,7 +40,7 @@ PUSH = "git push origin HEAD:main"
 @pytest.fixture(scope="module")
 def plugin(tmp_path_factory) -> Path:
     stub = tmp_path_factory.mktemp("plugin")
-    for part in (".claude-plugin", ".claude/hooks", "scripts/agk"):
+    for part in (".claude-plugin", ".claude/hooks", ".claude/agents", "scripts/agk"):
         shutil.copytree(ROOT / part, stub / part, ignore=shutil.ignore_patterns("__pycache__"))
     return stub
 
@@ -53,7 +53,7 @@ def project(base: Path, layout: str, plugin: Path | None = None) -> Path:
         (root / "agk.toml").write_text('[kit]\nlayout = "plugin"\n', encoding="utf-8")
     elif layout == "installed":
         (root / "agk.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
-        for part in (".claude/hooks", "scripts/agk"):
+        for part in (".claude/hooks", ".claude/agents", "scripts/agk"):
             shutil.copytree(
                 plugin / part, root / part, ignore=shutil.ignore_patterns("__pycache__")
             )
@@ -127,7 +127,7 @@ def test_ac1_every_guarded_agent_has_its_guard_in_the_plugin_hook():
         text = path.read_text(encoding="utf-8").split("\n---", 1)[0]
         named = [w for w in text.split('"') if w.startswith("/.claude/hooks/")]
         expected = tuple(named[0].removeprefix("/.claude/hooks/").split()) if named else None
-        assert module.AGENT_GUARDS.get(f"agk:{path.stem}") == expected, path.name
+        assert module.ROLE_GUARDS.get(path.stem) == expected, path.name
 
 
 # --- security first: the data guard in both layouts (answer 3) ----------------------------------
@@ -255,3 +255,82 @@ def test_ac1_the_stop_check_runs_the_gate_and_scripts_from_the_plugin(
     assert moved == [(str(kit / "check_example.py"), "--x")]
     assert stop.kit_forms(str(installed), None) == (stop.MAKE_GATE, None)
     assert stop.kit_forms(str(installed), [("scripts/agk/a.py",)])[1] == [("scripts/agk/a.py",)]
+
+
+# --- the fix list on 1e0a895 --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("agent", ["conductor", "agk:conductor", "other:conductor"])
+def test_ac1_every_spelling_of_a_guarded_role_gets_its_guard_in_a_clean_project(
+    tmp_path, plugin, agent
+):
+    """REQ-078 AC1: bare `--agent conductor` (recorded as `agk:conductor`), any spelling, denies."""
+    root = project(tmp_path, "clean")
+    assert reason(plugin_pre(plugin, root, pre(root, "Bash", agent, command=PUSH)))
+
+
+def test_ac1_a_session_in_a_subfolder_of_a_clean_project_gets_the_data_guard(tmp_path, plugin):
+    """REQ-078 AC1: the project is the git top level, not the session's folder."""
+    root = project(tmp_path, "clean")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed list
+    (root / ".env").write_text("invented\n", encoding="utf-8")
+    (root / "src").mkdir()
+    sub = root / "src"
+    payload = pre(sub, "Read", file_path=str(root / ".env"))
+    line = reason(hook(plugin / ".claude/hooks/plugin_hooks.py", sub, payload, "pre"))
+    assert line and line.startswith("data guard: secret-file")
+
+
+def fake_plugin(tmp_path: Path, guard: str, body: str | None) -> Path:
+    hooks = tmp_path / "fake" / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    shutil.copy(ROOT / ".claude/hooks/plugin_hooks.py", hooks / "plugin_hooks.py")
+    if body is not None:
+        (hooks / guard).write_text(body, encoding="utf-8")
+    return hooks / "plugin_hooks.py"
+
+
+CRASH = "import sys\nsys.exit('a failure at /home/member-example-1/private/path')\n"
+
+
+@pytest.mark.parametrize("body", [None, CRASH, "import time\ntime.sleep(8)\n"])
+def test_ac1_a_missing_crashing_or_slow_guard_denies_with_the_fixed_line(tmp_path, body):
+    """REQ-078 AC1: no guard message (or path) is passed on, and the hook stays in its budget."""
+    script = fake_plugin(tmp_path, "data_guard.py", body)
+    root = project(tmp_path, "clean")
+    proc = hook(script, root, pre(root, "Bash", command="ls"), "pre")
+    assert reason(proc).startswith("plugin hooks: cannot-judge")
+    assert "member-example-1" not in proc.stdout + proc.stderr
+
+
+STOP = 'import json\nprint(json.dumps({"decision": "block", "reason": "stub stop ran"}))\n'
+
+
+def test_ac1_the_stop_dispatch_runs_the_stop_check_in_a_clean_project_only(tmp_path, plugin):
+    """REQ-078 AC1: the Stop hook reaches the plugin's stop check; installed keeps its own."""
+    script = fake_plugin(tmp_path, "stop_check.py", STOP)
+    clean, installed = project(tmp_path, "clean"), project(tmp_path, "installed", plugin)
+    payload = {"hook_event_name": "Stop", "stop_hook_active": False}
+    out = hook(script, clean, {**payload, "cwd": str(clean)}, "stop").stdout
+    assert json.loads(out) == {"decision": "block", "reason": "stub stop ran"}
+    assert hook(script, installed, {**payload, "cwd": str(installed)}, "stop").stdout == ""
+
+
+def test_ac1_a_crashing_stop_check_blocks_once(tmp_path):
+    """REQ-078 AC1: a stop check that cannot run blocks the stop once, then allows it."""
+    script = fake_plugin(tmp_path, "stop_check.py", CRASH)
+    root = project(tmp_path, "clean")
+    first = hook(script, root, {"stop_hook_active": False, "cwd": str(root)}, "stop").stdout
+    assert json.loads(first)["reason"].startswith("plugin hooks: cannot-judge")
+    assert hook(script, root, {"stop_hook_active": True, "cwd": str(root)}, "stop").stdout == ""
+
+
+def test_ac1_the_guards_see_the_top_level_as_the_project(tmp_path):
+    """REQ-078 AC1: a stop in a subfolder runs the stop check against the project's top level."""
+    body = "import json, os\nprint(json.dumps({'reason': os.environ['CLAUDE_PROJECT_DIR']}))\n"
+    script = fake_plugin(tmp_path, "stop_check.py", body)
+    root = project(tmp_path, "clean")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed list
+    (root / "src").mkdir()
+    out = hook(script, root / "src", {"stop_hook_active": False}, "stop").stdout
+    assert Path(json.loads(out)["reason"]).resolve() == root.resolve()

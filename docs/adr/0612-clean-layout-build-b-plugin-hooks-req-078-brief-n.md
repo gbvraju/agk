@@ -11,7 +11,7 @@ Protected classes: `.claude/`, `.claude-plugin/`, `tests/kit/`, `kit/`, `agk.tom
 ## Context
 
 SPEC-0071 rule 4 marks three facts `(verify)` and says a recorded run settles each before build (b) changes anything.
-The runs were made on 2026-11-18 from 01:29Z to 02:05Z, in a cloud scheduled session, with Claude Code 2.1.327 run
+The runs were made on 2026-11-18 from 01:29Z to 01:55Z, in a cloud scheduled session, with Claude Code 2.1.327 run
 headless (`claude -p`). The model was a stub: a Messages API on `127.0.0.1` that asks for one Bash call, then ends. No
 model and no network outside the machine. The plugin was a stub with its own `.claude-plugin/plugin.json`, loaded with
 `--plugin-dir`, and once installed at user scope from a local directory marketplace; then this repository itself, loaded
@@ -25,7 +25,7 @@ What the runs showed, for this version of Claude Code:
    `CLAUDE_PROJECT_DIR` (the project, or the worktree). The hook's input carries `agent_type` (`agk:conductor`) when the
    session runs an agent.
 2. **A plugin agent is named `<plugin>:<name>`.** `--agent agk:conductor` ran the plugin's agent: its prompt and only its
-   `tools:`. With no project agent of that name, `--agent conductor` ran it too; with a project
+   `tools:`. With no project agent of that name, `--agent conductor` ran it too, with `agent_type` `agk:conductor`; with a project
    `.claude/agents/conductor.md`, `--agent conductor` ran the project's agent (`agent_type` `conductor`). An agent file listed in `plugin.json`'s
    `agents` is loaded; the list replaces the default `agents/` folder. **A plugin agent's own frontmatter `hooks` do not
    fire**: the agent's `PreToolUse` hook wrote nothing while the plugin's hook wrote its line.
@@ -55,8 +55,13 @@ What the runs showed, for this version of Claude Code:
    that does not register them itself: `[kit] layout = "plugin"`, or an `agk.toml` with no own copy of the guard. An
    installed project, the kit's own repository and a project with no `agk.toml` keep `.claude/settings.json`, so no
    guard runs twice. Because a plugin agent's frontmatter hooks do not fire (fact 2), it also runs the agent's guard
-   whenever `agent_type` names one of the five guarded plugin agents, in either layout, on the agents' matcher
-   (`Edit|Write|MultiEdit|NotebookEdit|Bash`). Input it cannot read, or a guard it cannot start, denies.
+   whenever `agent_type` names one of the five guarded roles in any spelling (`agk:conductor`, `conductor`, any
+   prefix), in either layout, on the agents' matcher (`Edit|Write|MultiEdit|NotebookEdit|Bash`); a bare name is
+   skipped only when the project's own `.claude/agents/<role>.md` exists, whose own hook runs the guard. The project
+   is the git top level of `CLAUDE_PROJECT_DIR` (or the input's `cwd`), and each guard runs with that as
+   `CLAUDE_PROJECT_DIR`, so a session started in a subfolder is guarded. Input it cannot read, or a guard that is
+   missing, exits non-zero or runs past 4 seconds (two guards fit the 10-second budget), denies with one fixed line
+   and never passes the guard's message on; for the Stop hook it blocks once, then allows, as `stop_check.py` does.
 3. `stop_check.py` runs the gate of `kit_root.gate` and the map's scripts from the plugin in a clean project. An
    installed project runs `make -f agk.mk agk-governance` as today.
 4. Permission rules: by fact 3 the plugin cannot carry them, and a project rule that names the plugin must name its
