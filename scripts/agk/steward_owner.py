@@ -273,13 +273,9 @@ def refusal_lines(root: Path, count: int) -> list[dict]:
         patterns = []
     keep = ("at", "hook", "reason", "text", "error")
     return [
-        {
-            k: guard_logs.redact(json.dumps(x[k]) if k == "error" else str(x[k]), patterns)[0]
-            for k in keep
-            if k in x
-        }  # fmt: skip
-        for x in out[-count:]
-        if count > 0
+        {k: guard_logs.redact(json.dumps(x[k]) if k == "error" else str(x[k]), patterns)[0]
+         for k in keep if k in x}  # fmt: skip
+        for x in out[-count:] if count > 0
     ]
 
 

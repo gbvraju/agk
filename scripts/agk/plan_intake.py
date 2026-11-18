@@ -352,7 +352,8 @@ def plan_problems(root: Path, data: dict) -> list[str]:
                 for k in repeated
             }
             out += [
-                f"rule 4: briefs {k}: the key is repeated in {', '.join(held[k])}" for k in repeated
+                f"rule 4: briefs {k}: the key is repeated in {', '.join(held[k])}"
+                for k in repeated
             ]
             continue
         out += [f"rule 4: {label} {k}: the key is repeated" for k in repeated]

@@ -150,7 +150,9 @@ def history(root: Path, base: str) -> list[tuple[str, str, Snapshot]]:
     return out
 
 
-def build_table(root: Path, base: str, hist: list[tuple[str, str, Snapshot]] | None = None) -> dict:
+def build_table(
+    root: Path, base: str, hist: list[tuple[str, str, Snapshot]] | None = None
+) -> dict:
     """The table from history up to `base`, plus the working tree as the current version."""
     snaps: dict[str, list[Snapshot]] = {}
     commits: dict[str, list[str]] = {}
