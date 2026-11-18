@@ -388,7 +388,7 @@ tests = [
   "tests/kit/test_caps.py", "tests/kit/test_steward_guard.py",
   "tests/kit/test_failures.py", "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py",
   "tests/kit/test_usage_transcript.py",
-  "tests/kit/test_stop_check_changed.py",
+  "tests/kit/test_stop_check_changed.py", "tests/kit/test_plugin_version_pin.py",
   "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
@@ -762,7 +762,7 @@ code = "scripts/agk/pr_state.py"
 tests = ["tests/kit/test_pr_state.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/kit_root.py"
-tests = ["tests/kit/test_kit_root.py"]
+tests = ["tests/kit/test_kit_root.py", "tests/kit/test_plugin_version_pin.py"]
 [[testing.map]]
 code = "scripts/agk/prepush.py"
 tests = [
@@ -877,7 +877,9 @@ code = "scripts/agk/scorecard.py"
 tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/common.py"
-tests = ["tests/kit/test_cloud_clone_local_mode.py", "tests/kit/test_shared_main.py"]
+tests = [
+  "tests/kit/test_cloud_clone_local_mode.py", "tests/kit/test_plugin_version_pin.py", "tests/kit/test_shared_main.py",
+]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
