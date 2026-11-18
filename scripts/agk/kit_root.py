@@ -19,10 +19,18 @@ headless job the plugin serves)`, else the plugin this file sits in; either must
 another `layout` in a readable `[kit]` table, it refuses with one line naming the setting
 (exit 1). An `agk.toml` that cannot be read keeps the installed layout, as before. Standard
 library; no network.
+
+`pin_refusal(root, plugin)` is the start check of SPEC-0071 rule 6 (brief #1455, ADR-0613): in a
+clean project `[kit] plugin_version` must be set, equal `version` (Q-S0071-7) and equal the
+`version` in `plugin`'s `.claude-plugin/plugin.json`; else it returns one line naming
+`plugin_version`, never a value, and with no plugin also the install command `INSTALL`. `main`
+runs it after finding the plugin, and `common` on import, so every kit script stops, exit 1,
+before any work.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -37,6 +45,10 @@ PLUGIN_FORM = '"${CLAUDE_PLUGIN_ROOT}/scripts/agk"'
 MAKE_GATE = ["make", "-f", "agk.mk", "agk-governance"]
 LAYOUTS = ("installed", "plugin")
 USAGE = "usage: kit_root.py [--form | governance]"
+PIN = "plugin_version"
+# The one install command a teammate without the plugin is told (Q-S0071-4), from
+# docs/guides/getting-started.md (verify: the install command for a private source).
+INSTALL = "claude plugin install agk@agk"
 
 
 class Refused(Exception):
@@ -72,6 +84,45 @@ def layout(root: Path) -> str:
     if value not in LAYOUTS:
         raise Refused("kit_root: [kit] layout is neither installed nor plugin (setting: layout)")
     return value
+
+
+def _toml(root: Path) -> dict:
+    try:
+        return tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return {}
+
+
+def plugin_version(candidate: Path) -> str | None:
+    """The `version` of `candidate`'s `.claude-plugin/plugin.json`, None when it has none."""
+    try:
+        data = json.loads((candidate / ".claude-plugin" / "plugin.json").read_text("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    value = data.get("version") if isinstance(data, dict) else None
+    return value if isinstance(value, str) and value else None
+
+
+def pin_refusal(root: Path, plugin: Path | None) -> str | None:
+    """None outside a clean project or when `plugin` is the pinned version; else the one refusal
+    line (SPEC-0071 rule 6). It names the setting, never the pin or the plugin's version."""
+    data = _toml(root)
+    kit = data.get("kit")
+    if not isinstance(kit, dict) or kit.get("layout") != "plugin":
+        return None
+    pin = kit.get(PIN)
+    if not isinstance(pin, str) or not pin:
+        return f"agk: this clean project pins no plugin version (setting: {PIN})"
+    if data.get("version") != pin:
+        return f"agk: the pinned plugin version is not the project's version (setting: {PIN})"
+    found = None
+    if plugin is not None and plugin.resolve() != root.resolve():
+        found = plugin_version(plugin)
+    if found is None:
+        return f"agk: no AGK plugin runs this clean project; install it: {INSTALL} (setting: {PIN})"
+    if found != pin:
+        return f"agk: the running AGK plugin is not the pinned version (setting: {PIN})"
+    return None
 
 
 def _plugin(candidate: Path, root: Path) -> bool:
@@ -152,6 +203,14 @@ def main(argv: list[str]) -> int:
         return 2
     root = project_root()
     try:
+        if layout(root) == "plugin":
+            try:
+                found: Path | None = plugin_root(root)
+            except Refused:
+                found = None  # no plugin: the pin's line names the install command (rule 10)
+            line = pin_refusal(root, found)
+            if line:
+                raise Refused(line)
         if argv == ["--form"]:
             print(form(root))
         elif argv == ["governance"]:
