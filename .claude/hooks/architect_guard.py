@@ -47,7 +47,7 @@ conductor's guard too: `scripts/agk/<script>` (or `./scripts/agk/<script>`), and
 only (`[kit] layout = "plugin"`, read by the resolver `kit_root.layout`), `python3
 "<plugin>/scripts/agk/<script>"`, where <plugin> is the plugin's folder written out in full, exactly
 as the resolver finds it (`kit_root.plugin_root`), with the same arguments as the first form
-(Q-1500-3 (a)). A variable (`${CLAUDE_PLUGIN_ROOT}`, empty in the Bash tool's shell, ADR-0612 fact
+(Q-1500-3 (a)). A variable (the plugin's variable, empty in the Bash tool's shell, ADR-0612 fact
 4), another folder, a `..` or a link is denied: the guard allows only the file it has checked.
 """
 
