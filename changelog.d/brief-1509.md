@@ -1,0 +1,1 @@
+- Team-mode projects gain `[governance] level` (`light`, `tests-first`, `spec`, `review` or `evidence`): new installs write `light`, `doctor.py` prints the level in force, any other key, a wrong type or an unknown value is refused naming the setting, and no level leaves out a check or lowers the floor (brief #1509)

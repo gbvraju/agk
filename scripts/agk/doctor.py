@@ -106,6 +106,7 @@ from common import (  # noqa: E402
     ROUTER_WORKFLOW,
     CheckError,
     experimental_enabled,
+    governance_level,
     jobs_of,
     load_config,
     main_folder_line,
@@ -2276,6 +2277,21 @@ def outside_test_dirs_lines(root: Path) -> list[str]:
     ]
 
 
+def governance_line(root: Path) -> str | None:
+    """SPEC-0041 rule 31 (ADR-0639): the team-mode governance level in force, or None when unset.
+    A refused `[governance]` table stops the doctor naming the setting, never the value."""
+    try:
+        level = governance_level(root)
+    except CheckError as exc:
+        raise Refusal(str(exc)) from None
+    if level is None:
+        return None
+    return (
+        f"governance level: {level} (the floor, the secret scan and no regression, "
+        "runs at every level)"
+    )
+
+
 def secret_scan_line(
     in_wsl: bool | None = None, in_cloud: bool | None = None, local: bool = False
 ) -> str:
@@ -2424,6 +2440,7 @@ def render_text(
     skills: list[str] | None = None,
     design: list[str] | None = None,
     licence: list[str] | None = None,
+    governance: str | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -2441,6 +2458,7 @@ def render_text(
     lines += deprecation or []
     lines += licence or []  # the licence grant (ADR-0596), a warning only
     lines += [scan] if scan else []
+    lines += [governance] if governance else []  # SPEC-0041 rule 31, after the secret scan
     lines += [work] if work else []
     lines += skills or []
     lines += design or []  # SPEC-0037 rule 15: the imported versions, information only
@@ -2460,10 +2478,13 @@ def render_json(
     skills: list[str] | None = None,
     design: list[str] | None = None,
     licence: list[str] | None = None,
+    governance: str | None = None,
 ) -> str:
     data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
     if scan:
         data["secret_scan"] = scan
+    if governance:
+        data["governance_level"] = governance
     if work:
         data["work_type"] = work
     if skills:
@@ -2532,6 +2553,7 @@ def main(argv: list[str] | None = None) -> int:
         if personal is not None:
             print(personal[1])
             return personal[0]
+        governance = governance_line(root.resolve())
         if no_kit(root.resolve()):
             sys.stdout.write(render_no_kit(options["json"]))
             return 0
@@ -2570,10 +2592,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra, scan, work, deprecation, skills, design, licence)
-        if options["json"]
-        else render_text(
-            report, version, tidy, extra, scan, work, deprecation, skills, design, licence
+        (render_json if options["json"] else render_text)(
+            report, version, tidy, extra, scan, work, deprecation, skills, design, licence,
+            governance=governance,
         )
     )
     return 1 if work_failed else exit_code(report)
