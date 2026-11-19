@@ -243,10 +243,9 @@ from common import (  # noqa: E402
     covered_fix_list,
     final_accepts,
     final_records,
-    show,
-    TEMP_VARS,
+    long_form,
     long_temp_dir,
-    long_temp_name,
+    show,
     status_flip_only,
     utf8_output,
     who_argv,
@@ -1396,13 +1395,14 @@ def on_windows() -> bool:
 def run_env(home: Path, extra: dict[str, str]) -> dict[str, str]:
     """The clean environment of a run (brief #1290, ADR-0549): PATH unchanged from this process,
     so in its own separator, HOME the run's scratch home, the names EXTRA and, on Windows only,
-    the five names a Windows process needs to start, where set, with `TEMP`, `TMP` and `TMPDIR`
-    the long form of the temporary folder, never an 8.3 short name (brief #1540 answer 4,
-    ADR-0257). Nothing else of this process's environment, as `env -i` kept before."""
+    the five names a Windows process needs to start, where set, `TEMP` and `TMP` in their long
+    form, never an 8.3 short name (brief #1540 answer 4, ADR-0257; `TMPDIR` is not kept, so no
+    short name reaches a run through it). Nothing else of this process's environment, as `env -i`
+    kept before."""
     env = {"PATH": os.environ.get("PATH", ""), "HOME": str(home), **extra}
     if on_windows():
         env.update({n: os.environ[n] for n in WINDOWS_KEPT if os.environ.get(n) is not None})
-        env.update(dict.fromkeys(TEMP_VARS, long_temp_name()))
+        env.update({n: long_form(env[n]) for n in ("TEMP", "TMP") if n in env})
     return env
 
 

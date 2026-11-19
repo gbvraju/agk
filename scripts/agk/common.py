@@ -242,6 +242,18 @@ def long_temp_name() -> str:
         return temp
 
 
+def long_form(path: str) -> str:
+    """On Windows the long form of PATH (`GetLongPathNameW`, brief #1540 answer 4), so that an 8.3
+    short name never reaches a test command; PATH unchanged when the expansion fails, and on any
+    other system."""
+    if not on_windows():
+        return path
+    try:
+        return long_path_name(path) or path
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        return path
+
+
 def long_temp_dir() -> Path:
     """`long_temp_name()` as a path, where proof and evidence make their temporary folders."""
     return Path(long_temp_name())

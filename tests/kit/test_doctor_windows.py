@@ -329,7 +329,8 @@ def old_kit_checkout(tmp_path: Path, kit: bool = True) -> Path:
     kit_git(origin, "init", "-q", "-b", "main")
     if kit:
         (origin / "kit").mkdir()
-        (origin / "kit" / "manifest.json").write_text('{"kit_version": "1.0.0"}\n', encoding="utf-8")
+        manifest = origin / "kit" / "manifest.json"
+        manifest.write_text('{"kit_version": "1.0.0"}\n', encoding="utf-8")
     (origin / "rules.toml").write_text("a = 1\nb = 2\n", encoding="utf-8")
     kit_git(origin, "add", "-A")
     kit_git(origin, "commit", "-q", "-m", "kit")

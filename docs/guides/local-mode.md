@@ -133,6 +133,14 @@ edit commits them back changed; the kit keeps LF only for its own files. `doctor
 `line endings: this machine rewrites LF to CRLF; add "* text=auto eol=lf" to .gitattributes (setting: core.autocrlf)`.
 Add that line to the project's `.gitattributes` yourself, outside the kit's lines; the kit never changes it (brief #1360).
 
+On Windows the check before a merge reads the committed bytes (brief #1540, ADR-0648): every temporary checkout the kit
+makes (the guarded merge's check, the heavy-queue jobs, proof, batch, the evidence check and the release checks) is added
+with `-c core.autocrlf=false -c core.eol=lf`, so its tests see what CI on Linux sees, whatever the person's git
+configuration says; the project's own `eol` attributes still win, in the check as in CI. Hashes taken from a checkout are
+taken as committed, and the check's temporary folder carries the long name, never an 8.3 short one. In a clone of the kit's
+own repository made before its `* text=auto eol=lf` line, `doctor.py` prints, on a clean tree only, the one command that
+checks the files out again: `git rm --cached -r -q . && git reset --hard`.
+
 Then add the `Evidence:` line that prepush printed to the pull request body, beside `Verified:`, and one line that names
 the head it ran on:
 

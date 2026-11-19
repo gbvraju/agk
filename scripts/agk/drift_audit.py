@@ -270,7 +270,8 @@ class Releases:
         if not paths or self.check is None:
             return set()
         copy = self.clone()
-        git(copy, *CHECKOUT, "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", parent)
+        quiet = ("-c", "advice.detachedHead=false")
+        git(copy, *CHECKOUT, *quiet, "checkout", "-q", "-f", "--detach", parent)
         git(copy, *CHECKOUT, "reset", "-q", "--hard")
         git(copy, "clean", "-q", "-f", "-d", "-x")
         kept = [p for p in paths if changes[p] != "D"]

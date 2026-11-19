@@ -119,9 +119,8 @@ def fetch(root: Path, number: int) -> str | None:
 def merge(tree: Path, sha: str, number: int) -> bool:
     """Merge one head into the worktree; abort and say False when it does not merge cleanly."""
     message = f"batch: #{number}"
-    code, _ = quiet_git(
-        tree, *CHECKOUT, *IDENTITY, "merge", "--no-ff", "--no-edit", "--no-verify", "-q", "-m", message, sha
-    )
+    argv = (*CHECKOUT, *IDENTITY, "merge", "--no-ff", "--no-edit", "--no-verify", "-q")
+    code, _ = quiet_git(tree, *argv, "-m", message, sha)
     if code != 0:
         quiet_git(tree, "merge", "--abort")
         quiet_git(tree, *CHECKOUT, "reset", "-q", "--hard")

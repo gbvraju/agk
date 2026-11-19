@@ -15,10 +15,12 @@ the pre-merge tests are real pytest runs of a small invented budget test. No net
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 from test_merge_cleared_after import makes, worktrees, writes
@@ -41,9 +43,11 @@ from test_merge_cleared_verdict import (
 
 sys.path.insert(0, str(SCRIPTS))
 
+import common  # noqa: E402
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 from common import CheckError  # noqa: E402
+from test_windows_checkout import FILES, VERBATIM, crlf, kit_repo  # noqa: E402
 
 TESTS_FAIL = "held: the merge with the default branch fails pre-merge tests"
 BUDGET_TEST = "tests/kit/test_budget.py"
@@ -289,3 +293,98 @@ def test_the_test_run_is_one_bounded_argument_list():
 def test_the_hold_names_the_first_failing_test(out, found):
     """REQ-046: brief #667 answer 1 (`(<file>::<test>)`; with no test named, the step)."""
     assert merge_cleared.first_failure(out, [BUDGET_TEST]) == found
+
+
+# --- brief #1540 (ADR-0648): a Windows person's check reads the committed bytes -----------------
+
+
+def fake_governance(seen: dict):
+    def run(root, tree, home, body, base, wait):
+        seen["tree"] = tree
+        seen["bytes"] = (tree / VERBATIM).read_bytes()
+        return None
+
+    return run
+
+
+def test_the_merge_checks_tree_holds_the_committed_bytes(tmp_path, monkeypatch):
+    """REQ-046: brief #1540 answers 2 and 4 (in_worktree in a CRLF person's clone, under a folder
+    with a space in its name, the folder made in the long temporary folder)."""
+    root = crlf(kit_repo(tmp_path / "My Project"))
+    long_folder = tmp_path / "Long Temp"
+    long_folder.mkdir()
+    monkeypatch.setattr(merge_cleared, "long_temp_dir", lambda: long_folder)
+    seen: dict = {}
+    monkeypatch.setattr(merge_cleared, "run_governance", fake_governance(seen))
+    commit = git(root, "rev-parse", "HEAD").strip()
+    assert merge_cleared.in_worktree(root, commit, commit, 1.0, "body\n", "agk-x-") is None
+    assert seen["bytes"] == FILES[VERBATIM].encode("utf-8")
+    assert seen["tree"].parent.parent == long_folder
+    assert list(long_folder.iterdir()) == [], "the folder is removed"
+
+
+def test_the_merge_checks_runs_get_the_long_temporary_folder_on_windows(tmp_path, monkeypatch):
+    """REQ-046: brief #1540 answer 4 and edge case 9 (an 8.3 short path: only the long name)."""
+    short, long_name = (
+        r"C:\Users\EXAMPL~1\AppData\Local\Temp",
+        r"C:\Users\example\AppData\Local\Temp",
+    )
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: True)
+    monkeypatch.setattr(common, "on_windows", lambda: True)
+    monkeypatch.setattr(common, "long_path_name", lambda path: long_name if path == short else None)
+    for name in ("TEMP", "TMP", "TMPDIR"):
+        monkeypatch.setenv(name, short)
+    env = merge_cleared.run_env(tmp_path / "home", {"AGK_KIT_TESTS": "1"})
+    assert {env[n] for n in ("TEMP", "TMP")} == {long_name}
+    assert "TMPDIR" not in env, "a clean environment: TMPDIR is not kept"
+    assert "EXAMPL~1" not in json.dumps(env)
+
+
+def test_off_windows_the_runs_environment_is_unchanged(tmp_path, monkeypatch):
+    """REQ-046: brief #1540 answer 4 (nothing changes on Linux and macOS)."""
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    env = merge_cleared.run_env(tmp_path / "home", {})
+    assert set(env) == {"PATH", "HOME"}
+
+
+# --- the end-to-end check: a CRLF person's guarded merge with the pre-merge tests -----------------
+
+
+BYTES_TEST = """
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_the_checkout_holds_the_committed_bytes():
+    assert b"\\r\\n" not in (ROOT / "rules.md").read_bytes()
+"""
+
+
+def test_a_crlf_persons_guarded_merge_runs_the_pre_merge_tests_on_committed_bytes(tmp_path):
+    """REQ-046: brief #1540 Measured line and edge case 9 (the owner's #1533 case, simulated: a
+    pre-merge test that compares bytes, a person with `core.autocrlf=true`, a folder with a
+    space; held before the change, merged after)."""
+    base = tmp_path / "My Project"
+    base.mkdir()
+    pre_files = {**BASE_FILES, "tests/kit/test_bytes.py": BYTES_TEST}
+    setting = '[testing]\npre_merge_tests = ["tests/kit/test_bytes.py"]\n'
+    root = repo(base, toml(ON) + setting)
+    url = git(root, "remote", "get-url", "origin").strip()
+    bare = Path(unquote(url.removeprefix("file://")))
+    x = commit_in(bare, pre_files, MERGE, "x")
+    main = commit_in(bare, WIDER, x, "main")
+    head = commit_in(bare, {"budget.txt": "6\n"}, x, "head")
+    git(bare, "update-ref", "refs/heads/main", main)
+    git(bare, "update-ref", "refs/pull/7/head", head)
+    git(root, "config", "core.autocrlf", "true")
+    pull = {**world()["pull"], "head": {"sha": head}}
+    commits = [{"sha": head, "commit": {"message": "Example change\n"}}]
+    bin_dir, log = fake_gh(
+        base, pull=pull, comments=[cleared(head, extra="")], issues=[AUTO_ISSUE],
+        commits=commits,
+    )  # fmt: skip
+    proc = run(root, bin_dir, "--pr", "7", "--sha", head)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert one_line(proc).endswith(f"merged {MERGE[:12]}")

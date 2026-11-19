@@ -1,13 +1,14 @@
 """The guarded merge's check gives the same result on Windows as on Linux (brief #1540, ADR-0648).
 
-On Windows (Git for Windows installs with `core.autocrlf=true`) `merge_cleared.py --pr 1533 --owner`
+On Windows (Git for Windows installs with `core.autocrlf=true`) the owner's guarded merge of #1533
 printed "3 failed, 51 passed" and held, while the same merge passed on Linux: its temporary tree was
 checked out with CRLF line ends, its hashes were taken from the bytes on disk, and two kit tests
 built names with `\\`. Now every temporary checkout of the kit passes `common.CHECKOUT` (the
 committed bytes whatever the person's git configuration says; a project's own `eol` attributes
 still win), a hash taken from the working tree is taken as committed (`common.committed_bytes`),
-the check's folder and its `TEMP`, `TMP` and `TMPDIR` hold the long name on Windows, and the kit's
-tests compare names with `/`.
+the check's folder and its `TEMP` and `TMP` hold the long name on Windows (those tests, with the
+end-to-end merge, are in `test_merge_cleared_pre_tests.py`), and the kit's tests compare names
+with `/`.
 
 Windows is simulated on Linux: git honours `core.autocrlf=true` on Linux too, so each CRLF
 checkout here is a real one; `os.name` and the long-name call are faked; names go through
@@ -23,9 +24,6 @@ import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from urllib.parse import unquote
-
-import pytest
 
 KIT = Path(__file__).resolve().parents[2]
 SCRIPTS = KIT / "scripts" / "agk"
@@ -38,7 +36,6 @@ import design_prototype_check  # noqa: E402
 import evidence  # noqa: E402
 import impact  # noqa: E402
 import kit_hashes  # noqa: E402
-import merge_cleared  # noqa: E402
 import plan_intake  # noqa: E402
 
 ENV = {
@@ -57,7 +54,7 @@ MANIFEST = {
     "adopt": {"templates": {}, "blocks": {}},
 }
 FILES = {
-    VERBATIM: "[signals]\nname = \"example\"\nlist = [\"a\", \"b\"]\n",
+    VERBATIM: '[signals]\nname = "example"\nlist = ["a", "b"]\n',
     "scripts/agk/tool.py": "print('example')\nprint('two')\n",
     TEMPLATE: "# Example\n\nA line.\n",
     "kit/manifest.json": json.dumps(MANIFEST, indent=2) + "\n",
@@ -172,7 +169,7 @@ def test_the_structural_test_finds_an_unguarded_checkout(tmp_path):
 
 
 def test_a_crlf_persons_worktree_holds_the_committed_bytes_only_with_the_options(tmp_path):
-    """REQ-046: brief #1540 edge case 9 (CRLF in a verbatim file; the old call is the red-before)."""
+    """REQ-046: brief #1540 edge case 9 (CRLF in a verbatim file; the old call is the red one)."""
     root = crlf(kit_repo(tmp_path / "kit"))
     old, new = tmp_path / "old", tmp_path / "new"
     git(root, "worktree", "add", "--detach", "-q", str(old), "HEAD")
@@ -202,100 +199,6 @@ def test_the_batch_tree_is_reset_to_the_committed_bytes(tmp_path):
     assert (tree / VERBATIM).read_bytes() == FILES[VERBATIM].encode("utf-8")
 
 
-# --- answers 2 and 4: the merge check's own tree and folder ---------------------------------------
-
-
-def fake_governance(seen: dict):
-    def run(root, tree, home, body, base, wait):
-        seen["tree"] = tree
-        seen["bytes"] = (tree / VERBATIM).read_bytes()
-        return None
-
-    return run
-
-
-def test_the_merge_checks_tree_holds_the_committed_bytes(tmp_path, monkeypatch):
-    """REQ-046: brief #1540 answers 2 and 4 (in_worktree in a CRLF person's clone, under a folder
-    with a space in its name, the folder made in the long temporary folder)."""
-    root = crlf(kit_repo(tmp_path / "My Project"))
-    long_folder = tmp_path / "Long Temp"
-    long_folder.mkdir()
-    monkeypatch.setattr(merge_cleared, "long_temp_dir", lambda: long_folder)
-    seen: dict = {}
-    monkeypatch.setattr(merge_cleared, "run_governance", fake_governance(seen))
-    commit = git(root, "rev-parse", "HEAD").strip()
-    assert merge_cleared.in_worktree(root, commit, commit, 1.0, "body\n", "agk-x-") is None
-    assert seen["bytes"] == FILES[VERBATIM].encode("utf-8")
-    assert seen["tree"].parent.parent == long_folder
-    assert list(long_folder.iterdir()) == [], "the folder is removed"
-
-
-def test_the_merge_checks_runs_get_the_long_temporary_folder_on_windows(tmp_path, monkeypatch):
-    """REQ-046: brief #1540 answer 4 and edge case 9 (an 8.3 short path: only the long name)."""
-    short, long_name = r"C:\Users\EXAMPL~1\AppData\Local\Temp", r"C:\Users\example\AppData\Local\Temp"
-    monkeypatch.setattr(merge_cleared, "on_windows", lambda: True)
-    monkeypatch.setattr(common, "on_windows", lambda: True)
-    monkeypatch.setattr(common, "long_path_name", lambda path: long_name if path == short else None)
-    monkeypatch.setattr(common.tempfile, "gettempdir", lambda: short)
-    for name in ("TEMP", "TMP", "TMPDIR"):
-        monkeypatch.setenv(name, short)
-    env = merge_cleared.run_env(tmp_path / "home", {"AGK_KIT_TESTS": "1"})
-    assert {env[n] for n in ("TEMP", "TMP", "TMPDIR")} == {long_name}
-    assert "EXAMPL~1" not in json.dumps(env)
-
-
-def test_off_windows_the_runs_environment_is_unchanged(tmp_path, monkeypatch):
-    """REQ-046: brief #1540 answer 4 (nothing changes on Linux and macOS)."""
-    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
-    monkeypatch.setenv("TMPDIR", str(tmp_path))
-    env = merge_cleared.run_env(tmp_path / "home", {})
-    assert set(env) == {"PATH", "HOME"}
-
-
-# --- the end-to-end check: a CRLF person's guarded merge with the pre-merge tests -------------------
-
-
-BYTES_TEST = '''
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-
-
-def test_the_checkout_holds_the_committed_bytes():
-    assert b"\\r\\n" not in (ROOT / "rules.md").read_bytes()
-'''
-
-
-def test_a_crlf_persons_guarded_merge_runs_the_pre_merge_tests_on_committed_bytes(tmp_path):
-    """REQ-046: brief #1540 Measured line and edge case 9 (the owner's #1533 case, simulated: a
-    pre-merge test that compares bytes, a person with `core.autocrlf=true`, a folder with a
-    space; held before the change, merged after)."""
-    import test_merge_cleared_pre_tests as pre
-
-    base = tmp_path / "My Project"
-    base.mkdir()
-    pre_files = {**pre.BASE_FILES, "tests/kit/test_bytes.py": BYTES_TEST}
-    setting = '[testing]\npre_merge_tests = ["tests/kit/test_bytes.py"]\n'
-    root = pre.repo(base, pre.toml(pre.ON) + setting)
-    url = git(root, "remote", "get-url", "origin").strip()
-    bare = Path(unquote(url.removeprefix("file://")))
-    x = pre.commit_in(bare, pre_files, pre.MERGE, "x")
-    main = pre.commit_in(bare, pre.WIDER, x, "main")
-    head = pre.commit_in(bare, {"budget.txt": "6\n"}, x, "head")
-    git(bare, "update-ref", "refs/heads/main", main)
-    git(bare, "update-ref", "refs/pull/7/head", head)
-    git(root, "config", "core.autocrlf", "true")
-    pull = {**pre.world()["pull"], "head": {"sha": head}}
-    commits = [{"sha": head, "commit": {"message": "Example change\n"}}]
-    bin_dir, log = pre.fake_gh(
-        base, pull=pull, comments=[pre.cleared(head, extra="")], issues=[pre.AUTO_ISSUE],
-        commits=commits,
-    )  # fmt: skip
-    proc = pre.run(root, bin_dir, "--pr", "7", "--sha", head)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert pre.one_line(proc).endswith(f"merged {pre.MERGE[:12]}")
-
-
 # --- answer 3: hashes as committed --------------------------------------------------------------
 
 
@@ -307,7 +210,7 @@ def checkout_of(root: Path, where: Path, autocrlf: str) -> Path:
 
 
 def test_a_hash_taken_on_a_crlf_checkout_equals_the_committed_hash(tmp_path):
-    """REQ-046: brief #1540 answer 3 and edge case 9 (a hash computed on Windows checks on Linux)."""
+    """REQ-046: brief #1540 answer 3 and edge case 9 (a hash made on Windows checks on Linux)."""
     root = kit_repo(tmp_path / "kit")
     windows = checkout_of(root, tmp_path / "windows", "true")
     linux = checkout_of(root, tmp_path / "linux", "false")
@@ -331,9 +234,9 @@ def test_a_real_edit_on_a_crlf_checkout_still_changes_the_hash(tmp_path):
     """REQ-046: brief #1540 answer 3 (only a change of line ends alone reads as committed)."""
     root = kit_repo(tmp_path / "kit")
     windows = checkout_of(root, tmp_path / "windows", "true")
-    (windows / VERBATIM).write_bytes(b"[signals]\r\nname = \"other\"\r\n")
+    (windows / VERBATIM).write_bytes(b'[signals]\r\nname = "other"\r\n')
     _, snap = kit_hashes.snapshot_worktree(windows)
-    assert snap["verbatim"][VERBATIM] == sha(b"[signals]\r\nname = \"other\"\r\n")
+    assert snap["verbatim"][VERBATIM] == sha(b'[signals]\r\nname = "other"\r\n')
 
 
 def test_a_mixed_team_merges_a_verbatim_change_with_no_line_end_change(tmp_path):
@@ -343,13 +246,13 @@ def test_a_mixed_team_merges_a_verbatim_change_with_no_line_end_change(tmp_path)
     git(root, "config", "receive.denyCurrentBranch", "ignore")
     windows = checkout_of(root, tmp_path / "windows", "true")
     linux = checkout_of(root, tmp_path / "linux", "false")
-    (windows / VERBATIM).write_bytes(b"[signals]\r\nname = \"changed\"\r\n")
+    (windows / VERBATIM).write_bytes(b'[signals]\r\nname = "changed"\r\n')
     git(windows, "commit", "-q", "-am", "change on Windows")
     git(windows, "push", "-q", "origin", "HEAD:refs/heads/windows")
     git(linux, "fetch", "-q", "origin", "windows")
     git(linux, "merge", "-q", "--ff-only", "FETCH_HEAD")
     blob = git(linux, "cat-file", "-p", f"HEAD:{VERBATIM}").encode("utf-8")
-    assert blob == b"[signals]\nname = \"changed\"\n"
+    assert blob == b'[signals]\nname = "changed"\n'
     assert kit_hashes.snapshot_worktree(windows) == kit_hashes.snapshot_worktree(linux)
 
 
@@ -396,7 +299,7 @@ def test_the_render_writes_lf_on_every_system():
     assert 'path.write_text(text, encoding="utf-8", newline="\\n")' in body
 
 
-# --- Q-1540-4: the prototype runtime's hash --------------------------------------------------------
+# --- Q-1540-4: the prototype runtime's hash ------------------------------------------------------
 
 
 def test_the_runtime_hash_reads_the_committed_bytes(tmp_path, monkeypatch):
@@ -465,11 +368,11 @@ def test_the_name_test_finds_the_old_helper(tmp_path):
 def test_windows_names_match_the_kits_globs_only_with_slashes():
     """REQ-046: brief #1540 edge case 9 (backslash names: the cause of failures 1 and 2)."""
     root = PureWindowsPath(r"C:\AI Projects\agk")
-    script = root / "scripts" / "agk" / "merge_cleared.py"
+    script = root / "scripts" / "agk" / "batch.py"
     pattern = "scripts/agk/*.py"
     rel = script.relative_to(root)
-    assert str(rel) == r"scripts\agk\merge_cleared.py"
+    assert str(rel) == r"scripts\agk\batch.py"
     assert not impact.matches(str(rel), pattern)
     posix = rel.as_posix()
-    assert posix == str(PurePosixPath("scripts/agk/merge_cleared.py"))
+    assert posix == str(PurePosixPath("scripts/agk/batch.py"))
     assert impact.matches(posix, pattern)
