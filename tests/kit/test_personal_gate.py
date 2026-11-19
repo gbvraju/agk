@@ -267,6 +267,18 @@ def test_req_048_review_with_a_malformed_report_fails(tmp_path):
     assert "gate: review FAIL" in done.stdout
 
 
+def test_req_048_review_without_the_report_checker_installed_fails(tmp_path, monkeypatch):
+    """REQ-048 AC5: rule 17 and brief #1546 (`check_review_report` is an experimental file, so an
+    install without it fails the `review` step by name instead of stopping on an ImportError)."""
+    import personal  # noqa: PLC0415
+
+    monkeypatch.setitem(sys.modules, "check_review_report", None)
+    ok, line = personal.review_step(tmp_path, "0" * 40)
+    assert ok is False
+    assert line.startswith("gate: review FAIL: ")
+    assert "scripts/agk/check_review_report.py" in line
+
+
 def test_req_048_evidence_with_a_differing_record_fails(tmp_path):
     """REQ-048 AC5: rule 17 (`evidence.problems`: a record of a dirty tree differs)."""
     clone, side = prepared(tmp_path, "evidence")
