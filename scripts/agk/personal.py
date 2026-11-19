@@ -473,8 +473,10 @@ def trailer_warnings(clone: Path, base: str, head: str, table: dict) -> list[str
     for sha in branch_commits(clone, base, head):
         shown = _git(clone, "show", "-s", f"--format=%(trailers:key={TRAILER_KEY},valueonly)", sha)
         if not shown.stdout.strip():
-            found.append(f"gate: warning: commit {sha[:12]} has no {TRAILER_KEY} trailer; if an "
-                         f"agent session made it, add the trailer yourself (setting: {DISCLOSURE})")  # fmt: skip
+            found.append(
+                f"gate: warning: commit {sha[:12]} has no {TRAILER_KEY} trailer; if an agent "
+                f"session made it, add the trailer yourself (setting: {DISCLOSURE})"
+            )
     return found
 
 
