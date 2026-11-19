@@ -11,6 +11,7 @@ scripts/agk/** text eol=lf
 .claude/agents/architect.md text eol=lf
 .claude/agents/conductor.md text eol=lf
 .claude/agents/drift-auditor.md text eol=lf
+.claude/agents/personal-reviewer.md text eol=lf
 .claude/agents/reviewer.md text eol=lf
 .claude/agents/shadow.md text eol=lf
 .claude/agents/steward.md text eol=lf

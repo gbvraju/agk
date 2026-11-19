@@ -1,0 +1,1 @@
+- The personal reviewer agent file keeps Unix line endings in every checkout, Windows too, like the kit's other agents (brief #1559)
