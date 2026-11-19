@@ -37,10 +37,16 @@ concerns, no foundation build precedes the first feature, and an adopted project
    setting, `project_lint_paths`.
 6. An adopted or upgraded project gets a committed baseline of today's findings and a ratchet: green first, red on a new
    or rising finding, lowered on a fixed one; nothing existing is rewritten.
-7. A business user is asked no engineering choice; the review checklist is unchanged; a prototype's markup is a
-   reference only, by an amendment to SPEC-0037 that its spec approver approves.
-8. This ADR names the protected classes of this intake only. Builds (a) (`config/playbooks/`), (b) (`agk.mk`), (d) (the
-   project's protected paths), (e) (the new `agk.toml` setting) and (h) (the steward's role file and the SPEC-0037
+7. When nobody has discussed a standard, the steward presents the choices it applies (one plain screen for a business
+   user, the full list for a team) and applies them only on the person's yes, one yes accepting all; a team may keep the
+   defaults or define its own architecture, pack configuration (accepted when it covers the pack's floor rules) or
+   stricter gates; a business or product owner's plain request becomes a requirement and a Proposed project ADR; the
+   person's priority orders a project's standard work; every work-type build brief names its layers in a `Layer:` line
+   and builders read the architecture record and the pack before writing code (brief #1524 answer 9).
+8. The review checklist is unchanged; a prototype's markup is a reference only, by an amendment to SPEC-0037 that its
+   spec approver approves.
+9. This ADR names the protected classes of this intake only. Builds (a) (`config/playbooks/`), (b) (`agk.mk`), (d) (the
+   project's protected paths, the builder prompt), (e) (the new `agk.toml` setting) and (h) (the steward's role file and the SPEC-0037
    amendment) change decisions held elsewhere, so each writes its own ADR. Builds (c), (f) and (g) will change
    `scripts/agk/`, `tests/kit/`, `skills/` and `kit/`; each may cite this ADR with `Covered-by: ADR-0643` once it is
    Accepted only if it changes no other class and no decision named here (session rule 36). No build changes a workflow
