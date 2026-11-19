@@ -1533,12 +1533,42 @@ EOL_WARNING = (
 )
 
 
+RENORMALISE = (
+    "line endings: this checkout of the kit repository predates its LF rule; on this clean tree run"
+    " git rm --cached -r -q . && git reset --hard (setting: .gitattributes)"
+)
+
+
+def renormalise_lines(root: Path) -> list[str]:
+    """Brief #1540 answer 6 (ADR-0648): in the kit repository only, on a clean tree, when a
+    tracked file whose attributes say `eol=lf` is CRLF on disk (a checkout made before the kit
+    repository's `* text=auto eol=lf`), the one line naming the command that checks it out
+    again. The doctor prints it and never runs it; read-only git, no network."""
+    if not (root / "kit" / "manifest.json").is_file():
+        return []
+    code, status = git_read(root, "status", "--porcelain")
+    if code != 0 or status:
+        return []
+    code, listed = git_read(root, "ls-files", "--eol")
+    if code != 0:
+        return []
+    for line in listed.splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and fields[1] == "w/crlf" and "eol=lf" in line.split("\t")[0]:
+            return [RENORMALISE]
+    return []
+
+
 def line_ending_lines(root: Path, platform: str | None = None) -> list[str]:
     """Brief #1360 answer 3 (ADR-0572): on Windows, with `core.autocrlf` true and no `*` line with
     an `eol=` attribute in the project's `.gitattributes`, the one warning line; else none. The
-    kit never changes the project's `.gitattributes` itself."""
+    kit never changes the project's `.gitattributes` itself. In the kit repository, first the line
+    of `renormalise_lines` when it has one (brief #1540 answer 6)."""
     if not (platform or sys.platform).startswith("win"):
         return []
+    found = renormalise_lines(root)
+    if found:
+        return found
     code, value = git_read(root, "config", "core.autocrlf")
     if code != 0 or value.strip().lower() != "true":
         return []

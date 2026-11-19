@@ -505,7 +505,7 @@ def live_job(seq: int, priority, waited_seconds: int, **extra) -> dict:
 
 
 def snapshot(box: Path) -> dict[str, bytes]:
-    return {str(p.relative_to(box)): p.read_bytes() for p in sorted(box.rglob("*")) if p.is_file()}
+    return {p.relative_to(box).as_posix(): p.read_bytes() for p in sorted(box.rglob("*")) if p.is_file()}
 
 
 def five_results() -> list[dict]:

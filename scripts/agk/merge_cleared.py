@@ -233,6 +233,7 @@ import lock  # noqa: E402
 import session  # noqa: E402
 import session_plan  # noqa: E402
 from common import (  # noqa: E402
+    CHECKOUT,
     DEFAULT_CONFIG,
     FINAL_ACCEPT,
     MERGED_BY,
@@ -243,6 +244,9 @@ from common import (  # noqa: E402
     final_accepts,
     final_records,
     show,
+    TEMP_VARS,
+    long_temp_dir,
+    long_temp_name,
     status_flip_only,
     utf8_output,
     who_argv,
@@ -1392,11 +1396,13 @@ def on_windows() -> bool:
 def run_env(home: Path, extra: dict[str, str]) -> dict[str, str]:
     """The clean environment of a run (brief #1290, ADR-0549): PATH unchanged from this process,
     so in its own separator, HOME the run's scratch home, the names EXTRA and, on Windows only,
-    the five names a Windows process needs to start, where set. Nothing else of this process's
-    environment, as `env -i` kept before."""
+    the five names a Windows process needs to start, where set, with `TEMP`, `TMP` and `TMPDIR`
+    the long form of the temporary folder, never an 8.3 short name (brief #1540 answer 4,
+    ADR-0257). Nothing else of this process's environment, as `env -i` kept before."""
     env = {"PATH": os.environ.get("PATH", ""), "HOME": str(home), **extra}
     if on_windows():
         env.update({n: os.environ[n] for n in WINDOWS_KEPT if os.environ.get(n) is not None})
+        env.update(dict.fromkeys(TEMP_VARS, long_temp_name()))
     return env
 
 
@@ -1609,7 +1615,7 @@ def in_worktree(
     (brief #610). None when green, else the failing step. With PRE (the default branch's
     `[testing]` table, None without one; False after the merge), the pre-merge tests run after a
     green governance and a failure raises Held (brief #667)."""
-    scratch = Path(tempfile.mkdtemp(prefix=prefix))
+    scratch = Path(tempfile.mkdtemp(prefix=prefix, dir=long_temp_dir()))  # brief #1540 answer 4
     tree, home = scratch / "tree", scratch / "home"
     body = home / "pr-body.md"
     try:
@@ -1617,7 +1623,7 @@ def in_worktree(
         body.write_text(text, encoding="utf-8")
         found = record_comments(repo, root, commit) if repo else []
         (home / RECORD_COMMENTS).write_text(json.dumps(found), encoding="utf-8")
-        code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), commit)
+        code, _ = git_out(root, *CHECKOUT, "worktree", "add", "--detach", "-q", str(tree), commit)
         if code != 0:
             return "worktree"
         step = run_governance(root, tree, home, body, base, wait)

@@ -304,6 +304,13 @@ def repo_root() -> Path:
     return Path(proc.stdout.strip())
 
 
+# The line ends of every temporary checkout the kit makes (brief #1540, ADR-0648; moved from
+# evidence.py, brief #1291, ADR-0550): the committed bytes, whatever the person's git configuration
+# says. Put before the git command (`git *CHECKOUT worktree add ...`); a project's own `eol`
+# attributes still win, in the check as in CI.
+CHECKOUT = ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
+
+
 def committed_bytes(root: Path, files: Mapping[str, bytes]) -> dict[str, bytes]:
     """FILES ({path from ROOT with `/`: the bytes on disk}) with each file whose bytes on disk hold
     a CRLF replaced by its index blob, when that blob equals those bytes with every CRLF turned to

@@ -467,8 +467,9 @@ def test_windows_names_match_the_kits_globs_only_with_slashes():
     root = PureWindowsPath(r"C:\AI Projects\agk")
     script = root / "scripts" / "agk" / "merge_cleared.py"
     pattern = "scripts/agk/*.py"
-    assert str(script.relative_to(root)) == r"scripts\agk\merge_cleared.py"
-    assert not impact.matches(str(script.relative_to(root)), pattern)
-    posix = script.relative_to(root).as_posix()
+    rel = script.relative_to(root)
+    assert str(rel) == r"scripts\agk\merge_cleared.py"
+    assert not impact.matches(str(rel), pattern)
+    posix = rel.as_posix()
     assert posix == str(PurePosixPath("scripts/agk/merge_cleared.py"))
     assert impact.matches(posix, pattern)

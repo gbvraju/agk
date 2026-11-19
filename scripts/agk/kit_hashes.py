@@ -31,7 +31,15 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from changelog_fragments import FRAG_DIR, tree_fragments, well_formed
-from common import CheckError, merge_base, pr_mode, repo_root, resolve_base, run
+from common import (
+    CheckError,
+    committed_bytes,
+    merge_base,
+    pr_mode,
+    repo_root,
+    resolve_base,
+    run,
+)
 
 NAME = "kit-hashes"
 USAGE = "usage: kit_hashes.py [--check | --write]"
@@ -84,14 +92,30 @@ def snapshot_of(manifest: dict, read: Any) -> Snapshot:
     return snap
 
 
+def hashed_paths(manifest: dict) -> set[str]:
+    """Every path whose bytes `snapshot_of` may read."""
+    adopt = manifest.get("adopt") or {}
+    wanted = set(manifest.get("verbatim", [])) | set(manifest.get("experimental", []))
+    wanted |= set(manifest.get("templates", {}).values())
+    wanted |= set((adopt.get("templates") or {}).values())
+    wanted |= set(adopt.get("blocks") or {})
+    wanted |= set((adopt.get("block_sources") or {}).values())
+    return wanted
+
+
 def snapshot_worktree(root: Path) -> tuple[str, Snapshot]:
+    """The snapshot of the checkout at ROOT, each file read as committed (brief #1540 answer 3,
+    ADR-0648): a file whose checkout changed only its line ends (`core.autocrlf=true`) hashes as
+    its index blob, so a hash taken on Windows equals the one taken on Linux; a file committed with
+    CRLF, an untracked file and a real edit keep their bytes on disk (`common.committed_bytes`)."""
     manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
-
-    def read(path: str) -> bytes | None:
-        file = root / path
-        return file.read_bytes() if file.is_file() else None
-
-    return str(manifest["kit_version"]), snapshot_of(manifest, read)
+    on_disk = {
+        path: (root / path).read_bytes()
+        for path in sorted(hashed_paths(manifest))
+        if (root / path).is_file()
+    }
+    found = committed_bytes(root, on_disk)
+    return str(manifest["kit_version"]), snapshot_of(manifest, found.get)
 
 
 class Blobs:
@@ -125,11 +149,7 @@ def snapshot_commit(root: Path, blobs: Blobs, commit: str) -> tuple[str, Snapsho
         return None
     blobs.fetch([tree[MANIFEST]])
     manifest = json.loads(blobs.cache[tree[MANIFEST]].decode("utf-8"))
-    wanted = set(manifest.get("verbatim", [])) | set(manifest.get("experimental", []))
-    wanted |= set(manifest.get("templates", {}).values())
-    wanted |= set((manifest.get("adopt") or {}).get("templates", {}).values())
-    wanted |= set((manifest.get("adopt") or {}).get("blocks", {}))
-    wanted |= set(((manifest.get("adopt") or {}).get("block_sources") or {}).values())
+    wanted = hashed_paths(manifest)
     blobs.fetch([tree[p] for p in wanted if p in tree])
 
     def read(path: str) -> bytes | None:
