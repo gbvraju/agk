@@ -974,6 +974,10 @@ NO_CHANGE = (
     f"no change is started on this branch; run personal.py change start <name> ({CHANGE_RULE})"
 )
 REVIEWER = "personal-reviewer"
+CONTEXT_SCRIPT = "scripts/agk/review_context.py"
+NO_REPORT_CHECK = (
+    "the reviewer report check is not installed (path: scripts/agk/check_review_report.py)"
+)
 SPEC_DRAFT = """# SPEC-{number}: {name} (verify: say what the change does)
 
 - Status: Draft
@@ -1097,8 +1101,13 @@ def change_start(clone: Path, sidecar: Path, name: str, ref: str | None, advance
 def review_context(clone: Path, sidecar: Path, base: str, head: str, body: str) -> str:
     """Answer 2: the sections of `review_context.assemble`, the diff and the changed files from the
     clone (read-only, the head tree under the sidecar), the records from the sidecar."""
-    import review_context as rc  # noqa: PLC0415 - kit-only, experimental (kit/manifest.json)
-
+    try:
+        # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
+        import review_context as rc  # noqa: PLC0415 - kit-only
+    except ImportError:
+        raise CheckError(
+            f"the review context builder is not installed (path: {CONTEXT_SCRIPT})"
+        ) from None
     os.environ["GIT_OPTIONAL_LOCKS"] = "0"  # rule 4: `review_context`'s git reads lock nothing
     limits, other = rc.caps(sidecar), rc.caps(sidecar)["review_other_cap"]
     listed = _git(clone, "diff", "-z", "--name-status", "--no-renames", base, head)
@@ -1156,10 +1165,9 @@ def change_review(clone: Path, sidecar: Path, ref: str | None, report: str | Non
                    "the clone, then run: personal.py change review --report FILE"]  # fmt: skip
     try:
         # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
-        from check_review_report import Context, parse_report, validate  # noqa: PLC0415
+        from check_review_report import Context, parse_report, validate  # noqa: PLC0415 - kit-only
     except ImportError:
-        raise CheckError("the reviewer report check is not installed "
-                         "(path: scripts/agk/check_review_report.py)") from None  # fmt: skip
+        raise CheckError(NO_REPORT_CHECK) from None
     if not (sidecar / context).is_file():
         raise CheckError(
             f"no review context for the head; run personal.py change review ({CHANGE_RULE})"
@@ -1193,10 +1201,14 @@ def change_confirm(
 
 
 def _change_confirm(clone: Path, sidecar: Path, ask, tty, env) -> tuple[int, list[str]]:
-    from check_review_report import parse_report  # noqa: PLC0415 - the report exists, so it does
     from forge import FilesForge  # noqa: PLC0415
     from local_mode import SESSION_SETTING  # noqa: PLC0415
 
+    try:
+        # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
+        from check_review_report import parse_report  # noqa: PLC0415 - kit-only
+    except ImportError:
+        raise CheckError(NO_REPORT_CHECK) from None
     env = os.environ if env is None else env
     if env.get(SESSION_SETTING):
         raise CheckError(f"confirm runs only at the person's terminal (setting: {SESSION_SETTING})")

@@ -434,3 +434,22 @@ def test_req_048_the_plugin_ships_the_personal_reviewer():
     plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     assert "./.claude/agents/personal-reviewer.md" in plugin["agents"]
     assert "./.claude/agents/reviewer.md" not in plugin["agents"]
+
+
+@pytest.mark.parametrize("missing", ["review_context", "check_review_report"])
+def test_req_048_a_default_install_without_the_experimental_review_files_fails_by_name(
+    tmp_path, monkeypatch, missing
+):
+    """REQ-048 AC5: rule 17 (an absent experimental review file is named, ADR-0649)."""
+    clone, side, _ = reviewed(tmp_path)
+    monkeypatch.setitem(sys.modules, missing, None)
+    path = f"scripts/agk/{missing}.py"
+    if missing == "review_context":
+        with pytest.raises(personal.CheckError, match=path):
+            personal.change_review(clone, side, None, None)
+        return
+    report = tmp_path / "report.md"
+    with pytest.raises(personal.CheckError, match=path):
+        personal.change_review(clone, side, None, str(report))
+    code, out = personal.change_confirm(clone, side, ask=lambda _q: "yes", **terminal())
+    assert code == 1 and path in "\n".join(out)
