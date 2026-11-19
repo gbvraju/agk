@@ -2348,7 +2348,7 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
         return "pending", verdict_reason(comments, sha, reason)
     accepts = accepted_adrs(latest_verdict(comments) or {}, sha) or []
     try:
-        records = [] if records_specs(rules.data) else None
+        records: list[str] | None = [] if records_specs(rules.data) else None
         hold_list(repo, number, pull, comments, rules.approvers, accepts, root, records=records)
     except Held as err:
         text = str(err)

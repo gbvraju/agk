@@ -165,7 +165,7 @@ def recorded(root, ref: str) -> set[str]:
 
 
 def advances_failures(
-    root, changed: dict[str, str], body: str, records: set[str] = frozenset()
+    root, changed: dict[str, str], body: str, records: frozenset[str] | set[str] = frozenset()
 ) -> list[str]:
     """Rule a: the requirements an implementation PR advances, each named by an Approved spec; a
     recorded spec counts as Approved (brief #1520)."""
@@ -295,7 +295,7 @@ def approval_failures(
     changed: dict[str, str],
     approvals: dict[str, list[str]] | None = None,
     sidecar: bool = False,
-    records: set[str] = frozenset(),
+    records: frozenset[str] | set[str] = frozenset(),
 ) -> list[str]:
     """SIDECAR (Q-1502-1 answer (a)): without the comments a flip is refused, not skipped. The
     release flip of a recorded spec needs no new approval: its record is one (brief #1520)."""
@@ -318,10 +318,12 @@ def approval_failures(
     return failures
 
 
-def flip_of_record(root, mb: str, path: str, records: set[str]) -> bool:
+def flip_of_record(root, mb: str, path: str, records: frozenset[str] | set[str]) -> bool:
     """Whether PATH is a recorded spec whose only change since MB is its Draft -> Approved flip."""
     old, new = show(root, mb, path), read_text(root, path)
-    return spec_number(path) in records and None not in (old, new) and status_flip_only(old, new)
+    if spec_number(path) not in records or old is None or new is None:
+        return False
+    return status_flip_only(old, new)
 
 
 def pending(root, argv: list[str] | None) -> int:
