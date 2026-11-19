@@ -43,6 +43,11 @@ briefs, the vision, design documents, the tests) and prints, never does, what to
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" . --write
    ```
 
+   In a clean project (`[kit] layout = "plugin"` in `agk.toml`), the removal also takes out `LICENSE-AGK` and the short
+   `CLAUDE.md`, and keeps every record (the specs and decisions too) unless the person names it: add one
+   `--agreed <path>` for each record or folder that the owner and the customer agreed in writing to remove. It then
+   prints the history clean-up with its checklist: show it whole, and never run it, force-push or change a GitHub
+   setting; those are the repository owner's acts.
 3. Show the printed protected classes and the ADR skeleton. Write no ADR and edit no protected path yourself: the
    pull request needs an ADR that the maintainers decide. The person commits the branch, pushes it and opens one pull
    request, which git can revert.

@@ -77,12 +77,13 @@ def write(root: Path, files: dict[str, str]) -> None:
 def kit(tmp_path, monkeypatch) -> Path:
     """A stub plugin at 2.0.0 with its own `.claude-plugin/plugin.json`."""
     root = tmp_path / "plugin-example"
-    write(root, {**KIT, TEMPLATE: (ROOT / TEMPLATE).read_text(encoding="utf-8")})
+    shipped = (TEMPLATE, "kit/templates/agk.toml")  # the second names the [kit] settings
+    write(root, {**KIT, **{t: (ROOT / t).read_text(encoding="utf-8") for t in shipped}})
     write(root, {".claude-plugin/plugin.json": '{"name": "agk", "version": "2.0.0"}\n'})
     manifest = {
         "kit_version": "2.0.0",
         "verbatim": sorted(KIT),
-        "templates": {},
+        "templates": {"agk.toml": "kit/templates/agk.toml"},
         "rendered": [],
         "adopt": {"skip": [], "blocks": {}, "templates": {}},
     }
