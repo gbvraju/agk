@@ -1,6 +1,6 @@
 # SPEC-0072: Each playbook carries its architecture, a standards pack and enterprise checks
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-079
 
