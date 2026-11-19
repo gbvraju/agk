@@ -1,0 +1,1 @@
+- In a project that runs the kit from the plugin, the conductor's and the architect's guards allow each kit command they allow with the plugin's folder written out in full, `python3 "<plugin>/scripts/agk/<script>"`, with the same arguments; a variable, another folder or a link is refused (brief #1500)
