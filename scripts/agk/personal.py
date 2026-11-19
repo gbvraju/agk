@@ -9,6 +9,8 @@
     python3 personal.py report [--week YYYY-Www] [--clone DIR] [--sidecar DIR]
     python3 personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]
     python3 personal.py gate [--clone DIR] [--sidecar DIR] [--base REF] [--approve]
+    python3 personal.py pr-summary [--clone DIR] [--sidecar DIR]
+    python3 personal.py status [--clone DIR] [--sidecar DIR]
 
 SPEC-0041 build (h), first part, rule 16. `baseline` prints the test command it would run: the
 sidecar's `[personal] test_command`, else the one test command the survey's inventory declares
@@ -50,6 +52,14 @@ person's terminal verdict naming the head) and `evidence` (`evidence.parse` and
 prints the push command for the developer and runs none. With `team_refs` off it warns of a
 commit carrying an `Advances:` line or a sidecar path. `report` names each local branch whose head
 equals its upstream's remote-tracking ref (no fetch) and has no gate record.
+
+`pr-summary` (build (j), rules 21 and 22, brief #1505) prints, and never posts, what the gate
+record of the head says: the secret scan, the tests, the proof where the level ran it and whether
+a review was done, with no REQ, SPEC or ADR id unless `team_refs = true`; with no record it says
+so and invents nothing. It and `status` print the disclosure in force; with `ai_disclosure`
+`pr-note` or `both` the summary ends with the disclosure line, and with `commit-trailer` or `both`
+the gate warns of each branch commit without a `Co-Authored-By:` trailer. Nothing amends, rewrites
+or strips a trailer or a commit.
 """
 
 from __future__ import annotations
@@ -82,7 +92,8 @@ from survey import INVENTORY, detect_test_files, find_sidecar, write_private  # 
 USAGE = (
     "usage: personal.py baseline|floor|gate|report [--clone DIR] [--sidecar DIR] [--base REF] "
     "[--week YYYY-Www] [--approve]\n"
-    "       personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]"
+    "       personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]\n"
+    "       personal.py pr-summary|status [--clone DIR] [--sidecar DIR]"
 )
 SETTING = "personal.test_command"
 JUNIT = "{junit}"
@@ -448,6 +459,25 @@ def team_ref_warnings(clone: Path, base: str, head: str, table: dict) -> list[st
     return found
 
 
+DISCLOSURE = "personal.ai_disclosure"
+DISCLOSURE_LINE = "This change was made with the help of an AI coding assistant."
+TRAILER_KEY = "Co-Authored-By"
+
+
+def trailer_warnings(clone: Path, base: str, head: str, table: dict) -> list[str]:
+    """Rule 22: with `commit-trailer` or `both`, one warning per commit of the branch whose
+    message has no `Co-Authored-By:` trailer (git's own trailer reading); nothing is changed."""
+    if table["ai_disclosure"] not in ("commit-trailer", "both"):
+        return []
+    found = []
+    for sha in branch_commits(clone, base, head):
+        shown = _git(clone, "show", "-s", f"--format=%(trailers:key={TRAILER_KEY},valueonly)", sha)
+        if not shown.stdout.strip():
+            found.append(f"gate: warning: commit {sha[:12]} has no {TRAILER_KEY} trailer; if an "
+                         f"agent session made it, add the trailer yourself (setting: {DISCLOSURE})")  # fmt: skip
+    return found
+
+
 def failed(step: str, why: str) -> tuple[bool, str]:
     return False, f"gate: {step} FAIL: {why} (setting: {LEVEL_SETTING})"
 
@@ -586,6 +616,7 @@ def gate(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[bo
     head, base = head_of(clone), merge_base(clone, ref)
     lines = [f"gate: level {level}, base {base[:12]}, head {head[:12]}"]
     lines.extend(team_ref_warnings(clone, base, head, table))
+    lines.extend(trailer_warnings(clone, base, head, table))
     if not approve:
         lines.append(f"gate: nothing ran: would run {command} on the base and head trees and the "
                      f"steps of level {level}; run again with --approve")  # fmt: skip
@@ -633,6 +664,79 @@ def gate(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[bo
     if passed:
         lines.append(push_line(clone))
     return passed, "\n".join(lines)
+
+
+TEAM_IDS = re.compile(r"\s*\b(?:REQ-\d{3}|SPEC-\d{4}|ADR-\d{4})\b")
+SUMMARY_STEPS = {
+    "secret-scan": "Secret scan",
+    "no-regression": "No test that passed before fails now",
+    "tests-first": "Tests written first",
+    "review": "Review",
+}
+
+
+def disclosure_in_force(table: dict) -> str:
+    return f"Disclosure in force: {table['ai_disclosure']} (setting: {DISCLOSURE})"
+
+
+def status(sidecar: Path) -> str:
+    """Rule 22: the settings in force, the disclosure among them; a bad value is refused."""
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    return (f"personal mode: forge {table['forge']}, level {table['level']}, "
+            f"disclosure {table['ai_disclosure']}\n{disclosure_in_force(table)}")  # fmt: skip
+
+
+def summary_lines(record: dict) -> list[str]:
+    """What the record's steps say, in plain words; a step the level did not run is said so."""
+    steps = record.get("steps") if isinstance(record.get("steps"), list) else []
+    outcome = {}
+    for step in steps:
+        if isinstance(step, dict) and isinstance(step.get("name"), str):
+            outcome[step["name"]] = "passed" if step.get("outcome") == "ok" else "failed"
+    lines = [f"{SUMMARY_STEPS[n]}: {outcome[n]}" for n in ("secret-scan", "no-regression")
+             if n in outcome]  # fmt: skip
+    proof = outcome.get("tests-first")
+    if proof is None:
+        lines.append("Tests written first: not run at this level")
+    else:
+        why = " (red before the change, green after)" if proof == "passed" else ""
+        lines.append(f"Tests written first: {proof}{why}")
+    review = outcome.get("review")
+    lines.append("Review: not done at this level" if review is None else f"Review: done ({review})")
+    lines.extend(f"Step {n}: {r}" for n, r in outcome.items() if n not in SUMMARY_STEPS)
+    level, result = record.get("level"), record.get("result")
+    lines.append(f"Gate: {result} at level {level} on {str(record.get('head'))[:12]}")
+    return lines
+
+
+def pr_summary(clone: Path, sidecar: Path) -> tuple[bool, str]:
+    """Rule 21: printed for the developer to paste; it posts and writes nothing."""
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    head = head_of(clone)
+    lines = ["pr-summary: for you to paste into the team's pull request; nothing is posted"]
+    lines.append(disclosure_in_force(table))
+    path = sidecar / GATES / f"{head}.json"
+    found = path.is_file()
+    if not found:
+        lines.append(f"pr-summary: no gate record for the head {head[:12]}; run the gate first, "
+                     f"no result is shown (path: {GATES})")  # fmt: skip
+    else:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise CheckError(f"the gate record cannot be read (path: {GATES})") from exc
+        if not isinstance(record, dict):
+            raise CheckError(f"the gate record cannot be read (path: {GATES})")
+        lines.extend(summary_lines(record))
+    if table.get("team_refs") is not True:
+        lines = [TEAM_IDS.sub("", line) for line in lines]
+    if table["ai_disclosure"] in ("pr-note", "both"):
+        lines.append(DISCLOSURE_LINE)
+    return found, "\n".join(lines)
 
 
 def commit_gate(sidecar: Path, head: str) -> list[str]:
@@ -848,7 +952,7 @@ def _write(sidecar: Path, files, rid: str, rel: str, shown: list[str], head: str
 def parse(args: list[str]) -> dict | None:
     if args and args[0] == "confirm":
         return parse_confirm(args[1:])
-    if not args or args[0] not in ("baseline", "floor", "gate", "report"):
+    if not args or args[0] not in ("baseline", "floor", "gate", "report", "pr-summary", "status"):
         return None
     out: dict = {"command": args.pop(0), "clone": ".", "sidecar": None, "base": None}
     out["week"] = None
@@ -892,6 +996,9 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = confirm(Path(options["sidecar"]), options["record"])
             print("\n".join(lines))
             return code
+        if options["command"] == "status" and options["sidecar"]:
+            print(status(Path(options["sidecar"])))
+            return 0
         probe = _git(Path(options["clone"]), "rev-parse", "--show-toplevel")
         if probe.returncode != 0:
             raise CheckError("the clone cannot be read as a git repository (option: --clone)")
@@ -907,6 +1014,13 @@ def main(argv: list[str] | None = None) -> int:
         if options["command"] == "report":
             print(report(clone, sidecar, options["week"]))
             return 0
+        if options["command"] == "status":
+            print(status(sidecar))
+            return 0
+        if options["command"] == "pr-summary":
+            passed, text = pr_summary(clone, sidecar)
+            print(text)
+            return 0 if passed else 1
         run = gate if options["command"] == "gate" else floor
         passed, text = run(clone, sidecar, options["base"], options["approve"])
         print(text)
