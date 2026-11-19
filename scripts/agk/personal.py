@@ -690,7 +690,8 @@ def status(sidecar: Path) -> str:
 
 def summary_lines(record: dict) -> list[str]:
     """What the record's steps say, in plain words; a step the level did not run is said so."""
-    steps = record.get("steps") if isinstance(record.get("steps"), list) else []
+    steps = record.get("steps")
+    steps = steps if isinstance(steps, list) else []
     outcome = {}
     for step in steps:
         if isinstance(step, dict) and isinstance(step.get("name"), str):
