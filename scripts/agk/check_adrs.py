@@ -15,6 +15,11 @@ closed. `check_adrs.py --record-ids` prints the Final comment id of each record 
 HEAD's history, one a line, so that the governance workflow can fetch those comments; with
 `--body FILE` only those a check will read: all for a release pull request, those of the ADRs a
 `Covered-by:` line names, else none (brief #1181, ADR-0501).
+
+In a sidecar only (SPEC-0041 rule 8, brief #1502), `check_adrs.py --comments FILE` also fails an ADR
+whose status line moves to `Accepted` without the `Accept: <C> ADR-nnnn` line of the person's
+terminal confirmation at a `<C>` where the ADR equals its text apart from its status line; without
+`--comments`, or without a base, such a move fails rather than being skipped (Q-1502-1 answer (a)).
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ from common import (
     STATUS_LINE,
     CheckError,
     accepted_by_final,
+    agent_apps,
     base_arg,
     changed_files,
     changed_lines,
@@ -37,6 +43,7 @@ from common import (
     final_records,
     git,
     merge_base,
+    personal_table,
     repo_root,
     resolve_base,
     run,
@@ -200,6 +207,59 @@ def pending(
     return 0
 
 
+def terminal_failures(root: Path, mb: str, args: list[str]) -> list[str]:
+    """SPEC-0041 rule 8, in a sidecar only (brief #1502): an ADR whose status line moves to
+    `Accepted` needs an `Accept: <C> ADR-nnnn` line that `reviewers.terminal_confirmations`
+    derives from `--comments FILE`, at a `<C>` of the head's history where the ADR equals its text
+    apart from its status line; without `--comments` it fails (Q-1502-1 answer (a)). Team and
+    solo mode take no such reading."""
+    if personal_table(root) is None:
+        return []
+    from check_specs import in_history  # noqa: PLC0415 - the sidecar reading only
+    from reviewers import (  # noqa: PLC0415
+        SIDECAR_NO_COMMENTS,
+        derived_only,
+        solo_person,
+        status_moved_only,
+        terminal_shas,
+    )
+
+    given = "--comments" in args
+    at = args.index("--comments") + 1 if given else 0
+    if given and at >= len(args):
+        raise CheckError("--comments needs a value")
+    saved = (read_comments(args[at]) or []) if given else []
+    derived = derived_only(saved, agent_apps(root), solo_person(root))
+    problems: list[str] = []
+    for path, state in sorted(changed_files(root, mb).items()):
+        number = FILE_RE.match(path.removeprefix("docs/adr/"))
+        if not path.startswith("docs/adr/") or not number or state not in ("A", "M"):
+            continue
+        new = show_work(root, path)
+        old = show(root, mb, path)
+        if new is None or status_of(new) != "Accepted" or (old and status_of(old) == "Accepted"):
+            continue
+        rid = f"ADR-{number.group(1)}"
+        shas = terminal_shas(derived, rid)
+        if not given:  # Q-1502-1 answer (a): refused, never skipped
+            problems.append(f"{rid}: {SIDECAR_NO_COMMENTS}")
+        elif not shas:
+            problems.append(f"{rid}: SPEC-0041 rule 8: no Accept line of a terminal confirmation")
+        elif not any(
+            in_history(root, sha) and status_moved_only(show(root, sha, path) or "", new)
+            for sha in shas
+        ):
+            problems.append(f"{rid}: SPEC-0041 rule 8: the ADR changed after the confirmed sha")
+    return problems
+
+
+def show_work(root: Path, path: str) -> str | None:
+    try:
+        return (root / path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def validate(name: str, text: str, known: set[str]) -> list[str]:
     problems: list[str] = []
     fm = FILE_RE.match(name)
@@ -269,6 +329,10 @@ def main(argv: list[str] | None = None) -> int:
     base = resolve_base(root, base_arg(argv))
     if base is None:
         print(f"{NAME}: no base ref available outside CI; immutability check skipped")
+        if personal_table(root) is not None:  # Q-1502-1 answer (a): a sidecar fails closed
+            from reviewers import SIDECAR_NO_BASE  # noqa: PLC0415
+
+            problems.append(SIDECAR_NO_BASE)
     else:
         mb = merge_base(root, base)
         recorded = accepted_by_final(root, mb)
@@ -286,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
                 ln[1:].startswith("- Status:") for ln in changed_lines(root, mb, path)
             ):
                 problems.append(f"{path}: an Accepted ADR may change only its Status line")
+        problems += terminal_failures(root, mb, args)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     if not problems:

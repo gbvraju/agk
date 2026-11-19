@@ -51,8 +51,6 @@ def contents(word: str) -> dict:
     return {f"{PATH}": {"type": "file", "encoding": "base64", "content": encoded}}
 
 
-
-
 def guarded(tmp_path, approve: str | None, word: str = "Draft", login: str = APPROVER):
     notes = [cleared(login="conductor-two")]
     if approve is not None:
@@ -62,9 +60,11 @@ def guarded(tmp_path, approve: str | None, word: str = "Draft", login: str = APP
     return run(root, bin_dir, "--pr", "7", "--sha", HEAD), calls(log)
 
 
-@pytest.mark.parametrize("line", ["Approve: SPEC-0052", f"Approve: {HEAD} SPEC-0052"])
+@pytest.mark.parametrize("line", ["Approve: SPEC-0052", f"Approve: {HEAD[:12]}0 SPEC-0052"])
 def test_the_merge_is_held_while_an_approved_spec_reads_draft(tmp_path, line):
-    """REQ-046: brief #797 answer 4 (both forms of the approval, the rule named, no value)."""
+    """REQ-046: brief #797 answer 4 (both forms of the approval, the rule named, no value). Brief
+    #1520 (ADR-0642): an approval that pins the head's text is recorded in the merge instead
+    (tests/kit/test_merger_spec_record.py), so these two pin no text of the head."""
     proc, made = guarded(tmp_path, line)
     assert HELD in proc.stdout, proc.stdout + proc.stderr
     assert "SPEC-0052" not in proc.stdout

@@ -41,6 +41,53 @@ GITLEAKS_INSTALL = (
 )
 
 
+# `[kit]`, `kit = { ... }` or `kit.layout = ...`: only then is agk.toml parsed (ADR-0613 decision 2)
+KIT_TABLE = re.compile(r"^\s*(\[\s*kit\s*\]|kit\s*[.=])", re.MULTILINE)
+
+
+def _run_by_hook() -> bool:
+    parts = Path(sys.argv[0] if sys.argv and sys.argv[0] else "").parts  # the program run
+    return any(parts[i : i + 2] == (".claude", "hooks") for i in range(len(parts) - 1))
+
+
+def pin_gate(cwd: Path | None = None) -> None:
+    """The start check of SPEC-0071 rule 6 (brief #1455, ADR-0613), run on import so that every kit
+    script that imports this module stops before any work: in a clean project (the git top level
+    of the working directory, found without running git) whose `[kit] plugin_version` is not the
+    version of the plugin this file runs from, it prints `kit_root.pin_refusal`'s one line and
+    exits 1. Anywhere else it does nothing, and so does a partial copy of the scripts that holds
+    no `kit_root.py` (a test's stub project; a plugin carries the whole manifest). A hook (a main
+    program under `.claude/hooks/`) is never stopped here: a hook that exits 1 does not block its
+    tool call `(verify)`, so a guard must keep guarding; the hooks' own check is build (b)'s."""
+    if _run_by_hook():
+        return
+    try:
+        import kit_root  # standalone, so no cycle
+    except ImportError:
+        return
+
+    try:
+        here = (Path.cwd() if cwd is None else cwd).resolve()
+    except OSError:
+        return
+    root = next((d for d in (here, *here.parents) if (d / ".git").exists()), None)
+    if root is None:
+        return
+    try:
+        text = (root / "agk.toml").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return
+    if not KIT_TABLE.search(text):  # no `[kit]` table: nothing to parse (an installed project)
+        return
+    line = kit_root.pin_refusal(root, Path(__file__).resolve().parents[2])
+    if line:
+        print(line, file=sys.stderr)
+        raise SystemExit(1)
+
+
+pin_gate()
+
+
 def utf8_output() -> None:
     """Reconfigure stdout and stderr to UTF-8 (`errors="replace"`) when they are text streams in
     another encoding (brief #1233, ADR-0524). A Windows console writes in its code page (cp1252),
@@ -487,6 +534,7 @@ def rule_tags_from(root: Path) -> date | None:
 ADR_PATH = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
 STACK_ADR_PATH = re.compile(r"docs/adr/\d{4}-stack-options\.md")
 FINAL_ACCEPT = re.compile(r"ADR-(\d{4}) Accepted \(Final (\d+)\)")
+SPEC_RECORD = re.compile(r"SPEC-(\d{4}) Approved \(Approve (\d+)\)")  # brief #1520
 MERGED_BY = "Merged-by: merge_cleared.py"  # the squash message line of merge_cleared.py (rule 3a)
 
 
@@ -513,6 +561,27 @@ def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
     """ADR number -> (pull request, Final comment id) of each `ADR-nnnn Accepted (Final <id>)` line
     in REF's history, read only from a squash commit that merge_cleared.py made: on REF's
     first-parent line, with one parent, a subject that ends `(#n)` and the line `MERGED_BY`."""
+    return merger_records(root, ref, "Accepted (Final ", FINAL_ACCEPT)
+
+
+def approval_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
+    """Spec number -> (pull request, Approve comment id) of each `SPEC-nnnn Approved (Approve
+    <id>)` line in REF's history, by the squash-commit rule of `final_records` (brief #1520)."""
+    return merger_records(root, ref, "Approved (Approve ", SPEC_RECORD)
+
+
+def approved_specs(root: Path, ref: str) -> set[str]:
+    """`SPEC-nnnn` of each spec whose file at REF says Approved or that a record names."""
+    found = {f"SPEC-{n}" for n in approval_records(root, ref)}
+    names = git(root, "ls-tree", "-z", "--name-only", f"{ref}:docs/specs", check=False)
+    for name in (n for n in names.split("\0") if n[:4].isdigit()):
+        lines = (show(root, ref, f"docs/specs/{name}") or "").splitlines()
+        if next((m.group(1) for ln in lines if (m := STATUS_LINE.match(ln))), None) == "Approved":
+            found.add(f"SPEC-{name[:4]}")
+    return found
+
+
+def merger_records(root: Path, ref: str, grep: str, line: re.Pattern) -> dict[str, tuple[int, int]]:
     out = git(
         root,
         "log",
@@ -520,7 +589,7 @@ def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
         "--format=%x1e%P%x1f%B",
         "--fixed-strings",
         "--grep",
-        "Accepted (Final ",
+        grep,
         ref,
         check=False,
     )
@@ -532,7 +601,7 @@ def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
         if len(parents.split()) != 1 or subject is None or MERGED_BY not in lines:
             continue
         for ln in lines:
-            if m := FINAL_ACCEPT.fullmatch(ln):
+            if m := line.fullmatch(ln):
                 found.setdefault(m.group(1), (int(subject.group(1)), int(m.group(2))))
     return found
 
@@ -934,6 +1003,41 @@ def personal_table(root: Path) -> dict | None:
         if key != FORGE_SETTING and not _personal_value_ok(key, out[key]):
             raise CheckError(f"not an accepted value (setting: {PERSONAL_TABLE}.{key})")
     return out
+
+
+# Team mode (SPEC-0041 rule 31, ADR-0639): the `[governance]` table holds one key, `level`.
+GOVERNANCE_TABLE = "governance"
+GOVERNANCE_LEVELS = PERSONAL_CHOICES["level"]
+# What each level leaves out of the team-mode checks. Empty until a person rules on Q-562-1:
+# no level leaves a check out, and the floor (the secret scan, no regression) never is.
+GOVERNANCE_SKIPS: dict[str, tuple[str, ...]] = {level: () for level in GOVERNANCE_LEVELS}
+
+
+def governance_level(root: Path) -> str | None:
+    """The team-mode `[governance] level`, or None with no table, no key or a sidecar.
+
+    Any other key, a wrong type or an unknown value is refused naming the setting, never the
+    value, so no setting lowers the floor (principle 11)."""
+    try:
+        source = config_source(root)
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise CheckError(f"agk.toml cannot be read (setting: {GOVERNANCE_TABLE})") from None
+    if PERSONAL_TABLE in source or GOVERNANCE_TABLE not in source:
+        return None
+    table = source[GOVERNANCE_TABLE]
+    if not isinstance(table, dict):
+        raise CheckError(f"[{GOVERNANCE_TABLE}] must be a table (setting: {GOVERNANCE_TABLE})")
+    for key in sorted(table):
+        if key != "level":
+            raise CheckError(
+                f"unknown key in [{GOVERNANCE_TABLE}] (setting: {GOVERNANCE_TABLE}.{key})"
+            )
+    if "level" not in table:
+        return None
+    level = table["level"]
+    if not isinstance(level, str) or level not in GOVERNANCE_LEVELS:
+        raise CheckError(f"not an accepted value (setting: {GOVERNANCE_TABLE}.level)")
+    return level
 
 
 def load_config(root: Path) -> dict:

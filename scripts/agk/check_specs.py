@@ -20,11 +20,18 @@ the one spec the pull request sets Approved or the one its first line names). Th
 head must equal the approved text apart from its status line. With `review_mode = "solo"` an
 `Approve: SPEC-<n>` line of the one listed person's confirmation approves the text at its confirmed
 sha, which must be the head of the latest run before the comment, as for a short line (brief 277,
-`reviewers.confirmed_comments`). Without `--comments` the approval is
-not checked (a local run has no comments).
+`reviewers.confirmed_comments`). In a sidecar (SPEC-0041 rule 8, brief #1502) only the
+`Approve: <C> SPEC-<n>` line that `reviewers.terminal_confirmations` derives from the person's
+terminal confirmation approves, never a plain comment, and without `--comments` or a base a
+sidecar spec set Approved fails (Q-1502-1 answer (a)). Elsewhere, without `--comments` the
+approval is not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
 notes' `## Rulings` section and no `<id> ruled` row in the decisions log).
+A spec that a merger record `SPEC-nnnn Approved (Approve <id>)` in the merge base's history names
+(`common.approval_records`, brief #1520) counts as Approved for rules (1), a and 5: only its
+Draft -> Approved flip passes without an amendment, and that flip needs no new approval.
+`check_specs.py --pending [--base REF]` prints each recorded spec whose file still says Draft.
 Messages name the spec path, the requirement or the question id, never content.
 """
 
@@ -44,6 +51,7 @@ from common import (
     STATUS_LINE,
     CheckError,
     agent_apps,
+    approval_records,
     base_arg,
     base_context,
     changed_files,
@@ -52,14 +60,25 @@ from common import (
     find_questions,
     frozen_log_problems,
     git,
+    merge_base,
+    personal_table,
     read_text,
     repo_root,
+    resolve_base,
     run,
     show,
     status_flip_only,
     utf8_output,
 )
-from reviewers import approval_shas, confirmed_comments, solo_person, spec_approvers
+from reviewers import (
+    SIDECAR_NO_BASE,
+    SIDECAR_NO_COMMENTS,
+    approval_shas,
+    confirmed_comments,
+    derived_only,
+    solo_person,
+    spec_approvers,
+)
 
 NAME = "specs"
 SPEC_PREFIX = "docs/specs/"
@@ -139,15 +158,28 @@ def requirements_of(root, folder: str) -> dict[str, tuple[list[str], str | None]
     return found
 
 
-def advances_failures(root, changed: dict[str, str], body: str) -> list[str]:
-    """Rule a: the requirements an implementation PR advances, each named by an Approved spec."""
+def recorded(root, ref: str) -> set[str]:
+    """The spec numbers a merger record in REF's history approves (brief #1520): REF is the merge
+    base, never the head, so that a line in a branch commit is never read."""
+    return set(approval_records(root, ref))
+
+
+def advances_failures(
+    root, changed: dict[str, str], body: str, records: frozenset[str] | set[str] = frozenset()
+) -> list[str]:
+    """Rule a: the requirements an implementation PR advances, each named by an Approved spec; a
+    recorded spec counts as Approved (brief #1520)."""
     if all(path.startswith(DOC_ONLY) for path in changed):
         return []
     line = field(body, "Advances:") or ""
     specs, adrs = requirements_of(root, "specs"), requirements_of(root, "adr")
     failures = []
     for req in dict.fromkeys(REQ_ID.findall(line)):
-        named = [status for ids, status in specs.values() if req in ids]
+        named = [
+            "Approved" if spec_number(path) in records else status
+            for path, (ids, status) in specs.items()
+            if req in ids
+        ]
         approved = "Approved" in named
         exempt = not named and any(req in ids for ids, _ in adrs.values())
         if not approved and not exempt:
@@ -258,13 +290,24 @@ def flipped_specs(root, mb: str, changed: dict[str, str]) -> dict[str, str]:
 
 
 def approval_failures(
-    root, mb: str, changed: dict[str, str], approvals: dict[str, list[str]] | None = None
+    root,
+    mb: str,
+    changed: dict[str, str],
+    approvals: dict[str, list[str]] | None = None,
+    sidecar: bool = False,
+    records: frozenset[str] | set[str] = frozenset(),
 ) -> list[str]:
+    """SIDECAR (Q-1502-1 answer (a)): without the comments a flip is refused, not skipped. The
+    release flip of a recorded spec needs no new approval: its record is one (brief #1520)."""
     failures = []
     noted = False
     for number, path in flipped_specs(root, mb, changed).items():
         failures += [f"{number}: {q} has no ruling" for q in open_questions(root, path)]
-        if approvals is None:
+        if flip_of_record(root, mb, path, records):
+            continue
+        if approvals is None and sidecar:
+            failures.append(f"{number}: {SIDECAR_NO_COMMENTS}")
+        elif approvals is None:
             if not noted:
                 print(f"{NAME}: no comments file; an approval of a spec is not checked")
                 noted = True
@@ -273,6 +316,25 @@ def approval_failures(
         elif not any(unchanged_since(root, sha, path) for sha in approvals[number]):
             failures.append(f"{number}: rule 5: the spec changed after the approved sha")
     return failures
+
+
+def flip_of_record(root, mb: str, path: str, records: frozenset[str] | set[str]) -> bool:
+    """Whether PATH is a recorded spec whose only change since MB is its Draft -> Approved flip."""
+    old, new = show(root, mb, path), read_text(root, path)
+    if spec_number(path) not in records or old is None or new is None:
+        return False
+    return status_flip_only(old, new)
+
+
+def pending(root, argv: list[str] | None) -> int:
+    """`--pending` (brief #1520 answer 4): each recorded spec whose file still says Draft, one path
+    a line, the records read at the merge base with `--base` (HEAD when none resolves)."""
+    base = resolve_base(root, base_arg(argv))
+    records = recorded(root, merge_base(root, base) if base else "HEAD")
+    for rel, (_, status) in requirements_of(root, "specs").items():
+        if spec_number(rel) in records and status == "Draft":
+            print(rel)
+    return 0
 
 
 def runs_of(root, path: str | None) -> list[dict]:
@@ -316,11 +378,17 @@ def in_history(root, sha) -> bool:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     root = repo_root()
+    if "--pending" in (sys.argv[1:] if argv is None else argv):
+        return pending(root, argv)
     body = body_arg(argv)
     mb = base_context(root, NAME, base_arg(argv))
+    if mb is None and personal_table(root) is not None:  # Q-1502-1 answer (a): fail closed
+        print(f"FAIL {NAME}: {SIDECAR_NO_BASE}")
+        return 1
     if mb is None:
         return 0
     changed = changed_files(root, mb)
+    records = recorded(root, mb)
     amendments = [
         p
         for p, s in changed.items()
@@ -332,7 +400,9 @@ def main(argv: list[str] | None = None) -> int:
         if not (path.startswith(SPEC_PREFIX) and path.endswith(".md")):
             continue
         old = show(root, mb, path)
-        if old is None or status_of(old) != "Approved":
+        if old is None or (status_of(old) != "Approved" and spec_number(path) not in records):
+            continue
+        if status_of(old) != "Approved" and flip_of_record(root, mb, path, records):
             continue
         if not any(path in text for text in texts):
             failures.append(path)
@@ -346,9 +416,13 @@ def main(argv: list[str] | None = None) -> int:
         reviews = file_arg(argv, "--reviews")
         runs = file_arg(argv, "--runs")
         pinned = runs_of(root, runs)
-        items = confirmed_comments(  # brief 277: the head by the rule of a short Approve: line
-            comments_of(Path(comments)), agent_apps(root), solo_person(root), runs=pinned
-        )
+        saved = comments_of(Path(comments))
+        if personal_table(root) is not None:  # SPEC-0041 rule 8: a terminal confirmation only
+            items = derived_only(saved, agent_apps(root), solo_person(root))
+        else:
+            items = confirmed_comments(  # brief 277: the head by the rule of a short Approve: line
+                saved, agent_apps(root), solo_person(root), runs=pinned
+            )
         approvals = approval_shas(
             items,
             comments_of(Path(reviews)) if reviews else [],
@@ -357,14 +431,16 @@ def main(argv: list[str] | None = None) -> int:
             set(flipped_specs(root, mb, changed)),
             agent_apps(root),
         )
-    messages += approval_failures(root, mb, changed, approvals)
+    messages += approval_failures(
+        root, mb, changed, approvals, personal_table(root) is not None, records
+    )
     messages += contexts_failures(root, mb, changed)
     messages += decision_file_problems(root)  # one row per decision file (brief 557)
     messages += frozen_log_problems(changed)  # the old log is frozen (brief 557 fix list item 3)
     if body is None or not body.strip():
         print(f"{NAME}: no pull request body; the lifecycle rule for Advances is skipped")
     else:
-        messages += advances_failures(root, changed, body)
+        messages += advances_failures(root, changed, body, records)
     for message in messages:
         print(f"FAIL {NAME}: {message}")
     if not messages:
