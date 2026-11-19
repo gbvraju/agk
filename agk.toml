@@ -365,6 +365,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_setup_team_roles.py",
   "tests/kit/test_entry_points_refuse.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_one_conductor_per_machine.py",
@@ -1154,7 +1155,8 @@ tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/k
 [[testing.map]]
 code = "scripts/agk/setup.py"
 tests = ["tests/kit/test_setup_read.py", "tests/kit/test_setup_settings.py", "tests/kit/test_setup_windows.py", "tests/kit/test_setup_linux.py", "tests/kit/test_setup_ci.py",
-  "tests/kit/test_setup_wsl.py", "tests/kit/test_setup_back.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_setup_wsl.py", "tests/kit/test_setup_back.py", "tests/kit/test_setup_team_roles.py",
+  "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_distribution.py"]
 [[testing.map]]
 code = "scripts/agk/setup_linux.sh"
