@@ -444,7 +444,7 @@ only `agk.toml` (at `REF` when given) and calls no `gh`; a value other than `tru
 
 ## Removing the kit
 
-    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" TARGET [--write] [--remove-docs]
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" TARGET [--write] [--remove-docs] [--agreed PATH ...]
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" TARGET --pause [--write]
 
 `/agk:uninstall` runs `scripts/agk/uninstall.py` from the plugin (or a kit checkout), never the copy in the repository, since
@@ -467,6 +467,14 @@ settings to tidy by hand first, then records, which stay as written.
 - **GitHub, printed only:** the ruleset to delete or relax, by name; the kit's labels; the issues it opened (the red-branch
   issue and the drift-audit, metrics and product-report issues); the plugin removal command. Each needs a person with admin
   rights; the tool does none of them.
+
+- **In a clean project** (`[kit] layout = "plugin"`, SPEC-0071 rule 9): `LICENSE-AGK` and the short `CLAUDE.md` go too,
+  and each record named with `--agreed PATH` (a file or folder of the project's records that the owner and the customer
+  agreed to remove); the specs and decisions stay unless named. The report then prints, never runs, the history
+  clean-up: every kit path of every release row of `kit/hashes.json` that `git log --all` finds, the `git filter-repo`
+  command for that list `(verify)` and its checklist (the customer's audit and retention choice, the written agreement,
+  branch protections paused and restored by the administrator, every clone made again). `--agreed` outside the clean
+  layout is refused, naming `layout`.
 
 The output names the protected classes the branch changes and prints an ADR skeleton; write the ADR yourself. After the
 removal merges, `agk doctor` reports `no kit installed` (exit 0) instead of failing: in a git work tree with no `agk.toml`,
