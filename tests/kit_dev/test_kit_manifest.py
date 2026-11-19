@@ -40,6 +40,7 @@ KIT_ONLY = {
     "scripts/agk/setup.py",  # the skill runs the plugin's copy (ADR-0618)
     "scripts/agk/setup_windows.ps1",  # the plugin's copy bootstraps native Windows (ADR-0620)
     "scripts/agk/setup_linux.sh",  # the plugin's copy bootstraps Linux machines (ADR-0622)
+    "scripts/agk/rehearsal.py",  # the plugin's copy checks SPEC-0071's proof (ADR-0617)
 }
 # Files under the law roots that belong to this repository only and are not installed in targets.
 REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md", ".github/workflows/agk-tag.yml"}

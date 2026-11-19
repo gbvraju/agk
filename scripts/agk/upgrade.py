@@ -29,7 +29,7 @@ target's git directory.
 `--clean-repo [--rehearsal] [--write]` (SPEC-0071 rule 8, brief #1456, ADR-0614) moves an installed
 local-mode project to the clean layout: see `clean_main`. It refuses, naming the setting, outside
 `execution = "local"`, in personal mode, until the rehearsal's proof is written (rule 11) unless
-`--rehearsal`, and when the project's version has no row of the table or is not this kit's. A dry
+`--rehearsal` (`rehearsal.py check`, brief #1459, ADR-0617), and when the project's version has no row of the table or is not this kit's. A dry
 run is the default; `--write` makes one new branch with `git switch -c` and commits nothing.
 """
 
@@ -950,22 +950,26 @@ CLEAN_KEPT = (
 )
 CLEAN_KEEPS = tuple(rel for rel in CLEAN_KEPT if rel != "CLAUDE.md")
 LOCAL_RULES = ".claude/settings.local.json"  # ADR-0612 decision 4: uncommitted, this machine's
-# Rule 11: build (g) writes the rehearsal's four figures to SPEC-0071's proof and sets this.
-CLEAN_PROOF_HELD = False
 PLUGIN_PATH = re.compile(r'"?\$\{CLAUDE_PLUGIN_ROOT\}"?/[\w./*<>-]*')
 WORD = re.compile(r"[\w./-]+")
 CLEAN_SHOWN = 40  # the lines of the proof shown, as uninstall.py shows its leftovers
 
 
-def clean_refusal(data: dict, version: str, kit_version: str, table: dict, rehearsal: bool) -> None:
-    """Each refusal of rule 8 and rule 11, naming the setting or the path class, never a value."""
+def clean_refusal(
+    data: dict, version: str, kit_version: str, table: dict, rehearsal: bool, kit_root: Path
+) -> None:
+    """Each refusal of rule 8 and rule 11, naming the setting or the path class, never a value.
+    Rule 11 (brief #1459, ADR-0617): the proof is held when `rehearsal.py check` passes on the
+    plugin's SPEC-0071 and the maintainers' acceptance line is dated."""
+    import rehearsal as proof  # noqa: PLC0415 - only this command
     if "personal" in data:
         raise Refusal("personal mode keeps the kit out of the product already (setting: forge)")
     if data.get("execution", "hosted") != "local":
         raise Refusal("the clean layout runs only in local mode (setting: execution)")
-    if not rehearsal and not CLEAN_PROOF_HELD:
+    if not rehearsal and not proof.proof_held(kit_root):
         raise Refusal(
-            "the rehearsal's four figures are not written yet (the proof of SPEC-0071 rule 11); "
+            "the rehearsal's four figures are not written and accepted yet (the proof of SPEC-0071 "
+            "rule 11, rehearsal.py check); "
             "only --rehearsal on a sample project runs"
         )
     if version not in table.get("releases", {}):
@@ -991,7 +995,7 @@ def clean_plan(target: Path, kit_root: Path, rehearsal: bool):
     version = installed_version(target) or ""
     manifest = json.loads((kit_root / MANIFEST).read_text(encoding="utf-8"))
     table = uninstall.load_table(kit_root)
-    clean_refusal(data, version, str(manifest["kit_version"]), table, rehearsal)
+    clean_refusal(data, version, str(manifest["kit_version"]), table, rehearsal, kit_root)
     listed = target / "config" / "protected-paths.txt"
     plan = uninstall.Plan(entries=read_list(listed.read_text("utf-8")) if listed.is_file() else [])
     reader = uninstall.Reader(target, kit_root)

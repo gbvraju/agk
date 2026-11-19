@@ -81,6 +81,20 @@ Saved git trees of invented sample projects, a stub plugin root with its own `.c
 
 REQ-078 AC1: *the kit lives in the plugin, the repository keeps the project.* Rules 2 to 4. REQ-078 AC2: *one version on every machine.* Rule 6. REQ-078 AC3: *one reversible migration.* Rule 8. REQ-078 AC4: *one command removes AGK at the end.* Rule 9. REQ-078 AC5: *protected on the machine.* Rule 7. REQ-078 AC6: *speed, quality and cost unchanged.* Rule 11; the rehearsal's four figures are written here by build (g). REQ-078 AC7: *nothing else changes.* Rules 1, 5 and 13.
 
+### Rehearsal record
+
+Build (g) (brief #1459, ADR-0617). The two runs of rule 11 on the sample project, written after each run; lead time is
+in hours, tokens are `metrics.py --cost`'s per merged pull request and the pass rate is in percent. `rehearsal.py check`
+fails while a cell holds `—`, the briefs differ or a clean figure is worse by more than 10%, and the clean-repo migration
+refuses until it passes and the line below carries the maintainers' date.
+
+| Run | Dates | Briefs | Lead time per brief (hours) | Tokens per merged pull request | First-review pass rate (%) | Failed checks |
+|---|---|---|---|---|---|---|
+| installed | — | — | — | — | — | — |
+| clean | — | — | — | — | — | — |
+
+Accepted: —
+
 ## Residual
 
 - 2026-11-16: an administrator of a machine can copy the plugin folder, and what is already in the product's history and in existing clones stays until the repository owner runs the printed clean-up; protection rests on the licence and the written grant (brief #1419) (due 2027-03-31).
