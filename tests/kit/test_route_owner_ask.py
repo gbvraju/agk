@@ -126,7 +126,7 @@ def comment_event(body: str, action: str = "created") -> dict:
 
 
 def test_1534_only_an_owner_answer_on_a_pull_request_starts_the_unpark():
-    """REQ-066: brief #1534 answer 5: an answer comment, created, on a pull request; nothing else."""
+    """REQ-066: brief #1534 answer 5: a created answer comment on a pull request; nothing else."""
     for line in ("Maintainer answer: accept " + HEAD, "Answer: Q-7-1 yes", "Approve: x"):
         assert route.owner_answer_event("issue_comment", comment_event(line)), line
     assert not route.owner_answer_event("issue_comment", comment_event("Report: abc ready"))

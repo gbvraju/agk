@@ -890,6 +890,7 @@ tests = [
 code = "scripts/agk/session.py"
 tests = [
   "tests/kit/test_guard_plugin_forms.py",
+  "tests/kit/test_route_owner_ask.py",
   "tests/kit/test_entry_points_refuse.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_autopilot_status.py",

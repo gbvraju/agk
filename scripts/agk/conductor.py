@@ -1172,7 +1172,9 @@ def owner_pass(root, repo: str, now: datetime) -> list[str]:
         found = session.owner_apply(repo, number, settings, listed, answerers, now)
         if found:
             park = found[0] == "park"
-            lines.append(f"PARKED #{number} {found[1]}" if park else unparked_line(number, found[1]))
+            lines.append(
+                f"PARKED #{number} {found[1]}" if park else unparked_line(number, found[1])
+            )
     return lines
 
 

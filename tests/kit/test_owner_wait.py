@@ -463,7 +463,11 @@ def test_1534_an_answer_before_the_park_ends_it(hub):
     """REQ-066: brief #1534 answer 3: an answer older than the `Parked-by:` comment still closes
     the item it parked for (#1532: the answer one second before the mark)."""
     parked = pull(labels=("agk:parked",))
-    said = [asked(90), answer(11, "Maintainer answer: Q-7-1 accept", 31), at(12, "boss", PARKED_BY, 30)]
+    said = [
+        asked(90),
+        answer(11, "Maintainer answer: Q-7-1 accept", 31),
+        at(12, "boss", PARKED_BY, 30),
+    ]
     assert step(parked, said) == ("unpark", "Q-7-1")
     gh = hub(said, labels=("agk:parked",))
     assert apply() == ("unpark", "Q-7-1")

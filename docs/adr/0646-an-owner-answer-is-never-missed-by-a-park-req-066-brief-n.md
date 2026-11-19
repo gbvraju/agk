@@ -6,7 +6,7 @@
 - Related: brief #1534, ADR-0543 (brief #1282), ADR-0559, SPEC-0059 rule 10, SPEC-0064 rule 2, #1532, #1519, #1511, #1516
 - Requirements: REQ-066
 
-Protected classes: `scripts/agk/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -43,6 +43,9 @@ answer.
    and `refused_here` allows it, `owner_apply` on each open pull request labelled `agk:parked`, `agk:question`,
    `agk:approve` or `agk:owner-merge`. It moves no read mark. The cadence stays `[autopilot] interval_minutes`; no
    one-minute entry is added (the owner's direction: event first).
+6. The tests of the race, the keys, the router and the supervisor are in `tests/kit/` (`test_owner_wait.py`,
+   `test_route_owner_ask.py`, `test_steward_owner_question.py`); `agk.toml`'s `[[testing.map]]` entry of
+   `scripts/agk/session.py` gains `tests/kit/test_route_owner_ask.py`, which now imports it.
 
 ## Consequences
 

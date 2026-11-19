@@ -4335,7 +4335,7 @@ ACCEPT_LINE = re.compile(r"Maintainer answer: accept ([0-9a-f]{40})\b")
 
 
 def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str]):
-    """(key, since) of the newest open item that waits on the owner, or None (`open_owner_items`)."""
+    """(key, since) of the newest open item waiting on the owner, or None (`open_owner_items`)."""
     open_items = open_owner_items(pr, comments, listed, answerers)
     if not open_items:
         return None
