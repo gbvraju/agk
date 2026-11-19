@@ -34,6 +34,10 @@ agent_apps = ["claude"]
 # session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
 # nobody or more than one person). A change needs an ADR.
 review_mode = "team"
+# The governance level (SPEC-0041 rule 31): "light" (the default for a new install), "tests-first", "spec", "review" or "evidence".
+# Its one key is level; any other key, a wrong type or an unknown value is refused. The floor (the secret scan, and no test that
+# passed on the base fails on the head) runs at every level, and no level leaves out a check yet. A change needs an ADR.
+governance = { level = "light" }
 # Optional: the folder of the heavy-step lock of `python3 scripts/agk/lock.py` (the user's temp folder if unset), and the minutes after
 # which a lock left by a session counts as stale and is cleared (120 if unset).
 # lock_dir = ""

@@ -1,8 +1,8 @@
 ---
 name: setup
-description: Read this machine and this project, size the AI workforce from memory and cores, ask at most five plain questions, show the plan and the setup table, and on the person's yes propose the project settings as one change for review and, on Windows with WSL 2 chosen, set up the WSL workforce through /agk:wsl's own script (agk setup); the status form changes nothing, and the back form removes only the scheduler tasks it added and prepares the reverse settings change. It never commits, pushes or merges.
+description: Read this machine and this project, size the AI workforce from memory and cores, ask at most five plain questions, show the plan and the setup table, and on the person's yes propose the project settings as one change for review and, on Windows with WSL 2 chosen, set up the WSL workforce through /agk:wsl's own script (agk setup); the status form changes nothing and shows the team, the restart form restarts only the roles this machine may run, and the back form removes only the scheduler tasks it added and prepares the reverse settings change. It never commits, pushes or merges.
 disable-model-invocation: true
-argument-hint: "[status|back]"
+argument-hint: "[status|restart|back]"
 ---
 <!--
 SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
@@ -12,8 +12,9 @@ AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository na
 
 # /agk:setup
 
-Run it from Claude Code in the project's folder (`claude "/agk:setup"`, or typed in a session). Three forms:
-`/agk:setup` (read the machine and the project and show the plan), `/agk:setup status` (show the table again) and
+Run it from Claude Code in the project's folder (`claude "/agk:setup"`, or typed in a session). Four forms:
+`/agk:setup` (read the machine and the project and show the plan), `/agk:setup status` (show the table and the team
+again), `/agk:setup restart` (restart this machine's stopped roles) and
 `/agk:setup back` (undo what it added). The work is one kit helper, `setup.py`, run from this plugin and never installed
 into the project. It reads everything it can itself
 and asks nothing that it can read. A missing tool shows as `waiting` with what to install. On Windows with WSL 2
@@ -27,6 +28,27 @@ yes. The only project file it writes is the project-settings change of step 5, o
 
    ```
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/setup.py" status
+   ```
+
+2. Show its `Team` lines as printed: who holds the conductor's lease, the live steward, each builder with its brief,
+   the members listed, what waits on the owner and this machine's roles. It posts nothing.
+
+## /agk:setup restart
+
+1. When this machine's roles have stopped, show what would restart, changing nothing; it restarts exactly the roles
+   the project allows here, so a builders-only machine stays builders-only:
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/setup.py" restart
+   ```
+
+2. Ask for one yes. On the yes, run it with `--yes`. It restarts the conductor itself (only on a machine allowed to
+   run it); for the builders run `/agk:launch`, which shows its own plan and asks its own yes; for the steward show
+   the person the printed command (`claude --agent steward`) to open it in a new terminal, since the steward is their
+   own session.
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/setup.py" restart --yes
    ```
 
 ## /agk:setup
@@ -47,7 +69,9 @@ yes. The only project file it writes is the project-settings change of step 5, o
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/setup.py" plan --answer where=local --answer team=solo
    ```
 
-3. The builders line names the figure, the limit that applied and why. When the person wants fewer builders, run the
+3. The `Roles here` line names this machine's roles and why. When the person wants fewer, run the plan again with
+   `--roles <role,role>`; a role the project does not allow here is refused, and you say so in one line. The builders
+   line names the figure, the limit that applied and why. When the person wants fewer builders, run the
    plan again with `--builders <n>`; a figure above the cap is refused, and you say so in one line.
 4. For each `waiting` step, tell the person in one line what its note says. The proof steps are listed as not yet run: the
    plan runs none of them. In `/agk:setup status`, which runs them, name each `failed` proof step and suggest
