@@ -89,6 +89,12 @@ def test_1282a_watch_parks_and_names_session_after_as_the_next_command(proj, stu
         iso(-timedelta(hours=1)),
     )
     watching(stub, [(pull(), [question])], base=[question])
+    # brief #1534 answer 2: the fresh read before the label write, and the one after it
+    pr_path, said_path = f"repos/{REPO}/pulls/7", f"repos/{REPO}/issues/7/comments"
+    stub.serve(pr_path, pull(), nth=2)
+    stub.serve(said_path, [question], nth=3)
+    stub.serve(pr_path, pull(labels=("agk:parked",)), nth=3)
+    stub.serve(said_path, [question, comment(11, "boss", "Parked-by: wait Q-7-1")], nth=4)
     stub.serve(f"repos/{REPO}/issues", [])  # no `agk-conductor` issue: messages are not read
     out = session(proj, stub, *WATCH)
     assert out.returncode == 0, out.stdout + out.stderr
@@ -176,7 +182,8 @@ def test_1282d_the_answer_unparks_on_the_next_pass():
     assert step(parked, [asked(90), mark]) is None  # still waits: stays parked, no new comment
     answer = at(13, "owner", "Maintainer answer: Q-7-1 the smaller runtime", 5)
     assert step(parked, [asked(90), mark, answer]) == ("unpark", "Q-7-1")
-    assert step(pull(), [asked(90), mark, answer]) is None  # unparked already
+    done = at(14, "boss", "Unparked-by: answer Q-7-1", 4)
+    assert step(pull(), [asked(90), mark, answer, done]) is None  # unparked already
 
 
 def test_1282d_sweep_parks_lists_once_and_unparks_with_the_resume_command(monkeypatch, tmp_path):
@@ -194,12 +201,16 @@ def test_1282d_sweep_parks_lists_once_and_unparks_with_the_resume_command(monkey
         comments[number].append(at(20 + len(writes), "boss", f"Parked-by: wait {key}", 0))
         return True
 
-    def unpark(repo, number, key):
+    def unpark(repo, number, key, labelled=True):
         writes.append(("unpark", number, key))
         labels[number] = ()
         return True
 
+    def fresh(repo, number):  # brief #1534: the apply's own read before each write
+        return {**pull(labels=labels[number]), "number": number}, list(comments[number])
+
     monkeypatch.setattr(conductor, "read", read)
+    monkeypatch.setattr(conductor.session, "owner_read", fresh)
     monkeypatch.setattr(conductor.session, "park_pull", park)
     monkeypatch.setattr(conductor.session, "unpark_pull", unpark)
     monkeypatch.setattr(conductor, "parked_mark", lambda root: tmp_path / "parked")
@@ -586,6 +597,7 @@ def test_1534_the_supervisor_runs_the_owner_step_while_a_job_runs(monkeypatch, c
 def test_1534_the_owner_pass_reads_only_waiting_pull_requests(monkeypatch):
     """REQ-066: brief #1534 answers 6 and 7, edge 13: a quiet pass makes no read; a pending one
     reads the comments of each waiting pull request only, and a member's machine writes nothing."""
+    monkeypatch.setattr(conductor.common, "personal_table", lambda root: None)
     monkeypatch.setattr(conductor, "change_reads", lambda *a: (True, None))
     monkeypatch.setattr(conductor, "pass_state", lambda root: {})
     applied: list = []
@@ -601,10 +613,10 @@ def test_1534_the_owner_pass_reads_only_waiting_pull_requests(monkeypatch):
     ]
     monkeypatch.setattr(conductor.session, "pages", lambda endpoint: pulls)
     monkeypatch.setattr(conductor, "refused_here", lambda root: False)
-    monkeypatch.setattr(conductor, "owner_wait_settings", lambda root: PLAIN)
+    monkeypatch.setattr(conductor.session, "owner_wait_settings", lambda root: PLAIN)
     monkeypatch.setattr(conductor, "verdict_authors", lambda root: ["boss"])
     monkeypatch.setattr(conductor, "spec_approvers", lambda root: ["owner"])
-    monkeypatch.setattr(conductor, "personal_table", lambda root: None)
+    monkeypatch.setattr(conductor.common, "personal_table", lambda root: None)
     assert conductor.owner_pass("root", REPO, NOW) == [] and applied == [7, 8]
     applied.clear()
     monkeypatch.setattr(conductor, "refused_here", lambda root: True)

@@ -1120,14 +1120,13 @@ def owner_lines(
         comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
         if kept is not None:
             kept[number] = comments  # read once: the steward's start reads them too (#1322)
-        found = session.owner_step(pull, comments, settings, now, listed, answerers)
-        if found and found[0] == "unpark" and session.unpark_pull(repo, number, found[1]):
-            unparks.append(
-                f"UNPARKED #{number} {found[1]}; run: python3 scripts/agk/session.py resume "
-                f"--pr {number}"
-            )
+        found = session.owner_apply(
+            repo, number, settings, listed, answerers, now, seen=(pull, comments)
+        )  # brief #1534 answer 1: decided on a fresh read, then written
+        if found and found[0] != "park":
+            unparks.append(unparked_line(number, found[1]))
             continue
-        if found and found[0] == "park" and session.park_pull(repo, number, found[1]):
+        if found:
             comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
             pull = {**pull, "labels": [*(pull.get("labels") or []), {"name": "agk:parked"}]}
         own = session.own_park(comments) if "agk:parked" in session.labels_of(pull) else None
@@ -1139,6 +1138,42 @@ def owner_lines(
     if mark is not None:
         write_held(mark, sorted(set(listed_now)))
     return unparks + parks
+
+
+def unparked_line(number: int, key: str) -> str:
+    return f"UNPARKED #{number} {key}; run: python3 scripts/agk/session.py resume --pr {number}"
+
+
+OWNER_WAITING = {"agk:parked", "agk:question", "agk:approve", "agk:owner-merge"}
+
+
+def owner_pass(root, repo: str, now: datetime) -> list[str]:
+    """The supervisor's owner step (brief #1534 answer 6), run while a job still runs: nothing
+    when nothing changed since the last full read, in personal mode or on a member's machine;
+    else `session.owner_apply` on each open pull request whose label shows a wait on the owner
+    (`OWNER_WAITING`), from the pulls page `change_reads` already read. It moves no read mark."""
+    if common.personal_table(Path(root)) is not None:
+        return []
+    quiet, _ = change_reads(root, repo, pass_state(root), now)
+    if quiet or refused_here(root):
+        return []
+    pulls = session.pages(f"repos/{repo}/pulls?state=open") or []
+    try:
+        settings = session.owner_wait_settings(Path(root))
+    except CheckError:
+        return []
+    listed = {a.lstrip("@").lower() for a in verdict_authors(root) or []}
+    answerers = listed | {a.lstrip("@").lower() for a in spec_approvers(root) or []}
+    lines = []
+    for pull in sorted(pulls, key=lambda p: p.get("number", 0)):
+        if not session.labels_of(pull) & OWNER_WAITING or not isinstance(pull.get("number"), int):
+            continue
+        number = pull["number"]
+        found = session.owner_apply(repo, number, settings, listed, answerers, now)
+        if found:
+            park = found[0] == "park"
+            lines.append(f"PARKED #{number} {found[1]}" if park else unparked_line(number, found[1]))
+    return lines
 
 
 STEWARD_PASS = timedelta(minutes=25)  # one conductor pass: its wake-up timer is at most 25 minutes
@@ -2767,6 +2802,8 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     (brief #1387); start nothing while nothing changed or a stop rule holds."""
     state, now = pass_state(root), datetime.now(UTC)
     if job_running(root, repo, name, state, now):
+        for line in owner_pass(root, repo, now):  # brief #1534 answer 6: the safety net
+            print(line)
         print(f"watchdog: job {name} still running; nothing started")
         return 0
     quiet, digest = change_reads(root, repo, state, now)

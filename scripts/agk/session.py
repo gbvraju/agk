@@ -4331,14 +4331,28 @@ def for_the_maintainers(line: str) -> bool:
     return line.startswith("Question: Q-") and "for the maintainers" in line
 
 
+ACCEPT_LINE = re.compile(r"Maintainer answer: accept ([0-9a-f]{40})\b")
+
+
 def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str]):
-    """(key, since) of the newest open item that waits on the owner, or None: a `Question:` for
-    the maintainers (key: its Q id) until an `Answer:` naming that id, or a `Correction:` naming
-    it, by an answerer; an `Owner needed:` by a listed verdict author (key: its Q id, else
-    `owner-needed`) until such an answer; both until a `Maintainer answer:` or `Approve:` by an
-    answerer; and the router's `agk:approve` or `agk:owner-merge` (key: `approve` or
-    `owner-merge`), from the newest comment, or the pull request's creation without one."""
+    """(key, since) of the newest open item that waits on the owner, or None (`open_owner_items`)."""
+    open_items = open_owner_items(pr, comments, listed, answerers)
+    if not open_items:
+        return None
+    return max(open_items.items(), key=lambda kv: kv[1])
+
+
+def open_owner_items(pr: dict, comments: list, listed: set[str], answerers: set[str]) -> dict:
+    """{key: since} of every open item that waits on the owner: a `Question:` for the maintainers
+    (key: its Q id) until an `Answer:`, a `Maintainer answer:` or a `Correction:` naming that id by
+    an answerer; an `Owner needed:` by a listed verdict author (key: its Q id while that question
+    is open, else `owner-needed`, brief #1534 answer 4) until such an answer; both until an
+    `Approve:`, or a `Maintainer answer:` that names no Q id, by an answerer, where an
+    `accept <sha>` answer closes only when the sha is the current head (Q-1534-2); and the
+    router's `agk:approve` or `agk:owner-merge` (key: `approve` or `owner-merge`), from the newest
+    comment, or the pull request's creation without one."""
     open_items: dict[str, datetime] = {}
+    head = str((pr.get("head") or {}).get("sha") or "")
     ordered = in_order(comments)
     for c in ordered:
         line, who, when = first_line(c), author_of(c), moment(c.get("created_at"))
@@ -4347,12 +4361,18 @@ def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str]):
             open_items[found.group(0) if found else "question"] = when
         elif line.startswith(OWNER_NEEDED) and who in listed:
             found = QUESTION_ID.search(line)
-            open_items[found.group(0) if found else "owner-needed"] = when
-        elif who in answerers and line.startswith(("Maintainer answer:", "Approve:")):
-            open_items.clear()
-        elif who in answerers and (found := ANSWER_LINE.match(line)):
+            named = found.group(0) if found and found.group(0) in open_items else None
+            open_items[named or "owner-needed"] = when
+        elif who not in answerers:
+            continue
+        elif found := ANSWER_LINE.match(line):
             open_items.pop(found.group(1), None)
-        elif who in answerers and line.startswith("Correction:"):
+        elif accepted := ACCEPT_LINE.match(line):
+            if head and accepted.group(1) == head:
+                open_items.clear()
+        elif line.startswith(("Maintainer answer:", "Approve:")):
+            open_items.clear()
+        elif line.startswith("Correction:"):
             for qid in QUESTION_ID.findall(str(c.get("body") or "")):
                 open_items.pop(qid, None)
     names = labels_of(pr)
@@ -4360,9 +4380,7 @@ def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str]):
         if label in names and key not in open_items:
             newest_post = moment(ordered[-1].get("created_at")) if ordered else None
             open_items[key] = newest_post or moment(pr.get("created_at"))
-    if not open_items:
-        return None
-    return max(open_items.items(), key=lambda kv: kv[1])
+    return open_items
 
 
 def own_park(comments: list) -> tuple[str, dict] | None:
@@ -4383,19 +4401,17 @@ def owner_step(
     pr: dict, comments: list, settings: dict, now: datetime, listed: set[str], answerers: set[str]
 ) -> tuple[str, str] | None:
     """`("park", key)` when the newest owner item has waited `minutes` since its post, or at once
-    inside rest hours; `("unpark", key)` when this rule parked the pull request and an answerer has
-    posted an answer since; else None. A person's own `agk:parked` is never touched."""
-    if PARKED_LABEL in labels_of(pr):
-        found = own_park(comments)
-        if found is None:
-            return None
-        key, mark = found
-        after = (moment(mark.get("created_at")), mark.get("id", 0))
-        for c in comments:
-            if (moment(c.get("created_at")), c.get("id", 0)) <= after:
-                continue
-            if author_of(c) in answerers and first_line(c).startswith(OWNER_ANSWERS):
-                return ("unpark", key)
+    inside rest hours; `("unpark", key)` when this rule parked the pull request and no item with
+    the key it parked for is still open, read over every comment, so an answer posted before the
+    park ends it and an answer to another Q id does not (brief #1534 answer 3); `("repair", key)`
+    when the label is gone but this rule's `Parked-by:` has no `Unparked-by:`; else None. A
+    person's own `agk:parked` is never touched."""
+    own = own_park(comments)
+    labelled = PARKED_LABEL in labels_of(pr)
+    if own is not None and (not labelled or own[0] not in open_owner_items(
+            pr, comments, listed, answerers)):  # fmt: skip
+        return ("unpark" if labelled else "repair", own[0])
+    if labelled:
         return None
     item = owner_item(pr, comments, listed, answerers)
     if item is None:
@@ -4403,6 +4419,59 @@ def owner_step(
     key, since = item
     waited = now - since >= timedelta(minutes=int(settings.get("minutes", 0)))
     return ("park", key) if waited or resting(settings, now) else None
+
+
+def owner_read(repo: str, number: int) -> tuple[dict, list] | None:
+    """(the pull request, all its comments) read from GitHub again, never from the run's memo, the
+    pass's unchanged set or the page store (an ETag still saves the body); None if unreadable."""
+    global MEMO
+    endpoint = f"repos/{repo}/issues/{number}/comments"
+    saved = MEMO, CACHE.unchanged
+    MEMO, CACHE.unchanged = None, None
+    try:
+        STORE.forget(endpoint)
+        pr = gh(f"repos/{repo}/pulls/{number}")
+        comments = pages(endpoint) if isinstance(pr, dict) else None
+    finally:
+        MEMO, CACHE.unchanged = saved
+    return (pr, comments) if isinstance(comments, list) else None
+
+
+def owner_apply(
+    repo: str,
+    number: int,
+    settings: dict,
+    listed: set[str],
+    answerers: set[str],
+    now: datetime,
+    *,
+    seen: tuple[dict, list] | None = None,
+    unpark_only: bool = False,
+) -> tuple[str, str] | None:
+    """The one owner-wait write of every caller (brief #1534 answers 1 to 3): with `seen`, the
+    caller's own read only says whether a step may be due; the decision is made on a fresh read
+    (`owner_read`), then written. A park is read once more after its writes, and unparked in the
+    same call when an answer now closes its item. `unpark_only` (the router) never parks. Returns
+    the step written, or None."""
+    if seen is not None and owner_step(*seen[:2], settings, now, listed, answerers) is None:
+        return None
+    fresh = owner_read(repo, number)
+    if fresh is None:
+        return None
+    found = owner_step(*fresh, settings, now, listed, answerers)
+    if found is None or (unpark_only and found[0] == "park"):
+        return None
+    kind, key = found
+    if kind != "park":
+        return found if unpark_pull(repo, number, key, labelled=kind == "unpark") else None
+    if not park_pull(repo, number, key):
+        return None
+    again = owner_read(repo, number)
+    if again is not None:
+        then = owner_step(*again, settings, now, listed, answerers)
+        if then is not None and then[0] == "unpark" and unpark_pull(repo, number, then[1]):
+            return then
+    return found
 
 
 def owner_people(root, pr: dict) -> tuple[set[str], set[str]]:
@@ -4417,8 +4486,9 @@ def owner_park(repo: str, pr: dict, comments: list, settings: dict, root, args: 
     `session.py after`; None while it waits, or when the writes fail (the next poll retries)."""
     number = int(args.get("--pr") or 0)
     listed, answerers = owner_people(root, pr)
-    found = owner_step(pr, comments, settings, datetime.now(UTC), listed, answerers)
-    if found is None or found[0] != "park" or not park_pull(repo, number, found[1]):
+    found = owner_apply(repo, number, settings, listed, answerers, datetime.now(UTC),
+                        seen=(pr, comments))  # fmt: skip
+    if found is None or found[0] != "park":
         return None
     head = str((pr.get("head") or {}).get("sha") or "")[:7]
     me = args.get("--session", "<ID>")
@@ -4439,12 +4509,15 @@ def park_pull(repo: str, number: int, key: str) -> bool:
     return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
 
 
-def unpark_pull(repo: str, number: int, key: str) -> bool:
+def unpark_pull(repo: str, number: int, key: str, labelled: bool = True) -> bool:
     """The label removed and one `Unparked-by: answer <key>` comment, which marks the label as no
-    longer this rule's, so a person's later `agk:parked` is never read as one (answer 4)."""
+    longer this rule's, so a person's later `agk:parked` is never read as one (answer 4). A label
+    already gone (404) counts as removed; without `labelled` only the comment is written, the
+    repair of a label removed by hand (brief #1534 answer 3)."""
     label = quote(PARKED_LABEL, safe="")
-    if gh(f"repos/{repo}/issues/{number}/labels/{label}", method="DELETE") is None:
-        return False
+    if labelled and gh(f"repos/{repo}/issues/{number}/labels/{label}", method="DELETE") is None:
+        if "HTTP 404" not in LAST_ERROR:
+            return False
     body = f"body=Unparked-by: answer {key}"
     return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
 

@@ -1,0 +1,1 @@
+- An owner's answer now ends a wait every time: a park and its undoing read the pull request again just before they write, the answer that closes the item unparks it wherever it was posted, an answer to another question no longer unparks, the router unparks on the answer's own run, and the supervisor's pass unparks while a job runs (brief #1534)
