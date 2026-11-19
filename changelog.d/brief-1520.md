@@ -1,0 +1,1 @@
+- The merger writes the owner's approval of a spec that still reads Draft into the merge, so it counts as Approved on the default branch without a status commit; the release sets the file Approved (brief #1520)

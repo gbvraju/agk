@@ -108,6 +108,7 @@ from merge_cleared import (
     github_mode,
     local_evidence,
     local_mode,
+    records_specs,
 )
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
@@ -610,10 +611,13 @@ def base_state(f: dict) -> str:
     if names_head and asked_for(latest) - people:
         return "agk:approve"
     if (names_head and kind == "cleared") or accepted or covered:
-        # brief #797 answer 4: an approval given while the spec on the head still reads Draft
+        # brief #797 answer 4: an approval given while the spec on the head still reads Draft;
+        # the merger records it in the merge instead (brief #1520, `merger`: `records_specs`)
         drafts = set(f.get("draft_specs") or ()) & specs_named_approved(
             comments, f.get("approvers") or []
         )
+        if f.get("merger"):
+            drafts = set()
         if (flipped - people) | drafts:
             return "agk:approve"
         files = {str(x.get("filename") or "") for x in f.get("files") or []}
@@ -701,6 +705,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "labels": [str(x.get("name")) for x in pr.get("labels") or []],
         "files": files,
         "draft_specs": draft_specs_of(repo, files, head),
+        "merger": records_specs(checkout_settings(root)),
         "commit": commit if isinstance(commit, dict) else {},
         "local": record_open(repo, root),
     }
