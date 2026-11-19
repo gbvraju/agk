@@ -60,6 +60,13 @@ so and invents nothing. It and `status` print the disclosure in force; with `ai_
 `pr-note` or `both` the summary ends with the disclosure line, and with `commit-trailer` or `both`
 the gate warns of each branch commit without a `Co-Authored-By:` trailer. Nothing amends, rewrites
 or strips a trailer or a commit.
+
+`change start|review|confirm|finish` (build (i), rules 17 and 29, brief #1507) takes one change
+through the level's steps: `start` records the files-forge pull of the branch (refused on the
+default branch) and, at `spec` and above, drafts the change's spec; `review` writes the context for
+the read-only `personal-reviewer` agent and, with `--report`, keeps the report that
+`check_review_report` accepts, as a comment marked as an agent's; `confirm` is the person's
+`Verdict: cleared <head>` at a terminal; `finish` runs the gate and prints, never runs, the push.
 """
 
 from __future__ import annotations
@@ -963,7 +970,9 @@ def _write(sidecar: Path, files, rid: str, rel: str, shown: list[str], head: str
 CHANGE_RULE = "SPEC-0041 rule 17"
 BRANCH_RULE = "SPEC-0041 rule 6"
 CHANGE_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,47}")
-NO_CHANGE = f"no change is started on this branch; run personal.py change start <name> ({CHANGE_RULE})"
+NO_CHANGE = (
+    f"no change is started on this branch; run personal.py change start <name> ({CHANGE_RULE})"
+)
 REVIEWER = "personal-reviewer"
 SPEC_DRAFT = """# SPEC-{number}: {name} (verify: say what the change does)
 
@@ -971,8 +980,8 @@ SPEC_DRAFT = """# SPEC-{number}: {name} (verify: say what the change does)
 - Owner: reviewer group (the one person of config/reviewers.yaml)
 - Requirements: {advances}
 
-The change `{name}` on the branch `{branch}`. (verify) Write what it does and how a test shows it, then confirm
-this spec at your own terminal before the change's first code commit.
+The change `{name}` on the branch `{branch}`. (verify) Write what it does and how a test shows
+it, then confirm this spec at your own terminal before the change's first code commit.
 
 ## Contexts
 
@@ -1002,7 +1011,9 @@ def default_branch(clone: Path, ref: str | None) -> str:
 def change_of(sidecar: Path, branch: str) -> dict | None:
     """The newest open pull record titled `change <name>` whose head is BRANCH."""
     found = None
-    for path in sorted((sidecar / "forge" / "pulls").glob("[0-9]*.json"), key=lambda p: int(p.stem)):
+    for path in sorted(
+        (sidecar / "forge" / "pulls").glob("[0-9]*.json"), key=lambda p: int(p.stem)
+    ):
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -1029,7 +1040,11 @@ def commit_sidecar(sidecar: Path, subject: str, paths: list[str]) -> None:
 
     added = _sidecar_git(sidecar, "add", "--", *paths)
     options = commit_options(sidecar, solo_person(sidecar) or "personal")
-    done = _sidecar_git(sidecar, *options, "-m", subject, "--", *paths) if added.returncode == 0 else None
+    done = (
+        _sidecar_git(sidecar, *options, "-m", subject, "--", *paths)
+        if added.returncode == 0
+        else None
+    )
     if done is None or done.returncode != 0:
         raise CheckError("the sidecar commit failed (path class: records)")
 
@@ -1043,7 +1058,9 @@ def change_start(clone: Path, sidecar: Path, name: str, ref: str | None, advance
     if table is None:
         raise CheckError("not a sidecar: it has no personal table (setting: personal)")
     if not CHANGE_NAME.fullmatch(name):
-        raise CheckError(f"name the change in lower-case letters, digits and dashes ({CHANGE_RULE})")
+        raise CheckError(
+            f"name the change in lower-case letters, digits and dashes ({CHANGE_RULE})"
+        )
     if advances is not None and not re.fullmatch(r"REQ-\d{3}", advances):
         raise CheckError("name the requirement as REQ-nnn (option: --advances)")
     branch, base = current_branch(clone), default_branch(clone, ref)
@@ -1059,16 +1076,21 @@ def change_start(clone: Path, sidecar: Path, name: str, ref: str | None, advance
         number = next_free_ids(sidecar, "HEAD")["spec"]
         rel = f"docs/specs/{number}-{name}.md"
         if (sidecar / rel).exists():
-            raise CheckError(f"the change's spec already exists (path class: docs/specs, {CHANGE_RULE})")
+            raise CheckError(
+                f"the change's spec already exists (path class: docs/specs, {CHANGE_RULE})"
+            )
         text = SPEC_DRAFT.format(number=number, name=name, branch=branch,
                                  advances=advances or "(verify: name the requirement)")  # fmt: skip
         write_private(sidecar / rel, text)
         commit_sidecar(sidecar, f"personal: draft SPEC-{number} for change {name}", [rel])
         body.append(f"Spec: SPEC-{number}")
-        lines.append(f"change: drafted SPEC-{number} in {rel}; write it, then confirm it yourself at "
-                     f"your terminal before the first code commit: personal.py confirm SPEC-{number}")  # fmt: skip
+        lines.append(f"change: drafted SPEC-{number} in {rel}; write it, then confirm it "
+                     "yourself at your terminal before the first code commit: "
+                     f"personal.py confirm SPEC-{number}")  # fmt: skip
     pull = FilesForge(sidecar).record_pull(f"change {name}", "\n".join(body), head, branch, base)
-    lines.insert(0, f"change: started {name} on {branch} (pull {pull}, base {base}, head {head[:12]})")
+    lines.insert(
+        0, f"change: started {name} on {branch} (pull {pull}, base {base}, head {head[:12]})"
+    )
     return 0, lines
 
 
@@ -1130,8 +1152,8 @@ def change_review(clone: Path, sidecar: Path, ref: str | None, report: str | Non
         write_private(sidecar / context, review_context(clone, sidecar, base, head, record["body"]))
         commit_sidecar(sidecar, f"personal: review context {head[:12]}", [context])
         return 0, [f"review: the context of {head[:12]} is in {sidecar / context}",
-                   f"review: ask the {REVIEWER} agent to review it, save its answer outside the clone, "
-                   "then run: personal.py change review --report FILE"]  # fmt: skip
+                   f"review: ask the {REVIEWER} agent to review it, save its answer outside "
+                   "the clone, then run: personal.py change review --report FILE"]  # fmt: skip
     try:
         # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
         from check_review_report import Context, parse_report, validate  # noqa: PLC0415
@@ -1139,7 +1161,9 @@ def change_review(clone: Path, sidecar: Path, ref: str | None, report: str | Non
         raise CheckError("the reviewer report check is not installed "
                          "(path: scripts/agk/check_review_report.py)") from None  # fmt: skip
     if not (sidecar / context).is_file():
-        raise CheckError(f"no review context for the head; run personal.py change review ({CHANGE_RULE})")
+        raise CheckError(
+            f"no review context for the head; run personal.py change review ({CHANGE_RULE})"
+        )
     try:
         text = Path(report).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
@@ -1155,10 +1179,12 @@ def change_review(clone: Path, sidecar: Path, ref: str | None, report: str | Non
     FilesForge(sidecar, env=marked).comment(record["number"], text)
     verdict = (parsed["verdicts"] or ["none"])[0]
     return 0, [f"review: the report holds (verdict {verdict}); it is advisory ({CHANGE_RULE})",
-               "review: give your own verdict at your terminal: personal.py change confirm"]  # fmt: skip
+               "review: your verdict, at your terminal: personal.py change confirm"]  # fmt: skip
 
 
-def change_confirm(clone: Path, sidecar: Path, ask=input, tty=None, env=None) -> tuple[int, list[str]]:
+def change_confirm(
+    clone: Path, sidecar: Path, ask=input, tty=None, env=None
+) -> tuple[int, list[str]]:
     """Answer 3: the person's `Verdict: cleared <head>` at a terminal, as the gate reads it."""
     try:
         return _change_confirm(clone, sidecar, ask, tty, env)
@@ -1179,7 +1205,9 @@ def _change_confirm(clone: Path, sidecar: Path, ask, tty, env) -> tuple[int, lis
     record, head, _ = started(clone, sidecar)
     report = sidecar / REVIEWS / f"{head}.report.md"
     if not report.is_file():
-        raise CheckError(f"no review report for the head; run personal.py change review ({CHANGE_RULE})")
+        raise CheckError(
+            f"no review report for the head; run personal.py change review ({CHANGE_RULE})"
+        )
     verdict = (parse_report(report.read_text(encoding="utf-8"))["verdicts"] or ["none"])[0]
     shown = [f"{record['title']}: pull {record['number']}",
              f"head {head} of {record['head']['ref']}",
@@ -1188,15 +1216,22 @@ def _change_confirm(clone: Path, sidecar: Path, ask, tty, env) -> tuple[int, lis
     if answer.strip().lower() not in ("y", "yes"):
         return 1, [*shown, "change confirm: nothing written"]
     if head_of(clone) != head:
-        raise CheckError(f"the clone's head moved while confirming; nothing written ({CHANGE_RULE})")
+        raise CheckError(
+            f"the clone's head moved while confirming; nothing written ({CHANGE_RULE})"
+        )
     files = FilesForge(sidecar, env=env)
     body = [f"Confirmed: {head}", f"Verdict: cleared {head}", "Shown:", *shown]
     body.append(f"confirmed by {files.person} at a terminal at {files.now()}")
     files.comment(record["number"], "\n".join(body))
-    return 0, [*shown, f"change confirm: {head[:12]} cleared at a terminal in pull {record['number']}"]
+    return 0, [
+        *shown,
+        f"change confirm: {head[:12]} cleared at a terminal in pull {record['number']}",
+    ]
 
 
-def change_finish(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[int, list[str]]:
+def change_finish(
+    clone: Path, sidecar: Path, ref: str | None, approve: bool
+) -> tuple[int, list[str]]:
     """Answer 4: the gate of build (h) unchanged; on a pass, the commands for the developer."""
     started(clone, sidecar)
     passed, text = gate(clone, sidecar, ref, approve)

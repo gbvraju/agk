@@ -153,7 +153,7 @@ def terminal(env: dict | None = None):
 
 
 def test_req_048_start_records_the_pull_of_the_branch_and_writes_nothing_in_the_clone(tmp_path):
-    """REQ-048 AC5: rules 4, 6 and 17 (the pull record of a local branch, head and base from git)."""
+    """REQ-048 AC5: rules 4, 6 and 17 (the pull record of a local branch, read from git)."""
     clone, side = clone_of(tmp_path), sidecar_of(tmp_path, "light")
     head = git(clone, "rev-parse", "HEAD")
     before = snapshot(clone)
@@ -220,7 +220,9 @@ def test_req_048_two_changes_on_two_branches_take_two_numbers_of_one_sequence(tm
     clone, side = clone_of(tmp_path), sidecar_of(tmp_path, "light")
     assert change(clone, side, "start", "cart-total").returncode == 0
     again = change(clone, side, "start", "cart-total")
-    assert again.returncode == 1 and "already" in again.stdout and "SPEC-0041 rule 17" in again.stdout
+    assert (
+        again.returncode == 1 and "already" in again.stdout and "SPEC-0041 rule 17" in again.stdout
+    )
     git(clone, "checkout", "-q", "-b", "other", "main")
     assert change(clone, side, "start", "cart-empty").returncode == 0
     found = pulls(side)
