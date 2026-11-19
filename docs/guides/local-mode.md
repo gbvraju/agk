@@ -364,9 +364,14 @@ Local mode uses the same three `[flow]` settings, labels and comments as CI mode
 `owner_wait_minutes` (30 by default; 0 parks at once), or not at all inside `owner_rest_hours` read at `owner_utc_offset`.
 For example, `owner_rest_hours = "20:00-08:00"` and `owner_utc_offset = "+05:30"`. Then it is labelled `agk:parked`, its
 builder hands over and moves on, and the parked pull request no longer takes a builder slot. When the owner answers, the
-next `conductor.py sweep` unparks it and prints its `resume --pr <n>` command, before new briefs. A bad value is refused
-with a line naming the setting. In personal mode there are no pull requests, so nothing is
-parked.
+router's own run on that answer comment unparks it within seconds (a `Maintainer answer:`, an `Approve:` or a
+`Correction:`; an `Answer:` once the route workflow's trigger lists it), the supervisor's next pass unparks it when the
+router could not, even while a conductor job still runs, and the next `conductor.py sweep` prints its `resume --pr <n>`
+command, before new briefs. Every park and unpark reads the pull request again just before it writes, so an answer
+posted at the moment of the park is never missed: the park is undone in the same step and no second answer is needed.
+A park ends when the item it waited for is answered, whenever that answer was posted, and never on an answer to another
+question. A bad value is refused with a line naming the setting. In personal mode there are no pull requests, so nothing
+is parked.
 
 ## When a guard refuses a command
 
