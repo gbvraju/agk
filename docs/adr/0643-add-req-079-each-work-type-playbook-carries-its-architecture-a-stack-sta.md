@@ -43,6 +43,10 @@ concerns, no foundation build precedes the first feature, and an adopted project
    stricter gates; a business or product owner's plain request becomes a requirement and a Proposed project ADR; the
    person's priority orders a project's standard work; every work-type build brief names its layers in a `Layer:` line
    and builders read the architecture record and the pack before writing code (brief #1524 answer 9).
+   No new project proceeds to its foundation build without a work type: where the requirements identify no playbook,
+   the steward asks the person's permission to research the product type on the web with only a generic description and
+   never customer data, then drafts a project playbook on `default.toml` that keeps every gate, recorded with a Proposed
+   project ADR and confirmed by the person (the maintainer's answer to `Q-S0072-4`, #1525 comment 7000020901).
 8. The review checklist is unchanged; a prototype's markup is a reference only, by an amendment to SPEC-0037 that its
    spec approver approves.
 9. This ADR names the protected classes of this intake only. Builds (a) (`config/playbooks/`), (b) (`agk.mk`), (d) (the
