@@ -552,7 +552,12 @@ def spec_step(clone: Path, sidecar: Path, base: str, head: str) -> tuple[bool, s
 def review_step(sidecar: Path, head: str) -> tuple[bool, str]:
     """`review`: the context and the reviewer report of the head, `check_review_report` unchanged,
     and the person's verdict at a terminal naming the head (advisory in what it finds, rule 17)."""
-    from check_review_report import Context, parse_report, validate  # noqa: PLC0415
+    try:
+        # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
+        from check_review_report import Context, parse_report, validate  # noqa: PLC0415 - kit-only
+    except ImportError:
+        return failed("review", "the reviewer report check is not installed "
+                      "(path: scripts/agk/check_review_report.py)")  # fmt: skip
     from common import agent_apps  # noqa: PLC0415
     from reviewers import TERMINAL_BY, login_of, solo_person, via_agent  # noqa: PLC0415
 
