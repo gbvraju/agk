@@ -1032,7 +1032,8 @@ tests = ["tests/kit/test_check_requirements.py", "tests/kit/test_retired_require
 [[testing.map]]
 code = "scripts/agk/uninstall.py"
 tests = [
-  "tests/kit/test_upgrade_clean_repo.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_uninstall.py",
+  "tests/kit/test_uninstall_clean.py", "tests/kit/test_upgrade_clean_repo.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_uninstall.py",
 ]
 [[testing.map]]
 code = "scripts/agk/upgrade.py"

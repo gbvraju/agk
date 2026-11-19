@@ -26,6 +26,9 @@ The GitHub side (answer 4) is printed, never done, in order (brief #1124, ADR-04
 (answer 1) adds the top-level line `paused = true` to agk.toml.
 The report then lists, read only, the lines of the project's files kept that still name a removed
 kit path: settings to tidy by hand, then records to keep as written (brief #1443, ADR-0604).
+In a clean project (`[kit] layout = "plugin"`, SPEC-0071 rule 9, brief #1457, ADR-0615) it also
+removes `LICENSE-AGK`, the short `CLAUDE.md` and each record named with `--agreed PATH`, keeps the
+specs and decisions unless named, and prints, never runs, the history clean-up with its checklist.
 """
 
 from __future__ import annotations
@@ -50,7 +53,8 @@ from init import MANIFEST, TABLE, Refusal, check_interpreter, passes_symlink, pa
 from reviewers import ReviewerError, parse, render_codeowners
 
 USAGE = (
-    "usage: uninstall.py TARGET [--write] [--remove-docs] | uninstall.py TARGET --pause [--write]"
+    "usage: uninstall.py TARGET [--write] [--remove-docs] [--agreed PATH ...] | "
+    "uninstall.py TARGET --pause [--write]"
 )
 BRANCH = "agk-uninstall"
 PAUSE_BRANCH = "agk-pause"
@@ -114,6 +118,9 @@ class Plan:
     own: list[str] = field(default_factory=list)
     left: list[tuple[str, int, str]] = field(default_factory=list)
     skipped: int = 0
+    clean: bool = False
+    history: list[str] = field(default_factory=list)
+    shared: list[str] = field(default_factory=list)
 
     def of(self, action: str) -> list[Item]:
         return [i for i in self.items if i.action == action]
@@ -415,7 +422,7 @@ def without_stamp(target: Path, entries: list[str]) -> Item:
     return Item("pyproject.toml", "edit", detail, content=like(raw, new))
 
 
-def build_plan(target: Path, kit_root: Path) -> Plan:
+def build_plan(target: Path, kit_root: Path, agreed: tuple[str, ...] = ()) -> Plan:
     legacy = legacy_stamp(target)
     if not (target / "agk.toml").is_file() and not legacy:
         raise Refusal("agk.toml is missing (path class agk.toml): no kit installed")
@@ -453,10 +460,146 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
             )
         )
     makefile_item(target, plan)
+    if clean_layout(target):
+        clean_items(target, kit_root, reader, plan, agreed)
+    elif agreed:
+        raise Refusal("--agreed applies only in the clean layout (setting: layout)")
     plan.items.sort(key=lambda i: i.rel)
     plan.own = own_files(target)
     plan.left, plan.skipped = leftovers(target, plan)
     return plan
+
+
+# --- the clean layout (SPEC-0071 rule 9, brief #1457, ADR-0615) -------------------------------
+
+LICENCE = "LICENSE-AGK"
+CLEAN_TEMPLATE = "kit/templates/clean-claude.md"
+HISTORY_FILE = "agk-history-paths.txt"
+KEPT_RECORDS = ("docs/specs/", "docs/adr/")  # Q-S0071-1: kept unless named with --agreed
+
+
+def clean_layout(target: Path) -> bool:
+    try:
+        data = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    kit = data.get("kit")
+    return isinstance(kit, dict) and kit.get("layout") == "plugin"
+
+
+def agreed_files(target: Path, agreed: tuple[str, ...]) -> list[str]:
+    """Every file of the project's records that a `--agreed` path names; anything else refused."""
+    found: list[str] = []
+    for raw in agreed:
+        rel = raw.replace("\\", "/").strip("/")
+        path = target / rel
+        bad = not rel or rel.startswith("/") or ".." in rel.split("/")
+        if bad or passes_symlink(target, rel) or not own_work(rel + ("/" if path.is_dir() else "")):
+            raise Refusal("--agreed names a path that is not a project record (setting: --agreed)")
+        files = [path] if path.is_file() else sorted(path.rglob("*")) if path.is_dir() else []
+        files = [p for p in files if p.is_file() and not p.is_symlink()]
+        if not files:
+            raise Refusal("--agreed names a record that does not exist (setting: --agreed)")
+        found += [p.relative_to(target).as_posix() for p in files]
+    return sorted({rel for rel in found if own_work(rel)})
+
+
+def short_claude(target: Path, kit_root: Path) -> Item | None:
+    """The short CLAUDE.md the migration wrote: deleted, or edited to the project's own lines."""
+    from init import render, slug  # noqa: PLC0415 - only the clean layout
+
+    try:
+        data = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+        version = str(data["kit"].get("plugin_version", ""))
+        text = (kit_root / CLEAN_TEMPLATE).read_text(encoding="utf-8")
+        short = render(text, {"project": slug(target.name), "kit_version": version}, CLEAN_TEMPLATE)
+        raw = (target / "CLAUDE.md").read_bytes()
+        now = lf(raw).decode("utf-8")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, Refusal):
+        return None
+    if not now.startswith(short):
+        return None
+    rest = now[len(short) :].lstrip("\n")
+    if not rest.strip():
+        return Item("CLAUDE.md", "delete", " (the short CLAUDE.md of the clean layout)")
+    return Item(
+        "CLAUDE.md", "edit", " (the short CLAUDE.md removed; project lines kept)", like(raw, rest)
+    )
+
+
+def history_paths(target: Path, kit_root: Path) -> list[str]:
+    """Every path of every release row of the table that `git log --all` finds (rule 9)."""
+    rows = load_table(kit_root)["releases"].values()
+    kit = {
+        rel
+        for row in rows
+        for name in ("verbatim", "blocks", "templates")
+        for rel in row.get(name) or {}
+    }
+    out = git(
+        target,
+        "-c",
+        "core.quotepath=off",
+        "log",
+        "--all",
+        "-m",
+        "--no-renames",
+        "--name-only",
+        "--format=",
+    )
+    if out.returncode != 0:
+        raise Refusal("git cannot read the history (path class .git/)")
+    seen = {ln for ln in out.stdout.splitlines() if ln}
+    return sorted(rel for rel in kit & seen if not own_work(rel))
+
+
+def clean_items(
+    target: Path, kit_root: Path, reader: Reader, plan: Plan, agreed: tuple[str, ...]
+) -> None:
+    plan.clean = True
+    put = {i.rel: i for i in plan.items}
+    if (target / LICENCE).is_file() and not passes_symlink(target, LICENCE):
+        put[LICENCE] = Item(LICENCE, "delete", " (the licence; the clean layout removes it)")
+    if (target / "CLAUDE.md").is_file() and put.get(
+        "CLAUDE.md", Item("", "changed")
+    ).action == "changed":
+        short = short_claude(target, kit_root)
+        if short is not None:
+            put["CLAUDE.md"] = short
+    for rel in agreed_files(target, agreed):
+        put[rel] = Item(rel, "delete", " (an agreed record)")
+    plan.items = list(put.values())
+    plan.history = history_paths(target, kit_root)
+    blocks = set(reader.styles) | set(reader.blocks)
+    plan.shared = [rel for rel in plan.history if rel in blocks]
+
+
+def history_lines(plan: Plan) -> list[str]:
+    """Rule 9 and the brief's answer 2: printed, never run; the repository owner's act."""
+    if not plan.history:
+        return ["History clean-up: no kit path in the history; nothing to clean"]
+    lines = [
+        "History clean-up (printed, never run; the repository owner's act):",
+        f"save the history paths below, one per line, to {HISTORY_FILE} outside the repository, "
+        "then in a fresh clone run: git filter-repo --invert-paths --paths-from-file "
+        f"{HISTORY_FILE} (verify: the git filter-repo options for a path list)",
+    ]
+    lines += [f"history path: {rel}" for rel in plan.history]
+    if plan.shared:
+        lines.append(
+            f"shared with the project's own lines: {', '.join(plan.shared)} (their own lines leave "
+            "the history too; drop a path from the list to keep it)"
+        )
+    return [
+        *lines,
+        "checklist:",
+        "- the customer's choice: clean the history where its audit and retention policy allows; "
+        "else keep it and record the decision in the project",
+        "- the customer's written agreement, before any rewrite",
+        "- branch protections paused and restored by the repository's administrator",
+        "- every clone made again after the rewrite",
+        "- the kit never runs this, never force-pushes and changes no GitHub setting",
+    ]
 
 
 # --- the lines left in the project's own files (brief #1443, ADR-0604) --------------------------
@@ -620,6 +763,14 @@ def report(plan: Plan, kit_root: Path, write: bool, docs: bool) -> list[str]:
             "the tool never deletes the project's own documents: delete those you no longer want "
             "in your own change"
         )
+    elif plan.clean:
+        named = {i.rel for i in plan.of("delete")}
+        stay = [d for d in KEPT_RECORDS if not any(r.startswith(d) for r in named)]
+        if stay:
+            lines.append(
+                f"kept: the specs and decisions ({', '.join(stay)}) by default (Q-S0071-1)"
+            )
+        lines.append("kept: every other record not named with --agreed, the code and the tests")
     else:
         lines.append(
             "kept: the project's own work (requirements, ADRs, specs, briefs, the vision, design "
@@ -641,6 +792,8 @@ def report(plan: Plan, kit_root: Path, write: bool, docs: bool) -> list[str]:
     touched = [i.rel for i in plan.items if i.action in ("delete", "edit")]
     lines += adr_skeleton("Remove agk from the project", protected_classes(touched, plan.entries))
     lines += github_lines(kit_root)
+    if plan.clean:
+        lines += history_lines(plan)
     if write and (gone or edited):
         lines.append(
             f"next: review the change on the branch {BRANCH}, commit it, push it and open one "
@@ -785,13 +938,21 @@ def pause(target: Path, write: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    agreed: list[str] = []
+    while "--agreed" in args:
+        at = args.index("--agreed")
+        if at + 1 >= len(args) or args[at + 1].startswith("-"):
+            print(USAGE, file=sys.stderr)
+            return 2
+        agreed.append(args.pop(at + 1))
+        args.pop(at)
     flags = {"--write", "--remove-docs", "--pause"}
     rest = [a for a in args if a not in flags]
     if len(rest) != 1 or rest[0].startswith("-") or len(set(args) & flags) != len(args) - 1:
         print(USAGE, file=sys.stderr)
         return 2
     write, docs, pausing = "--write" in args, "--remove-docs" in args, "--pause" in args
-    if pausing and docs:
+    if pausing and (docs or agreed):
         print(USAGE, file=sys.stderr)
         return 2
     try:
@@ -809,7 +970,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Refusal("TARGET is not a git work tree (path class .git/)")
         if pausing:
             return pause(target, write)
-        plan = build_plan(target, kit_root)
+        plan = build_plan(target, kit_root, tuple(agreed))
         if write and (plan.of("delete") or plan.of("edit")):
             new_branch(target, BRANCH)
             apply(target, plan)
