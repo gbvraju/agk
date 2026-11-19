@@ -111,3 +111,60 @@ def test_1168_the_docstring_names_the_rule():
     """REQ-039: brief #1168 answer 2 (`asks_owner` says how each ask closes)."""
     text = route.asks_owner.__doc__ or ""
     assert "ADR-0497" in text and "new head" in text
+
+
+# --- brief #1534 answer 5 (ADR-0646): the router unparks on the answer's own run ---------------
+
+
+def comment_event(body: str, action: str = "created") -> dict:
+    return {
+        "action": action,
+        "issue": {"number": 7, "pull_request": {}},
+        "comment": {"body": body},
+        "repository": REPO_INFO,
+    }
+
+
+def test_1534_only_an_owner_answer_on_a_pull_request_starts_the_unpark():
+    """REQ-066: brief #1534 answer 5: a created answer comment on a pull request; nothing else."""
+    for line in ("Maintainer answer: accept " + HEAD, "Answer: Q-7-1 yes", "Approve: x"):
+        assert route.owner_answer_event("issue_comment", comment_event(line)), line
+    assert not route.owner_answer_event("issue_comment", comment_event("Report: abc ready"))
+    assert not route.owner_answer_event("issue_comment", comment_event("Answer: x", "edited"))
+    brief = {**comment_event("Answer: Q-7-1 yes"), "issue": {"number": 7}}
+    assert not route.owner_answer_event("issue_comment", brief)
+    assert not route.owner_answer_event("pull_request", comment_event("Answer: Q-7-1 yes"))
+
+
+def test_1534_the_router_unparks_through_the_one_owner_step(monkeypatch, tmp_path):
+    """REQ-066: brief #1534 answer 5 and Q-1534-1: the unpark half only, with the shared people."""
+    import session
+
+    seen: list = []
+
+    def apply(repo, n, settings, listed, answerers, now, **kw):
+        seen.append((repo, n, listed, answerers, kw))
+        return ("unpark", "Q-7-1")
+
+    monkeypatch.setattr(session, "owner_people", lambda root, pr: ({"boss"}, {"boss", "owner"}))
+    monkeypatch.setattr(session, "owner_apply", apply)
+    assert route.owner_unpark("acme/widgets", 7, tmp_path) == "#7 unparked Q-7-1 (brief #1534)"
+    assert seen == [("acme/widgets", 7, {"boss"}, {"boss", "owner"}, {"unpark_only": True})]
+    monkeypatch.setattr(session, "owner_apply", lambda *a, **k: None)
+    assert route.owner_unpark("acme/widgets", 7, tmp_path) is None
+
+
+def test_1534_the_answer_comment_run_removes_the_wait_park(proj, stub, tmp_path):  # noqa: F811
+    """REQ-066: brief #1534 answer 5, `Measured:` after: the answer's own router run unparks."""
+    stub.pull(7, labels=["agk:parked"])
+    asked = at(3, "builder", "Question: Q-7-1 for the maintainers: which?", ASKED_AT)
+    mark = at(4, "boss", "Parked-by: wait Q-7-1", "2026-11-13T00:50:00Z")
+    answer = at(5, "maintainer", "Answer: Q-7-1 the smaller one", "2026-11-13T00:49:59Z")
+    stub.serve("issues/7/comments", [asked, answer, mark])
+    stub.serve(f"commits/{HEAD}", PUSHED)
+    proc = run_router(proj, stub, tmp_path, "issue_comment", comment_event(answer["body"]))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "#7 unparked Q-7-1 (brief #1534)" in proc.stdout
+    writes = stub.writes()
+    assert any(w[0] == "DELETE" and "agk%3Aparked" in w[1] for w in writes), writes
+    assert any("Unparked-by: answer Q-7-1" in " ".join(w[2]) for w in writes), writes
