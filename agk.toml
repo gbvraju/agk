@@ -697,7 +697,7 @@ tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
 code = "scripts/agk/personal.py"
 tests = [
   "tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",
-  "tests/kit/test_personal_gate.py",
+  "tests/kit/test_personal_gate.py", "tests/kit/test_personal_disclosure.py",
 ]
 [[testing.map]]
 code = "scripts/agk/personal_state.py"
