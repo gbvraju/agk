@@ -209,7 +209,7 @@ def test_with_two_slots_no_two_worktree_calls_run_at_once(repo, tmp_path, monkey
     count = threading.Lock()
 
     def slow_git(cwd, *args):
-        if args[:1] != ("worktree",):
+        if "worktree" not in args[:5]:  # after the checkout options (brief #1540)
             return real(cwd, *args)
         with count:
             inside[0] += 1
