@@ -415,6 +415,29 @@ def test_a_signal_while_the_run_starts_leaves_no_process_behind(tmp_path, monkey
     assert not still, "the sampled run outlived the signal"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_a_handler_set_outside_python_is_never_held(monkeypatch):
+    """REQ-039: brief #1543, fix list 7010266313 item 1 (a signal whose handler was set outside
+    Python, `getsignal` None, is not held, so it is never left on the noting handler)."""
+    import evidence
+
+    real = signal.getsignal
+    monkeypatch.setattr(
+        evidence.signal,
+        "getsignal",
+        lambda sig: None if sig == signal.SIGHUP else real(sig),
+    )
+    before = {sig: real(sig) for sig in (signal.SIGTERM, signal.SIGHUP)}
+    held = evidence.hold_signals()
+    try:
+        assert signal.SIGHUP not in held[0] and signal.SIGTERM in held[0]
+        assert real(signal.SIGHUP) is before[signal.SIGHUP]
+        assert real(signal.SIGTERM) is not before[signal.SIGTERM]
+    finally:
+        evidence.release_signals(held)
+    assert {sig: real(sig) for sig in before} == before
+
+
 def test_the_worktree_is_of_the_head_not_the_work_tree(repo, outside):
     """REQ-039: brief #434 answer 2 (a clean worktree of the head: local edits do not count)."""
     project(repo, outside, makefile=LINT_FAIL)

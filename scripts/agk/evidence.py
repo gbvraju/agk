@@ -576,8 +576,11 @@ def hold_signals() -> tuple[dict, list[int]]:
     noted: list[int] = []
     if threading.current_thread() is not threading.main_thread():
         return {}, noted
-    previous = {sig: signal.signal(sig, lambda signum, _frame: noted.append(signum))
-                for sig in stop_signals()}
+    previous = {
+        sig: signal.signal(sig, lambda signum, _frame: noted.append(signum))
+        for sig in stop_signals()
+        if signal.getsignal(sig) is not None  # set outside Python: it could not be put back
+    }
     return previous, noted
 
 
@@ -585,8 +588,7 @@ def release_signals(held: tuple[dict, list[int]]) -> None:
     """Put the handlers back, then deliver the first noted signal to them."""
     previous, noted = held
     for sig, handler in previous.items():
-        if handler is not None:  # None: a handler set outside Python, which cannot be put back
-            signal.signal(sig, handler)
+        signal.signal(sig, handler)
     if noted:
         signal.raise_signal(noted[0])
 
