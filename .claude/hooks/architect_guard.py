@@ -41,6 +41,14 @@ request of the repository named by this checkout's origin remote (read from `.gi
 config-driven command are denied (GIT_FORBIDDEN_LONG). Shell operators, substitutions, redirections
 and a `#` outside a quoted string (brief #351: bash and the lexer read it differently) are denied.
 The message names the rule, never the command or the path. Standard library only; no network.
+
+The two forms of a kit command (SPEC-0071 rule 4, brief #1500, ADR-0631), one table for the
+conductor's guard too: `scripts/agk/<script>` (or `./scripts/agk/<script>`), and, in a clean project
+only (`[kit] layout = "plugin"`, read by the resolver `kit_root.layout`), `python3
+"<plugin>/scripts/agk/<script>"`, where <plugin> is the plugin's folder written out in full, exactly
+as the resolver finds it (`kit_root.plugin_root`), with the same arguments as the first form
+(Q-1500-3 (a)). A variable (`${CLAUDE_PLUGIN_ROOT}`, empty in the Bash tool's shell, ADR-0612 fact
+4), another folder, a `..` or a link is denied: the guard allows only the file it has checked.
 """
 
 from __future__ import annotations
@@ -51,6 +59,7 @@ import re
 import shlex
 import sys
 import tempfile
+from pathlib import Path
 
 READ_ONLY_SCRIPTS = frozenset(
     {
@@ -72,7 +81,7 @@ READ_ONLY_SCRIPTS = frozenset(
     }
 )
 # Brief #982: the review agent alone re-runs the evidence check, in this one form.
-REVIEW_SCRIPT = re.compile(r"(?:\./)?scripts/agk/evidence\.py")
+REVIEW_SCRIPT = re.compile(r"(?:(?:\./)?|\$\{plugin\}/)scripts/agk/evidence\.py")
 EVIDENCE_VALUES = {"--head": re.compile(r"[0-9a-fA-F]{7,40}"), "--sample": re.compile(r"[1-9]\d*")}
 READ_GIT = frozenset(
     {
@@ -100,6 +109,16 @@ WRITE_ALLOWED_FILE = "constitution/vision.md"
 COMMENT_ENDPOINT = re.compile(r"^/?repos/([^/\s]+)/([^/\s]+)/issues/\d+/comments$")
 FIELD_FLAGS = frozenset({"-f", "--raw-field", "-F", "--field", "--input"})
 UNSAFE = re.compile(r"[$`\n\r]")
+# The two forms of a kit command, one table (brief #1500, ADR-0631): the word that names a kit
+# script, as `tokens_of` returns it, starts with one of these. `tokens_of` writes the plugin's
+# checked script as PLUGIN_WORD + `scripts/agk/<name>.py`, a word no command can carry, since a
+# command with a `$` is never read (UNSAFE).
+PLUGIN_WORD = "${plugin}/"
+KIT_WORD = r"(?:(?:\./)?|\$\{plugin\}/)scripts/agk/"
+PLUGIN_SCRIPT = re.compile(r"\w+\.py")
+KIT_SCRIPTS = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "agk"
+)
 # Options of an allowed `git` subcommand that run a program, write a file or reach a config-driven
 # command (a pager, an external diff, a text conversion, a filter, a signature check). Git accepts
 # any unambiguous prefix of a long option, so a long word is denied when it is a prefix of one of
@@ -133,8 +152,8 @@ REVIEW_SCRATCH = re.compile(r"agk-review-[A-Za-z0-9._-]+")
 REVIEW_SHA = re.compile(r"[0-9a-f]{7,40}")
 REVIEWER_NAME = re.compile(r"r[1-9]\d*")  # session.REVIEWER_NAME (brief #1013); a test pins it
 PR_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
-SESSION_WORD = re.compile(r"(?:\./)?scripts/agk/session\.py")
-CONDUCTOR_WORD = re.compile(r"(?:\./)?scripts/agk/conductor\.py")
+SESSION_WORD = re.compile(KIT_WORD + r"session\.py")
+CONDUCTOR_WORD = re.compile(KIT_WORD + r"conductor\.py")
 
 
 def project_root() -> str:
@@ -178,9 +197,67 @@ def hash_outside_quotes(command: str) -> bool:
     return False
 
 
+def kit_resolver():
+    """The resolver of the guard's own kit (`kit_root`), or None when it cannot be imported."""
+    try:
+        sys.path.insert(0, KIT_SCRIPTS)
+        import kit_root  # noqa: PLC0415 - the kit's own folder, only for the plugin's form
+
+        return kit_root
+    except ImportError:
+        return None
+
+
+def clean_project() -> bool:
+    """`[kit] layout = "plugin"` in the project's agk.toml, read by the resolver; anything else, or
+    no resolver, is not a clean project (brief #1500 answer 3)."""
+    resolver = kit_resolver()
+    if resolver is None:
+        return False
+    try:
+        return resolver.layout(Path(project_root())) == "plugin"
+    except resolver.Refused:
+        return False
+
+
+def plugin_file(name: str) -> Path | None:
+    """The plugin's `scripts/agk/<name>` in a clean project, as the resolver finds the plugin, when
+    it is a regular file and never a link; else None (ADR-0631, verdict on 1b4e725 item 1)."""
+    if not PLUGIN_SCRIPT.fullmatch(name) or not clean_project():
+        return None
+    resolver = kit_resolver()
+    try:
+        full = resolver.plugin_root(Path(project_root())) / "scripts" / "agk" / name
+    except resolver.Refused:
+        return None
+    return full if full.is_file() and not full.is_symlink() else None
+
+
+def plugin_script(word: str, script: str) -> bool:
+    """`word` is the plugin's checked form of `script` (`scripts/agk/<name>.py`), as `tokens_of`
+    writes it, and the plugin still holds that regular file (ADR-0631)."""
+    wanted = script.replace(os.sep, "/")
+    if word != PLUGIN_WORD + wanted or not wanted.startswith("scripts/agk/"):
+        return False
+    return plugin_file(wanted.removeprefix("scripts/agk/")) is not None
+
+
+def plugin_marked(word: str) -> str:
+    """The plugin's script named by its full path (`<plugin>/scripts/agk/<name>.py`, exactly the
+    folder the resolver finds) as PLUGIN_WORD + `scripts/agk/<name>.py`; any other word as it is."""
+    if not os.path.isabs(word):
+        return word
+    folder, name = os.path.split(word)
+    found = plugin_file(name)
+    return PLUGIN_WORD + "scripts/agk/" + name if found and str(found.parent) == folder else word
+
+
 def tokens_of(command: str) -> list[str] | None:
     """The words of a simple command, or None when it has an operator, a substitution or a `#`
-    outside a quoted string (brief #351: the words are the words bash would pass)."""
+    outside a quoted string (brief #351: the words are the words bash would pass). In a clean
+    project the script word of `python3 "<plugin>/scripts/agk/<name>.py" ...` is returned as
+    PLUGIN_WORD + `scripts/agk/<name>.py` when <plugin> is the folder the resolver finds and the
+    script a regular file there (brief #1500, ADR-0631, Q-1500-3 (a))."""
     if UNSAFE.search(command) or hash_outside_quotes(command):
         return None
     lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
@@ -192,6 +269,8 @@ def tokens_of(command: str) -> list[str] | None:
         return None
     if any(w and all(c in "();<>|&" for c in w) for w in words):
         return None
+    if len(words) > 1 and words[0] == "python3":
+        words[1] = plugin_marked(words[1])
     return words
 
 
@@ -367,7 +446,7 @@ def bash_allowed(command: object, review: bool = False) -> bool:
     if head == "make":
         return words[1:] in (["governance"], ["-f", "agk.mk", "agk-governance"])
     if head == "python3" and len(words) > 1:
-        match = re.fullmatch(r"(?:\./)?scripts/agk/(\w+)\.py", words[1])
+        match = re.fullmatch(KIT_WORD + r"(\w+)\.py", words[1])
         return bool(match) and match.group(1) in READ_ONLY_SCRIPTS and "--write" not in words
     return False
 
@@ -445,7 +524,7 @@ def verdict_post_ok(words: list[str]) -> bool:
     return first is not None and first.startswith("Verdict:")
 
 
-BUNDLE_WORD = re.compile(r"(?:\./)?scripts/agk/review_bundle\.py")
+BUNDLE_WORD = re.compile(KIT_WORD + r"review_bundle\.py")
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 BUNDLE_BASE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 PLAIN_PATH = re.compile(r"/[A-Za-z0-9._/-]+")
