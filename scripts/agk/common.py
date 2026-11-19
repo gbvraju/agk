@@ -534,6 +534,7 @@ def rule_tags_from(root: Path) -> date | None:
 ADR_PATH = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
 STACK_ADR_PATH = re.compile(r"docs/adr/\d{4}-stack-options\.md")
 FINAL_ACCEPT = re.compile(r"ADR-(\d{4}) Accepted \(Final (\d+)\)")
+SPEC_RECORD = re.compile(r"SPEC-(\d{4}) Approved \(Approve (\d+)\)")  # brief #1520
 MERGED_BY = "Merged-by: merge_cleared.py"  # the squash message line of merge_cleared.py (rule 3a)
 
 
@@ -560,6 +561,27 @@ def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
     """ADR number -> (pull request, Final comment id) of each `ADR-nnnn Accepted (Final <id>)` line
     in REF's history, read only from a squash commit that merge_cleared.py made: on REF's
     first-parent line, with one parent, a subject that ends `(#n)` and the line `MERGED_BY`."""
+    return merger_records(root, ref, "Accepted (Final ", FINAL_ACCEPT)
+
+
+def approval_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
+    """Spec number -> (pull request, Approve comment id) of each `SPEC-nnnn Approved (Approve
+    <id>)` line in REF's history, by the squash-commit rule of `final_records` (brief #1520)."""
+    return merger_records(root, ref, "Approved (Approve ", SPEC_RECORD)
+
+
+def approved_specs(root: Path, ref: str) -> set[str]:
+    """`SPEC-nnnn` of each spec whose file at REF says Approved or that a record names."""
+    found = {f"SPEC-{n}" for n in approval_records(root, ref)}
+    names = git(root, "ls-tree", "-z", "--name-only", f"{ref}:docs/specs", check=False)
+    for name in (n for n in names.split("\0") if n[:4].isdigit()):
+        lines = (show(root, ref, f"docs/specs/{name}") or "").splitlines()
+        if next((m.group(1) for ln in lines if (m := STATUS_LINE.match(ln))), None) == "Approved":
+            found.add(f"SPEC-{name[:4]}")
+    return found
+
+
+def merger_records(root: Path, ref: str, grep: str, line: re.Pattern) -> dict[str, tuple[int, int]]:
     out = git(
         root,
         "log",
@@ -567,7 +589,7 @@ def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
         "--format=%x1e%P%x1f%B",
         "--fixed-strings",
         "--grep",
-        "Accepted (Final ",
+        grep,
         ref,
         check=False,
     )
@@ -579,7 +601,7 @@ def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
         if len(parents.split()) != 1 or subject is None or MERGED_BY not in lines:
             continue
         for ln in lines:
-            if m := FINAL_ACCEPT.fullmatch(ln):
+            if m := line.fullmatch(ln):
                 found.setdefault(m.group(1), (int(subject.group(1)), int(m.group(2))))
     return found
 

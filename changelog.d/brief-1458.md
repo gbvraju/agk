@@ -1,0 +1,1 @@
+- In a clean project the doctor warns `kit-in-repository` when a kit file is found in the product, naming its path class and never its content; a session's start check warns after the licence grant's `valid_until` and stops nothing; and the steward's guard refuses a write of a kit manifest path into the product (SPEC-0071 rule 7, brief #1458)
