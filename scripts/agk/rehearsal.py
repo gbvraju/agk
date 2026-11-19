@@ -25,7 +25,10 @@ import sys
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-SPEC = "docs/specs/0071-the-kit-runs-from-the-plugin-and-a-product-repository-keeps-only-its-project.md"
+SPEC = (
+    "docs/specs/"
+    "0071-the-kit-runs-from-the-plugin-and-a-product-repository-keeps-only-its-project.md"
+)
 HEADING = "### Rehearsal record"
 RUNS = ("installed", "clean")
 # (name, higher is worse): the four figures of rule 11, in the table's column order.
@@ -85,10 +88,11 @@ def read(text: str) -> tuple[list[str], bool]:
         else:
             problems.append(f"missing: the briefs ({run})")
         values[run] = [number(c) for c in cells[2:6]]
-        for (name, _), value in zip(FIGURES, values[run]):
+        for (name, _), value in zip(FIGURES, values[run], strict=True):
             if value is None:
                 problems.append(f"missing: {name} ({run})")
-    if len(briefs) == 2 and (len(briefs["installed"]) != 5 or briefs["installed"] != briefs["clean"]):
+    same = len(briefs) == 2 and briefs["installed"] == briefs["clean"]
+    if len(briefs) == 2 and (len(briefs["installed"]) != 5 or not same):
         problems.append("not the same five briefs in both runs")
     if len(values) == 2:
         for i, (name, higher_worse) in enumerate(FIGURES):

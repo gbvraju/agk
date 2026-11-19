@@ -943,7 +943,7 @@ nothing (ADR-0181). See `docs/specs/0008-upgrade.md` and ADR-0018.
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/rehearsal.py" check [--root KIT_ROOT]
 
-Kit-only, run from the plugin. Checks the rehearsal record in SPEC-0071's proof: an `installed` and a `clean` run of the
+Kit-only, run from the plugin. Checks the rehearsal record (`### Rehearsal record`) in SPEC-0071's proof: an `installed` and a `clean` run of the
 same five briefs, each with its dates and four figures (lead time per brief, tokens per merged pull request, first-review
 pass rate, failed checks). It fails, naming the figure and never a value, when one is missing or the clean run is worse
 by more than 10%. `upgrade.py --clean-repo` refuses without `--rehearsal` until the check passes and the record's

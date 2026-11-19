@@ -29,7 +29,8 @@ target's git directory.
 `--clean-repo [--rehearsal] [--write]` (SPEC-0071 rule 8, brief #1456, ADR-0614) moves an installed
 local-mode project to the clean layout: see `clean_main`. It refuses, naming the setting, outside
 `execution = "local"`, in personal mode, until the rehearsal's proof is written (rule 11) unless
-`--rehearsal` (`rehearsal.py check`, brief #1459, ADR-0617), and when the project's version has no row of the table or is not this kit's. A dry
+`--rehearsal` (`rehearsal.py check`, brief #1459, ADR-0617), and when the project's version has no
+row of the table or is not this kit's. A dry
 run is the default; `--write` makes one new branch with `git switch -c` and commits nothing.
 """
 

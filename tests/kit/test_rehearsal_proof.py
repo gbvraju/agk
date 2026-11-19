@@ -25,19 +25,20 @@ HEAD = (
 
 
 def record(clean: dict | None = None, accepted: str = "2026-12-01 by the maintainers") -> str:
-    figures = {"lead": "10", "tokens": "100000", "pass": "80", "failed": "2"}
+    figures = {"lead": "10", "tokens": "100000", "rate": "80", "failed": "2"}
     worse = {**figures, **(clean or {})}
 
     def row(run: str, f: dict, briefs: str = BRIEFS) -> str:
         return (
             f"| {run} | 2026-11-20..2026-11-21 | {briefs} | {f['lead']} | {f['tokens']} "
-            f"| {f['pass']} | {f['failed']} |\n"
+            f"| {f['rate']} | {f['failed']} |\n"
         )
 
     clean_briefs = worse.pop("briefs", BRIEFS)
     return (
         "# SPEC-0071: sample\n\n## Proof\n\nREQ-078 AC6.\n\n"
-        f"{rehearsal.HEADING}\n\n{HEAD}{row('installed', figures)}{row('clean', worse, clean_briefs)}"
+        f"{rehearsal.HEADING}\n\n{HEAD}{row('installed', figures)}"
+        f"{row('clean', worse, clean_briefs)}"
         f"\nAccepted: {accepted}\n\n## Residual\n"
     )
 
@@ -49,16 +50,16 @@ def write(tmp_path: Path, text: str) -> Path:
     return tmp_path / "plugin-example"
 
 
-def test_the_shipped_spec_holds_the_record_without_figures_so_the_gate_holds():
-    """REQ-078 AC6: the record is written to the spec's proof; until the run, it holds no figure."""
+def test_the_shipped_spec_holds_no_figures_yet_so_the_gate_holds(capsys):
+    """REQ-078 AC6: until the runs are written to the spec's proof, the check fails naming it."""
     problems, accepted = rehearsal.read((ROOT / rehearsal.SPEC).read_text(encoding="utf-8"))
-    assert problems and all("missing" in p for p in problems), problems
-    assert not accepted and not rehearsal.proof_held(ROOT)
+    assert problems and not accepted and not rehearsal.proof_held(ROOT)
+    assert rehearsal.main(["check"]) == 1 and "not held: " in capsys.readouterr().out
 
 
 def test_a_full_record_within_ten_percent_and_accepted_holds_the_proof(tmp_path, capsys):
     """REQ-078 AC6: both runs' four figures, the same five briefs, the run dates and acceptance."""
-    root = write(tmp_path, record({"lead": "11", "tokens": "110000", "pass": "72", "failed": "2"}))
+    root = write(tmp_path, record({"lead": "11", "tokens": "110000", "rate": "72", "failed": "2"}))
     assert rehearsal.main(["check", "--root", str(root)]) == 0
     assert "proof held" in capsys.readouterr().out and rehearsal.proof_held(root)
 
@@ -68,7 +69,7 @@ def test_a_full_record_within_ten_percent_and_accepted_holds_the_proof(tmp_path,
     [
         ({"lead": "11.5"}, "lead time per brief"),
         ({"tokens": "110001"}, "tokens per merged pull request"),
-        ({"pass": "71"}, "first-review pass rate"),
+        ({"rate": "71"}, "first-review pass rate"),
         ({"failed": "3"}, "failed checks"),
     ],
 )
