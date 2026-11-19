@@ -1,9 +1,10 @@
 """The merger records the owner's spec approval in the merge (brief #1520, ADR-0642, REQ-039).
 
-With `[flow] auto_merge = true` a spec the owner approved for the head's text that still reads `Draft`
-merges with one squash line `SPEC-nnnn Approved (Approve <comment id>)`; `common.approval_records`
-reads it back only from a squash commit the merger made, and `check_specs.py` and `route.py` count the
-spec as Approved. Saved answers, temporary git repositories and invented logins only; no network.
+With `[flow] auto_merge = true` a spec the owner approved for the head's text that still reads
+`Draft` merges with one squash line `SPEC-nnnn Approved (Approve <comment id>)`;
+`common.approval_records` reads it back only from a squash commit the merger made, and
+`check_specs.py` and `route.py` count the spec as Approved. Saved answers, temporary git
+repositories and invented logins only; no network.
 """
 
 from __future__ import annotations
@@ -44,8 +45,13 @@ def merged(tmp_path, notes, paths=(SPEC_A,), word="Draft", flow=ON, **saved):
     root = repo(tmp_path, toml(flow), reviewers_yaml=YAML)
     files = [{"filename": p, "status": "modified", "patch": "+a"} for p in paths]
     found = contents(*[(p, word) for p in paths])
-    bin_dir, log = fake_gh(tmp_path, comments=[cleared(login="conductor-two"), *notes],
-                           files=files, contents=found, **saved)
+    bin_dir, log = fake_gh(
+        tmp_path,
+        comments=[cleared(login="conductor-two"), *notes],
+        files=files,
+        contents=found,
+        **saved,
+    )
     proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
     puts = [c for c in calls(log) if "PUT" in c]
     return proc, [a for c in puts for a in c if a.startswith("commit_message=")]
@@ -55,23 +61,31 @@ def test_an_approved_draft_spec_merges_with_its_record(tmp_path):
     """REQ-039: brief #1520 answer 1 (the record line beside Merged-by, no hold)."""
     proc, message = merged(tmp_path, [comment(f"Approve: {HEAD} SPEC-0052", APPROVER, 6)])
     assert "merged" in proc.stdout, proc.stdout + proc.stderr
-    assert message == ["commit_message=SPEC-0052 Approved (Approve 1006)\nMerged-by: merge_cleared.py"]
+    assert message == [
+        "commit_message=SPEC-0052 Approved (Approve 1006)\nMerged-by: merge_cleared.py"
+    ]
 
 
 def test_two_specs_approved_in_one_pull_request_give_two_lines(tmp_path):
     """REQ-039: brief #1520 answer 6 (two specs, two lines)."""
-    notes = [comment(f"Approve: {HEAD} SPEC-0052", APPROVER, 6),
-             comment(f"Approve: {HEAD} SPEC-0053", APPROVER, 7)]
+    notes = [
+        comment(f"Approve: {HEAD} SPEC-0052", APPROVER, 6),
+        comment(f"Approve: {HEAD} SPEC-0053", APPROVER, 7),
+    ]
     _, message = merged(tmp_path, notes, (SPEC_A, SPEC_B))
     lines = message[0].removeprefix("commit_message=").splitlines()
-    assert lines == ["SPEC-0052 Approved (Approve 1006)", "SPEC-0053 Approved (Approve 1007)",
-                     "Merged-by: merge_cleared.py"]
+    assert lines == [
+        "SPEC-0052 Approved (Approve 1006)",
+        "SPEC-0053 Approved (Approve 1007)",
+        "Merged-by: merge_cleared.py",
+    ]
 
 
 def test_a_spec_already_approved_or_approved_by_a_stranger_gives_no_line(tmp_path):
-    """REQ-039: brief #1520 answer 6 (Approved at the head: no line; outside spec_approvers: none)."""
-    _, message = merged(tmp_path / "a", [comment(f"Approve: {HEAD} SPEC-0052", APPROVER, 6)],
-                        word="Approved")
+    """REQ-039: brief #1520 answer 6 (Approved at the head, or a stranger's line: no line)."""
+    _, message = merged(
+        tmp_path / "a", [comment(f"Approve: {HEAD} SPEC-0052", APPROVER, 6)], word="Approved"
+    )
     assert message == ["commit_message=Merged-by: merge_cleared.py"]
     _, message = merged(tmp_path / "b", [comment(f"Approve: {HEAD} SPEC-0052", "a-stranger", 6)])
     assert message == ["commit_message=Merged-by: merge_cleared.py"]
@@ -80,8 +94,9 @@ def test_a_spec_already_approved_or_approved_by_a_stranger_gives_no_line(tmp_pat
 def test_a_forged_record_line_in_a_branch_commit_is_held(tmp_path):
     """REQ-039: brief #1520 answer 1 (a commit already holding the line is held, as for the ADR)."""
     forged = [{"sha": HEAD, "commit": {"message": "x\n\nSPEC-0052 Approved (Approve 1)\n"}}]
-    proc, message = merged(tmp_path, [comment(f"Approve: {HEAD} SPEC-0052", APPROVER, 6)],
-                           commits=forged)
+    proc, message = merged(
+        tmp_path, [comment(f"Approve: {HEAD} SPEC-0052", APPROVER, 6)], commits=forged
+    )
     assert "already holds a record line" in proc.stdout and message == []
 
 
@@ -118,8 +133,12 @@ def history(repo, spec_text: str = "- Status: Draft\nrules\n") -> tuple[str, str
 
 def approval_of(repo, approved, head, line="Approve: SPEC-0070", login=APPROVER, approvers=None):
     runs = [{"event": "pull_request", "head_sha": approved, "created_at": "2026-11-18T03:42:30Z"}]
-    note = {"id": 6970385486, "user": {"login": login}, "body": line,
-            "created_at": "2026-11-18T05:52:16Z"}
+    note = {
+        "id": 6970385486,
+        "user": {"login": login},
+        "body": line,
+        "created_at": "2026-11-18T05:52:16Z",
+    }
     return merge_cleared.spec_approval_id(
         "SPEC-0070", [note], approvers or [f"@{APPROVER}"], runs, head, repo.root, 1511
     )
@@ -129,10 +148,14 @@ def test_the_1511_case_a_short_approval_is_pinned_and_kept_over_a_merge_of_main(
     """REQ-039: brief #1520 Correction (#1511: `Approve: SPEC-0070`, then a merge of main)."""
     approved, head = history(repo)
     assert approval_of(repo, approved, head) == 6970385486
-    labelled = facts(comments=[said(1, "boss", f"Verdict: cleared {facts()['head']}"),
-                               said(2, "maintainer", "Approve: SPEC-0070")],
-                     files=[{"filename": SPEC70, "status": "modified", "patch": "+a"}],
-                     draft_specs={"SPEC-0070"})
+    labelled = facts(
+        comments=[
+            said(1, "boss", f"Verdict: cleared {facts()['head']}"),
+            said(2, "maintainer", "Approve: SPEC-0070"),
+        ],
+        files=[{"filename": SPEC70, "status": "modified", "patch": "+a"}],
+        draft_specs={"SPEC-0070"},
+    )
     assert route.decide({**labelled, "merger": True}) == "agk:merge-ready"
     assert route.decide(labelled) == "agk:approve"  # auto_merge off: as today
 

@@ -85,6 +85,13 @@ Brief #628 (ADR-0304, amendment 124 of SPEC-0039 rule 5) keeps a spec approval o
 apart from the status flip from `Draft` to `Approved`, read with local `git` (the head fetched
 from `refs/pull/<n>/head` only when missing); anything unreadable holds as `spec approval`.
 
+Brief #1520 (ADR-0642) records a spec approval: with `[flow] auto_merge = true` and `merge_queue`
+off, a spec the pull request changes that reads `Draft` at the head and that an account in
+`spec_approvers` approved for the head's text (`Approve: <sha> SPEC-<n>`, or `Approve: SPEC-<n>`
+pinned by the pull request's `pull_request` runs, one GET) holds nothing, and the squash message
+gains `SPEC-nnnn Approved (Approve <comment id>)` before `Merged-by: merge_cleared.py`, the line
+`common.approval_records` reads. An approval that pins no text of the head holds as before.
+
 Brief #1134 (ADR-0483, amendment 170 of SPEC-0039 rule 5) adds two holds: a pull request labelled
 `agk:question`, an open owner ask (`owner ask`), and an `Approval: SPEC-nnnn` line of the clearing
 verdict (the latest `Verdict:`, naming the head) read beside the body's (`spec approval`).
@@ -217,6 +224,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -228,6 +236,7 @@ from common import (  # noqa: E402
     DEFAULT_CONFIG,
     FINAL_ACCEPT,
     MERGED_BY,
+    SPEC_RECORD,
     STATUS_LINE,
     CheckError,
     covered_fix_list,
@@ -239,10 +248,13 @@ from common import (  # noqa: E402
     who_argv,
 )
 from reviewers import (  # noqa: E402
+    APPROVE,
+    APPROVE_SHORT,
     CONFIG,
     approval_shas,
     approvers_of,
     conductors_of,
+    head_before_comment,
     parse,
     specs_named_approved,
 )
@@ -957,12 +969,71 @@ def unapproved(
     return any(spec_unapproved(spec, approved, sha, root, number) for spec in asked)
 
 
+def records_specs(data: dict) -> bool:
+    """Brief #1520 answer 5 (ADR-0642): the merger writes a spec's approval record only with
+    `[flow] auto_merge = true` and `merge_queue` off (GitHub writes a queued squash message)."""
+    try:
+        return auto_merge_setting(data) == "on" and not merge_queue_setting(data)
+    except CheckError:
+        return False
+
+
+def pull_runs(repo: str, pull: dict) -> list[dict]:
+    """The pull request's `pull_request` workflow runs, one GET never retried (brief #1520): they
+    pin a short `Approve: SPEC-<n>` line; unreadable is none, so such a line pins nothing."""
+    ref = quote(str((pull.get("head") or {}).get("ref") or ""), safe="")
+    found = read_once(
+        f"repos/{repo}/actions/runs?event=pull_request&branch={ref}&per_page=100", dict
+    )
+    runs = found.get("workflow_runs") if isinstance(found, dict) else None
+    return [r for r in runs or [] if isinstance(r, dict)]
+
+
+def spec_approval_id(
+    spec: str,
+    comments: list[dict],
+    approvers: list[str],
+    runs: list[dict],
+    sha: str,
+    root: Path | None,
+    number: int,
+) -> int | None:
+    """Brief #1520 answer 1: the id of the newest comment by an account in APPROVERS whose first
+    line approves SPEC for the head SHA's text (`Approve: <sha> SPEC-<n>`, or `Approve: SPEC-<n>`
+    pinned by RUNS), kept apart from the status flip (amendment 124); else None."""
+    allowed = {a.lstrip("@").lower() for a in approvers}
+    for item in sorted(comments, key=stamp, reverse=True):
+        line = first_line(item)
+        long, short = APPROVE.fullmatch(line), APPROVE_SHORT.fullmatch(line)
+        if login(item) not in allowed or not isinstance(item.get("id"), int):
+            continue
+        if long and long.group(2) == spec:
+            pin = long.group(1)
+        elif short and short.group(1) == spec:
+            pin = head_before_comment(runs, item)
+        else:
+            continue
+        if pin and not spec_unapproved(spec, {spec: [pin]}, sha, root, number):
+            return item["id"]
+    return None
+
+
 def approved_still_draft(
-    repo: str, files: list[dict], comments: list[dict], approvers: list[str], sha: str
+    repo: str,
+    files: list[dict],
+    comments: list[dict],
+    approvers: list[str],
+    sha: str,
+    records: list[str] | None = None,
+    pull: dict | None = None,
+    root: Path | None = None,
 ) -> bool:
     """Brief #797 answer 4: whether the pull request adds or changes a spec a listed approver has
-    approved and that still reads `Draft` on the head; the status is read only for such a spec."""
+    approved and that still reads `Draft` on the head; the status is read only for such a spec.
+    With RECORDS (brief #1520, `records_specs`), a spec approved for the head's text holds nothing
+    and its record line `SPEC-nnnn Approved (Approve <id>)` is appended to RECORDS."""
     approved = specs_named_approved(comments, approvers)
+    runs: list[dict] | None = None
     for item in files:
         name = str(item.get("filename") or "")
         match = SPEC_FILE.fullmatch(name)
@@ -970,8 +1041,18 @@ def approved_still_draft(
             continue
         if f"SPEC-{match.group(1)}" not in approved:
             continue
-        if adr_status(repo, sha, name, "a spec the pull request changes") == "Draft":
+        if adr_status(repo, sha, name, "a spec the pull request changes") != "Draft":
+            continue
+        if records is None:
             return True
+        spec = f"SPEC-{match.group(1)}"
+        if runs is None:
+            runs = pull_runs(repo, pull or {})
+        number = int((pull or {}).get("number") or 0)
+        cid = spec_approval_id(spec, comments, approvers, runs, sha, root, number)
+        if cid is None:
+            return True
+        records.append(f"{spec} Approved (Approve {cid})")
     return False
 
 
@@ -1000,7 +1081,9 @@ def holds_record(text: str) -> bool:
     `ADR-nnnn Accepted (Final <id>)` line or the line `MERGED_BY` (rule 3a). Only this command
     writes them, so a pull request that carries one is held (brief 557)."""
     lines = [ln.strip() for ln in text.splitlines()]
-    return any(ln == MERGED_BY or FINAL_ACCEPT.fullmatch(ln) for ln in lines)
+    return any(
+        ln == MERGED_BY or FINAL_ACCEPT.fullmatch(ln) or SPEC_RECORD.fullmatch(ln) for ln in lines
+    )
 
 
 def hold_list(
@@ -1013,6 +1096,7 @@ def hold_list(
     root: Path | None = None,
     lift: bool = False,
     report: bool = False,
+    records: list[str] | None = None,
 ) -> str | None:
     """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order; first,
     each ADR a Final line ACCEPTS must be one the pull request adds or changes (rule 3). The first
@@ -1051,7 +1135,7 @@ def hold_list(
         hold("release (rule 5)", True)
     if unapproved(pull, comments, sha, approvers, root, number):
         hold("spec approval (rule 5)")
-    if approved_still_draft(repo, files, comments, approvers, sha):
+    if approved_still_draft(repo, files, comments, approvers, sha, records, pull, root):
         hold(DRAFT_HOLD)
     if (klass := protected_class(files)) is not None:
         hold(f"protected class {klass} (rule 5)", True)
@@ -2264,7 +2348,8 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
         return "pending", verdict_reason(comments, sha, reason)
     accepts = accepted_adrs(latest_verdict(comments) or {}, sha) or []
     try:
-        hold_list(repo, number, pull, comments, rules.approvers, accepts, root)
+        records = [] if records_specs(rules.data) else None
+        hold_list(repo, number, pull, comments, rules.approvers, accepts, root, records=records)
     except Held as err:
         text = str(err)
         if owner_only(text):
@@ -2486,7 +2571,12 @@ def holds(
     else:
         ci_evidence(repo, sha, rules.required)
     accepts = accepted_adrs(verdict, sha) or []
-    owner = hold_list(repo, number, pull, comments, rules.approvers, accepts, root, lift, report)
+    records: list[str] | None = [] if records_specs(rules.data) else None
+    owner = hold_list(
+        repo, number, pull, comments, rules.approvers, accepts, root, lift, report, records
+    )
+    if records:  # brief #1520: the spec records beside the ADR lines, then MERGED_BY
+        accepted = [ln for ln in accepted if ln != MERGED_BY] + records + [MERGED_BY]
     return pull, verdict, accepted, record, fixing, owner
 
 

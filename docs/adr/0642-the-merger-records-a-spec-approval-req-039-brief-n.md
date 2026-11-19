@@ -6,7 +6,7 @@
 - Related: brief #1520, Q-1418-1, #1511, brief #797, brief #628, ADR-0304, ADR-0373, SPEC-0021 rule 3a
 - Requirements: REQ-039
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
 
 ## Context
 

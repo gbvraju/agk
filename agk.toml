@@ -341,6 +341,7 @@ tests = ["tests/kit/test_check_runbooks.py"]
 [[testing.map]]
 code = "scripts/agk/check_specs.py"
 tests = [
+  "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_agent_apps.py", "tests/kit/test_agent_apps_check.py", "tests/kit/test_approval_same_text.py",
   "tests/kit/test_approve_short.py", "tests/kit/test_architect_guard.py", "tests/kit/test_brief_contexts.py",
@@ -637,6 +638,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_direct_transport.py",
   "tests/kit/test_steward_guard.py",
@@ -850,6 +852,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_read_budget.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_route_owner_ask.py",
   "tests/kit/test_agent_apps.py", "tests/kit/test_approve_short.py", "tests/kit/test_approved_spec_not_draft.py",
@@ -885,6 +888,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/common.py"
 tests = [
+  "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_cloud_clone_local_mode.py", "tests/kit/test_plugin_version_pin.py", "tests/kit/test_shared_main.py",
   "tests/kit/test_governance_level.py",
 ]
