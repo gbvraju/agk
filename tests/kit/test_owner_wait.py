@@ -353,3 +353,259 @@ def test_1282g_keys_under_a_commented_flow_header_are_not_read(tmp_path):
     assert {"owner_wait_minutes", "owner_rest_hours", "owner_utc_offset"} <= config.TABLE_KEYS[
         "flow"
     ]
+
+
+# --- brief #1534 (ADR-0646): an owner's answer is never missed by a park -----------------------
+
+OLD_SHA = "0" * 40
+ACCEPT_ASK = "Owner needed: accept the evidence of the current head"
+
+
+class Hub:
+    """`session.gh` recorded: pull request #7 in memory; `on` runs a hook before a write."""
+
+    def __init__(self, comments: list, labels: tuple = (), head: str = SHA) -> None:
+        self.comments, self.labels, self.head = list(comments), set(labels), head
+        self.calls: list = []
+        self.on: dict = {}
+        self.missing_label = False
+
+    def __call__(self, endpoint: str, *extra: str, method: str = "GET"):
+        self.calls.append((method, endpoint, extra))
+        if hook := self.on.pop((method, endpoint.rsplit("/", 1)[-1].split("?")[0]), None):
+            hook(self)
+        if method == "GET" and endpoint.endswith("/pulls/7"):
+            return {
+                "number": 7,
+                "user": {"login": "builder"},
+                "created_at": "2026-11-14T06:00:00Z",
+                "head": {"sha": self.head},
+                "labels": [{"name": n} for n in sorted(self.labels)],
+            }
+        if method == "GET" and "/issues/7/comments" in endpoint:
+            return list(self.comments)
+        if method == "POST" and endpoint.endswith("/labels"):
+            self.labels.add(extra[1].split("=", 1)[1])
+            return []
+        if method == "DELETE" and "/labels/" in endpoint:
+            if self.missing_label or "agk:parked" not in self.labels:
+                session_mod.LAST_ERROR = "gh: Label does not exist (HTTP 404)"
+                return None
+            self.labels.discard("agk:parked")
+            return {}
+        if method == "POST" and endpoint.endswith("/comments"):
+            body = extra[1].split("=", 1)[1]
+            self.comments.append(at(100 + len(self.comments), "boss", body, 0))
+            return {"id": 1}
+        raise AssertionError((method, endpoint))
+
+    def writes(self) -> list:
+        return [(m, e.rsplit("/", 1)[-1], x) for m, e, x in self.calls if m != "GET"]
+
+    def posted(self) -> list[str]:
+        return [x[1].split("=", 1)[1] for m, e, x in self.calls if m == "POST" and "comments" in e]
+
+
+@pytest.fixture
+def hub(monkeypatch):
+    def make(comments: list, labels: tuple = (), head: str = SHA) -> Hub:
+        made = Hub(comments, labels, head)
+        monkeypatch.setattr(session_mod, "gh", made)
+        return made
+
+    return make
+
+
+def apply(seen=None, unpark_only: bool = False):
+    return session_mod.owner_apply(
+        REPO, 7, PLAIN, LISTED, ANSWERERS, NOW, seen=seen, unpark_only=unpark_only
+    )
+
+
+def answer(cid: int, body: str, minutes: float) -> dict:
+    return at(cid, "owner", body, minutes)
+
+
+def test_1534_an_answer_after_the_callers_read_parks_nothing(hub):
+    """REQ-066: brief #1534 answers 1 and 2, edge 1: the caller read no answer, the fresh read
+    before the label write sees it, so nothing is written and no second answer is asked for."""
+    stale = [asked(90)]
+    gh = hub([asked(90), answer(11, "Answer: Q-7-1 the smaller runtime", 0)])
+    assert step(pull(), stale) == ("park", "Q-7-1")  # what the caller's own read says
+    assert apply(seen=(pull(), stale)) is None
+    assert gh.writes() == [] and gh.labels == set()
+
+
+def test_1534_an_answer_between_the_label_and_the_comment_unparks_at_once(hub):
+    """REQ-066: brief #1534 answer 2, edge 1: the read after the write sees the answer and the
+    same call unparks; the end state has no label and exactly one `Unparked-by:`."""
+    gh = hub([asked(90)])
+    gh.on[("POST", "labels")] = lambda h: h.comments.append(
+        answer(11, "Answer: Q-7-1 the smaller runtime", 0)
+    )
+    assert apply() == ("unpark", "Q-7-1")
+    assert gh.labels == set()
+    assert gh.posted() == ["Parked-by: wait Q-7-1", "Unparked-by: answer Q-7-1"]
+
+
+def test_1534_an_answer_before_the_park_ends_it(hub):
+    """REQ-066: brief #1534 answer 3: an answer older than the `Parked-by:` comment still closes
+    the item it parked for (#1532: the answer one second before the mark)."""
+    parked = pull(labels=("agk:parked",))
+    said = [asked(90), answer(11, "Maintainer answer: Q-7-1 accept", 31), at(12, "boss", PARKED_BY, 30)]
+    assert step(parked, said) == ("unpark", "Q-7-1")
+    gh = hub(said, labels=("agk:parked",))
+    assert apply() == ("unpark", "Q-7-1")
+    assert gh.labels == set() and gh.posted() == ["Unparked-by: answer Q-7-1"]
+    assert apply() is None and len(gh.posted()) == 1  # a second pass writes nothing
+
+
+def test_1534_an_answer_to_another_question_does_not_unpark():
+    """REQ-066: brief #1534 answer 3, F-st-agk-84-1 (#1519): `Answer: Q-7-2` leaves `wait Q-7-1`."""
+    parked = pull(labels=("agk:parked",))
+    other = at(9, "builder", "Question: Q-7-2 for the maintainers: which region?", 95)
+    said = [other, asked(90), at(12, "boss", PARKED_BY, 30)]
+    assert step(parked, [*said, answer(13, "Answer: Q-7-2 the north", 5)]) is None
+    assert step(parked, [*said, answer(13, "Maintainer answer: Q-7-2 north", 5)]) is None
+    assert step(parked, [*said, answer(13, "Answer: Q-7-1 the smaller runtime", 5)]) == (
+        "unpark",
+        "Q-7-1",
+    )
+
+
+def test_1534_an_owner_needed_naming_an_answered_question_parks_as_owner_needed():
+    """REQ-066: brief #1534 answer 4, F-st-agk-91-1 (#1511, #1516): the key is the open item."""
+    said = [
+        asked(120),
+        answer(11, "Answer: Q-7-1 the smaller runtime", 100),
+        at(12, "boss", "Owner needed: Q-7-1 is answered; accept the evidence", 45),
+    ]
+    assert step(pull(), said) == ("park", "owner-needed")
+    still = [asked(120), at(12, "boss", "Owner needed: Q-7-1 is still open", 45)]
+    assert step(pull(), still) == ("park", "Q-7-1")
+
+
+def test_1534_an_accept_of_an_old_head_does_not_end_the_wait():
+    """REQ-066: brief #1534 answer 4 and Q-2: only an accept naming the current head closes it."""
+    ask = at(11, "boss", ACCEPT_ASK, 45)
+    old = answer(12, f"Maintainer answer: accept {OLD_SHA}", 40)
+    assert step(pull(), [ask, old]) == ("park", "owner-needed")
+    now = answer(12, f"Maintainer answer: accept {SHA}", 40)
+    assert step(pull(), [ask, now]) is None
+    parked = pull(labels=("agk:parked",))
+    mark = at(13, "boss", "Parked-by: wait owner-needed", 10)
+    assert step(parked, [ask, mark, answer(14, f"Maintainer answer: accept {OLD_SHA}", 5)]) is None
+    assert step(parked, [ask, mark, answer(14, f"Maintainer answer: accept {SHA}", 5)]) == (
+        "unpark",
+        "owner-needed",
+    )
+
+
+def test_1534_two_answers_write_one_unpark(hub):
+    """REQ-066: brief #1534 edge 3: the second answer after the unpark writes nothing."""
+    said = [asked(90), at(12, "boss", PARKED_BY, 30), answer(13, "Answer: Q-7-1 small", 5)]
+    gh = hub(said, labels=("agk:parked",))
+    assert apply(unpark_only=True) == ("unpark", "Q-7-1")
+    gh.comments.append(answer(40, "Answer: Q-7-1 small, again", 0))
+    assert apply(unpark_only=True) is None
+    assert gh.posted() == ["Unparked-by: answer Q-7-1"]
+
+
+def test_1534_a_label_removed_by_hand_gets_one_repair_unparked_by(hub):
+    """REQ-066: brief #1534 answer 3, edge 9: no label, an open `Parked-by:` of this rule."""
+    said = [asked(90), at(12, "boss", PARKED_BY, 30), answer(13, "Answer: Q-7-1 small", 5)]
+    gh = hub(said)
+    assert apply(unpark_only=True) == ("repair", "Q-7-1")
+    assert gh.posted() == ["Unparked-by: answer Q-7-1"]
+    assert [w[0] for w in gh.writes()] == ["POST"]  # no label write, no DELETE
+    assert apply(unpark_only=True) is None and len(gh.posted()) == 1
+    assert session_mod.unparked_owed(pull(), gh.comments)
+
+
+def test_1534_a_delete_answered_404_counts_as_done(hub):
+    """REQ-066: brief #1534 answer 3, edge 10: the label already gone is an unpark done."""
+    said = [asked(90), at(12, "boss", PARKED_BY, 30), answer(13, "Answer: Q-7-1 small", 5)]
+    gh = hub(said, labels=("agk:parked",))
+    gh.missing_label = True
+    assert apply(unpark_only=True) == ("unpark", "Q-7-1")
+    assert gh.posted() == ["Unparked-by: answer Q-7-1"]
+
+
+def test_1534_a_persons_own_park_is_never_touched_by_the_apply(hub):
+    """REQ-066: brief #1534 answer 3, edge 6: no `Parked-by:` of this rule, no write at all."""
+    gh = hub([asked(90), answer(13, "Answer: Q-7-1 small", 5)], labels=("agk:parked",))
+    assert apply() is None and apply(unpark_only=True) is None
+    assert gh.writes() == []
+
+
+def test_1534_unpark_only_never_parks(hub):
+    """REQ-066: brief #1534 answer 5: the router's half writes no park."""
+    gh = hub([asked(90)])
+    assert apply(unpark_only=True) is None and gh.writes() == []
+
+
+def test_1534_the_fresh_read_skips_the_runs_memo(hub, monkeypatch):
+    """REQ-066: brief #1534 answer 1: the read before a write never answers from the run's memo."""
+    gh = hub([asked(90), answer(11, "Answer: Q-7-1 small", 0)])
+    stale = {(f"repos/{REPO}/issues/7/comments?per_page=100&page=1",): [asked(90)]}
+    monkeypatch.setattr(session_mod, "MEMO", stale)
+    assert apply() is None and gh.writes() == []
+    assert session_mod.MEMO is stale  # restored for the rest of the run
+
+
+def test_1534_sweep_and_steward_write_only_through_the_apply(monkeypatch):
+    """REQ-066: brief #1534 answer 1: `park_pull` and `unpark_pull` are called from `owner_apply`
+    alone; every caller goes through it."""
+    import inspect
+
+    import steward_owner
+
+    for module in (conductor, steward_owner):
+        text = inspect.getsource(module)
+        assert "park_pull(" not in text.replace("owner_apply", ""), module.__name__
+    text = inspect.getsource(session_mod.owner_park)
+    assert "owner_apply(" in text and "park_pull(" not in text
+
+
+def test_1534_the_supervisor_runs_the_owner_step_while_a_job_runs(monkeypatch, capsys):
+    """REQ-066: brief #1534 answer 6, edge 5: a pass that finds a job running still unparks, and
+    moves no read mark, so the job that follows sees the change."""
+    kept: list = []
+    monkeypatch.setattr(conductor, "pass_state", lambda root: {"seen_at": "x"})
+    monkeypatch.setattr(conductor, "job_running", lambda *a: True)
+    monkeypatch.setattr(conductor, "keep_state", lambda root, state: kept.append(dict(state)))
+    monkeypatch.setattr(
+        conductor, "owner_pass", lambda root, repo, now: ["UNPARKED #7 Q-7-1; run: x"]
+    )
+    assert conductor.watchdog_pass("root", "c1", REPO, "none") == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["UNPARKED #7 Q-7-1; run: x", "watchdog: job c1 still running; nothing started"]
+    assert kept == []
+
+
+def test_1534_the_owner_pass_reads_only_waiting_pull_requests(monkeypatch):
+    """REQ-066: brief #1534 answers 6 and 7, edge 13: a quiet pass makes no read; a pending one
+    reads the comments of each waiting pull request only, and a member's machine writes nothing."""
+    monkeypatch.setattr(conductor, "change_reads", lambda *a: (True, None))
+    monkeypatch.setattr(conductor, "pass_state", lambda root: {})
+    applied: list = []
+    monkeypatch.setattr(
+        conductor.session, "owner_apply", lambda *a, **k: applied.append(a[1]) or None
+    )
+    assert conductor.owner_pass("root", REPO, NOW) == [] and applied == []
+    monkeypatch.setattr(conductor, "change_reads", lambda *a: (False, "d"))
+    pulls = [
+        {"number": 5, "labels": []},
+        {"number": 7, "labels": [{"name": "agk:parked"}]},
+        {"number": 8, "labels": [{"name": "agk:question"}]},
+    ]
+    monkeypatch.setattr(conductor.session, "pages", lambda endpoint: pulls)
+    monkeypatch.setattr(conductor, "refused_here", lambda root: False)
+    monkeypatch.setattr(conductor, "owner_wait_settings", lambda root: PLAIN)
+    monkeypatch.setattr(conductor, "verdict_authors", lambda root: ["boss"])
+    monkeypatch.setattr(conductor, "spec_approvers", lambda root: ["owner"])
+    monkeypatch.setattr(conductor, "personal_table", lambda root: None)
+    assert conductor.owner_pass("root", REPO, NOW) == [] and applied == [7, 8]
+    applied.clear()
+    monkeypatch.setattr(conductor, "refused_here", lambda root: True)
+    assert conductor.owner_pass("root", REPO, NOW) == [] and applied == []
