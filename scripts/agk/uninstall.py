@@ -765,10 +765,10 @@ def report(plan: Plan, kit_root: Path, write: bool, docs: bool) -> list[str]:
         )
     elif plan.clean:
         named = {i.rel for i in plan.of("delete")}
-        kept = [d for d in KEPT_RECORDS if not any(r.startswith(d) for r in named)]
-        if kept:
+        stay = [d for d in KEPT_RECORDS if not any(r.startswith(d) for r in named)]
+        if stay:
             lines.append(
-                f"kept: the specs and decisions ({', '.join(kept)}) by default (Q-S0071-1)"
+                f"kept: the specs and decisions ({', '.join(stay)}) by default (Q-S0071-1)"
             )
         lines.append("kept: every other record not named with --agreed, the code and the tests")
     else:
