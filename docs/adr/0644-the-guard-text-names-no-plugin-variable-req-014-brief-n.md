@@ -17,10 +17,14 @@ The default branch is red since #1516 (brief #1500, ADR-0631) merged at 6f7288da
 
 ## Decision
 
-1. The one docstring line of `.claude/hooks/architect_guard.py` that wrote the variable out now says "the plugin
-   folder variable" instead. No code, no test and no other line changes.
+1. The one docstring line of `.claude/hooks/architect_guard.py` that wrote the variable out now says "the plugin's
+   variable" instead, which keeps the line within the 100-character lint limit. No code, no test and no other line changes.
 2. The tests' rule stays as ADR-0630 wrote it (principle 11).
 
 ## Consequences
 
 The default branch turns green. Nothing a project runs changes, in any mode: one comment line of an installed guard.
+
+## Residual
+
+None: the three tests and every guard test pass; no rule changes.
