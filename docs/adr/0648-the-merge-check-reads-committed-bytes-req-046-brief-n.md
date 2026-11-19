@@ -29,21 +29,30 @@ change for the owner (session rule 30) that adds minutes to every run.
 1. The kit repository's root `.gitattributes` carries `* text=auto eol=lf` above its `merge=union` lines. Every blob is
    already LF, so no file's content changes. `kit/templates/gitattributes`, what a project gets, is unchanged.
 2. `scripts/agk/common.py` holds `CHECKOUT` (`-c core.autocrlf=false -c core.eol=lf`, moved from `evidence.py`, value
-   unchanged) and `add_worktree(root, tree, ref)`. Every temporary checkout of the kit (`merge_cleared.py`, `lock.py`,
-   `proof.py`, `batch.py`, `workflow_apply.py`, `evidence.py`, `plugin_snapshot.py`, `release_pack.py`,
-   `drift_audit.py`) goes through it, so it holds the committed bytes whatever the person's git configuration says. A
-   project's own `eol` attributes still win, in the check as in CI. A structural test keeps it so; `setup.py`'s branch
-   checkout of the person's own clone is not a temporary tree and is named as the one exception.
+   unchanged). Every git call that writes files into a temporary tree of the kit passes it before its command: the
+   `worktree add` of `merge_cleared.py`, `lock.py` (the heavy-queue job), `proof.py`, `batch.py`, `workflow_apply.py`
+   and `evidence.py`; the `checkout` of the clones of `plugin_snapshot.py`, `release_pack.py` and `drift_audit.py`; and
+   the later `merge`, `checkout` and `reset --hard` that `batch.py` and `drift_audit.py` run in their trees, since a
+   worktree shares the person's configuration. Each site keeps its own git wrapper (its error handling, and the tests
+   that slow or fake it), so there is no shared `add_worktree` function. So each tree holds the committed bytes whatever
+   the person's git configuration says; a project's own `eol` attributes still win, in the check as in CI. A structural
+   test refuses a `worktree add` or a `checkout` argument list under `scripts/agk/` without `*CHECKOUT`; `setup.py`'s
+   branch checkout of the person's own WSL clone is not a temporary tree and is named as the one exception.
 3. A hash taken from the working tree is taken as committed: `kit_hashes.py snapshot_worktree` and `plan_intake.py`'s
    re-render read through `common.committed_bytes` (ADR-0550), so a file whose checkout changed only its line ends
-   hashes as its blob, and a file committed with CRLF keeps its own hash. `design_prototype_check.py`'s runtime hash does
-   the same (Q-1540-4, ADR-0550's residual).
-4. The merge check's temporary folder is made under `common.long_temp_dir()`, and its test runs get `TEMP`, `TMP` and
-   `TMPDIR` set to that long name on Windows (ADR-0257).
+   hashes as its blob, and a file committed with CRLF keeps its own hash. The re-render also accepts the digest of the
+   bytes on disk, so a digest recorded before this change still matches, and the render writes LF on every system.
+   `design_prototype_check.py`'s runtime hash reads the same way (Q-1540-4, ADR-0550's residual): a tracked runtime
+   whose blob is LF checks on a CRLF checkout; an untracked one keeps its bytes on disk.
+4. The merge check's temporary folder is made under `common.long_temp_dir()`, and on Windows its runs get `TEMP` and
+   `TMP`, where set, in their long form (`common.long_form`, ADR-0257). The run's environment is a clean one that never
+   kept `TMPDIR` (brief #1290), so no short name reaches a run through it, and no name is invented.
 5. The kit's own tests compare names with `/` (`.as_posix()`); a structural test refuses `str(<x>.relative_to(<y>))`
    under `tests/kit/` and `tests/kit_dev/`. A project's own tests are its own (Q-1540-5).
-6. In the kit repository only, on Windows and a clean tree, `doctor.py`'s line-endings row prints the one command that
-   renormalises a checkout made before rule 1: `git rm --cached -r -q . && git reset --hard`. The doctor never runs it.
+6. In the kit repository only, on Windows and a clean tree, when a tracked file whose attributes say `eol=lf` is CRLF
+   on disk, `doctor.py`'s line-endings row prints the one command that renormalises a checkout made before rule 1:
+   `git rm --cached -r -q . && git reset --hard` (verify: this exact form on Git for Windows; it is tested with git on
+   Linux). The doctor never runs it, and a project is told nothing new (Q-1540-6).
 7. Option (D) is not taken here (Q-1540-3): the edge cases run on Linux with a real `core.autocrlf=true` checkout and
    `PureWindowsPath` names, plus one recorded owner run on Windows.
 
