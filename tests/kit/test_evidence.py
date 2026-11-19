@@ -377,8 +377,9 @@ def alive(pid: int) -> bool:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals and process groups")
 def test_a_signal_while_the_run_starts_leaves_no_process_behind(tmp_path, monkeypatch):
-    """REQ-039: brief #1543 (main 20b7ee4 red: a SIGTERM that lands after the sampled run's child
-    has started but before `spawn` holds its handle still ends the child, and the stop is raised)."""
+    """REQ-039: brief #1543 (main 20b7ee4 red: a SIGTERM that lands after the sampled run's
+    child has started but before `spawn` holds its handle still ends the child, and the stop is
+    raised)."""
     import evidence
     import lock
 
