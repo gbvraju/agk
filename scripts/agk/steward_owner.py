@@ -142,16 +142,17 @@ def ask(root: Path, qid: str, number: int, text: str) -> tuple[int, list[str]]:
 
 
 def unpark(root: Path, repo: str, number: int, qid: str, conductor: str | None) -> list[str]:
-    """Remove the owner wait's `agk:parked` on #N when the wait set it, and tell the conductor."""
+    """Remove the owner wait's `agk:parked` on #N when the wait set it and the relayed answer
+    closed the item it parked for, read fresh (brief #1534 answer 3), and tell the conductor."""
     pull = session.gh(f"repos/{repo}/pulls/{number}")
-    comments = session.gh(f"repos/{repo}/issues/{number}/comments?per_page=100")
-    if not isinstance(pull, dict) or not isinstance(comments, list):
+    if not isinstance(pull, dict):
         return []  # a brief, or unreadable: the conductor's sweep unparks it
-    if session.PARKED_LABEL not in session.labels_of(pull) or session.own_park(comments) is None:
+    listed, answerers = session.owner_people(root, pull)
+    found = session.owner_apply(repo, number, {"minutes": 0}, listed, answerers,
+                                datetime.now(UTC), unpark_only=True)  # fmt: skip
+    if found is None:
         return []
-    if not session.unpark_pull(repo, number, qid):
-        raise CheckError(f"#{number} could not be unparked")
-    return [f"unparked #{number} {qid}", *tell(root, conductor, number, qid)]
+    return [f"unparked #{number} {found[1]}", *tell(root, conductor, number, found[1])]
 
 
 def relay(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
@@ -180,15 +181,14 @@ def park(root: Path, number: int, conductor: str | None, now: datetime) -> tuple
         return 0, ["personal mode: nothing is parked"]
     repo = session.repo_name(root)
     pull = session.gh(f"repos/{repo}/pulls/{number}")
-    comments = session.gh(f"repos/{repo}/issues/{number}/comments?per_page=100")
-    if not isinstance(pull, dict) or not isinstance(comments, list):
+    if not isinstance(pull, dict):
         raise steward.Unreadable(f"#{number}")
     listed, answerers = session.owner_people(root, pull)
     settings = session.owner_wait_settings(root)
-    found = session.owner_step(pull, comments, settings, now, listed, answerers)
-    if found and found[0] == "park" and session.park_pull(repo, number, found[1]):
+    found = session.owner_apply(repo, number, settings, listed, answerers, now)  # brief #1534
+    if found and found[0] == "park":
         return 0, [f"parked #{number} {found[1]}"]
-    if found and found[0] == "unpark" and session.unpark_pull(repo, number, found[1]):
+    if found:
         return 0, [f"unparked #{number} {found[1]}", *tell(root, conductor, number, found[1])]
     return 0, [f"#{number}: nothing to park"]
 
@@ -273,9 +273,13 @@ def refusal_lines(root: Path, count: int) -> list[dict]:
         patterns = []
     keep = ("at", "hook", "reason", "text", "error")
     return [
-        {k: guard_logs.redact(json.dumps(x[k]) if k == "error" else str(x[k]), patterns)[0]
-         for k in keep if k in x}  # fmt: skip
-        for x in out[-count:] if count > 0
+        {
+            k: guard_logs.redact(json.dumps(x[k]) if k == "error" else str(x[k]), patterns)[0]
+            for k in keep
+            if k in x
+        }  # fmt: skip
+        for x in out[-count:]
+        if count > 0
     ]
 
 

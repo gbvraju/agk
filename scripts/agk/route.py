@@ -108,6 +108,7 @@ from merge_cleared import (
     github_mode,
     local_evidence,
     local_mode,
+    records_specs,
 )
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
@@ -610,10 +611,13 @@ def base_state(f: dict) -> str:
     if names_head and asked_for(latest) - people:
         return "agk:approve"
     if (names_head and kind == "cleared") or accepted or covered:
-        # brief #797 answer 4: an approval given while the spec on the head still reads Draft
+        # brief #797 answer 4: an approval given while the spec on the head still reads Draft;
+        # the merger records it in the merge instead (brief #1520, `merger`: `records_specs`)
         drafts = set(f.get("draft_specs") or ()) & specs_named_approved(
             comments, f.get("approvers") or []
         )
+        if f.get("merger"):
+            drafts = set()
         if (flipped - people) | drafts:
             return "agk:approve"
         files = {str(x.get("filename") or "") for x in f.get("files") or []}
@@ -701,6 +705,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "labels": [str(x.get("name")) for x in pr.get("labels") or []],
         "files": files,
         "draft_specs": draft_specs_of(repo, files, head),
+        "merger": records_specs(checkout_settings(root)),
         "commit": commit if isinstance(commit, dict) else {},
         "local": record_open(repo, root),
     }
@@ -1453,6 +1458,31 @@ def write_pipeline(repo: str, root: Path) -> None:
         print("skipped rule 4: the pipeline document was not written")
 
 
+OWNER_ANSWER_LINES = ("Maintainer answer:", "Answer:", "Approve:", "Correction:")
+
+
+def owner_answer_event(name: str, event: dict) -> bool:
+    """A created comment on a pull request whose first line is an owner's answer (brief #1534)."""
+    if name != "issue_comment" or event.get("action", "created") != "created":
+        return False
+    body = str((event.get("comment") or {}).get("body") or "").strip()
+    line = body.splitlines()[0].strip() if body else ""
+    return "pull_request" in (event.get("issue") or {}) and line.startswith(OWNER_ANSWER_LINES)
+
+
+def owner_unpark(repo: str, n: int, root: Path) -> str | None:
+    """Brief #1534 answer 5 (ADR-0646, Q-1534-1): on the answer's own run, the unpark half of the
+    one owner step (`session.owner_apply`): an `agk:parked` that the owner wait wrote is removed,
+    with its `Unparked-by:`, when a fresh read finds its item answered; a person's own park, and
+    a park whose item is still open, are left. Never parks. The line it printed, or None."""
+    import session  # here, not at the top: session imports this module
+
+    listed, answerers = session.owner_people(root, {})
+    now = datetime.datetime.now(datetime.UTC)
+    found = session.owner_apply(repo, n, {"minutes": 0}, listed, answerers, now, unpark_only=True)
+    return f"#{n} unparked {found[1]} (brief #1534)" if found else None
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
@@ -1508,9 +1538,12 @@ def main(argv: list[str] | None = None) -> int:
 
     entered = enter if starts else None
 
+    unparks = not rest and not dry and owner_answer_event(name, event)
     try:
         for n in dict.fromkeys(numbers):
             try:
+                if unparks and (said := owner_unpark(repo, n, root)):
+                    print(said)  # before the label is read, so it routes unparked
                 route_one(repo, n, root, labels, dry, entered)
             except CheckError as exc:
                 print(f"FAIL {NAME}: {exc}")

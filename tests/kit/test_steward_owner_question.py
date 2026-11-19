@@ -222,19 +222,22 @@ def test_req066_rule10_a_conductor_with_no_steward_still_parks_and_resumes(monke
         comments.append(at(5, "boss", f"Parked-by: wait {key}", 0))
         return True
 
-    monkeypatch.setattr(conductor, "read", lambda endpoint, what: list(comments))
-    monkeypatch.setattr(conductor.session, "park_pull", park)
-    monkeypatch.setattr(conductor.session, "unpark_pull", lambda *a: labels.clear() or True)
-    monkeypatch.setattr(conductor, "parked_mark", lambda root: tmp_path / "parked")
-
-    def lines() -> list[str]:
-        pull = {
+    def pull() -> dict:
+        return {
             "number": 7,
             "user": {"login": "builder1"},
             "created_at": "2026-11-15T10:00:00Z",
             "labels": [{"name": n} for n in labels],
         }
-        return conductor.owner_lines("root", REPO, [pull], PLAIN, ["boss"], ["owner"], NOW)
+
+    monkeypatch.setattr(conductor, "read", lambda endpoint, what: list(comments))
+    monkeypatch.setattr(conductor.session, "owner_read", lambda repo, n: (pull(), list(comments)))
+    monkeypatch.setattr(conductor.session, "park_pull", park)
+    monkeypatch.setattr(conductor.session, "unpark_pull", lambda *a, **k: labels.clear() or True)
+    monkeypatch.setattr(conductor, "parked_mark", lambda root: tmp_path / "parked")
+
+    def lines() -> list[str]:
+        return conductor.owner_lines("root", REPO, [pull()], PLAIN, ["boss"], ["owner"], NOW)
 
     assert lines() == ["PARKED #7 Q-7-1"]
     comments.append(at(6, "owner", "Maintainer answer: Q-7-1 wait", 0))

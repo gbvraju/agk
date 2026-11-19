@@ -177,7 +177,7 @@ steward post (ending `Who: AGK steward`) after it. It is read from the comments 
 
 Brief #1237 (ADR-0525): local mode restarts the conductor unattended.
 
-    python3 conductor.py watchdog [--session NAME] [--install] [--pass]
+    python3 conductor.py watchdog [--session NAME] [--install] [--pass] [--conductor-only]
 
 `watchdog` is one pass, never a loop. It reads, in order: the pause of the default branch
 (`agk paused; nothing started`, exit 0); `auto_start` and `launch_adapter` of the `[flow]` table,
@@ -195,7 +195,8 @@ NAME (`conductor-local` by default), `AGK_ROLE=conductor` and `AGK_TIER=stronges
 It posts nothing and takes no lease: the started conductor takes its own, and the lease keeps two
 from running. `--install` reads nothing and runs nothing: it prints the one scheduler line for the
 platform, `schtasks /Create /SC MINUTE /MO 30 ...` on Windows and a crontab line elsewhere, each a
-`git fetch` of the checkout and then this pass, for the person to run.
+`git fetch` of the checkout and then this pass, for the person to run. `--conductor-only` (brief
+#1467, ADR-0625) skips the builder pass, so `/agk:setup restart` starts only the conductor.
 
 Brief #1310 (ADR-0554): `watchdog --pass` is the scripted conductor pass. After the same checks it
 takes or renews the lease under NAME (another live holder starts nothing, exit 0), runs
@@ -332,7 +333,7 @@ USAGE = (
     "[--root DIR] [--open-briefs FILE] | "
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N | "
     "conductor.py reprove --pr N [--apply] | "
-    "conductor.py watchdog [--session NAME] [--install] [--pass] | "
+    "conductor.py watchdog [--session NAME] [--install] [--pass] [--conductor-only] | "
     "conductor.py review --pr N [--start]"
 )
 REPROVE_REPORT = "merge of main (light re-prove, SPEC-0050 amendment 171)"
@@ -1119,14 +1120,13 @@ def owner_lines(
         comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
         if kept is not None:
             kept[number] = comments  # read once: the steward's start reads them too (#1322)
-        found = session.owner_step(pull, comments, settings, now, listed, answerers)
-        if found and found[0] == "unpark" and session.unpark_pull(repo, number, found[1]):
-            unparks.append(
-                f"UNPARKED #{number} {found[1]}; run: python3 scripts/agk/session.py resume "
-                f"--pr {number}"
-            )
+        found = session.owner_apply(
+            repo, number, settings, listed, answerers, now, seen=(pull, comments)
+        )  # brief #1534 answer 1: decided on a fresh read, then written
+        if found and found[0] != "park":
+            unparks.append(unparked_line(number, found[1]))
             continue
-        if found and found[0] == "park" and session.park_pull(repo, number, found[1]):
+        if found:
             comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
             pull = {**pull, "labels": [*(pull.get("labels") or []), {"name": "agk:parked"}]}
         own = session.own_park(comments) if "agk:parked" in session.labels_of(pull) else None
@@ -1138,6 +1138,44 @@ def owner_lines(
     if mark is not None:
         write_held(mark, sorted(set(listed_now)))
     return unparks + parks
+
+
+def unparked_line(number: int, key: str) -> str:
+    return f"UNPARKED #{number} {key}; run: python3 scripts/agk/session.py resume --pr {number}"
+
+
+OWNER_WAITING = {"agk:parked", "agk:question", "agk:approve", "agk:owner-merge"}
+
+
+def owner_pass(root, repo: str, now: datetime) -> list[str]:
+    """The supervisor's owner step (brief #1534 answer 6), run while a job still runs: nothing
+    when nothing changed since the last full read, in personal mode or on a member's machine;
+    else `session.owner_apply` on each open pull request whose label shows a wait on the owner
+    (`OWNER_WAITING`), from the pulls page `change_reads` already read. It moves no read mark."""
+    if common.personal_table(Path(root)) is not None:
+        return []
+    quiet, _ = change_reads(root, repo, pass_state(root), now)
+    if quiet or refused_here(root):
+        return []
+    pulls = session.pages(f"repos/{repo}/pulls?state=open") or []
+    try:
+        settings = session.owner_wait_settings(Path(root))
+    except CheckError:
+        return []
+    listed = {a.lstrip("@").lower() for a in verdict_authors(root) or []}
+    answerers = listed | {a.lstrip("@").lower() for a in spec_approvers(root) or []}
+    lines = []
+    for pull in sorted(pulls, key=lambda p: p.get("number", 0)):
+        if not session.labels_of(pull) & OWNER_WAITING or not isinstance(pull.get("number"), int):
+            continue
+        number = pull["number"]
+        found = session.owner_apply(repo, number, settings, listed, answerers, now)
+        if found:
+            park = found[0] == "park"
+            lines.append(
+                f"PARKED #{number} {found[1]}" if park else unparked_line(number, found[1])
+            )
+    return lines
 
 
 STEWARD_PASS = timedelta(minutes=25)  # one conductor pass: its wake-up timer is at most 25 minutes
@@ -2238,20 +2276,22 @@ WATCHDOG_PROMPT = (
 )
 
 
-def watchdog_args(args: list[str]) -> tuple[str, bool, bool] | None:
-    """(NAME, `--install` given, `--pass` given) for `watchdog [--session NAME] [--install]
-    [--pass]`; None otherwise."""
-    rest, name, install, scripted = args[1:], WATCHDOG_NAME, False, False
+def watchdog_args(args: list[str]) -> tuple[str, bool, bool, bool] | None:
+    """(NAME, `--install` given, `--pass` given, `--conductor-only` given) for `watchdog
+    [--session NAME] [--install] [--pass] [--conductor-only]`; None otherwise."""
+    rest, name, install, scripted, only = args[1:], WATCHDOG_NAME, False, False, False
     while rest:
         if rest[0] == "--install" and not install:
             install, rest = True, rest[1:]
+        elif rest[0] == "--conductor-only" and not only:
+            only, rest = True, rest[1:]
         elif rest[0] == "--pass" and not scripted:
             scripted, rest = True, rest[1:]
         elif rest[0] == "--session" and len(rest) > 1 and NAME.fullmatch(rest[1]):
             name, rest = rest[1], rest[2:]
         else:
             return None
-    return name, install, scripted
+    return name, install, scripted, only
 
 
 def install_line(root, name: str, platform: str, scripted: bool = False) -> str:
@@ -2288,9 +2328,9 @@ def memory_line(root) -> tuple[str, bool]:
     return line, not (per and free is not None and free < per * session_plan.GIB)
 
 
-def watchdog(root, name: str, scripted: bool = False) -> int:
+def watchdog(root, name: str, scripted: bool = False, only: bool = False) -> int:
     """One pass: start the conductor through the adapter when its lease is free or expired; with
-    `scripted` (`--pass`), the scripted pass of ADR-0554."""
+    `scripted` (`--pass`), the scripted pass of ADR-0554; with `only`, no builder pass."""
     if session.paused_default(root):
         print("watchdog: agk paused; nothing started")
         return 0
@@ -2307,16 +2347,16 @@ def watchdog(root, name: str, scripted: bool = False) -> int:
     repo = session.repo_name(root)
     if not scripted:
         code = watchdog_once(root, name, repo, here[1], issue)
-        builder_pass(
-            root, repo, here[1]
-        )  # brief #1355 (ADR-0568): the builders after the conductor
+        if not only:  # brief #1355 (ADR-0568): the builders after the conductor
+            builder_pass(root, repo, here[1])
         return code
     with autopilot_lock(root) as mine:  # brief #1387: two passes of a machine never overlap
         if not mine:
             print(f"watchdog: another pass holds the lock {AUTOPILOT_LOCK}; nothing started")
             return 0
         code = watchdog_pass(root, name, repo, here[1])
-        builder_pass(root, repo, here[1])
+        if not only:
+            builder_pass(root, repo, here[1])
         return code
 
 
@@ -2764,6 +2804,8 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     (brief #1387); start nothing while nothing changed or a stop rule holds."""
     state, now = pass_state(root), datetime.now(UTC)
     if job_running(root, repo, name, state, now):
+        for line in owner_pass(root, repo, now):  # brief #1534 answer 6: the safety net
+            print(line)
         print(f"watchdog: job {name} still running; nothing started")
         return 0
     quiet, digest = change_reads(root, repo, state, now)
@@ -3687,7 +3729,7 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
                 return reprove(root, routine[1], routine[2])
             return lease(root, routine[1], routine[2])
         if guard is not None:
-            return watchdog(root, guard[0], guard[2])
+            return watchdog(root, guard[0], guard[2], guard[3])
         if gate is not None:
             return review(root, *gate)
         if args == ["sweep"]:
