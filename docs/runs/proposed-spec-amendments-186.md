@@ -70,12 +70,16 @@ so rule 6's fallback would never apply (ADR-0650, Context).
      187), the project's last run before its default branch.
    - Project, personal: unchanged; the floor of SPEC-0041 rule 18 runs the whole `test_command` before the push, and the
      gate's quick run adds the list as a selection does.
-3. **Rule 6b, `local_full` in local mode (new; `Q-1548-5`).** "In local mode (`execution = "local"`, or the one open
-   local-mode record issue), `local_full = "ci"` does not leave the full suite to CI, because no CI run follows:
+3. **Rule 6b, `local_full` where no CI proof job runs (new; `Q-1548-5`, answered).** "Only where no CI proof job runs
+   on the pull request, `local_full = "ci"` does not leave the full suite to CI, because no CI run follows:
    `prepush.left_to_ci` keeps the full run and prints one line `tests: full suite runs here (setting: testing.local_full;
-   local mode)`. The comment beside `local_full` in `agk.toml` and `prepush.py`'s docstring and its line `tests: full
-   suite left to CI's proof job` name the job that runs it: in the kit, governance's `Tests of the checks` step (not
-   `proof.yml`, which runs the pull request's own test files red then green); in a project, its `Project tests` step."
+   no CI proof job)`. Where a CI proof job runs on the pull request, in local mode too, `local_full = "ci"` leaves the
+   full suite to CI as today. No CI proof job runs when the one local-mode record issue is open (CI blocked, session rule
+   30) or when the repository has no proof workflow (`.github/workflows/proof.yml`); `execution = "local"` alone does not
+   turn the rule on (`Q-1548-10`). The comment beside `local_full` in `agk.toml` and `prepush.py`'s docstring and its line
+   `tests: full suite left to CI's proof job` name the job that runs it: in the kit, governance's `Tests of the checks`
+   step (not `proof.yml`, which runs the pull request's own test files red then green); in a project, its `Project
+   tests` step."
 4. **Rule 15, the builds, gains** "(k), (l) and (m) of amendment 186 and 187", as listed below.
 5. **Tests gains:** "Rule 6a, each on an invented tree (`example.com`), with no network: a docstring-only change of an
    installed script (the #1516 replay selects the list, and an invented naming test fails on the pull request); a new
@@ -89,9 +93,9 @@ so rule 6's fallback would never apply (ADR-0650, Context).
    `..`, a backslash, a non-list, an empty list; each names the setting, never the value); a file in the list and the
    selection (run once); a listed file in no `[proof]` area (`not run` locally, a CI failure naming the setting);
    `fast`, `balanced` and `thorough` (the list is added under each; `thorough` is full); `pr_tests = "full"` (inside the
-   full run); `full_when_share` reached by the list's files (full). Rule 6b: `local_full = "ci"` with `execution =
-   "local"` and with an open record issue (full, the line printed), and in GitHub mode (left to CI as today, the
-   corrected job name). REQ-062."
+   full run); `full_when_share` reached by the list's files (full). Rule 6b: `local_full = "ci"` with an open record issue
+   and with no proof workflow (full, the line printed), and with `execution = "local"` while a proof job runs and in
+   GitHub mode (left to CI as today, the corrected job name). REQ-062."
 6. **Proof gains (the measured goal):** "On the kit with the first list: `test_plan.py --base 6f7288da~1 --head
    6f7288da` selects `tests/kit_dev/test_distribution.py` and `tests/kit_dev/test_playbook.py`, and `--base 0d4ba3a3~1
    --head 0d4ba3a3` selects `tests/kit/test_installed_imports.py`, each with a `whole:` line; a pull request run of the
@@ -106,7 +110,7 @@ so rule 6's fallback would never apply (ADR-0650, Context).
    own list in `agk.toml`"; `github`: "no workflow, ruleset or required-check change: `Tests of the checks` and `Project
    tests` already run the plan; the list adds files to it; no new GitHub API call"; `local`: "prepush and the merge check
    run the list in the builder's and the conductor's checkouts, LF and CRLF alike; rule 6b closes the gap of `local_full
-   = "ci"`"; `personal`: "unchanged: the floor runs the whole test command"; `stacks`: "the list holds a project's own
+   = "ci"` where no CI proof job runs"; `personal`: "unchanged: the floor runs the whole test command"; `stacks`: "the list holds a project's own
    test file paths, for any stack, run through its `[proof]` areas".
 9. **The settings, each with its impact, traced:**
 
@@ -117,8 +121,8 @@ so rule 6's fallback would never apply (ADR-0650, Context).
    | `pr_tests` | `full`: the list is inside the full run; `selected`: it is added to the selection |
    | `always_full` | a match stays full; the list changes nothing there |
    | `full_when_share` | the list's files count among the selected files (15 of 542 tracked test files in the kit), so a selection can tip into full sooner, never later |
-   | `local_full` | `"local"`: unchanged; `"ci"`: the list runs locally beside the mapped tests; in local mode the full suite runs here (rule 6b) |
-   | `execution`, the local-mode record issue | local mode turns rule 6b on; GitHub mode reads `local_full` as today |
+   | `local_full` | `"local"`: unchanged; `"ci"`: the list runs locally beside the mapped tests; where no CI proof job runs on the pull request, the full suite runs here (rule 6b) |
+   | `execution`, the local-mode record issue | `execution = "local"` alone changes nothing; an open record issue (no CI proof job) turns rule 6b on |
    | `pre_merge_tests` | unchanged; the merge check runs both lists, each file once (amendment 187) |
    | `map_source` curated or generated | the list is separate from the map and read the same way under both |
    | playbook maps (`config/playbooks/*.toml`, `engines.py`) | a playbook may propose a project's whole tests, printed by `engines.py` as a proposal, never written to `agk.toml` (`Q-1548-6`) |
@@ -153,12 +157,17 @@ once it is Accepted, and a Settings section:
 - Q-1548-3: run the list on a change of only `docs/` files? No; the governance checks already read every document
   (`check_neutrality`, `check_licence_notice`), and a `docs/` file is not installed.
 - Q-1548-4: should the list replace the kit's three `pre_merge_tests`? No; both stay, each file runs once.
-- Q-1548-5: in local mode `local_full = "ci"` leaves the full suite to a CI run that never happens. The full suite runs
-  locally, as with `local_full = "local"`, with one line naming the setting (rule 6b).
+- Q-1548-5: in local mode `local_full = "ci"` leaves the full suite to a CI run that never happens. Answered by the
+  maintainer on #1549 (comment 7016265488, 2026-11-19, quoted as data): "amendment 186 approved, with rule 6b only where
+  no CI proof job runs on the pull request". Rule 6b applies only there; where a proof job runs, `local_full = "ci"`
+  leaves the full suite to CI as today.
 - Q-1548-6: may a playbook propose a project's whole tests? Printed as a proposal only, never written.
 - Q-1548-7: a forge-button merge skips the merge check and so the list. Unchanged here; brief #1539's intake covers
   button merges.
 - Q-1548-8: priority? 1.
+- Q-1548-10 (new, this writer's, from the answer to Q-1548-5): how a run knows that no CI proof job runs on the pull
+  request. The reading: the one open local-mode record issue, or no `.github/workflows/proof.yml` in the repository;
+  build (k)'s brief may settle another reading.
 - Q-1548-9 (new, this writer's): the brief names its builds (a) to (c); SPEC-0055 rule 15 already uses (a) to (j), so
   this proposal letters them (k) to (m) and keeps the brief's letters beside them. The reading: the maintainers may keep
   either; the build briefs cite both.

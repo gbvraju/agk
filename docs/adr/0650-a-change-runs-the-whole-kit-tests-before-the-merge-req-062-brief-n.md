@@ -47,9 +47,10 @@ full. The list needs its own key.
    under `docs/` only selects nothing, as today (Q-1548-3).
 3. The merge check runs `whole_tests` with `pre_merge_tests` on the would-be merge, the union in one pytest call, each
    file once, with the same hold line (amendment 187, SPEC-0039 rule 6). Both lists stay (Q-1548-4).
-4. In local mode (`execution = "local"`, or the open local-mode record issue), `local_full = "ci"` no longer leaves the
-   full suite to a CI run that never happens: the run is full there, as with `local_full = "local"`, and prints one line
-   naming the setting (Q-1548-5).
+4. Only where no CI proof job runs on the pull request (the open local-mode record issue, or no proof workflow),
+   `local_full = "ci"` no longer leaves the full suite to a CI run that never happens: the run is full there, as with
+   `local_full = "local"`, and prints one line naming the setting. Where a proof job runs, in local mode too, it leaves
+   the full suite to CI as today (Q-1548-5, the maintainer's answer on #1549; Q-1548-10).
 5. The kit's first list is the 15 test files that brief #1548 read from the code; a test is a whole test when it reads
    every file of a class (installed, tracked, kit, or a manifest of them) and asserts a rule over all of them, and a new
    such test joins the list in the pull request that adds it (Q-1548-2). Build (c) measures the list and may trim it.

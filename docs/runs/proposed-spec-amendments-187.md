@@ -75,5 +75,5 @@ table (`checked_key`), so a changed list is judged again.
 
 ## Questions (brief #1548)
 
-The questions are those of amendment 186 (`Q-1548-1` to `Q-1548-9`); this amendment relies on `Q-1548-4` (both lists
+The questions are those of amendment 186 (`Q-1548-1` to `Q-1548-10`); this amendment relies on `Q-1548-4` (both lists
 stay, each file once) and `Q-1548-7` (a button merge skips the list, unchanged here).
