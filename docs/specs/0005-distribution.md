@@ -51,7 +51,9 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
 7. **Footprint.** The plugin ships no hook, no MCP or LSP server, no monitor and no `bin/` directory in K3. Installing
    a plugin trusts its hooks and `bin/`; the plugin asks for neither. The stop hook stays in the project's
    `.claude/hooks/`. `/agk:review` uses the project's `reviewer` subagent (installed by init and adopt); the plugin
-   ships no copy of it, so there is no second `agk:reviewer`.
+   ships no copy of it for team mode, so there is no second `agk:reviewer` there; for personal mode only, where the
+   product has no `.claude/agents/`, the plugin ships one reviewer agent, advisory and experimental (SPEC-0041 rule
+   17, `Q-S0041-10`).
 8. **The commands.** Namespaced `/agk:<command>`. A command that writes does not commit, push or merge, and never sets
    a spec `Approved` or an ADR `Accepted` (principle 6).
    In personal mode (SPEC-0041) a command may commit its own writes to the developer's sidecar repository and to

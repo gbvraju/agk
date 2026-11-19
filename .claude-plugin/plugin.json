@@ -12,6 +12,7 @@
     "./.claude/agents/architect-review.md",
     "./.claude/agents/conductor.md",
     "./.claude/agents/drift-auditor.md",
+    "./.claude/agents/personal-reviewer.md",
     "./.claude/agents/shadow.md",
     "./.claude/agents/steward.md"
   ],

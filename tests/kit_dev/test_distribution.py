@@ -528,3 +528,20 @@ def test_spec0005_rules_1_2_and_8_gain_the_personal_mode_sentences():
     for row in rows:
         cells = [c.strip() for c in row.split("|")]
         assert cells[3] == "the sidecar only" and cells[4] == "none"
+
+
+RULE_7_PERSONAL = (
+    "the plugin ships no copy of it for team mode, so there is no second `agk:reviewer` there; "
+    "for personal mode only, where the product has no `.claude/agents/`, the plugin ships one "
+    "reviewer agent, advisory and experimental (SPEC-0041 rule 17, `Q-S0041-10`)."
+)
+
+
+def test_spec0005_rule_7_lets_the_plugin_ship_the_personal_reviewer_only():
+    """REQ-048 AC4: amendment 113 item 5 (SPEC-0041 rule 29, build (i), brief #1507)."""
+    flat = " ".join(spec_rule(7).split())
+    assert flat.endswith(RULE_7_PERSONAL)
+    assert "The plugin ships no hook, no MCP or LSP server, no monitor and no `bin/`" in flat
+    agents = load(PLUGIN / "plugin.json")["agents"]
+    assert "./.claude/agents/personal-reviewer.md" in agents
+    assert "./.claude/agents/reviewer.md" not in agents

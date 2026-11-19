@@ -67,3 +67,8 @@ Applied (2026-11-05, from `date -u`): items 3, 4 and 6 to `docs/specs/0005-distr
 (brief #584): the sentence of item 3 at the end of rule 1, that of item 4 at the end of rule 2, and the sentence and
 the two table rows of item 6 in rule 8, word for word; `tests/kit_dev/test_distribution.py` pins them. Items 5, 7 and
 8 stay for builds (i) and (n).
+
+Applied (2026-11-19, from `date -u`): item 5 to `docs/specs/0005-distribution.md` by build (i) of SPEC-0041 (brief
+#1507, ADR-0635): rule 7's last sentence, word for word; `tests/kit_dev/test_distribution.py` pins it. The plugin's
+agents are listed in `.claude-plugin/plugin.json` `agents`, as ADR-0612 decision 1 has them, `(verify)` against the
+Claude Code documentation. Items 7 and 8 stay for build (n).
