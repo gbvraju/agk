@@ -983,6 +983,41 @@ def personal_table(root: Path) -> dict | None:
     return out
 
 
+# Team mode (SPEC-0041 rule 31, ADR-0639): the `[governance]` table holds one key, `level`.
+GOVERNANCE_TABLE = "governance"
+GOVERNANCE_LEVELS = PERSONAL_CHOICES["level"]
+# What each level leaves out of the team-mode checks. Empty until a person rules on Q-562-1:
+# no level leaves a check out, and the floor (the secret scan, no regression) never is.
+GOVERNANCE_SKIPS: dict[str, tuple[str, ...]] = {level: () for level in GOVERNANCE_LEVELS}
+
+
+def governance_level(root: Path) -> str | None:
+    """The team-mode `[governance] level`, or None with no table, no key or a sidecar.
+
+    Any other key, a wrong type or an unknown value is refused naming the setting, never the
+    value, so no setting lowers the floor (principle 11)."""
+    try:
+        source = config_source(root)
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise CheckError(f"agk.toml cannot be read (setting: {GOVERNANCE_TABLE})") from None
+    if PERSONAL_TABLE in source or GOVERNANCE_TABLE not in source:
+        return None
+    table = source[GOVERNANCE_TABLE]
+    if not isinstance(table, dict):
+        raise CheckError(f"[{GOVERNANCE_TABLE}] must be a table (setting: {GOVERNANCE_TABLE})")
+    for key in sorted(table):
+        if key != "level":
+            raise CheckError(
+                f"unknown key in [{GOVERNANCE_TABLE}] (setting: {GOVERNANCE_TABLE}.{key})"
+            )
+    if "level" not in table:
+        return None
+    level = table["level"]
+    if not isinstance(level, str) or level not in GOVERNANCE_LEVELS:
+        raise CheckError(f"not an accepted value (setting: {GOVERNANCE_TABLE}.level)")
+    return level
+
+
 def load_config(root: Path) -> dict:
     """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps."""
     cfg = {k: list(v) if isinstance(v, list) else v for k, v in DEFAULT_CONFIG.items()}
