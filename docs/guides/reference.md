@@ -327,7 +327,7 @@ daily list. Exit 2: a refused input; exit 4: the memory cannot be written.
     python3 scripts/agk/conductor.py rerun --pr N [--apply]
     python3 scripts/agk/conductor.py check-verdict FILE [--pr N] [--root DIR] [--open-briefs FILE]
     python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
-    python3 scripts/agk/conductor.py watchdog [--session NAME] [--install] [--pass]
+    python3 scripts/agk/conductor.py watchdog [--session NAME] [--install] [--pass] [--conductor-only]
     python3 scripts/agk/conductor.py review --pr N [--start]
     python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
     python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT

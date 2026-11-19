@@ -20,8 +20,11 @@ the one spec the pull request sets Approved or the one its first line names). Th
 head must equal the approved text apart from its status line. With `review_mode = "solo"` an
 `Approve: SPEC-<n>` line of the one listed person's confirmation approves the text at its confirmed
 sha, which must be the head of the latest run before the comment, as for a short line (brief 277,
-`reviewers.confirmed_comments`). Without `--comments` the approval is
-not checked (a local run has no comments).
+`reviewers.confirmed_comments`). In a sidecar (SPEC-0041 rule 8, brief #1502) only the
+`Approve: <C> SPEC-<n>` line that `reviewers.terminal_confirmations` derives from the person's
+terminal confirmation approves, never a plain comment, and without `--comments` or a base a
+sidecar spec set Approved fails (Q-1502-1 answer (a)). Elsewhere, without `--comments` the
+approval is not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
 notes' `## Rulings` section and no `<id> ruled` row in the decisions log).
@@ -52,6 +55,7 @@ from common import (
     find_questions,
     frozen_log_problems,
     git,
+    personal_table,
     read_text,
     repo_root,
     run,
@@ -59,7 +63,15 @@ from common import (
     status_flip_only,
     utf8_output,
 )
-from reviewers import approval_shas, confirmed_comments, solo_person, spec_approvers
+from reviewers import (
+    SIDECAR_NO_BASE,
+    SIDECAR_NO_COMMENTS,
+    approval_shas,
+    confirmed_comments,
+    derived_only,
+    solo_person,
+    spec_approvers,
+)
 
 NAME = "specs"
 SPEC_PREFIX = "docs/specs/"
@@ -258,13 +270,20 @@ def flipped_specs(root, mb: str, changed: dict[str, str]) -> dict[str, str]:
 
 
 def approval_failures(
-    root, mb: str, changed: dict[str, str], approvals: dict[str, list[str]] | None = None
+    root,
+    mb: str,
+    changed: dict[str, str],
+    approvals: dict[str, list[str]] | None = None,
+    sidecar: bool = False,
 ) -> list[str]:
+    """SIDECAR (Q-1502-1 answer (a)): without the comments a flip is refused, not skipped."""
     failures = []
     noted = False
     for number, path in flipped_specs(root, mb, changed).items():
         failures += [f"{number}: {q} has no ruling" for q in open_questions(root, path)]
-        if approvals is None:
+        if approvals is None and sidecar:
+            failures.append(f"{number}: {SIDECAR_NO_COMMENTS}")
+        elif approvals is None:
             if not noted:
                 print(f"{NAME}: no comments file; an approval of a spec is not checked")
                 noted = True
@@ -318,6 +337,9 @@ def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     body = body_arg(argv)
     mb = base_context(root, NAME, base_arg(argv))
+    if mb is None and personal_table(root) is not None:  # Q-1502-1 answer (a): fail closed
+        print(f"FAIL {NAME}: {SIDECAR_NO_BASE}")
+        return 1
     if mb is None:
         return 0
     changed = changed_files(root, mb)
@@ -346,9 +368,13 @@ def main(argv: list[str] | None = None) -> int:
         reviews = file_arg(argv, "--reviews")
         runs = file_arg(argv, "--runs")
         pinned = runs_of(root, runs)
-        items = confirmed_comments(  # brief 277: the head by the rule of a short Approve: line
-            comments_of(Path(comments)), agent_apps(root), solo_person(root), runs=pinned
-        )
+        saved = comments_of(Path(comments))
+        if personal_table(root) is not None:  # SPEC-0041 rule 8: a terminal confirmation only
+            items = derived_only(saved, agent_apps(root), solo_person(root))
+        else:
+            items = confirmed_comments(  # brief 277: the head by the rule of a short Approve: line
+                saved, agent_apps(root), solo_person(root), runs=pinned
+            )
         approvals = approval_shas(
             items,
             comments_of(Path(reviews)) if reviews else [],
@@ -357,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
             set(flipped_specs(root, mb, changed)),
             agent_apps(root),
         )
-    messages += approval_failures(root, mb, changed, approvals)
+    messages += approval_failures(root, mb, changed, approvals, personal_table(root) is not None)
     messages += contexts_failures(root, mb, changed)
     messages += decision_file_problems(root)  # one row per decision file (brief 557)
     messages += frozen_log_problems(changed)  # the old log is frozen (brief 557 fix list item 3)
