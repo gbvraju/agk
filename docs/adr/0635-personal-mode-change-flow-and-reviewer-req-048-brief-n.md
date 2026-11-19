@@ -6,8 +6,7 @@
 - Related: ADR-0267, ADR-0612, ADR-0632, ADR-0634, SPEC-0041, SPEC-0005, brief #1507
 - Requirements: REQ-048
 
-Protected classes: `scripts/agk/`, `.claude/`, `.claude-plugin/`, `kit/`, `config/`, `agk.toml`, `tests/kit/`,
-`tests/kit_dev/`, `docs/specs/`
+Protected classes: `scripts/agk/`, `.claude/`, `.claude-plugin/`, `kit/`, `config/`, `agk.toml`, `tests/kit/`
 
 ## Context
 
@@ -49,9 +48,7 @@ classes; this is build (i).
    never writes in the product clone or anywhere else and never confirms. It is listed in `kit/manifest.json`
    `verbatim` and in `.claude-plugin/plugin.json` `agents`, which list the same agents; `config/rule-budget.txt` gains
    its line (no rule lines). The team-mode `reviewer` is unchanged.
-6. Item 5 of amendment 113 is applied to SPEC-0005 rule 7 word for word, and `tests/kit_dev/test_distribution.py`
-   pins it; the amendment file records it as applied.
-7. Every change command writes only in the sidecar; the product's `git status --porcelain` and every file under its
+6. Every change command writes only in the sidecar; the product's `git status --porcelain` and every file under its
    `.git/` stay unchanged, which a test checks by path and SHA-256.
 
 ## Consequences
@@ -62,5 +59,8 @@ mark is a label and not proof (`Q-S0041-16`).
 
 ## Residual
 
+- 2026-11-19: item 5 of amendment 113 (SPEC-0005 rule 7: the plugin ships one reviewer agent for personal mode) is
+  not applied here: an amended Approved spec needs a `## Contexts` section (amendment 142), which SPEC-0005 lacks and
+  no amendment supplies, and writing one is the reviewer group's (principle 6) (`Q-1507-1`).
 - 2026-11-19: where a plugin's agents live in its layout is read from the existing `plugin.json` `agents` list
   (ADR-0612 decision 1), not from the Claude Code documentation `(verify)`.
