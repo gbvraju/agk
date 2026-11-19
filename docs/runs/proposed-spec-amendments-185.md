@@ -39,8 +39,8 @@ prompt merge until the conductor's next `merge-queue` pass, which runs only whil
      never stands for a verdict.
    A word stands for head `<h>` only, until the head moves, a verdict that does not clear `<h>` is newer, `agk:hold` is
    set, or a newer word names another head (Q-1539-2). The owner's word lifts the holds of `OWNER_HOLDS` for that head as
-   `--owner` does, and nothing else; in a team it also asks for the merge now. It is not the local-evidence accept of
-   rule 4, which stays its own `Maintainer answer: accept <h>` line (Q-1539-6)."
+   `--owner` does; in a team it also asks for the merge now. It is also the accept of rule 4 of `<h>`'s local evidence
+   (Q-1539-6, the owner's answer), so a phone merge is one comment, under the guards of rule 4's new sentence (item 4a)."
 2. **Rule 2 gains the new form and its callers.** "A second form of the guarded command reads the owner's word of rule 5b
    on one pull request and, when it stands, runs the `--owner` path on its head: `python3 scripts/agk/merge_cleared.py
    --pr <n> --word <comment id>`; the build of (a) may name the option otherwise and its brief settles it (Q-1539-9). It
@@ -67,6 +67,12 @@ prompt merge until the conductor's next `merge-queue` pass, which runs only whil
    kit write."
 4. **Rule 5 gains one sentence.** "A release or a protected-class hold (`OWNER_HOLDS`) also ends for one head on the
    owner's word of rule 5b; every other hold of this list still holds, and the word never lifts a hold for another head."
+4a. **Rule 4 gains one sentence.** "In local mode the owner's word of rule 5b is also the accept of the difference for
+   the head it names, as a `Maintainer answer:` accept is, for that exact head only, only when its author is a
+   maintainer (rule 5b), and only when every check of `required_checks` has a latest run on that head that ended
+   `success` (its secret scan included); a required check that is red, pending or missing on that head leaves the
+   evidence unaccepted and the pull request held. The would-be merge with the default branch of rule 6 still runs. The
+   record line of rule 7 and the `Merge done:` reply say the word stood for the merge and the accept."
 5. **Rule 6 gains one line of the squash message.** "A merge on the owner's word adds, after the `Final:` and spec lines,
    one line `Merge-word: <comment id>`, then `Merged-by: merge_cleared.py`. `holds_record` also holds a pull request whose
    body or any commit message already carries a `Merge-word:` line."
@@ -87,7 +93,8 @@ prompt merge until the conductor's next `merge-queue` pass, which runs only whil
    answer:` or `Merge:` line; its replies of item 3 start `Merge done:`, `Merge held:` or `Merge refused:`."
 8. **Rule 11, the guide.** "`docs/guides/auto-merge.md` gains how the owner merges from the browser or a phone: copy the
    `Merge: #<n> <head>` line that the conductor's `Owner needed:` text and its `not queued:` line (`kept_out_line`) print
-   beside `OWNER_COMMAND`; what each reply means; that the forge's button leaves a `Hand merge:` record and ADRs to raise;
+   beside `OWNER_COMMAND` (for an owner-held pull request the text shows this one line, which also accepts the local
+   evidence, item 4a); what each reply means; that the forge's button leaves a `Hand merge:` record and ADRs to raise;
    and that personal mode has no line. `docs/guides/local-mode.md` names the delay of one `[autopilot] interval_minutes`."
 9. **The options weighed** (recorded so a later reader sees why item 2 was chosen):
 
@@ -123,7 +130,8 @@ prompt merge until the conductor's next `merge-queue` pass, which runs only whil
     and a quoted line (ignored); a word before the clearing verdict (does not count); a word on a red head or a pending
     check (held, one reply per reason, a later pass or event merges it); a word while the default branch is red (held,
     but the red-branch fix); a word on a pull request with no owner-only hold (the ordinary guarded merge, nothing
-    lifted); a word with auto-merge off (refused naming the setting); a word in personal mode (nothing); two
+    lifted); a word on a local head whose evidence differs (merges only with every required check green on that head,
+    the record and reply saying it stood for both; held with a red, pending or missing check); a word with auto-merge off (refused naming the setting); a word in personal mode (nothing); two
     supervisors on two machines (one merge); each caller (A), (C) and (D) on saved events and comment lists. Rule 7's
     hand merge: a button merge with `Final:` lines (record, the ADRs raised with their Final ids) and without (record,
     each Proposed ADR raised as having no Final); a guarded merge (no action); nothing new merged (no GitHub read).
@@ -146,7 +154,7 @@ prompt merge until the conductor's next `merge-queue` pass, which runs only whil
     supervisor's scripted pass and the conductor's batch run the word within one pass, under cron and Windows Task
     Scheduler alike; the hand-merge record by local `git`; the lease for several machines"; `personal`: "no comment, no
     button, no merge on the forge; only the guards' denial applies"; `stacks`: not applicable.
-15. **Unchanged:** principle 2 (Q-1539-1); rules 1, 3, 4, 9 and 10; ADR-0570 decision 1 (the check before the merge of an
+15. **Unchanged:** principle 2 (Q-1539-1); rules 1, 3, 9 and 10 (rule 4 gains item 4a's sentence); ADR-0570 decision 1 (the check before the merge of an
     owner-only hold); `--owner` itself, which stays the terminal path; the ruleset and required checks.
 
 ## The builds
@@ -177,8 +185,11 @@ and a Settings section:
   brief.
 - Q-1539-5: in a team, is one maintainer's word enough? Yes, as `--owner` takes one; a two-person setting is a later
   brief.
-- Q-1539-6: does a `Merge:` word also stand for the local-evidence accept of the same head? No; the accept stays its own
-  first line and the `Owner needed:` text shows both lines; for the owner's word (owner).
+- Q-1539-6: does a `Merge:` word also stand for the local-evidence accept of the same head? Answered by the owner
+  (quoted as data from brief #1539, 2026-11-19, the co-owner chat, 17:55 IST, option "a": "Yes, one comment does both"):
+  yes, for the exact head only, from a maintainer, only with the forge's required checks green on that head (its secret
+  scan included), the merge still tested against the default branch, and the record saying the word stood for both
+  (item 4a).
 - Q-1539-7: is the hand-merge record `Hand merge:` or rule 7's `Auto merge:` line? `Hand merge:`, so the record tells a
   guarded merge from a button merge.
 - Q-1539-8: priority? 1.

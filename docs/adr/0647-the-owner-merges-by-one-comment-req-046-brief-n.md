@@ -19,15 +19,18 @@ decision 2), is refused inside an agent session and needs a terminal: a phone ha
 (`OWNER_HOLDS`) has no phone path, and an accepted local head waits for the conductor's next `merge-queue` pass, which
 runs only while a conductor session is awake. The merger job already starts on `issue_comment` events and the
 supervisor's scripted pass already reads changed comments every `[autopilot] interval_minutes`. The owner prefers events
-to polling (2026-11-19).
+to polling (2026-11-19), and answered Q-1539-6 that one comment does both the merge and the local-evidence accept
+(2026-11-19, 17:55 IST, quoted as data in brief #1539).
 
 ## Decision
 
 1. The owner's word (SPEC-0039 rule 5b of amendment 185): a created comment on pull request `<n>` that is exactly
    `Merge: #<n> <40-character head>`, by a `User` account in `spec_approvers` that is a maintainer and is not in
    `conductor_accounts`, not through an app, with no `Who:` line or generator footer, and newer than the clearing verdict
-   on that head. It lifts `OWNER_HOLDS` for that head only and never stands for a verdict or for the local-evidence
-   accept.
+   on that head. It lifts `OWNER_HOLDS` for that head only and never stands for a verdict. By the owner's answer to
+   Q-1539-6 it is also the accept of that head's local evidence (SPEC-0039 rule 4), only when every required check on
+   that head is green, its secret scan included; the would-be merge still runs and the record says the word stood for
+   both.
 2. One new form of the guarded command reads the word and runs the `--owner` path on its head, with every other hold,
    the would-be merge and the post-merge steps unchanged, adds `Merge-word: <comment id>` to the squash message before
    `Merged-by: merge_cleared.py`, and posts one `Merge done:`, `Merge held:` or `Merge refused:` reply per word and
