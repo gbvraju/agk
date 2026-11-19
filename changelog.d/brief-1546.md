@@ -1,0 +1,1 @@
+- Personal mode: `personal.py gate` at the `review` level fails the step by name when `check_review_report.py` (an experimental file) is not installed, instead of stopping on an import error (brief #1546, ADR-0649)
