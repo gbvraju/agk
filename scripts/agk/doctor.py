@@ -65,6 +65,11 @@ Brief #1390 (ADR-0587): `autopilot-settings` names each of `[flow] auto_start`, 
 and `[capacity]` still set, which `[autopilot]` replaces: read for one release while that table is
 absent, then from it only; never a value. Brief #1480 (ADR-0628): its fix names
 `[autopilot] adapter`, and `model-names` also warns for `[autopilot] mode = "on"` with an `adapter`.
+SPEC-0071 rule 7 (brief #1458, ADR-0616): in a clean project (`[kit] layout = "plugin"`), one
+`warn kit-in-repository:` line names the path class of each kit manifest file found in it other than
+rule 2's kept files, never a file or its content; and `--paused`, a session's first command, prints
+the grant's `valid_until` warning to stderr when a `[licence]` table is present. Neither changes the
+exit code or the one stdout line of `--paused`.
 """
 
 from __future__ import annotations
@@ -1951,6 +1956,67 @@ def licence_lines(root: Path, today: datetime.date | None = None) -> list[str]:
     return lines
 
 
+# SPEC-0071 rule 2: the files of the manifest that a clean project keeps (git and GitHub read them
+# only from the repository; `CLAUDE.md` is the short project file; `LICENSE-AGK`, brief #1419).
+CLEAN_KEEPS = (".gitignore", "CLAUDE.md", "LICENSE-AGK", ".github/PULL_REQUEST_TEMPLATE.md")
+CLEAN_KEEPS_UNDER = (".github/ISSUE_TEMPLATE/",)
+KIT_IN_REPOSITORY = "warn kit-in-repository: "
+
+
+def clean_layout(root: Path) -> bool:
+    """True when `[kit] layout = "plugin"` in agk.toml (SPEC-0071 rule 2); unreadable is False."""
+    try:
+        kit = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8")).get("kit")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return False
+    return isinstance(kit, dict) and kit.get("layout") == "plugin"
+
+
+def kit_in_repository_lines(root: Path, kit: Path | None = None) -> list[str]:
+    """SPEC-0071 rule 7 (brief #1458, ADR-0616): in a clean project, one warning naming the path
+    class of each kit manifest file (`verbatim`, `experimental`, `kit_tests`) found in it, other
+    than rule 2's kept files; never a file's content. The manifest is the plugin's (`kit`, else
+    the plugin this file runs from). Nothing in an installed project; a warning, never a failure."""
+    if not clean_layout(root):
+        return []
+    plugin = kit or Path(__file__).resolve().parents[2]
+    try:
+        manifest = json.loads((plugin / "kit" / "manifest.json").read_text(encoding="utf-8"))
+        listed = [*manifest.get("verbatim", []), *manifest.get("experimental", [])]
+        tests = str(manifest.get("kit_tests") or "").strip("/")
+    except (OSError, UnicodeDecodeError, ValueError, AttributeError, TypeError):
+        return [
+            KIT_IN_REPOSITORY + "cannot be checked, the plugin's kit manifest cannot be read "
+            "(path class: kit/manifest.json)"
+        ]
+    classes = set()
+    for rel in listed:
+        if rel in CLEAN_KEEPS or rel.startswith(CLEAN_KEEPS_UNDER):
+            continue
+        if (root / rel).is_file():
+            classes.add(rel.rsplit("/", 1)[0] + "/" if "/" in rel else rel)
+    if tests and (root / tests).is_dir() and any(p.is_file() for p in (root / tests).rglob("*")):
+        classes.add(tests + "/")
+    if not classes:
+        return []
+    return [
+        KIT_IN_REPOSITORY + "kit files are in this clean project, whose kit runs from the plugin "
+        f"(path class: {', '.join(sorted(classes))}); remove them (SPEC-0071 rule 7)"
+    ]
+
+
+def grant_start_lines(root: Path) -> list[str]:
+    """The grant's end at a session's start (SPEC-0071 rule 7, Q-S0071-3): the `valid_until` line
+    of `licence_lines` when a `[licence]` table is present, else nothing; it never stops work."""
+    try:
+        table = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8")).get(LICENCE_TABLE)
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    if not isinstance(table, dict):
+        return []
+    return [line for line in licence_lines(root) if "valid_until" in line]
+
+
 def no_kit(root: Path) -> bool:
     """True after a removal (answer 5): a git work tree with no agk.toml, no `[tool.agk]` stamp in
     pyproject.toml and none of the kit's files (KIT_TRACES)."""
@@ -2018,6 +2084,8 @@ def paused_query(root: Path, ref: str | None) -> int:
         print(f"refused: {exc}")
         return 1 if "setting: paused" in str(exc) else 3
     print(PAUSED_LINE if state else "agk not paused")
+    for line in grant_start_lines(root):
+        print(line, file=sys.stderr)  # a warning at start, never a stop (SPEC-0071 rule 7)
     return 0
 
 
@@ -2578,6 +2646,9 @@ def main(argv: list[str] | None = None) -> int:
             + main_folder_lines(root.resolve())
             + line_ending_lines(root.resolve())
             + machine_wsl_lines(root.resolve())
+            + kit_in_repository_lines(
+                root.resolve(), Path(options["kit"]) if options["kit"] else None
+            )
         )
         licence = licence_lines(root.resolve())
         deprecation = deprecation_lines(root.resolve())

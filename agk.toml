@@ -466,7 +466,7 @@ tests = [
 code = "scripts/agk/doctor.py"
 tests = [
   "tests/kit/test_governance_level.py",
-  "tests/kit/test_kit_defect_report.py", "tests/kit/test_kit_repo_local_mode.py",
+  "tests/kit/test_kit_defect_report.py", "tests/kit/test_kit_in_repository.py", "tests/kit/test_kit_repo_local_mode.py",
   "tests/kit/test_autopilot_settings.py", "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
   "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
   "tests/kit/test_doctor_windows.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py", "tests/kit/test_doctor_no_kit.py", "tests/kit/test_model_routes.py",
@@ -968,7 +968,7 @@ tests = ["tests/kit/test_steward_onboarding.py", "tests/kit_dev/test_kit_manifes
 [[testing.map]]
 code = ".claude/hooks/steward_guard.py"
 tests = [
-  "tests/kit/test_steward_guard.py", "tests/kit/test_steward_outbound_guard.py", "tests/kit/test_kit_defect_report.py",
+  "tests/kit/test_kit_in_repository.py", "tests/kit/test_steward_guard.py", "tests/kit/test_steward_outbound_guard.py", "tests/kit/test_kit_defect_report.py",
   "tests/kit/test_guard_plugin_forms.py",
 ]
 [[testing.map]]
@@ -1181,7 +1181,7 @@ tests = [
 [[testing.map]]
 code = ".claude/agents/*.md"
 tests = [
-  "tests/kit/test_conductor_tier.py",
+  "tests/kit/test_conductor_tier.py", "tests/kit/test_kit_in_repository.py",
   "tests/kit/test_steward_starts.py",
   "tests/kit/test_check_numbers_amendments.py", "tests/kit/test_conductor_guard_issue.py",
   "tests/kit/test_conductor_playbook_evidence.py", "tests/kit/test_decision_files.py",
