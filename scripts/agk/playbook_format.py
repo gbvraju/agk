@@ -165,7 +165,10 @@ SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
     "split": ({"brief_order": STRS, "depends_on": PAIRS}, {}),
     "lanes": ({"name": STR, "kinds": STRS}, {}),
     "testing": ({"profile": STR, "always_full": STRS, "map": TABLES}, {}),
-    "gates": ({"id": STR, "kind": STR, "text": STR, "owner_only": BOOL}, {"step": STR, "reason": STR}),
+    "gates": (
+        {"id": STR, "kind": STR, "text": STR, "owner_only": BOOL},
+        {"step": STR, "reason": STR},  # SPEC-0072 rule 2: `reason`
+    ),
     "milestones": ({"shape": STR, "batch_by": STR}, {}),
     # `basis` is required by rule 3 and `record` by rule 3 for a measured claim
     "claims": ({"text": STR}, {"basis": STR, "record": STR}),
@@ -510,8 +513,8 @@ def _inside(path: str) -> bool:
     return bool(path) and "\\" not in path and not pure.is_absolute() and ".." not in pure.parts
 
 
-def _architecture(rel: str, data: dict) -> list[str]:
-    """SPEC-0072 rule 2: the form of `[architecture]` and its fit to the playbook's `[testing] map`."""
+def _architecture(rel: str, data: dict, root: Path) -> list[str]:
+    """SPEC-0072 rule 2: the form of `[architecture]` and its fit to the `[testing] map`."""
     arch = data["architecture"]
     where = f"{SPEC72}: {rel}:"
     out = _table_keys(rel, "[architecture]", arch, *ARCH_KEYS)
@@ -524,7 +527,7 @@ def _architecture(rel: str, data: dict) -> list[str]:
     names = [layer["name"] for layer in layers if isinstance(layer.get("name"), str)]
     paths = [p for layer in layers if _is(layer.get("paths"), STRS) for p in layer["paths"]]
     if any(not SLUG.match(n) for n in names) or len(set(names)) != len(names):
-        out.append(f"{where} a layer name is not a slug or appears twice (key: architecture.layers)")
+        out.append(f"{where} a layer name is not a slug or is twice (key: architecture.layers)")
     if any(not _inside(p) for p in paths):
         out.append(f"{where} a layer path is not inside the project (key: architecture.layers)")
     ends = [(e.get("from"), e.get("to")) for e in allow]
@@ -532,8 +535,10 @@ def _architecture(rel: str, data: dict) -> list[str]:
         out.append(f"{where} an `allow` entry names an unknown layer (key: architecture.allow)")
     if any("adr" in e and not ADR_ID.match(str(e["adr"])) for e in allow):
         out.append(f"{where} an `allow` entry `adr` is not an ADR id (key: architecture.allow)")
-    if data.get("work_type") == BASE:
-        return out
+    work_type = data.get("work_type")
+    derived = isinstance(work_type, str) and is_derived(work_type, root)
+    if work_type not in WORK_TYPES and not derived:
+        return out  # the base (it constrains nothing), or a name rule 1 already refuses
     testing = data.get("testing")
     entries = testing.get("map") if isinstance(testing, dict) else None
     codes = [e["code"] for e in entries or [] if isinstance(e, dict) and _is(e.get("code"), STR)]
@@ -556,7 +561,8 @@ def stacks(root: Path) -> list[str] | None:
 
 
 def _standards(rel: str, entries: list[dict], root: Path) -> list[str]:
-    """SPEC-0072 rule 2: each `[[standards]]` entry's form, a known stack once, a relative config."""
+    """SPEC-0072 rule 2: each `[[standards]]` entry's form, a known stack once, a relative
+    config."""
     where = f"{SPEC72}: {rel}:"
     out = []
     for entry in entries:
@@ -648,7 +654,7 @@ def problems(path: Path, root: Path) -> list[str]:
     if _is(data.get("modules"), STRS):
         out += _modules(rel, data["modules"], root)
     if _is(data.get("architecture"), "table"):
-        out += _architecture(rel, data)
+        out += _architecture(rel, data, root)
     if _is(data.get("standards"), TABLES):
         out += _standards(rel, data["standards"], root)
     out += _named(rel, data)

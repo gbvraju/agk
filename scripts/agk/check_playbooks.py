@@ -107,7 +107,8 @@ def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], l
             keys = _weakened(gate, held) if held else []
             # SPEC-0072 rule 2: the eight enterprise ids are the kit's own names, never a value
             named = gate["id"] in playbook_format.ENTERPRISE
-            weak.update(f"gate: {gate['id']}, key: {key}" if named else f"key: {key}" for key in keys)
+            prefix = f"gate: {gate['id']}, " if named else ""
+            weak.update(f"{prefix}key: {key}" for key in keys)
             if not keys:
                 gates[gate["id"]] = gate
     problems += [f"rule 21: {rel}: a gate is restated weaker ({key})" for key in sorted(weak)]

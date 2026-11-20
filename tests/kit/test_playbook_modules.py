@@ -301,8 +301,8 @@ def test_every_shipped_playbook_takes_default_and_is_not_weakened() -> None:
     assert check_playbooks.main(["--root", str(KIT_ROOT)]) == 0
     base = check_playbooks.composed(KIT_ROOT / FOLDER / "default.toml", KIT_ROOT)[0]
     five = [g["id"] for g in base]
-    assert len(five) == 5
+    assert len(five) == 5 + len(playbook_format.ENTERPRISE)  # SPEC-0072 rule 2 (ADR-0665)
     for path in playbook_format.playbooks(KIT_ROOT):
         gates, _, found = check_playbooks.composed(path, KIT_ROOT)
         assert found == []
-        assert [g["id"] for g in gates][:5] == five
+        assert [g["id"] for g in gates][: len(five)] == five
