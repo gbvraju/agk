@@ -1,5 +1,6 @@
-"""Tests of SPEC-0062 build (b): in solo mode the steward does the setup for the person and records
-each AGK choice as one `Setup:` entry (rules 8, 9 and 11; brief #1599, ADR-0679; REQ-069 AC3 to AC5).
+"""Tests of SPEC-0062 build (b): in solo mode the steward does the setup for the person and
+records each AGK choice as one `Setup:` entry (rules 8, 9 and 11; brief #1599, ADR-0679;
+REQ-069 AC3 to AC5).
 
 A recorded `gh` double, a stubbed `gh api user` (an invented login) and a stubbed detector stand in
 for the runtime, the model and GitHub; no network, invented data only (example.com).
@@ -7,7 +8,7 @@ for the runtime, the model and GitHub; no network, invented data only (example.c
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404 - a fixed `git init` and a stub's result, no shell
 import sys
 import tomllib
 from pathlib import Path
@@ -67,7 +68,7 @@ def test_req069_ac4_record_takes_the_setup_kind_in_its_form(tmp_path, monkeypatc
     code, _ = steward.record(tmp_path, "Setup", "pr_mode: strict because the kit default", gh)
     assert code == 0
     body = gh.issues[1]["c"][-1]["body"]
-    assert body.startswith("Setup: pr_mode: strict because") and body.endswith(steward.WHO)
+    assert body.startswith("Setup: pr_mode: strict because") and body.rstrip().endswith(steward.WHO)
     code, lines = steward.record(tmp_path, "Setup", "pr_mode strict", gh)
     assert code == 2 and "Setup entry" in lines[0]
 
@@ -137,14 +138,15 @@ def test_req069_ac3_an_adopted_project_gets_a_test_command_from_the_detected_sta
     assert steward.test_outcome(0, "") == "passed"
     assert steward.test_outcome(5, "") == "no tests"
     assert steward.test_outcome(1, "") == "failed"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)], check=True)
+    git = ["git", "init", "-q", "-b", "main", str(tmp_path)]
+    subprocess.run(git, check=True)  # nosec B603 - fixed argument list, no shell
     plan_rows, _, _ = adopt.build_plan(tmp_path, TODAY, {"project_tests": "python3 -m pytest -q"})
     toml = next(c for rel, _, c, _ in plan_rows if rel == "agk.toml").decode("utf-8")
     assert tomllib.loads(toml)["project_tests"] == "python3 -m pytest -q"
 
 
 def test_req069_ac5_setup_touches_no_workflow_ruleset_check_or_secret(tmp_path):
-    """REQ-069 AC5: rule 11's limits, only the reviewers file, its owners, the settings and the ADR."""
+    """REQ-069 AC5: rule 11's limits; only the reviewers file, its owners, settings and the ADR."""
     before = items_of(tmp_path)
     after = items_of(tmp_path, {"login": LOGIN, "solo": True, "project_tests": "make test"})
     changed = sorted(rel for rel in before if before[rel] != after[rel])

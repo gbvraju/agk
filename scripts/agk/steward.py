@@ -58,6 +58,7 @@ KINDS = (
     "Triage",
     "Override",
     "Onboarded",
+    "Setup",
 )
 MARKERS = ("Started", "Ended", "Daily", "Shortened")
 LABEL = "agk-steward"
@@ -69,6 +70,22 @@ QUESTION = (
     "Tell me in your own words what you want to build and who it is for; are you coming at this"
     " from the business side or the technical side?"
 )
+SETUP = re.compile(r"[^:\n]+: \S.* because \S.*", re.S)
+# SPEC-0062 rules 2, 9 and 11 (brief #1599, ADR-0679): the only setup questions are plain ones.
+ALONE_QUESTION = (
+    "Will you run this alone, or with a team? Alone (recommended for one person) · with a team"
+)
+REST_QUESTION = "When do you rest?"
+STACK_TESTS = {
+    "python-pyproject": "python3 -m pytest -q",
+    "python-pip": "python3 -m pytest -q",
+    "node": "npm test",
+    "go-modules": "go test ./...",
+    "rust-cargo": "cargo test",
+    "java-maven": "mvn -q test",
+    "java-gradle": "./gradlew test",
+    "dart-pub": "dart test",
+}
 ROLL_OVER = 500
 LIVE = timedelta(minutes=60)
 PAGE = 100
@@ -283,6 +300,82 @@ def first_question(root: Path, memory: dict) -> list[str]:
     ]
 
 
+def proposed_tests(stack: dict | None) -> str:
+    """Rule 11: the test command for the stacks `front_door.py detect` read, or empty."""
+    parts = []
+    for row in (stack or {}).get("rows", []):
+        command = STACK_TESTS.get(row.get("name", ""))
+        folder = row.get("folder", ".")
+        if command and folder in (".", ""):
+            parts.append(command)
+        elif command:
+            parts.append(f"(cd {folder} && {command})")
+    return " && ".join(dict.fromkeys(parts))
+
+
+def test_outcome(code: int, output: str) -> str:
+    """Q-1599-2: the one run of a proposed command, said plainly."""
+    if code == 5 or "no tests ran" in output:
+        return "no tests"
+    return "passed" if code == 0 else "failed"
+
+
+def review_choice(answer: str) -> str | None:
+    """Rule 2 as amendment 208 proposes: the person's answer, `solo`, `team` or None (ask again)."""
+    words = answer.strip().lower().rstrip(".!")
+    if words in ("alone", "alone, by myself", "by myself", "just me", "solo"):
+        return "solo"
+    return "team" if words in ("with a team", "a team", "team") else None
+
+
+def setup_plan(root: Path, adopted: bool, stack: dict | None) -> dict:
+    """Rule 9: each AGK matter of a start, settled from the kit's defaults; plain questions only."""
+    from session import MAX_BUILDERS
+
+    entries = [
+        "models: one route for every session because the kit's default has no [models.routes]",
+        "builders: one builder per brief because the kit runs one pull request per item",
+        f"max_builders: {MAX_BUILDERS} because it is the kit's cost-effective default",
+        "pr_mode: strict because it is the kit's default (one open pull request at a time)",
+        "reviewers: the signed-in login on both lines because the person is the one reviewer",
+    ]
+    if adopted:
+        command = proposed_tests(stack)
+        names = ", ".join(row.get("name", "") for row in (stack or {}).get("rows", []))
+        entries.append(
+            f"project_tests: {command} because the detected stack is {names}"
+            if command
+            else "project_tests: empty because no stack was detected"
+        )
+    return {"entries": [f"Setup: {e}" for e in entries], "ask": [ALONE_QUESTION, REST_QUESTION]}
+
+
+def setup_lines(
+    root: Path, adopted: bool, stack: dict | None, answer: str | None
+) -> tuple[int, list[str]]:
+    """The entries to record, the questions left, and the install command to run."""
+    stamp = root / "agk.toml"
+    text = stamp.read_text(encoding="utf-8") if stamp.is_file() else ""
+    if answer is not None and re.search(r'(?m)^mode\s*=\s*"(init|adopt)"', text):
+        return 2, [
+            "refused: review_mode is set only at setup (setting: review_mode; SPEC-0062 rule 2)"
+        ]
+    plan = setup_plan(root, adopted, stack)
+    lines = list(plan["entries"])
+    tool = "adopt" if adopted else "init"
+    run = f"run: python3 scripts/agk/{tool}.py . --login-from-gh"
+    command = proposed_tests(stack) if adopted else ""
+    if command:
+        run += " --project-tests " + json.dumps(command)
+    choice = review_choice(answer) if answer is not None else None
+    if choice is None:
+        return 0, [*lines, *(f"ask: {q}" for q in plan["ask"])]
+    said = (answer or "").strip()
+    lines.append(f'Setup: review_mode: {choice} because the person said "{said}"')
+    lines.append(f"ask: {REST_QUESTION}")
+    return 0, [*lines, run + (" --solo" if choice == "solo" else "")]
+
+
 def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[str]]:
     if personal_table(root) is not None:
         comments = personal_entries(root)
@@ -321,6 +414,11 @@ def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
     if kind == "Person" and not PERSON.fullmatch(text.strip()):
         return 2, [
             "refused: a Person entry is `<business|technical>: <their words>` (SPEC-0062 rule 4)"
+        ]
+    if kind == "Setup" and not SETUP.fullmatch(text.strip()):
+        return 2, [
+            "refused: a Setup entry is `<setting or matter>: <choice> because <reason>`"
+            " (SPEC-0062 rule 9)"
         ]
     from guard import scan_text
 
@@ -374,6 +472,10 @@ def main(argv: list[str] | None = None) -> int:
     end_p.add_argument("--calls", type=int)
     end_p.add_argument("--tokens", type=int)
     sub.add_parser("onboard").add_argument("--again", action="store_true")
+    set_p = sub.add_parser("setup")
+    set_p.add_argument("--adopted", action="store_true")
+    set_p.add_argument("--detect", type=Path, help="the output of `front_door.py detect --json`")
+    set_p.add_argument("--answer", help="the person's answer to the alone-or-team question")
     rec = sub.add_parser("record")
     rec.add_argument("--kind", required=True)
     group = rec.add_mutually_exclusive_group(required=True)
@@ -385,6 +487,15 @@ def main(argv: list[str] | None = None) -> int:
         import steward_onboard
 
         return steward_onboard.run(root, opts.again)
+    if opts.command == "setup":
+        try:
+            facts = json.loads(opts.detect.read_text(encoding="utf-8")) if opts.detect else {}
+        except (OSError, ValueError):
+            print("refused: --detect cannot be read (setting: --detect)", file=sys.stderr)
+            return 2
+        code, lines = setup_lines(root, opts.adopted, facts.get("stack"), opts.answer)
+        print("\n".join(lines))
+        return code
     try:
         if opts.command == "record":
             text = opts.text if opts.text is not None else opts.file.read_text(encoding="utf-8")

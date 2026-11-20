@@ -45,8 +45,10 @@ from init import (
     PLACEHOLDER,
     PLUGINS,
     REF_HINT,
+    SETUP_USAGE,
     UNRELEASED,
     Refusal,
+    apply_setup,
     check_interpreter,
     install_mode,
     kit_bytes,
@@ -56,6 +58,7 @@ from init import (
     print_branch_rules,
     release_problem,
     render,
+    setup_args,
     slug,
 )
 from reviewers import parse, render_codeowners
@@ -145,7 +148,7 @@ def existing_protected_files(target: Path, entries: list[str], owned: set[str]) 
     return sorted(found)
 
 
-def build_plan(target: Path, today: str):
+def build_plan(target: Path, today: str, setup: dict | None = None):
     """(plan entries (rel, action, content, detail), protected entries, default branch)."""
     manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
     spec = manifest["adopt"]
@@ -191,6 +194,7 @@ def build_plan(target: Path, today: str):
         created[dest] = render((KIT_ROOT / src).read_text(encoding="utf-8"), variables, src).encode(
             "utf-8"
         )
+    apply_setup(created, setup)
     reviewers_text = created["config/reviewers.yaml"].decode("utf-8")
     codeowners = render_codeowners(parse(reviewers_text))
 
@@ -250,8 +254,13 @@ def main(argv: list[str] | None = None) -> int:
     dry_run = "--dry-run" in args
     unreleased = UNRELEASED in args
     rest = [a for a in args if a not in ("--dry-run", UNRELEASED)]
+    try:
+        rest, setup = setup_args(rest)
+    except Refusal as exc:
+        print(f"refused: {exc}")
+        return 1
     if len(rest) != 1 or rest[0].startswith("-"):
-        print("usage: adopt.py TARGET [--dry-run] [--unreleased]", file=sys.stderr)
+        print(f"usage: adopt.py TARGET [--dry-run] [--unreleased] {SETUP_USAGE}", file=sys.stderr)
         return 2
     try:
         problem = check_interpreter(tuple(sys.version_info[:3]))
@@ -273,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: {not_released}; {REF_HINT}; nothing was written")
             print(plugin_settings())
             return 1
-        plan, entries, branch = build_plan(target, datetime.now(UTC).date().isoformat())
+        plan, entries, branch = build_plan(target, datetime.now(UTC).date().isoformat(), setup)
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1
