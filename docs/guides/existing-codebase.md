@@ -55,6 +55,11 @@ the criteria against what the product really does; the checks cannot tell you th
 The criteria describe what the product does today, including what you might call a flaw. Recording a flaw is not endorsing it;
 changing it is a later, separate change.
 
+Behaviour observed in code is also an allowed source, as long as it stays `Proposed`: a record drafted from what the code does,
+not from what your documentation promises, cites the lines it read (`path:start-end@blob`, as `/agk:personal-adopt` writes in
+[personal mode](personal-mode.md)), carries a `Source: observed in code at <citation>` line, and is never `done` until a test
+asserts it (SPEC-0041 rule 29). The code shows what happens, not what was meant, so read each one as a question for its owner.
+
 ## Step 3. Add tests that assert today's behaviour
 
 For each criterion add a test that passes on the unchanged code and assert what it does now. Mark each test with its requirement and

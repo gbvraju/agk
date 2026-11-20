@@ -1,0 +1,1 @@
+- Personal mode: `docs/guides/personal-mode.md` takes one developer from install at user scope to detach with every command and setting the code accepts (a test keeps the two in step), the security guide says what personal mode keeps on the machine, and a recorded walk on an invented project shows the product untouched (brief #1510, ADR-0640)
