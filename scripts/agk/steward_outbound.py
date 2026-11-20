@@ -33,7 +33,9 @@ FORGES = frozenset({"github.com", "gitlab.com", "bitbucket.org"})
 LISTS = ("config/neutrality.txt", "kit/templates/neutrality.txt")  # the second only where present
 RULE = "SPEC-0059 rule 6"
 REWRITE = "; rewrite it with invented names (example.com)"
-URL = re.compile(r"(?i)\b(?:https?|ssh|git)://(?:[^@/\s]+@)?([a-z0-9.-]+)(?::\d+)?(/[^\s)>\]\"'`]*)?")
+URL = re.compile(
+    r"(?i)\b(?:https?|ssh|git)://(?:[^@/\s]+@)?([a-z0-9.-]+)(?::\d+)?(/[^\s)>\]\"'`]*)?"
+)
 SCP = re.compile(r"(?i)\b[\w.-]+@([a-z0-9.-]+\.[a-z]{2,}):([\w.-]+/[\w.-]+)")
 REPO_REFS = (
     re.compile(r"\brepos/([\w.-]+/[\w.-]+)"),

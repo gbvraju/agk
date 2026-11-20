@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import personal_table, repo_root, utf8_output  # noqa: E402
+from common import OUTSIDE_PROJECT, CheckError, personal_table, repo_root, utf8_output  # noqa: E402
 
 WHO = "Who: AGK steward"
 MAX_DAYS = 14
@@ -265,7 +265,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("daily")
     sub.add_parser("bundle").add_argument("--question", type=Path, required=True)
     opts = parser.parse_args(argv)
-    root, now = repo_root(), datetime.now(UTC)
+    try:
+        root = repo_root()
+    except CheckError:
+        print(OUTSIDE_PROJECT)
+        return 3
+    now = datetime.now(UTC)
     if opts.command == "bundle":
         print(recheck_bundle(json.loads(opts.question.read_text(encoding="utf-8"))))
         return 0

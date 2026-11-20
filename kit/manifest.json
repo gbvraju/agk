@@ -218,6 +218,9 @@
   "extendable": {
     ".gitignore": "hash"
   },
+  "project_keys": {
+    ".claude/settings.json": ["agent"]
+  },
   "snapshot": [
     ".claude-plugin/",
     ".claude/agents/",

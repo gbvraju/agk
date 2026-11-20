@@ -259,7 +259,7 @@ def greeting() -> list[str]:
 
 
 def test_the_role_file_reads_the_outside_line_and_gives_the_three_line_greeting():
-    assert OUTSIDE in ROLE and "steward.py first-run" in ROLE
+    assert OUTSIDE in ROLE and "python3 <kit>/steward.py first-run" in ROLE
     lines = greeting()
     assert len(lines) == 3
     assert lines[0].startswith("👋 You've got AGK")
@@ -271,3 +271,15 @@ def test_the_role_file_reads_the_outside_line_and_gives_the_three_line_greeting(
 def test_the_role_file_names_each_first_step():
     for step in ("greet", "greeted", "adopt", "project", "kit"):
         assert f"`{step}`" in ROLE, step
+
+
+def test_uninstall_reads_a_named_copy_as_the_kits(tmp_path):
+    import uninstall
+
+    table = json.loads((ROOT / "kit" / "hashes.json").read_text(encoding="utf-8"))
+    released = {h for row in table["releases"].values() for h in row["verbatim"].get(SETTINGS, [])}
+    named = common.with_agent(KIT_SETTINGS, "steward")
+    assert hashlib.sha256(common.without_agent(SETTINGS, named)).hexdigest() in released | RELEASED
+    assert common.without_agent(SETTINGS, named) == KIT_SETTINGS
+    assert "without_agent(rel, data)" in (SCRIPTS / "uninstall.py").read_text(encoding="utf-8")
+    assert uninstall.without_agent is common.without_agent

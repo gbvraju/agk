@@ -128,7 +128,9 @@ from common import (  # noqa: E402
     router_wanted,
     utf8_output,
     with_router_names,
+    without_agent,
 )
+from common import starts_unnamed as starts_unnamed_text  # noqa: E402
 from tree_walk import FRONTEND_PATTERNS, SKIP_DIRS, walked_dirs  # noqa: E402
 
 import config as models  # noqa: E402
@@ -1483,7 +1485,7 @@ def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
     if any(starts_unnamed(Path(w) if Path(w).is_absolute() else root / w) for w in named):
         return Result(  # SPEC-0066 rule 5 (brief #1582, ADR-0662): a warning, never a refusal
             "fail",
-            message="the launch adapter starts claude without --agent; pass --agent \"$AGK_AGENT\" "
+            message='the launch adapter starts claude without --agent; pass --agent "$AGK_AGENT" '
             f"as the kit's adapter {file} does (setting: flow.launch_adapter)",
         )
     return Result("ok", message="auto_start on, the adapter is there")
@@ -1495,7 +1497,7 @@ def starts_unnamed(path: Path) -> bool:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return False
-    return re.search(r"(?<![\w./-])claude[ \t]", text) is not None and "--agent" not in text
+    return starts_unnamed_text(text)
 
 
 def model_names_result(root: Path) -> Result:
@@ -1759,6 +1761,7 @@ def lf(data: bytes) -> bytes:
 def same_file(rel: str, data: bytes, kit: bytes) -> bool:
     """DATA equals the kit's copy; for the router, with its `workflow_run` list read as the kit's
     (the names are the project's, brief #285)."""
+    data = without_agent(rel, data)  # the project's agent line (SPEC-0066 rule 2, ADR-0663)
     if data == kit or rel != ROUTER_WORKFLOW:
         return data == kit
     try:

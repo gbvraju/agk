@@ -112,6 +112,7 @@ def test_ac2_manifest_shape_and_version():
         "rendered",
         "adopt",
         "extendable",
+        "project_keys",
         "snapshot",
     }
     assert m["kit_tests"] == "tests/kit" and (KIT_ROOT / m["kit_tests"]).is_dir()
