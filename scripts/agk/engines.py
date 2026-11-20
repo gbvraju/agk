@@ -65,6 +65,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from check_adrs import validate as validate_adr
+from check_playbooks import composed
 from common import (
     REQ_ID,
     CheckError,
@@ -79,8 +80,8 @@ from common import (
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
+from playbook_format import BASE, WORK_TYPES, declaration, discovery, selected
 from playbook_format import FOLDER as PLAYBOOKS
-from playbook_format import WORK_TYPES, declaration, discovery, selected
 from playbook_format import problems as playbook_problems
 from pr_body import brief_option, prepare, print_body
 
@@ -163,7 +164,9 @@ NOT_A_PATH = {*PROFILES, *TESTING_KEYS, "[testing]"}
 # Brief #663 (ADR-0316): the playbook's practices in the skeleton. A map suggestion is one
 # backticked `<code> -> <tests>` pair; the arrow tells it from an `always_full` path.
 MAP_ARROW = " -> "
-PRACTICES_TODO = "   - TODO(architect): check (step: "
+PRACTICES_HEAD = "2. **Practices**"  # brief #1587: the gate bullets open the item
+PRACTICES_SLOT = "{{practices}}"  # each option's `Practices:`, the item's names (SPEC-0072 rule 4)
+PRACTICE_NAME = re.compile(r"^   - ([^:\n]+): (?:check|judgement)\b")
 SELECTION_LINE = re.compile(r"^(\s*-\s+test selection:\s+(?:check|judgement))\s+\(.*\)\s*$")
 
 
@@ -318,6 +321,7 @@ def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
     text = text.replace("{{adr}}", adr).replace("{{date}}", today)
     if playbook is not None:
         text = with_playbook(text, *playbook)
+    text = with_names(text)
     path = root / "docs" / "adr" / f"{adr}-stack-options.md"
     path.write_text(text, encoding="utf-8")
     print(f"wrote docs/adr/{path.name}")
@@ -331,8 +335,9 @@ def playbook_practices(root: Path) -> tuple[list[str], str] | None:
     work_type, found = declaration(root)
     if found:
         raise CheckError(found[0])
-    if work_type is None:
-        return None
+    if work_type is None:  # SPEC-0072 rule 4 and `Q-S0072-17`: `default.toml`'s part alone
+        base = root / PLAYBOOKS / f"{BASE}.toml"
+        return (gate_bullets(base, root, BASE), "") if base.is_file() else None
     path = selected(root)
     if path is None or playbook_problems(path, root):
         raise CheckError(
@@ -340,12 +345,7 @@ def playbook_practices(root: Path) -> tuple[list[str], str] | None:
         )
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     mark = f"(playbook {work_type})"
-    bullets = []
-    for gate in data["gates"]:
-        if gate["kind"] == "check":
-            bullets.append(f"   - {gate['id']}: check (step: {gate['step']}) {mark}\n")
-        else:
-            bullets.append(f"   - {gate['id']}: judgement {mark}\n")
+    bullets = gate_bullets(path, root, work_type)
     testing = data["testing"]
     always = ", ".join(f"`{p}`" for p in testing["always_full"]) or "none"
     entries = ", ".join(f"`{e['code']}{MAP_ARROW}{e['tests']}`" for e in testing["map"]) or "none"
@@ -353,20 +353,46 @@ def playbook_practices(root: Path) -> tuple[list[str], str] | None:
     return bullets, proposal
 
 
+def gate_bullets(path: Path, root: Path, name: str) -> list[str]:
+    """SPEC-0072 rule 4 (brief #1587): one bullet per gate of the composed playbook (`default`,
+    the modules, then the playbook), the enterprise gates included, marked with the playbook."""
+    gates, _, found = composed(path, root)
+    if found:
+        raise CheckError(
+            "rule 6: the declared playbook fails check_playbooks.py (setting: work_type)"
+        )
+    mark = f"(playbook {name})"
+    bullets = []
+    for gate in gates:
+        if gate["kind"] == "check":
+            bullets.append(f"   - {gate['id']}: check (step: {gate['step']}) {mark}\n")
+        else:
+            bullets.append(f"   - {gate['id']}: judgement {mark}\n")
+    return bullets
+
+
 def with_playbook(text: str, bullets: list[str], proposal: str) -> str:
-    """The skeleton with the gate bullets after the template's `TODO(architect)` practice and the
-    proposal in the `test selection` parenthesis, once per option; nothing else changes."""
+    """The skeleton with the gate bullets first in the Practices item and the proposal, when there
+    is one, in the `test selection` parenthesis, once per option; nothing else changes."""
     letters = [m.group(1) for m in map(OPTION.match, text.splitlines()) if m]
     inside = "; ".join(f"Option {x}: {proposal}" for x in letters) or proposal
     out: list[str] = []
     for line in text.splitlines(keepends=True):
         m = SELECTION_LINE.match(line)
-        if m:
+        if m and proposal:
             line = f"{m.group(1)} ({inside})\n"
         out.append(line)
-        if line.startswith(PRACTICES_TODO):
+        if line.startswith(PRACTICES_HEAD):
             out += bullets
     return "".join(out)
+
+
+def with_names(text: str) -> str:
+    """SPEC-0072 rule 4 (brief #1587): each option's `Practices:` names every practice of the
+    Practices item, so no `TODO(architect)` stays there; the architect may still change them."""
+    item = text[text.index(PRACTICES_HEAD) :].split("\n3. ", 1)[0]
+    names = [m.group(1) for m in map(PRACTICE_NAME.match, item.splitlines()) if m]
+    return text.replace(PRACTICES_SLOT, ", ".join(names))
 
 
 def practice_names(option_text: str) -> list[str]:

@@ -13,10 +13,9 @@ TODO(architect): what the product needs from a stack, as the owner gave it in th
 ## Decision
 
 1. **Options**
-   - Option A — TODO(architect). Trade-offs: TODO(architect). External services: TODO(architect). Practices: TODO(architect).
-   - Option B — TODO(architect). Trade-offs: TODO(architect). External services: TODO(architect). Practices: TODO(architect).
+   - Option A — TODO(architect). Trade-offs: TODO(architect). External services: TODO(architect). Practices: {{practices}}.
+   - Option B — TODO(architect). Trade-offs: TODO(architect). External services: TODO(architect). Practices: {{practices}}.
 2. **Practices**
-   - TODO(architect): check (step: the governance step the adopting build adds) or judgement
    - local profile: check (step: a smoke test that starts the local profile and signs in with the stand-in identity)
    - fast CI: check (step: `agk doctor` reports ci-drafts and ci-concurrency ok for each workflow of required_checks; the five defaults of the kit's guide project-ci.md)
    - fast tests: check (step: the full project suite runs in budget_seconds or less on the CI runner, with tests in parallel, a template database copied per test, no network in tests and cached dependencies)

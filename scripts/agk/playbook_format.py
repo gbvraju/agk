@@ -34,6 +34,10 @@ the work type and the milestone shape; and the problems that refuse the split, e
 the file and the key, never a value. With no declaration there is nothing to print and no problem.
 Nothing is written.
 
+The foundation kind (SPEC-0072 rule 4; REQ-079 AC3; brief #1587, ADR-0667): every shipped
+`brief_order` starts with `foundation`; in the split, a kind that no `depends_on` pair orders after
+another depends on `foundation` when the order holds it, so every other kind follows it.
+
 The discovery questions (SPEC-0048 rule 4, SPEC-0038 rule 2 as amendment 130 widens it; REQ-055
 AC2; brief #686): every playbook holds `[[discovery]]` entries (`id`, a lower-case slug, and `text`,
 one plain question) with at least the five ids of `DISCOVERY_IDS`, each id once; `discovery(path)`
@@ -189,6 +193,7 @@ ENTERPRISE = (
 REASON_MIN = 20
 STACKS = "config/stack-signals.toml"
 SPEC72 = "SPEC-0072 rule 2"
+FOUNDATION = "foundation"  # SPEC-0072 rule 4: the first kind of every `brief_order`
 ARCH_KEYS = ({"layers": TABLES}, {"allow": TABLES})
 LAYER_KEYS = {"name": STR, "paths": STRS}
 ALLOW_KEYS = ({"from": STR, "to": STR}, {"adr": STR})
@@ -741,6 +746,8 @@ def _blocks(data: dict, goal: str, only: str | None) -> list[str]:
         out.append(f"{number}. {goal}: {kind}" if goal else f"{number}. {kind}")
         out.append(f"   Kind: {kind}")
         earlier = sorted({e for later, e in pairs if later == kind}, key=order.index)
+        if not earlier and kind != FOUNDATION and FOUNDATION in order:  # SPEC-0072 rule 4
+            earlier = [FOUNDATION]
         out += [f"   Depends-on: #<{e} brief>" for e in earlier]
         out.append(f"   lane: {lanes.get(kind, 'none')}")
     return out

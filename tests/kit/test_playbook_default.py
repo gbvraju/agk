@@ -113,7 +113,7 @@ def test_a_verdict_has_one_evidence_item_per_gate() -> None:
 def test_the_base_invents_no_order_of_work_and_no_claim() -> None:
     playbook = data()
     assert playbook["phases"] == [] and playbook["lanes"] == []
-    assert playbook["split"] == {"brief_order": [], "depends_on": []}
+    assert playbook["split"] == {"brief_order": ["foundation"], "depends_on": []}  # SPEC-0072
     assert playbook["heavy_steps"] == []
     assert playbook["claims"] == []
     assert playbook["testing"] == {"profile": "balanced", "always_full": [], "map": []}

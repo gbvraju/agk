@@ -109,6 +109,11 @@ repository folder; a link holding `://` is not one), a brief key (a brief file's
 request`, `PR rate`, whole words, any case, plurals too), as `rule 10: <file>:<line>: <kind>`,
 never the text.
 
+Brief #1587, SPEC-0072 rule 4 (ADR-0667): with `[delivery] work_type` set, the brief files hold
+one `Kind: foundation` brief in the first milestone and every other brief of that milestone names it
+on a `Depends-on:` line, so no feature brief runs before the foundation; with no work type a
+foundation brief is refused naming the setting, and nothing else is held (`Q-S0072-17`).
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
@@ -126,6 +131,7 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import playbook_format
 from common import (
     REQ_HEADER,
     ac_markers_for,
@@ -711,6 +717,38 @@ def briefs(root: Path) -> list[tuple[str, str | None, list[str]]]:
         text = _read(path) or ""
         advances = re.split(r"[,\s]+", _line_value(text, "Advances") or "")
         out.append((path.stem, _line_value(text, "Milestone"), [a for a in advances if a]))
+    return out
+
+
+def foundation_problems(root: Path) -> list[str]:
+    """SPEC-0072 rule 4 (brief #1587): with a declared work type, one brief file `Kind: foundation`
+    in the first milestone, and every other brief file of that milestone `Depends-on:` it; with no
+    work type, no foundation brief (rule 8's hold). Each line names the rule and the key."""
+    where, folder = "SPEC-0072 rule 4", root / BRIEFS
+    files = sorted(folder.rglob("*.md")) if folder.is_dir() else []
+    read = [(p.stem, _read(p) or "") for p in files]
+    kind = f"Kind: {playbook_format.FOUNDATION}"
+    found = [(k, t) for k, t in read if kind in [ln.strip() for ln in t.splitlines()]]
+    if playbook_format.declaration(root)[0] is None:
+        return [
+            f"{where}: {k}: a foundation brief while no work type is set (setting: work_type)"
+            for k, _ in found
+        ]
+    if not read:
+        return []
+    if len(found) != 1:
+        many = "more than one brief is" if found else "no brief is"
+        return [f"{where}: {BRIEFS}: {many} {kind} (setting: work_type)"]
+    key, text = found[0]
+    first, home = (milestones(root) or [None])[0], _line_value(text, "Milestone")
+    if first is not None and home != first:
+        return [f"{where}: {key}: the foundation brief is not in the first milestone"]
+    out = []
+    for other, body in read:
+        named = [ln.strip() for ln in body.splitlines() if ln.strip().startswith("Depends-on:")]
+        after = any(key in re.split(r"[,\s]+", ln[len("Depends-on:") :]) for ln in named)
+        if other != key and _line_value(body, "Milestone") == home and not after:
+            out.append(f"{where}: {other}: runs before the foundation brief (no Depends-on: {key})")
     return out
 
 
@@ -1316,6 +1354,7 @@ def cmd_check(
         lines += plan.rule_lines(facts is not None) + plan.access_lines(facts is not None)
         print("\n".join(lines))
     problems += plan.problems() + scope_lock_problems(root) + scope_problems(root, comments, base)
+    problems += foundation_problems(root)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     for line in plan.unmatched():

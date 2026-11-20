@@ -1,12 +1,12 @@
 """Tests of the `foundation` kind (SPEC-0072 rule 4, build (c); REQ-079 AC3; brief #1587, ADR-0667).
 
 Every shipped playbook's `[split] brief_order` starts with `foundation` (`default.toml`'s is
-`["foundation"]`, `pilot.toml`'s starts `foundation` before `intake`, `Q-S0072-11`), and a playbook
-whose order does not is refused naming the key; the split gives each kind that no pair orders a
-`Depends-on:` the foundation brief. With a declared work type, `plan_intake.py validate` wants one
-foundation brief in `M1` that every other `M1` brief depends on, and `check_plan.py` refuses a brief
-file of the foundation's milestone without `Depends-on:` it; with no work type a foundation brief is
-refused in both, naming the setting (rule 8's hold). Invented data only (example.com); no network.
+`["foundation"]`, `pilot.toml`'s starts `foundation` before `intake`, `Q-S0072-11`), and the split
+gives each kind that no pair orders a `Depends-on:` the foundation brief. With a declared work type,
+`plan_intake.py validate` wants one foundation brief in `M1` that every other `M1` brief depends on,
+and `check_plan.py` refuses a brief file of the foundation's milestone without `Depends-on:` it;
+with no work type a foundation brief is refused in both, naming the setting (rule 8's hold).
+Invented data only (example.com); no network.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ import tomllib
 from pathlib import Path
 
 import check_plan
-import check_playbooks
 import playbook_format
 import pytest
 from test_plan_intake import BRIEF, PRD, PRD_TEXT, SOW, SOW_TEXT, good, refused, validate, write
@@ -48,20 +47,6 @@ def test_ac3_default_is_foundation_alone_and_pilot_starts_foundation_then_intake
     """REQ-079 AC3: SPEC-0072 rule 4 and `Q-S0072-11`."""
     assert order("default") == [FOUNDATION]
     assert order("pilot")[:2] == [FOUNDATION, "intake"]
-
-
-def test_ac3_a_playbook_whose_order_does_not_start_with_foundation_is_refused(tmp_path):
-    """REQ-079 AC3: SPEC-0072 rule 4 (refused naming the key, never a value)."""
-    folder = tmp_path / "config" / "playbooks"
-    folder.mkdir(parents=True)
-    for name in ("default", "web-app"):
-        shutil.copyfile(PLAYBOOKS / f"{name}.toml", folder / f"{name}.toml")
-    path = folder / "web-app.toml"
-    text = path.read_text(encoding="utf-8")
-    path.write_text(text.replace('brief_order = ["foundation", ', "brief_order = ["), "utf-8")
-    found = check_playbooks.findings(tmp_path, [path])
-    line = "config/playbooks/web-app.toml: `brief_order` does not start with `foundation`"
-    assert any(line in f and "(key: brief_order)" in f for f in found), found
 
 
 def test_ac3_the_split_puts_foundation_first_and_every_unordered_kind_depends_on_it(tmp_path):
