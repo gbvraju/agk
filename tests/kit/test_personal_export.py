@@ -61,7 +61,10 @@ Invented.
 """
 BRIEF = "# Brief: Empty the cart faster\n\nAdvances REQ-101 under SPEC-0001.\n"
 CLOSED_BRIEF = "# Brief: An old item\n\n- Status: closed\n"
-LOG_ROW = "| 2026-11-18 | The cart empties at once (SPEC-0001) | invented | ADR-0001 | member-example-1 |\n"
+LOG_ROW = (
+    "| 2026-11-18 | The cart empties at once (SPEC-0001) | invented | ADR-0001 "
+    "| member-example-1 |\n"
+)
 NOTE = "The checkout code is slow on Mondays (invented).\n"
 TEST_FILE = "def test_empty():\n    assert True\n"
 
@@ -145,8 +148,13 @@ def export(side: Path, target: Path, *flags: str, monkeypatch=None) -> tuple[int
     if monkeypatch is not None:
         for key, value in IDENTITY.items():
             monkeypatch.setenv(key, value)
-    code, lines = personal.export(side, target, write="--write" in flags,
-                                  branch=_branch(flags), with_notes="--with-notes" in flags)  # fmt: skip
+    code, lines = personal.export(
+        side,
+        target,
+        write="--write" in flags,
+        branch=_branch(flags),
+        with_notes="--with-notes" in flags,
+    )
     return code, "\n".join(lines)
 
 
@@ -205,8 +213,15 @@ def test_req_048_ac7_export_prints_issue_commands_for_open_briefs_and_runs_none(
     tmp_path, monkeypatch
 ):
     side, target = sidecar(tmp_path / "side"), product(tmp_path / "product", installed=True)
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    ran = tmp_path / "gh-ran"
+    (fake / "gh").write_text(f"#!/bin/sh\ntouch {ran}\n", encoding="utf-8")
+    (fake / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake}{os.pathsep}{os.environ.get('PATH', '')}")
     code, out = export(side, target, "--write", monkeypatch=monkeypatch)
     assert code == 0, out
+    assert not ran.exists()  # printed, never run
     commands = [x for x in out.splitlines() if "gh issue create" in x]
     assert len(commands) == 1  # the closed brief has none
     assert "Empty the cart faster" in commands[0] and "docs/briefs/empty-cart.md" in commands[0]
@@ -302,7 +317,8 @@ def test_req_048_ac7_check_fails_naming_the_count_and_the_first_unmapped_id(tmp_
     code, lines = personal.export_check(side)
     assert code == 1
     assert lines[-1] == (
-        "export --check: failed: 1 record not in export-map.json, first ADR-0002 (SPEC-0041 rule 25)"
+        "export --check: failed: 1 record not in export-map.json, first ADR-0002 "
+        "(SPEC-0041 rule 25)"
     )
 
 
