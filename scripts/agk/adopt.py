@@ -5,7 +5,11 @@
 """agk adopt: install the kit into an existing repository, touching no product file (SPEC-0002).
 
 Usage: python3 scripts/agk/adopt.py TARGET [--dry-run] [--unreleased]
-           [--login-from-env] [--solo] [--project-tests CMD]
+           [--login-from-env] [--solo] [--project-tests CMD] [--layout plugin [--rehearsal]]
+
+`--layout plugin` (SPEC-0071 rule 2 as amendment 211 proposes, brief #1603, ADR-0683) adopts the
+project clean, as init does: no kit file in the adopt commit but rule 2's, the short CLAUDE.md as
+its marked block, and `execution = "local"` with the `[kit]` table; the same refusals as init's.
 
 The setup flags (SPEC-0062 rule 11, brief #1599, ADR-0679), passed by the steward: the login in
 AGK_SETUP_LOGIN on both reviewer lines (never printed), `review_mode = "solo"` with its ADR line
@@ -44,6 +48,8 @@ from common import (
 )
 from init import (
     CREATE_ONLY,
+    LAYOUT_LINE,
+    LAYOUT_USAGE,
     DATE_RE,
     KIT_ROOT,
     MANIFEST,
@@ -55,11 +61,16 @@ from init import (
     Refusal,
     apply_setup,
     check_interpreter,
+    clean_claude,
+    clean_kept,
+    clean_refusal,
+    clean_toml,
     install_mode,
     kit_bytes,
     name_agent,
     passes_symlink,
     path_class,
+    layout_args,
     plugin_settings,
     print_branch_rules,
     release_problem,
@@ -154,7 +165,7 @@ def existing_protected_files(target: Path, entries: list[str], owned: set[str]) 
     return sorted(found)
 
 
-def build_plan(target: Path, today: str, setup: dict | None = None):
+def build_plan(target: Path, today: str, setup: dict | None = None, clean: bool = False):
     """(plan entries (rel, action, content, detail), protected entries, default branch)."""
     manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
     spec = manifest["adopt"]
@@ -195,13 +206,18 @@ def build_plan(target: Path, today: str, setup: dict | None = None):
     }
     created: dict[str, bytes] = {}
     for rel in sorted(verbatim - set(spec["skip"]) - set(spec["blocks"])):
-        created[rel] = kit_bytes(KIT_ROOT / rel)
+        if not clean or clean_kept(rel):  # the clean layout keeps only rule 2's kit files
+            created[rel] = kit_bytes(KIT_ROOT / rel)
     name_agent(created)
     for dest, src in spec["templates"].items():
         created[dest] = render((KIT_ROOT / src).read_text(encoding="utf-8"), variables, src).encode(
             "utf-8"
         )
     apply_setup(created, setup)
+    if clean:
+        created["agk.toml"] = clean_toml(
+            created["agk.toml"].decode("utf-8"), variables["kit_version"]
+        ).encode("utf-8")
     reviewers_text = created["config/reviewers.yaml"].decode("utf-8")
     codeowners = render_codeowners(parse(reviewers_text))
 
@@ -211,6 +227,8 @@ def build_plan(target: Path, today: str, setup: dict | None = None):
     for rel, style in sorted(spec["blocks"].items()):
         source = block_source(manifest, rel)
         body = codeowners if rel == ".github/CODEOWNERS" else (KIT_ROOT / source).read_text("utf-8")
+        if clean and rel == "CLAUDE.md":
+            body = clean_claude(variables)
         plan.append(classify_block(target, rel, style, body, entries))
     return sorted(plan), entries, branch
 
@@ -266,9 +284,14 @@ def main(argv: list[str] | None = None) -> int:
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1
-    if len(rest) != 1 or rest[0].startswith("-"):
-        print(f"usage: adopt.py TARGET [--dry-run] [--unreleased] {SETUP_USAGE}", file=sys.stderr)
+    layout = layout_args(rest)
+    if layout is None or len(layout[0]) != 1 or layout[0][0].startswith("-"):
+        print(
+            f"usage: adopt.py TARGET [--dry-run] [--unreleased] {SETUP_USAGE} {LAYOUT_USAGE}",
+            file=sys.stderr,
+        )
         return 2
+    rest, clean, rehearsal = layout
     try:
         problem = check_interpreter(tuple(sys.version_info[:3]))
         if problem:
@@ -284,12 +307,15 @@ def main(argv: list[str] | None = None) -> int:
         mode = install_mode(target)
         if mode == "init":
             raise Refusal("TARGET is already installed by init (path class agk.toml)")
+        if clean:
+            clean_refusal(target, rehearsal)
         not_released = release_problem(KIT_ROOT)
         if not_released and not unreleased:
             print(f"refused: {not_released}; {REF_HINT}; nothing was written")
             print(plugin_settings())
             return 1
-        plan, entries, branch = build_plan(target, datetime.now(UTC).date().isoformat(), setup)
+        today = datetime.now(UTC).date().isoformat()
+        plan, entries, branch = build_plan(target, today, setup, clean)
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1
@@ -301,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"notice: {UNRELEASED}: {not_released.replace(PLUGINS, 'the kit files', 1)}")
     for rel, action, _, detail in plan:
         print(f"{action} {rel}{detail}")
+    if clean:
+        print(LAYOUT_LINE)
     if any(action == "conflict" for _, action, _, _ in plan):
         print("refused: existing files differ; nothing was written")
         print_branch_rules(branch, "adopt")

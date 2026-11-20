@@ -5,7 +5,13 @@
 """agk init: install the kit into an empty repository (SPEC-0001).
 
 Usage: python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased]
-           [--login-from-env] [--solo] [--project-tests CMD]
+           [--login-from-env] [--solo] [--project-tests CMD] [--layout plugin [--rehearsal]]
+
+`--layout plugin` (SPEC-0071 rule 2 as amendment 211 proposes, brief #1603, ADR-0683) starts the
+project in the clean layout: only the files the migration of rule 8 keeps, the short CLAUDE.md and
+`execution = "local"` with the `[kit]` table; no kit script, hook, agent, workflow or guide. It
+refuses as `upgrade.py --clean-repo` does: in personal mode, with another `execution`, and until
+the rehearsal's proof is held (rule 11) unless `--rehearsal` on the sample project.
 
 The setup flags (SPEC-0062 rule 11, brief #1599, ADR-0679), passed by the steward: the login in
 AGK_SETUP_LOGIN on both reviewer lines (never printed), `review_mode = "solo"` with its ADR line
@@ -50,6 +56,7 @@ from common import (
     with_router_names,
 )
 from common import required_checks as configured_checks
+from rehearsal import proof_held
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -92,6 +99,25 @@ SOLO_ADR = (
     "   (SPEC-0062 rule 2 as amendment 208 proposes); the steward records it as a `Setup:`\n"
     "   entry and never changes it later.\n"
 )
+
+# SPEC-0071 rule 2 (brief #1603, ADR-0683): the clean layout from the first commit. The kit files
+# a clean project keeps are upgrade.py's CLEAN_KEPT (a test keeps the two equal; init imports no
+# module that runs a process); every file the kit renders for the project stays, as rule 8 keeps it.
+LAYOUT_USAGE = "[--layout plugin [--rehearsal]]"
+CLEAN_KEPT = (
+    ".gitignore",
+    "CLAUDE.md",
+    "LICENSE-AGK",
+    ".github/ISSUE_TEMPLATE/",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "agk.toml",
+)
+CLEAN_TEMPLATE = "kit/templates/clean-claude.md"
+LAYOUT_LINE = (
+    'layout: plugin; the kit runs from the plugin, pinned by [kit] plugin_version, with execution = '
+    '"local" (SPEC-0071 rules 2, 5 and 6)'
+)
+EXECUTION_LINE = re.compile(r'(?m)^# execution = "hosted"$')
 
 
 class Refusal(Exception):
@@ -209,6 +235,74 @@ def setup_args(args: list[str]) -> tuple[list[str], dict]:
     return rest, setup
 
 
+def layout_args(args: list[str]) -> tuple[list[str], bool, bool] | None:
+    """(the rest, clean, rehearsal) out of ARGS, or None for a usage error: `--layout` takes only
+    `plugin`, and `--rehearsal` only beside it."""
+    rest, clean, rehearsal = [], False, False
+    words = iter(args)
+    for word in words:
+        if word == "--layout":
+            if next(words, None) != "plugin" or clean:
+                return None
+            clean = True
+        elif word == "--rehearsal":
+            rehearsal = True
+        else:
+            rest.append(word)
+    if rehearsal and not clean:
+        return None
+    return rest, clean, rehearsal
+
+
+def clean_refusal(target: Path, rehearsal: bool) -> None:
+    """The refusals of rule 8 and rule 11 before any write, naming the setting or the proof, never
+    a value: personal mode, an `execution` other than local in TARGET's agk.toml, and no proof."""
+    data: dict = {}
+    if (target / "agk.toml").exists():
+        try:
+            data = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            raise Refusal("agk.toml is not readable TOML (path class agk.toml)") from None
+    if "personal" in data:
+        raise Refusal("personal mode keeps the kit out of the product already (setting: forge)")
+    if data.get("execution", "local") != "local":
+        raise Refusal("the clean layout runs only in local mode (setting: execution)")
+    if not rehearsal and not proof_held(KIT_ROOT):
+        raise Refusal(
+            "the rehearsal's four figures are not written and accepted yet (the proof of SPEC-0071 "
+            "rule 11, rehearsal.py check); only --rehearsal on a sample project runs"
+        )
+
+
+def clean_kept(rel: str) -> bool:
+    return rel in CLEAN_KEPT or rel.startswith(tuple(r for r in CLEAN_KEPT if r.endswith("/")))
+
+
+def clean_claude(variables: dict[str, str]) -> str:
+    """The short project CLAUDE.md of rule 2, from the plugin's template."""
+    short = {"project": variables["project"], "kit_version": variables["kit_version"]}
+    return render((KIT_ROOT / CLEAN_TEMPLATE).read_text(encoding="utf-8"), short, CLEAN_TEMPLATE)
+
+
+def clean_toml(text: str, version: str) -> str:
+    """agk.toml in the clean layout: `execution = "local"` (rule 5) and the `[kit]` table last."""
+    text, count = EXECUTION_LINE.subn('execution = "local"', text, count=1)
+    if not count:
+        raise Refusal("the agk.toml template has no execution line (path class kit/templates/)")
+    sep = "" if text.endswith("\n") else "\n"
+    return f'{text}{sep}\n[kit]\nlayout = "plugin"\nplugin_version = "{version}"\n'
+
+
+def apply_clean(items: dict[str, bytes], kit_files: set[str], variables: dict[str, str]) -> None:
+    """Drops every kit file but rule 2's, and writes the short CLAUDE.md and the clean agk.toml."""
+    for rel in [r for r in items if r in kit_files and not clean_kept(r)]:
+        del items[rel]
+    if "CLAUDE.md" in items:
+        items["CLAUDE.md"] = clean_claude(variables).encode("utf-8")
+    toml = clean_toml(items["agk.toml"].decode("utf-8"), variables["kit_version"])
+    items["agk.toml"] = toml.encode("utf-8")
+
+
 def apply_setup(items: dict[str, bytes], setup: dict | None) -> None:
     """The steward's setup in the install (SPEC-0062 rule 11): the reviewers file, the settings
     and, for solo, the ADR's line. Refused, naming the setting, when solo has no one person."""
@@ -245,7 +339,7 @@ def path_class(rel: str, entries: list[str]) -> str:
 
 
 def build_items(
-    target: Path, today: str, setup: dict | None = None
+    target: Path, today: str, setup: dict | None = None, clean: bool = False
 ) -> tuple[list[tuple[str, bytes]], list[str], str]:
     """Every file init manages as (relative path, content), protected entries, default branch."""
     manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
@@ -270,6 +364,8 @@ def build_items(
         items[ROUTER_WORKFLOW] = router_bytes(target, items[ROUTER_WORKFLOW], items["agk.toml"])
     name_agent(items)
     apply_setup(items, setup)
+    if clean:
+        apply_clean(items, {*manifest["verbatim"], *extra}, variables)
     codeowners = render_codeowners(parse(items["config/reviewers.yaml"].decode("utf-8")))
     items[".github/CODEOWNERS"] = codeowners.encode("utf-8")
     entries = read_list(items["config/protected-paths.txt"].decode("utf-8"))
@@ -431,9 +527,14 @@ def main(argv: list[str] | None = None) -> int:
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1
-    if len(rest) != 1 or rest[0].startswith("-"):
-        print(f"usage: init.py TARGET [--dry-run] [--unreleased] {SETUP_USAGE}", file=sys.stderr)
+    layout = layout_args(rest)
+    if layout is None or len(layout[0]) != 1 or layout[0][0].startswith("-"):
+        print(
+            f"usage: init.py TARGET [--dry-run] [--unreleased] {SETUP_USAGE} {LAYOUT_USAGE}",
+            file=sys.stderr,
+        )
         return 2
+    rest, clean, rehearsal = layout
     try:
         problem = check_interpreter(tuple(sys.version_info[:3]))
         if problem:
@@ -446,12 +547,15 @@ def main(argv: list[str] | None = None) -> int:
             raise Refusal("TARGET is the kit checkout or inside it (path class kit/)")
         if install_mode(target) == "adopt":
             raise Refusal("TARGET was installed by adopt (path class agk.toml); init refuses")
+        if clean:
+            clean_refusal(target, rehearsal)
         not_released = release_problem(KIT_ROOT)
         if not_released and not unreleased:
             print(f"refused: {not_released}; {REF_HINT}; nothing was written")
             print(plugin_settings())
             return 1
-        items, entries, branch = build_items(target, datetime.now(UTC).date().isoformat(), setup)
+        today = datetime.now(UTC).date().isoformat()
+        items, entries, branch = build_items(target, today, setup, clean)
         plan = classify(target, items, entries)
     except Refusal as exc:
         print(f"refused: {exc}")
@@ -464,6 +568,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"notice: {UNRELEASED}: {not_released.replace(PLUGINS, 'the kit files', 1)}")
     for rel, action, _, detail in plan:
         print(f"{action} {rel}{detail}")
+    if clean:
+        print(LAYOUT_LINE)
     added = found_test_dirs(target)
     if added:
         print(f"test_dirs: added {', '.join(added)} (front-end and end-to-end test folders found)")
