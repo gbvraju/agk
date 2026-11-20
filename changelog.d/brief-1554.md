@@ -1,0 +1,1 @@
+- A comment or a finished run starts a GitHub job only when it can change something: a fresh conductor lease is not written again, `Answer:` wakes the router, and the repository variable `AGK_MERGER = off` keeps merger jobs that would only read `off` from starting; the doctor offers the one command (brief #1554)

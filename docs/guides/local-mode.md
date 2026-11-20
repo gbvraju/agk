@@ -365,12 +365,16 @@ Local mode uses the same three `[flow]` settings, labels and comments as CI mode
 For example, `owner_rest_hours = "20:00-08:00"` and `owner_utc_offset = "+05:30"`. Then it is labelled `agk:parked`, its
 builder hands over and moves on, and the parked pull request no longer takes a builder slot. When the owner answers, the
 router's own run on that answer comment unparks it within seconds (a `Maintainer answer:`, an `Approve:` or a
-`Correction:`; an `Answer:` once the route workflow's trigger lists it), the supervisor's next pass unparks it when the
+`Correction:` or an `Answer:`), the supervisor's next pass unparks it when the
 router could not, even while a conductor job still runs, and the next `conductor.py sweep` prints its `resume --pr <n>`
 command, before new briefs. Every park and unpark reads the pull request again just before it writes, so an answer
 posted at the moment of the park is never missed: the park is undone in the same step and no second answer is needed.
 A park ends when the item it waited for is answered, whenever that answer was posted, and never on an answer to another
-question. A bad value is refused with a line naming the setting. In personal mode there are no pull requests, so nothing
+question. The owner's line must lead the comment: the router and the unpark read only its first line, so a
+comment `Thanks` with `Maintainer answer: yes` on its second line starts nothing and unparks nothing (brief #1554).
+Where the merger would stop at its gate anyway (`auto_merge` not `true`, or `execution = "local"`), the owner may set
+the repository variable once with `gh variable set AGK_MERGER --body off` (verify the form): the merger's comment and
+scheduled jobs then start no more, and `doctor.py`'s `merger-variable` line offers it; a session never runs it. A bad value is refused with a line naming the setting. In personal mode there are no pull requests, so nothing
 is parked.
 
 ## When a guard refuses a command

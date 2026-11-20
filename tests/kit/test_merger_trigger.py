@@ -298,7 +298,7 @@ def test_1554_a_session_line_starts_no_merger(line):
 
 
 def test_1554_the_merger_chain_listens_only_to_the_merge_queue():
-    """REQ-039: brief #1554 answer 2 (`branches` on the merger's `workflow_run`, verify the form)."""
+    """REQ-039: brief #1554 answer 2 (`branches` on the merger's `workflow_run`; verify it)."""
     head = text("merger.yml").split("\njobs:", 1)[0]
     chain = head.split("\n  workflow_run:\n", 1)[1].split("\n  status:", 1)[0]
     assert chain.splitlines() == [
@@ -309,16 +309,16 @@ def test_1554_the_merger_chain_listens_only_to_the_merge_queue():
 
 
 def github_glob(pattern: str, name: str) -> bool:
-    """GitHub's branch filter as its documentation reads it: `**` any characters, `*` any but `/`."""
+    """GitHub's branch filter as its documentation reads it: `**` any text, `*` any but `/`."""
     parts = re.split(r"(\*\*|\*)", pattern)
-    rx = "".join(".*" if p == "**" else "[^/]*" if p == "*" else re.escape(p) for p in parts)
+    rx = "".join({"**": ".*", "*": "[^/]*"}.get(p, re.escape(p)) for p in parts)
     return re.fullmatch(rx, name) is not None
 
 
 @pytest.mark.parametrize(
     ("branch", "event", "starts"),
     [
-        ("gh-readonly-queue/main/pr-7-0123456789abcdef0123456789abcdef01234567", "merge_group", True),
+        ("gh-readonly-queue/main/pr-7-" + "0123456789abcdef" * 2 + "01234567", "merge_group", True),
         ("feat/x", "pull_request", False),
         ("main", "push", False),
     ],
