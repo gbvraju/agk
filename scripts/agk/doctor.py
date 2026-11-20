@@ -489,6 +489,27 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "install the kit's adapter (python3 scripts/agk/upgrade.py writes a missing template) and "
         "set launch_adapter in the flow table of agk.toml to the line above (a protected path)",
     ),
+    "tier-use": (  # brief #1617 answer 1 (ADR-0686): information, never a failure of the run
+        "warn",
+        "each tier a kind uses gets an open brief, or there is none",
+        "a tier that a kind uses gets no open brief",
+        "information only: a kit brief that touches a protected path is `build` (SPEC-0045 "
+        "rule 4); the tiers are set in the [models] table of agk.toml (a protected path)",
+    ),
+    "review-ceiling": (  # brief #1617 answer 1 (ADR-0686): information only, no proposed value
+        "warn",
+        "reviews_in_flight is not under max_builders",
+        "reviews_in_flight is under max_builders",
+        "information only: reviews_in_flight and max_builders are settings of agk.toml (a "
+        "protected path)",
+    ),
+    "slot-use": (  # brief #1617 answer 1 (ADR-0686): information, never a failure of the run
+        "warn",
+        "no builder slot is stale or idle, or builder_start is not assign",
+        "a builder slot is stale or its starts are idle",
+        "turn off the scheduled tasks of a stale slot, or lower builder_slots in the flow table of "
+        "agk.toml (a protected path)",
+    ),
     "model-names": (  # brief #1252 (ADR-0530): information, never a failure of the run
         "warn",
         "model names: ",
@@ -1318,6 +1339,116 @@ def slot_schedule_result(root: Path, reads: Reads) -> Result:
     return Result("ok", message=needed)
 
 
+DAY = datetime.timedelta(hours=24)
+
+
+def tier_use_result(root: Path, reads: Any) -> Result:
+    """`tier-use` (brief #1617 answer 1, ADR-0686, Q-1617-1): the kind of each open brief
+    (`session.kind_of`) and the tier `[models]` gives it, each tier's count, and a warning for a
+    tier that a brief kind uses and no open brief gets. The read of `brief-broad-touches`."""
+    try:
+        settings = models.model_settings(root)
+    except CheckError as exc:
+        found = re.search(r"\(setting: [^)]+\)", str(exc))
+        return Result("fail", message=f" {found.group(0) if found else '(setting: models)'}")
+    briefs, why = reads.get("briefs-open", "/issues?state=open&labels=agk-brief&per_page=100")
+    if not isinstance(briefs, list):
+        return Result("cannot-check", why or "bad-response")
+    bodies = [
+        str(b.get("body") or "") for b in briefs if isinstance(b, dict) and "pull_request" not in b
+    ]
+    if not bodies:
+        return Result("ok", message=" (no open briefs)")
+    protected, existing = session.protected_entries(root), session.existing_adrs(root)
+    used = [
+        t
+        for t in models.MODEL_TIERS
+        if any(s["tier"] == t for k, s in settings.items() if k != "review")
+    ]
+    counts = dict.fromkeys(used, 0)
+    for body in bodies:
+        counts[settings[session.kind_of(body, protected, existing)]["tier"]] += 1
+    shown = ", ".join(f"{t} {n}" for t, n in counts.items())
+    unused = [f"{t}: 0 of {len(bodies)} open briefs" for t, n in counts.items() if not n]
+    if unused:
+        return Result("fail", message=f" ({'; '.join(unused)}; {shown})")
+    return Result("ok", message=f" ({shown})")
+
+
+def review_ceiling_result(root: Path) -> Result:
+    """`review-ceiling` (brief #1617 answer 1, ADR-0686, Q-1617-3): `reviews_in_flight` under
+    `max_builders` (`session_plan.ceilings`) prints the builds that may wait for a review;
+    information only, no proposed value. A refused value names the setting."""
+    try:
+        ceil = session_plan.ceilings(
+            root, session.flow_int(root, "max_builders", session.MAX_BUILDERS, 1)
+        )
+    except CheckError as err:
+        return Result("fail", message=f" ({err})")
+    builders, reviews = ceil["max_builders"], ceil["reviews_in_flight"]
+    if reviews >= builders:
+        return Result("ok")
+    gap = builders - reviews
+    return Result(
+        "fail",
+        message=f" ({gap} build{'s' if gap != 1 else ''} may wait for a review: reviews_in_flight "
+        f"{reviews}, max_builders {builders})",
+    )
+
+
+def slot_use_result(root: Path, reads: Any, now: datetime.datetime | None = None) -> Result:
+    """`slot-use` (brief #1617 answer 1, ADR-0686): with `builder_start = "assign"`, the slots whose
+    newest marker is over 24 hours old (stale: their scheduled tasks may still fire) and the share
+    of the runs of the last 24 hours that decided `none` (idle starts). Every marker is read,
+    since a marker edited in place keeps no older time; an account's scheduled tasks cannot be
+    read from here `(verify)`."""
+    try:
+        if session.builder_start(root) != "assign":
+            return Result("ok", message=" (builder_start is not assign)")
+        count = session.builder_slots(root)
+    except CheckError as err:
+        return Result("fail", message=f" ({err})")
+    found, why = reads.get(
+        "conductor-issue", "/issues?state=open&labels=agk-conductor&per_page=100"
+    )
+    if why or not isinstance(found, list) or not found or not isinstance(found[0], dict):
+        return Result("cannot-check", why or "bad-response")
+    comments: list = []
+    for page in range(1, 100):
+        name = "slot-markers-day" if page == 1 else f"slot-markers-day-{page}"
+        path = f"/issues/{found[0].get('number')}/comments?per_page=100&page={page}"
+        data, why = reads.get(name, path)
+        if not isinstance(data, list):
+            return Result("cannot-check", why or "bad-response")
+        comments += [c for c in data if isinstance(c, dict)]
+        if len(data) < 100:
+            break
+    newest: dict[str, tuple[datetime.datetime, dict]] = {}
+    for c in comments:
+        match = session.SLOT_LINE.fullmatch(session.first_line(c))
+        if (
+            match
+            and (at := session.moment(match.group(2)))
+            > newest.get(match.group(3), (datetime.datetime.min.replace(tzinfo=datetime.UTC), {}))[
+                0
+            ]
+        ):
+            newest[match.group(3)] = (at, c)
+    day_ago = (now or datetime.datetime.now(datetime.UTC)) - DAY
+    slots = [f"s{n}" for n in range(1, count + 1)]
+    stale = [s for s in slots if s in newest and newest[s][0] < day_ago]
+    recent = [session.slot_log(newest[s][1]) for s in slots if s in newest and s not in stale]
+    runs = [log for log in recent if log is not None]
+    idle = sum(1 for log in runs if log[2] == "none")
+    parts = [f"stale: {' '.join(stale)}, their scheduled tasks may still fire"] if stale else []
+    if idle:
+        parts.append(f"idle: {idle} of {len(runs)} runs in the last 24 hours decided none")
+    if not parts:
+        return Result("ok")
+    parts.append("the account's scheduled tasks cannot be read from here")
+    return Result("fail", message=f" ({'; '.join(parts)}) (verify)")
+
+
 def model_routes_result(root: Path) -> Result:
     """Amendment 145 item 6: a refused `[models.routes]` names the setting; a tier that a kind uses
     and that has no route of its own names the route it uses instead; no table is one route. It
@@ -1450,7 +1581,9 @@ def main_folder_lines(root: Path) -> list[str]:
     return [f"MAIN-FOLDER: {line}"] if line else []
 
 
-def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
+def launch_adapter_result(
+    root: Path, platform: str | None = None, cloud: bool | None = None
+) -> Result:
     """With `auto_start` on, the kit's adapter for the platform and the `launch_adapter` line,
     when that setting is unset or a script file it names is missing (brief #1237, ADR-0525).
     A word of the command that names a file of the project (a path, or a script suffix) must
@@ -1464,31 +1597,55 @@ def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
         return Result("fail", message=f"{err}")
     if not auto:
         return Result("ok", message="auto_start off")
+    try:
+        words = shlex.split(adapter or "")
+    except ValueError:
+        words = []
+    fit = adapter_fit(words, platform or sys.platform, cloud)
     if adapter is None:
         return Result(
             "fail",
             message=f"auto_start is on and launch_adapter is unset; the kit's "
-            f"adapter is {file}: set {line}",
+            f"adapter is {file}: set {line}" + "".join(f"; {x}" for x in fit),
         )
-    try:
-        words = shlex.split(adapter)
-    except ValueError:
-        words = []
     named = [w for w in words if "/" in w or "\\" in w or w.lower().endswith(SCRIPT_SUFFIXES)]
     missing = [w for w in named if not (Path(w) if Path(w).is_absolute() else root / w).is_file()]
+    more = "".join(f"; {x}" for x in fit)
     if missing:
         return Result(
             "fail",
             message=f"auto_start is on and a file launch_adapter names is "
-            f"missing; the kit's adapter is {file}: set {line}",
+            f"missing; the kit's adapter is {file}: set {line}" + more,
         )
     if any(starts_unnamed(Path(w) if Path(w).is_absolute() else root / w) for w in named):
         return Result(  # SPEC-0066 rule 5 (brief #1582, ADR-0662): a warning, never a refusal
             "fail",
             message='the launch adapter starts claude without --agent; pass --agent "$AGK_AGENT" '
-            f"as the kit's adapter {file} does (setting: flow.launch_adapter)",
+            f"as the kit's adapter {file} does (setting: flow.launch_adapter)" + more,
         )
+    if fit:
+        return Result("fail", message="; ".join(fit))
     return Result("ok", message="auto_start on, the adapter is there")
+
+
+ADAPTER_SETTING = "(setting: [flow] launch_adapter)"
+
+
+def adapter_fit(words: list[str], platform: str, cloud: bool | None) -> list[str]:
+    """Brief #1617 answer 1 (ADR-0686, Q-1617-2): with `auto_start` on, a cloud session starts
+    nothing (`not run here`, never a failure; a session the runtime's variable does not mark is
+    treated as not cloud), and a `.ps1` adapter on a machine that is not Windows."""
+    if cloud is None:
+        cloud = os.environ.get(REMOTE_RUNTIME) == "true"
+    found = []
+    if cloud:
+        found.append(
+            f"auto_start starts nothing from a cloud session, not run here {ADAPTER_SETTING} "
+            "(verify)"
+        )
+    if platform != "win32" and any(w.lower().endswith(".ps1") for w in words):
+        found.append(f"the adapter is for Windows {ADAPTER_SETTING}")
+    return found
 
 
 def starts_unnamed(path: Path) -> bool:
@@ -2260,6 +2417,9 @@ def run_checks(
     results["capacity"] = capacity_result(root, measure=api_dir is None)
     results["reviewer-slots"] = reviewer_slots_result(root)
     results["launch-adapter"] = launch_adapter_result(root)
+    results["tier-use"] = tier_use_result(root, reads)
+    results["review-ceiling"] = review_ceiling_result(root)
+    results["slot-use"] = slot_use_result(root, reads)
     results["model-names"] = model_names_result(root)
     results["misplaced-settings"] = misplaced_settings_result(config)
     results["autopilot-settings"] = autopilot_settings_result(root)
