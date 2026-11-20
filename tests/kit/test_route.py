@@ -855,3 +855,100 @@ def test_1101_an_owner_state_is_never_replaced_by_handover():
     assert not set(route.OWNER_STATES) & set(route.BUILDER_STATES)
     parked = facts(comments=[fix_list(), handing_over()], labels=["agk:parked"])
     assert route.decide(parked) == "agk:parked"
+
+
+# --- a CI fix report puts a ready head back in review (brief #1568, ADR-0658) ------------------
+
+CI_FIX_BODY = "Brief: #9\nSummary: A fixed head goes back to review.\n"
+
+
+def ci_fix(cid: int = 4, sha: str = HEAD, login: str = "builder", tail: str = "") -> dict:
+    text = f"Report: {sha[:7]} CI fix{tail}\n\nUsage: not shown"
+    return said(cid, login, text)
+
+
+def red(name: str) -> dict:
+    return {"name": name, "status": "completed", "conclusion": "failure"}
+
+
+def test_1568_one_list_of_ready_report_forms():
+    """REQ-039: brief #1568 answer 2 (one tuple; `BUILT` reads it; `CI fix` is one more form)."""
+    assert route.READY_REPORTS == ("ready for review", "fix list applied", "merge of main", "CI fix")
+    for form in route.READY_REPORTS:
+        assert route.BUILT.match(f"Report: {HEAD[:7]} {form}"), form
+    assert not route.BUILT.match(f"Report: {HEAD[:7]} handing over: six hours")
+    assert not route.BUILT.match(f"Report: {HEAD[:7]} CI fixes")
+
+
+def test_1568_a_ci_fix_report_on_the_head_is_review():
+    """REQ-039: brief #1568 answer 1 and Measured (#1563: `CI fix` gave agk:build)."""
+    assert route.decide(facts(body=CI_FIX_BODY, comments=[])) == "agk:build"
+    fixed = ci_fix(tail=": governance test_reference_commands")
+    assert route.decide(facts(body=CI_FIX_BODY, comments=[fixed])) == "agk:review"
+    assert route.pr_state(facts(body=CI_FIX_BODY, comments=[ci_fix()])) == (
+        "agk:review",
+        "conductor",
+    )
+
+
+def test_1568_a_ci_fix_on_an_old_head_or_by_another_login_or_on_a_draft_stays_build():
+    """REQ-039: brief #1568 answer 4 (old sha, another login, a draft: agk:build)."""
+    for comment in (ci_fix(sha=OLD), ci_fix(login="someone")):
+        assert route.decide(facts(body=CI_FIX_BODY, comments=[comment])) == "agk:build"
+    draft = facts(draft=True, body=CI_FIX_BODY, comments=[ci_fix()])
+    assert route.decide(draft) == "agk:build"
+
+
+def test_1568_the_checks_still_decide_after_a_ci_fix_report():
+    """REQ-039: brief #1568 answer 4 (a red check is agk:ci-red; `CI fix pending` is ready and CI
+    decides the label as for `ready for review`)."""
+    redden = facts(body=CI_FIX_BODY, comments=[ci_fix()], checks=[ok("governance"), red("proof")])
+    assert route.decide(redden) == "agk:ci-red"
+    running = {"name": "proof", "status": "in_progress", "conclusion": None}
+    pending = [ci_fix(tail=" pending")]
+    assert (
+        route.decide(facts(body=CI_FIX_BODY, comments=pending, checks=[ok("governance"), running]))
+        == "agk:ci-running"
+    )
+    assert route.decide(facts(body=CI_FIX_BODY, comments=pending)) == "agk:review"
+
+
+@pytest.mark.parametrize("solo", [None, "boss"])
+def test_1568_review_mode_and_merge_settings_change_only_the_label(solo):
+    """REQ-039: brief #1568 answer 3 (`review_mode` solo or team; `pr_mode` and `[flow]
+    auto_merge` read the label, which a verdict naming the head decides as before)."""
+    f = facts(body=CI_FIX_BODY, comments=[ci_fix()], solo_person=solo)
+    assert route.decide(f) == "agk:review"
+    cleared = said(5, "boss", f"Verdict: cleared {HEAD}")
+    done = facts(body=CI_FIX_BODY, comments=[ci_fix(), cleared], solo_person=solo)
+    ready = said(4, "builder", f"Report: {HEAD[:7]} ready for review")
+    same = facts(body=CI_FIX_BODY, comments=[ready, cleared], solo_person=solo)
+    assert route.decide(done) == route.decide(same)
+
+
+def test_1568_local_execution_labels_a_ci_fix_head_in_the_conductors_pass():
+    """REQ-039: brief #1568 answer 3 (`execution` local: `route.py --all` decides by the same
+    rule; with the checks reported the head is in review)."""
+    assert route.decide(facts(body=CI_FIX_BODY, comments=[ci_fix()], local=True)) == "agk:review"
+
+
+def test_1568_personal_mode_reads_no_label_and_no_report_form():
+    """REQ-039: brief #1568 answer 3 (`[personal] forge = "files"`: no labels, no change)."""
+    for name in ("personal.py", "personal_state.py", "personal_adopt.py"):
+        text = (SCRIPTS / name).read_text(encoding="utf-8")
+        assert "agk:review" not in text and "agk:build" not in text, name
+        assert "READY_REPORTS" not in text and "CI fix" not in text, name
+
+
+def test_1568_the_review_queue_and_the_capacity_read_the_same_forms():
+    """REQ-039: brief #1568 answers 2 and 3 (the conductor's review-queue reader and the
+    `[flow] max_builders` capacity count read `READY_REPORTS`; the capacity rule is unchanged)."""
+    import session
+    import session_plan
+
+    assert session.READY_REPORTS is route.READY_REPORTS
+    for form in route.READY_REPORTS:
+        assert session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} {form}"), form
+    assert session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} CI fix: proof")
+    assert not session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} handing over: done")
+    assert not session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} escalate")

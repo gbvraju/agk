@@ -202,3 +202,15 @@ def test_any_other_form_is_a_usage_error(proj, stub, args):
 def test_the_prompt_is_the_same_text_for_the_same_brief(proj, stub):
     assert prompt(proj, stub, "--brief", "9") == prompt(proj, stub, "--brief", "9")
     assert clean_env()  # the stub, not the network, answered both reads
+
+
+def test_1568_the_prompt_names_every_ready_report_form_ready_for_review_first(proj, stub):
+    """REQ-039: brief #1568 answer 2 and Q-1568-1 (the prompt names the forms of
+    `READY_REPORTS`, `ready for review` first)."""
+    import session as kit_session
+
+    text = prompt(proj, stub, "--brief", "9")
+    tail = text[text.index("When the pull request is ready") :]
+    places = [tail.index(f"`Report: <head> {form}") for form in kit_session.READY_REPORTS]
+    assert places == sorted(places)
+    assert places[0] == tail.index("`Report: <head> ready for review`")
