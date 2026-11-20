@@ -1,0 +1,94 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The router (SPEC-0032 rules 1, 2 and 8): one label for the state of every pull request, set from GitHub events, so a session that
+# restarts resumes from GitHub. It runs `scripts/agk/route.py` from a checkout of the default branch and never runs code of a pull
+# request; no agent runs here. The permissions are the five the router needs: it reads the checks and statuses of a head and writes
+# labels, and, for a push to the default branch or a finished workflow on it (SPEC-0032 rule 7), the one issue "The default branch is
+# red", and, when a pull request merges, the brief its `Finishes:` line names (brief #302). A label set with the job's token starts
+# no workflow, and no trigger below listens to a label change, so it cannot loop.
+# A comment starts a job only when its first line can change a state: `Verdict:`, `Approve:`, `Approval:` or `Correction:` (brief #216),
+# or, for the health issues, `Assign:` or `Request:`: a dead pool pushes nothing, so these are its only events (brief #776, ADR-0368).
+# An edited `Verdict:`, `Final:` or `Approve:` comment starts it too, since a verdict corrected in place changes the state (brief #836, ADR-0383).
+# Brief #369 (ADR-0207): GitHub bills every job as at least one whole minute, so a job starts only where it can change a label.
+# A `pull_request` event of a draft starts no job: a draft's governance run wakes the router when it finishes, and the label is
+# set again when it is marked ready, by the router run that the `ready_for_review` governance run wakes. A `workflow_run` whose
+# conclusion is `skipped` (proof on a draft) starts no job either, since a skipped run changes no label.
+# Brief #1116 (ADR-0476): when it labels a pull request `agk:merge-ready` it starts the merger once for it with `workflow_dispatch`
+# (`actions: write`, the one event the job's token may start), so the merger no longer starts on every finished run.
+# Brief #1554 (ADR-0654): a created `Answer:` starts the job (route.py unparks on it, brief #1534); the step passes the
+# repository variable `AGK_MERGER`, so with `off` the router dispatches the merger for a cleared head itself.
+name: agk-route
+
+on:
+  # `closed` (brief #302): when a pull request merges, the brief its `Finishes:` line names is closed; the job runs for a closed
+  # pull request only when it merged.
+  # `edited` is not a trigger (brief #369, ADR-0207): an edited description starts `governance edited`, whose finished run wakes
+  # this router for the same state, so a run of its own would bill a second minute for nothing.
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  issue_comment:
+    types: [created, edited]
+  workflow_run:
+    # The workflows that hold the checks of `required_checks` in agk.toml (brief #285): `workflow_run` takes names, not patterns,
+    # so upgrade.py and init.py write this one line from that setting and the project's workflows, and keep names added to it.
+    workflows: [governance, proof]
+    types: [completed]
+  push:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+  statuses: read
+  actions: write
+
+# Fast CI (brief #283): the router runs on drafts too, since it labels every pull request and runs no test; it installs and
+# caches nothing and builds nothing, and its one upload (the pipeline document) keeps a retention of 7 days. The concurrency
+# group below is the per-pull-request group of brief #309; a documentation change is labelled like any other.
+# One group per pull request (brief #309): GitHub keeps one pending run per group and cancels the older pending one, so a single
+# group let another pull request's event cancel a wake. The group is the pull request's number for all of its own events
+# (pull_request, issue_comment, and workflow_run through the run's pull request), so two runs of one pull request never write its
+# label at once; a run with no pull request (a fork's, the default branch's) falls back to its head, and a push to its branch.
+# Events of one pull request may still replace each other, since the latest run reads the latest state. A run that labels after
+# checks finish also sweeps every pull request left at agk:ci-running.
+concurrency:
+  group: agk-route-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  agk-route:
+    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || (github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')) || (github.event.action == 'created' && (startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:') || startsWith(github.event.comment.body, 'Assign:') || startsWith(github.event.comment.body, 'Request:') || startsWith(github.event.comment.body, 'Owner needed:') || startsWith(github.event.comment.body, 'Question:') || startsWith(github.event.comment.body, 'Maintainer answer:') || startsWith(github.event.comment.body, 'Report:') || startsWith(github.event.comment.body, 'Answer:')))) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Route
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGK_PIPELINE_FILE: ${{ runner.temp }}/pipeline.json
+          AGK_MERGER: ${{ vars.AGK_MERGER }}
+        run: |
+          # The script reaches the default branch with the pull request that adds it; until then there is nothing to route.
+          if [ -f scripts/agk/route.py ]; then
+            python3 scripts/agk/route.py
+          else
+            echo "route.py is not on the default branch yet: nothing to route"
+          fi
+      # SPEC-0036 rule 5: the pipeline document is an artifact, overwritten by the next run; a failed upload fails no routing.
+      - name: Publish the pipeline document
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        with:
+          name: agk-pipeline
+          path: ${{ runner.temp }}/pipeline.json
+          retention-days: 7
+          if-no-files-found: ignore
+          overwrite: true
