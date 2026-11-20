@@ -41,11 +41,12 @@ EFFECTS = (
 )
 OPTION_A = (
     "   - Option A — plain scripts (recommended). Trade-offs: nothing to host, fewer features. "
-    f"{EFFECTS}Why: a laptop is all it needs. Parts: python 3.12.7 PSF-2.0. Practices: pinned actions, least privilege.\n"
+    f"{EFFECTS}Why: a laptop is all it needs. "
+    "Parts: a 1.0 MIT. Practices: pinned actions, least privilege.\n"
 )
 OPTION_B = (
     f"   - Option B — a web framework. Trade-offs: more features, a host to run. {EFFECTS}"
-    "Parts: python 3.12.7 PSF-2.0. Practices: pinned actions, security headers, a host-boundary test.\n"
+    "Parts: a 1.0 MIT. Practices: pinned actions, security headers, a host-boundary test.\n"
 )
 GOOD_STACK = f"""# ADR-0002: stack options
 
@@ -120,7 +121,7 @@ def test_ac4_two_or_three_options_with_practices_told_apart_pass(started):
     third = GOOD_STACK.replace(
         "2. **Practices**",
         f"   - Option C — a hosted service. Trade-offs: no servers, lock-in. {EFFECTS}"
-        "Parts: python 3.12.7 PSF-2.0. Practices: pinned actions.\n"
+        "Parts: a 1.0 MIT. Practices: pinned actions.\n"
         "2. **Practices**",
     )
     stack_root(started, third)
@@ -140,7 +141,8 @@ def test_ac4_no_stack_adr_is_nothing_to_check(started):
             lambda t: t.replace(
                 "2. **Practices**",
                 "".join(
-                    f"   - Option {x} — s. Trade-offs: t. Parts: python 3.12.7 PSF-2.0. Practices: pinned actions.\n"
+                    f"   - Option {x} — s. Trade-offs: t. "
+                    "Parts: a 1.0 MIT. Practices: pinned actions.\n"
                     for x in "CD"
                 )
                 + "2. **Practices**",

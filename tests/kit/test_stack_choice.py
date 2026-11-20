@@ -29,11 +29,11 @@ EFFECTS = (
 OPTION_A = (
     f"   - Option A — one web application (recommended). Trade-offs: {EFFECTS} "
     "Why: the busiest hour is small and an hour of downtime a month is allowed. "
-    "Parts: python 3.12.7 PSF-2.0. Practices: pinned actions, test selection.\n"
+    "Parts: a 1.0 MIT. Practices: pinned actions, test selection.\n"
 )
 OPTION_B = (
     f"   - Option B — a hosted service at example.com. Trade-offs: {EFFECTS} "
-    "Parts: python 3.12.7 PSF-2.0. Practices: pinned actions, test selection.\n"
+    "Parts: a 1.0 MIT. Practices: pinned actions, test selection.\n"
 )
 SELECTION = (
     "test selection: judgement (Option A: profile fast, always_full `app/auth/**`; "
@@ -158,9 +158,9 @@ def test_an_accepted_record_written_before_still_passes(tmp_path):
     """REQ-036 AC4: Q-1591-3, the new rules apply to a Proposed record only (principle 11)."""
     old = (
         "   - Option A — plain scripts. Trade-offs: nothing to host. "
-        "Parts: python 3.12.7 PSF-2.0. Practices: pinned actions, test selection.\n"
+        "Parts: a 1.0 MIT. Practices: pinned actions, test selection.\n"
         "   - Option B — a web framework. Trade-offs: a host to run. "
-        "Parts: python 3.12.7 PSF-2.0. Practices: pinned actions, test selection.\n"
+        "Parts: a 1.0 MIT. Practices: pinned actions, test selection.\n"
     )
     assert fails(tmp_path, record(old, "Accepted", "Option A — nothing to host.")) == []
 

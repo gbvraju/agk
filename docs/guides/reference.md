@@ -838,6 +838,8 @@ The `pins` step reads the chosen stack's build file and its lock (`requirements.
 and fails on a direct dependency not pinned exactly or not in the lock, on a missing lock and on a part of the Accepted
 stack record whose version differs from the lock's, each line naming the rule and the component class, never a name or a
 version. With no `[delivery] work_type` or no Accepted stack record it prints `pins: not run: no stack chosen`.
+It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
+them), with the runner's interface.
 
 ## Design check
 

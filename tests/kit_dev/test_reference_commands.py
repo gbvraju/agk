@@ -143,10 +143,13 @@ def run_by_the_kit() -> str:
 def imported(script: str, installed: list[str]) -> bool:
     module = script.removesuffix(".py")
     pattern = re.compile(rf"^\s*(?:from {module} import|import {module}\b)", re.M)
+    manifest = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    # by its path: the step registry of run_gates.py is a folder under scripts/agk/ (brief #1586)
+    paths = [rel for rel in manifest["verbatim"] if Path(rel).name in installed]
     return any(
-        pattern.search((KIT_ROOT / "scripts" / "agk" / other).read_text(encoding="utf-8"))
-        for other in installed
-        if other != script
+        pattern.search((KIT_ROOT / rel).read_text(encoding="utf-8"))
+        for rel in paths
+        if Path(rel).name != script
     )
 
 

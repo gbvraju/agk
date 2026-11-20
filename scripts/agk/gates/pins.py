@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The `pins` step (brief #1592, ADR-0672; SPEC-0072 rule 4 as amendment 201 proposes; REQ-079).
 
     python3 scripts/agk/gates/pins.py [--root DIR]
