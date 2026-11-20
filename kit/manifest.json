@@ -103,6 +103,8 @@
     "scripts/agk/forge.py",
     "scripts/agk/front_door.py",
     "scripts/agk/full_run.py",
+    "scripts/agk/gates/__init__.py",
+    "scripts/agk/gates/pins.py",
     "scripts/agk/governance_map.py",
     "scripts/agk/guard.py",
     "scripts/agk/guard_logs.py",
