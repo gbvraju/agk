@@ -848,6 +848,22 @@ recommended stack of the declared shape from `config/stack-defaults.toml` as Opt
 `engines.py stack-accept --option X --reason TEXT` makes the accepting change in its two ordinary commits after the
 person's one plain yes.
 
+Pinned parts (brief #1592, ADR-0672, amendments 200 and 201): in a Proposed stack ADR each option names its `Parts:`, each
+`<name> <exact version> <licence id>` (an SPDX id such as `MIT` or `Apache-2.0`, marked `(verify)` until the foundation's
+build installs them), and `stack-check` refuses a range, a missing version or a missing licence naming the option and the
+part's place. `engines.py stack-files` writes the chosen stack's build file from `kit/templates/stacks/` (Python:
+`pyproject.toml`; `node`: `package.json`) and never rewrites a project's own; the lock is made by the stack's own tool on
+the builder's machine and committed.
+
+    python3 scripts/agk/gates/pins.py [--root DIR]
+
+The `pins` step reads the chosen stack's build file and its lock (`requirements.lock` or `package-lock.json`), offline,
+and fails on a direct dependency not pinned exactly or not in the lock, on a missing lock and on a part of the Accepted
+stack record whose version differs from the lock's, each line naming the rule and the component class, never a name or a
+version. With no `[delivery] work_type` or no Accepted stack record it prints `pins: not run: no stack chosen`.
+It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
+them), with the runner's interface.
+
 ## Design check
 
     python3 scripts/agk/check_design.py [--root DIR]
@@ -1075,7 +1091,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:ruleset` | `scripts/agk/ruleset.py plan`, then the `gh api` commands it prints, after you say yes | the default branch's ruleset and two repository settings (add-only) |
 | `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR on a new branch |
 | `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR on a new branch |
-| `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check` | one Proposed ADR of stack options on a new branch |
+| `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check`, `stack-files` | one Proposed ADR of stack options on a new branch |
 | `/agk:design` | `scripts/agk/design.py write`, `screenshots`, `scripts/agk/check_design.py` | `docs/design/theme.md` (when absent) and a mockup folder with `index.html` and `README.md` on a new branch |
 | `/agk:launch` | `scripts/agk/session.py plan`, `scripts/agk/launch.py prompts` | nothing in the repository (after you say yes, one session per planned slot is started through an adapter, or its prompt is printed) |
 | `/agk:review-pass` | `scripts/agk/session.py review-queue`, the conductor's protocol, `gh api`, then `scripts/agk/session.py plan --json` and `scripts/agk/launch.py prompts` | one `Verdict:` comment per pull request that needs one (never two on one head), from a conductor session; at the end it prints the plan, and starts the planned sessions through the project's adapter only with `[flow] auto_start = true` |

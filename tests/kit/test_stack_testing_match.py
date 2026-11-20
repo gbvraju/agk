@@ -30,11 +30,11 @@ EFFECTS = (
 WHY = "Why: a laptop is all it needs."
 OPTION_A = (
     f"   - Option A — plain scripts (recommended). Trade-offs: nothing to host; {EFFECTS} {WHY} "
-    "Practices: pinned actions"
+    "Parts: a 1.0 MIT. Practices: pinned actions"
 )
 OPTION_B = (
     f"   - Option B — a web framework. Trade-offs: a host to run; {EFFECTS} "
-    "Practices: pinned actions"
+    "Parts: a 1.0 MIT. Practices: pinned actions"
 )
 MATCH = 'profile = "fast"\nalways_full = ["app/auth/**", "migrations/**"]\n'
 

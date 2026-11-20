@@ -44,7 +44,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
 
 2. Fill the skeleton from the vision and the charter, and from nothing the owner did not give. In the Decision: **Options** has two or
    three bullets `- Option A — <name>. Trade-offs: Cost: <plain phrase>; Build speed: <plain phrase>; Security: <plain phrase>;
-   Uptime: <plain phrase>. External services: <service>, <service>. Practices: <practice>, <practice>.`, the four effects in
+   Uptime: <plain phrase>. Parts: <name> <exact version> <licence id>, ... External services: <service>, <service>. Practices:
+   <practice>, <practice>.`, where `Parts:` names the runtime, the framework, the database engine and each library with the
+   latest stable version read that day and its SPDX licence id, marked `(verify)`, the four effects in
    words a business person reads, and one option, the default unless the needs in the charter or the discovery document rule
    it out, carries `(recommended)` after its name and `Why: <the need it meets>.` after its trade-offs; an option whose stack
    has no standards pack yet says "code checks for this choice come later" in its `Build speed:` or `Security:` phrase;
