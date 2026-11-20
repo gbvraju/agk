@@ -332,3 +332,16 @@ def test_req_012_ac2_the_weekly_report_is_byte_identical(repo):
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.startswith("agk metrics 2026-W41 (window 2026-10-05 to 2026-10-12)\n")
     assert "measures" not in proc.stdout
+
+
+def test_req_012_ac2_a_close_a_second_after_the_merge_keeps_the_finish(setup):
+    """REQ-012 AC2: brief #1557 answer 2 (GitHub may close a second after the merge; the finishing
+    pull request is still the feature's, not a follow-up)."""
+    repo, api = setup
+    api.brief(52, at(1), [taken(1, at(1, 10))])
+    api.pull(64, 52, at(1, 11), at(1, 12), "e" * 40, [report_line(5, at(1, 11, 30), 10)], True)
+    detail = json.loads((api.path / "pull-64.json").read_text())
+    detail["closed_at"] = "2026-10-01T12:00:01Z"
+    api.put("pull-64", detail)
+    got = row(measures(repo, api).stdout, "feature #52: ")
+    assert (got["pulls"], got["follow_ups"]) == ("#64", "0")

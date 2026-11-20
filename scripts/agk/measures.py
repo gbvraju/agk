@@ -100,6 +100,12 @@ def order(c: dict) -> tuple[str, int]:
     return str(c.get("created_at") or ""), cid if isinstance(cid, int) else 0
 
 
+def ended(p: dict) -> datetime | None:
+    """A merged pull request ends at its merge (GitHub may close it a second later), else at
+    its close."""
+    return metrics.stamp(p.get("merged_at") or p.get("closed_at"))
+
+
 def first(c: dict) -> str:
     return session.first_line(c)
 
@@ -159,7 +165,7 @@ class Reader:
     def feature(self, brief: int, issue: dict, pulls: list[dict], finish: dict) -> dict:
         done = metrics.stamp(finish.get("merged_at"))
         assert done is not None  # noqa: S101 - a finish is chosen by its merge time
-        mine = [p for p in pulls if (metrics.stamp(p.get("closed_at")) or done) <= done]
+        mine = [p for p in pulls if (ended(p) or done) <= done]
         after = [p for p in pulls if p.get("merged_at") and p not in mine]
         brief_comments = self.comments(brief)
         threads = {p["number"]: self.comments(p["number"]) for p in mine}
