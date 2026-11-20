@@ -45,6 +45,7 @@ PARTS_KEY = "Parts:"
 PARTS_ENDS = ("Why:", "External services:", "Practices:")
 VERIFY = "(verify)"
 NOT_RUN = "not run: no stack chosen"
+USAGE = "usage: python3 scripts/agk/gates/pins.py [--root DIR]"
 PEP508 = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*?)\s*(;.*)?$")
 EXACT_PY = re.compile(r"^==\s*([0-9][0-9A-Za-z.+!-]*)$")
 EXACT_NPM = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
@@ -178,7 +179,10 @@ def check(root: Path, playbook: dict[str, Any]) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    root = Path(args[args.index("--root") + 1]) if "--root" in args else Path.cwd()
+    if args and not (len(args) == 2 and args[0] == "--root" and args[1]):
+        print(USAGE, file=sys.stderr)
+        return 2
+    root = Path(args[1]) if args else Path.cwd()
     found = problems(root)
     if found is None:
         print(f"pins: {NOT_RUN}")

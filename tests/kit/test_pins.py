@@ -261,3 +261,10 @@ def test_req079_the_step_follows_the_runner_interface(tmp_path: Path) -> None:
 
     assert isinstance(pins.RULE, str) and pins.RULE
     assert pins.check(python_project(tmp_path), {}) == []
+
+
+@pytest.mark.parametrize("args", [["--root"], ["--other"], ["--root", ".", "extra"]])
+def test_req079_a_malformed_command_line_prints_usage(args: list[str]) -> None:
+    result = run(PINS, *args)
+    assert result.returncode == 2 and "Traceback" not in result.stderr
+    assert result.stderr.startswith("usage: python3 scripts/agk/gates/pins.py")
