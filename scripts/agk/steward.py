@@ -8,6 +8,7 @@ Usage: python3 scripts/agk/steward.py start --session ID
        python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
        python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
        python3 scripts/agk/steward.py onboard [--again]
+       python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
 
 The memory is one open issue labelled `agk-steward`, created when none is open: one comment per
 entry, whose first word is one of KINDS, each ending `Who: AGK steward`. `start` reads it before any
@@ -23,7 +24,10 @@ the value (exit 2). `end` writes the pass's counted calls and tokens on its mark
 not given, never 0 (rule 13's daily list reads them). `onboard` is `steward_onboard.py onboard`
 (SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In solo mode a start with no `Person:` entry
 prints the one question of SPEC-0062 rule 4, and `record --kind Person` takes `<business|technical>:
-<their words>` and ends `Who: ProductOwner` (rule 15; brief #1598, ADR-0678). In personal mode
+<their words>` and ends `Who: ProductOwner` (rule 15; brief #1598, ADR-0678). `setup` prints one
+`Setup: <matter>: <choice> because <reason>` line per AGK matter, the plain questions and, with the
+person's `--answer`, the install command; after the install it refuses `--answer` (SPEC-0062 rules
+2, 9 and 11; brief #1599, ADR-0679). In personal mode
 (a `[personal]` table) the memory is `docs/runs/steward/memory.md` of the sidecar and nothing is
 posted. A failed GitHub call exits 4.
 """
@@ -86,6 +90,7 @@ STACK_TESTS = {
     "java-gradle": "./gradlew test",
     "dart-pub": "dart test",
 }
+LOGIN_ENV = "AGK_SETUP_LOGIN"  # init.py's; the login is read by `gh api user` and never printed
 ROLL_OVER = 500
 LIVE = timedelta(minutes=60)
 PAGE = 100
@@ -363,7 +368,8 @@ def setup_lines(
     plan = setup_plan(root, adopted, stack)
     lines = list(plan["entries"])
     tool = "adopt" if adopted else "init"
-    run = f"run: python3 scripts/agk/{tool}.py . --login-from-gh"
+    login = f'{LOGIN_ENV}="$(gh api user --jq .login)"'
+    run = f"run: {login} python3 scripts/agk/{tool}.py . --login-from-env"
     command = proposed_tests(stack) if adopted else ""
     if command:
         run += " --project-tests " + json.dumps(command)

@@ -5,6 +5,11 @@
 """agk adopt: install the kit into an existing repository, touching no product file (SPEC-0002).
 
 Usage: python3 scripts/agk/adopt.py TARGET [--dry-run] [--unreleased]
+           [--login-from-env] [--solo] [--project-tests CMD]
+
+The setup flags (SPEC-0062 rule 11, brief #1599, ADR-0679), passed by the steward: the login in
+AGK_SETUP_LOGIN on both reviewer lines (never printed), `review_mode = "solo"` with its ADR line
+(refused without one person), and `project_tests`.
 
 Standard library only. No network, no git or gh calls, no writes outside TARGET. Target files are
 data: they are compared byte for byte, scanned for agk's own marked blocks and for the stamp, and

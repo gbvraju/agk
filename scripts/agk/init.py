@@ -5,6 +5,11 @@
 """agk init: install the kit into an empty repository (SPEC-0001).
 
 Usage: python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased]
+           [--login-from-env] [--solo] [--project-tests CMD]
+
+The setup flags (SPEC-0062 rule 11, brief #1599, ADR-0679), passed by the steward: the login in
+AGK_SETUP_LOGIN on both reviewer lines (never printed), `review_mode = "solo"` with its ADR line
+(refused without one person), and `project_tests`.
 
 Standard library only. No network, no git or gh calls, no writes outside TARGET. Reads only
 kit/manifest.json (and what it lists) from the kit checkout this script lives in. Refuses
@@ -20,8 +25,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
-import subprocess  # nosec B404 - one fixed argument list (`gh api user`), no shell
 import sys
 import tomllib
 from datetime import UTC, datetime
@@ -76,8 +81,9 @@ FRONT_END_TEST_DIRS = (
 TEST_DIRS_LINE = 'test_dirs = ["tests"]'
 # SPEC-0062 rules 2 and 11 (brief #1599, ADR-0679): what the steward's setup writes in the install.
 LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
-SETUP_FLAGS = ("--login-from-gh", "--solo")
-SETUP_USAGE = "[--login-from-gh] [--solo] [--project-tests CMD]"
+LOGIN_ENV = "AGK_SETUP_LOGIN"  # set by the steward from `gh api user`; init runs no command
+SETUP_FLAGS = ("--login-from-env", "--solo")
+SETUP_USAGE = "[--login-from-env] [--solo] [--project-tests CMD]"
 SOLO_ADR = (
     "5. Review mode: `solo`, from the person's answer at setup that they run this alone\n"
     "   (SPEC-0062 rule 2 as amendment 208 proposes); the steward records it as a `Setup:`\n"
@@ -173,31 +179,29 @@ def with_test_dirs(rendered: str, added: list[str]) -> str:
     return re.sub(rf"(?m)^{re.escape(TEST_DIRS_LINE)}$", lambda _m: line, rendered, count=1)
 
 
-def signed_in_login(run=subprocess.run) -> str | None:
-    """The signed-in GitHub login (`gh api user`), or None; the caller never prints it."""
-    found = run(  # nosec B603 - fixed argument list, no shell
-        ["gh", "api", "user", "--jq", ".login"], capture_output=True, encoding="utf-8", check=False
-    )
-    login = (found.stdout or "").strip() if found.returncode == 0 else ""
+def setup_login() -> str | None:
+    """The signed-in login the steward read with `gh api user` into AGK_SETUP_LOGIN, or None;
+    never printed."""
+    login = os.environ.get(LOGIN_ENV, "").strip()
     return login if LOGIN_RE.fullmatch(login) else None
 
 
 def setup_args(args: list[str]) -> tuple[list[str], dict]:
-    """The setup flags (`--login-from-gh`, `--solo`, `--project-tests CMD`) out of ARGS."""
+    """The setup flags (`--login-from-env`, `--solo`, `--project-tests CMD`) out of ARGS."""
     setup: dict = {}
     rest = []
     words = iter(args)
     for word in words:
         if word in SETUP_FLAGS:
-            setup[word.lstrip("-").replace("-from-gh", "")] = True
+            setup[word.lstrip("-").replace("-from-env", "")] = True
         elif word == "--project-tests":
             setup["project_tests"] = next(words, "")
         else:
             rest.append(word)
     if setup.pop("login", False):
-        login = signed_in_login()
+        login = setup_login()
         if login is None:
-            raise Refusal("the signed-in login cannot be read (setting: config/reviewers.yaml)")
+            raise Refusal(f"the signed-in login cannot be read (setting: {LOGIN_ENV})")
         setup["login"] = login
     return rest, setup
 

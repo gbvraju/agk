@@ -31,17 +31,6 @@ ADR = "docs/adr/0001-adopt-agk.md"
 PYTHON = {"rows": [{"name": "python-pyproject", "folder": ".", "file": "pyproject.toml"}]}
 
 
-class Run:
-    """`gh api user` answered with an invented login; every call is kept."""
-
-    def __init__(self, out: str = f"{LOGIN}\n", code: int = 0) -> None:
-        self.out, self.code, self.calls = out, code, []
-
-    def __call__(self, args, **_):
-        self.calls.append(list(args))
-        return subprocess.CompletedProcess(args, self.code, stdout=self.out, stderr="")
-
-
 def items_of(target: Path, setup: dict | None = None) -> dict[str, str]:
     items, _, _ = init.build_items(target, TODAY, setup)
     return {rel: data.decode("utf-8") for rel, data in items}
@@ -73,24 +62,34 @@ def test_req069_ac4_record_takes_the_setup_kind_in_its_form(tmp_path, monkeypatc
     assert code == 2 and "Setup entry" in lines[0]
 
 
-def test_req069_ac5_the_reviewers_file_is_filled_from_the_signed_in_login(tmp_path, capsys):
+def test_req069_ac5_the_reviewers_file_is_filled_from_the_signed_in_login(
+    tmp_path, capsys, monkeypatch
+):
     """REQ-069 AC5: rule 11, both placeholder lines get the login, which is never printed."""
-    run = Run()
-    login = init.signed_in_login(run)
-    assert login == LOGIN and run.calls == [["gh", "api", "user", "--jq", ".login"]]
+    monkeypatch.setenv(init.LOGIN_ENV, f"{LOGIN}\n")
+    login = init.setup_login()
+    assert login == LOGIN
     text = items_of(tmp_path, {"login": login})
     assert init.PLACEHOLDER not in text[REVIEWERS]
     assert text[REVIEWERS].count(f"@{LOGIN}") == 2
     assert f"@{LOGIN}" in text[".github/CODEOWNERS"]
     assert LOGIN not in capsys.readouterr().out
-    assert init.signed_in_login(Run(out="", code=1)) is None
-    assert init.signed_in_login(Run(out="not a login\n")) is None
+    for bad in ("", "not a login"):
+        monkeypatch.setenv(init.LOGIN_ENV, bad)
+        assert init.setup_login() is None
+    _, lines = steward.setup_lines(tmp_path, False, None, None)
+    assert not any(line.startswith("run: ") for line in lines)
+    _, lines = steward.setup_lines(tmp_path, False, None, "with a team")
+    assert lines[-1] == (
+        f'run: {init.LOGIN_ENV}="$(gh api user --jq .login)" python3 scripts/agk/init.py .'
+        " --login-from-env"
+    )
 
 
 def test_req069_ac5_init_main_fills_the_login_and_never_prints_it(tmp_path, capsys, monkeypatch):
-    """REQ-069 AC5: `init.py TARGET --login-from-gh` writes the file; nothing to edit by hand."""
-    monkeypatch.setattr(init, "signed_in_login", lambda run=None: LOGIN)
-    assert init.main([str(tmp_path), "--unreleased", "--login-from-gh"]) == 0
+    """REQ-069 AC5: `init.py TARGET --login-from-env` writes the file; nothing to edit by hand."""
+    monkeypatch.setenv(init.LOGIN_ENV, LOGIN)
+    assert init.main([str(tmp_path), "--unreleased", "--login-from-env"]) == 0
     out = capsys.readouterr().out
     assert LOGIN not in out and "placeholder" not in out
     assert (tmp_path / REVIEWERS).read_text(encoding="utf-8").count(f"@{LOGIN}") == 2
@@ -110,7 +109,7 @@ def test_req069_ac5_the_alone_answer_sets_solo_only_in_the_install_with_its_adr(
     with pytest.raises(init.Refusal, match="setting: review_mode"):
         items_of(tmp_path, {"solo": True})
     code, lines = steward.setup_lines(tmp_path, False, None, "alone")
-    assert code == 0 and lines[-1].endswith("--login-from-gh --solo")
+    assert code == 0 and lines[-1].endswith("--login-from-env --solo")
     assert any(line.startswith("Setup: review_mode: solo because") for line in lines)
 
 
