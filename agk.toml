@@ -648,6 +648,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_owner_answer_carries.py",
   "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_direct_transport.py",
@@ -872,6 +873,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_owner_answer_carries.py",
   "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_read_budget.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_route_owner_ask.py",
@@ -915,6 +917,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_owner_answer_carries.py",
   "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_route_owner_ask.py",
   "tests/kit/test_entry_points_refuse.py",
@@ -954,6 +957,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
 tests = [
+  "tests/kit/test_owner_answer_carries.py",
+  "tests/kit/test_owner_wait.py",
   "tests/kit/test_autopilot_status.py", "tests/kit/test_dependency_beats_overlap.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",

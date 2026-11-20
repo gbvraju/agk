@@ -4382,7 +4382,7 @@ def open_owner_items(
     that id in its first line or body, whatever its key; an `accept <old>` closes the items too
     when `carried(old, head)` holds (`carried_check`); a check that fails carries nothing."""
     open_items: dict[str, datetime] = {}
-    names: dict[str, set[str]] = {}  # the Q ids the newest `Owner needed:` of each key names
+    ids_of: dict[str, set[str]] = {}  # the Q ids the newest `Owner needed:` of each key names
     head = str((pr.get("head") or {}).get("sha") or "")
     author = str((pr.get("user") or {}).get("login") or "").lower()
     ordered = in_order(comments)
@@ -4395,7 +4395,7 @@ def open_owner_items(
             found = QUESTION_ID.search(line)
             named = found.group(0) if found and found.group(0) in open_items else None
             open_items[named or "owner-needed"] = when
-            names[named or "owner-needed"] = set(QUESTION_ID.findall(str(c.get("body") or "")))
+            ids_of[named or "owner-needed"] = set(QUESTION_ID.findall(str(c.get("body") or "")))
         elif own and who == author and (done := READY_REPORT.match(line)):
             if head and head.startswith(done.group(1)):
                 open_items.pop("owner-needed", None)
@@ -4403,7 +4403,7 @@ def open_owner_items(
             continue
         elif found := ANSWER_LINE.match(line):
             qid = found.group(1)
-            for key in [qid, *(k for k, ids in names.items() if qid in ids)]:
+            for key in [qid, *(k for k, ids in ids_of.items() if qid in ids)]:
                 open_items.pop(key, None)
         elif accepted := ACCEPT_LINE.match(line):
             if head and (accepted.group(1) == head or carries(carried, accepted.group(1), head)):

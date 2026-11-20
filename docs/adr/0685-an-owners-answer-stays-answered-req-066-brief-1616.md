@@ -6,7 +6,7 @@
 - Related: brief #1616, found bug #1578, brief #1534 (ADR-0646), brief #1567 (ADR-0657), brief #1163 (ADR-0495), SPEC-0039 rule 4
 - Requirements: REQ-066
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -51,3 +51,5 @@ conflicts, or cannot be read still needs a fresh accept.
 
 - A merge of main that shares no file with the pull request is `none`, not `light`, by `reprove_kind`, so
   `light_merge` (as the brief names it) does not carry an accept over it: Q-1616-3 on the pull request.
+- The new tests import `session`, `route`, `merge_cleared` and `session_plan`, so their entries are added to the
+  `[[testing.map]]` of `agk.toml` (`test_always_full_infra.py`); the brief's `Touches:` does not name `agk.toml`.
