@@ -1519,7 +1519,8 @@ def owner_unpark(repo: str, n: int, root: Path) -> str | None:
 
     listed, answerers = session.owner_people(root, {})
     now = datetime.datetime.now(datetime.UTC)
-    found = session.owner_apply(repo, n, {"minutes": 0}, listed, answerers, now, unpark_only=True)
+    found = session.owner_apply(repo, n, {"minutes": 0}, listed, answerers, now, unpark_only=True,
+                                carried=session.carried_check(root))  # fmt: skip  # brief #1616
     return f"#{n} unparked {found[1]} (brief #1534)" if found else None
 
 
