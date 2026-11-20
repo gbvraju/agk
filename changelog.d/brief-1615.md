@@ -1,0 +1,1 @@
+- In local mode the merger's sweep merges a cleared, green head once the conductor's lease has been free for `[flow] conductor_lapse_minutes` (off when absent), with local evidence and green GitHub checks; owner-only holds stay the owner's (brief #1615, ADR-0684)
