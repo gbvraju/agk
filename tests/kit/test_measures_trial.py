@@ -59,7 +59,8 @@ def test_req_012_ac1_the_trial_figures_of_one_feature(setup):
     assert got["merged"] == "3"  # #60, #61 and the follow-up #62
     assert (got["lead_hours_median"], got["lead_hours_p90"]) == ("52.0", "52.0")
     assert got["cleared_to_merge_minutes"] == "1170"  # median of 1140 (#60) and 1200 (#61)
-    assert got["fix_rounds_per_merged"] == "0.3"  # one fix list over three merges
+    # one fix list over the two merges with a verdict; the follow-up #62 has none
+    assert got["fix_rounds_per_merged"] == "0.5 (+1 unknown)"
     assert got["owner_items"] == "1"
     assert got["owner_wait_minutes"] == "30"  # the question, answered half an hour later
     assert got["park_minutes"] == "0"

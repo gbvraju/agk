@@ -23,7 +23,8 @@ the conductor's `Owner needed:`, and no figure reads park time, the red-branch i
        or pull request (a `Question:` for the maintainers or an `Owner needed:` by a listed verdict author) up to the
        answer that closes it, else the finishing merge; `park_minutes` (`Parked-by: wait` to `Unparked-by:`, an open
        park up to the end of `--to`, marked `(<n> open)`); `cleared_to_merge_minutes` (median, the last clearing
-       verdict to the merge); `fix_rounds_per_merged`; `red_spells` and `red_hours` (the issues titled `The default
+       verdict to the merge); `fix_rounds_per_merged` (over those with a verdict, the others counted
+       as `(+<n> unknown)`); `red_spells` and `red_hours` (the issues titled `The default
        branch is red` that overlap the range, opened to closed, cut to the range); `reverts` (merged pull requests
        whose merge commit, read by local git, starts `Revert "`); `confirmations` (in solo mode the `Confirmed:` lines
        of the one person, else `none (team mode)`); `tokens_per_merged` and `tokens_per_merged_<tier>`, the tier being

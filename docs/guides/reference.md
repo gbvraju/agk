@@ -97,7 +97,7 @@ request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
 
 ## Measures for a date range
 
-    python3 scripts/agk/measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--repo OWNER/REPO] [--api-dir DIR | --sidecar DIR]
+    python3 scripts/agk/measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--trial] [--repo OWNER/REPO] [--api-dir DIR | --sidecar DIR]
 
 Reads the GitHub REST API (`gh api`, GET only), saved responses (`--api-dir`) or, in personal mode, the sidecar's
 `forge/` files (`--sidecar`), and local git objects; it writes no file and posts nothing. The range is UTC days, both
@@ -109,6 +109,12 @@ wait). Then the range totals and one row for the merged pull requests tied to no
 never a title, a login, a branch or a host; a figure whose input is missing is `unknown`, never 0, and local or personal
 mode prints `none (local mode)` or `none (personal mode)` for what it does not keep. `--json` gives the same rows. See
 ADR-0659 and amendment 191 (SPEC-0007).
+
+`--trial` adds one `trial` row, a solo trial of the range: speed (pull requests merged, brief to merge median and 90th
+percentile, the owner's items and wait including the conductor's `Owner needed:`, park minutes, cleared to merge),
+quality (fix rounds per merged pull request, red spells of the default branch and their hours, reverts, a solo person's
+confirmations) and cost (tokens per merged pull request, and by the configured tier of the brief's kind). No cost is
+estimated. See ADR-0687 and amendment 213 (SPEC-0007).
 
 ## The operations checklist
 

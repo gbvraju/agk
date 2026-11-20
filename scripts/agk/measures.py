@@ -4,15 +4,16 @@
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The measures of each delivered feature for a date range (brief #1557, ADR-0659, amendment 191).
 
-`measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--repo OWNER/REPO] [--api-dir DIR]
-[--sidecar DIR]` prints one row per feature (a brief whose finishing pull request merged in the
+`measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--trial] [--repo OWNER/REPO] [--api-dir
+DIR] [--sidecar DIR]` prints one row per feature (a brief whose finishing pull request merged in the
 range), the range totals and one row for the merged pull requests tied to no brief. Read-only: GET
 only through `metrics.Gh`, `metrics.ApiDir` or, in personal mode, `forge.FilesForge`; it writes no
 file and posts nothing. The rows reuse `metrics.build_record`, `metrics.escape_of`,
-`caps.hours_used` and `caps.tokens_used`; no field of SPEC-0007 is computed again. The output
-holds numbers only: dates, brief and pull request numbers, counts, hours, minutes and tokens,
-never a title, body text, login, branch, path, label or host. A figure whose input is missing
-is `unknown`, never 0.
+`caps.hours_used` and `caps.tokens_used`; no field of SPEC-0007 is computed again. The output holds
+numbers only: dates, brief and pull request numbers, counts, hours, minutes and tokens, never a
+title, body text, login, branch, path, label or host. A figure whose input is missing is `unknown`,
+never 0. `--trial` (brief #1618, ADR-0687, amendment 213) adds one `trial` row: speed, quality and
+cost of the range, the tier being the configured one of the brief's kind.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import json
 import re
 import sys
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -32,13 +33,24 @@ import caps
 import metrics
 import minutes
 import session
-from common import MERGED_BY, CheckError, agent_apps, execution, finished_brief, git, repo_root
+from common import (
+    MERGED_BY,
+    CheckError,
+    agent_apps,
+    execution,
+    finished_brief,
+    git,
+    repo_root,
+    review_mode,
+)
 from full_run import contained_in
-from reviewers import solo_person, verdict_authors
+from reviewers import solo_person, spec_approvers, verdict_authors
+
+from config import model_settings
 
 NAME = "measures"
 USAGE = (
-    "usage: measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--repo OWNER/REPO] "
+    "usage: measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--trial] [--repo OWNER/REPO] "
     "[--api-dir DIR | --sidecar DIR]"
 )
 UNKNOWN = metrics.UNKNOWN
@@ -49,6 +61,8 @@ RELAYED = "Owner said ("
 OWNER_QUESTION = re.compile(r"Question: \S+ for the maintainers\b.*")
 ANSWERS = ("Answer:", "Maintainer answer:", "Correction:")
 NOT_REPORTED = "not-reported"
+TEAM = "none (team mode)"
+REVERT = 'Revert "'
 
 
 # --- the command line -------------------------------------------------------------------------
@@ -64,13 +78,18 @@ def day_of(text: str | None, option: str) -> date:
 
 
 def parse_args(args: list[str]) -> dict:
-    options: dict[str, Any] = {"json": False}
+    options: dict[str, Any] = {"json": False, "trial": False}
     names = {"--from": "from", "--to": "to", "--repo": "repo", "--api-dir": "api"}
     names["--sidecar"] = "sidecar"
     i = 0
     while i < len(args):
         if args[i] == "--json":
             options["json"] = True
+            i += 1
+        elif args[i] == "--trial":
+            if options["trial"] or (i + 1 < len(args) and not args[i + 1].startswith("--")):
+                raise CheckError("--trial takes no value and is given once (option: --trial)")
+            options["trial"] = True
             i += 1
         elif args[i] in names and i + 1 < len(args) and names[args[i]] not in options:
             options[names[args[i]]] = args[i + 1]
@@ -142,6 +161,7 @@ class Reader:
         self.local = execution(config) == "local"
         self.auto = session.auto_merge_on(root)
         self.ctx = metrics.Context(src, root, [], self.authors, solo_person(config), self.apps)
+        self.kept: list[tuple[dict, list[list[dict] | None], datetime]] = []
 
     def get(self, name: str, endpoint: str) -> Any:
         return self.src.get(name, endpoint)
@@ -176,6 +196,9 @@ class Reader:
         row |= self.defects(mine)
         row |= self.spend(brief_comments, mine, threads, records)
         row |= self.owner(brief_comments, mine, threads, done)
+        self.kept.append(
+            ({p["number"]: p for p in mine}, [brief_comments, *threads.values()], done)
+        )
         return row
 
     def times(self, issue, brief_comments, mine, threads, finish) -> dict[str, str]:
@@ -312,7 +335,7 @@ class Reader:
 
     # --- the range ----------------------------------------------------------------------------
 
-    def measure(self, start: date, end: date) -> dict:
+    def measure(self, start: date, end: date, trial: bool = False) -> dict:
         lo, hi = metrics.start_of(start), metrics.start_of(end + timedelta(days=1))
 
         def older(chunk: list[dict]) -> bool:
@@ -361,12 +384,15 @@ class Reader:
                 continue
             if merged_in(finish):
                 features.append({"brief": f"#{brief}"} | self.feature(brief, issue, group, finish))
-        return {
+        data = {
             "range": {"from": start.isoformat(), "to": end.isoformat()},
             "features": features,
             "totals": self.totals(features, lo, hi),
             "untied": self.untied(untied),
         }
+        if trial:
+            data["trial"] = self.trial(features, [d for d in details if merged_in(d)], lo, hi)
+        return data
 
     def totals(self, features: list[dict], lo: datetime, hi: datetime) -> dict[str, str]:
         leads = [Decimal(f["lead_hours"]) for f in features if f["lead_hours"] != UNKNOWN]
@@ -416,6 +442,182 @@ class Reader:
             "tokens": total(tokens) if pulls else "0",
         }
 
+    # --- the trial (brief #1618, ADR-0687, amendment 213) ---------------------------------------
+
+    def trial(self, features: list[dict], merged: list[dict], lo: datetime, hi: datetime) -> dict:
+        tiers = model_settings(self.root)
+        leads = sorted(Decimal(f["lead_hours"]) for f in features if f["lead_hours"] != UNKNOWN)
+        records = [metrics.build_record(self.ctx, p) for p in merged]
+        rounds = [r["review_rounds"] for r in records]
+        threads = {p["number"]: self.comments(p["number"]) for p in merged}
+        out = {
+            "merged": str(len(merged)),
+            "lead_hours_median": metrics.tenths(Decimal(median(leads))) if leads else UNKNOWN,
+            "lead_hours_p90": metrics.tenths(leads[-(-9 * len(leads) // 10) - 1])
+            if leads
+            else UNKNOWN,
+        }
+        out |= self.owner_wait() | self.parks(threads, hi)
+        waits = [self.cleared_wait(p, threads[p["number"]]) for p in merged]
+        known = [w for w in waits if isinstance(w, Decimal)]
+        out["cleared_to_merge_minutes"] = (
+            UNKNOWN if UNKNOWN in waits or not known else metrics.figure(Decimal(median(known)))
+        )
+        counted = [int(r) for r in rounds if str(r).isdigit()]
+        unread = f" (+{len(rounds) - len(counted)} {UNKNOWN})" if len(counted) < len(rounds) else ""
+        out["fix_rounds_per_merged"] = (
+            metrics.tenths(Decimal(sum(counted)) / len(counted)) + unread if counted else UNKNOWN
+        )
+        out |= self.red(lo, hi)
+        messages = [self.message(p.get("merge_commit_sha")) for p in merged]
+        out["reverts"] = (
+            UNKNOWN if None in messages else str(sum(m.startswith(REVERT) for m in messages if m))
+        )
+        out["confirmations"] = self.confirmations(threads)
+        groups: dict[str, list[Any]] = {}
+        for p in merged:
+            used = caps.tokens_used(threads[p["number"]], metrics.author_of(p))
+            if used == UNKNOWN and threads[p["number"]] is not None:
+                used = NOT_REPORTED
+            groups.setdefault(self.tier_of(p, tiers), []).append(used)
+        out["tokens_per_merged"] = per_merged([v for vs in groups.values() for v in vs])
+        for tier in sorted(groups):
+            label = (
+                ""
+                if tier == UNKNOWN or groups[tier] == [NOT_REPORTED] * len(groups[tier])
+                else " (configured)"
+            )
+            out[f"tokens_per_merged_{tier}"] = per_merged(groups[tier]) + label
+        return out
+
+    def tier_of(self, pull: dict, tiers: dict[str, dict[str, str]]) -> str:
+        brief = session.brief_number(pull)
+        issue = self.get(f"issue-{brief}", f"repos/{{repo}}/issues/{brief}") if brief else None
+        body = issue.get("body") if isinstance(issue, dict) else None
+        if not isinstance(body, str):
+            return UNKNOWN
+        kind = session.kind_of(
+            body, session.protected_entries(self.root), session.existing_adrs(self.root)
+        )
+        return tiers[kind]["tier"]
+
+    def owner_wait(self) -> dict[str, str]:
+        if self.personal:
+            return dict.fromkeys(("owner_items", "owner_wait_minutes"), PERSONAL)
+        answerers = self.allowed | {a.lstrip("@").lower() for a in spec_approvers(self.root)}
+        items, waited = 0, Decimal(0)
+        for pulls, every, done in self.kept:
+            if any(t is None for t in every):
+                return dict.fromkeys(("owner_items", "owner_wait_minutes"), UNKNOWN)
+            heads = [str((p.get("head") or {}).get("sha") or "") for p in pulls.values()]
+            for thread, head in zip(every, ["", *heads], strict=True):
+                for start, end in owner_spans(thread or [], head, done, self.allowed, answerers):
+                    items += 1
+                    waited += minutes_between(start, end)
+        return {"owner_items": str(items), "owner_wait_minutes": metrics.figure(waited)}
+
+    def parks(self, merged: dict[int, list[dict] | None], hi: datetime) -> dict[str, str]:
+        if self.personal:
+            return {"park_minutes": PERSONAL}
+        threads = dict(merged)
+        for pulls, every, _ in self.kept:
+            threads |= dict(zip(pulls, every[1:], strict=True))
+        if any(t is None for t in threads.values()):
+            return {"park_minutes": UNKNOWN}
+        parked, still = Decimal(0), 0
+        for n in sorted(threads):
+            since = None
+            for c in session.in_order(threads[n] or []):
+                if since is None and session.PARKED_BY.match(first(c)):
+                    since = metrics.stamp(c.get("created_at"))
+                elif since is not None and session.UNPARKED_BY.match(first(c)):
+                    parked += minutes_between(since, metrics.stamp(c.get("created_at")))
+                    since = None
+            if since is not None:
+                parked, still = parked + minutes_between(since, hi), still + 1
+        return {"park_minutes": metrics.figure(parked) + (f" ({still} open)" if still else "")}
+
+    def cleared_wait(self, pull: dict, thread: list[dict] | None) -> Decimal | str | None:
+        if thread is None:
+            return UNKNOWN
+        done = metrics.stamp(pull.get("merged_at"))
+        times = [
+            metrics.stamp(c.get("created_at"))
+            for c in thread
+            if metrics.author_of(c) in self.allowed
+            and (m := metrics.VERDICT.fullmatch(first(c).strip()))
+            and m.group(1)
+        ]
+        before = [t for t in times if t is not None and done is not None and t <= done]
+        return minutes_between(max(before), done) if before else None
+
+    def red(self, lo: datetime, hi: datetime) -> dict[str, str]:
+        if self.personal:
+            return dict.fromkeys(("red_spells", "red_hours"), PERSONAL)
+        since = lo.strftime("%Y-%m-%dT%H:%M:%SZ")
+        found = listed(
+            self.get("issues-red", f"repos/{{repo}}/issues?state=all&since={since}&per_page=100")
+        )
+        if found is None:
+            return dict.fromkeys(("red_spells", "red_hours"), UNKNOWN)
+        spells, minutes_red = 0, Decimal(0)
+        for issue in found:
+            opened = metrics.stamp(issue.get("created_at"))
+            if issue.get("title") != session.RED_TITLE or "pull_request" in issue or opened is None:
+                continue
+            start, end = max(opened, lo), min(metrics.stamp(issue.get("closed_at")) or hi, hi)
+            if end > start:
+                spells, minutes_red = spells + 1, minutes_red + minutes_between(start, end)
+        return {"red_spells": str(spells), "red_hours": metrics.tenths(minutes_red / 60)}
+
+    def confirmations(self, merged: dict[int, list[dict] | None]) -> str:
+        if self.personal:
+            return PERSONAL
+        if review_mode(self.root) != "solo":
+            return TEAM
+        person = (self.ctx.solo_person or "").lstrip("@").lower()
+        every = [t for _, ts, _ in self.kept for t in ts] + list(merged.values())
+        if not person or any(t is None for t in every):
+            return UNKNOWN
+        seen = {
+            (c.get("id"), c.get("created_at"))
+            for t in every
+            for c in t or []
+            if metrics.author_of(c) == person and first(c).startswith("Confirmed:")
+        }
+        return str(len(seen))
+
+
+def minutes_between(start: datetime | None, end: datetime | None) -> Decimal:
+    if start is None or end is None:
+        return Decimal(0)
+    return Decimal(str(max(0.0, (end - start).total_seconds()))) / 60
+
+
+def owner_spans(thread, head, done, listed, answerers) -> list[tuple[datetime, datetime]]:
+    """(opened, closed) of each owner item that `session.open_owner_items` opens in one thread (no
+    label item: a label is today's state), closed by its answer, else at the finishing merge."""
+    ordered = session.in_order(thread)
+    spans, before = [], {}
+    for i, c in enumerate(ordered):
+        now = session.open_owner_items({"head": {"sha": head}}, ordered[: i + 1], listed, answerers)
+        when = metrics.stamp(c.get("created_at")) or done
+        spans += [(since, when) for key, since in before.items() if now.get(key) != since]
+        before = now
+    return spans + [(since, done) for since in before.values()]
+
+
+def per_merged(values: list[Any]) -> str:
+    """The whole mean per reporting pull request; `unknown` with none or any unknown."""
+    if not values or UNKNOWN in values:
+        return UNKNOWN
+    known = [int(v) for v in values if v != NOT_REPORTED]
+    if not known:
+        return NOT_REPORTED
+    mean = (Decimal(sum(known)) / len(known)).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    missing = len(values) - len(known)
+    return f"{mean} (+{missing} {NOT_REPORTED})" if missing else str(mean)
+
 
 def render(data: dict) -> str:
     def joined(row: dict) -> str:
@@ -428,6 +630,8 @@ def render(data: dict) -> str:
         lines.append(f"feature {f['brief']}: {joined(rest)}")
     lines.append(f"totals: {joined(data['totals'])}")
     lines.append(f"not tied to a brief: {joined(data['untied'])}")
+    if "trial" in data:
+        lines.append(f"trial: {joined(data['trial'])}")
     return "\n".join(lines) + "\n"
 
 
@@ -453,7 +657,9 @@ def main(argv: list[str] | None = None) -> int:
         repo = options.get("repo") or metrics.origin_repo()
         config, src, msrc = root, metrics.Gh(repo), minutes.Gh(repo)
     try:
-        data = Reader(src, root, config, msrc, personal).measure(options["from"], options["to"])
+        data = Reader(src, root, config, msrc, personal).measure(
+            options["from"], options["to"], options["trial"]
+        )
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}", file=sys.stderr)
         return 1
