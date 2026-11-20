@@ -930,3 +930,76 @@ def test_b_a_wrong_form_in_ci_mode_gets_the_general_rule(ev, tmp_path):
     (ev.root / "agk.toml").write_text('execution = "github"\n', encoding="utf-8")
     found, _ = run_route_hook(ev.root, f"python3 {EVIDENCE_SCRIPT} check", [], tmp_path)
     assert found is not None and EVIDENCE_MARK not in found["permissionDecisionReason"]
+
+
+# --- brief #1566 (ADR-0656): the evidence check gets the pull request body ----------------------
+
+
+def scratch_body(ev: Evidence) -> Path:
+    body = ev.scratch / "pr-body.md"
+    body.write_text("Advances: REQ-001\n", encoding="utf-8")
+    return body
+
+
+BODY_OK = [
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {{body}}",
+    f"python3 {EVIDENCE_SCRIPT} check --body {{body}} --head abc1234 --json",
+    f"python3 {EVIDENCE_SCRIPT} check {{record}} --head {HEX} --body {{body}} --sample 2",
+]
+
+
+@pytest.mark.parametrize("command", BODY_OK)
+def test_a_the_evidence_check_with_a_scratch_body_is_allowed(ev, command):
+    """REQ-046: brief #1566 answer 2, the one new argument with a scratch path."""
+    text = command.format(body=scratch_body(ev), record=ev.record)
+    assert ev.decide(text) is None, text
+
+
+BODY_NO = [
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {{body}} --body {{body}}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body={{body}}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body pr-body.md",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {{inside}}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {{shared}}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {{missing}}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {{folder}}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {{outside}}",
+    f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body /etc/hostname",
+    f"python3 {EVIDENCE_SCRIPT} check --body {{body}}",
+]
+
+
+@pytest.mark.parametrize("command", BODY_NO)
+def test_b_a_body_outside_a_scratch_directory_is_refused(ev, command):
+    """REQ-046: brief #1566 answer 2, a scratch path only, once, as a separate argument."""
+    inside = ev.root / "pr-body.md"
+    inside.write_text("x\n", encoding="utf-8")
+    outside = ev.tmp / "elsewhere.md"
+    outside.write_text("x\n", encoding="utf-8")
+    text = command.format(
+        body=scratch_body(ev),
+        inside=inside,
+        shared=ev.shared,
+        missing=ev.scratch / "none.md",
+        folder=ev.scratch,
+        outside=outside,
+    )
+    found = ev.decide(text)
+    assert found is not None and found["permissionDecision"] == "deny", text
+    assert MARK in found["permissionDecisionReason"]
+
+
+def test_b_a_body_that_links_out_of_the_scratch_directory_is_refused(ev):
+    """REQ-046: brief #1566 answer 2, the body a regular file of the scratch, never a link."""
+    outside = ev.tmp / "elsewhere.md"
+    outside.write_text("x\n", encoding="utf-8")
+    link = ev.scratch / "link.md"
+    link.symlink_to(outside)
+    assert ev.decide(f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {link}") is not None
+
+
+def test_b_the_shadow_never_runs_the_check_with_a_body(ev):
+    """REQ-046: brief #1566, the shadow reviewer still gets no evidence command."""
+    command = f"python3 {EVIDENCE_SCRIPT} check --head {HEX} --body {scratch_body(ev)}"
+    assert ev.decide(command, "--shadow") is not None
