@@ -144,6 +144,10 @@ and the `next:` line that names the builder's hand-over and `session.py after`. 
 request holds no builder slot, and `next` offers an unparked one (an `Unparked-by:` its author has
 not spoken after) before stalled pull requests and new briefs.
 
+Brief #1567 (ADR-0657): on the owner's own pull request (a `Flow: owner change` line and no live
+take of its brief, or a spec approver's with no take ever), the author's ready `Report:` on the
+current head ends an `owner-needed` park, with one `Unparked-by: report <sha12>`; never a Q id.
+
 Brief #1310 (ADR-0554): `watch --pr N` and `watch --assign ID` take `--until-event`: they return
 only on an event, printing every event line of one read, or after `[flow] wake_minutes` (110 by
 default) with `renew: no event` (exit 0); a slot's lease is renewed by the wait every 240 s, so
@@ -4309,7 +4313,9 @@ def parked(root, repo: str, pr: dict, comments: list | None) -> bool:
 # --- the owner's waits (brief #1282, ADR-0543) --------------------------------------------------
 
 PARKED_BY = re.compile(r"Parked-by: wait (\S+)")
-UNPARKED_BY = re.compile(r"Unparked-by: answer (\S+)")
+UNPARKED_BY = re.compile(r"Unparked-by: (?:answer|report) (\S+)")
+ANSWER_UNPARK = re.compile(r"Unparked-by: answer (\S+)")  # owed to a builder; a report's is not
+OWNER_CHANGE = re.compile(r"^Flow: owner change\b", re.MULTILINE)  # brief #1567: a hand change
 OWNER_NEEDED = "Owner needed:"
 OWNER_ANSWERS = ("Maintainer answer:", "Answer:", "Approve:", "Correction:")
 OWNER_LABELS = {"agk:approve": "approve", "agk:owner-merge": "owner-merge"}
@@ -4343,15 +4349,17 @@ def for_the_maintainers(line: str) -> bool:
 ACCEPT_LINE = re.compile(r"Maintainer answer: accept ([0-9a-f]{40})\b")
 
 
-def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str]):
+def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str], own: bool = False):
     """(key, since) of the newest open item waiting on the owner, or None (`open_owner_items`)."""
-    open_items = open_owner_items(pr, comments, listed, answerers)
+    open_items = open_owner_items(pr, comments, listed, answerers, own)
     if not open_items:
         return None
     return max(open_items.items(), key=lambda kv: kv[1])
 
 
-def open_owner_items(pr: dict, comments: list, listed: set[str], answerers: set[str]) -> dict:
+def open_owner_items(
+    pr: dict, comments: list, listed: set[str], answerers: set[str], own: bool = False
+) -> dict:
     """{key: since} of every open item that waits on the owner: a `Question:` for the maintainers
     (key: its Q id) until an `Answer:`, a `Maintainer answer:` or a `Correction:` naming that id by
     an answerer; an `Owner needed:` by a listed verdict author (key: its Q id while that question
@@ -4359,9 +4367,12 @@ def open_owner_items(pr: dict, comments: list, listed: set[str], answerers: set[
     `Approve:`, or a `Maintainer answer:` that names no Q id, by an answerer, where an
     `accept <sha>` answer closes only when the sha is the current head (Q-1534-2); and the
     router's `agk:approve` or `agk:owner-merge` (key: `approve` or `owner-merge`), from the newest
-    comment, or the pull request's creation without one."""
+    comment, or the pull request's creation without one. With `own` (the owner's own pull
+    request, `owner_own`), a ready `Report:` of the pull request's author that names the current
+    head closes an `owner-needed` item posted before it, never a Q id (brief #1567 answer 1)."""
     open_items: dict[str, datetime] = {}
     head = str((pr.get("head") or {}).get("sha") or "")
+    author = str((pr.get("user") or {}).get("login") or "").lower()
     ordered = in_order(comments)
     for c in ordered:
         line, who, when = first_line(c), author_of(c), moment(c.get("created_at"))
@@ -4372,6 +4383,9 @@ def open_owner_items(pr: dict, comments: list, listed: set[str], answerers: set[
             found = QUESTION_ID.search(line)
             named = found.group(0) if found and found.group(0) in open_items else None
             open_items[named or "owner-needed"] = when
+        elif own and who == author and (done := READY_REPORT.match(line)):
+            if head and head.startswith(done.group(1)):
+                open_items.pop("owner-needed", None)
         elif who not in answerers:
             continue
         elif found := ANSWER_LINE.match(line):
@@ -4407,22 +4421,28 @@ def own_park(comments: list) -> tuple[str, dict] | None:
 
 
 def owner_step(
-    pr: dict, comments: list, settings: dict, now: datetime, listed: set[str], answerers: set[str]
+    pr: dict,
+    comments: list,
+    settings: dict,
+    now: datetime,
+    listed: set[str],
+    answerers: set[str],
+    own: bool = False,
 ) -> tuple[str, str] | None:
     """`("park", key)` when the newest owner item has waited `minutes` since its post, or at once
     inside rest hours; `("unpark", key)` when this rule parked the pull request and no item with
     the key it parked for is still open, read over every comment, so an answer posted before the
     park ends it and an answer to another Q id does not (brief #1534 answer 3); `("repair", key)`
     when the label is gone but this rule's `Parked-by:` has no `Unparked-by:`; else None. A
-    person's own `agk:parked` is never touched."""
-    own = own_park(comments)
+    person's own `agk:parked` is never touched. `own` as in `open_owner_items` (brief #1567)."""
+    mark = own_park(comments)
     labelled = PARKED_LABEL in labels_of(pr)
-    if own is not None and (not labelled or own[0] not in open_owner_items(
-            pr, comments, listed, answerers)):  # fmt: skip
-        return ("unpark" if labelled else "repair", own[0])
+    if mark is not None and (not labelled or mark[0] not in open_owner_items(
+            pr, comments, listed, answerers, own)):  # fmt: skip
+        return ("unpark" if labelled else "repair", mark[0])
     if labelled:
         return None
-    item = owner_item(pr, comments, listed, answerers)
+    item = owner_item(pr, comments, listed, answerers, own)
     if item is None:
         return None
     key, since = item
@@ -4463,16 +4483,27 @@ def owner_apply(
     same call when an answer now closes its item. `unpark_only` (the router) never parks. Returns
     the step written, or None."""
     if seen is not None and owner_step(*seen[:2], settings, now, listed, answerers) is None:
-        return None
+        if owner_step(*seen[:2], settings, now, listed, answerers, own=True) is None:
+            return None
     fresh = owner_read(repo, number)
     if fresh is None:
         return None
     found = owner_step(*fresh, settings, now, listed, answerers)
+    by_report = owner_step(*fresh, settings, now, listed, answerers, own=True)
+    reported = by_report != found and owner_own(repo, fresh[0])  # brief #1567: reads its brief
+    if reported:
+        found = by_report
     if found is None or (unpark_only and found[0] == "park"):
         return None
     kind, key = found
     if kind != "park":
-        return found if unpark_pull(repo, number, key, labelled=kind == "unpark") else None
+        labelled = kind == "unpark"
+        if reported:  # brief #1567 answer 2: one `Unparked-by: report <sha12>`
+            sha = str((fresh[0].get("head") or {}).get("sha") or "")[:12]
+            done = unpark_pull(repo, number, key, labelled, why=f"report {sha}")
+        else:
+            done = unpark_pull(repo, number, key, labelled=labelled)
+        return found if done else None
     if not park_pull(repo, number, key):
         return None
     again = owner_read(repo, number)
@@ -4518,25 +4549,54 @@ def park_pull(repo: str, number: int, key: str) -> bool:
     return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
 
 
-def unpark_pull(repo: str, number: int, key: str, labelled: bool = True) -> bool:
+def owner_own(repo: str, pr: dict) -> bool:
+    """Brief #1567 answer 1 (ADR-0657): whether pull request PR is the owner's own, whose ready
+    `Report:` may close an `owner-needed` wait. Its body has a `Flow: owner change` line and no
+    live `taken:` names its brief (Q-1567-1's reading of the brief's Q-1), or its author is a
+    spec approver and no `taken:` ever named its brief. Sessions and the owner post as one login,
+    so the login alone never decides. An unreadable brief is not the owner's. GET only."""
+    body = str(pr.get("body") or "")
+    author = str((pr.get("user") or {}).get("login") or "").lower()
+    try:
+        approvers = {a.lstrip("@").lower() for a in spec_approvers(repo_root())}
+    except (CheckError, OSError):
+        approvers = set()
+    hand, approver = bool(OWNER_CHANGE.search(body)), author in approvers
+    if not (hand or approver):
+        return False
+    brief = brief_number(pr)
+    said = pages(f"repos/{repo}/issues/{brief}/comments") if brief is not None else []
+    if not isinstance(said, list):
+        return False
+    takes = all_takes(said)
+    if approver and not takes:
+        return True
+    return hand and not live_takes(said, brief or 0, [pr], CLAIM_HOURS)
+
+
+def unpark_pull(
+    repo: str, number: int, key: str, labelled: bool = True, why: str | None = None
+) -> bool:
     """The label removed and one `Unparked-by: answer <key>` comment, which marks the label as no
     longer this rule's, so a person's later `agk:parked` is never read as one (answer 4). A label
     already gone (404) counts as removed; without `labelled` only the comment is written, the
-    repair of a label removed by hand (brief #1534 answer 3)."""
+    repair of a label removed by hand (brief #1534 answer 3). With `why` the comment is
+    `Unparked-by: <why>`, the owner's report (`report <sha12>`, brief #1567 answer 2)."""
     label = quote(PARKED_LABEL, safe="")
     if labelled and gh(f"repos/{repo}/issues/{number}/labels/{label}", method="DELETE") is None:
         if "HTTP 404" not in LAST_ERROR:
             return False
-    body = f"body=Unparked-by: answer {key}"
+    body = f"body=Unparked-by: {why or f'answer {key}'}"
     return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
 
 
 def unparked_owed(pr: dict, comments: list) -> bool:
     """An `Unparked-by:` newer than every comment of the pull request's author: the owner answered
-    and no builder has resumed it yet (brief #1282 answer 4)."""
+    and no builder has resumed it yet (brief #1282 answer 4). The owner's own report unpark is
+    owed to the review, never to a builder (brief #1567)."""
     me = str((pr.get("user") or {}).get("login") or "").lower()
     ordered = in_order(comments)
-    marks = [i for i, c in enumerate(ordered) if UNPARKED_BY.match(first_line(c))]
+    marks = [i for i, c in enumerate(ordered) if ANSWER_UNPARK.match(first_line(c))]
     spoke = [
         i
         for i, c in enumerate(ordered)

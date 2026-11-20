@@ -715,7 +715,7 @@ def test_1567_the_wait_setting_and_rest_hours_do_not_hold_the_report(minutes):
 
 
 def test_1567_a_persons_own_park_is_never_removed_by_a_report():
-    """REQ-066: brief #1567 answer 3, last case: an `agk:parked` with no `Parked-by:` of the rule."""
+    """REQ-066: brief #1567 answer 3: an `agk:parked` with no `Parked-by:` of the rule stays."""
     said = [*owner_wait(park=False), reported()]
     assert session_mod.owner_step(mine(), said, PLAIN, NOW, LISTED, ANSWERERS, own=True) is None
 
@@ -725,7 +725,7 @@ class OwnHub(Hub):
 
     def __init__(self, comments, labels=("agk:parked",), body=HAND_FLOW, brief=(), author="owner"):
         super().__init__(comments, labels)
-        self.body, self.brief, self.author = body, list(brief), author
+        self.body, self.brief, self.author = body, (None if brief is None else list(brief)), author
 
     def __call__(self, endpoint: str, *extra: str, method: str = "GET"):
         if method == "GET" and "/issues/40/comments" in endpoint:
