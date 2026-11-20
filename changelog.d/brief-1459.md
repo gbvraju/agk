@@ -1,0 +1,1 @@
+- `rehearsal.py check` reads the rehearsal record in SPEC-0071's proof, both runs' four figures for the same five briefs, and fails, naming the figure, when one is missing or the clean run is worse by more than 10%; `/agk:upgrade --clean-repo` without `--rehearsal` now stays refused until that check passes and the maintainers date the record's acceptance line (brief #1459)
