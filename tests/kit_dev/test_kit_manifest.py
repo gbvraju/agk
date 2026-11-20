@@ -74,6 +74,7 @@ SINGLES = {
     "config/playbooks/web-app.toml",
     "config/review-checklist.md",
     "config/session-rules.md",
+    "config/stack-defaults.toml",
     "config/stack-signals.toml",
 }
 FORBIDDEN = [r"gbvraju", r"day-\d", r"\bK[0-4]\b", r"PR #\d+", r"Q-K\d"]
