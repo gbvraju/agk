@@ -18,8 +18,9 @@ file. Builds of one product are therefore not repeatable, and a non-Python produ
 
 ## Decision
 
-1. SPEC-0029 rule 5 and SPEC-0072 rule 4 change only through amendments 200 and 201, which this build writes; they are
-   applied on a person's approval, never by a session.
+1. SPEC-0029 rule 5 and SPEC-0072 rule 4 change only through amendments 200 and 201, which this build writes. Amendment
+   200 was applied word for word on the maintainer's answer on this pull request, "Maintainer answer: amendment 200
+   approved" (2026-11-20); amendment 201 is applied the same way only on its own approval.
 2. **Parts with versions and licences.** In a Proposed stack record each option names `Parts:`, a list of
    `<name> <exact version> <licence id>` for the runtime, the framework, the database engine and each library it names,
    placed after its trade-offs and `Why:` and before `External services:`. An exact version has two or more numeric
