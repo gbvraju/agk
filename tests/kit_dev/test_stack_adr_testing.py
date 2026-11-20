@@ -30,6 +30,8 @@ TEST_SELECTION = (
     "proposes, its test configuration and build files, and any other path only with a "
     "`# full: <reason>` comment)\n"
 )
+# Brief #1591 (ADR-0671): the four effects of an option.
+EFFECTS = "Cost: low; Build speed: quick; Security: one sign-in; Uptime: short pauses. "
 
 
 @pytest.fixture
@@ -87,14 +89,14 @@ def test_answer3_a_stack_drafted_from_the_template_with_both_lines_passes(starte
     )
     lines = []
     for line in text.splitlines(keepends=True):
-        if "Option A — TODO" in line:
+        if "Option A — " in line:  # brief #1591: the kit's default is Option A
             line = (
-                "   - Option A — plain scripts. Trade-offs: nothing to host. "
-                "Practices: fast tests, test selection.\n"
+                "   - Option A — plain scripts (recommended). Trade-offs: nothing to host. "
+                f"{EFFECTS}Why: a laptop is all it needs. Practices: fast tests, test selection.\n"
             )
         elif "Option B — TODO" in line:
             line = (
-                "   - Option B — a web framework. Trade-offs: a host to run. "
+                f"   - Option B — a web framework. Trade-offs: a host to run. {EFFECTS}"
                 "Practices: fast tests, test selection, local profile.\n"
             )
         elif "TODO(architect): check" in line:

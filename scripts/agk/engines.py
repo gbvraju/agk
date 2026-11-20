@@ -11,6 +11,7 @@ Usage:
     python3 engines.py stack-ids [--ref REF] [--root DIR]
     python3 engines.py stack-write [--ref REF] [--date D] [--root DIR]
     python3 engines.py stack-check [--root DIR]
+    python3 engines.py stack-accept --option X --reason TEXT [--root DIR]
     python3 engines.py stack-next-steps [--base REF] [--date D] [--brief N|none] [--issues FILE]
                                         [--root DIR]
     python3 engines.py design-next-steps --req REQ-nnn [--base REF] [--date D] [--brief N|none]
@@ -49,6 +50,14 @@ those of the composed playbook (`default.toml`, the modules, then the playbook),
 enterprise gates are among them; without a declaration `default.toml` alone gives them when it is
 present (`Q-S0072-17`). Each option's `Practices:` names every practice of the Practices item, so
 no `TODO(architect)` is written there; the architect may still change a practice before acceptance.
+
+The stack choice for a business person (SPEC-0029 rule 5 as amendment 199 proposes; brief #1591,
+ADR-0671): in a Proposed record each option's `Trade-offs:` gives `Cost:`, `Build speed:`,
+`Security:` and `Uptime:` in plain words, and one option is `(recommended)` with a `Why:`; an
+Accepted record is checked as before. `stack-write` writes the row of `config/stack-defaults.toml`
+for the declared work type (else `default`) as Option A, recommended, or, when the committed tree
+already holds one other stack, that stack, kept. `stack-accept` makes the two ordinary commits of
+the accepting change: Status and Chosen, then the option's `[testing]` copy into `agk.toml`.
 
 The discovery questions (SPEC-0048 rule 4; brief #686): `questions` prints the ten common topics,
 then the `[[discovery]]` questions of `config/playbooks/<kind>.toml`, each once: the kind is
@@ -97,7 +106,8 @@ USAGE = (
     "usage: engines.py questions [--work-type KIND] | "
     "vision-write --idea-file F [--draft-file D] | vision-check | "
     "stack-ids [--ref REF] | stack-write [--ref REF] [--date D] | stack-check | "
-    "stack-next-steps | design-next-steps --req REQ-nnn  [--root DIR]"
+    "stack-accept --option X --reason TEXT | stack-next-steps | "
+    "design-next-steps --req REQ-nnn  [--root DIR]"
 )
 FLAGS = (
     "--root",
@@ -108,6 +118,8 @@ FLAGS = (
     "--base",
     "--brief",
     "--issues",
+    "--option",
+    "--reason",
     "--req",
     "--work-type",
 )
@@ -173,6 +185,14 @@ MAP_ARROW = " -> "
 PRACTICES_HEAD = "2. **Practices**"  # brief #1587: the gate bullets open the item
 PRACTICES_SLOT = "{{practices}}"  # each option's `Practices:`, the item's names (SPEC-0072 rule 4)
 PRACTICE_NAME = re.compile(r"^   - ([^:\n]+): (?:check|judgement)\b")
+DEFAULTS = (
+    KIT / "config" / "stack-defaults.toml"
+)  # brief #1591: read from the kit, never the project
+RECOMMENDED_SLOT = "{{recommended}}"
+RECOMMENDED = "(recommended)"
+EFFECTS = ("Cost", "Build speed", "Security", "Uptime")
+EFFECT = re.compile(r"(Cost|Build speed|Security|Uptime):")
+ENDS = ("Why:", SERVICES_KEY, "Practices:")
 SELECTION_LINE = re.compile(r"^(\s*-\s+test selection:\s+(?:check|judgement))\s+\(.*\)\s*$")
 
 
@@ -327,11 +347,53 @@ def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
     text = text.replace("{{adr}}", adr).replace("{{date}}", today)
     if playbook is not None:
         text = with_playbook(text, *playbook)
-    text = with_names(text)
+    text = with_names(text).replace(RECOMMENDED_SLOT, recommended_option(root))
     path = root / "docs" / "adr" / f"{adr}-stack-options.md"
     path.write_text(text, encoding="utf-8")
     print(f"wrote docs/adr/{path.name}")
     return 0
+
+
+def recommended_option(root: Path) -> str:
+    """Brief #1591 answers 2, 3 and 6: Option A from the kit's row for the declared work type,
+    else the `default` row, so two runs for one shape recommend the same option; the stack the
+    committed tree already holds, kept, when it is one other stack (SPEC-0057, never a rewrite)."""
+    work_type, _ = declaration(root)
+    try:
+        rows = {r["work_type"]: r for r in tomllib.loads(DEFAULTS.read_text("utf-8"))["default"]}
+        row = rows.get(work_type or "default") or rows["default"]
+        keys = ("stack", "description", "cost", "build_speed", "security", "uptime", "reason")
+        if not all(isinstance(row[k], str) and row[k].strip() for k in keys):
+            raise TypeError
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, KeyError, TypeError):
+        raise CheckError(
+            "rule 5: the kit's stack defaults cannot be read (path class config/)"
+        ) from None
+    kept = kept_stack(root, row["stack"])
+    if kept is not None:
+        todo = "; ".join(f"{e}: TODO(architect)" for e in EFFECTS)
+        return (
+            f"keep the stack already in this repository, {kept} {RECOMMENDED}. Trade-offs: {todo}."
+            " Why: the code already exists and is kept, never rewritten"
+        )
+    return (
+        f"{row['description']} {RECOMMENDED}. Trade-offs: Cost: {row['cost']}; Build speed: "
+        f"{row['build_speed']}; Security: {row['security']}; Uptime: {row['uptime']}. "
+        f"Why: {row['reason']}"
+    )
+
+
+def kept_stack(root: Path, stack: str) -> str | None:
+    """The one stack `front_door.py detect` finds in the committed tree, when it is not `stack`."""
+    from front_door import Refusal as DoorRefusal  # noqa: PLC0415 - only stack-write needs it
+    from front_door import detect_facts  # noqa: PLC0415
+
+    try:
+        rows = detect_facts(root, KIT)["stack"]["rows"]
+    except (DoorRefusal, CheckError, OSError, ValueError):
+        return None
+    names = sorted({str(r["name"]) for r in rows})
+    return names[0] if len(names) == 1 and names[0] != stack else None
 
 
 def playbook_practices(root: Path) -> tuple[list[str], str] | None:
@@ -464,6 +526,7 @@ def stack_problems(name: str, text: str) -> list[str]:
     chosen = " ".join(chosen_lines)
     letters = {m.group(1) for m in options}
     if status and status.group(1) == "Proposed":
+        out += choice_problems(options)
         if chosen != "none yet":
             out.append(
                 "rule 5: the ADR is Proposed and Chosen is not `none yet`; an option is chosen by "
@@ -476,6 +539,40 @@ def stack_problems(name: str, text: str) -> list[str]:
                 "rule 5: the ADR is Accepted and Chosen is not one option with at most a "
                 "one-line reason (`Option <X>` or `Option <X> — <reason>`)"
             )
+    return out
+
+
+def segment(body: str, key: str) -> str | None:
+    """The text after `key` up to the next `Why:`, `External services:` or `Practices:`."""
+    _, found, tail = body.partition(key)
+    if not found:
+        return None
+    return tail[: min((tail.find(e) for e in ENDS if e != key and e in tail), default=len(tail))]
+
+
+def choice_problems(options: list[re.Match]) -> list[str]:
+    """Brief #1591 answer 1 (amendment 199): in a Proposed record each option gives the four
+    effects in plain words, and exactly one option is recommended with a `Why:`."""
+    out: list[str] = []
+    marked = []
+    for m in options:
+        letter, body = m.group(1), m.group(2)
+        if RECOMMENDED in body.split("Trade-offs:", 1)[0]:
+            marked.append(m)
+        parts = EFFECT.split(segment(body, "Trade-offs:") or "")
+        phrases: dict[str, list[str]] = {}
+        for label, text in zip(parts[1::2], parts[2::2], strict=True):
+            phrases.setdefault(label, []).append(text.strip(" .;"))
+        for label in EFFECTS:
+            got = phrases.get(label, [])
+            if len(got) != 1 or not got[0]:
+                out.append(f"rule 5: option {letter} lacks {label} in its Trade-offs")
+    if not marked:
+        out.append(f"rule 5: no option is marked {RECOMMENDED}")
+    elif len(marked) > 1:
+        out.append(f"rule 5: more than one option is marked {RECOMMENDED}")
+    elif not (segment(marked[0].group(2), "Why:") or "").strip(" ."):
+        out.append(f"rule 5: option {marked[0].group(1)} is recommended with no Why: naming a need")
     return out
 
 
@@ -692,6 +789,103 @@ def cmd_stack_check(root: Path) -> int:
     return 1 if problems else 0
 
 
+def cmd_stack_accept(root: Path, opts: dict[str, str]) -> int:
+    """Brief #1591 answer 4: the accepting change of `skills/stack/SKILL.md` step 4 in its two
+    ordinary commits, Status and Chosen, then the `[testing]` copy; a refusal writes nothing."""
+    letter, reason = opts.get("option", ""), opts.get("reason", "").strip()
+    if not re.fullmatch(r"[A-C]", letter):
+        raise CheckError("rule 5: the option to accept is A, B or C (option --option)")
+    if not reason or "\n" in reason:
+        raise CheckError("rule 5: the reason is one line (option --reason)")
+    work_branch(root, "stack")
+    if git(root, "status", "--porcelain").strip():
+        raise CheckError("rule 5: the work tree is not clean; stack-accept commits only its change")
+    files = sorted(
+        p for p in root.glob("docs/adr/*.md") if STACK_NAME.match(p.relative_to(root).as_posix())
+    )
+    if len(files) != 1:
+        raise CheckError("rule 5: there is not exactly one stack ADR (path class docs/adr/)")
+    path, text = files[0], files[0].read_text(encoding="utf-8")
+    status = STATUS.search(text)
+    if not status or status.group(1) != "Proposed" or stack_problems(path.name, text):
+        raise CheckError("rule 5: the stack ADR is not a Proposed record that passes stack-check")
+    if letter not in [m.group(1) for m in map(OPTION.match, text.splitlines()) if m]:
+        raise CheckError(f"rule 5: option {letter} is not an option of the stack ADR")
+    accepted = STATUS.sub("- Status: Accepted", text, count=1)
+    accepted = re.sub(
+        r"(?m)^(\s*3\.\s+\*\*Chosen\*\*:) none yet$",
+        lambda m: f"{m.group(1)} Option {letter} — {reason}",
+        accepted,
+        count=1,
+    )
+    if stack_problems(path.name, accepted):
+        raise CheckError("rule 5: the accepted stack ADR would fail stack-check")
+    toml = testing_copy(root, text, letter)
+    adr, rel = f"ADR-{path.name[:4]}", path.relative_to(root).as_posix()
+    path.write_text(accepted, encoding="utf-8")
+    git(root, "commit", "-q", "-m", f"stack: accept option {letter} of {adr}", "--", rel)
+    print(f"committed: {adr} Accepted, option {letter} chosen")
+    if toml is not None:
+        (root / "agk.toml").write_text(toml, encoding="utf-8")
+        message = f"stack: copy the [testing] values of option {letter} of {adr}"
+        git(root, "commit", "-q", "-m", message, "--", "agk.toml")
+        print(f"committed: the [testing] values of option {letter} in agk.toml")
+    else:
+        print(f"unchanged: [testing] already matches option {letter}")
+    return 0
+
+
+def testing_copy(root: Path, text: str, letter: str) -> str | None:
+    """The new `agk.toml` with the option's profile and its `always_full` paths added in the
+    `[testing]` table, nothing else changed; None when it already matches."""
+    part = selection_part(text, letter)
+    profiles = set(PROFILE_WORD.findall(part or ""))
+    if len(profiles) != 1:
+        raise CheckError(
+            f"rule 5: the test selection practice names no one profile for option {letter}"
+        )
+    if testing_match(root, text, letter) == f"matches option {letter}":
+        return None
+    profile = profiles.pop()
+    paths = [
+        p for p in BACKTICKED.findall(part or "") if p not in NOT_A_PATH and MAP_ARROW not in p
+    ]
+    source = (root / "agk.toml").read_text(encoding="utf-8")
+    try:
+        old = tomllib.loads(source).get("testing", {})
+    except tomllib.TOMLDecodeError:
+        raise CheckError("rule 5: agk.toml cannot be read (setting: testing)") from None
+    always = list(dict.fromkeys([*old.get("always_full", []), *paths]))
+    new = [f'profile = "{profile}"\n', f"always_full = {json.dumps(always)}\n"]
+    lines = source.splitlines(keepends=True)
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == "[testing]"), None)
+    if start is None:
+        out = source + ("" if source.endswith("\n") else "\n") + "\n[testing]\n" + "".join(new)
+    else:
+        kept, rest, depth = lines[: start + 1], lines[start + 1 :], 0
+        for n, line in enumerate(rest):
+            code = line.split("#", 1)[0]
+            if depth:
+                depth += code.count("[") - code.count("]")
+                continue
+            if line.lstrip().startswith("["):
+                kept += new + rest[n:]
+                new = []
+                break
+            if re.match(r"\s*(profile|always_full)\s*=", line):
+                depth = code.count("[") - code.count("]")
+                continue
+            kept.append(line)
+        out = "".join(kept + new)
+    try:
+        table = tomllib.loads(out)["testing"]
+    except (tomllib.TOMLDecodeError, KeyError):
+        table = {}
+    if table.get("profile") != profile or table.get("always_full") != always:
+        raise CheckError("rule 5: agk.toml cannot be changed in place (setting: testing)")
+    return out
+
+
 CHOSEN_LINE = re.compile(r"(?m)^\s*3\.\s+\*\*Chosen\*\*:\s+Option ([A-Z])(?: — (.+))?$")
 STATUS = re.compile(r"(?m)^- Status: (\w+)\s*$")
 DESIGN_CHECK = KIT / "scripts" / "agk" / "check_design.py"
@@ -759,7 +953,8 @@ def cmd_stack_next_steps(root: Path, opts: dict[str, str]) -> int:
             ),
             "",
         )
-        name = option.split(". Trade-offs:", 1)[0].strip().rstrip(".")
+        name = option.split(". Trade-offs:", 1)[0].replace(f" {RECOMMENDED}", "").strip()
+        name = name.rstrip(".")
         why = f" ({reason})" if reason else ""
         fields = [
             ("Advances", reqs),
@@ -834,6 +1029,7 @@ def main(argv: list[str] | None = None) -> int:
         "stack-ids",
         "stack-write",
         "stack-check",
+        "stack-accept",
         "stack-next-steps",
         "design-next-steps",
     )
@@ -862,6 +1058,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_stack_write(root, opts)
         if args[0] == "stack-check":
             return cmd_stack_check(root)
+        if args[0] == "stack-accept":
+            return cmd_stack_accept(root, opts)
         if args[0] == "stack-next-steps":
             return cmd_stack_next_steps(root, opts)
         if args[0] == "design-next-steps":

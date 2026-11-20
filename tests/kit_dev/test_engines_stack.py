@@ -35,12 +35,16 @@ def engines(root, *args):
 
 # --- the stack ---------------------------------------------------------------------------------
 
+# Brief #1591 (ADR-0671): a Proposed option gives the four effects; one is recommended with a Why.
+EFFECTS = (
+    "Cost: low; Build speed: quick; Security: one sign-in; Uptime: a short pause on a restart. "
+)
 OPTION_A = (
-    "   - Option A — plain scripts. Trade-offs: nothing to host, fewer features. "
-    "Practices: pinned actions, least privilege.\n"
+    "   - Option A — plain scripts (recommended). Trade-offs: nothing to host, fewer features. "
+    f"{EFFECTS}Why: a laptop is all it needs. Practices: pinned actions, least privilege.\n"
 )
 OPTION_B = (
-    "   - Option B — a web framework. Trade-offs: more features, a host to run. "
+    f"   - Option B — a web framework. Trade-offs: more features, a host to run. {EFFECTS}"
     "Practices: pinned actions, security headers, a host-boundary test.\n"
 )
 GOOD_STACK = f"""# ADR-0002: stack options
@@ -115,7 +119,7 @@ def test_ac4_two_or_three_options_with_practices_told_apart_pass(started):
     assert engines(started, "stack-check").returncode == 0
     third = GOOD_STACK.replace(
         "2. **Practices**",
-        "   - Option C — a hosted service. Trade-offs: no servers, lock-in. "
+        f"   - Option C — a hosted service. Trade-offs: no servers, lock-in. {EFFECTS}"
         "Practices: pinned actions.\n"
         "2. **Practices**",
     )

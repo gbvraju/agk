@@ -24,6 +24,18 @@ SELECTION = (
     "test selection: judgement (Option A: profile fast, always_full `app/auth/**`, "
     "`migrations/**`; Option B: profile thorough, always_full `src/secrets/**`)"
 )
+EFFECTS = (
+    "Cost: low; Build speed: quick; Security: one sign-in; Uptime: a short pause on a restart."
+)
+WHY = "Why: a laptop is all it needs."
+OPTION_A = (
+    f"   - Option A — plain scripts (recommended). Trade-offs: nothing to host; {EFFECTS} {WHY} "
+    "Practices: pinned actions"
+)
+OPTION_B = (
+    f"   - Option B — a web framework. Trade-offs: a host to run; {EFFECTS} "
+    "Practices: pinned actions"
+)
 MATCH = 'profile = "fast"\nalways_full = ["app/auth/**", "migrations/**"]\n'
 
 
@@ -49,8 +61,8 @@ A reading list that runs on a laptop, for readers at example.com.
 ## Decision
 
 1. **Options**
-   - Option A — plain scripts. Trade-offs: nothing to host. Practices: pinned actions{names}.
-   - Option B — a web framework. Trade-offs: a host to run. Practices: pinned actions{names}.
+{OPTION_A}{names}.
+{OPTION_B}{names}.
 2. **Practices**
    - pinned actions: check (step: the workflow lint of the adopting build)
 {practice}3. **Chosen**: {chosen}

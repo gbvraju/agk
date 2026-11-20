@@ -1,0 +1,1 @@
+- The stack is offered in plain words: each option gives its cost, build speed, security and uptime, one is recommended for the product's shape, and one command makes the accepting change after the person's yes (brief #1591)

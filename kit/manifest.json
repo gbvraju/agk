@@ -49,6 +49,7 @@
     "config/playbooks/web-app.toml",
     "config/review-checklist.md",
     "config/session-rules.md",
+    "config/stack-defaults.toml",
     "config/stack-signals.toml",
     "constitution/principles.md",
     "docs/adr/TEMPLATE.md",
