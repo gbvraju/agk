@@ -3,9 +3,12 @@ $ErrorActionPreference = 'Stop'
 $session = $env:AGK_SESSION
 $brief = $env:AGK_BRIEF
 if (-not $session) { throw 'AGK_SESSION is not set' }
-# The agent the start names (SPEC-0066 rule 5, ADR-0662): claude always gets --agent; without it nothing starts.
+# The agent the start names (SPEC-0066 rule 5): claude always gets --agent; without it nothing starts.
 $agent = $env:AGK_AGENT
-if (-not $agent) { [Console]::Error.WriteLine('start-session-windows: no agent named; nothing started (setting: AGK_AGENT)'); exit 1 }
+if (-not $agent) {
+    [Console]::Error.WriteLine('start-session-windows: no agent named; nothing started (setting: AGK_AGENT)')
+    exit 1
+}
 $prompt = [Console]::In.ReadToEnd()
 
 # 1. The worktree first, and wait until its folder exists.

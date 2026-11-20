@@ -9,6 +9,7 @@ docs/runs/architect-catches-*.md merge=union
 scripts/agk/** text eol=lf
 .claude/agents/architect-review.md text eol=lf
 .claude/agents/architect.md text eol=lf
+.claude/agents/builder.md text eol=lf
 .claude/agents/conductor.md text eol=lf
 .claude/agents/drift-auditor.md text eol=lf
 .claude/agents/personal-reviewer.md text eol=lf

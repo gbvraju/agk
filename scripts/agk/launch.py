@@ -790,7 +790,7 @@ def start_with(
 ROLES = ("steward", "conductor")
 ROLE_PROMPT = (
     "You are session {session}, the {role} of this repository, running as the `{role}` agent: "
-    "the adapter started you with `--agent {role}` (SPEC-0066 rule 5). Follow "
+    "the adapter started you as `claude --agent {role}` (SPEC-0066 rule 5). Follow "
     "`.claude/agents/{role}.md`. Read CLAUDE.md, constitution/principles.md and "
     "config/core-rules.md first. {kind_line}\n"
 )

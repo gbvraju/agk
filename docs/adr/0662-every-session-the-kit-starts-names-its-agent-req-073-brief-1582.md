@@ -29,7 +29,7 @@ itself with `claude --agent`, which it cannot do.
    and no longer asks it to start itself.
 4. **The builder agent.** `.claude/agents/builder.md` names the builder's rules by reference (`config/session-rules.md`,
    SPEC-0061 rule 7, `kit/templates/runtime/builder.txt`), never a second copy; it adds no permission and no guard of
-   its own (Q-1582-2, the brief's recommendation). `kit/manifest.json` ships it verbatim.
+   its own (Q-1582-2, the brief's recommendation). `kit/manifest.json` ships it verbatim and `.claude-plugin/plugin.json` lists it with the other agents.
 5. **The cloud task texts** name their agent on their first line: `builder.txt` the builder; `conductor.txt` and
    `launcher.txt` the conductor, since the launcher is the cloud form of the watchdog's conductor job (SPEC-0064
    rule 13). How a cloud task sets the agent of its session is marked `(verify)` there (Q-S0066-5); until it is
@@ -41,10 +41,10 @@ itself with `claude --agent`, which it cannot do.
    `autopilot.py` or a documented command in `docs/guides/` starts `claude -p` without `--agent`, and when a start of
    those scripts hands the adapter a session without `AGK_AGENT`.
 
-Protected path classes changed: `kit/` (both adapter templates, the three runtime texts, `kit/manifest.json`),
-`scripts/agk/` (`launch.py`, `conductor.py`, `doctor.py`), `.claude/` (`.claude/agents/builder.md`), `tests/kit/`
-(`test_agent_named.py` and the adapter tests whose expected arguments now begin with `--agent`), `agk.toml` (a
-`[[testing.map]]` entry), `docs/adr/` (this file) and `changelog.d/` (one fragment).
+Protected path classes changed: `kit/` (both adapter templates, the three runtime texts, `kit/manifest.json`, the `gitattributes` template),
+`scripts/agk/` (`launch.py`, `conductor.py`, `doctor.py`), `.claude/` (`.claude/agents/builder.md`), `.claude-plugin/` (the agent listed in `plugin.json`), `tests/kit/`
+(`test_agent_named.py` and the adapter tests whose expected arguments now begin with `--agent`), `config/` (the builder agent's line in
+`config/rule-budget.txt`), `agk.toml` (a `[[testing.map]]` entry), `docs/adr/` (this file) and `changelog.d/` (one fragment).
 
 ## Consequences
 

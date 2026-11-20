@@ -14,7 +14,7 @@
 # When claude exits, <worktree>/.agk-session-exit holds exit_code=<code> and ended_utc=<UTC time>.
 # With AGK_MODEL set (the tier's name from [models.names]) claude gets --model AGK_MODEL, and
 # --effort AGK_EFFORT beside it when that is set; without AGK_MODEL it gets no flag (verify: the flags are claude's).
-# claude always gets --agent AGK_AGENT first, the agent the start names (SPEC-0066 rule 5, ADR-0662); without
+# claude always gets --agent AGK_AGENT first, the agent the start names (SPEC-0066 rule 5); without
 # AGK_AGENT nothing starts.
 set -euo pipefail
 session="${AGK_SESSION:?AGK_SESSION is not set}"

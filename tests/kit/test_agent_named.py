@@ -57,9 +57,9 @@ def start_paths() -> dict[str, str]:
     every guide's documented commands (SPEC-0066 rule 5)."""
     paths = [POSIX, WINDOWS, OWN_WINDOWS, *sorted(RUNTIME.glob("*.txt"))]
     paths += [ROOT / "scripts" / "agk" / name for name in STARTERS]
-    found = {str(p.relative_to(ROOT)): p.read_text(encoding="utf-8") for p in paths}
+    found = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8") for p in paths}
     for guide in sorted(GUIDES.glob("*.md")):
-        found[str(guide.relative_to(ROOT))] = guide_code(guide.read_text(encoding="utf-8"))
+        found[guide.relative_to(ROOT).as_posix()] = guide_code(guide.read_text(encoding="utf-8"))
     return found
 
 
