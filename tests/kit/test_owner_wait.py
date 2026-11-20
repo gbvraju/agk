@@ -770,13 +770,40 @@ def test_1567_the_owners_hand_change_unparks_with_one_report_mark(own_hub):
 
 
 def test_1567_a_live_take_on_the_brief_keeps_the_park(own_hub):
-    """REQ-066: brief #1567 Q-1 (its conservative reading): the hand-change line counts only with
-    no live `taken:` on its brief; a released take is not live; an unreadable brief keeps it."""
-    gh = own_hub([*owner_wait(), reported()], brief=[TAKEN])
+    """REQ-066: brief #1567 Q-1 with the answer to Q-1567-1: on a hand change, a live `taken:`
+    newer than the `Owner needed:` with no hand-over keeps the park; a released take is not
+    live; an unreadable brief keeps it."""
+    fresh = at(32, "builder", "taken: cb41 2026-11-14", 60)  # after the ask of 80 minutes ago
+    gh = own_hub([*owner_wait(), reported()], brief=[fresh])
     assert apply() is None and gh.writes() == []
-    gh = own_hub([*owner_wait(), reported()], brief=[TAKEN, RELEASED])
+    gh = own_hub(
+        [*owner_wait(), reported()], brief=[fresh, at(33, "builder", "released: cb41", 50)]
+    )
     assert apply() == ("unpark", "owner-needed")
     gh = own_hub([*owner_wait(), reported()], brief=None)
+    assert apply() is None and gh.writes() == []
+
+
+HANDED = f"Report: {SHA[:8]} handing over: blocked: the owner makes the commit"
+
+
+def test_1567_an_old_or_handed_over_take_no_longer_counts(own_hub):
+    """REQ-066: brief #1567, the answer to Q-1567-1 (2026-11-20 09:20Z): a take older than the
+    `Owner needed:` (#1561: brief #1536's three takes of 11-19) or whose session then posted a
+    `handing over` report, on the brief or the pull request, no longer keeps the park."""
+    gh = own_hub([*owner_wait(), reported()], brief=[TAKEN])  # 300 minutes, before the ask
+    assert apply() == ("unpark", "owner-needed")
+    fresh = at(32, "builder", "taken: cb41 2026-11-14", 60)
+    gh = own_hub([*owner_wait(), reported()], brief=[fresh, at(34, "builder", HANDED, 55)])
+    assert apply() == ("unpark", "owner-needed")
+    said = [*owner_wait(), at(13, "builder", HANDED, 20), reported()]
+    gh = own_hub(said, brief=[fresh])  # the hand-over on the pull request itself
+    assert apply() == ("unpark", "owner-needed")
+    later = at(35, "builder", "taken: cb42 2026-11-14", 50)  # a new take after the hand-over
+    gh = own_hub([*owner_wait(), reported()], brief=[fresh, at(34, "builder", HANDED, 55), later])
+    assert apply() is None and gh.writes() == []
+    early = at(36, "builder", HANDED, 70)  # a hand-over before the take ends nothing of it
+    gh = own_hub([*owner_wait(), reported()], brief=[early, fresh])
     assert apply() is None and gh.writes() == []
 
 
