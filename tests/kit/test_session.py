@@ -443,6 +443,7 @@ def test_rule5_session_posts_only_its_two_take_comments_and_the_checks_do_not_ca
     assert text.count('f"body=Tell: ') == 1
     assert text.count('f"body=Parked-by: wait ') == 1
     assert text.count('f"body=Unparked-by: answer ') == 1
+    assert text.count('f"body=Unparked-by: {why}') == 1  # the owner's report (brief #1567)
     for name in ("check_final_clearance.py", "check_brief.py", "facts.py"):
         path = SCRIPTS / name
         if path.exists() and name != "facts.py":
