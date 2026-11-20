@@ -1,3 +1,6 @@
+# agk (brief #1540, ADR-0648): every file of the kit repository checks out with LF, whatever the person's
+# git configuration says (Git for Windows' core.autocrlf=true), so a check sees the committed bytes.
+* text=auto eol=lf
 # agk: the append-only logs merge by union (ADR-0084). This repository does not mark its own scripts as generated.
 docs/runs/decisions-log.md merge=union
 docs/runs/residuals.md merge=union

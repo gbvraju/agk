@@ -60,6 +60,8 @@ The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/sp
 
 `python3 scripts/agk/personal.py baseline [--clone DIR] [--sidecar DIR] [--approve]` prints the test command of personal mode and, only with `--approve`, runs it once on the head tree in the sidecar and records the tests already failing in `records/baseline.json` (SPEC-0041 rule 16, ADR-0400).
 
+`python3 scripts/agk/personal_adopt.py check|render FILE [--clone DIR] [--sidecar DIR] [--today YYYY-MM-DD]` checks the model's proposals of `/agk:personal-adopt`, refusing each claim whose citation does not exist, and `render` writes the claims left into the sidecar as Draft and Proposed records for the person to confirm (SPEC-0041 rules 13 and 14, ADR-0633).
+
 ## Drift audit
 
     python3 scripts/agk/drift_audit.py [--today YYYY-MM-DD]

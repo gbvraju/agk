@@ -242,6 +242,18 @@ def long_temp_name() -> str:
         return temp
 
 
+def long_form(path: str) -> str:
+    """On Windows the long form of PATH (`GetLongPathNameW`, brief #1540 answer 4), so that an 8.3
+    short name never reaches a test command; PATH unchanged when the expansion fails, and on any
+    other system."""
+    if not on_windows():
+        return path
+    try:
+        return long_path_name(path) or path
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        return path
+
+
 def long_temp_dir() -> Path:
     """`long_temp_name()` as a path, where proof and evidence make their temporary folders."""
     return Path(long_temp_name())
@@ -302,6 +314,13 @@ def repo_root() -> Path:
     if proc.returncode != 0:
         raise CheckError("not inside a git repository")
     return Path(proc.stdout.strip())
+
+
+# The line ends of every temporary checkout the kit makes (brief #1540, ADR-0648; moved from
+# evidence.py, brief #1291, ADR-0550): the committed bytes, whatever the person's git configuration
+# says. Put before the git command (`git *CHECKOUT worktree add ...`); a project's own `eol`
+# attributes still win, in the check as in CI.
+CHECKOUT = ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
 
 
 def committed_bytes(root: Path, files: Mapping[str, bytes]) -> dict[str, bytes]:
