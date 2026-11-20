@@ -1,0 +1,1 @@
+- One command prints, for a date range of at most 92 days, the measures of each delivered feature as numbers only: time from brief to merge, rework, escapes, tokens, Actions minutes and the owner's part (brief #1557)

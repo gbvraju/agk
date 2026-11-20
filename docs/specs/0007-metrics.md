@@ -132,12 +132,36 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
     that the schedule missed is run by `workflow_dispatch` with `today`; the issue says it was run by hand, and a
     week run by hand does not count towards the two consecutive scheduled weeks unless the maintainers accept it.
 
+### Measures for a date range
+
+25. **One command, read-only.** `measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--repo OWNER/REPO]
+    [--api-dir DIR | --sidecar DIR]` reads with GET only, writes no file and posts nothing. The range is UTC days,
+    both included, at most 92; any other range is refused naming the option. The same input gives the same bytes.
+26. **The unit is the feature.** A feature is a brief whose finishing pull request (`Finishes: #n`, else the last
+    merged one with `Brief: #n` once the brief is closed) merged in the range. One row per feature, then the range
+    totals, then one row for the merged pull requests tied to no brief. The rows reuse the records of rules 2 to 9.
+27. **The figures.** Per feature: hours from brief to merge (queue, build, the builder's turns of SPEC-0049 rule 6),
+    rework (fix rounds, rejections, corrections, reopens, follow-ups, first-review pass), backstop escapes, tokens
+    (SPEC-0049 rule 5), Actions minutes, and the owner's part (hand and guarded merges, a person's lines, owner
+    questions and their wait). Rule 10 holds: a missing input is `unknown`; a mode that keeps no such record prints
+    `none (local mode)` or `none (personal mode)`. No cost and no owner's minutes are estimated.
+28. **Numbers only.** The output holds dates, numbers, counts, hours, minutes and tokens, never a title, body text,
+    login, branch, path, label, repository or host name; a test asserts it on invented names.
+
 ## Tests
 
 - Rules 1-10, 20, 23: `tests/kit/test_metrics.py`, marker `REQ-012 AC1`.
 - Rules 11-16, 21, 22: the same file, marker `REQ-012 AC1`.
 - Rules 17, 18: `tests/kit/test_metrics_workflow.py` (permissions, pinned actions, the only write calls), marker `REQ-012 AC1`.
 - Rule 24: a record in `docs/runs/`, checked by the maintainers, not by a test.
+
+## Contexts
+
+- kit: `metrics.py` and `measures.py` are installed in every project with the kit and read only its own records
+- github: the weekly workflow files one issue a week (rules 11 to 15), and `measures.py` reads with GET only and posts nothing
+- local: the records are read the same way, and the Actions figures read `none (local mode)` (rule 27)
+- personal: the sidecar's `forge/` files are read through the same names (SPEC-0041 rule 6), and the Actions, escape and owner figures read `none (personal mode)`
+- stacks: not applicable: no test or build step of a stack runs
 
 ## Residual
 
