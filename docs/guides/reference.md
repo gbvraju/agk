@@ -34,18 +34,23 @@ adopted repository only the marked block). `python3 scripts/agk/traceability.py`
 3. From a checkout of agk, run init as a maintainer-approved step (an agent session blocks running a cloned script
    until a maintainer authorizes it):
 
-       python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased]
+       python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased] [--login-from-env] [--solo] [--project-tests CMD]
 
    Init never overwrites a differing file (it refuses and lists it) and a second run changes nothing.
    Init installs only the files of a release: run it from a release tag (`git checkout v<version>`). Between two
    releases it refuses, naming the release; `--unreleased` installs the checkout as it is, for the kit's own tests.
 4. Apply the printed ruleset and repository settings by hand on GitHub; init configures nothing there.
 
+The setup flags of init and adopt (SPEC-0062 rule 11, ADR-0679), which the steward passes: `--login-from-env` writes the
+login in `AGK_SETUP_LOGIN` (read by `gh api user`, never printed) on both `@REPLACE-ME` lines of `config/reviewers.yaml`;
+`--solo` writes `review_mode = "solo"` and its line in ADR-0001, refused without one person in the reviewers file;
+`--project-tests CMD` writes `project_tests`. Init and adopt themselves still run no command and reach no network.
+
 See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
 
 ## Adopting an existing repository
 
-    python3 scripts/agk/adopt.py TARGET [--dry-run]
+    python3 scripts/agk/adopt.py TARGET [--dry-run] [--login-from-env] [--solo] [--project-tests CMD]
 
 Run from a checkout of agk as a maintainer-approved step. TARGET is an existing git work tree. Adopt touches no
 product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `.claude/`, `config/`,
@@ -196,13 +201,16 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/steward.py start --session ID
     python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
     python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
+    python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
 
 The steward's notes (SPEC-0059 rule 8, ADR-0557): one open issue labelled `agk-steward`, created when none is open, one
 comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Person`, `Pattern`, `Gap`, `Risk`, `Lesson`,
-`Owner question`, `Triage`, `Override`, `Onboarded`). `start` reads the notes first, with `since=` from the last one seen,
+`Owner question`, `Triage`, `Override`, `Onboarded`, `Setup`). `start` reads the notes first, with `since=` from the last one seen,
 prints the newest of each kind, posts `Started: steward <session> <UTC time>` and exits 1, writing nothing, while another
 steward's marker is live (60 minutes, no `Ended:`); at 500 comments it opens a new issue that carries the open owner
-questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). A failed
+questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). `setup`
+(SPEC-0062 rules 9 and 11, ADR-0679) prints one `Setup: <matter>: <choice> because <reason>` line per AGK matter, the
+plain questions left and, with `--answer`, the `run:` install command; after the install `--answer` is refused (exit 2). A failed
 GitHub call exits 4. In personal mode the notes are `docs/runs/steward/memory.md` of the sidecar and nothing is posted.
 In solo mode (SPEC-0062 rule 4) a start with no `Person:` note prints `ask:` with the one question to the person, and a
 `Person` note is `<business|technical>: <their words>`, ending `Who: ProductOwner` (else exit 2).

@@ -54,6 +54,19 @@ steward is SPEC-0059's exactly, and it never changes `review_mode` itself.
   whether AGK can build a thing, and if not, the nearest thing it can.
 - **Only the product.** A message about anything else gets one polite line and a return to the product:
   `steward_voice.py offtopic --product "<their words>"`.
+- **Setup is the steward's** (rules 8, 9 and 11; brief #1599, ADR-0679). Starting or adopting a project, it runs
+  `steward.py setup [--adopted] [--detect FILE]` (FILE from `front_door.py detect --json`) and records each `Setup:`
+  line it prints with `steward.py record --kind Setup`: the models, the builders, `max_builders`, `pr_mode`, the
+  reviewers file and, adopted, the proposed test command. It asks only the plain questions it prints ("Will you run this
+  alone, or with a team?" and "When do you rest?"), runs `setup` again with `--answer "<their words>"`, records that
+  line too and runs the `run:` command it prints: init or adopt puts the signed-in login on both reviewer lines (read
+  by `gh api user`, never printed), writes `review_mode = "solo"` with its line in the install's ADR on the answer
+  alone, and writes the test command, all in the install pull request. Before writing a proposed test command it runs
+  it once and says plainly whether it passed, failed or found no tests; a failing command is still written. After the
+  install `--answer` is refused: the steward never changes `review_mode` later. The person edits no file but the
+  `[delivery] work_type` line of a pilot or a declared kind. A product whose kind is unclear is planned as an
+  enterprise product, with one open point `D-<n>` saying so; a pilot is planned only on the person's words asking for
+  one, recorded as a `Decision:`.
 - **The stack choice** (brief #1591, ADR-0671). The options of the stack record in the decision shape of rule 4, each
   with its cost, build speed, security and uptime in plain words and no kit term, the recommended one first with the
   need it meets; then one plain yes. On the yes the steward drafts a mechanical brief whose builder runs
