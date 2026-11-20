@@ -102,6 +102,8 @@ from common import (
     without_who,
 )
 from merge_cleared import (
+    MERGER_CREATED,
+    MERGER_VARIABLE,
     PROTECTED,
     RECORD_TITLE,
     Nothing,
@@ -133,7 +135,23 @@ USAGE = "usage: route.py [--pr N | --all | --branch | --health] [--dry-run]"
 ROUTER_JOB = "agk-route"
 MERGER_WORKFLOW = "merger.yml"  # brief #1116 (ADR-0476): started once per pull request entering
 MERGE_READY = "agk:merge-ready"
-MERGER_STARTS = ("Verdict:", "Approve:")  # comments on which merger.yml starts by itself
+MERGER_STARTS = MERGER_CREATED  # comments on which merger.yml starts by itself
+# brief #1554 answer 5 (ADR-0654): the first lines agk-route.yml's job starts on, created and
+# edited, from the readers below; the kit's own tests hold them equal to its `if:`
+ROUTER_EDITED = ("Verdict:", "Approve:", "Final:")  # FORM_LINES' verdict, approval and status
+ROUTER_CREATED = (
+    "Verdict:",
+    "Approve:",
+    "Approval:",
+    "Correction:",
+    "Assign:",
+    "Request:",
+    "Owner needed:",
+    "Question:",
+    "Maintainer answer:",
+    "Report:",
+    "Answer:",  # OWNER_ANSWER_LINES: the steward's evidence answer unparks (brief #1534)
+)
 STATES = (  # (label, actor, what), amendment 150 item 1; pr_state's precedence (ADR-0385)
     ("agk:parked", "owner", "a person holds it"),
     ("agk:build", "builder", "a draft, or no ready Report: on the head"),
@@ -1077,6 +1095,8 @@ def merger_on(root: Path) -> bool:
 def merger_starts_itself(name: str, event: dict) -> bool:
     """The comment of this event already starts merger.yml (its `issue_comment` condition)."""
     if name != "issue_comment":
+        return False
+    if os.environ.get(MERGER_VARIABLE) == "off":  # brief #1554 answer 4: its job does not start
         return False
     body = str((event.get("comment") or {}).get("body") or "")
     if body.startswith(MERGER_STARTS):

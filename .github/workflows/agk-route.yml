@@ -17,6 +17,8 @@
 # conclusion is `skipped` (proof on a draft) starts no job either, since a skipped run changes no label.
 # Brief #1116 (ADR-0476): when it labels a pull request `agk:merge-ready` it starts the merger once for it with `workflow_dispatch`
 # (`actions: write`, the one event the job's token may start), so the merger no longer starts on every finished run.
+# Brief #1554 (ADR-0654): a created `Answer:` starts the job (route.py unparks on it, brief #1534); the step passes the
+# repository variable `AGK_MERGER`, so with `off` the router dispatches the merger for a cleared head itself.
 name: agk-route
 
 on:
@@ -58,7 +60,7 @@ concurrency:
 
 jobs:
   agk-route:
-    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || (github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')) || (github.event.action == 'created' && (startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:') || startsWith(github.event.comment.body, 'Assign:') || startsWith(github.event.comment.body, 'Request:') || startsWith(github.event.comment.body, 'Owner needed:') || startsWith(github.event.comment.body, 'Question:') || startsWith(github.event.comment.body, 'Maintainer answer:') || startsWith(github.event.comment.body, 'Report:')))) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped') }}
+    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || (github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')) || (github.event.action == 'created' && (startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:') || startsWith(github.event.comment.body, 'Assign:') || startsWith(github.event.comment.body, 'Request:') || startsWith(github.event.comment.body, 'Owner needed:') || startsWith(github.event.comment.body, 'Question:') || startsWith(github.event.comment.body, 'Maintainer answer:') || startsWith(github.event.comment.body, 'Report:') || startsWith(github.event.comment.body, 'Answer:')))) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
@@ -71,6 +73,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGK_PIPELINE_FILE: ${{ runner.temp }}/pipeline.json
+          AGK_MERGER: ${{ vars.AGK_MERGER }}
         run: |
           # The script reaches the default branch with the pull request that adds it; until then there is nothing to route.
           if [ -f scripts/agk/route.py ]; then

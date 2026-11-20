@@ -123,6 +123,8 @@ name holds it, and returns within 5 minutes with `tick`), counted only when its 
 in `verdict_authors`; `--take NAME` posts
 it, or edits the newest counted `Conductor:` comment in place, unless another name holds a valid
 lease (exit 3, naming the setting), and keeps NAME in the git directory as this checkout's name;
+a take by the holder of a lease whose time is less than `RENEW_EVERY` (240 s) old writes nothing
+and prints the lease's current end (brief #1554 answer 1, ADR-0654: no edit event per `watch`);
 `--release NAME` edits it to `Conductor: released <time> <name>` for the holder; `--show` prints
 `held by <name> until <time>` or `free`. `merge-queue` refuses to run (`held`, exit 3) while a
 name other than this checkout's holds a valid lease.
@@ -2213,6 +2215,15 @@ def write_marker(repo: str, issue: int, found, text: str) -> None:
         )
 
 
+def fresh_own(holder, found, name: str | None, now: datetime) -> bool:
+    """NAME holds a valid lease whose own time is less than RENEW_EVERY seconds old (brief #1554
+    answer 1): a free, lapsed or stalled lease, or another holder's, is never fresh."""
+    if not holder or found is None or holder[0] != name:
+        return False
+    start = when(found[1].group(2))
+    return start is not None and (now - start).total_seconds() < RENEW_EVERY
+
+
 def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
     issue = plan_issue(root)
     if issue is None:
@@ -2239,6 +2250,14 @@ def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
         holder = None
     found = lease_comment(comments, authors)
     mark = lease_mark(root)
+    if mode == "--take" and holder and fresh_own(holder, found, name, now):
+        # brief #1554 answer 1 (ADR-0654): the holder's take of a lease written less than
+        # RENEW_EVERY ago writes nothing, so a new `watch` start makes no edit event
+        if mark is not None:
+            mark.parent.mkdir(parents=True, exist_ok=True)
+            mark.write_text(f"{name}\n", encoding="utf-8")
+        print(f"lease: taken by {name} until {stamp_of(holder[1])}")
+        return 0
     if mode == "--take":
         taken = found[1].group(4) or found[1].group(2) if holder and found else stamp_of(now)
         text = f"body=Conductor: active {stamp_of(now)} {name} since {taken}"

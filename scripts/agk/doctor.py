@@ -508,6 +508,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "installs its own); they are read for one release "
         "while [autopilot] is absent (a change to agk.toml needs an ADR in the same pull request)",
     ),
+    "merger-variable": (  # brief #1554 answer 4 (ADR-0654)
+        "warn",
+        "the merger's jobs start only where they can merge",
+        "merger-variable: ",
+        "the owner runs the one printed command (repository variable AGK_MERGER); a session "
+        "never runs it (session rule 30, brief #1554, ADR-0654)",
+    ),
     "local-mode-switch": (
         "warn",
         "the local-mode switch-over is consistent",
@@ -932,6 +939,37 @@ def local_switch_result(reads: Reads, config: dict) -> Result:
         plural = "s" if still != 1 else ""
         parts.append(f"the ruleset still requires {still} check{plural} of required_checks")
     return Result("fail", message=f" ({'; '.join(parts)})") if parts else Result("ok")
+
+
+MERGER_FILE = ".github/workflows/merger.yml"
+CRON_EVERY = re.compile(r'cron: "\*/([1-9][0-9]?) \* \* \* \*"')
+
+
+def scheduled_per_day(text: str) -> int | None:
+    """The starts a day of a `*/N * * * *` schedule in the workflow TEXT; None for any other."""
+    found = CRON_EVERY.search(text)
+    return 1440 // int(found.group(1)) if found else None
+
+
+def merger_variable_result(root: Path, reads: Reads, config: dict) -> Result:
+    """`merger-variable` (brief #1554 answer 4, ADR-0654): with the merger installed, offers the
+    one command that keeps its comment and scheduled jobs from starting where it would stop at its
+    gate, and warns when auto-merge is on in GitHub mode and they are kept off. One GET of the
+    repository variable (404: unset); prints, never runs (session rule 30)."""
+    try:
+        text = (root / MERGER_FILE).read_text(encoding="utf-8")
+    except OSError:
+        return Result("ok", message=" (not applicable: the merger workflow is not installed)")
+    data, why = reads.get(
+        "variable-agk-merger", f"/actions/variables/{merge_cleared.MERGER_VARIABLE}", "unset"
+    )
+    if why and why != "unset":
+        return Result("cannot-check", why)
+    value = data.get("value") if isinstance(data, dict) else None
+    found = merge_cleared.merger_variable_line(config, value, scheduled_per_day(text))
+    if found is None:
+        return Result("ok")
+    return Result("fail", message=found[1])
 
 
 def issues_result(repo_data: Any, reason: str, writers: list[str]) -> Result:
@@ -2205,6 +2243,7 @@ def run_checks(
     results["misplaced-settings"] = misplaced_settings_result(config)
     results["autopilot-settings"] = autopilot_settings_result(root)
     results["local-mode-switch"] = local_switch_result(reads, config)
+    results["merger-variable"] = merger_variable_result(root, reads, config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]

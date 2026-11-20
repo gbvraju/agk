@@ -554,3 +554,56 @@ def test_doctor_reads_an_adapter_on_path_as_there(tmp_path):
 
     write_toml(tmp_path, '[flow]\nauto_start = true\nlaunch_adapter = "my-launcher --cloud"\n')
     assert doctor.launch_adapter_result(tmp_path, "linux").status == "ok"
+
+
+# --- brief #1554 answer 1 (ADR-0654): a fresh lease is not written again --------------------------
+
+
+def test_1554_a_watchdog_take_of_its_own_fresh_lease_writes_nothing(world):
+    """REQ-039: brief #1554 answer 1 (the watchdog's take goes through the same path)."""
+    import conductor
+
+    stamp = iso(timedelta(seconds=-20))
+    own = comment(5, "boss", f"Conductor: active {stamp} conductor-local since {stamp}", stamp)
+    world["stub"].serve(PLAN, [own])
+    code, said = conductor.session.quietly(
+        conductor.lease, world["repo"].root, "--take", "conductor-local", False
+    )
+    assert code == 0 and said.startswith("lease: taken by conductor-local until ")
+    assert writes(world["stub"]) == []
+
+
+def test_1554_ten_watch_starts_within_240_seconds_write_the_lease_once(world, monkeypatch):
+    """REQ-039: brief #1554 answer 1 (each `watch` start renews; only a stale lease is written:
+    exactly one PATCH for the first start and none for the nine after it)."""
+    from datetime import UTC, datetime
+
+    import conductor
+
+    start = datetime.now(UTC).replace(microsecond=0)
+    clock = {"now": start}
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock["now"]
+
+    old = (start - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    store = [comment(5, "boss", f"Conductor: active {old} c1 since {old}", old)]
+    edits = []
+
+    def write_marker(repo, issue, found, text):
+        edits.append(text)
+        store[0] = {**store[0], "body": text.removeprefix("body=")}
+
+    monkeypatch.setattr(conductor, "datetime", Clock)
+    monkeypatch.setattr(conductor, "plan_comments", lambda repo, issue: list(store))
+    monkeypatch.setattr(conductor, "write_marker", write_marker)
+    root = world["repo"].root
+    for step in range(10):
+        clock["now"] = start + timedelta(seconds=24 * step)  # 0 s to 216 s
+        assert conductor.lease(root, "--take", "c1", takeover=False) == 0
+    assert len(edits) == 1
+    clock["now"] = start + timedelta(seconds=conductor.RENEW_EVERY)
+    assert conductor.lease(root, "--take", "c1", takeover=False) == 0
+    assert len(edits) == 2
