@@ -14,8 +14,15 @@
 # When claude exits, <worktree>/.agk-session-exit holds exit_code=<code> and ended_utc=<UTC time>.
 # With AGK_MODEL set (the tier's name from [models.names]) claude gets --model AGK_MODEL, and
 # --effort AGK_EFFORT beside it when that is set; without AGK_MODEL it gets no flag (verify: the flags are claude's).
+# claude always gets --agent AGK_AGENT first, the agent the start names (SPEC-0066 rule 5, ADR-0662); without
+# AGK_AGENT nothing starts.
 set -euo pipefail
 session="${AGK_SESSION:?AGK_SESSION is not set}"
+agent="${AGK_AGENT:-}"
+if [ -z "$agent" ]; then
+    echo "start-session-local: no agent named; nothing started (setting: AGK_AGENT)" >&2
+    exit 1
+fi
 prompt="$(cat)"
 
 # 1. The worktree first, and keep the session's own files out of git.
@@ -77,9 +84,9 @@ flags=()
 if [ -n "${4:-}" ]; then flags=(--model "$4"); if [ -n "${5:-}" ]; then flags+=(--effort "$5"); fi; fi
 code=0
 if [ "$3" = tab ]; then
-    claude "${flags[@]}" -p "$prompt" 2>&1 | tee "$1/.agk-session.log"; code=${PIPESTATUS[0]}
+    claude --agent "${11}" "${flags[@]}" -p "$prompt" 2>&1 | tee "$1/.agk-session.log"; code=${PIPESTATUS[0]}
 else
-    claude "${flags[@]}" -p "$prompt" || code=$?
+    claude --agent "${11}" "${flags[@]}" -p "$prompt" || code=$?
 fi
 printf "exit_code=%s\nended_utc=%s\n" "$code" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$1/.agk-session-exit"
 exit "$code"'
@@ -89,8 +96,8 @@ if [ "${AGK_SHOW_JOBS:-}" = true ] && command -v gnome-terminal >/dev/null 2>&1 
     && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
     gnome-terminal --tab --title "$session" --working-directory "$worktree" -- \
         bash -c "$wrapper" agk-session "$worktree" "$prompt_file" tab "${AGK_MODEL:-}" "${AGK_EFFORT:-}" \
-        "$session" "${AGK_BRIEF:-}" "${AGK_JOB_KIND:-}" "${AGK_ITEM:-}" "${AGK_HEAD:-}"
+        "$session" "${AGK_BRIEF:-}" "${AGK_JOB_KIND:-}" "${AGK_ITEM:-}" "${AGK_HEAD:-}" "$agent"
 else
     nohup bash -c "$wrapper" agk-session "$worktree" "$prompt_file" background "${AGK_MODEL:-}" "${AGK_EFFORT:-}" \
-        "$session" "${AGK_BRIEF:-}" "${AGK_JOB_KIND:-}" "${AGK_ITEM:-}" "${AGK_HEAD:-}" > "$worktree/.agk-session.log" 2>&1 < /dev/null &
+        "$session" "${AGK_BRIEF:-}" "${AGK_JOB_KIND:-}" "${AGK_ITEM:-}" "${AGK_HEAD:-}" "$agent" > "$worktree/.agk-session.log" 2>&1 < /dev/null &
 fi

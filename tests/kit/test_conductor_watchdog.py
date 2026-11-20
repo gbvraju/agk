@@ -395,6 +395,7 @@ def posix(tmp_path):
     env.update(
         PATH=f"{fake}{os.pathsep}{env['PATH']}",
         AGK_SESSION="builder-x",
+        AGK_AGENT="builder",  # SPEC-0066 rule 5 (ADR-0662)
         CLAUDE_SEEN=str(tmp_path / "seen.txt"),
         CLAUDE_CODE_CHILD_SESSION="1",
     )
