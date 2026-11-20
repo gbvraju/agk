@@ -47,7 +47,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from adopt import MARKERS
-from common import DEFAULT_CONFIG, CheckError, lf, matches, paused, read_list
+from common import DEFAULT_CONFIG, CheckError, lf, matches, paused, read_list, without_agent
 from init import KIT_ROOT as KIT_ROOT  # noqa: PLC0414 - tests point it at a fixture kit
 from init import MANIFEST, TABLE, Refusal, check_interpreter, passes_symlink, path_class
 from reviewers import ReviewerError, parse, render_codeowners
@@ -244,6 +244,7 @@ class Reader:
         return sorted(found)
 
     def is_kit_copy(self, rel: str, data: bytes) -> bool:
+        data = without_agent(rel, data)  # the project's agent line (SPEC-0066 rule 2, ADR-0663)
         mark = digest(data)
         if mark in self.verbatim.get(rel, set()):
             return True

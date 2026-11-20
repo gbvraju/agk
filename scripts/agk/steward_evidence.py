@@ -39,7 +39,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table, read_list, repo_root, utf8_output  # noqa: E402
+from common import (  # noqa: E402
+    OUTSIDE_PROJECT,
+    CheckError,
+    personal_table,
+    read_list,
+    repo_root,
+    utf8_output,
+)
 
 SOURCES = (
     "owner decision",
@@ -297,7 +304,12 @@ def main(argv: list[str] | None = None) -> int:
     opts = parser.parse_args(argv)
     from steward import Unreadable, gh_api
 
-    root, today = repo_root(), datetime.now(UTC).date()
+    try:
+        root = repo_root()
+    except CheckError:
+        print(OUTSIDE_PROJECT)
+        return 3
+    today = datetime.now(UTC).date()
     try:
         if opts.command == "skill":
             line = skill_line(root, opts.step)

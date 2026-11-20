@@ -1,0 +1,1 @@
+- The owner's ready `Report:` on the head of his own parked pull request (a `Flow: owner change` line, and no live take of its brief newer than the ask and not handed over) ends an `Owner needed:` wait and returns it to review, written as one `Unparked-by: report <sha12>` (brief #1567)
