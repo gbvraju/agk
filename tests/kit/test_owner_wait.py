@@ -848,3 +848,52 @@ def test_1567_the_local_pass_unparks_through_the_one_owner_step(monkeypatch, own
     pulls = [mine()]
     lines = conductor.owner_lines("root", REPO, pulls, PLAIN, ["boss"], ["owner"], NOW)
     assert lines == [conductor.unparked_line(7, "owner-needed")]
+
+
+# --- brief #1616 answer 4: the settings beside the carried accept ------------------------------
+
+
+@pytest.mark.parametrize("value", ['"kit/manifest.json"', '["kit/*.json"]', "[1]"])
+def test_1616_a_bad_shared_indexes_is_refused_and_carries_nothing(tmp_path, value):
+    """REQ-066: brief #1616 answer 4: `[flow] shared_indexes` decides the light merge; a bad value
+    is refused naming the setting, and the accept's carried check reads it as no carry."""
+    import session_plan
+
+    (tmp_path / "agk.toml").write_text(f"[flow]\nshared_indexes = {value}\n", encoding="utf-8")
+    with pytest.raises(session_plan.CheckError) as refused:
+        session_plan.shared_indexes(tmp_path)
+    assert str(refused.value) == session_plan.INDEXES_REFUSED
+    assert session_mod.carried_check(tmp_path)("b" * 40, "c" * 40) is False
+
+
+@pytest.mark.parametrize("mode", ["team", "solo"])
+def test_1616_team_and_solo_read_the_same_answerers(tmp_path, monkeypatch, mode):
+    """REQ-066: brief #1616 answer 4: `review_mode` does not change who answers the owner wait."""
+    import common
+
+    (tmp_path / "agk.toml").write_text(f'review_mode = "{mode}"\n', encoding="utf-8")
+    assert common.review_mode(tmp_path) == mode
+    monkeypatch.setattr(session_mod, "verdict_authors", lambda root: ["@Boss"])
+    monkeypatch.setattr(session_mod, "spec_approvers", lambda root: ["Owner"])
+    assert session_mod.owner_people(tmp_path, {}) == ({"boss"}, {"boss", "owner"})
+
+
+@pytest.mark.parametrize(("key", "value"), [("review_mode", "pair"), ("execution", "cloud")])
+def test_1616_a_bad_review_mode_or_execution_is_refused_naming_the_setting(tmp_path, key, value):
+    """REQ-066: brief #1616 answer 4: `common.review_mode` and `common.execution` refuse."""
+    import common
+
+    (tmp_path / "agk.toml").write_text(f'{key} = "{value}"\n', encoding="utf-8")
+    with pytest.raises(common.CheckError) as refused:
+        getattr(common, key)(tmp_path)
+    assert f"setting: {key}" in str(refused.value) and value not in str(refused.value)
+
+
+@pytest.mark.parametrize("value", ["hosted", "hybrid", "pool", "local"])
+def test_1616_every_execution_value_is_read(tmp_path, value):
+    """REQ-066: brief #1616 answer 4: the router unparks with `hosted`, `hybrid` and `pool`; the
+    conductor's pass with `local`; both through the one `owner_apply` with the carried check."""
+    import common
+
+    (tmp_path / "agk.toml").write_text(f'execution = "{value}"\n', encoding="utf-8")
+    assert common.execution(tmp_path) == value

@@ -4350,16 +4350,23 @@ def for_the_maintainers(line: str) -> bool:
 ACCEPT_LINE = re.compile(r"Maintainer answer: accept ([0-9a-f]{40})\b")
 
 
-def owner_item(pr: dict, comments: list, listed: set[str], answerers: set[str], own: bool = False):
+def owner_item(
+    pr: dict, comments: list, listed: set[str], answerers: set[str], own: bool = False, carried=None
+):
     """(key, since) of the newest open item waiting on the owner, or None (`open_owner_items`)."""
-    open_items = open_owner_items(pr, comments, listed, answerers, own)
+    open_items = open_owner_items(pr, comments, listed, answerers, own, carried)
     if not open_items:
         return None
     return max(open_items.items(), key=lambda kv: kv[1])
 
 
 def open_owner_items(
-    pr: dict, comments: list, listed: set[str], answerers: set[str], own: bool = False
+    pr: dict,
+    comments: list,
+    listed: set[str],
+    answerers: set[str],
+    own: bool = False,
+    carried: Callable[[str, str], bool] | None = None,
 ) -> dict:
     """{key: since} of every open item that waits on the owner: a `Question:` for the maintainers
     (key: its Q id) until an `Answer:`, a `Maintainer answer:` or a `Correction:` naming that id by
@@ -4370,8 +4377,12 @@ def open_owner_items(
     router's `agk:approve` or `agk:owner-merge` (key: `approve` or `owner-merge`), from the newest
     comment, or the pull request's creation without one. With `own` (the owner's own pull
     request, `owner_own`), a ready `Report:` of the pull request's author that names the current
-    head closes an `owner-needed` item posted before it, never a Q id (brief #1567 answer 1)."""
+    head closes an `owner-needed` item posted before it, never a Q id (brief #1567 answer 1).
+    Brief #1616 (ADR-0685): an answer naming a Q id also closes every `Owner needed:` that names
+    that id in its first line or body, whatever its key; an `accept <old>` closes the items too
+    when `carried(old, head)` holds (`carried_check`); a check that fails carries nothing."""
     open_items: dict[str, datetime] = {}
+    ids_of: dict[str, set[str]] = {}  # the Q ids the newest `Owner needed:` of each key names
     head = str((pr.get("head") or {}).get("sha") or "")
     author = str((pr.get("user") or {}).get("login") or "").lower()
     ordered = in_order(comments)
@@ -4384,15 +4395,18 @@ def open_owner_items(
             found = QUESTION_ID.search(line)
             named = found.group(0) if found and found.group(0) in open_items else None
             open_items[named or "owner-needed"] = when
+            ids_of[named or "owner-needed"] = set(QUESTION_ID.findall(str(c.get("body") or "")))
         elif own and who == author and (done := READY_REPORT.match(line)):
             if head and head.startswith(done.group(1)):
                 open_items.pop("owner-needed", None)
         elif who not in answerers:
             continue
         elif found := ANSWER_LINE.match(line):
-            open_items.pop(found.group(1), None)
+            qid = found.group(1)
+            for key in [qid, *(k for k, ids in ids_of.items() if qid in ids)]:
+                open_items.pop(key, None)
         elif accepted := ACCEPT_LINE.match(line):
-            if head and accepted.group(1) == head:
+            if head and (accepted.group(1) == head or carries(carried, accepted.group(1), head)):
                 open_items.clear()
         elif line.startswith(("Maintainer answer:", "Approve:")):
             open_items.clear()
@@ -4405,6 +4419,51 @@ def open_owner_items(
             newest_post = moment(ordered[-1].get("created_at")) if ordered else None
             open_items[key] = newest_post or moment(pr.get("created_at"))
     return open_items
+
+
+def carries(carried: Callable[[str, str], bool] | None, old: str, head: str) -> bool:
+    """Whether the caller's check carries an accept of OLD to HEAD; no check, or one that fails,
+    carries nothing (brief #1616 answer 2)."""
+    if carried is None:
+        return False
+    try:
+        return bool(carried(old, head))
+    except (CheckError, OSError, ValueError, subprocess.SubprocessError):
+        return False
+
+
+CARRY_STEPS = 20  # the most first-parent merges of the default branch an accept carries over
+SHA_FULL = re.compile(r"[0-9a-f]{40}")
+
+
+def carried_check(root, default: str | None = None, shared: list[str] | None = None):
+    """The git-backed `carried(old, head)` of brief #1616 answer 2: each first-parent step from
+    OLD to HEAD is `session_plan.light_merge` of the default branch (`origin/<default_branch>` as
+    last fetched, else DEFAULT) with `[flow] shared_indexes` (else SHARED). It never fetches: a
+    commit that is not in ROOT, a bad setting or any failed read is False."""
+
+    def carried(old: str, head: str) -> bool:
+        from session_plan import _git, light_merge, shared_indexes  # the plan builds on this
+
+        if not (SHA_FULL.fullmatch(old) and SHA_FULL.fullmatch(head)) or not Path(root).is_dir():
+            return False
+        try:
+            branch = config_source(Path(root)).get("default_branch", "main")
+            indexes = list(shared_indexes(root) if shared is None else shared)
+        except (CheckError, OSError, ValueError):
+            return False
+        ref = default or f"origin/{branch}"
+        step = head
+        for _ in range(CARRY_STEPS):
+            parents = (_git(root, "rev-list", "--parents", "-n", "1", step) or "").split()[1:]
+            if len(parents) != 2 or not light_merge(root, parents[0], step, ref, indexes):
+                return False
+            step = parents[0]
+            if step == old:
+                return True
+        return False
+
+    return carried
 
 
 def own_park(comments: list) -> tuple[str, dict] | None:
@@ -4429,21 +4488,22 @@ def owner_step(
     listed: set[str],
     answerers: set[str],
     own: bool = False,
+    carried: Callable[[str, str], bool] | None = None,
 ) -> tuple[str, str] | None:
     """`("park", key)` when the newest owner item has waited `minutes` since its post, or at once
     inside rest hours; `("unpark", key)` when this rule parked the pull request and no item with
     the key it parked for is still open, read over every comment, so an answer posted before the
     park ends it and an answer to another Q id does not (brief #1534 answer 3); `("repair", key)`
     when the label is gone but this rule's `Parked-by:` has no `Unparked-by:`; else None. A
-    person's own `agk:parked` is never touched. `own` as in `open_owner_items` (brief #1567)."""
+    person's own `agk:parked` is never touched. `own` and `carried` as in `open_owner_items`."""
     mark = own_park(comments)
     labelled = PARKED_LABEL in labels_of(pr)
     if mark is not None and (not labelled or mark[0] not in open_owner_items(
-            pr, comments, listed, answerers, own)):  # fmt: skip
+            pr, comments, listed, answerers, own, carried)):  # fmt: skip
         return ("unpark" if labelled else "repair", mark[0])
     if labelled:
         return None
-    item = owner_item(pr, comments, listed, answerers, own)
+    item = owner_item(pr, comments, listed, answerers, own, carried)
     if item is None:
         return None
     key, since = item
@@ -4477,20 +4537,22 @@ def owner_apply(
     *,
     seen: tuple[dict, list] | None = None,
     unpark_only: bool = False,
+    carried: Callable[[str, str], bool] | None = None,
 ) -> tuple[str, str] | None:
     """The one owner-wait write of every caller (brief #1534 answers 1 to 3): with `seen`, the
     caller's own read only says whether a step may be due; the decision is made on a fresh read
     (`owner_read`), then written. A park is read once more after its writes, and unparked in the
     same call when an answer now closes its item. `unpark_only` (the router) never parks. Returns
-    the step written, or None."""
-    if seen is not None and owner_step(*seen[:2], settings, now, listed, answerers) is None:
-        if owner_step(*seen[:2], settings, now, listed, answerers, own=True) is None:
+    the step written, or None. `carried` is the caller's check of brief #1616 answer 2."""
+    people = (listed, answerers)
+    if seen is not None and owner_step(*seen[:2], settings, now, *people, carried=carried) is None:
+        if owner_step(*seen[:2], settings, now, *people, own=True, carried=carried) is None:
             return None
     fresh = owner_read(repo, number)
     if fresh is None:
         return None
-    found = owner_step(*fresh, settings, now, listed, answerers)
-    by_report = owner_step(*fresh, settings, now, listed, answerers, own=True)
+    found = owner_step(*fresh, settings, now, *people, carried=carried)
+    by_report = owner_step(*fresh, settings, now, *people, own=True, carried=carried)
     reported = by_report != found and owner_own(repo, *fresh, listed)  # brief #1567: its brief
     if reported:
         found = by_report
@@ -4509,7 +4571,7 @@ def owner_apply(
         return None
     again = owner_read(repo, number)
     if again is not None:
-        then = owner_step(*again, settings, now, listed, answerers)
+        then = owner_step(*again, settings, now, listed, answerers, carried=carried)
         if then is not None and then[0] == "unpark" and unpark_pull(repo, number, then[1]):
             return then
     return found
@@ -4528,7 +4590,7 @@ def owner_park(repo: str, pr: dict, comments: list, settings: dict, root, args: 
     number = int(args.get("--pr") or 0)
     listed, answerers = owner_people(root, pr)
     found = owner_apply(repo, number, settings, listed, answerers, datetime.now(UTC),
-                        seen=(pr, comments))  # fmt: skip
+                        seen=(pr, comments), carried=carried_check(root))  # fmt: skip
     if found is None or found[0] != "park":
         return None
     head = str((pr.get("head") or {}).get("sha") or "")[:7]

@@ -1124,8 +1124,9 @@ def owner_lines(
         if kept is not None:
             kept[number] = comments  # read once: the steward's start reads them too (#1322)
         found = session.owner_apply(
-            repo, number, settings, listed, answerers, now, seen=(pull, comments)
-        )  # brief #1534 answer 1: decided on a fresh read, then written
+            repo, number, settings, listed, answerers, now, seen=(pull, comments),
+            carried=session.carried_check(root),
+        )  # fmt: skip  # brief #1534 answer 1: decided on a fresh read; #1616 answer 2
         if found and found[0] != "park":
             unparks.append(unparked_line(number, found[1]))
             continue
@@ -1172,7 +1173,8 @@ def owner_pass(root, repo: str, now: datetime) -> list[str]:
         if not session.labels_of(pull) & OWNER_WAITING or not isinstance(pull.get("number"), int):
             continue
         number = pull["number"]
-        found = session.owner_apply(repo, number, settings, listed, answerers, now)
+        found = session.owner_apply(repo, number, settings, listed, answerers, now,
+                                    carried=session.carried_check(root))  # fmt: skip
         if found:
             park = found[0] == "park"
             lines.append(
