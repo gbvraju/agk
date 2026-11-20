@@ -1,0 +1,1 @@
+- The stack record names each part's exact version and licence, the foundation writes the chosen stack's own build file, and a new `pins` step checks it against the committed lock (brief #1592)
