@@ -328,7 +328,7 @@ def files(root) -> list:
     skip = {".git", "stub", "bin"}
     found = [p for p in root.rglob("*") if not skip & set(p.relative_to(root).parts)]
     found = [p for p in found if p.is_file()]
-    return sorted((str(p.relative_to(root)), p.read_bytes()) for p in found)
+    return sorted((p.relative_to(root).as_posix(), p.read_bytes()) for p in found)
 
 
 def test_sweep_with_caps_makes_get_calls_only_and_writes_no_file(proj, stub):

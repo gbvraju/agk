@@ -106,7 +106,15 @@ import check_plan
 import design_import
 import design_signoff
 import playbook_format
-from common import ESTIMATE_LINES, CheckError, plan_settings, repo_root, run, utf8_output
+from common import (
+    ESTIMATE_LINES,
+    CheckError,
+    committed_bytes,
+    plan_settings,
+    repo_root,
+    run,
+    utf8_output,
+)
 
 NAME = "plan-intake"
 USAGE = (
@@ -922,9 +930,18 @@ def read_digests(root: Path) -> dict | None:
 def again_plan(root: Path, files: dict[str, str], listed: dict) -> tuple[list, list[str]]:
     """Brief #1221 answer 2: (path, text, what is printed) for each file to write, and the lines
     of the files left as they are. A file is rewritten only when the list holds it and its bytes
-    still have the listed digest; a missing file is created."""
+    still have the listed digest; a missing file is created. A file is read as committed (brief
+    #1540 answer 3, ADR-0648): a teammate's checkout that changed only its line ends
+    (`core.autocrlf=true`) is not an edit; the bytes on disk still count too, so a digest a
+    render recorded before that change still matches."""
     write: list[tuple[str, str, str]] = []
     kept: list[str] = []
+    plain = {
+        rel: (root / rel).read_bytes()
+        for rel in files
+        if (root / rel).is_file() and not (root / rel).is_symlink()
+    }
+    seen = committed_bytes(root, plain)
     for rel, text in files.items():
         path = root / rel
         if path.is_symlink() or (path.exists() and not path.is_file()):
@@ -933,9 +950,9 @@ def again_plan(root: Path, files: dict[str, str], listed: dict) -> tuple[list, l
             write.append((rel, text, "created"))
         elif rel not in listed["files"]:
             kept.append(f"kept {rel}: not written by render")
-        elif _digest(path.read_bytes()) != listed["files"][rel]:
+        elif listed["files"][rel] not in {_digest(plain[rel]), _digest(seen[rel])}:
             kept.append(f"kept {rel}: edited since the last render")
-        elif path.read_bytes() == text.encode("utf-8"):
+        elif text.encode("utf-8") in (plain[rel], seen[rel]):
             write.append((rel, text, "unchanged"))
         else:
             write.append((rel, text, "rewrote"))
@@ -1005,7 +1022,7 @@ def cmd_render(root: Path, proposals: Path, again: bool = False) -> int:
         path = root / rel
         if said != "unchanged":
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
+            path.write_text(text, encoding="utf-8", newline="\n")  # brief #1540 answer 3
         listed["files"][rel] = _digest(path.read_bytes())
         print(f"{said} {rel}")
     for line in kept:

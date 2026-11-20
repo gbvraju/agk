@@ -89,7 +89,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import kit_root
 import lock as heavy_lock
-from common import CheckError, long_temp_dir, proof_areas, proof_timeout, temp_env, utf8_output
+from common import (
+    CHECKOUT,
+    CheckError,
+    long_temp_dir,
+    proof_areas,
+    proof_timeout,
+    temp_env,
+    utf8_output,
+)
 from impact import impact
 from prepush import (
     LOCK,
@@ -644,8 +652,7 @@ def run_env(base: str) -> dict:
 # What governance keeps of this process's environment besides PATH (brief #1291, ADR-0550): on
 # Windows only, what Python and the shell need to start; never a token, never HOME or git settings.
 WINDOWS_KEEP = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT")
-# The line ends of the worktree: the committed bytes, whatever the person's git configuration says.
-CHECKOUT = ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
+# The line ends of the worktree: `common.CHECKOUT`, the committed bytes (brief #1540, ADR-0648).
 
 
 def governance_env(base: str, home: Path) -> dict:
