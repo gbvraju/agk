@@ -38,7 +38,9 @@ OUTSIDE = "outside: no project here"
 
 
 def git(*args: str, cwd: Path) -> None:
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)  # nosec B603 B607
+    subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=cwd, check=True, capture_output=True
+    )
 
 
 def repo(path: Path) -> Path:
