@@ -2023,10 +2023,12 @@ def merger_variable_line(
         merging = lapse_rule(data)  # the lapse sweep needs the scheduled jobs (brief #1615)
     except (Nothing, Refused):
         merging = False
-    try:
-        merging = merging or github_mode(data) is None
-    except Nothing:
-        pass
+    if not merging:
+        try:
+            github_mode(data)
+            merging = True
+        except Nothing:
+            merging = False
     off = value == "off"
     if not merging and not off:
         saved = f"up to {per_day} scheduled jobs" if per_day else "the scheduled jobs"
