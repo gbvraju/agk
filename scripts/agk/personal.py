@@ -1394,17 +1394,17 @@ def req_sections(text: str) -> list[tuple[str, str]]:
     """(id, text) of each `### REQ-nnn` section, up to the next `##` or `###` heading."""
     from common import REQ_HEADER  # noqa: PLC0415
 
-    found: list[list] = []
-    current = None
+    found: list[tuple[str, list[str]]] = []
+    current: list[str] | None = None
     for line in text.splitlines(keepends=True):
         header = REQ_HEADER.match(line)
         if header:
-            current = [header[1], [line]]
-            found.append(current)
+            current = [line]
+            found.append((header[1], current))
         elif line.startswith(("## ", "### ")):
             current = None
         elif current is not None:
-            current[1].append(line)
+            current.append(line)
     return [(rid, "".join(lines)) for rid, lines in found]
 
 
@@ -1568,7 +1568,7 @@ def export_plan(sidecar: Path, target: Path, with_notes: bool, today: str) -> di
     default, base, installed = target_state(target)
     plan = {} if installed else adopt_plan(target, today)
     records = sidecar_records(sidecar)
-    own = {"req": [], "spec": [], "adr": []}
+    own: dict[str, list[int]] = {"req": [], "spec": [], "adr": []}
     for r in records:
         key = {"requirement": "req", "spec": "spec", "adr": "adr"}.get(r["kind"])
         number = int(r["id"].split("-")[1]) if key else 0
@@ -1583,7 +1583,10 @@ def export_plan(sidecar: Path, target: Path, with_notes: bool, today: str) -> di
         text = files.get(rel) or show(target, base, rel) or ""
         return text if not text or text.endswith("\n") else text + "\n"
 
-    entries, commands, scanned, tests = [], [], [], {}
+    entries: list[dict] = []
+    commands: list[str] = []
+    scanned: list[tuple[str, str]] = []
+    tests: dict[str, str] = {}
     for r in records:
         rid, kind, entry = r["id"], r["kind"], {"id": r["id"], "kind": r["kind"]}
         line = (
@@ -1599,9 +1602,9 @@ def export_plan(sidecar: Path, target: Path, with_notes: bool, today: str) -> di
             entry.update(status="mapped", to=rewritten(rid, maps), path=REQ_FILE)
             scanned.append((REQ_FILE, text))
         elif kind in FOLDERS:
-            name = NUMBERED.match(Path(r["rel"]).name)
-            new = maps[kind][int(name[1])]
-            rel = f"{FOLDERS[kind]}/{new:04d}-{name[2]}.md"
+            number, slug = r["rel"].rsplit("/", 1)[1][:-3].split("-", 1)
+            new = maps[kind][int(number)]
+            rel = f"{FOLDERS[kind]}/{new:04d}-{slug}.md"
             files[rel] = with_line(reset_status(rewritten(r["text"], maps), RESET[kind]), line)
             entry.update(status="mapped", to=rewritten(rid, maps), path=rel)
             scanned.append((FOLDERS[kind], files[rel]))
@@ -1646,8 +1649,8 @@ def export_plan(sidecar: Path, target: Path, with_notes: bool, today: str) -> di
         else:
             path, _, name = r["test"].partition("::")
             marker = rewritten(r["key"], maps)
-            text = tests.get(path) or show(target, base, path)
-            done = marked(text, name, marker, Path(path).suffix) if text and name else None
+            found = tests.get(path) or show(target, base, path)
+            done = marked(found, name, marker, Path(path).suffix) if found and name else None
             if done is None:
                 entry.update(status="withheld", reason=NOT_FOUND)
             else:
