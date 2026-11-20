@@ -265,7 +265,9 @@ def test_ac2_render_prints_the_declared_playbooks_batch_by(design: Path, capsys)
     write(design, "agk.toml", '[delivery]\nwork_type = "web-app"\n')
     for rel in ("config/playbooks/default.toml", "config/playbooks/web-app.toml"):
         write(design, rel, read(KIT_ROOT, rel))
-    code, out = render(design, sliced(), capsys)
+    data = sliced()
+    data["briefs"][0]["foundation"] = True  # SPEC-0072 rule 4: a work-type plan's foundation
+    code, out = render(design, data, capsys)
     assert code == 0, out
     line = (
         "Milestone order for the person: demo value: the joins that show the most in a demo"

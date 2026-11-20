@@ -4,6 +4,7 @@
   "verbatim": [
     ".claude/agents/architect-review.md",
     ".claude/agents/architect.md",
+    ".claude/agents/builder.md",
     ".claude/agents/conductor.md",
     ".claude/agents/drift-auditor.md",
     ".claude/agents/personal-reviewer.md",
@@ -36,6 +37,7 @@
     "agk.mk",
     "config/ci-tools.txt",
     "config/core-rules.md",
+    "config/playbooks/api-service.toml",
     "config/playbooks/cloud-migration.toml",
     "config/playbooks/data-pipeline.toml",
     "config/playbooks/default.toml",
@@ -110,6 +112,7 @@
     "scripts/agk/lessons.py",
     "scripts/agk/local_mode.py",
     "scripts/agk/lock.py",
+    "scripts/agk/measures.py",
     "scripts/agk/merge_cleared.py",
     "scripts/agk/metrics.py",
     "scripts/agk/minutes.py",

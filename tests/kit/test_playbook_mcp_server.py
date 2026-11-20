@@ -1,7 +1,7 @@
 """Tests of the shipped mcp-server playbook (SPEC-0038 rules 1, 10 and 12 build (k)).
 
 REQ-045 AC6. `config/playbooks/mcp-server.toml` passes the playbook check, and
-`check_playbooks.py` passes with ten playbooks. It holds exactly the mcp-server gates of rule 10:
+`check_playbooks.py` passes with eleven playbooks. It holds exactly the mcp-server gates of rule 10:
 tool schema contract tests, `check` (the testing map names a test glob for every schema file);
 permission scopes, `check` (every tool declares its scopes and none is a wildcard); and a
 prompt-injection test set, `check` (the set exists and the map names its tests). Each check gate
@@ -31,7 +31,8 @@ def data() -> dict:
 
 
 def gates() -> dict[str, dict]:
-    return {g["id"]: g for g in data()["gates"]}
+    # SPEC-0072 rule 2 (ADR-0665): the no-screen `accessibility` gate is not one of this spec
+    return {g["id"]: g for g in data()["gates"] if g["id"] != "accessibility"}
 
 
 def test_the_playbook_passes_the_check() -> None:
@@ -43,7 +44,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_ten_playbooks() -> None:
+def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -51,7 +52,7 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (10 playbooks)\n"
+    assert out.stdout == "ok playbooks (11 playbooks)\n"
 
 
 def test_exactly_the_mcp_server_gates_of_rule_10() -> None:
@@ -93,7 +94,7 @@ def test_nothing_beyond_rule_10_is_invented() -> None:
     # rule 10 gives the gates only: no order, lane, test map, heavy step or batching is invented
     playbook = data()
     assert [p["name"] for p in playbook["phases"]] == ["build"]
-    assert playbook["split"] == {"brief_order": ["build"], "depends_on": []}
+    assert playbook["split"] == {"brief_order": ["foundation", "build"], "depends_on": []}
     assert playbook["lanes"] == []
     assert playbook["heavy_steps"] == []
     assert playbook["milestones"]["shape"] == "per-brief"

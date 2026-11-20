@@ -34,18 +34,23 @@ adopted repository only the marked block). `python3 scripts/agk/traceability.py`
 3. From a checkout of agk, run init as a maintainer-approved step (an agent session blocks running a cloned script
    until a maintainer authorizes it):
 
-       python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased]
+       python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased] [--login-from-env] [--solo] [--project-tests CMD]
 
    Init never overwrites a differing file (it refuses and lists it) and a second run changes nothing.
    Init installs only the files of a release: run it from a release tag (`git checkout v<version>`). Between two
    releases it refuses, naming the release; `--unreleased` installs the checkout as it is, for the kit's own tests.
 4. Apply the printed ruleset and repository settings by hand on GitHub; init configures nothing there.
 
+The setup flags of init and adopt (SPEC-0062 rule 11, ADR-0679), which the steward passes: `--login-from-env` writes the
+login in `AGK_SETUP_LOGIN` (read by `gh api user`, never printed) on both `@REPLACE-ME` lines of `config/reviewers.yaml`;
+`--solo` writes `review_mode = "solo"` and its line in ADR-0001, refused without one person in the reviewers file;
+`--project-tests CMD` writes `project_tests`. Init and adopt themselves still run no command and reach no network.
+
 See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
 
 ## Adopting an existing repository
 
-    python3 scripts/agk/adopt.py TARGET [--dry-run]
+    python3 scripts/agk/adopt.py TARGET [--dry-run] [--login-from-env] [--solo] [--project-tests CMD]
 
 Run from a checkout of agk as a maintainer-approved step. TARGET is an existing git work tree. Adopt touches no
 product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `.claude/`, `config/`,
@@ -89,6 +94,21 @@ cleared). Review rounds, rejection and the cleared head come from comments whose
 sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.github/workflows/metrics.yml` runs every
 Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
 request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
+
+## Measures for a date range
+
+    python3 scripts/agk/measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--repo OWNER/REPO] [--api-dir DIR | --sidecar DIR]
+
+Reads the GitHub REST API (`gh api`, GET only), saved responses (`--api-dir`) or, in personal mode, the sidecar's
+`forge/` files (`--sidecar`), and local git objects; it writes no file and posts nothing. The range is UTC days, both
+included, at most 92. It prints one row per feature, a brief whose finishing pull request (`Finishes: #n`, else the last
+merged one once the brief is closed) merged in the range: its pull requests, the hours from brief to merge (queue, build
+and the builder's own turns), rework (fix rounds, rejections, corrections, reopens, follow-ups, first-review pass), backstop
+escapes, tokens, Actions minutes and the owner's part (hand and guarded merges, owner lines, owner questions and their
+wait). Then the range totals and one row for the merged pull requests tied to no brief. The output holds numbers only,
+never a title, a login, a branch or a host; a figure whose input is missing is `unknown`, never 0, and local or personal
+mode prints `none (local mode)` or `none (personal mode)` for what it does not keep. `--json` gives the same rows. See
+ADR-0659 and amendment 191 (SPEC-0007).
 
 ## The operations checklist
 
@@ -181,14 +201,19 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/steward.py start --session ID
     python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
     python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
+    python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
 
 The steward's notes (SPEC-0059 rule 8, ADR-0557): one open issue labelled `agk-steward`, created when none is open, one
-comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Pattern`, `Gap`, `Risk`, `Lesson`,
-`Owner question`, `Triage`, `Override`, `Onboarded`). `start` reads the notes first, with `since=` from the last one seen,
+comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Person`, `Pattern`, `Gap`, `Risk`, `Lesson`,
+`Owner question`, `Triage`, `Override`, `Onboarded`, `Setup`). `start` reads the notes first, with `since=` from the last one seen,
 prints the newest of each kind, posts `Started: steward <session> <UTC time>` and exits 1, writing nothing, while another
 steward's marker is live (60 minutes, no `Ended:`); at 500 comments it opens a new issue that carries the open owner
-questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). A failed
+questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). `setup`
+(SPEC-0062 rules 9 and 11, ADR-0679) prints one `Setup: <matter>: <choice> because <reason>` line per AGK matter, the
+plain questions left and, with `--answer`, the `run:` install command; after the install `--answer` is refused (exit 2). A failed
 GitHub call exits 4. In personal mode the notes are `docs/runs/steward/memory.md` of the sidecar and nothing is posted.
+In solo mode (SPEC-0062 rule 4) a start with no `Person:` note prints `ask:` with the one question to the person, and a
+`Person` note is `<business|technical>: <their words>`, ending `Who: ProductOwner` (else exit 2).
 `end` writes the pass's counted calls and tokens on its `Ended:` marker, `not shown` for a figure not given, never 0.
 
 ## Steward evidence
@@ -313,6 +338,9 @@ files forge. `jobs` prints the pass's `job:`, `held:` and `not started:` lines f
     python3 scripts/agk/steward_voice.py form FILE
     python3 scripts/agk/steward_voice.py confirm FILE --answers FILE
     python3 scripts/agk/steward_voice.py shortened --rules N[,N]
+    python3 scripts/agk/steward_voice.py explained FILE
+    python3 scripts/agk/steward_voice.py playback FILE --reply TEXT
+    python3 scripts/agk/steward_voice.py offtopic --product TEXT
 
 The steward's voice (ADR-0582, brief #1382). `check` reads a reply to a person and prints one `voice: rule <n>:` line per
 broken rule, naming the rule and never the text (exit 1), or `voice: ok`: the first line is an ask or an answer; at most
@@ -323,7 +351,11 @@ list. `choose` renders a decision JSON (`decision`, `options` of `label` with op
 evidence rules out, grouping kinds, keeping the best three by score with `say more for N other options`, or asking the
 one sharper question. `form` renders 1 to 5 inputs (`name`, `default`, optional `choices`) as one form with each default;
 `confirm` plays the answers back in at most three lines. `shortened` records one `Shortened:` marker, counted in the
-daily list. Exit 2: a refused input; exit 4: the memory cannot be written.
+daily list. In `check`, a term of the guide's `Kit terms` list passes only with its one sentence in the sentence that
+first names it, and only once: `explained` records each term a reply explains for the first time as one `Term: kit:`
+entry, and a later reply that explains it again fails (SPEC-0062 rule 5). `playback` exits 0 (`go on`) only when the
+play-back is three sentences or fewer and `--reply` is a plain yes, else 1 (`play back again`); `offtopic` prints the one
+line back to the product. Exit 2: a refused input; exit 4: the memory cannot be written.
 
 ## Conductor routines
 

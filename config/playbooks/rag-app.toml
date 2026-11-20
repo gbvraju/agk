@@ -40,7 +40,7 @@ order = 5
 after = ["answers"]
 
 [split]
-brief_order = ["corpus", "evaluation-set", "retrieval", "answer", "join"]
+brief_order = ["foundation", "corpus", "evaluation-set", "retrieval", "answer", "join"]
 depends_on = [
   ["evaluation-set", "corpus"],
   ["retrieval", "evaluation-set"],
@@ -67,6 +67,15 @@ map = [
   { code = "retrieval/**", tests = "tests/retrieval/**" },
   { code = "answers/**", tests = "tests/answers/**" },
 ]
+
+[architecture]
+layers = [
+  { name = "corpus", paths = ["corpus/**"] },
+  { name = "evaluation", paths = ["evaluation/**"] },
+  { name = "retrieval", paths = ["retrieval/**"] },
+  { name = "answers", paths = ["answers/**"] },
+]
+allow = []
 
 [[gates]]
 id = "evaluation-set"

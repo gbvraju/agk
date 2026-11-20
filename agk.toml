@@ -152,6 +152,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/adopt.py"
 tests = [
+  "tests/kit/test_steward_setup.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_reviewers_approvers_install.py",
   "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_project_mk.py", "tests/kit/test_windows_install.py",
   "tests/kit_dev/test_adopt.py", "tests/kit_dev/test_adopt_from_release.py",
@@ -571,6 +572,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/init.py"
 tests = [
+  "tests/kit/test_steward_setup.py",
   "tests/kit/test_architect_guard.py", "tests/kit/test_flakes.py", "tests/kit/test_personal_mode_rules.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_test_dirs_front_end.py",
@@ -612,6 +614,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_agent_named.py",
   "tests/kit/test_autopilot_adapter.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_one_conductor_per_machine.py",
@@ -673,11 +676,16 @@ tests = [
   "tests/kit/test_kit_repo_local_mode.py",
 ]
 [[testing.map]]
+code = "scripts/agk/measures.py"
+tests = [
+  "tests/kit/test_measures.py", "tests/kit_dev/test_reference_commands.py",
+]
+[[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
   "tests/kit/test_checklist.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_forge.py",
-  "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_metrics.py",
-  "tests/kit/test_metrics_cost.py", "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
+  "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_measures.py",
+  "tests/kit/test_metrics.py", "tests/kit/test_metrics_cost.py", "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
   "tests/kit/test_over_cap_builder.py", "tests/kit/test_product_report.py", "tests/kit/test_runbook_measures.py",
   "tests/kit/test_self_clearance.py", "tests/kit/test_solo_mode.py", "tests/kit/test_usage_by_kind.py",
   "tests/kit/test_usage_transcript.py", "tests/kit/test_verdict_authors.py", "tests/kit/test_verdict_forms.py", "tests/kit_dev/test_architect_review.py",
@@ -975,7 +983,7 @@ code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
 [[testing.map]]
 code = "scripts/agk/steward.py"
-tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
+tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_setup.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
 [[testing.map]]
 code = "scripts/agk/steward_daily.py"
 tests = ["tests/kit/test_steward_daily.py", "tests/kit/test_steward_evidence.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1020,7 +1028,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/steward_voice.py"
-tests = ["tests/kit/test_steward_voice.py", "tests/kit/test_steward_daily.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_steward_voice.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_daily.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/survey.py"
 tests = ["tests/kit/test_survey.py", "tests/kit_dev/test_kit_manifest.py"]

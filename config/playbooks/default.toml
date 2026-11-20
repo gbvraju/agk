@@ -12,19 +12,31 @@ evidence = [
   "the evidence item each verdict cites for each gate",
   "the recorded rollback or undo path of each change that is applied",
   "the acceptance criteria of each brief and the tests that carry them",
+  "the access check each action makes, with its test",
+  "the scan of the committed files for credentials, keys and tokens",
+  "the check each outside input meets before use, with its test",
+  "the log and trace lines a fault leaves",
+  "the scan of the code for settings fixed per environment",
+  "the forward migration and its way back, each tested",
+  "the keyboard and screen reader review of each screen",
+  "the measured time and cost of each path a user waits on",
 ]
 phases = []
 lanes = []
 claims = []
 
 [split]
-brief_order = []
+brief_order = ["foundation"]
 depends_on = []
 
 [testing]
 profile = "balanced"
 always_full = []
 map = []
+
+[architecture]
+layers = [{ name = "src", paths = ["**"] }]
+allow = []
 
 [[gates]]
 id = "tests-first"
@@ -55,6 +67,62 @@ id = "definition-of-done"
 kind = "judgement"
 text = "Every brief has acceptance criteria that its tests carry."
 owner_only = false
+
+[[gates]]
+id = "sign-in-permissions"
+kind = "judgement"
+text = "Every action checks who the user is and what they may do before it runs."
+owner_only = false
+reason = "No step can yet tell which actions of a project need an access check."
+
+[[gates]]
+id = "secrets"
+kind = "check"
+text = "No credential, key or token is committed; each value comes from the environment."
+owner_only = false
+step = "secrets"
+
+[[gates]]
+id = "input-validation"
+kind = "judgement"
+text = "Every input from outside the program is checked against its expected form before use."
+owner_only = false
+reason = "No step can yet tell which code paths take input from outside the program."
+
+[[gates]]
+id = "logging-tracing"
+kind = "judgement"
+text = "Each request or job leaves logs and traces that let a fault be found without a debugger."
+owner_only = false
+reason = "Whether the logs are enough to find a fault is a reviewer's reading of the code."
+
+[[gates]]
+id = "environment-settings"
+kind = "check"
+text = "A value that differs between environments is read from the environment, never fixed in code."
+owner_only = false
+step = "environment-settings"
+
+[[gates]]
+id = "migrations"
+kind = "judgement"
+text = "Every change to stored data has a forward migration and a tested way back."
+owner_only = false
+reason = "No step can yet tell which project files hold stored data or its migrations."
+
+[[gates]]
+id = "accessibility"
+kind = "judgement"
+text = "Every screen can be used with a keyboard and a screen reader, to the level the project names."
+owner_only = false
+reason = "No screen paths are named for the project, so no step can read its screens."
+
+[[gates]]
+id = "performance"
+kind = "judgement"
+text = "Every path a user waits on meets the time and cost budget the project names."
+owner_only = false
+reason = "A budget is the person's own trade-off, so a reviewer reads it against the measure."
 
 [milestones]
 shape = "per-brief"

@@ -68,6 +68,7 @@ def posix(tmp_path):
     env.update(
         PATH=f"{fake}{os.pathsep}{env['PATH']}",
         AGK_SESSION="builder-m",
+        AGK_AGENT="builder",  # SPEC-0066 rule 5 (ADR-0662)
         CLAUDE_SEEN=str(tmp_path / "seen.txt"),
     )
     return {"work": work, "env": env, "worktree": tmp_path / "agk-builder-m", "tmp": tmp_path}
@@ -93,18 +94,19 @@ def run_posix(posix, **extra: str) -> list[str]:
 def test_the_posix_adapter_passes_the_model_and_effort_when_the_model_is_set(posix):
     """REQ-052: brief #1252 answers 1 and 4 (`--model <name>` when `AGK_MODEL` is set)."""
     got = run_posix(posix, AGK_MODEL=MODEL, AGK_EFFORT="low", AGK_TIER="mid")
-    assert got == ["--model", MODEL, "--effort", "low", "-p", "build it"]
+    assert got == ["--agent", "builder", "--model", MODEL, "--effort", "low", "-p", "build it"]
 
 
 def test_the_posix_adapter_passes_the_model_alone_without_an_effort(posix):
     """REQ-052: brief #1252 answer 1."""
-    assert run_posix(posix, AGK_MODEL=MODEL) == ["--model", MODEL, "-p", "build it"]
+    got = run_posix(posix, AGK_MODEL=MODEL)
+    assert got == ["--agent", "builder", "--model", MODEL, "-p", "build it"]
 
 
 @pytest.mark.parametrize("extra", [{}, {"AGK_EFFORT": "high", "AGK_TIER": "strongest"}])
 def test_the_posix_adapter_passes_no_flag_without_a_model(posix, extra):
     """REQ-052: brief #1252 answers 1 and 4 (no `AGK_MODEL`: today's command, no flag)."""
-    assert run_posix(posix, **extra) == ["-p", "build it"]
+    assert run_posix(posix, **extra) == ["--agent", "builder", "-p", "build it"]
 
 
 # --- the Windows adapter -----------------------------------------------------------------------
@@ -121,9 +123,9 @@ def test_the_windows_adapter_hands_the_model_and_effort_to_its_tab():
     model and effort travel as arguments of the wrapper, as the session and brief do)."""
     script = WINDOWS.read_text(encoding="utf-8")
     wrapper = wrapper_of(script)
-    params = "param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)"
+    params = "param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Agent, $Model, $Effort)"
     assert wrapper.splitlines()[0] == params
-    assert "& claude @flags -p $prompt" in wrapper  # headless since brief #1388
+    assert "& claude --agent $Agent @flags -p $prompt" in wrapper  # headless since brief #1388
     assert "& claude $prompt" not in wrapper
     tab = script[script.find("wt -w 0 new-tab") :]
     assert "@extra" in tab and "$env:AGK_MODEL" in script
@@ -133,9 +135,13 @@ def test_the_windows_adapter_hands_the_model_and_effort_to_its_tab():
 @pytest.mark.parametrize(
     "model, effort, expected",
     [
-        (MODEL, "medium", ["--model", MODEL, "--effort", "medium", "-p", "build it"]),
-        (MODEL, None, ["--model", MODEL, "-p", "build it"]),
-        (None, None, ["-p", "build it"]),
+        (
+            MODEL,
+            "medium",
+            ["--agent", "builder", "--model", MODEL, "--effort", "medium", "-p", "build it"],
+        ),
+        (MODEL, None, ["--agent", "builder", "--model", MODEL, "-p", "build it"]),
+        (None, None, ["--agent", "builder", "-p", "build it"]),
     ],
 )
 def test_the_windows_wrapper_passes_the_model_only_when_set(tmp_path, model, effort, expected):
@@ -159,7 +165,7 @@ def test_the_windows_wrapper_passes_the_model_only_when_set(tmp_path, model, eff
     fake = double(tmp_path / "bin")
     env = {**os.environ, "PATH": f"{fake}{os.pathsep}{os.environ['PATH']}"}
     env["CLAUDE_SEEN"] = str(tmp_path / "seen.txt")
-    args = [str(worktree), str(prompt), str(tmp_path), "builder-w", "1252"]
+    args = [str(worktree), str(prompt), str(tmp_path), "builder-w", "1252", "builder"]
     args += [a for a in (model, effort) if a]
     done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["pwsh", "-NoProfile", "-File", str(run), *args], env=env, capture_output=True,

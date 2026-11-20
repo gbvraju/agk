@@ -9,6 +9,9 @@ Usage: python3 scripts/agk/steward_voice.py check FILE
        python3 scripts/agk/steward_voice.py form FILE
        python3 scripts/agk/steward_voice.py confirm FILE --answers FILE
        python3 scripts/agk/steward_voice.py shortened --rules N[,N]
+       python3 scripts/agk/steward_voice.py explained FILE
+       python3 scripts/agk/steward_voice.py playback FILE --reply TEXT
+       python3 scripts/agk/steward_voice.py offtopic --product TEXT
 
 `check` reads a reply the steward is about to give a person and prints one line per broken rule
 of ADR-0582, naming the rule and never the text, exit 1, or `voice: ok`, exit 0: rule 1, the
@@ -22,7 +25,13 @@ drops what the evidence rules out and says how many, groups kinds, keeps the bes
 with "say more for N other options", or asks the one sharper question. `form` renders up to five
 inputs as one short form with each default filled in, and `confirm` plays the answers back in at
 most three lines. `shortened` records one `Shortened:` marker in the steward's memory, which the
-daily list counts. No network but `shortened`'s one post, no model.
+daily list counts. Rule 8 also reads the planted kit terms of the guide's `Kit terms` list
+(SPEC-0062 rule 5, brief #1598, ADR-0678): a term is said with its one sentence on first use, in
+the sentence that first names it, and not again once the memory holds its `Term: kit:` entry,
+which `explained` records once. `playback` lets a stage go on (exit 0) only when the play-back is
+three sentences or fewer and the reply is a plain yes (SPEC-0062 rules 4 and 14), else says to play
+back again (exit 1); `offtopic` prints rule 10's one line. No network but the posts of
+`shortened` and `explained`, no model.
 """
 
 from __future__ import annotations
@@ -50,6 +59,85 @@ GREETING = re.compile(
 LETTERED = re.compile(r"^\s*(?:[-*•]\s+)?\(?([A-H])[).:]?\s+\S")
 OPTIONS = re.compile(r"Options: (.*?)(?: · |$)", re.M)
 STATUS = ("Done:", "In progress:", "Waiting on you:")
+GUIDE = Path(__file__).resolve().parents[2] / "docs" / "guides" / "steward-voice.md"
+TERM_LINE = re.compile(r"^- ([a-zA-Z][\w ]*?): (\S.*\.)$")
+SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
+YES = re.compile(
+    r"(?:yes|yes please|yes,? go ahead|approved|go ahead|go ahead with it|that'?s right|"
+    r"that is right|correct)[.!]?",
+    re.IGNORECASE,
+)
+SETTING = "setting: the kit terms of docs/guides/steward-voice.md, SPEC-0062 rule 5"
+
+
+def planted_terms(guide: Path = GUIDE) -> dict[str, str]:
+    """The guide's `Kit terms` list: {term: its one-sentence explanation}."""
+    try:
+        text = guide.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    part = (
+        text.split("\n## Kit terms\n", 1)[-1].split("\n## ", 1)[0] if "## Kit terms" in text else ""
+    )
+    return {m[1].lower(): m[2] for line in part.splitlines() if (m := TERM_LINE.match(line))}
+
+
+def known_terms(root: Path) -> set[str]:
+    """The kit terms the memory records as explained (`Term: kit: <term>: ...`)."""
+    import steward
+
+    if steward.personal_table(root) is not None:
+        comments = steward.personal_entries(root)
+    else:
+        comments = steward.load_cache(root).get("comments", [])
+    found = (re.match(r"Term: kit: ([^:\n]+):", c.get("body", "").lstrip()) for c in comments)
+    return {m[1].strip().lower() for m in found if m}
+
+
+def term_pattern(term: str) -> re.Pattern:
+    return re.compile(rf"\b{re.escape(term)}s?\b", re.IGNORECASE)
+
+
+def first_sentence(text: str, term: str) -> str:
+    return next((s for s in SENTENCE.split(text) if term_pattern(term).search(s)), "")
+
+
+def said(text: str, explanation: str) -> bool:
+    return explanation.rstrip(".").lower() in " ".join(text.split()).lower()
+
+
+def explained_terms(text: str, terms: dict[str, str], known=frozenset()) -> list[str]:
+    """The planted terms TEXT names for the first time with their one sentence."""
+    return [
+        t
+        for t, e in terms.items()
+        if t not in known and term_pattern(t).search(text) and said(first_sentence(text, t), e)
+    ]
+
+
+def term_problems(text: str, terms: dict[str, str], known) -> tuple[list[str], str]:
+    """Rule 8 for the planted terms, and TEXT with them masked for the other kit-term forms."""
+    out, masked = [], text
+    for term in sorted(terms, key=len, reverse=True):
+        if not term_pattern(term).search(masked):
+            continue
+        if term in known and said(text, terms[term]):
+            out.append(f"voice: rule 8: a kit term explained twice ({SETTING})")
+        elif term not in known and not said(first_sentence(text, term), terms[term]):
+            out.append(
+                f"voice: rule 8: a kit term without its one-sentence explanation ({SETTING})"
+            )
+        masked = term_pattern(term).sub("it", masked)
+    return sorted(set(out)), masked
+
+
+def is_yes(reply: str) -> bool:
+    """SPEC-0062 rule 14: an explicit approval with no condition, change or question."""
+    return bool(YES.fullmatch(reply.strip()))
+
+
+def sentences(text: str) -> int:
+    return len([s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.strip()])
 
 
 def kit_terms() -> re.Pattern:
@@ -68,8 +156,9 @@ def choices(text: str) -> int:
     return max(run, parts)
 
 
-def problems(text: str) -> list[str]:
+def problems(text: str, terms: dict[str, str] | None = None, known=frozenset()) -> list[str]:
     """Each broken rule of ADR-0582, naming the rule, never the text."""
+    planted, masked = term_problems(text, planted_terms() if terms is None else terms, known)
     rows = [line for line in text.splitlines() if line.strip()]
     out = []
     first = rows[0].strip() if rows else ""
@@ -91,7 +180,8 @@ def problems(text: str) -> list[str]:
         len(rows) != 3 or any(not r.startswith(s) for r, s in zip(rows, STATUS, strict=False))
     ):
         out.append(f"voice: rule 5: a status is three lines: {', '.join(STATUS)} ({ADR})")
-    if kit_terms().search(text):
+    out += planted
+    if not planted and kit_terms().search(masked):
         out.append("voice: rule 8: a kit term (setting: the plain-words list, SPEC-0062 rule 5)")
     return out
 
@@ -195,6 +285,28 @@ def confirm(fields: list[dict], answers: dict) -> str:
     return "\n".join(rows)
 
 
+def record_explained(text: str) -> int:
+    """One `Term: kit:` entry for each planted term TEXT explains for the first time."""
+    import steward
+
+    root, terms = repo_root(), planted_terms()
+    fresh = explained_terms(text, terms, known_terms(root))
+    try:
+        for term in fresh:
+            code, lines = steward.record(
+                root, "Term", f"kit: {term}: {terms[term]}", steward.gh_api
+            )
+            print("\n".join(lines))
+            if code:
+                return code
+    except steward.Unreadable as exc:
+        print(f"error: {exc} cannot be read", file=sys.stderr)
+        return 4
+    if not fresh:
+        print("no new kit term")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     parser = argparse.ArgumentParser(prog="steward_voice.py", description=__doc__.split("\n\n")[0])
@@ -205,8 +317,28 @@ def main(argv: list[str] | None = None) -> int:
     con.add_argument("file", type=Path)
     con.add_argument("--answers", type=Path, required=True)
     sub.add_parser("shortened").add_argument("--rules", required=True)
+    sub.add_parser("explained").add_argument("file", type=Path)
+    play = sub.add_parser("playback")
+    play.add_argument("file", type=Path)
+    play.add_argument("--reply", required=True)
+    sub.add_parser("offtopic").add_argument("--product", required=True)
     opts = parser.parse_args(argv)
     try:
+        if opts.command == "offtopic":
+            words = " ".join(opts.product.split()).rstrip("?.")
+            print(f"I can only help with what you are building here; shall we go back to {words}?")
+            return 0
+        if opts.command == "playback":
+            text = opts.file.read_text(encoding="utf-8")
+            if not text.strip() or sentences(text) > 3:
+                raise ValueError("a play-back is three sentences or fewer (SPEC-0062 rule 4)")
+            if is_yes(opts.reply):
+                print("go on: the person said yes")
+                return 0
+            print("play back again: not a plain yes; take the change and play it back")
+            return 1
+        if opts.command == "explained":
+            return record_explained(opts.file.read_text(encoding="utf-8"))
         if opts.command == "shortened":
             import steward
 
@@ -224,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
             return code
         text = opts.file.read_text(encoding="utf-8")
         if opts.command == "check":
-            found = problems(text)
+            found = problems(text, known=known_terms(repo_root()))
             print("\n".join(found) if found else "voice: ok")
             return 1 if found else 0
         data = json.loads(text)

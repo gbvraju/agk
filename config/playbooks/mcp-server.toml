@@ -19,7 +19,7 @@ order = 1
 after = []
 
 [split]
-brief_order = ["build"]
+brief_order = ["foundation", "build"]
 depends_on = []
 
 [testing]
@@ -47,6 +47,13 @@ kind = "check"
 text = "A prompt-injection test set: the set exists and the testing map names its tests."
 step = "prompt-injection-set"
 owner_only = false
+
+[[gates]]
+id = "accessibility"
+kind = "judgement"
+text = "Accessibility of the screens, where the work has any."
+owner_only = false
+reason = "This kind of work has no screens of its own, so there is nothing to check."
 
 [milestones]
 shape = "per-brief"

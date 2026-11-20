@@ -39,7 +39,7 @@ order = 4
 after = ["front-end", "back-end"]
 
 [split]
-brief_order = ["contract", "mock", "front-end", "back-end", "join"]
+brief_order = ["foundation", "contract", "mock", "front-end", "back-end", "join"]
 depends_on = [
   ["mock", "contract"],
   ["front-end", "mock"],
@@ -64,6 +64,19 @@ map = [
   { code = "mocks/**", tests = "tests/mocks/**" },
   { code = "frontend/**", tests = "tests/frontend/**" },
   { code = "backend/**", tests = "tests/backend/**" },
+]
+
+[architecture]
+layers = [
+  { name = "contracts", paths = ["contracts/**"] },
+  { name = "mocks", paths = ["mocks/**"] },
+  { name = "frontend", paths = ["frontend/**"] },
+  { name = "backend", paths = ["backend/**"] },
+]
+allow = [
+  { from = "frontend", to = "contracts" },
+  { from = "backend", to = "contracts" },
+  { from = "mocks", to = "contracts" },
 ]
 
 [[gates]]
@@ -91,6 +104,7 @@ id = "accessibility"
 kind = "judgement"
 text = "Accessibility, with the checks of SPEC-0037 where a prototype exists."
 owner_only = false
+reason = "No step reads the rendered screens yet; a reviewer reads them against the prototype."
 
 [milestones]
 shape = "per-batch"

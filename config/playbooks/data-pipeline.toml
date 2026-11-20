@@ -31,7 +31,7 @@ order = 3
 after = ["rollback"]
 
 [split]
-brief_order = ["build", "rollback", "cut-over"]
+brief_order = ["foundation", "build", "rollback", "cut-over"]
 depends_on = [
   ["rollback", "build"],
   ["cut-over", "rollback"],
@@ -86,6 +86,13 @@ id = "production-run"
 kind = "judgement"
 text = "Any run against production data, done and recorded by the owner alone; a session prepares the run and stops."
 owner_only = true
+
+[[gates]]
+id = "accessibility"
+kind = "judgement"
+text = "Accessibility of the screens, where the work has any."
+owner_only = false
+reason = "This kind of work has no screens of its own, so there is nothing to check."
 
 [milestones]
 shape = "per-brief"
