@@ -13,8 +13,8 @@ TODO(architect): what the product needs from a stack, as the owner gave it in th
 ## Decision
 
 1. **Options**
-   - Option A — {{recommended}}. External services: TODO(architect). Practices: {{practices}}.
-   - Option B — TODO(architect). Trade-offs: Cost: TODO(architect); Build speed: TODO(architect); Security: TODO(architect); Uptime: TODO(architect). External services: TODO(architect). Practices: {{practices}}.
+   - Option A — {{recommended}}. Parts: TODO(architect). External services: TODO(architect). Practices: {{practices}}.
+   - Option B — TODO(architect). Trade-offs: Cost: TODO(architect); Build speed: TODO(architect); Security: TODO(architect); Uptime: TODO(architect). Parts: TODO(architect). External services: TODO(architect). Practices: {{practices}}.
 2. **Practices**
    - local profile: check (step: a smoke test that starts the local profile and signs in with the stand-in identity)
    - fast CI: check (step: `agk doctor` reports ci-drafts and ci-concurrency ok for each workflow of required_checks; the five defaults of the kit's guide project-ci.md)

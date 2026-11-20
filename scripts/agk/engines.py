@@ -192,7 +192,14 @@ RECOMMENDED_SLOT = "{{recommended}}"
 RECOMMENDED = "(recommended)"
 EFFECTS = ("Cost", "Build speed", "Security", "Uptime")
 EFFECT = re.compile(r"(Cost|Build speed|Security|Uptime):")
-ENDS = ("Why:", SERVICES_KEY, "Practices:")
+PARTS_KEY = "Parts:"  # brief #1592 (amendment 200): `<name> <exact version> <licence id>`, ...
+ENDS = ("Why:", PARTS_KEY, SERVICES_KEY, "Practices:")
+# An exact version: two or more numeric fields and at most a pre-release or build tag, no range.
+EXACT = re.compile(r"\d+(?:\.\d+)+(?:[-+]?[A-Za-z][0-9A-Za-z.]*)?")
+# An SPDX licence id or expression (`MIT`, `Apache-2.0`, `MIT OR Apache-2.0`, `LicenseRef-x`).
+SPDX_ID = r"(?:LicenseRef-[0-9A-Za-z.-]+|[0-9A-Z][0-9A-Za-z.+-]*)"
+SPDX = re.compile(rf"{SPDX_ID}(?: (?:AND|OR|WITH) {SPDX_ID})*")
+VERIFY = "(verify)"
 SELECTION_LINE = re.compile(r"^(\s*-\s+test selection:\s+(?:check|judgement))\s+\(.*\)\s*$")
 
 
@@ -527,6 +534,7 @@ def stack_problems(name: str, text: str) -> list[str]:
     letters = {m.group(1) for m in options}
     if status and status.group(1) == "Proposed":
         out += choice_problems(options)
+        out += parts_problems(options)
         if chosen != "none yet":
             out.append(
                 "rule 5: the ADR is Proposed and Chosen is not `none yet`; an option is chosen by "
@@ -573,6 +581,39 @@ def choice_problems(options: list[re.Match]) -> list[str]:
         out.append(f"rule 5: more than one option is marked {RECOMMENDED}")
     elif not (segment(marked[0].group(2), "Why:") or "").strip(" ."):
         out.append(f"rule 5: option {marked[0].group(1)} is recommended with no Why: naming a need")
+    return out
+
+
+def option_parts(body: str) -> list[tuple[str, str, str]] | None:
+    """Brief #1592 answer 1: the option's parts as (name, version, licence), None with no `Parts:`.
+    A part's licence is '' when absent; `(verify)` marks are dropped (versions read that day)."""
+    text = segment(body, PARTS_KEY)
+    if text is None:
+        return None
+    out = []
+    for raw in text.replace(VERIFY, " ").strip(" .;").split(","):
+        words = raw.split()
+        if words:
+            out.append((words[0], words[1] if len(words) > 1 else "", " ".join(words[2:])))
+    return out
+
+
+def parts_problems(options: list[re.Match]) -> list[str]:
+    """Brief #1592 answer 1 (amendment 200): in a Proposed record each option names its parts,
+    each with an exact version and a licence id; the line names the option and the part's place."""
+    out: list[str] = []
+    for m in options:
+        letter, parts = m.group(1), option_parts(m.group(2))
+        if not parts:
+            out.append(f"rule 5: option {letter} names no Parts")
+            continue
+        for n, (_, version, licence) in enumerate(parts, 1):
+            if not EXACT.fullmatch(version):
+                out.append(f"rule 5: option {letter} part {n} has a range or no exact version")
+                if SPDX.fullmatch(version):  # the licence in the version's place
+                    continue
+            if not SPDX.fullmatch(licence):
+                out.append(f"rule 5: option {letter} part {n} has no licence id")
     return out
 
 
