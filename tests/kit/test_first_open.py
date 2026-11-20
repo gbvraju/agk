@@ -31,6 +31,8 @@ import upgrade
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts" / "agk"
+if not (ROOT / "kit" / "manifest.json").is_file():  # an install, or a copy of the kit's tests
+    pytest.skip("reads the kit's own files (kit/ is kit-only)", allow_module_level=True)
 SETTINGS = ".claude/settings.json"
 KIT_SETTINGS = (ROOT / SETTINGS).read_bytes()
 ROLE = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
