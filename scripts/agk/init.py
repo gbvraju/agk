@@ -5,6 +5,11 @@
 """agk init: install the kit into an empty repository (SPEC-0001).
 
 Usage: python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased]
+           [--login-from-env] [--solo] [--project-tests CMD]
+
+The setup flags (SPEC-0062 rule 11, brief #1599, ADR-0679), passed by the steward: the login in
+AGK_SETUP_LOGIN on both reviewer lines (never printed), `review_mode = "solo"` with its ADR line
+(refused without one person), and `project_tests`.
 
 Standard library only. No network, no git or gh calls, no writes outside TARGET. Reads only
 kit/manifest.json (and what it lists) from the kit checkout this script lives in. Refuses
@@ -20,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 import tomllib
@@ -73,6 +79,16 @@ FRONT_END_TEST_DIRS = (
     "cypress",
 )
 TEST_DIRS_LINE = 'test_dirs = ["tests"]'
+# SPEC-0062 rules 2 and 11 (brief #1599, ADR-0679): what the steward's setup writes in the install.
+LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
+LOGIN_ENV = "AGK_SETUP_LOGIN"  # set by the steward from `gh api user`; init runs no command
+SETUP_FLAGS = ("--login-from-env", "--solo")
+SETUP_USAGE = "[--login-from-env] [--solo] [--project-tests CMD]"
+SOLO_ADR = (
+    "5. Review mode: `solo`, from the person's answer at setup that they run this alone\n"
+    "   (SPEC-0062 rule 2 as amendment 208 proposes); the steward records it as a `Setup:`\n"
+    "   entry and never changes it later.\n"
+)
 
 
 class Refusal(Exception):
@@ -163,6 +179,61 @@ def with_test_dirs(rendered: str, added: list[str]) -> str:
     return re.sub(rf"(?m)^{re.escape(TEST_DIRS_LINE)}$", lambda _m: line, rendered, count=1)
 
 
+def setup_login() -> str | None:
+    """The signed-in login the steward read with `gh api user` into AGK_SETUP_LOGIN, or None;
+    never printed."""
+    login = os.environ.get(LOGIN_ENV, "").strip()
+    return login if LOGIN_RE.fullmatch(login) else None
+
+
+def setup_args(args: list[str]) -> tuple[list[str], dict]:
+    """The setup flags (`--login-from-env`, `--solo`, `--project-tests CMD`) out of ARGS."""
+    setup: dict = {}
+    rest = []
+    words = iter(args)
+    for word in words:
+        if word in SETUP_FLAGS:
+            setup[word.lstrip("-").replace("-from-env", "")] = True
+        elif word == "--project-tests":
+            setup["project_tests"] = next(words, "")
+        else:
+            rest.append(word)
+    if setup.pop("login", False):
+        login = setup_login()
+        if login is None:
+            raise Refusal(f"the signed-in login cannot be read (setting: {LOGIN_ENV})")
+        setup["login"] = login
+    return rest, setup
+
+
+def apply_setup(items: dict[str, bytes], setup: dict | None) -> None:
+    """The steward's setup in the install (SPEC-0062 rule 11): the reviewers file, the settings
+    and, for solo, the ADR's line. Refused, naming the setting, when solo has no one person."""
+    if not setup:
+        return
+    text = {rel: items[rel].decode("utf-8") for rel in ("config/reviewers.yaml", "agk.toml")}
+    adr = next(rel for rel in items if rel.startswith("docs/adr/0001-"))
+    text[adr] = items[adr].decode("utf-8")
+    if setup.get("login"):
+        text["config/reviewers.yaml"] = text["config/reviewers.yaml"].replace(
+            PLACEHOLDER, "@" + setup["login"]
+        )
+        text[adr] = "".join(
+            line for line in text[adr].splitlines(True) if "placeholder handle" not in line
+        )
+    if setup.get("solo"):
+        if PLACEHOLDER in text["config/reviewers.yaml"]:
+            raise Refusal("solo needs one person in config/reviewers.yaml (setting: review_mode)")
+        text["agk.toml"] = re.sub(
+            r'(?m)^review_mode = "team"$', 'review_mode = "solo"', text["agk.toml"]
+        )
+        text[adr] = text[adr].replace("\n## Consequences", SOLO_ADR + "\n## Consequences", 1)
+    if "project_tests" in setup:
+        line = "project_tests = " + json.dumps(setup["project_tests"])
+        text["agk.toml"] = re.sub(r"(?m)^project_tests = .*$", lambda _: line, text["agk.toml"])
+    items.update({rel: value.encode("utf-8") for rel, value in text.items()})
+
+
 def path_class(rel: str, entries: list[str]) -> str:
     for entry in entries:
         if matches(rel, entry):
@@ -170,7 +241,9 @@ def path_class(rel: str, entries: list[str]) -> str:
     return rel.split("/", 1)[0] + "/" if "/" in rel else "(repository root)"
 
 
-def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list[str], str]:
+def build_items(
+    target: Path, today: str, setup: dict | None = None
+) -> tuple[list[tuple[str, bytes]], list[str], str]:
     """Every file init manages as (relative path, content), protected entries, default branch."""
     manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
     date, branch = stamped(target, today)
@@ -192,6 +265,7 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
         items[dest] = rendered.encode("utf-8")
     if ROUTER_WORKFLOW in items:
         items[ROUTER_WORKFLOW] = router_bytes(target, items[ROUTER_WORKFLOW], items["agk.toml"])
+    apply_setup(items, setup)
     codeowners = render_codeowners(parse(items["config/reviewers.yaml"].decode("utf-8")))
     items[".github/CODEOWNERS"] = codeowners.encode("utf-8")
     entries = read_list(items["config/protected-paths.txt"].decode("utf-8"))
@@ -342,8 +416,13 @@ def main(argv: list[str] | None = None) -> int:
     dry_run = "--dry-run" in args
     unreleased = UNRELEASED in args
     rest = [a for a in args if a not in ("--dry-run", UNRELEASED)]
+    try:
+        rest, setup = setup_args(rest)
+    except Refusal as exc:
+        print(f"refused: {exc}")
+        return 1
     if len(rest) != 1 or rest[0].startswith("-"):
-        print("usage: init.py TARGET [--dry-run] [--unreleased]", file=sys.stderr)
+        print(f"usage: init.py TARGET [--dry-run] [--unreleased] {SETUP_USAGE}", file=sys.stderr)
         return 2
     try:
         problem = check_interpreter(tuple(sys.version_info[:3]))
@@ -362,7 +441,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: {not_released}; {REF_HINT}; nothing was written")
             print(plugin_settings())
             return 1
-        items, entries, branch = build_items(target, datetime.now(UTC).date().isoformat())
+        items, entries, branch = build_items(target, datetime.now(UTC).date().isoformat(), setup)
         plan = classify(target, items, entries)
     except Refusal as exc:
         print(f"refused: {exc}")

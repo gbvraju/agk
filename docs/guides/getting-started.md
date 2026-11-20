@@ -85,7 +85,9 @@ Each slash command runs one script of the plugin, the one its `skills/<name>/SKI
 
 ## Step 4. Put your name on the reviewer groups, check, commit and push
 
-`@REPLACE-ME` stands for the person or team who reviews protected paths, and for the person who approves a spec. Use your own
+In solo mode with the steward you skip this edit: the steward runs init or adopt with `--login-from-env`, which writes your
+signed-in login (read by `gh api user`, never printed) on both lines in the install pull request (SPEC-0062 rule 11).
+Otherwise: `@REPLACE-ME` stands for the person or team who reviews protected paths, and for the person who approves a spec. Use your own
 GitHub handle in both places. Open `config/reviewers.yaml`, find the two lines
 
     maintainers: {github_team: "@REPLACE-ME"}

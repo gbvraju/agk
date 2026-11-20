@@ -152,6 +152,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/adopt.py"
 tests = [
+  "tests/kit/test_steward_setup.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_reviewers_approvers_install.py",
   "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_project_mk.py", "tests/kit/test_windows_install.py",
   "tests/kit_dev/test_adopt.py", "tests/kit_dev/test_adopt_from_release.py",
@@ -571,6 +572,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/init.py"
 tests = [
+  "tests/kit/test_steward_setup.py",
   "tests/kit/test_architect_guard.py", "tests/kit/test_flakes.py", "tests/kit/test_personal_mode_rules.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_test_dirs_front_end.py",
@@ -987,7 +989,7 @@ code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
 [[testing.map]]
 code = "scripts/agk/steward.py"
-tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
+tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_setup.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
 [[testing.map]]
 code = "scripts/agk/steward_daily.py"
 tests = ["tests/kit/test_steward_daily.py", "tests/kit/test_steward_evidence.py", "tests/kit_dev/test_kit_manifest.py"]
