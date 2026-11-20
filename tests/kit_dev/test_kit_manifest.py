@@ -56,6 +56,7 @@ SINGLES = {
     "docs/specs/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
     "docs/guides/local-mode.md",
+    "docs/guides/steward-first-run.md",
     "docs/guides/steward-voice.md",
     "docs/runbooks/actions-blocked.md",
     "docs/runbooks/leaked-secret.md",

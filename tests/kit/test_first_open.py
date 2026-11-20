@@ -36,6 +36,8 @@ if not (ROOT / "kit" / "manifest.json").is_file():  # an install, or a copy of t
 SETTINGS = ".claude/settings.json"
 KIT_SETTINGS = (ROOT / SETTINGS).read_bytes()
 ROLE = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
+FIRST_RUN = "docs/guides/steward-first-run.md"  # named by the role file (the answer on #1612)
+GUIDE = (ROOT / FIRST_RUN).read_text(encoding="utf-8")
 OUTSIDE = "outside: no project here"
 
 
@@ -259,11 +261,14 @@ def test_first_run_prints_its_step(tmp_path, home, capsys, monkeypatch):
 
 
 def greeting() -> list[str]:
-    return [ln[2:] for ln in ROLE.splitlines() if ln.startswith("> ")]
+    return [ln[2:] for ln in GUIDE.splitlines() if ln.startswith("> ")]
 
 
-def test_the_role_file_reads_the_outside_line_and_gives_the_three_line_greeting():
-    assert OUTSIDE in ROLE and "python3 <kit>/steward.py first-run" in ROLE
+def test_the_role_file_names_the_guide_that_reads_the_outside_line_and_greets():
+    assert f"`{FIRST_RUN}`" in ROLE and not [ln for ln in ROLE.splitlines() if ln.startswith("> ")]
+    manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    assert FIRST_RUN in manifest["verbatim"] and FIRST_RUN in manifest["snapshot"]
+    assert OUTSIDE in GUIDE and "python3 <kit>/steward.py first-run" in GUIDE
     lines = greeting()
     assert len(lines) == 3
     assert lines[0].startswith("👋 You've got AGK")
@@ -272,9 +277,9 @@ def test_the_role_file_reads_the_outside_line_and_gives_the_three_line_greeting(
         assert all(word not in line for line in lines), word
 
 
-def test_the_role_file_names_each_first_step():
+def test_the_guide_names_each_first_step():
     for step in ("greet", "greeted", "adopt", "project", "kit"):
-        assert f"`{step}`" in ROLE, step
+        assert f"`{step}`" in GUIDE, step
 
 
 def test_uninstall_reads_a_named_copy_as_the_kits(tmp_path):
