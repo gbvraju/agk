@@ -980,7 +980,7 @@ code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
 [[testing.map]]
 code = "scripts/agk/steward.py"
-tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
+tests = ["tests/kit/test_steward_memory.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
 [[testing.map]]
 code = "scripts/agk/steward_daily.py"
 tests = ["tests/kit/test_steward_daily.py", "tests/kit/test_steward_evidence.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1025,7 +1025,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/steward_voice.py"
-tests = ["tests/kit/test_steward_voice.py", "tests/kit/test_steward_daily.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_steward_voice.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_daily.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/survey.py"
 tests = ["tests/kit/test_survey.py", "tests/kit_dev/test_kit_manifest.py"]
