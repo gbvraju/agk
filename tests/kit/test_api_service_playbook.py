@@ -31,7 +31,8 @@ ENTERPRISE = {
 }
 CHECKS = {"contract-tests", "secrets", "environment-settings"}
 JUDGED = {"input-validation", "sign-in-permissions", "logging-tracing"}
-GIT = ["git", "-c", "user.name=Ada", "-c", "user.email=ada@example.com", "-c", "commit.gpgsign=false"]
+GIT = ["git", "-c", "user.name=Ada", "-c", "user.email=ada@example.com"]
+GIT += ["-c", "commit.gpgsign=false"]
 SERVICE = {
     "pyproject.toml": '[project]\nname = "shop-hours"\ndependencies = ["fastapi>=0.1"]\n',
     "contracts/openapi.yaml": "openapi: 3.0.0\ninfo:\n  title: Opening hours for shops\n",
@@ -68,7 +69,8 @@ def test_it_composes_with_default_and_weakens_no_gate() -> None:
     for gid in JUDGED:
         assert by_id[gid]["kind"] == "judgement"
         assert len(by_id[gid]["reason"].strip()) >= playbook_format.REASON_MIN
-    base = {g["id"]: g for g in playbook_format.load(KIT_ROOT / "config/playbooks/default.toml")["gates"]}
+    default = playbook_format.load(KIT_ROOT / "config/playbooks/default.toml")
+    base = {g["id"]: g for g in default["gates"]}
     own = {g["id"]: g for g in data()["gates"]}
     for gid in set(own) & set(base):
         assert not (base[gid]["kind"] == "check" and own[gid]["kind"] == "judgement"), gid
