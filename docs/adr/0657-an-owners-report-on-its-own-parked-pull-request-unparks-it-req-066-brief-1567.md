@@ -29,10 +29,11 @@ one login (SPEC-0059 rule 1, Q-S0059-4), so a `Report:` by that login cannot sho
    other: the author is a spec approver and no `taken:` ever named its brief. By the maintainer answer to Q-1567-1
    (2026-11-20), a take no longer counts for the first case when it is older than the newest `Owner needed:` of a
    listed verdict author on the pull request. It also stops counting when a `Report: <sha> handing over` follows it,
-   on the brief or the pull request, before the next take: each hand-over ends the newest take before it. The second
-   case keeps "no take ever": under one login it is what keeps a builder's pull request from unparking on its own
-   report. A builder's `Flow: builder ...` line is no hand change, even when it says "by hand". An unreadable brief
-   is not the owner's.
+   on the brief or the pull request, before the next take: each hand-over ends the newest take before it, whichever
+   session posted it, since sessions share one login and a `Report:` names no session (the reading the answer
+   allows). The second case keeps "no take ever": under one login it is what keeps a builder's pull request from
+   unparking on its own report. A builder's `Flow: builder ...` line is no hand change, even when it says "by hand".
+   An unreadable brief is not the owner's.
 3. `session.owner_apply` stays the one write. The unpark it writes on a report removes the label and posts one
    `Unparked-by: report <sha12>`. `UNPARKED_BY` reads both forms, so the park is over. `unparked_owed` counts only
    `Unparked-by: answer`, so `next` offers no builder the owner's own pull request; it goes to review.
