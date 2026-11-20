@@ -25,7 +25,6 @@ from test_measures import (
     report_line,
     row,
     taken,
-    verdict,
 )
 
 RED = "The default branch is red"
