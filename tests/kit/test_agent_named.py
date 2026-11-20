@@ -389,4 +389,4 @@ def test_doctor_is_quiet_about_an_own_adapter_that_names_the_agent(tmp_path):
     import doctor
 
     root = project_with(tmp_path, '#!/bin/sh\nclaude --agent "$AGK_AGENT" -p "$(cat)"\n')
-    assert doctor.launch_adapter_result(root).status == "ok"
+    assert doctor.launch_adapter_result(root, cloud=False).status == "ok"

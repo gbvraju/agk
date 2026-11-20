@@ -1,4 +1,4 @@
 {
   "cannot": {},
-  "fail": ["brief-finished"]
+  "fail": ["brief-finished", "tier-use"]
 }

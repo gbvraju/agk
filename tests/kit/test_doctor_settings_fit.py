@@ -163,7 +163,7 @@ def test_reviews_under_builders_prints_the_difference(tmp_path):
 
 def test_fixed_profile_sets_reviews_to_builders_and_is_quiet(tmp_path):
     """REQ-072: answer 2."""
-    toml = "[flow]\nmax_builders = 12\nreviews_in_flight = 9\n[capacity]\nprofile = \"fixed\"\n"
+    toml = '[flow]\nmax_builders = 12\nreviews_in_flight = 9\n[capacity]\nprofile = "fixed"\n'
     assert doctor.review_ceiling_result(project(tmp_path, toml)).status == "ok"
 
 

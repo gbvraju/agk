@@ -1,0 +1,1 @@
+- `doctor.py` warns, information only, when the start settings do not fit how the project runs: `tier-use` (a model tier no open brief gets), the `launch-adapter` lines for a cloud session and a Windows adapter elsewhere, `review-ceiling` (`reviews_in_flight` under `max_builders`) and `slot-use` (stale or idle builder slots) (brief #1617, ADR-0686)
