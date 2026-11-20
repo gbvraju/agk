@@ -39,7 +39,7 @@ order = 4
 after = ["front-end", "back-end"]
 
 [split]
-brief_order = ["contract", "mock", "front-end", "back-end", "join"]
+brief_order = ["foundation", "contract", "mock", "front-end", "back-end", "join"]
 depends_on = [
   ["mock", "contract"],
   ["front-end", "mock"],

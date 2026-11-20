@@ -30,7 +30,7 @@ order = 3
 after = ["wave-plan"]
 
 [split]
-brief_order = ["inventory", "wave-plan", "cut-over"]
+brief_order = ["foundation", "inventory", "wave-plan", "cut-over"]
 depends_on = [
   ["wave-plan", "inventory"],
   ["cut-over", "wave-plan"],

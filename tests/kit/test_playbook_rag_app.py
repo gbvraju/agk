@@ -76,7 +76,8 @@ def test_phases_corpus_evaluation_set_retrieval_answers_joins() -> None:
 def test_the_evaluation_set_comes_before_any_retrieval_or_answer_brief() -> None:
     playbook = data()
     split = playbook["split"]
-    assert split["brief_order"] == ["corpus", "evaluation-set", "retrieval", "answer", "join"]
+    order = ["foundation", "corpus", "evaluation-set", "retrieval", "answer", "join"]
+    assert split["brief_order"] == order  # SPEC-0072 rule 4
     pairs = {tuple(p) for p in split["depends_on"]}
     assert ("retrieval", "evaluation-set") in pairs
     assert ("answer", "evaluation-set") in pairs

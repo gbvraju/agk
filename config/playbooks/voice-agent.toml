@@ -20,7 +20,7 @@ order = 1
 after = []
 
 [split]
-brief_order = ["build"]
+brief_order = ["foundation", "build"]
 depends_on = []
 
 [testing]

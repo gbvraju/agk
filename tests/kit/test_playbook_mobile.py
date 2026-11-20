@@ -106,7 +106,7 @@ def test_the_shape_is_one_brief_at_a_time() -> None:
     playbook = data()
     assert [p["name"] for p in playbook["phases"]] == ["build"]
     assert playbook["phases"][0]["after"] == []
-    assert playbook["split"]["brief_order"] == ["build"]
+    assert playbook["split"]["brief_order"] == ["foundation", "build"]  # SPEC-0072 rule 4
     assert playbook["split"]["depends_on"] == []
     assert playbook["lanes"] == []
     assert playbook["milestones"]["shape"] == "per-brief"

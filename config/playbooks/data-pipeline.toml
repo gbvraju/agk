@@ -31,7 +31,7 @@ order = 3
 after = ["rollback"]
 
 [split]
-brief_order = ["build", "rollback", "cut-over"]
+brief_order = ["foundation", "build", "rollback", "cut-over"]
 depends_on = [
   ["rollback", "build"],
   ["cut-over", "rollback"],
