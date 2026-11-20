@@ -1,0 +1,1 @@
+- In solo mode the steward first asks who it is talking to and what they want to build, records the answer in their own words, plays back what it understood before each stage and explains each kit term once (SPEC-0062 build (a), brief #1598)

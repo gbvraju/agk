@@ -21,9 +21,11 @@ open `Owner question:` (no later `Decision:` names its Q id), then closes the ol
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
 the value (exit 2). `end` writes the pass's counted calls and tokens on its marker, `not shown` when
 not given, never 0 (rule 13's daily list reads them). `onboard` is `steward_onboard.py onboard`
-(SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In personal mode (a `[personal]` table) the
-memory is `docs/runs/steward/memory.md` of the sidecar and nothing is posted. A failed GitHub call
-exits 4.
+(SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In solo mode a start with no `Person:` entry
+prints the one question of SPEC-0062 rule 4, and `record --kind Person` takes `<business|technical>:
+<their words>` and ends `Who: ProductOwner` (rule 15; brief #1598, ADR-0678). In personal mode
+(a `[personal]` table) the memory is `docs/runs/steward/memory.md` of the sidecar and nothing is
+posted. A failed GitHub call exits 4.
 """
 
 from __future__ import annotations
@@ -40,13 +42,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table, repo_root, utf8_output  # noqa: E402
+from common import CheckError, personal_table, repo_root, review_mode, utf8_output  # noqa: E402
 
 KINDS = (
     "Decision",
     "Ranking",
     "Term",
     "Persona",
+    "Person",
     "Pattern",
     "Gap",
     "Risk",
@@ -60,6 +63,12 @@ MARKERS = ("Started", "Ended", "Daily", "Shortened")
 LABEL = "agk-steward"
 TITLE = "AGK steward memory"
 WHO = "Who: AGK steward"
+OWNER_WHO = "Who: ProductOwner"
+PERSON = re.compile(r"(?:business|technical): \S.*", re.S)
+QUESTION = (
+    "Tell me in your own words what you want to build and who it is for; are you coming at this"
+    " from the business side or the technical side?"
+)
 ROLL_OVER = 500
 LIVE = timedelta(minutes=60)
 PAGE = 100
@@ -224,8 +233,8 @@ def memory_issue(gh: Gh, root: Path, cache: dict) -> dict:
     return issue
 
 
-def post(gh: Gh, cache: dict, text: str) -> None:
-    item = call(gh, "POST", f"{ISSUES}/{cache['issue']}/comments", {"body": f"{text}\n\n{WHO}\n"})
+def post(gh: Gh, cache: dict, text: str, who: str = WHO) -> None:
+    item = call(gh, "POST", f"{ISSUES}/{cache['issue']}/comments", {"body": f"{text}\n\n{who}\n"})
     cache["comments"].append({k: item.get(k) for k in ("id", "body", "created_at", "updated_at")})
 
 
@@ -264,13 +273,25 @@ def personal_append(root: Path, text: str) -> None:
 # --- the commands ---------------------------------------------------------------------------------
 
 
+def first_question(root: Path, memory: dict) -> list[str]:
+    """SPEC-0062 rule 4: in solo mode, with no `Person:` entry yet, the one question to ask."""
+    if review_mode(root) != "solo" or memory["newest"].get("Person"):
+        return []
+    return [
+        "first start with this person: ask, then record the answer as --kind Person",
+        f"ask: {QUESTION}",
+    ]
+
+
 def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[str]]:
     if personal_table(root) is not None:
         comments = personal_entries(root)
         if other := live_start(comments, session, now):
             return 1, [f"steward already running: {other}; this start writes nothing"]
         personal_append(root, f"Started: steward {session} {stamp(now)}")
-        return 0, [f"memory: {PERSONAL_FILE.as_posix()}", *summary(read_memory(comments))]
+        memory = read_memory(comments)
+        lines = [f"memory: {PERSONAL_FILE.as_posix()}", *summary(memory)]
+        return 0, [*lines, *first_question(root, memory)]
     cache = load_cache(root)
     issue = memory_issue(gh, root, cache)
     if other := live_start(cache["comments"], session, now):
@@ -283,7 +304,7 @@ def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[st
     memory = read_memory(cache["comments"])
     post(gh, cache, f"Started: steward {session} {stamp(now)}")
     save_cache(root, cache)
-    return 0, [f"memory: #{cache['issue']}", *summary(memory)]
+    return 0, [f"memory: #{cache['issue']}", *summary(memory), *first_question(root, memory)]
 
 
 def end(
@@ -297,6 +318,10 @@ def end(
 def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
     if kind not in KINDS:
         return 2, ["refused: not a memory kind (setting: the first word of rule 8)"]
+    if kind == "Person" and not PERSON.fullmatch(text.strip()):
+        return 2, [
+            "refused: a Person entry is `<business|technical>: <their words>` (SPEC-0062 rule 4)"
+        ]
     from guard import scan_text
 
     from config import guard_patterns
@@ -305,17 +330,18 @@ def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
     if findings:
         classes = ", ".join(sorted({f.kind for f in findings}))
         return 2, [f"refused: the text holds {classes} (setting: [guard]; data guard, SPEC-0042)"]
-    return write(root, f"{kind}: {text.strip()}", gh)
+    who = OWNER_WHO if kind == "Person" else WHO
+    return write(root, f"{kind}: {text.strip()}", gh, who)
 
 
-def write(root: Path, text: str, gh: Gh) -> tuple[int, list[str]]:
+def write(root: Path, text: str, gh: Gh, who: str = WHO) -> tuple[int, list[str]]:
     if personal_table(root) is not None:
-        personal_append(root, text)
+        personal_append(root, text if who == WHO else f"{text}\n\n{who}")
         return 0, [f"recorded in {PERSONAL_FILE.as_posix()}"]
     cache = load_cache(root)
     if "issue" not in cache:
         memory_issue(gh, root, cache)
-    post(gh, cache, text)
+    post(gh, cache, text, who)
     save_cache(root, cache)
     return 0, [f"recorded on #{cache['issue']}"]
 
