@@ -1,0 +1,1 @@
+- The conductor's check of a builder's local evidence gives governance the pull request body, so a protected change covered by its spec's decision no longer needs an owner accept (brief #1566)

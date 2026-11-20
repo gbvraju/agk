@@ -4,8 +4,8 @@
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """Check a local evidence record against the head and re-run a sample of it (brief #434, ADR-0233).
 
-    python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]
-    python3 scripts/agk/evidence.py check --head SHA [--sample N] [--json]
+    python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--body FILE] [--json]
+    python3 scripts/agk/evidence.py check --head SHA [--sample N] [--body FILE] [--json]
     python3 scripts/agk/evidence.py push --branch BRANCH [--remote REMOTE]
 
 RECORD is the file that `prepush.py --record` wrote (schema 1, brief #374, ADR-0208). A record of
@@ -66,6 +66,15 @@ one line: run it again (exit 1) when the remote's notes moved since the fetch, e
 that setting and the fallback (the record copied by hand, exit 0); any other failure keeps git's
 exit code. A fetch or push never prompts.
 
+Brief #1566 (ADR-0656): `--body FILE` gives governance the pull request body, as prepush gives it
+(`AGK_PR_BODY`, read by `check_protected_changes.py` for a `Covered-by:` line). The file is read as
+UTF-8 text of at most 65536 characters (GitHub's limit) and its bytes copied into the check's
+temporary folder; `AGK_PR_BODY` names that copy, never the given path, and the copy is removed with
+the folder. Only governance gets it: the sampled re-runs and the record's `pr-body` unit are as
+before. A body that cannot be read is a finding, `evidence: the pull request body cannot be read
+(option: --body)`, so the check differs and re-runs nothing. The `Evidence check:` line ends
+`, body <sha12 of the file>`, or `, body not given` without the option.
+
 Exit 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O
 error (a record that cannot be read, a worktree that cannot be made, make not installed). It posts
 nothing, needs no network but the notes fetch above and changes nothing in the repository but the
@@ -117,7 +126,8 @@ from proof import WINDOWS, kill_tree, popen_options
 
 HERE = Path(__file__).resolve().parent
 USAGE = (
-    "usage: evidence.py check RECORD [--head SHA] [--sample N] [--json] | check --head SHA ..."
+    "usage: evidence.py check RECORD [--head SHA] [--sample N] [--body FILE] [--json]"
+    " | check --head SHA ..."
     " | push --branch BRANCH [--remote REMOTE]"
 )
 NO_SHARED = "evidence: no record for this head in the shared evidence folder (option: --record)"
@@ -141,6 +151,9 @@ OUTCOMES = ("ok", "FAIL", "skipped")
 RESULTS = ("passed", "failed")
 TIMING_SOURCES = ("durations", "junit", "unknown")
 GOVERNANCE = ["make", "-f", "agk.mk", "agk-governance"]
+BODY_LIMIT = 65536  # GitHub's limit for a pull request body, in characters (brief #1566)
+BODY_COPY = "pr-body.md"  # the copy of the body inside the temporary folder (ADR-0656)
+NO_BODY = "the pull request body cannot be read (option: --body)"
 
 
 class Usage(Exception):
@@ -154,13 +167,23 @@ class Unreadable(Exception):
 def parse_args(args: list[str]) -> dict:
     if not args or args[0] != "check":
         raise Usage(USAGE)
-    options: dict = {"record": None, "head": None, "sample": DEFAULT_SAMPLE, "json": False}
+    options: dict = {
+        "record": None,
+        "head": None,
+        "sample": DEFAULT_SAMPLE,
+        "json": False,
+        "body": None,
+    }
     i = 1
     while i < len(args):
         arg = args[i]
-        if arg in ("--head", "--sample") and i + 1 < len(args):
+        if arg in ("--head", "--sample", "--body") and i + 1 < len(args):
             value = args[i + 1]
-            if arg == "--sample":
+            if arg == "--body":
+                if options["body"] is not None:
+                    raise Usage(USAGE)
+                options["body"] = value
+            elif arg == "--sample":
                 if not value.isdigit() or int(value) < 1:
                     raise Usage(USAGE)
                 options["sample"] = int(value)
@@ -178,6 +201,21 @@ def parse_args(args: list[str]) -> dict:
     if options["record"] is None and options["head"] is None:
         raise Usage(USAGE)
     return options
+
+
+def read_body(path: str) -> bytes | None:
+    """The bytes of the body file: UTF-8 text of at most `BODY_LIMIT` characters, else None."""
+    try:
+        data = Path(path).read_bytes()
+        text = data.decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    return data if len(text) <= BODY_LIMIT else None
+
+
+def report_body(sha: str | None) -> str:
+    """The end of the `Evidence check:` line: the body's sha12, or that none was given."""
+    return "body not given" if sha is None else f"body {sha[:12]}"
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -686,21 +724,27 @@ WINDOWS_KEEP = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT")
 # The line ends of the worktree: `common.CHECKOUT`, the committed bytes (brief #1540, ADR-0648).
 
 
-def governance_env(base: str, home: Path) -> dict:
+def governance_env(base: str, home: Path, body: Path | None = None) -> dict:
     """The environment of the governance run, the conductor's (`env -i PATH="$PATH" HOME=<scratch>
     AGK_BASE=<base>`, the local-mode guide): `PATH`, a scratch `HOME` inside the temporary folder
     and `AGK_BASE`; on Windows also `WINDOWS_KEEP`, `USERPROFILE` as that `HOME`, and the long
     temporary folder in `TEMP`, `TMP` and `TMPDIR` (brief #508). The person's own `HOME`, git
-    configuration and tokens never reach it (brief #1291, ADR-0550)."""
+    configuration and tokens never reach it (brief #1291, ADR-0550). With BODY, the copy of the
+    pull request body in the temporary folder, also `AGK_PR_BODY` (brief #1566, ADR-0656)."""
     env = {"PATH": os.environ.get("PATH", ""), "HOME": str(home), "AGK_BASE": base}
+    if body is not None:
+        env["AGK_PR_BODY"] = str(body)
     if WINDOWS:
         env.update({k: os.environ[k] for k in WINDOWS_KEEP if k in os.environ})
         env["USERPROFILE"] = str(home)
     return temp_env(env)
 
 
-def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
-    """Governance and the sample, in a detached worktree of `head`, under the heavy-step lock."""
+def in_worktree(
+    root: Path, record: dict, head: str, count: int, body: bytes | None = None
+) -> dict:
+    """Governance and the sample, in a detached worktree of `head`, under the heavy-step lock;
+    governance reads BODY from a copy in the temporary folder (brief #1566)."""
     try:
         temp = Path(tempfile.mkdtemp(prefix="agk-evidence-", dir=long_temp_dir()))
     except OSError:
@@ -726,7 +770,11 @@ def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
             ) from None
         home = temp / "home"
         home.mkdir()
-        code, out = governance(tree, governance_env(record["base"], home))
+        copy = None
+        if body is not None:
+            copy = temp / BODY_COPY
+            copy.write_bytes(body)
+        code, out = governance(tree, governance_env(record["base"], home, copy))
         env = run_env(record["base"])
         try:
             limit = proof_timeout(tree)
@@ -765,7 +813,14 @@ def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
         remove(root, temp, tree)
 
 
-def report(head: str, sha: str, found: list[str], ran: dict | None, as_json: bool) -> int:
+def report(
+    head: str,
+    sha: str,
+    found: list[str],
+    ran: dict | None,
+    as_json: bool,
+    body_sha: str | None = None,
+) -> int:
     differs = bool(found)
     gov = "not run"
     same = 0
@@ -804,6 +859,7 @@ def report(head: str, sha: str, found: list[str], ran: dict | None, as_json: boo
             "governance": {"exit": ran["governance"]["exit"]} if ran else None,
             "sample": ran["sample"] if ran else [],
             "notes": ran["notes"] if ran else [],
+            "body_sha256": body_sha,
         }
         print(json.dumps(data, indent=2, sort_keys=True))
     else:
@@ -811,7 +867,7 @@ def report(head: str, sha: str, found: list[str], ran: dict | None, as_json: boo
             print(line)
         print(
             f"Evidence check: {result}, head {head[:12]}, record {sha[:12]}, governance {gov}, "
-            f"sample {same} of {total} same exit"
+            f"sample {same} of {total} same exit, {report_body(body_sha)}"
         )
     return 1 if differs else 0
 
@@ -833,8 +889,15 @@ def main(argv: list[str] | None = None) -> int:
         else:
             record, sha = load_shared(root, head, options["json"])
         found = problems(record, head)
-        ran = None if found else in_worktree(root, record, head, options["sample"])
-        return report(head, sha, found, ran, options["json"])
+        body = body_sha = None
+        if options["body"] is not None:
+            body = read_body(options["body"])
+            if body is None:
+                found.append(NO_BODY)
+            else:
+                body_sha = hashlib.sha256(body).hexdigest()
+        ran = None if found else in_worktree(root, record, head, options["sample"], body)
+        return report(head, sha, found, ran, options["json"], body_sha)
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
