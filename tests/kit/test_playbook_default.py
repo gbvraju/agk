@@ -175,7 +175,7 @@ def test_the_kit_ships_only_default_and_kinds_of_the_list() -> None:
 
 def test_the_playbook_names_no_vendor_product_or_tool() -> None:
     lines = PLAYBOOK.read_text(encoding="utf-8").splitlines()
-    # only the fixed ids and steps of SPEC-0072 rule 2's enterprise gates are skipped: names, not tools
+    # only the fixed ids and steps of SPEC-0072 rule 2's enterprise gates are skipped (names)
     fixed = {f'{key} = "{gid}"' for key in ("id", "step") for gid in ENTERPRISE}
     text = "\n".join(s for s in lines if s not in fixed)
     assert "://" not in text and "www." not in text
