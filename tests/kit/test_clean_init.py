@@ -38,7 +38,7 @@ def kept(rel: str) -> bool:
 
 def repo(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)  # nosec B603 B607
+    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)  # nosec B603 B607 - a fixed git init, no shell
     return path
 
 

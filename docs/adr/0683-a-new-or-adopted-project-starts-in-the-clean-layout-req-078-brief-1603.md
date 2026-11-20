@@ -34,7 +34,8 @@ proof of rule 11 as not held.
 5. The steward's offer at setup (brief answer 3) is not built here: the brief's `Touches:` does not name `steward.py`
    (`Q-1603-1`).
 
-Protected path classes changed: `scripts/agk/` (`init.py`, `adopt.py`), `tests/kit/` (`test_clean_init.py`), `skills/`
+Protected path classes changed: `scripts/agk/` (`init.py`, `adopt.py`), `tests/kit/` (`test_clean_init.py`),
+`tests/kit_dev/` (`test_init.py`: init may import `rehearsal`, itself standard library only), `skills/`
 (`init/SKILL.md`) and `agk.toml` (the `[testing]` map entries of `init.py`, `adopt.py` and `rehearsal.py`).
 
 ## Consequences
