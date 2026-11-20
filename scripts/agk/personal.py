@@ -13,6 +13,8 @@
     python3 personal.py status [--clone DIR] [--sidecar DIR]
     python3 personal.py upgrade [--clone DIR] [--sidecar DIR]
     python3 personal.py hook install|remove [--clone DIR]
+    python3 personal.py export --target CLONE [--write] [--branch NAME] [--with-notes]
+    python3 personal.py export --check [--clone DIR] [--sidecar DIR]
 
 SPEC-0041 build (h), first part, rule 16. `baseline` prints the test command it would run: the
 sidecar's `[personal] test_command`, else the one test command the survey's inventory declares
@@ -75,6 +77,22 @@ plugin's `personal_state.PLUGIN_SCHEMA`, each step its own sidecar commit; it re
 than the plugin's, a sidecar with uncommitted changes and a missing step. `hook install|remove`
 (rule 19) writes or removes the opt-in `pre-push` hook that runs `gate --approve`, the one write
 under the clone's `.git/`; both are in `personal_state.py`, which a project install does not hold.
+
+`export` (build (m), rules 24 and 25, brief #1508) takes the sidecar's records to a target clone.
+Without `--write` it prints the mapping and writes nothing. With it, on a new branch of the target
+from its default branch (`--branch`, default `agk/personal-export`; the default branch is refused):
+the `adopt.build_plan` files when AGK is not installed there, the requirements, specs, ADRs, open
+briefs and decisions-log rows renumbered in one pass (`intake.rewritten`) from the first free ids
+(`common.next_free_ids` on the base, or counted over the plan), statuses reset to `planned`,
+`Draft` and `Proposed`, each requirement, spec and ADR ending `confirmed by <person> in personal
+mode on <date>` when the person confirmed it at a terminal, else `drafted in personal mode, not
+confirmed`; and `docs/runs/export-map.json`. A second branch `<branch>-tests` proposes the test map
+as `REQ-n ACm` comment markers above each named test. Field notes (`records/notes/`) are withheld
+unless `--with-notes`; a record that `guard.scan_text` flags is refused before anything is written,
+naming the path class. `gh issue create` is printed for each open brief and never run; nothing is
+pushed, the target's checkout is restored and the map is kept as `records/export-map.json` with one
+sidecar commit. `export --check` fails unless every record is in that map, mapped or withheld with
+a reason, naming the count and the first unmapped id.
 """
 
 from __future__ import annotations
@@ -89,6 +107,7 @@ import subprocess  # nosec B404 - fixed git argument lists and the person's appr
 import sys
 import tarfile
 import tempfile
+import tomllib
 import xml.parsers.expat
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -112,6 +131,8 @@ USAGE = (
     "       personal.py upgrade [--clone DIR] [--sidecar DIR] | hook install|remove [--clone DIR]\n"
     "       personal.py change start <name> [--advances REQ-nnn] [--base REF] | "
     "review [--report FILE] [--base REF] | confirm | finish [--base REF] [--approve]\n"
+    "       personal.py export --target CLONE [--write] [--branch NAME] [--with-notes] | "
+    "export --check\n"
     "       (each with [--clone DIR] [--sidecar DIR])"
 )
 SETTING = "personal.test_command"
@@ -1345,6 +1366,449 @@ def hook(clone: Path, action: str) -> tuple[int, list[str]]:
     return 0, [state.remove_hook(clone)]
 
 
+EXPORT_RULE = "SPEC-0041 rule 24"
+CHECK_RULE = "SPEC-0041 rule 25"
+EXPORT_MAP = "records/export-map.json"
+TARGET_MAP = "docs/runs/export-map.json"
+EXPORT_BRANCH = "agk/personal-export"
+NOTES = "records/notes"
+REQ_FILE, LOG_FILE = "docs/requirements.md", "docs/runs/decisions-log.md"
+RESET = {"requirement": "planned", "spec": "Draft", "adr": "Proposed"}
+FOLDERS = {"spec": "docs/specs", "adr": "docs/adr"}
+CLOSED_BRIEF = re.compile(r"^- Status: (?:done|closed|retired)[ \t]*$", re.MULTILINE)
+DERIVED = re.compile(r"(?:Approve|Accept|Confirm): [0-9a-f]{40} (\S+)")
+NUMBERED = re.compile(r"^(\d{4})-([a-z0-9][a-z0-9-]*)\.md$")
+HASH_COMMENT = (".py", ".rb", ".sh", ".pl", ".r", ".ex", ".exs", ".jl", ".cr", ".nim")
+NOT_FOUND = "the test is not found in the target's default branch; no marker is proposed"
+
+
+def kit_module(name: str):
+    """A kit script that the plugin holds and a project install does not (`adopt`, `intake`)."""
+    try:
+        return __import__(name)
+    except ImportError as exc:
+        raise CheckError(f"export needs the kit's {name}.py (path class: scripts/agk/)") from exc
+
+
+def req_sections(text: str) -> list[tuple[str, str]]:
+    """(id, text) of each `### REQ-nnn` section, up to the next `##` or `###` heading."""
+    from common import REQ_HEADER  # noqa: PLC0415
+
+    found: list[tuple[str, list[str]]] = []
+    current: list[str] | None = None
+    for line in text.splitlines(keepends=True):
+        header = REQ_HEADER.match(line)
+        if header:
+            current = [line]
+            found.append((header[1], current))
+        elif line.startswith(("## ", "### ")):
+            current = None
+        elif current is not None:
+            current.append(line)
+    return [(rid, "".join(lines)) for rid, lines in found]
+
+
+def log_rows(text: str) -> list[str]:
+    """The data rows of the decisions log's table: every `|` line after the header and rule."""
+    table = [line for line in text.splitlines() if line.startswith("|")]
+    return table[2:]
+
+
+def sidecar_records(sidecar: Path) -> list[dict]:
+    """Every record of rule 25, in order: {id, kind, rel, text}."""
+    out: list[dict] = []
+    req = sidecar / REQ_FILE
+    for rid, text in req_sections(req.read_text(encoding="utf-8") if req.is_file() else ""):
+        out.append({"id": rid, "kind": "requirement", "rel": REQ_FILE, "text": text})
+    for kind, folder in FOLDERS.items():
+        for path in sorted((sidecar / folder).glob("*.md")):
+            if NUMBERED.match(path.name):
+                rid = f"{'SPEC' if kind == 'spec' else 'ADR'}-{path.name[:4]}"
+                rel = path.relative_to(sidecar).as_posix()
+                out.append({"id": rid, "kind": kind, "rel": rel, "text": path.read_text("utf-8")})
+    for path in sorted((sidecar / "docs" / "briefs").glob("*.md")):
+        if path.name != "TEMPLATE.md":
+            rel = path.relative_to(sidecar).as_posix()
+            out.append(
+                {
+                    "id": f"brief:{path.stem}",
+                    "kind": "brief",
+                    "rel": rel,
+                    "text": path.read_text(encoding="utf-8"),
+                }
+            )
+    log = sidecar / LOG_FILE
+    for n, row in enumerate(log_rows(log.read_text(encoding="utf-8") if log.is_file() else ""), 1):
+        out.append({"id": f"log:{n}", "kind": "decisions-log", "rel": LOG_FILE, "text": row})
+    for path in sorted(p for p in (sidecar / NOTES).rglob("*") if p.is_file()):
+        rel = path.relative_to(sidecar / NOTES).as_posix()
+        out.append(
+            {
+                "id": f"note:{rel}",
+                "kind": "field-note",
+                "rel": NOTES,
+                "text": path.read_text(encoding="utf-8", errors="replace"),
+            }
+        )
+    entries = (
+        tomllib.loads((sidecar / "test-map.toml").read_text(encoding="utf-8"))
+        if (sidecar / "test-map.toml").is_file()
+        else {}
+    )
+    for key, ids in entries.items():
+        for test_id in ids if isinstance(ids, list) else []:
+            out.append(
+                {
+                    "id": f"test-map:{key} {test_id}",
+                    "kind": "test-map",
+                    "rel": "test-map.toml",
+                    "key": key,
+                    "test": str(test_id),
+                    "text": "",
+                }
+            )
+    return out
+
+
+def confirmations(sidecar: Path) -> dict[str, tuple[str, str]]:
+    """Record id -> (login, date) of each confirmation made at the person's terminal (rule 8)."""
+    from common import agent_apps  # noqa: PLC0415
+    from reviewers import derived_only, login_of, solo_person  # noqa: PLC0415
+
+    out: dict[str, tuple[str, str]] = {}
+    for item in derived_only(sidecar_comments(sidecar), agent_apps(sidecar), solo_person(sidecar)):
+        found = DERIVED.fullmatch(str(item.get("body") or ""))
+        if found:
+            out[found[1]] = (login_of(item), str(item.get("created_at") or "")[:10])
+    return out
+
+
+def reset_status(text: str, new: str) -> str:
+    """TEXT with its first `- Status:` line set to NEW (rule 24's reset)."""
+    lines = text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if STATUS_LINE.match(line.rstrip("\r\n")):
+            lines[i] = f"- Status: {new}{line[len(line.rstrip(chr(13) + chr(10))) :]}"
+            break
+    return "".join(lines)
+
+
+def with_line(text: str, line: str) -> str:
+    return text.rstrip("\n") + f"\n\n{line}\n"
+
+
+def target_state(target: Path) -> tuple[str, str, bool]:
+    """(default branch, base ref, AGK installed on it) of the target, read only."""
+    from common import detect_default_branch, show  # noqa: PLC0415
+
+    default = detect_default_branch(target)
+    if not default:
+        raise CheckError("cannot tell the target's default branch (option: --target)")
+    base = f"origin/{default}"
+    if _git(target, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").returncode != 0:
+        base = default
+    if _git(target, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").returncode != 0:
+        raise CheckError("the target's default branch has no commit (option: --target)")
+    text = show(target, base, "agk.toml")
+    try:
+        installed = text is not None and "version" in tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        installed = True
+    return default, base, installed
+
+
+def free_ids(target: Path, base: str, plan: dict[str, str]) -> dict[str, int]:
+    """The first free number of each kind: `common.next_free_ids` against the base when AGK is
+    installed there, else counted over the adopt plan's files, which the branch writes first."""
+    from common import NUM_FILE, PROJECT_FIRST_REQ, next_free_ids  # noqa: PLC0415
+
+    if not plan:
+        free = next_free_ids(target, base)
+        return {"req": int(free["req"][4:]), "spec": int(free["spec"]), "adr": int(free["adr"])}
+    reqs = [int(r["id"][4:]) for r in parse_requirements(plan.get(REQ_FILE, ""))]
+    out = {"req": max(max(reqs, default=0) + 1, PROJECT_FIRST_REQ)}
+    for key, folder in FOLDERS.items():
+        nums = [
+            int(m[1])
+            for rel in plan
+            if rel.startswith(folder + "/") and (m := NUM_FILE.match(Path(rel).name))
+        ]
+        out[key] = max(nums, default=0) + 1
+    return out
+
+
+def adopt_plan(target: Path, today: str) -> dict[str, str]:
+    adopt = kit_module("adopt")
+    plan, _, _ = adopt.build_plan(target, today)
+    clash = [rel for rel, action, _, _ in plan if action == "conflict"]
+    if clash:
+        raise CheckError("the adopt plan has a conflict in the target (path class: adopt plan)")
+    return {rel: content.decode("utf-8") for rel, action, content, _ in plan if action == "create"}
+
+
+def marked(text: str, name: str, marker: str, suffix: str) -> str | None:
+    """TEXT with `<comment> MARKER` above the first line naming the test NAME, else None."""
+    word = re.compile(rf"\b{re.escape(name.split('::')[-1].split('.')[-1])}\b")
+    lines = text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if word.search(line):
+            lead = "#" if suffix.lower() in HASH_COMMENT else "//"
+            note = f"{line[: len(line) - len(line.lstrip())]}{lead} {marker}\n"
+            if i and lines[i - 1] == note:
+                return text
+            return "".join([*lines[:i], note, *lines[i:]])
+    return None
+
+
+def export_plan(sidecar: Path, target: Path, with_notes: bool, today: str) -> dict:
+    """What `--write` would write: the files of both branches, the map and the printed commands."""
+    from common import show  # noqa: PLC0415
+
+    rewritten = kit_module("intake").rewritten
+    default, base, installed = target_state(target)
+    plan = {} if installed else adopt_plan(target, today)
+    records = sidecar_records(sidecar)
+    own: dict[str, list[int]] = {"req": [], "spec": [], "adr": []}
+    for r in records:
+        key = {"requirement": "req", "spec": "spec", "adr": "adr"}.get(r["kind"])
+        number = int(r["id"].split("-")[1]) if key else 0
+        if key and not (key == "req" and number < 101):
+            own[key].append(number)
+    first = free_ids(target, base, plan)
+    maps = {k: {n: first[k] + i for i, n in enumerate(sorted(v))} for k, v in own.items()}
+    confirmed = confirmations(sidecar)
+    files = dict(plan)
+
+    def base_text(rel: str) -> str:
+        text = files.get(rel) or show(target, base, rel) or ""
+        return text if not text or text.endswith("\n") else text + "\n"
+
+    entries: list[dict] = []
+    commands: list[str] = []
+    scanned: list[tuple[str, str]] = []
+    tests: dict[str, str] = {}
+    for r in records:
+        rid, kind, entry = r["id"], r["kind"], {"id": r["id"], "kind": r["kind"]}
+        line = (
+            "confirmed by {} in personal mode on {}".format(*confirmed[rid])
+            if rid in confirmed
+            else "drafted in personal mode, not confirmed"
+        )
+        if kind == "requirement" and int(rid[4:]) < 101:
+            entry.update(status="withheld", reason="AGK's own requirement (REQ-001 to REQ-099)")
+        elif kind == "requirement":
+            text = with_line(reset_status(rewritten(r["text"], maps), RESET[kind]), line)
+            files[REQ_FILE] = base_text(REQ_FILE).rstrip("\n") + "\n\n" + text
+            entry.update(status="mapped", to=rewritten(rid, maps), path=REQ_FILE)
+            scanned.append((REQ_FILE, text))
+        elif kind in FOLDERS:
+            number, slug = r["rel"].rsplit("/", 1)[1][:-3].split("-", 1)
+            new = maps[kind][int(number)]
+            rel = f"{FOLDERS[kind]}/{new:04d}-{slug}.md"
+            files[rel] = with_line(reset_status(rewritten(r["text"], maps), RESET[kind]), line)
+            entry.update(status="mapped", to=rewritten(rid, maps), path=rel)
+            scanned.append((FOLDERS[kind], files[rel]))
+        elif kind == "brief" and CLOSED_BRIEF.search(r["text"]):
+            entry.update(status="withheld", reason="a closed brief; no issue is proposed")
+        elif kind == "brief":
+            files[r["rel"]] = rewritten(r["text"], maps)
+            head = files[r["rel"]].splitlines()[0] if files[r["rel"]].strip() else ""
+            title = head.removeprefix("# Brief: ").removeprefix("# ").strip() or rid[6:]
+            commands.append(
+                shlex.join(
+                    [
+                        "gh",
+                        "issue",
+                        "create",
+                        "--title",
+                        title,
+                        "--label",
+                        "agk-brief",
+                        "--body-file",
+                        r["rel"],
+                    ]
+                )
+            )
+            entry.update(status="mapped", to="an issue, its command printed", path=r["rel"])
+            scanned.append(("docs/briefs", files[r["rel"]]))
+        elif kind == "decisions-log":
+            row = rewritten(r["text"], maps)
+            text = base_text(LOG_FILE) or kit_module("adopt").KIT_ROOT.joinpath(
+                "kit/templates/decisions-log.md"
+            ).read_text(encoding="utf-8")
+            files[LOG_FILE] = text.rstrip("\n") + "\n" + row + "\n"
+            entry.update(status="mapped", to=f"{LOG_FILE} row", path=LOG_FILE)
+            scanned.append((LOG_FILE, row))
+        elif kind == "field-note" and not with_notes:
+            entry.update(status="withheld", reason="a private field note (Q-S0041-11)")
+        elif kind == "field-note":
+            rel = f"docs/runs/field-notes/{rid[5:]}"
+            files[rel] = r["text"]
+            entry.update(status="mapped", to=rel, path=rel)
+            scanned.append((NOTES, r["text"]))
+        else:
+            path, _, name = r["test"].partition("::")
+            marker = rewritten(r["key"], maps)
+            found = tests.get(path) or show(target, base, path)
+            done = marked(found, name, marker, Path(path).suffix) if found and name else None
+            if done is None:
+                entry.update(status="withheld", reason=NOT_FOUND)
+            else:
+                tests[path] = done
+                entry.update(status="mapped", to=f"{marker} at {r['test']}", path=path)
+        entries.append(entry)
+    return {
+        "default": default,
+        "base": base,
+        "installed": installed,
+        "plan": sorted(plan),
+        "files": files,
+        "tests": tests,
+        "entries": entries,
+        "commands": commands,
+        "scanned": scanned,
+    }
+
+
+def export_lines(out: dict) -> list[str]:
+    plan = out["plan"]
+    lines = [
+        f"export: target AGK {'installed' if out['installed'] else 'not installed'}"
+        + ("" if out["installed"] else f"; the adopt plan adds {len(plan)} files")
+    ]
+    for e in out["entries"]:
+        if e["status"] == "mapped":
+            lines.append(f"export: {e['id']} -> {e['to']}")
+        else:
+            lines.append(f"export: withheld {e['id']} ({e['reason']})")
+    lines += [f"export: for the team to run: {c}" for c in out["commands"]]
+    mapped = sum(e["status"] == "mapped" for e in out["entries"])
+    lines.append(f"export: {mapped} mapped, {len(out['entries']) - mapped} withheld")
+    return lines
+
+
+def _target_git(target: Path, *args: str) -> subprocess.CompletedProcess:
+    """A git call that writes in the target, `export --write` only (rule 24); never a push."""
+    return subprocess.run(  # nosec B603 B607 - fixed git argument list, no shell
+        ["git", "-C", str(target), *args], capture_output=True, check=False
+    )
+
+
+def export(
+    sidecar: Path,
+    target: Path,
+    write: bool = False,
+    branch: str | None = None,
+    with_notes: bool = False,
+) -> tuple[int, list[str]]:
+    """Rule 24: a dry run, or with WRITE two new branches of TARGET and the map; never a push."""
+    try:
+        return _export(sidecar, target, write, branch or EXPORT_BRANCH, with_notes)
+    except CheckError as exc:
+        return 1, [f"refused: {exc}"]
+
+
+def _export(sidecar: Path, target: Path, write: bool, branch: str, with_notes: bool):
+    from guard import scan_text  # noqa: PLC0415
+
+    today = datetime.now(UTC).date().isoformat()
+    out = export_plan(sidecar, target, with_notes, today)
+    for cls, text in out["scanned"]:
+        if scan_text(text):
+            raise CheckError(
+                f"a record to export holds a secret pattern; nothing written (path class: {cls})"
+            )
+    lines = export_lines(out)
+    if not write:
+        return 0, ["export: dry run; nothing written (pass --write)", *lines]
+    tests_branch = f"{branch}-tests"
+    if branch in (out["default"], out["base"]) or tests_branch == out["default"]:
+        raise CheckError(
+            "export writes on a new branch, never the default branch (option: --branch)"
+        )
+    for name in (branch, tests_branch):
+        if _git(target, "rev-parse", "--verify", "--quiet", f"refs/heads/{name}").returncode == 0:
+            raise CheckError("the export branch already exists in the target (option: --branch)")
+    if _git(target, "status", "--porcelain").stdout.strip():
+        raise CheckError("the target's work tree is not clean (option: --target)")
+    mapping = {
+        "schema": 1,
+        "rule": EXPORT_RULE,
+        "date": today,
+        "base": out["base"],
+        "branch": branch,
+        "tests_branch": tests_branch,
+        "records": out["entries"],
+    }
+    text = json.dumps(mapping, indent=2) + "\n"
+    records = {**out["files"], TARGET_MAP: text}
+    back = [_git(target, "symbolic-ref", "--short", "-q", "HEAD").stdout.decode().strip()]
+    back = (
+        back if back[0] else ["--detach", _git(target, "rev-parse", "HEAD").stdout.decode().strip()]
+    )
+    made: list[str] = []
+    try:
+        for name, files, subject in (
+            (branch, records, "agk: export personal-mode records to team mode"),
+            (tests_branch, out["tests"], "agk: propose the personal test map as test markers"),
+        ):
+            if _target_git(
+                target, "switch", "-q", "--no-track", "-c", name, out["base"]
+            ).returncode:
+                raise CheckError("the target branch cannot be made (option: --branch)")
+            made.append(name)
+            for rel, content in files.items():
+                (target / rel).parent.mkdir(parents=True, exist_ok=True)
+                (target / rel).write_text(content, encoding="utf-8", newline="\n")
+            if files and (
+                _target_git(target, "add", "--", *files).returncode
+                or _target_git(
+                    target, "commit", "-q", "-m", f"{subject} ({EXPORT_RULE})"
+                ).returncode
+            ):
+                raise CheckError("the target commit failed (path class: target)")
+    except CheckError:
+        _target_git(target, "reset", "-q", "--hard")
+        _target_git(target, "switch", "-q", "--discard-changes", *back)
+        for name in made:
+            _target_git(target, "branch", "-q", "-D", name)
+        raise
+    _target_git(target, "switch", "-q", *back)
+    write_private(sidecar / EXPORT_MAP, text)
+    commit_sidecar(sidecar, "personal: export map", [EXPORT_MAP])
+    done = f"export: wrote the branches {branch} and {tests_branch} in the target; nothing pushed"
+    return 0, [*lines, done]
+
+
+def export_check(sidecar: Path) -> tuple[int, list[str]]:
+    """Rule 25: every record of the sidecar is in the map, mapped to a new id or withheld."""
+    path = sidecar / EXPORT_MAP
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8")).get("records", [])
+    except (OSError, ValueError, AttributeError):
+        return 1, [
+            f"export --check: failed: no readable export-map.json (path: {EXPORT_MAP}, "
+            f"{CHECK_RULE}); run export --write first"
+        ]
+    held = {
+        e.get("id")
+        for e in entries
+        if isinstance(e, dict)
+        and (
+            (e.get("status") == "mapped" and e.get("to"))
+            or (e.get("status") == "withheld" and e.get("reason"))
+        )
+    }
+    missing = [r["id"] for r in sidecar_records(sidecar) if r["id"] not in held]
+    if missing:
+        word = "record" if len(missing) == 1 else "records"
+        return 1, [
+            f"export --check: failed: {len(missing)} {word} not in export-map.json, "
+            f"first {missing[0]} ({CHECK_RULE})"
+        ]
+    return 0, [f"export --check: ok ({len(held)} records mapped or withheld)"]
+
+
 def run_change(clone: Path, sidecar: Path, options: dict) -> tuple[int, list[str]]:
     step = options["step"]
     if step == "start":
@@ -1356,7 +1820,34 @@ def run_change(clone: Path, sidecar: Path, options: dict) -> tuple[int, list[str
     return change_finish(clone, sidecar, options["base"], options["approve"])
 
 
+def parse_export(args: list[str]) -> dict | None:
+    """`export --target CLONE [--write] [--branch NAME] [--with-notes]` or `export --check`."""
+    out: dict = {
+        "command": "export",
+        "clone": ".",
+        "sidecar": None,
+        "target": None,
+        "write": False,
+        "branch": None,
+        "with_notes": False,
+        "check": False,
+    }
+    while args:
+        flag = args.pop(0)
+        if flag in ("--write", "--with-notes", "--check"):
+            out[flag[2:].replace("-", "_")] = True
+        elif flag in ("--clone", "--sidecar", "--target", "--branch") and args:
+            out[flag[2:]] = args.pop(0)
+        else:
+            return None
+    if out["check"]:
+        return None if out["write"] or out["target"] or out["branch"] else out
+    return out if out["target"] else None
+
+
 def parse(args: list[str]) -> dict | None:
+    if args and args[0] == "export":
+        return parse_export(args[1:])
     if args and args[0] == "confirm":
         return parse_confirm(args[1:])
     if args and args[0] == "change":
@@ -1430,6 +1921,10 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = upgrade(Path(options["sidecar"]))
             print("\n".join(lines))
             return code
+        if options["command"] == "export" and options["check"] and options["sidecar"]:
+            code, lines = export_check(Path(options["sidecar"]))
+            print("\n".join(lines))
+            return code
         probe = _git(Path(options["clone"]), "rev-parse", "--show-toplevel")
         if probe.returncode != 0:
             raise CheckError("the clone cannot be read as a git repository (option: --clone)")
@@ -1441,6 +1936,20 @@ def main(argv: list[str] | None = None) -> int:
         sidecar = Path(options["sidecar"]) if options["sidecar"] else find_sidecar(clone)
         if options["command"] == "upgrade":
             code, lines = upgrade(sidecar)
+            print("\n".join(lines))
+            return code
+        if options["command"] == "export":
+            code, lines = (
+                export_check(sidecar)
+                if options["check"]
+                else export(
+                    sidecar,
+                    Path(options["target"]),
+                    options["write"],
+                    options["branch"],
+                    options["with_notes"],
+                )
+            )
             print("\n".join(lines))
             return code
         if options["command"] == "change":
