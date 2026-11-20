@@ -29,23 +29,23 @@ map = []
 
 [[gates]]
 id = "tool-schema-contract-tests"
-kind = "check"
+kind = "judgement"
 text = "Tool schema contract tests: the testing map names a test glob for every schema file."
-step = "tool-schema-contract-tests"
+reason = "No path is named for the tool schema files yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "permission-scopes"
-kind = "check"
+kind = "judgement"
 text = "Permission scopes: every tool declares its scopes and none is a wildcard."
-step = "permission-scopes"
+reason = "No path is named for the tools' scope declarations yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "prompt-injection-set"
-kind = "check"
+kind = "judgement"
 text = "A prompt-injection test set: the set exists and the testing map names its tests."
-step = "prompt-injection-set"
+reason = "No path is named for the prompt-injection test set yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]

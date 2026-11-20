@@ -83,9 +83,9 @@ map = []
 
 [[gates]]
 id = "research-record"
-kind = "check"
+kind = "judgement"
 text = "A research record: a file under docs/research/ for the pilot holds at least two options; a criteria table that covers capability fit to the success criteria, cost, licence, data handling and residency, maturity, integration effort and lock-in; for every option at least one source line with a URL and an access date; and a recommendation marked as a proposal."
-step = "research-record"
+reason = "A record's criteria and sources are read against the pilot by a reviewer; no offline step reads them yet (ADR-0666)."
 owner_only = false
 
 [[gates]]
@@ -108,30 +108,30 @@ owner_only = true
 
 [[gates]]
 id = "customer-data"
-kind = "check"
+kind = "judgement"
 text = "Customer data: fixtures and demo data use invented values only, at example.com, and real customer data stays out of the repository."
-step = "customer-data"
+reason = "Whether data is invented or real is a reviewer's reading; no offline step can tell it yet (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "time-box"
-kind = "check"
+kind = "judgement"
 text = "A time box: the intake declares it as a number of days."
-step = "time-box"
+reason = "No path is named for the intake's time box yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "demo-fallback"
-kind = "check"
+kind = "judgement"
 text = "A demo fallback: the demo script names the mock path that runs when the live service is unavailable."
-step = "demo-fallback"
+reason = "No path is named for the demo script yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "cost-estimate"
-kind = "check"
+kind = "judgement"
 text = "A cost estimate is declared."
-step = "cost-estimate"
+reason = "No path is named for the cost estimate yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
@@ -142,9 +142,9 @@ owner_only = false
 
 [[gates]]
 id = "pilot-report"
-kind = "check"
+kind = "judgement"
 text = "A pilot report: docs/runs/pilot-report.md exists with the sections what worked, the measured numbers, a cost estimate, risks and the path to production as a later project of another work type."
-step = "pilot-report"
+reason = "The report lands at the pilot's end, so a step would be red until then; a reviewer reads it (ADR-0666)."
 owner_only = false
 
 [milestones]
