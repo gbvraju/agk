@@ -1,0 +1,99 @@
+{
+  "base": "d7de5767dc19e057bcfa5373ec89ba8013e8427a",
+  "head": "cc3deb793a670898c6a3275e9072d5b95e175ab1",
+  "not_run": [],
+  "notes": [],
+  "result": "passed",
+  "schema": 1,
+  "started": "2026-11-20T03:35:52Z",
+  "steps": [
+    {
+      "argv": [],
+      "cwd": ".",
+      "exit": null,
+      "name": "pr-body",
+      "not_run": false,
+      "outcome": "skipped",
+      "output_bytes": 0,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "seconds": 0.0
+    },
+    {
+      "argv": [
+        "make",
+        "lint"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "name": "lint",
+      "not_run": false,
+      "outcome": "ok",
+      "output_bytes": 133,
+      "output_sha256": "a0a6e25fd710084cd43bb4f1277196999cf4f5a73106eca13e6a075477cf086d",
+      "seconds": 0.198
+    },
+    {
+      "argv": [
+        "make",
+        "-f",
+        "agk.mk",
+        "agk-governance"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "name": "governance",
+      "not_run": false,
+      "outcome": "ok",
+      "output_bytes": 1217,
+      "output_sha256": "7c0108dd74c8f8454e851159d244e96345c487598711f07d6b09906ed8c43262",
+      "seconds": 7.091
+    },
+    {
+      "argv": [
+        "<outside>/gitleaks",
+        "git",
+        "--no-banner",
+        "--redact",
+        "--exit-code",
+        "1",
+        "--log-opts=d7de5767dc19e057bcfa5373ec89ba8013e8427a..cc3deb793a670898c6a3275e9072d5b95e175ab1",
+        "."
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "name": "secret-scan",
+      "not_run": false,
+      "outcome": "ok",
+      "output_bytes": 182,
+      "output_sha256": "cd662d94869c4b13af09b1209bdf388dd05640e5a771b8dde5228a7e09018ab2",
+      "seconds": 0.501
+    },
+    {
+      "argv": [
+        "python3",
+        "scripts/agk/test_plan.py",
+        "--json",
+        "--base",
+        "d7de5767dc19e057bcfa5373ec89ba8013e8427a",
+        "--head",
+        "HEAD"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "name": "tests",
+      "not_run": false,
+      "outcome": "ok",
+      "output_bytes": 368,
+      "output_sha256": "dc18b861bc4e4e7fb667c6dabcff092fa09246d98a0a408f323154c460944b0a",
+      "runs": [],
+      "seconds": 0.234
+    }
+  ],
+  "tree_clean": true,
+  "versions": {
+    "git": "git version 2.53.0",
+    "gitleaks": "8.30.1",
+    "make": "GNU Make 4.4.1",
+    "python3": "3.14.4"
+  }
+}
