@@ -21,8 +21,8 @@ is a printed prompt for two hand-made commits that a business person cannot make
 
 ## Decision
 
-1. SPEC-0029 rule 5 changes only through amendment 199, which this build writes and does not apply; it is applied word
-   for word on the owner's approval of SPEC-0029.
+1. SPEC-0029 rule 5 changes only through amendment 199, which this build writes; it was applied word for word on the
+   maintainer's answer on this pull request, "Maintainer answer: amendment 199 approved" (2026-11-20).
 2. **Four effects and one recommendation.** In a Proposed stack record, each option's `Trade-offs:` holds the four
    labels `Cost:`, `Build speed:`, `Security:` and `Uptime:`, each followed by a plain phrase, and exactly one option
    carries `(recommended)` in its name, with a `Why:` after its trade-offs that names a need from the charter or the
