@@ -274,3 +274,14 @@ def test_doctor_reads_nothing_without_a_router_or_in_local_mode(tmp_path):
 def test_doctor_cannot_check_unreadable_labels(tmp_path):
     """REQ-039: amendment 150 item 8 (a failed read is `cannot-check`, never ok)."""
     assert _row(tmp_path, {"message": "Server Error"})["status"] == "cannot-check"
+
+
+def test_1568_the_review_queue_and_the_capacity_read_the_same_forms():
+    """REQ-039: brief #1568 answers 2 and 3 (the conductor's review-queue reader and the
+    `[flow] max_builders` capacity count read `READY_REPORTS`; the capacity rule is unchanged)."""
+    assert session.READY_REPORTS is route.READY_REPORTS
+    for form in route.READY_REPORTS:
+        assert session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} {form}"), form
+    assert session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} CI fix: proof")
+    assert not session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} handing over: done")
+    assert not session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} escalate")

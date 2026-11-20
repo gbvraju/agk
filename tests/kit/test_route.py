@@ -873,7 +873,8 @@ def red(name: str) -> dict:
 
 def test_1568_one_list_of_ready_report_forms():
     """REQ-039: brief #1568 answer 2 (one tuple; `BUILT` reads it; `CI fix` is one more form)."""
-    assert route.READY_REPORTS == ("ready for review", "fix list applied", "merge of main", "CI fix")
+    forms = ("ready for review", "fix list applied", "merge of main", "CI fix")
+    assert route.READY_REPORTS == forms
     for form in route.READY_REPORTS:
         assert route.BUILT.match(f"Report: {HEAD[:7]} {form}"), form
     assert not route.BUILT.match(f"Report: {HEAD[:7]} handing over: six hours")
@@ -939,16 +940,3 @@ def test_1568_personal_mode_reads_no_label_and_no_report_form():
         assert "agk:review" not in text and "agk:build" not in text, name
         assert "READY_REPORTS" not in text and "CI fix" not in text, name
 
-
-def test_1568_the_review_queue_and_the_capacity_read_the_same_forms():
-    """REQ-039: brief #1568 answers 2 and 3 (the conductor's review-queue reader and the
-    `[flow] max_builders` capacity count read `READY_REPORTS`; the capacity rule is unchanged)."""
-    import session
-    import session_plan
-
-    assert session.READY_REPORTS is route.READY_REPORTS
-    for form in route.READY_REPORTS:
-        assert session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} {form}"), form
-    assert session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} CI fix: proof")
-    assert not session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} handing over: done")
-    assert not session_plan.WAITING_REPORT.match(f"Report: {HEAD[:7]} escalate")

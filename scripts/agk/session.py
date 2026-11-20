@@ -3898,6 +3898,15 @@ def queue(root, role: str, author: str | None) -> int:
 # --- review-queue (brief 306) -----------------------------------------------------------------
 
 TRIGGERS = ("Question:", "Report:", "Correction:", "Maintainer answer:")
+# brief #1568 (ADR-0658): the one list of the forms of a builder's `Report: <head> <form>` that put
+# a head in review; route.py (`BUILT`), session_plan.py (`WAITING_REPORT`, the conductor's review
+# queue and the capacity count) and the builder prompt read it. Here, not in route.py: route.py and
+# session_plan.py both import this module, and session_plan.py cannot import route.py (route.py
+# imports merge_cleared.py, which imports session_plan.py).
+READY_REPORTS = ("ready for review", "fix list applied", "merge of main", "CI fix")
+READY_REPORT = re.compile(
+    r"Report: ([0-9a-f]{7,40}) (?:" + "|".join(map(re.escape, READY_REPORTS)) + r")\b"
+)
 RUNNING_LABEL = "agk:ci-running"
 
 
@@ -4813,7 +4822,9 @@ PROMPT_HEAD = (
 PROMPT_TAIL = (
     "\n"
     "When the pull request is ready, post `Report: <head> ready for review` on it and end your "
-    "session; a blocked session posts `Question: Q-{brief}-n ...` and waits there.\n"
+    "session; after a fix the router also reads "
+    + ", ".join(f"`Report: <head> {form}`" for form in READY_REPORTS[1:])
+    + " as ready; a blocked session posts `Question: Q-{brief}-n ...` and waits there.\n"
 )
 STOP_LINE = (
     "Your item, your session name and any reserved numbers are in the line above. If an open "
