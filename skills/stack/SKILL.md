@@ -38,8 +38,16 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
    fails `check_playbooks.py`, naming the setting and never its value, and writes nothing. Without a declaration the skeleton
    is the template as before.
 
+   Option A is the kit's recommended stack for the declared shape (`config/stack-defaults.toml`, the maintainers' rows; the
+   `default` row without a declaration), marked `(recommended)` with its four effects and a `Why:`; when the committed tree
+   already holds one other stack, Option A keeps that stack instead, never a rewrite (brief #1591, ADR-0671).
+
 2. Fill the skeleton from the vision and the charter, and from nothing the owner did not give. In the Decision: **Options** has two or
-   three bullets `- Option A — <name>. Trade-offs: <text>. External services: <service>, <service>. Practices: <practice>, <practice>.`,
+   three bullets `- Option A — <name>. Trade-offs: Cost: <plain phrase>; Build speed: <plain phrase>; Security: <plain phrase>;
+   Uptime: <plain phrase>. External services: <service>, <service>. Practices: <practice>, <practice>.`, the four effects in
+   words a business person reads, and one option, the default unless the needs in the charter or the discovery document rule
+   it out, carries `(recommended)` after its name and `Why: <the need it meets>.` after its trade-offs; an option whose stack
+   has no standards pack yet says "code checks for this choice come later" in its `Build speed:` or `Security:` phrase;
    where `External services:` names, once and before `Practices:`, each service outside the product that the option relies on
    (identity, email, storage, queues or schedulers, payments, and so on), and is left out when the option relies on none;
    **Practices** has one bullet for every practice any option names, `- <practice>: check (step: <the governance step the adopting
@@ -68,6 +76,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
    them; the ADR names `agk.toml`, which covers that protected path; after the second commit, `stack-check` prints whether
    the copy matches, in one information line that never fails it. Print the text below for the person, with the ADR number and
    the file name filled in:
+
+   The person accepts with one plain yes to the steward's question (in team mode, a spec approver's yes); they type no line.
+   The accepting change is then made in one step by a builder's session from a mechanical brief:
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-accept --option <X> --reason "<one-line reason>"` on a fresh
+   branch makes exactly the two commits above and nothing else, and refuses, writing nothing, an option the record does
+   not hold or a record that is not Proposed or does not pass `stack-check`. Where no builder runs, the prompt below does
+   the same by hand.
 
    The prompt for the accepting change:
 

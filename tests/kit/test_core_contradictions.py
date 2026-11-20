@@ -26,6 +26,17 @@ CONFIG = "version: 1\nverdict_authors: [reviewer]\n"
 STACK = "docs/adr/0002-stack-options.md"
 
 
+EFFECTS = (
+    "Cost: low; Build speed: quick; Security: one sign-in; Uptime: a short pause on a restart."
+)
+OPTIONS = (
+    f"   - Option A — plain scripts (recommended). Trade-offs: nothing to host; {EFFECTS} "
+    "Why: a laptop is all it needs. Practices: pinned actions.\n"
+    f"   - Option B — a web framework. Trade-offs: a host to run; {EFFECTS} "
+    "Practices: security headers."
+)
+
+
 def stack_adr(status: str, chosen: str) -> str:
     return f"""# ADR-0002: stack options
 
@@ -42,8 +53,7 @@ A reading list that runs on a laptop.
 ## Decision
 
 1. **Options**
-   - Option A — plain scripts. Trade-offs: nothing to host. Practices: pinned actions.
-   - Option B — a web framework. Trade-offs: a host to run. Practices: security headers.
+{OPTIONS}
 2. **Practices**
    - pinned actions: check (step: the workflow lint of the adopting build)
    - security headers: check (step: a header test of the adopting build)

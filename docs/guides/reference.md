@@ -825,6 +825,13 @@ name exactly one option. An option is accepted in one plain step: one ordinary c
 and `Chosen: Option <X> — <one-line reason>` together; `stack-check` accepts the pair and the verdict is a plain `cleared`. It is not a
 `Final:` commit, which may change only status lines; `check_final_clearance.py` says so when one changes `Chosen`.
 
+For a business person (brief #1591, ADR-0671, amendment 199), a Proposed stack ADR gives each option its `Cost:`,
+`Build speed:`, `Security:` and `Uptime:` in plain words and marks one option `(recommended)` with a `Why:`; `stack-check`
+refuses each gap naming the option letter, and an Accepted record is checked as before. `stack-write` writes the
+recommended stack of the declared shape from `config/stack-defaults.toml` as Option A, and
+`engines.py stack-accept --option X --reason TEXT` makes the accepting change in its two ordinary commits after the
+person's one plain yes.
+
 ## Design check
 
     python3 scripts/agk/check_design.py [--root DIR]
