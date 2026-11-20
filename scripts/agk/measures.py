@@ -598,13 +598,17 @@ def owner_spans(thread, head, done, listed, answerers) -> list[tuple[datetime, d
     """(opened, closed) of each owner item that `session.open_owner_items` opens in one thread (no
     label item: a label is today's state), closed by its answer, else at the finishing merge."""
     ordered = session.in_order(thread)
-    spans, before = [], {}
+    spans: list[tuple[datetime, datetime]] = []
+    before: dict[str, datetime] = {}
     for i, c in enumerate(ordered):
         now = session.open_owner_items({"head": {"sha": head}}, ordered[: i + 1], listed, answerers)
         when = metrics.stamp(c.get("created_at")) or done
         spans += [(since, when) for key, since in before.items() if now.get(key) != since]
         before = now
-    return spans + [(since, done) for since in before.values()]
+    spans += [(since, done) for since in before.values()]
+    return [
+        (a, b) for a, b in spans if a <= done
+    ]  # an item opened after the merge is not this feature's
 
 
 def per_merged(values: list[Any]) -> str:
