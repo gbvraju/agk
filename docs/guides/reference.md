@@ -527,7 +527,7 @@ label what it starts, for example containers, by session (ADR-0231).
 
 A builder in local mode records its run with `python3 scripts/agk/prepush.py --record` (ADR-0208; with no FILE the record goes
 to `<git common dir>/agk-evidence/<head>.json`, the clone's shared folder, ADR-0536), and the conductor checks that record
-before its verdict with `python3 scripts/agk/evidence.py check --head SHA [--sample N] [--json]`, or `check RECORD [--head SHA]`
+before its verdict with `python3 scripts/agk/evidence.py check --head SHA [--sample N] [--body FILE] [--json]` (`--body`: the pull request body for governance, brief #1566), or `check RECORD [--head SHA]`
 for a record file passed from another machine: `stale`,
 `dirty` or `failed` when the record names another head, an unclean tree or a failed step; otherwise, in a temporary worktree of
 the head under the heavy-step lock, governance runs and a sample of the steps (one by default, chosen from the head sha) re-runs

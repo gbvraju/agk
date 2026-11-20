@@ -128,7 +128,10 @@ evidence folder (`<git common dir>/agk-evidence`, found with one `git rev-parse 
 Without a matching record the check runs the head's governance and a sample of its tests in a
 temporary worktree with the conductor's environment, so it is allowed only while the project is in
 local mode, judged as for `route.py` above; in CI mode it is refused with a message naming the
-setting. Another subcommand or option, a second RECORD, a record elsewhere and another copy of the
+setting. Brief #1566 (ADR-0656): the check may also take `--body <FILE>` once, the pull request body the
+conductor read with one GET and saved with Write: an existing regular file of a scratch directory,
+named by its absolute path with no link, never the shared evidence folder or another path.
+Another subcommand or option, a second RECORD, a record elsewhere and another copy of the
 script stay denied.
 In a clean project (`[kit] layout = "plugin"`) each `python3 scripts/agk/<script>` above is also
 allowed as `python3 "<plugin>/scripts/agk/<script>"`, the plugin's folder written out in full as the
@@ -681,9 +684,20 @@ def evidence_record_ok(path: str) -> bool:
     return folder is not None and os.path.dirname(os.path.normpath(path)) == folder
 
 
+def evidence_body_ok(path: str) -> bool:
+    """`--body FILE` is an existing regular file of a scratch directory, named by its absolute
+    path with no link and no `..` on the way (brief #1566, ADR-0656)."""
+    if not path or "\0" in path or not os.path.isabs(path):
+        return False
+    if os.path.realpath(path) != os.path.normpath(path) or not os.path.isfile(path):
+        return False
+    return scratch_dir(path) is not None
+
+
 def evidence_form(args: list[str]) -> bool:
-    """`check [RECORD] --head <7 to 40 hex> [--sample <n>] [--json]`, each option at most once and
-    in any order, RECORD at most one (brief #1281 answer 1); both forms only read."""
+    """`check [RECORD] --head <7 to 40 hex> [--sample <n>] [--body <scratch file>] [--json]`, each
+    option at most once and in any order, RECORD at most one (brief #1281 answer 1, brief #1566);
+    both forms only read."""
     if not args or args[0] != "check":
         return False
     seen: set[str] = set()
@@ -695,6 +709,11 @@ def evidence_form(args: list[str]) -> bool:
             return False
         if arg in EVIDENCE_VALUES:
             if i + 1 >= len(args) or not EVIDENCE_VALUES[arg].fullmatch(args[i + 1]):
+                return False
+            seen.add(arg)
+            i += 2
+        elif arg == "--body":
+            if i + 1 >= len(args) or not evidence_body_ok(args[i + 1]):
                 return False
             seen.add(arg)
             i += 2

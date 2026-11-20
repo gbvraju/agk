@@ -174,7 +174,11 @@ Step 1 of the conductor's protocol (CI first) has nothing to read in local mode,
    reported on that head: a red check still blocks a clearing verdict.
 2. Check the builder's record against the head with one command (brief #434):
 
-       python3 scripts/agk/evidence.py check --head <sha>
+       python3 scripts/agk/evidence.py check --head <sha> --body <file>
+
+   `<file>` holds the pull request body, read with one GET and saved in the conductor's scratch folder: governance then reads
+   its `Covered-by:` line as the builder's prepush did, so a covered protected change agrees (brief #1566, ADR-0656). The
+   last line ends `body <sha12>`, or `body not given` without the option; a body that cannot be read is a difference.
 
    With no record file it reads the clone's shared record of that head, and when there is none it exits 3 with
    `evidence: no record for this head in the shared evidence folder (option: --record)`: ask the builder to run
