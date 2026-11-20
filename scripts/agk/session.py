@@ -4553,7 +4553,9 @@ def park_pull(repo: str, number: int, key: str) -> bool:
 HANDED_OVER = re.compile(r"Report: [0-9a-f]{7,40} handing over\b")  # route.HANDING_OVER's start
 
 
-def owner_own(repo: str, pr: dict, comments: list | None = None, listed: AbstractSet = ()) -> bool:
+def owner_own(
+    repo: str, pr: dict, comments: list | None = None, listed: AbstractSet = frozenset()
+) -> bool:
     """Brief #1567 answer 1 (ADR-0657): whether pull request PR is the owner's own, whose ready
     `Report:` may close an `owner-needed` wait. Its body has a `Flow: owner change` line and no
     live `taken:` that still counts names its brief, or its author is a spec approver and no
