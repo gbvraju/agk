@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The recommended stack per shape (brief #1591, ADR-0671; SPEC-0029 rule 5 as amendment 199 proposes). The rows are the
+# maintainers' decision in ADR-0671, never an agent's. `engines.py stack-write` writes the row of the declared
+# `[delivery] work_type`, else the `default` row, as Option A marked (recommended), with `Why:` the row's reason. Each
+# `stack` is a `[[stack]]` name of config/stack-signals.toml. It is read from the kit's own root, never from the project.
+# The effects are plain words for a business person. No standards pack is built yet (SPEC-0072 build (e)), so each row
+# says that code checks for its choice come later; the build that adds a stack's pack changes its rows.
+
+[[default]]
+work_type = "default"
+stack = "python-pyproject"
+description = "one small Python application with a file database, on one machine"
+cost = "one small server, the lowest monthly cost"
+build_speed = "quick to start, one program to build; code checks for this choice come later"
+security = "one program and one data file to protect, behind one sign-in"
+uptime = "one machine, so a restart or a fault stops it for a few minutes"
+reason = "the shape of the product is not known yet, so the smallest stack that can grow is proposed until it is"
+
+[[default]]
+work_type = "web-app"
+stack = "python-pyproject"
+description = "one Python web application with a managed database"
+cost = "one small web server and one managed database, a low monthly cost that grows with use"
+build_speed = "quick, one program and one database; code checks for this choice come later"
+security = "the database provider keeps backups and updates; sign-in and data stay in one application"
+uptime = "the managed database stays up; the one web server pauses for about a minute when it restarts"
+reason = "a web app serves people in a browser and keeps their data, and one application with a managed database holds it safely in the simplest way"
+
+[[default]]
+work_type = "data-pipeline"
+stack = "python-pyproject"
+description = "a scheduled Python job that reads a file and writes the report, with no server"
+cost = "only the minutes the job runs, the lowest cost"
+build_speed = "quick, one job and its tests; code checks for this choice come later"
+security = "no server open to the internet; only the job reads the files"
+uptime = "nothing runs between jobs; a failed run is run again at the next scheduled time"
+reason = "a data or report tool runs on a schedule and needs no server waiting for people"

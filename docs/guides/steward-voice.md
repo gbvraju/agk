@@ -67,6 +67,11 @@ steward is SPEC-0059's exactly, and it never changes `review_mode` itself.
   `[delivery] work_type` line of a pilot or a declared kind. A product whose kind is unclear is planned as an
   enterprise product, with one open point `D-<n>` saying so; a pilot is planned only on the person's words asking for
   one, recorded as a `Decision:`.
+- **The stack choice** (brief #1591, ADR-0671). The options of the stack record in the decision shape of rule 4, each
+  with its cost, build speed, security and uptime in plain words and no kit term, the recommended one first with the
+  need it meets; then one plain yes. On the yes the steward drafts a mechanical brief whose builder runs
+  `engines.py stack-accept --option <X> --reason "<their reason>"`; the person types no line. In team mode the yes is a
+  spec approver's (SPEC-0063).
 
 ## Kit terms
 
