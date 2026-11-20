@@ -629,7 +629,7 @@ def test_1534_the_owner_pass_reads_only_waiting_pull_requests(monkeypatch):
 
 # --- brief #1567 (ADR-0657): the owner's Report on its own parked pull request unparks it -------
 
-HAND_FLOW = "Flow: owner change, merged by hand (merge_cleared.py --pr 7 --owner)"
+HAND_FLOW = "Flow: owner change, merged by hand with the owner's merge command"
 BUILDER_FLOW = "Flow: builder cb40, one pull request for brief #40; the owner merges it by hand"
 NEEDED = "Owner needed: add the body line, then run the owner's merge command"
 OWNER_PARK = "Parked-by: wait owner-needed"
