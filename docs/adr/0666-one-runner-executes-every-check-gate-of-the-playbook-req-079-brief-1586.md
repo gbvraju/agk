@@ -38,9 +38,9 @@ equal; a session never changes a workflow.
    (cloud-migration: inventory, then wave plan, then cut-over, each depending on the one before) and `rollback-order`
    (data-pipeline: a rollback brief before every cut-over brief, which depends on it). Each fails naming
    `config/playbooks/`.
-4. The other 25 are restated as `judgement` with a reason of 20 characters or more ending `(ADR-0666)`, and lose their
-   `step`: `contract-tests` and `mock-parity` (web-app) name brief #1597; `secrets` and `environment-settings`
-   (`default.toml`) name brief #1593, which changes ADR-0665 decision 5 and SPEC-0072 rule 2's base until that brief
+4. The other 28 are restated as `judgement` with a reason of 20 characters or more ending `(ADR-0666)`, and lose their
+   `step`: `contract-tests` and `mock-parity` (web-app) and `contract-tests` (api-service) name brief #1597; `secrets`
+   and `environment-settings` (`default.toml`, and api-service's own two) name brief #1593, which changes ADR-0665 decision 5 and SPEC-0072 rule 2's base until that brief
    builds them; the 21 whose files have no path named by any playbook or spec (data-pipeline 2, mcp-server 3, mobile 2,
    multi-agent 2, pilot 6, rag-app 3, voice-agent 3) say so, and `pilot-report` says a step would be red until the
    pilot's end. A later build that adds a step restates its gate as `check` again.
@@ -58,3 +58,6 @@ check or `agk.mk` changes.
 
 - 2026-11-20: `Q-1586-3` (the runner from `check_playbooks.py`, not an `agk.mk` line) and decision 4's restatement of
   `secrets` and `environment-settings`, on the pull request of brief #1586.
+- 2026-11-20: `Q-1586-5` (conductor's correction on the pull request of brief #1586): the three api-service check gates
+  that #1610 added (`contract-tests`, `secrets`, `environment-settings`) are restated as decision 4 says, so this ADR
+  supersedes ADR-0682's residual (a check gate "without its step on disk") for those three gates; the count is 28.

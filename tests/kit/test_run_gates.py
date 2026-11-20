@@ -3,7 +3,7 @@
 Every check gate of every shipped playbook, composed with `default.toml`, has a step module under
 `scripts/agk/gates/` and runs on a sample project with the network stubbed off; a stub playbook
 naming a step with no module fails naming the gate id; a failure names the gate id, the rule and
-the path class and never a value; the 25 restated gates are judgement with a reason; and no test
+the path class and never a value; the 28 restated gates are judgement with a reason; and no test
 changes `required_checks` or a workflow. Fixtures in `tmp_path` only: invented data, no network.
 """
 
@@ -80,7 +80,7 @@ def test_the_restated_gates_are_judgement_with_a_reason_and_no_step() -> None:
                 assert len(gate["reason"]) >= 20, gate["id"]
             if gate["kind"] == "judgement":
                 assert "step" not in gate, gate["id"]
-    assert restated == 25
+    assert restated == 28
 
 
 def test_the_kit_without_a_work_type_runs_default_only(
@@ -141,7 +141,8 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
     root = _project(tmp_path, "cloud-migration")
     assert check_playbooks.main(["--root", str(root)]) == 0
     out = capsys.readouterr().out
-    assert "ok playbooks (10 playbooks)\nok cut-over-order\nok gates (1 check gates)\n" in out
+    count = len(WORK_TYPES) + 1
+    assert f"ok playbooks ({count} playbooks)\nok cut-over-order\nok gates (1 check gates)\n" in out
     path = root / "config" / "playbooks" / "cloud-migration.toml"
     text = path.read_text(encoding="utf-8")
     text = text.replace('["cut-over", "wave-plan"]', '["cut-over", "x"]')
