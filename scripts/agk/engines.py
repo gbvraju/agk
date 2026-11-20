@@ -12,6 +12,7 @@ Usage:
     python3 engines.py stack-write [--ref REF] [--date D] [--root DIR]
     python3 engines.py stack-check [--root DIR]
     python3 engines.py stack-accept --option X --reason TEXT [--root DIR]
+    python3 engines.py stack-files [--root DIR]
     python3 engines.py stack-next-steps [--base REF] [--date D] [--brief N|none] [--issues FILE]
                                         [--root DIR]
     python3 engines.py design-next-steps --req REQ-nnn [--base REF] [--date D] [--brief N|none]
@@ -59,6 +60,12 @@ for the declared work type (else `default`) as Option A, recommended, or, when t
 already holds one other stack, that stack, kept. `stack-accept` makes the two ordinary commits of
 the accepting change: Status and Chosen, then the option's `[testing]` copy into `agk.toml`.
 
+Pinned parts (brief #1592, ADR-0672, amendment 200): in a Proposed record each option names its
+`Parts:`, each `<name> <exact version> <licence id>` (SPDX form, `(verify)` until the build installs
+them); a range, no version or no licence id is refused naming the option and the part's place.
+`stack-files` (amendment 201) writes the chosen stack's build file from `kit/templates/stacks/`,
+never over a project's own; `scripts/agk/gates/pins.py` checks it against the lock.
+
 The discovery questions (SPEC-0048 rule 4; brief #686): `questions` prints the ten common topics,
 then the `[[discovery]]` questions of `config/playbooks/<kind>.toml`, each once: the kind is
 `--work-type`, else the declared work type; with neither the output is the ten, as before. An
@@ -92,6 +99,7 @@ from common import (
     parse_requirements,
     resolve_base,
 )
+from gates.pins import option_parts
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
@@ -199,7 +207,6 @@ EXACT = re.compile(r"\d+(?:\.\d+)+(?:[-+]?[A-Za-z][0-9A-Za-z.]*)?")
 # An SPDX licence id or expression (`MIT`, `Apache-2.0`, `MIT OR Apache-2.0`, `LicenseRef-x`).
 SPDX_ID = r"(?:LicenseRef-[0-9A-Za-z.-]+|[0-9A-Z][0-9A-Za-z.+-]*)"
 SPDX = re.compile(rf"{SPDX_ID}(?: (?:AND|OR|WITH) {SPDX_ID})*")
-VERIFY = "(verify)"
 SELECTION_LINE = re.compile(r"^(\s*-\s+test selection:\s+(?:check|judgement))\s+\(.*\)\s*$")
 
 
@@ -584,20 +591,6 @@ def choice_problems(options: list[re.Match]) -> list[str]:
     return out
 
 
-def option_parts(body: str) -> list[tuple[str, str, str]] | None:
-    """Brief #1592 answer 1: the option's parts as (name, version, licence), None with no `Parts:`.
-    A part's licence is '' when absent; `(verify)` marks are dropped (versions read that day)."""
-    text = segment(body, PARTS_KEY)
-    if text is None:
-        return None
-    out = []
-    for raw in text.replace(VERIFY, " ").strip(" .;").split(","):
-        words = raw.split()
-        if words:
-            out.append((words[0], words[1] if len(words) > 1 else "", " ".join(words[2:])))
-    return out
-
-
 def parts_problems(options: list[re.Match]) -> list[str]:
     """Brief #1592 answer 1 (amendment 200): in a Proposed record each option names its parts,
     each with an exact version and a licence id; the line names the option and the part's place."""
@@ -876,6 +869,34 @@ def cmd_stack_accept(root: Path, opts: dict[str, str]) -> int:
     return 0
 
 
+def cmd_stack_files(root: Path) -> int:
+    """Brief #1592 answer 2 (amendment 201): the foundation writes the chosen stack's build file
+    from `kit/templates/stacks/<folder>/`, over the untouched file `init` wrote of the same name
+    only; any other (an adopted project's own) is kept, never rewritten. The lock is the stack's
+    own tool's, made on the builder's machine."""
+    from gates.pins import chosen  # noqa: PLC0415 - the step's own reading of the record
+    from init import render, slug  # noqa: PLC0415 - the same rendering as init
+
+    found = chosen(root)
+    if found is None:
+        print("stack-files: not run: no stack chosen")
+        return 0
+    (folder, name, lock, _), _ = found
+    target, variables = root / name, {"project": slug(root.resolve().name)}
+    if target.exists():
+        mine = TEMPLATES / name
+        untouched = mine.is_file() and target.read_text(encoding="utf-8") == render(
+            mine.read_text(encoding="utf-8"), variables, name
+        )
+        if not untouched or b'mode = "adopt"' in (root / "agk.toml").read_bytes():
+            print(f"kept {name}")
+            return 0
+    source = TEMPLATES / "stacks" / folder / name
+    target.write_text(render(source.read_text(encoding="utf-8"), variables, name), "utf-8")
+    print(f"wrote {name}; make {lock} with the stack's own tool and commit both")
+    return 0
+
+
 def testing_copy(root: Path, text: str, letter: str) -> str | None:
     """The new `agk.toml` with the option's profile and its `always_full` paths added in the
     `[testing]` table, nothing else changed; None when it already matches."""
@@ -1071,6 +1092,7 @@ def main(argv: list[str] | None = None) -> int:
         "stack-write",
         "stack-check",
         "stack-accept",
+        "stack-files",
         "stack-next-steps",
         "design-next-steps",
     )
@@ -1101,6 +1123,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_stack_check(root)
         if args[0] == "stack-accept":
             return cmd_stack_accept(root, opts)
+        if args[0] == "stack-files":
+            return cmd_stack_files(root)
         if args[0] == "stack-next-steps":
             return cmd_stack_next_steps(root, opts)
         if args[0] == "design-next-steps":

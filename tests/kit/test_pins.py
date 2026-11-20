@@ -2,7 +2,7 @@
 files (brief #1592, ADR-0672, amendments 200 and 201; REQ-036 AC4, REQ-079).
 
 A Proposed stack record names each option's `Parts:`, each `<name> <exact version> <licence id>`;
-`gates/pins.py write` writes the chosen stack's build file from `kit/templates/stacks/<stack>/` and
+`engines.py stack-files` writes the chosen stack's build file from `kit/templates/stacks/` and
 never rewrites one a project already holds; `gates/pins.py` (the `pins` step) fails on a direct
 dependency not pinned exactly or not in the lock, on a missing lock and on a part of the Accepted
 record whose version differs from the lock's, naming the rule and the component class, never a
@@ -167,7 +167,7 @@ def test_req036_ac4_the_skeleton_asks_for_parts() -> None:
 
 def test_req079_a_node_sample_gets_package_json_and_no_pyproject(tmp_path: Path) -> None:
     root = project(tmp_path, record(a_parts=NODE_PARTS, status="Accepted", chosen="Option A"))
-    result = run(PINS, "write", "--root", str(root))
+    result = run(ENGINES, "stack-files", "--root", str(root))
     assert result.returncode == 0, result.stdout + result.stderr
     data = json.loads((root / "package.json").read_text(encoding="utf-8"))
     assert data["dependencies"] == {} and data["private"] is True
@@ -183,7 +183,7 @@ def test_req079_a_python_sample_gets_exact_pins_over_the_init_file(tmp_path: Pat
     (root / "pyproject.toml").write_text(
         init_text.replace("{{project}}", slug(root.name)), encoding="utf-8"
     )
-    assert run(PINS, "write", "--root", str(root)).returncode == 0
+    assert run(ENGINES, "stack-files", "--root", str(root)).returncode == 0
     text = (root / "pyproject.toml").read_text(encoding="utf-8")
     assert "setuptools==" in text and ">=61" not in text
 
@@ -196,7 +196,7 @@ def test_req079_an_adopted_build_file_is_untouched(tmp_path: Path) -> None:
     )
     own = '{"name": "theirs", "dependencies": {"example-web": "^4.0.0"}}\n'
     (root / "package.json").write_text(own, encoding="utf-8")
-    result = run(PINS, "write", "--root", str(root))
+    result = run(ENGINES, "stack-files", "--root", str(root))
     assert result.returncode == 0 and "kept package.json" in result.stdout
     assert (root / "package.json").read_text(encoding="utf-8") == own
 

@@ -1,8 +1,0 @@
-# The Python stack's build and lock files (brief #1592, ADR-0672; SPEC-0072 rule 4 as amendment 201 proposes).
-# `runtime` is the part name of the stack record that selects this folder; `build_file` is written from this folder
-# by `gates/pins.py write`; `lock_file` is made by the stack's own tool on the builder's machine, never by a check:
-#   pip-compile --generate-hashes --output-file requirements.lock pyproject.toml   (verify)
-runtime = "python"
-build_file = "pyproject.toml"
-lock_file = "requirements.lock"
-reader = "requirements"
