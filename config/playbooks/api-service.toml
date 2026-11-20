@@ -1,0 +1,134 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The api-service playbook (brief #1602, ADR-0682): contract first, on the base `default.toml`.
+format = 1
+work_type = "api-service"
+title = "Contract first for a service other apps call: the foundation, then the contract and its tests, then the back end, then the joins"
+heavy_steps = []
+evidence = [
+  "the contract test output, with the test glob the map names for each contract file",
+  "the access check each operation makes, with its test",
+  "the check each request meets before use, with its test",
+  "the log and trace lines a failed request leaves",
+]
+phases = []
+lanes = []
+claims = []
+
+[split]
+brief_order = ["foundation", "contract", "back-end", "join"]
+depends_on = [
+  ["contract", "foundation"],
+  ["back-end", "contract"],
+  ["join", "back-end"],
+]
+
+[testing]
+profile = "balanced"
+always_full = ["contracts/**"]
+map = [
+  { code = "contracts/**", tests = "tests/contract/**" },
+  { code = "api/**", tests = "tests/api/**" },
+  { code = "domain/**", tests = "tests/domain/**" },
+  { code = "data/**", tests = "tests/data/**" },
+]
+
+[architecture]
+layers = [
+  { name = "contracts", paths = ["contracts/**"] },
+  { name = "api", paths = ["api/**"] },
+  { name = "domain", paths = ["domain/**"] },
+  { name = "data", paths = ["data/**"] },
+]
+allow = [
+  { from = "api", to = "contracts" },
+  { from = "api", to = "domain" },
+  { from = "domain", to = "data" },
+]
+
+[[gates]]
+id = "contract-tests"
+kind = "check"
+text = "Contract tests: the testing map names a test glob for every contract path, and the contract lands before the back end."
+step = "contract-tests"
+owner_only = false
+
+[[gates]]
+id = "secrets"
+kind = "check"
+text = "No credential, key or token of a caller or a store is committed; each value comes from the environment."
+owner_only = false
+step = "secrets"
+
+[[gates]]
+id = "environment-settings"
+kind = "check"
+text = "An address, a limit or a store that differs between environments is read from the environment, never fixed in code."
+owner_only = false
+step = "environment-settings"
+
+[[gates]]
+id = "input-validation"
+kind = "judgement"
+text = "Every request is checked against the contract's expected form before the service uses it."
+owner_only = false
+reason = "No step can yet tell which operations take a request body or parameters from callers."
+
+[[gates]]
+id = "sign-in-permissions"
+kind = "judgement"
+text = "Every operation checks who the caller is and what that caller may do before it runs."
+owner_only = false
+reason = "No step can yet tell which operations of the contract need an access check."
+
+[[gates]]
+id = "logging-tracing"
+kind = "judgement"
+text = "Each request leaves a log line and a trace id that let a failed call be found without a debugger."
+owner_only = false
+reason = "Whether the logs are enough to find a failed call is a reviewer's reading of the code."
+
+[[gates]]
+id = "accessibility"
+kind = "judgement"
+text = "Accessibility of the screens, where the work has any."
+owner_only = false
+reason = "A service other apps call has no screens of its own, so there is nothing to check."
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or callers and systems that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which calls show that the work succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data a caller sends, the service keeps and the service returns?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of response time, uptime, security and recovery must it meet?"
+
+[[discovery]]
+id = "callers"
+text = "Who calls the service: your own apps, partner apps or the public, and how many calls at the busiest hour?"
+
+[[discovery]]
+id = "response-time"
+text = "How fast must each call answer, and what may a caller see when it is slower?"
+
+[[discovery]]
+id = "caller-sign-in"
+text = "How do callers sign in, and which callers may do which operations?"

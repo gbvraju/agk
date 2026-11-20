@@ -94,6 +94,7 @@ WORK_TYPES = (
     "voice-agent",
     "pilot",
     "data-pipeline",  # amendment 130, SPEC-0048 rule 18 build (g)
+    "api-service",  # ADR-0682, brief #1602
 )
 BASE = "default"  # SPEC-0048 rule 21: a playbook every kind of work carries, never declared
 FOLDER = "config/playbooks"
