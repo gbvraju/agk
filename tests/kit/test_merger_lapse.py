@@ -20,8 +20,9 @@ from test_merger_sweep import NOW, RECORD, a_pull, clearing, sha_of
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 
-import config  # noqa: E402
 import merge_cleared  # noqa: E402
+
+import config  # noqa: E402
 
 AUTHOR = "conductor-two"
 REFUSAL = "conductor_lapse_minutes of the flow table must be a whole number from 15 to 1440"
@@ -103,8 +104,16 @@ def test_this_repository_runs_solo_with_a_thirty_minute_lapse():
         ([], False),  # no lease was ever taken: nothing to measure
         ([marker("released", 90, login="builder-one")], False),  # not a listed verdict author
     ],
-    ids=["released", "released-young", "expired", "expired-young", "held", "renewed", "none",
-         "unlisted"],
+    ids=[
+        "released",
+        "released-young",
+        "expired",
+        "expired-young",
+        "held",
+        "renewed",
+        "none",
+        "unlisted",
+    ],
 )
 def test_a_lapse_is_a_lease_free_for_the_setting_s_minutes(monkeypatch, comments, expected):
     """REQ-046: brief #1615 answer 1 (no holder for the minutes past the lease's end)."""
@@ -116,9 +125,14 @@ def test_unreadable_plan_issue_comments_are_never_a_lapse(monkeypatch):
     assert lapsed(monkeypatch, [marker("released", 90)], unreadable=True) is False
 
 
-@pytest.mark.parametrize("main", [toml(ON + "plan_issue = 661\n", local=True),
-                                  toml(ON + "conductor_lapse_minutes = 30\n", local=True)],
-                         ids=["setting-absent", "no-plan-issue"])
+@pytest.mark.parametrize(
+    "main",
+    [
+        toml(ON + "plan_issue = 661\n", local=True),
+        toml(ON + "conductor_lapse_minutes = 30\n", local=True),
+    ],
+    ids=["setting-absent", "no-plan-issue"],
+)
 def test_no_setting_or_no_plan_issue_is_never_a_lapse(monkeypatch, main):
     """REQ-046: brief #1615 answer 3 (absent is off; no plan issue, no lease to read)."""
     assert lapsed(monkeypatch, [marker("released", 90)], tomllib.loads(main)) is False
@@ -163,8 +177,9 @@ def test_a_lapse_merges_the_cleared_head_in_local_mode(tmp_path, monkeypatch, ca
     assert lines[0].endswith(": merged " + "ab" * 6)
 
 
-@pytest.mark.parametrize("plan", [[marker("active", 5)], [marker("released", 10)], []],
-                         ids=["fresh", "young", "none"])
+@pytest.mark.parametrize(
+    "plan", [[marker("active", 5)], [marker("released", 10)], []], ids=["fresh", "young", "none"]
+)
 def test_no_lapse_keeps_the_conductor_s_merge(tmp_path, monkeypatch, capsys, plan):
     """REQ-046: brief #1615 answers 1 and 5 (a fresh or stalled lease merges nothing)."""
     world = Sweep(monkeypatch, plan)
@@ -227,8 +242,10 @@ HEAD = sha_of(5)
 
 
 def checks(monkeypatch, names=("proof", "governance"), conclusion="success"):
-    runs = [{"name": n, "status": "completed", "conclusion": conclusion, "id": i}
-            for i, n in enumerate(names)]
+    runs = [
+        {"name": n, "status": "completed", "conclusion": conclusion, "id": i}
+        for i, n in enumerate(names)
+    ]
 
     def pages(endpoint, what, key=None):
         return runs if endpoint.endswith("/check-runs") else []
@@ -267,7 +284,12 @@ def test_a_lease_renewed_during_the_sweep_holds_under_the_lock(monkeypatch):
 def test_the_record_line_says_the_sweep_merged_after_a_lapse(monkeypatch):
     """REQ-046: brief #1615 answer 1 (each lapse merge's record line says so)."""
     posted: list[list[str]] = []
-    monkeypatch.setattr(merge_cleared, "write_once", lambda a, e=None: posted.append(a) or (0, "", ""))
+
+    def write_once(args, env=None):
+        posted.append(args)
+        return 0, "", ""
+
+    monkeypatch.setattr(merge_cleared, "write_once", write_once)
     verdict = {"id": 7, "html_url": "https://example.com/pull/5#issuecomment-7"}
     assert merge_cleared.post_record(REPO, 41, 5, "c" * 40, verdict, lapse=True)
     assert merge_cleared.post_record(REPO, 41, 5, "c" * 40, verdict)
