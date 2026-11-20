@@ -1,0 +1,1 @@
+- `measures.py --trial` adds one solo trial row from the project's own records: speed (brief to merge, the owner's wait including `Owner needed:`, park time), quality (fix rounds, red spells of the default branch, reverts) and cost (tokens per merged pull request by configured tier) (brief #1618, ADR-0687)
