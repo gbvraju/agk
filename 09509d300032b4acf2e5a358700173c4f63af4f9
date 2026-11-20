@@ -1,0 +1,42 @@
+{
+  "base": "b4776b596cc0e65bca28d5efe192e8bb79d8d4be",
+  "head": "09509d300032b4acf2e5a358700173c4f63af4f9",
+  "not_run": [],
+  "notes": [],
+  "result": "failed",
+  "schema": 1,
+  "started": "2026-11-20T01:54:40Z",
+  "steps": [
+    {
+      "argv": [],
+      "cwd": ".",
+      "exit": null,
+      "name": "pr-body",
+      "not_run": false,
+      "outcome": "skipped",
+      "output_bytes": 0,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "seconds": 0.0
+    },
+    {
+      "argv": [
+        "make",
+        "lint"
+      ],
+      "cwd": ".",
+      "exit": 2,
+      "name": "lint",
+      "not_run": false,
+      "outcome": "FAIL",
+      "output_bytes": 194,
+      "output_sha256": "dbafb19f66dd0b6a9707c4f681b80cbea95c3d5a7d0382fa6bd32369ffe4c2ee",
+      "seconds": 0.162
+    }
+  ],
+  "tree_clean": true,
+  "versions": {
+    "git": "git version 2.53.0",
+    "make": "GNU Make 4.4.1",
+    "python3": "3.14.4"
+  }
+}
