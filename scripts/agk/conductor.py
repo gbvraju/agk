@@ -2250,7 +2250,7 @@ def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
         holder = None
     found = lease_comment(comments, authors)
     mark = lease_mark(root)
-    if mode == "--take" and fresh_own(holder, found, name, now):
+    if mode == "--take" and holder and fresh_own(holder, found, name, now):
         # brief #1554 answer 1 (ADR-0654): the holder's take of a lease written less than
         # RENEW_EVERY ago writes nothing, so a new `watch` start makes no edit event
         if mark is not None:

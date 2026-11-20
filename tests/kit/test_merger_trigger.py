@@ -393,3 +393,55 @@ def test_1554_merger_starts_itself_reads_the_variable(monkeypatch):
     assert route.merger_starts_itself("issue_comment", event)
     monkeypatch.setenv("AGK_MERGER", "off")
     assert not route.merger_starts_itself("issue_comment", event)
+
+
+# brief #1554 answers 3, 5 and 8 for the router: here, beside the module's other `route` readers
+
+
+def test_1554_the_router_starts_on_exactly_the_lines_its_reader_holds():
+    """REQ-039: brief #1554 answer 5 (the trigger list and the reader's list are one list)."""
+    from test_ci_saving import router_condition
+    from test_route_triggers import COMMENT_LINE, acting_lines
+
+    cond = router_condition()
+    assert acting_lines(cond, "created") == set(route.ROUTER_CREATED)
+    assert acting_lines(cond, "edited") == set(route.ROUTER_EDITED)
+    assert set(COMMENT_LINE.findall(cond)) == set(route.ROUTER_CREATED) | set(route.ROUTER_EDITED)
+    # every owner answer the router unparks on starts it (the gap `Answer:` was, brief #1534 Q-4)
+    assert set(route.OWNER_ANSWER_LINES) <= set(route.ROUTER_CREATED)
+
+
+def test_1554_answer_wakes_the_router_when_created_only():
+    """REQ-039: brief #1554 answers 3 and 8 (`Answer:` created starts it; edited does not)."""
+    from test_ci_saving import holds, router_condition
+    from test_route_triggers import comment_on
+
+    cond = router_condition()
+    assert "Answer:" in route.ROUTER_CREATED and "Answer:" not in route.ROUTER_EDITED
+    assert holds(cond, comment_on("Answer: Q-1-1 the evidence settles it"))
+    assert not holds(cond, comment_on("Answer: Q-1-1 the evidence settles it", "edited"))
+
+
+@pytest.mark.parametrize(
+    "line", ["Owner needed:", "Maintainer answer:", "Answer:", "Report:", "Question:"]
+)
+def test_1554_an_edited_ask_or_answer_starts_no_router(line):
+    """REQ-039: brief #1554 answer 8 (an edited ask, answer or report starts none, as today)."""
+    from test_ci_saving import holds, router_condition
+    from test_route_triggers import comment_on
+
+    assert line not in route.ROUTER_EDITED
+    assert not holds(router_condition(), comment_on(f"{line} x", "edited"))
+
+
+def test_1554_an_owner_line_under_another_first_line_starts_and_unparks_nothing():
+    """REQ-039: brief #1554 answer 8 (the owner's line must lead the comment)."""
+    from test_ci_saving import holds, router_condition
+    from test_route_triggers import comment_on
+
+    event = comment_on("Thanks\nMaintainer answer: yes")
+    assert not holds(router_condition(), event)
+    payload = {**event["event"], "issue": {"number": 7, "pull_request": {}}}
+    assert not route.owner_answer_event("issue_comment", payload)
+    payload["comment"] = {"body": "Maintainer answer: yes\nThanks"}
+    assert route.owner_answer_event("issue_comment", payload)

@@ -562,12 +562,11 @@ def test_doctor_reads_an_adapter_on_path_as_there(tmp_path):
 def test_1554_a_watchdog_take_of_its_own_fresh_lease_writes_nothing(world):
     """REQ-039: brief #1554 answer 1 (the watchdog's take goes through the same path)."""
     import conductor
-    import session
 
     stamp = iso(timedelta(seconds=-20))
     own = comment(5, "boss", f"Conductor: active {stamp} conductor-local since {stamp}", stamp)
     world["stub"].serve(PLAN, [own])
-    code, said = session.quietly(
+    code, said = conductor.session.quietly(
         conductor.lease, world["repo"].root, "--take", "conductor-local", False
     )
     assert code == 0 and said.startswith("lease: taken by conductor-local until ")
