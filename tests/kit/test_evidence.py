@@ -375,6 +375,69 @@ def alive(pid: int) -> bool:
     return state != "Z"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals and process groups")
+def test_a_signal_while_the_run_starts_leaves_no_process_behind(tmp_path, monkeypatch):
+    """REQ-039: brief #1543 (main 20b7ee4 red: a SIGTERM that lands after the sampled run's
+    child has started but before `spawn` holds its handle still ends the child, and the stop is
+    raised)."""
+    import evidence
+    import lock
+
+    pidfile = tmp_path / "child.pid"
+    real = subprocess.Popen
+
+    class Late(real):  # the signal lands inside Popen, as on a loaded machine
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            deadline = time.monotonic() + 30
+            while not (pidfile.is_file() and pidfile.read_text().strip()):
+                assert time.monotonic() < deadline, "the child never started"
+                time.sleep(0.01)
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(0.05)  # the handler runs here, before Popen returns
+
+    previous = signal.signal(signal.SIGTERM, lock.on_signal)
+    monkeypatch.setattr(evidence.subprocess, "Popen", Late)
+    child = None
+    try:
+        with pytest.raises(lock.Stopped):
+            evidence.spawn(["sh", "-c", f'echo $$ > "{pidfile}"; exec sleep 60'], tmp_path, {})
+        assert signal.getsignal(signal.SIGTERM) is lock.on_signal  # the handler is put back
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        if pidfile.is_file() and pidfile.read_text().strip():
+            child = int(pidfile.read_text().strip())
+    assert child is not None
+    time.sleep(0.2)
+    still = alive(child)
+    if still:
+        os.kill(child, signal.SIGKILL)  # leave nothing behind, even when the test fails
+    assert not still, "the sampled run outlived the signal"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_a_handler_set_outside_python_is_never_held(monkeypatch):
+    """REQ-039: brief #1543, fix list 7010266313 item 1 (a signal whose handler was set outside
+    Python, `getsignal` None, is not held, so it is never left on the noting handler)."""
+    import evidence
+
+    real = signal.getsignal
+    monkeypatch.setattr(
+        evidence.signal,
+        "getsignal",
+        lambda sig: None if sig == signal.SIGHUP else real(sig),
+    )
+    before = {sig: real(sig) for sig in (signal.SIGTERM, signal.SIGHUP)}
+    held = evidence.hold_signals()
+    try:
+        assert signal.SIGHUP not in held[0] and signal.SIGTERM in held[0]
+        assert real(signal.SIGHUP) is before[signal.SIGHUP]
+        assert real(signal.SIGTERM) is not before[signal.SIGTERM]
+    finally:
+        evidence.release_signals(held)
+    assert {sig: real(sig) for sig in before} == before
+
+
 def test_the_worktree_is_of_the_head_not_the_work_tree(repo, outside):
     """REQ-039: brief #434 answer 2 (a clean worktree of the head: local edits do not count)."""
     project(repo, outside, makefile=LINT_FAIL)
