@@ -186,7 +186,8 @@ def derived(root: Path, allow: str) -> Path:
     (root / "docs" / "research" / "clinic-bookings.md").write_text("# Invented\n", encoding="utf-8")
     web = playbook_format.load(root / FOLDER / "web-app.toml")
     text = (root / FOLDER / "web-app.toml").read_text(encoding="utf-8")
-    text = text.replace('work_type = "web-app"', 'work_type = "clinic-bookings"\nmodules = ["web-app"]')
+    own = 'work_type = "clinic-bookings"\nmodules = ["web-app"]'
+    text = text.replace('work_type = "web-app"', own)
     text = text.replace('owner_only = false\n', 'owner_only = false\nbasis = "expected"\n')
     old = "allow = [\n"
     assert old in text and web["architecture"]["allow"]
@@ -243,7 +244,10 @@ def test_a_pack_for_a_stack_the_kit_cannot_name_is_refused(tmp_path: Path) -> No
 def test_the_other_gates_are_still_not_named(tmp_path: Path) -> None:
     """SPEC-0048 rule 21 is unchanged: only the eight fixed ids are named in a refusal."""
     root = kit_copy(tmp_path)
-    own = '\n[[gates]]\nid = "contract-tests"\nkind = "judgement"\ntext = "Invented."\nowner_only = false\n'
+    own = (
+        '\n[[gates]]\nid = "contract-tests"\nkind = "judgement"\ntext = "Invented."\n'
+        "owner_only = false\n"
+    )
     edit(root, "web-app", "[milestones]", own + "\n[milestones]")
     done = check(root)
     assert done.returncode == 1
