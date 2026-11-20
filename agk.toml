@@ -614,6 +614,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_agent_named.py",
   "tests/kit/test_autopilot_adapter.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_one_conductor_per_machine.py",

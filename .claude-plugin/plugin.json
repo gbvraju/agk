@@ -9,6 +9,7 @@
   "repository": "https://github.com/gbvraju/agk",
   "agents": [
     "./.claude/agents/architect.md",
+    "./.claude/agents/builder.md",
     "./.claude/agents/architect-review.md",
     "./.claude/agents/conductor.md",
     "./.claude/agents/drift-auditor.md",

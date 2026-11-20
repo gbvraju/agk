@@ -31,7 +31,8 @@ def data() -> dict:
 
 
 def gates() -> dict[str, dict]:
-    return {g["id"]: g for g in data()["gates"]}
+    # SPEC-0072 rule 2 (ADR-0665): the no-screen `accessibility` gate is not one of this spec
+    return {g["id"]: g for g in data()["gates"] if g["id"] != "accessibility"}
 
 
 def test_the_playbook_passes_the_check() -> None:
@@ -63,7 +64,7 @@ def test_phases_inventory_then_wave_plan_then_cut_over() -> None:
 
 def test_each_cut_over_brief_depends_on_its_wave_plan_which_depends_on_the_inventory() -> None:
     split = data()["split"]
-    assert split["brief_order"] == ORDER
+    assert split["brief_order"] == ["foundation", *ORDER]  # SPEC-0072 rule 4
     assert sorted(map(tuple, split["depends_on"])) == [
         ("cut-over", "wave-plan"),
         ("wave-plan", "inventory"),

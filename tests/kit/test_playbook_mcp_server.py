@@ -31,7 +31,8 @@ def data() -> dict:
 
 
 def gates() -> dict[str, dict]:
-    return {g["id"]: g for g in data()["gates"]}
+    # SPEC-0072 rule 2 (ADR-0665): the no-screen `accessibility` gate is not one of this spec
+    return {g["id"]: g for g in data()["gates"] if g["id"] != "accessibility"}
 
 
 def test_the_playbook_passes_the_check() -> None:
@@ -93,7 +94,7 @@ def test_nothing_beyond_rule_10_is_invented() -> None:
     # rule 10 gives the gates only: no order, lane, test map, heavy step or batching is invented
     playbook = data()
     assert [p["name"] for p in playbook["phases"]] == ["build"]
-    assert playbook["split"] == {"brief_order": ["build"], "depends_on": []}
+    assert playbook["split"] == {"brief_order": ["foundation", "build"], "depends_on": []}
     assert playbook["lanes"] == []
     assert playbook["heavy_steps"] == []
     assert playbook["milestones"]["shape"] == "per-brief"

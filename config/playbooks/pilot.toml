@@ -50,7 +50,7 @@ order = 7
 after = ["demo"]
 
 [split]
-brief_order = ["intake", "research", "choice", "contract", "integration", "demo-surface", "evaluation", "demo", "report"]
+brief_order = ["foundation", "intake", "research", "choice", "contract", "integration", "demo-surface", "evaluation", "demo", "report"]
 depends_on = [
   ["research", "intake"],
   ["choice", "research"],

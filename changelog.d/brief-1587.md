@@ -1,0 +1,1 @@
+- Every plan of a project with a work type now starts with one foundation step that the rest of the first milestone waits for, and the stack record arrives with its practices filled in from the playbook (brief #1587)

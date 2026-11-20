@@ -37,7 +37,8 @@ def data() -> dict:
 
 
 def gates() -> dict[str, dict]:
-    return {g["id"]: g for g in data()["gates"]}
+    # SPEC-0072 rule 2 (ADR-0665): the no-screen `accessibility` gate is not one of this spec
+    return {g["id"]: g for g in data()["gates"] if g["id"] != "accessibility"}
 
 
 def test_data_pipeline_is_a_work_type() -> None:
@@ -113,7 +114,7 @@ def test_the_split_puts_the_rollback_brief_before_the_cut_over_brief() -> None:
     playbook = data()
     assert [p["name"] for p in playbook["phases"]] == ["build", "rollback", "cut-over"]
     order = playbook["split"]["brief_order"]
-    assert order == ["build", "rollback", "cut-over"]
+    assert order == ["foundation", "build", "rollback", "cut-over"]  # SPEC-0072 rule 4
     assert order.index("rollback") < order.index("cut-over")
     assert ["cut-over", "rollback"] in playbook["split"]["depends_on"]
 
