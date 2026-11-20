@@ -6,7 +6,7 @@
 - Related: brief #1591, SPEC-0029, amendment 199, SPEC-0062, SPEC-0072, SPEC-0057, ADR-0103, ADR-0163, ADR-0667, brief #1587, brief #1577, brief #1602, plan #661
 - Requirements: REQ-036, REQ-069
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `config/`, `skills/`, `.claude/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `config/`, `skills/`
 
 ## Context
 
@@ -50,8 +50,9 @@ is a printed prompt for two hand-made commits that a business person cannot make
    `[testing]` table of `agk.toml` and changes nothing else (none when they already match). A refusal writes nothing.
    It runs in a builder's session from a mechanical brief that the steward drafts after the person's one plain yes
    (Q-1591-1); the person types no line. In team mode the yes is a spec approver's (SPEC-0063).
-7. **The steward presents it in plain words.** `.claude/agents/steward.md` tells the steward to show the options with
-   the four effects and the recommendation, in the voice of `docs/guides/steward-voice.md`, and to ask one yes.
+7. **The steward presents it in plain words.** `docs/guides/steward-voice.md`, which the steward's role file already
+   follows for every reply, shows the options with the four effects and the recommendation and asks one yes; the role
+   file itself is unchanged, as its word budget holds (`config/rule-budget.txt`).
 
 ## Consequences
 

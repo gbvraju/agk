@@ -19,7 +19,7 @@ import pytest
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
 ENGINES = KIT_ROOT / "scripts" / "agk" / "engines.py"
-DEFAULTS = KIT_ROOT / "config" / "stack-defaults.toml"
+DEFAULTS = KIT_ROOT / "config/stack-defaults.toml"
 SIGNALS = KIT_ROOT / "config" / "stack-signals.toml"
 STACK = "docs/adr/0002-stack-options.md"
 EFFECTS = (

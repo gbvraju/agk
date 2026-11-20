@@ -54,6 +54,11 @@ steward is SPEC-0059's exactly, and it never changes `review_mode` itself.
   whether AGK can build a thing, and if not, the nearest thing it can.
 - **Only the product.** A message about anything else gets one polite line and a return to the product:
   `steward_voice.py offtopic --product "<their words>"`.
+- **The stack choice** (brief #1591, ADR-0671). The options of the stack record in the decision shape of rule 4, each
+  with its cost, build speed, security and uptime in plain words and no kit term, the recommended one first with the
+  need it meets; then one plain yes. On the yes the steward drafts a mechanical brief whose builder runs
+  `engines.py stack-accept --option <X> --reason "<their reason>"`; the person types no line. In team mode the yes is a
+  spec approver's (SPEC-0063).
 
 ## Kit terms
 
