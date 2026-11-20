@@ -35,6 +35,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    PROJECT_AGENT,
+    PROJECT_SETTINGS,
     ROUTER_WORKFLOW,
     CheckError,
     detect_default_branch,
@@ -44,6 +46,7 @@ from common import (
     read_list,
     router_names,
     router_wanted,
+    with_agent,
     with_router_names,
 )
 from common import required_checks as configured_checks
@@ -265,11 +268,18 @@ def build_items(
         items[dest] = rendered.encode("utf-8")
     if ROUTER_WORKFLOW in items:
         items[ROUTER_WORKFLOW] = router_bytes(target, items[ROUTER_WORKFLOW], items["agk.toml"])
+    name_agent(items)
     apply_setup(items, setup)
     codeowners = render_codeowners(parse(items["config/reviewers.yaml"].decode("utf-8")))
     items[".github/CODEOWNERS"] = codeowners.encode("utf-8")
     entries = read_list(items["config/protected-paths.txt"].decode("utf-8"))
     return sorted(items.items()), entries, branch
+
+
+def name_agent(items: dict[str, bytes]) -> None:
+    """The steward as the project's agent, after the copy step (SPEC-0066 rule 2, ADR-0663)."""
+    if PROJECT_SETTINGS in items:
+        items[PROJECT_SETTINGS] = with_agent(items[PROJECT_SETTINGS], PROJECT_AGENT)
 
 
 def router_bytes(target: Path, kit: bytes, rendered_toml: bytes) -> bytes:

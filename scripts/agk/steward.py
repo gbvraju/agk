@@ -9,6 +9,7 @@ Usage: python3 scripts/agk/steward.py start --session ID
        python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
        python3 scripts/agk/steward.py onboard [--again]
        python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
+       python3 scripts/agk/steward.py first-run [--folder DIR]
 
 The memory is one open issue labelled `agk-steward`, created when none is open: one comment per
 entry, whose first word is one of KINDS, each ending `Who: AGK steward`. `start` reads it before any
@@ -29,12 +30,16 @@ prints the one question of SPEC-0062 rule 4, and `record --kind Person` takes `<
 person's `--answer`, the install command; after the install it refuses `--answer` (SPEC-0062 rules
 2, 9 and 11; brief #1599, ADR-0679). In personal mode
 (a `[personal]` table) the memory is `docs/runs/steward/memory.md` of the sidecar and nothing is
-posted. A failed GitHub call exits 4.
+posted. A failed GitHub call exits 4. Outside a git repository every command but `first-run`
+prints `outside: no project here`, exit 3, and writes nothing; `first-run` prints `first-run:
+<step>`, one of `kit`, `project`, `adopt`, `greet` and `greeted`, and writes only the greeting mark
+of a `greet` to the person's Claude folder (SPEC-0066 rule 8; brief #1583, ADR-0663).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -46,7 +51,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table, repo_root, review_mode, utf8_output  # noqa: E402
+from common import (  # noqa: E402
+    OUTSIDE_PROJECT,
+    CheckError,
+    personal_table,
+    repo_root,
+    review_mode,
+    utf8_output,
+)  # noqa: E402
 
 KINDS = (
     "Decision",
@@ -450,6 +462,47 @@ def write(root: Path, text: str, gh: Gh, who: str = WHO) -> tuple[int, list[str]
     return 0, [f"recorded on #{cache['issue']}"]
 
 
+# SPEC-0066 rule 8 (brief #1583, ADR-0663): the greeting mark, one line per folder greeted, a hash
+# of the folder's path and the date and nothing else, in the person's own Claude folder.
+GREETED = "agk-greeted.txt"
+
+
+def now_day() -> str:
+    return datetime.now(UTC).date().isoformat()
+
+
+def claude_folder() -> Path:
+    """The person's Claude folder: CLAUDE_CONFIG_DIR, else `~/.claude` (verify: per platform)."""
+    found = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(found) if found else Path.home() / ".claude"
+
+
+def first_run(folder: Path, today: str) -> str:
+    """The first step for FOLDER (SPEC-0066 rule 8): `kit`, `project`, `adopt`, `greet` or
+    `greeted`. Only `greet` writes, and only its mark in the person's Claude folder."""
+    folder = folder.resolve()
+    top = next((p for p in (folder, *folder.parents) if (p / ".git").exists()), None)
+    if top is not None:
+        if (top / "kit" / "manifest.json").is_file() and (top / ".claude-plugin").is_dir():
+            return "kit"
+        return "project" if (top / "agk.toml").is_file() else "adopt"
+    text = str(folder)
+    key = hashlib.sha256(
+        (text.casefold() if sys.platform in ("win32", "darwin") else text).encode("utf-8")
+    ).hexdigest()
+    mark = claude_folder() / GREETED
+    try:
+        seen = mark.read_text(encoding="utf-8").split()
+    except OSError:
+        seen = []
+    if key in seen:
+        return "greeted"
+    mark.parent.mkdir(parents=True, exist_ok=True)
+    with mark.open("a", encoding="utf-8") as out:
+        out.write(f"{key} {today}\n")
+    return "greet"
+
+
 def gh_api(method: str, endpoint: str, fields: dict | None = None):
     """One `gh api` call; None when it fails or answers no JSON."""
     args = ["gh", "api", "-X", method, endpoint]
@@ -478,6 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     end_p.add_argument("--calls", type=int)
     end_p.add_argument("--tokens", type=int)
     sub.add_parser("onboard").add_argument("--again", action="store_true")
+    sub.add_parser("first-run").add_argument("--folder", type=Path)
     set_p = sub.add_parser("setup")
     set_p.add_argument("--adopted", action="store_true")
     set_p.add_argument("--detect", type=Path, help="the output of `front_door.py detect --json`")
@@ -488,7 +542,15 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--text")
     group.add_argument("--file", type=Path)
     opts = parser.parse_args(argv)
-    root, now = repo_root(), datetime.now(UTC)
+    if opts.command == "first-run":
+        print(f"first-run: {first_run(opts.folder or Path.cwd(), now_day())}")
+        return 0
+    try:
+        root = repo_root()
+    except CheckError:
+        print(OUTSIDE_PROJECT)
+        return 3
+    now = datetime.now(UTC)
     if opts.command == "onboard":
         import steward_onboard
 

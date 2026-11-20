@@ -26,6 +26,9 @@ from conftest import (
     snapshot,
 )
 
+sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+from common import project_agent, without_agent  # noqa: E402
+
 INSTALLED_PROTECTED = [
     "constitution/",
     "config/",
@@ -138,7 +141,9 @@ def test_ac2_creates_exactly_the_planned_file_list(target):
     assert created == expected_files()
     assert (target / "README.md").read_bytes() == readme
     for rel in manifest()["verbatim"]:
-        assert (target / rel).read_bytes() == (KIT_ROOT / rel).read_bytes(), rel
+        data = without_agent(rel, (target / rel).read_bytes())  # SPEC-0066 rule 2, ADR-0663
+        assert data == (KIT_ROOT / rel).read_bytes(), rel
+    assert project_agent((target / ".claude/settings.json").read_bytes()) == "steward"
 
 
 def test_ac2_kit_only_files_are_not_installed(installed):
