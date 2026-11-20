@@ -1,0 +1,1 @@
+- An owner's `Maintainer answer: Q-<id>` closes every `Owner needed:` that names that id, and an `accept <head>` carries over a light merge of main, so an answered pull request is not parked again (brief #1616)

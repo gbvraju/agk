@@ -143,6 +143,7 @@ def test_1534_the_router_unparks_through_the_one_owner_step(monkeypatch, tmp_pat
     seen: list = []
 
     def apply(repo, n, settings, listed, answerers, now, **kw):
+        assert callable(kw.pop("carried"))  # brief #1616 answer 2: a check that never fetches
         seen.append((repo, n, listed, answerers, kw))
         return ("unpark", "Q-7-1")
 

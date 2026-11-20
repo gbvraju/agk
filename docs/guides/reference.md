@@ -849,7 +849,7 @@ recommended stack of the declared shape from `config/stack-defaults.toml` as Opt
 person's one plain yes.
 
 Pinned parts (brief #1592, ADR-0672, amendments 200 and 201): in a Proposed stack ADR each option names its `Parts:`, each
-`<name> <exact version> <licence id>` (an SPDX id such as `MIT` or `Apache-2.0`, marked `(verify)` until the foundation's
+`<name> <exact version> <licence id>` (an SPDX id such as `MIT` or `BSD-3-Clause`, marked `(verify)` until the foundation's
 build installs them), and `stack-check` refuses a range, a missing version or a missing licence naming the option and the
 part's place. `engines.py stack-files` writes the chosen stack's build file from `kit/templates/stacks/` (Python:
 `pyproject.toml`; `node`: `package.json`) and never rewrites a project's own; the lock is made by the stack's own tool on

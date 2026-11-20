@@ -29,6 +29,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
+from common import utf8_output  # noqa: E402
 from playbook_format import declaration  # noqa: E402
 
 RULE = "SPEC-0072 rule 4: the stack's build file and lock are not pinned and in step"
@@ -178,6 +179,7 @@ def check(root: Path, playbook: dict[str, Any]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     if args and not (len(args) == 2 and args[0] == "--root" and args[1]):
         print(USAGE, file=sys.stderr)
