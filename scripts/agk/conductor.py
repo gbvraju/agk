@@ -192,8 +192,9 @@ printed as `watchdog: memory <n> GB available, builder_memory_gb <g>|unset`. Bel
 starts nothing and says so (exit 1); memory that cannot be read prints `memory unknown` and the
 start goes ahead, as `launch.py`'s floor does. Otherwise it calls the adapter once, as
 `launch.py` does (split into words, no shell, the prompt on standard input), with `AGK_SESSION`
-NAME (`conductor-local` by default), `AGK_ROLE=conductor` and `AGK_TIER=strongest`, and no
-`AGK_BRIEF`; the prompt names the conductor role and tells it to take the lease under NAME first.
+NAME (`conductor-local` by default), `AGK_ROLE=conductor`, `AGK_AGENT=conductor` (ADR-0662) and
+`AGK_TIER=strongest`, and no `AGK_BRIEF`; the prompt names the conductor role and tells it to take
+the lease under NAME first.
 It posts nothing and takes no lease: the started conductor takes its own, and the lease keeps two
 from running. `--install` reads nothing and runs nothing: it prints the one scheduler line for the
 platform, `schtasks /Create /SC MINUTE /MO 30 ...` on Windows and a crontab line elsewhere, each a
@@ -2409,7 +2410,7 @@ def watchdog_once(root, name: str, repo: str, adapter: str, issue: int) -> int:
         return 0
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
     env.update(launch.QUIET, **JOB_RECORD)
-    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER="strongest")
+    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_AGENT="conductor", AGK_TIER="strongest")
     try:
         done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
             shlex.split(adapter),
@@ -2638,7 +2639,8 @@ def start_job(root, adapter: str, name: str, repo: str, why: str, tier: tuple) -
     output, or None when it cannot be run or fails."""
     env = {k: v for k, v in os.environ.items() if k not in ("AGK_BRIEF", "AGK_BUILD")}
     env.update(launch.QUIET, **JOB_RECORD)
-    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_TIER=tier[0], AGK_EFFORT=tier[1])
+    env.update(AGK_SESSION=name, AGK_ROLE="conductor", AGK_AGENT="conductor")
+    env.update(AGK_TIER=tier[0], AGK_EFFORT=tier[1])
     prompt = JOB_PROMPT.format(name=name, repo=repo, why=why)
     prompt += TIER_NOTE.format(tier=tier[0], effort=tier[1])
     prompt += MID_NOTE if tier[0] == "mid" else ""
