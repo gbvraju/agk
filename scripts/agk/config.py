@@ -782,6 +782,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "builder_slots",
             "builder_start",
             "claim_hours",
+            "conductor_lapse_minutes",
             "claim_stale_hours",
             "idle_minutes",
             "launch_adapter",

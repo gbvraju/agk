@@ -195,8 +195,9 @@ def test_local_mode_reports_and_merges_nothing(tmp_path, monkeypatch, capsys, ho
         (toml(""), "off"),
         (toml(ON, local=True), "off"),
         ('forge = "files"\n' + toml(ON), "off"),
+        (toml(ON + "conductor_lapse_minutes = 30\n", local=True), "on"),  # brief #1615
     ],
-    ids=["github", "auto-merge-off", "local", "personal"],
+    ids=["github", "auto-merge-off", "local", "personal", "local-lapse"],
 )
 def test_the_gate_says_whether_this_project_sweeps(tmp_path, capsys, main, word):
     """REQ-046: brief #797 answer 6 (GitHub mode with auto-merge alone gets the sweep job)."""
