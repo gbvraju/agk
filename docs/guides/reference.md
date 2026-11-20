@@ -198,12 +198,14 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
 
 The steward's notes (SPEC-0059 rule 8, ADR-0557): one open issue labelled `agk-steward`, created when none is open, one
-comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Pattern`, `Gap`, `Risk`, `Lesson`,
+comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Person`, `Pattern`, `Gap`, `Risk`, `Lesson`,
 `Owner question`, `Triage`, `Override`, `Onboarded`). `start` reads the notes first, with `since=` from the last one seen,
 prints the newest of each kind, posts `Started: steward <session> <UTC time>` and exits 1, writing nothing, while another
 steward's marker is live (60 minutes, no `Ended:`); at 500 comments it opens a new issue that carries the open owner
 questions and closes the old one. `record` refuses an unknown kind or a text the data guard matches (exit 2). A failed
 GitHub call exits 4. In personal mode the notes are `docs/runs/steward/memory.md` of the sidecar and nothing is posted.
+In solo mode (SPEC-0062 rule 4) a start with no `Person:` note prints `ask:` with the one question to the person, and a
+`Person` note is `<business|technical>: <their words>`, ending `Who: ProductOwner` (else exit 2).
 `end` writes the pass's counted calls and tokens on its `Ended:` marker, `not shown` for a figure not given, never 0.
 
 ## Steward evidence
@@ -328,6 +330,9 @@ files forge. `jobs` prints the pass's `job:`, `held:` and `not started:` lines f
     python3 scripts/agk/steward_voice.py form FILE
     python3 scripts/agk/steward_voice.py confirm FILE --answers FILE
     python3 scripts/agk/steward_voice.py shortened --rules N[,N]
+    python3 scripts/agk/steward_voice.py explained FILE
+    python3 scripts/agk/steward_voice.py playback FILE --reply TEXT
+    python3 scripts/agk/steward_voice.py offtopic --product TEXT
 
 The steward's voice (ADR-0582, brief #1382). `check` reads a reply to a person and prints one `voice: rule <n>:` line per
 broken rule, naming the rule and never the text (exit 1), or `voice: ok`: the first line is an ask or an answer; at most
@@ -338,7 +343,11 @@ list. `choose` renders a decision JSON (`decision`, `options` of `label` with op
 evidence rules out, grouping kinds, keeping the best three by score with `say more for N other options`, or asking the
 one sharper question. `form` renders 1 to 5 inputs (`name`, `default`, optional `choices`) as one form with each default;
 `confirm` plays the answers back in at most three lines. `shortened` records one `Shortened:` marker, counted in the
-daily list. Exit 2: a refused input; exit 4: the memory cannot be written.
+daily list. In `check`, a term of the guide's `Kit terms` list passes only with its one sentence in the sentence that
+first names it, and only once: `explained` records each term a reply explains for the first time as one `Term: kit:`
+entry, and a later reply that explains it again fails (SPEC-0062 rule 5). `playback` exits 0 (`go on`) only when the
+play-back is three sentences or fewer and `--reply` is a plain yes, else 1 (`play back again`); `offtopic` prints the one
+line back to the product. Exit 2: a refused input; exit 4: the memory cannot be written.
 
 ## Conductor routines
 

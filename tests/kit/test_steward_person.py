@@ -154,7 +154,7 @@ def test_req069_ac2_a_kit_term_is_flagged_unless_explained_and_never_explained_t
     found = voice.problems(bare, TERMS)
     assert any("rule 8" in p and "explanation" in p for p in found)
     assert "pull request" not in " ".join(found)
-    told = f"I opened a pull request: {TERMS['pull request']} Shall I go on?"
+    told = f"I opened a pull request: {TERMS['pull request']}\nShall I go on?"
     assert voice.problems(told, TERMS) == []
     assert voice.explained_terms(told, TERMS) == ["pull request"]
     assert voice.problems(bare, TERMS, {"pull request"}) == []
@@ -168,7 +168,7 @@ def test_req069_ac2_an_explained_term_is_recorded_once_as_a_kit_term(solo, monke
     (solo / "agk.toml").write_text('review_mode = "solo"\n[personal]\nforge = "files"\n', "utf-8")
     monkeypatch.setattr(voice, "repo_root", lambda: solo)
     reply = solo / "reply.txt"
-    reply.write_text(f"I opened a pull request: {TERMS['pull request']} Go on?", encoding="utf-8")
+    reply.write_text(f"I opened a pull request: {TERMS['pull request']}\nGo on?", encoding="utf-8")
     assert voice.main(["explained", str(reply)]) == 0
     assert voice.main(["explained", str(reply)]) == 0
     text = (solo / steward.PERSONAL_FILE).read_text(encoding="utf-8")
@@ -191,7 +191,7 @@ def test_req069_the_role_file_points_at_the_solo_section():
     role = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
     assert "Solo." in role and "steward_voice.py playback" in role
     assert "--kind Person" in role and "steward_voice.py explained" in role
-    guide = (ROOT / "docs" / "guides" / "steward-voice.md").read_text(encoding="utf-8")
+    guide = " ".join((ROOT / "docs" / "guides" / "steward-voice.md").read_text("utf-8").split())
     for words in (
         "## Solo mode",
         "assumes nothing about the product",
