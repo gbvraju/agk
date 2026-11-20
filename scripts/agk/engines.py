@@ -44,6 +44,12 @@ proposals: the architect chooses as today, and nothing writes `agk.toml`. Withou
 skeleton is the template as before. A declaration with a problem, or a declared playbook that fails
 the playbook check, is refused before anything is written, naming the setting and never a value.
 
+The composed practices (SPEC-0072 rule 4; REQ-079 AC3; brief #1587, ADR-0667): the gate bullets are
+those of the composed playbook (`default.toml`, the modules, then the playbook), so the eight
+enterprise gates are among them; without a declaration `default.toml` alone gives them when it is
+present (`Q-S0072-17`). Each option's `Practices:` names every practice of the Practices item, so
+no `TODO(architect)` is written there; the architect may still change a practice before acceptance.
+
 The discovery questions (SPEC-0048 rule 4; brief #686): `questions` prints the ten common topics,
 then the `[[discovery]]` questions of `config/playbooks/<kind>.toml`, each once: the kind is
 `--work-type`, else the declared work type; with neither the output is the ten, as before. An

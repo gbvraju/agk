@@ -49,7 +49,8 @@ checkout; the other scripts are installed under `scripts/agk/`.
    `yes` that the prototype source does not show, which becomes an open question. The skill then reads the sources and
    writes one proposals file: scope, milestones, requirements, feature areas, briefs and conflicts, every item citing a
    location (`<file>:<line>` or `<file>#<heading>`). A point no source settles is an open question marked `(verify)`,
-   never a made-up value.
+   never a made-up value. With a work type set, the plan starts with one foundation brief in `M1` that every other
+   `M1` brief depends on (SPEC-0072 rule 4); with none, no foundation brief is proposed until the work type is set.
 5. **Validate.** `python3 scripts/agk/plan_intake.py validate --proposals FILE` prints `ok proposals` or one line per
    problem, naming the rule and the item's key, never its text. A size, a range or a date that no cited location states
    is refused as an open question. Above `[plan] max_questions` of `agk.toml` (60 by default) it also prints

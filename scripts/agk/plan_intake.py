@@ -32,7 +32,10 @@ whose `component` names it); a brief whose `screens` use a component names that 
 its first `Source:` lines (brief #1217, `Q-1217-1`). While a `Kind: design` source has a
 `<screen>/<state>` heading, every milestone after `M1` has `screens`, its `exit` names
 `design_compare.py`, `match` and a signed-off version, and every such heading is in a milestone's
-`screens`. Rule 7: `render` runs `validate` first, prints
+`screens`. Brief #1587 (SPEC-0072 rule 4, ADR-0667): with `[delivery] work_type` declared, exactly
+one brief has `foundation` true, in `M1`, and every other `M1` brief names it in `depends_on`;
+`render` writes its `Kind: foundation` line; with no work type a foundation brief is refused naming
+the setting. Rule 7: `render` runs `validate` first, prints
 every conflict under `Conflicts for the person` and then every open question under `Open questions
 for the person`, and writes, as new files only and all or nothing, `docs/plan/scope.md`,
 `docs/plan/personas.md`, `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md` (each block
