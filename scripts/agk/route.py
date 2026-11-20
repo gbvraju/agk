@@ -137,7 +137,7 @@ MERGER_WORKFLOW = "merger.yml"  # brief #1116 (ADR-0476): started once per pull 
 MERGE_READY = "agk:merge-ready"
 MERGER_STARTS = MERGER_CREATED  # comments on which merger.yml starts by itself
 # brief #1554 answer 5 (ADR-0654): the first lines agk-route.yml's job starts on, created and
-# edited, from the readers below; tests/kit/test_route_triggers.py holds them equal to its `if:`
+# edited, from the readers below; the kit's own tests hold them equal to its `if:`
 ROUTER_EDITED = ("Verdict:", "Approve:", "Final:")  # FORM_LINES' verdict, approval and status
 ROUTER_CREATED = (
     "Verdict:",

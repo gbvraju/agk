@@ -327,7 +327,7 @@ JOB_LINE = re.compile(
 CREATED_STARTS = ("Verdict:", "Approve:")  # first lines of a new comment that may clear a head
 EDITED_STARTS = (*CREATED_STARTS, "Final:")  # and of an edited one (brief #836 answer 1)
 # brief #1554 answer 5 (ADR-0654): the first lines merger.yml's job starts on, created and edited,
-# held equal to its `if:` by tests/kit/test_merger_trigger.py
+# held equal to its `if:` by the kit's own tests
 MERGER_CREATED = CREATED_STARTS
 MERGER_EDITED = EDITED_STARTS
 MERGER_VARIABLE = "AGK_MERGER"  # the repository variable whose value `off` keeps those jobs off

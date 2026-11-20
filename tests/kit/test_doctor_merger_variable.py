@@ -17,7 +17,8 @@ import doctor
 import pytest
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
-MERGER = (KIT_ROOT / ".github" / "workflows" / "merger.yml").read_text(encoding="utf-8")
+# The schedule part of merger.yml (a copy: a project tree under test may hold no workflow file).
+MERGER = 'name: merger\non:\n  schedule:\n    - cron: "*/15 * * * *"\n'
 ON = {"flow": {"auto_merge": True, "auto_merge_method": "squash"}}
 OFF_DEFAULT: dict = {}
 LOCAL = {"execution": "local", **ON}
@@ -97,5 +98,8 @@ def test_the_row_is_a_warning_of_the_report_and_never_runs_the_command():
 def test_the_schedule_rate_is_read_from_the_workflow():
     """REQ-039: brief #1554 answer 4 (the starts a day at the project's own schedule)."""
     assert doctor.scheduled_per_day(MERGER) == 96
+    kit = KIT_ROOT / ".github" / "workflows" / "merger.yml"
+    if kit.is_file():  # the kit's own file, where it is there
+        assert doctor.scheduled_per_day(kit.read_text(encoding="utf-8")) == 96
     assert doctor.scheduled_per_day('cron: "*/30 * * * *"') == 48
     assert doctor.scheduled_per_day('cron: "5 * * * *"') is None
