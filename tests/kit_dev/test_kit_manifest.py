@@ -62,6 +62,7 @@ SINGLES = {
     "docs/runbooks/red-default-branch.md",
     "config/ci-tools.txt",
     "config/core-rules.md",
+    "config/playbooks/api-service.toml",
     "config/playbooks/cloud-migration.toml",
     "config/playbooks/data-pipeline.toml",
     "config/playbooks/default.toml",

@@ -1,7 +1,7 @@
 """Tests of the shipped pilot playbook (SPEC-0038 rules 1, 10, 11 and 12 build (n)).
 
 REQ-045 AC5. `config/playbooks/pilot.toml` passes the playbook check, and `check_playbooks.py`
-passes with ten playbooks. It orders `intake`, `research`, `choice`, `contract`, `build` with its
+passes with eleven playbooks. It orders `intake`, `research`, `choice`, `contract`, `build` with its
 three lanes, `demo` and `report`, with `research` and `choice` before `contract`. It holds the eight
 pilot gates of rule 10 as ten entries, since the research record and the cost estimate each have a
 `check` part and a `judgement` part. The choice and the credentials are `owner_only`. Each check
@@ -60,7 +60,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_ten_playbooks() -> None:
+def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -68,7 +68,7 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (10 playbooks)\n"
+    assert out.stdout == "ok playbooks (11 playbooks)\n"
 
 
 def test_the_phases_run_in_the_order_of_rule_11() -> None:
