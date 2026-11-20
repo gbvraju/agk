@@ -740,7 +740,7 @@ def foundation_problems(root: Path) -> list[str]:
         many = "more than one brief is" if found else "no brief is"
         return [f"{where}: {BRIEFS}: {many} {kind} (setting: work_type)"]
     key, text = found[0]
-    first, home = (milestones(root) or [None])[0], _line_value(text, "Milestone")
+    first, home = next(iter(milestones(root)), None), _line_value(text, "Milestone")
     if first is not None and home != first:
         return [f"{where}: {key}: the foundation brief is not in the first milestone"]
     out = []
