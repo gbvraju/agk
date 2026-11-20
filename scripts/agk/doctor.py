@@ -70,6 +70,9 @@ SPEC-0071 rule 7 (brief #1458, ADR-0616): in a clean project (`[kit] layout = "p
 rule 2's kept files, never a file or its content; and `--paused`, a session's first command, prints
 the grant's `valid_until` warning to stderr when a `[licence]` table is present. Neither changes the
 exit code or the one stdout line of `--paused`.
+SPEC-0066 rule 5 (brief #1582, ADR-0662): `launch-adapter` also warns, naming
+`flow.launch_adapter` and never the command, when a script file the setting names starts `claude`
+and never passes `--agent`; nothing is refused (the upgrade's refusal is build (d)'s).
 """
 
 from __future__ import annotations
@@ -1477,7 +1480,22 @@ def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
             message=f"auto_start is on and a file launch_adapter names is "
             f"missing; the kit's adapter is {file}: set {line}",
         )
+    if any(starts_unnamed(Path(w) if Path(w).is_absolute() else root / w) for w in named):
+        return Result(  # SPEC-0066 rule 5 (brief #1582, ADR-0662): a warning, never a refusal
+            "fail",
+            message="the launch adapter starts claude without --agent; pass --agent \"$AGK_AGENT\" "
+            f"as the kit's adapter {file} does (setting: flow.launch_adapter)",
+        )
     return Result("ok", message="auto_start on, the adapter is there")
+
+
+def starts_unnamed(path: Path) -> bool:
+    """True when the script at PATH starts `claude` and never passes `--agent` (ADR-0662)."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return re.search(r"(?<![\w./-])claude[ \t]", text) is not None and "--agent" not in text
 
 
 def model_names_result(root: Path) -> Result:

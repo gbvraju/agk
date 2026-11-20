@@ -28,9 +28,9 @@ WEB_APP = KIT_ROOT / "config" / "playbooks" / "web-app.toml"
 ADR = "docs/adr/0002-stack-options.md"
 DATE = "2026-11-07"
 DECLARATION = '\n[delivery]\nwork_type = "web-app"\n'
-TODO_PRACTICE = (
-    "   - TODO(architect): check (step: the governance step the adopting build adds) or judgement\n"
-)
+PRACTICES_HEAD = "2. **Practices**\n"
+TEMPLATE_NAMES = "local profile, fast CI, fast tests, test selection"
+DEFAULT = KIT_ROOT / "config" / "playbooks" / "default.toml"
 PROPOSAL = (
     "profile balanced, always_full `contracts/**`, map `contracts/** -> tests/contract/**`, "
     "`mocks/** -> tests/mocks/**`, `frontend/** -> tests/frontend/**`, "
@@ -76,8 +76,13 @@ def declare(root, work_type: str = "web-app", playbook: str | None = "shipped") 
         path.write_text(playbook, encoding="utf-8")
 
 
-def rendered_template() -> str:
-    return TEMPLATE.read_text(encoding="utf-8").replace("{{adr}}", "0002").replace("{{date}}", DATE)
+def rendered_template(names: str = TEMPLATE_NAMES) -> str:
+    text = TEMPLATE.read_text(encoding="utf-8").replace("{{adr}}", "0002")
+    return text.replace("{{date}}", DATE).replace("{{practices}}", names)
+
+
+def gate_names() -> str:
+    return ", ".join(line.split(":")[0].removeprefix("   - ") for line in GATES)
 
 
 def practices(text: str) -> str:
@@ -116,7 +121,8 @@ def test_ac3_a_declared_work_type_adds_one_practice_per_gate_marked_with_the_pla
     proc = stack_write(started)
     assert (proc.returncode, proc.stdout) == (0, "wrote docs/adr/0002-stack-options.md\n")
     block = practices((started / ADR).read_text(encoding="utf-8"))
-    assert TODO_PRACTICE + "".join(GATES) in block
+    assert PRACTICES_HEAD + "".join(GATES) in block
+    assert "TODO(architect)" not in block
     gates = tomllib.loads(WEB_APP.read_text(encoding="utf-8"))["gates"]
     assert [g["id"] for g in gates] == [
         "contract-tests",
@@ -129,6 +135,37 @@ def test_ac3_a_declared_work_type_adds_one_practice_per_gate_marked_with_the_pla
         assert ("(step: " in line) == (gate["kind"] == "check")
         assert line.rstrip("\n").endswith("(playbook web-app)")
     assert block.count("(playbook web-app)") == len(GATES) + 2
+
+
+def test_ac3_each_option_names_the_composed_practices_with_no_todo(started):
+    """REQ-079 AC3: SPEC-0072 rule 4 (brief #1587): with `default.toml` beside the playbook, the
+    composed gates, the eight enterprise gates included, fill the Practices item and each option's
+    `Practices:`, and no `TODO(architect)` stays there."""
+    declare(started)
+    (started / "config" / "playbooks" / "default.toml").write_bytes(DEFAULT.read_bytes())
+    assert stack_write(started).returncode == 0
+    text = (started / ADR).read_text(encoding="utf-8")
+    block = practices(text)
+    assert "TODO(architect)" not in block
+    for gate in ("secrets", "environment-settings", "sign-in-permissions", "contract-tests"):
+        assert f"   - {gate}: " in block
+    assert "   - secrets: check (step: secrets) (playbook web-app)\n" in block
+    options = [ln for ln in text.splitlines() if ln.startswith("   - Option ")]
+    assert len(options) == 2
+    for line in options:
+        assert "Practices: TODO" not in line and "secrets, " in line and "test selection." in line
+
+
+def test_ac3_without_a_declaration_default_toml_alone_fills_the_practices(started):
+    """REQ-079 AC3: SPEC-0072 rule 4 and `Q-S0072-17` (no work type: `default.toml`'s part)."""
+    folder = started / "config" / "playbooks"
+    folder.mkdir(parents=True)
+    (folder / "default.toml").write_bytes(DEFAULT.read_bytes())
+    assert stack_write(started).returncode == 0
+    block = practices((started / ADR).read_text(encoding="utf-8"))
+    assert "TODO(architect)" not in block
+    assert "   - secrets: check (step: secrets) (playbook default)\n" in block
+    assert "(playbook default)" not in block.split("- test selection:")[1]
 
 
 def test_ac3_the_test_selection_parenthesis_carries_the_testing_suggestion_per_option(started):
@@ -168,7 +205,7 @@ def test_ac3_nothing_else_of_the_adr_changes(started):
     for line in GATES:
         assert text.count(line) == 1
         text = text.replace(line, "", 1)
-    template = rendered_template()
+    template = rendered_template(f"{gate_names()}, {TEMPLATE_NAMES}")
     original = next(ln for ln in template.splitlines(keepends=True) if "- test selection:" in ln)
     assert text.count(TEST_SELECTION) == 1
     assert text.replace(TEST_SELECTION, original, 1) == template
@@ -195,8 +232,6 @@ def test_ac3_the_skeleton_with_the_playbook_practices_passes_the_check_once_draf
                 "   - Option B — a web framework. Trade-offs: a host to run. "
                 "Practices: mock-parity, accessibility, test selection.\n"
             )
-        elif line == TODO_PRACTICE:
-            continue
         lines.append(line)
     path.write_text("".join(lines), encoding="utf-8")
     assert engines(started, "stack-check").stdout == "ok engines-stack\n"

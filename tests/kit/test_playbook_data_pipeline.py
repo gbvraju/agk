@@ -3,7 +3,7 @@
 SPEC-0038 rules 1 and 10 as amendment 130 widens them.
 
 REQ-055 AC8. `config/playbooks/data-pipeline.toml` passes the playbook check, and
-`check_playbooks.py` passes with ten playbooks. It holds the exact data-pipeline gates of rule 18
+`check_playbooks.py` passes with eleven playbooks. It holds the exact data-pipeline gates of rule 18
 (SPEC-0038 rule 10 as amendment 130 widens it): a data contract, `check` (a contract file names each
 source and target field with its type, and the testing map names a test glob for it); row-count and
 checksum reconciliation, `check` that one is declared for every table or stream the contract names
@@ -37,15 +37,16 @@ def data() -> dict:
 
 
 def gates() -> dict[str, dict]:
-    return {g["id"]: g for g in data()["gates"]}
+    # SPEC-0072 rule 2 (ADR-0665): the no-screen `accessibility` gate is not one of this spec
+    return {g["id"]: g for g in data()["gates"] if g["id"] != "accessibility"}
 
 
 def test_data_pipeline_is_a_work_type() -> None:
     sys.path.insert(0, str(SCRIPTS))
     import playbook_format
 
-    assert playbook_format.WORK_TYPES[-1] == "data-pipeline"
-    assert len(playbook_format.WORK_TYPES) == len(set(playbook_format.WORK_TYPES)) == 9
+    assert playbook_format.WORK_TYPES[8] == "data-pipeline"  # ADR-0682 appends api-service
+    assert len(playbook_format.WORK_TYPES) == len(set(playbook_format.WORK_TYPES)) == 10
 
 
 def test_the_playbook_passes_the_check() -> None:
@@ -57,7 +58,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_ten_playbooks() -> None:
+def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -65,7 +66,7 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (10 playbooks)\n"
+    assert out.stdout == "ok playbooks (11 playbooks)\n"
 
 
 def test_exactly_the_data_pipeline_gates_of_rule_18() -> None:
@@ -113,7 +114,7 @@ def test_the_split_puts_the_rollback_brief_before_the_cut_over_brief() -> None:
     playbook = data()
     assert [p["name"] for p in playbook["phases"]] == ["build", "rollback", "cut-over"]
     order = playbook["split"]["brief_order"]
-    assert order == ["build", "rollback", "cut-over"]
+    assert order == ["foundation", "build", "rollback", "cut-over"]  # SPEC-0072 rule 4
     assert order.index("rollback") < order.index("cut-over")
     assert ["cut-over", "rollback"] in playbook["split"]["depends_on"]
 

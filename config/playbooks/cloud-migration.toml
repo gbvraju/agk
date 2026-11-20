@@ -30,7 +30,7 @@ order = 3
 after = ["wave-plan"]
 
 [split]
-brief_order = ["inventory", "wave-plan", "cut-over"]
+brief_order = ["foundation", "inventory", "wave-plan", "cut-over"]
 depends_on = [
   ["wave-plan", "inventory"],
   ["cut-over", "wave-plan"],
@@ -65,6 +65,13 @@ id = "apply"
 kind = "judgement"
 text = "Any apply of infrastructure, done and recorded by the owner alone; a session prepares the plan and stops."
 owner_only = true
+
+[[gates]]
+id = "accessibility"
+kind = "judgement"
+text = "Accessibility of the screens, where the work has any."
+owner_only = false
+reason = "This kind of work has no screens of its own, so there is nothing to check."
 
 [milestones]
 shape = "per-brief"

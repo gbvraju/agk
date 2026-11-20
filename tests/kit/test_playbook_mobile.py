@@ -41,7 +41,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_ten_playbooks() -> None:
+def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -49,7 +49,7 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (10 playbooks)\n"
+    assert out.stdout == "ok playbooks (11 playbooks)\n"
 
 
 def test_exactly_the_mobile_gates_of_rule_10() -> None:
@@ -106,7 +106,7 @@ def test_the_shape_is_one_brief_at_a_time() -> None:
     playbook = data()
     assert [p["name"] for p in playbook["phases"]] == ["build"]
     assert playbook["phases"][0]["after"] == []
-    assert playbook["split"]["brief_order"] == ["build"]
+    assert playbook["split"]["brief_order"] == ["foundation", "build"]  # SPEC-0072 rule 4
     assert playbook["split"]["depends_on"] == []
     assert playbook["lanes"] == []
     assert playbook["milestones"]["shape"] == "per-brief"

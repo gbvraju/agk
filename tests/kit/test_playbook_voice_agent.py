@@ -1,7 +1,7 @@
 """Tests of the shipped voice-agent playbook (SPEC-0038 rules 1, 10 and 12 build (m)).
 
 REQ-045 AC6. `config/playbooks/voice-agent.toml` passes the playbook check, and
-`check_playbooks.py` passes with ten playbooks. It holds exactly the voice-agent gates of rule
+`check_playbooks.py` passes with eleven playbooks. It holds exactly the voice-agent gates of rule
 10: a latency budget, `check` that it is declared and `judgement` that a recorded run meets it; an
 ASR/TTS evaluation set, `check` (the set exists with a version line); and barge-in and fallback
 scenarios, `check` (each scenario is listed and the map names its tests). Each check gate names
@@ -44,7 +44,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_ten_playbooks() -> None:
+def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -52,7 +52,7 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (10 playbooks)\n"
+    assert out.stdout == "ok playbooks (11 playbooks)\n"
 
 
 def test_exactly_the_voice_agent_gates_of_rule_10() -> None:
@@ -100,7 +100,7 @@ def test_nothing_beyond_rule_10_is_invented() -> None:
     # rule 10 gives the gates only: no order, lane, test map, heavy step or batching is invented
     playbook = data()
     assert [p["name"] for p in playbook["phases"]] == ["build"]
-    assert playbook["split"] == {"brief_order": ["build"], "depends_on": []}
+    assert playbook["split"] == {"brief_order": ["foundation", "build"], "depends_on": []}
     assert playbook["lanes"] == []
     assert playbook["heavy_steps"] == []
     assert playbook["milestones"]["shape"] == "per-brief"

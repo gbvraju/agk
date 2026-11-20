@@ -432,6 +432,7 @@ def render(data: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    metrics.utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
     except CheckError as exc:

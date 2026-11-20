@@ -1,0 +1,1 @@
+- A new api-service playbook gives a service that other apps call a reviewed default: contract first, four layers, the enterprise gates and three discovery questions, and detect proposes it from the files a repository holds (brief #1602, ADR-0682)

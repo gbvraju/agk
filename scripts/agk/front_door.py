@@ -1081,7 +1081,7 @@ def skeleton(name: str, modules: list[str], base: dict) -> str:
     ]
     if modules:
         lines.append(f"modules = {_toml(modules)}")
-    lines += ["", "[split]", "brief_order = []", "depends_on = []", "", "[testing]"]
+    lines += ["", "[split]", 'brief_order = ["foundation"]', "depends_on = []", "", "[testing]"]
     lines += [f"profile = {_toml(base['testing']['profile'])}", "always_full = []", "map = []"]
     milestones = base["milestones"]
     lines += ["", "[milestones]", f"shape = {_toml(milestones['shape'])}"]

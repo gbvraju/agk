@@ -94,16 +94,18 @@ def test_ac3_the_shipped_web_app_playbook_splits_a_goal_in_brief_order(tmp_path)
     lines = proc.stdout.splitlines()
     assert lines[0] == "work type: web-app (playbook config/playbooks/web-app.toml)"
     titles = [line for line in lines if line[:1].isdigit()]
-    assert titles == [
-        f"1. {GOAL}: contract",
-        f"2. {GOAL}: mock",
-        f"3. {GOAL}: front-end",
-        f"4. {GOAL}: back-end",
-        f"5. {GOAL}: join",
+    assert titles == [  # SPEC-0072 rule 4: the foundation first
+        f"1. {GOAL}: foundation",
+        f"2. {GOAL}: contract",
+        f"3. {GOAL}: mock",
+        f"4. {GOAL}: front-end",
+        f"5. {GOAL}: back-end",
+        f"6. {GOAL}: join",
     ]
     by_kind = blocks(lines)
-    assert list(by_kind) == ["contract", "mock", "front-end", "back-end", "join"]
-    assert depends(by_kind["contract"]) == []
+    assert list(by_kind) == ["foundation", "contract", "mock", "front-end", "back-end", "join"]
+    assert depends(by_kind["foundation"]) == []
+    assert depends(by_kind["contract"]) == ["Depends-on: #<foundation brief>"]
     assert depends(by_kind["mock"]) == ["Depends-on: #<contract brief>"]
     assert depends(by_kind["front-end"]) == ["Depends-on: #<mock brief>"]
     assert depends(by_kind["back-end"]) == ["Depends-on: #<mock brief>"]
@@ -128,7 +130,14 @@ def test_ac3_without_a_goal_the_titles_are_the_kinds(tmp_path):
     proc = split(project(tmp_path / "proj"))
     assert proc.returncode == 0, proc.stdout + proc.stderr
     titles = [line for line in proc.stdout.splitlines() if line[:1].isdigit()]
-    assert titles == ["1. contract", "2. mock", "3. front-end", "4. back-end", "5. join"]
+    assert titles == [
+        "1. foundation",
+        "2. contract",
+        "3. mock",
+        "4. front-end",
+        "5. back-end",
+        "6. join",
+    ]
 
 
 def test_ac3_the_milestone_shape_is_printed_with_its_meaning(tmp_path):
@@ -154,7 +163,15 @@ def test_ac3_the_shipped_rag_app_playbook_puts_the_evaluation_set_before_retriev
     assert lines[1].startswith("milestone shape: per-brief")
     assert lines[2].strip() == "one pull request per brief, as today"
     by_kind = blocks(lines)
-    assert list(by_kind) == ["corpus", "evaluation-set", "retrieval", "answer", "join"]
+    assert list(by_kind) == [
+        "foundation",
+        "corpus",
+        "evaluation-set",
+        "retrieval",
+        "answer",
+        "join",
+    ]
+    assert depends(by_kind["corpus"]) == ["Depends-on: #<foundation brief>"]
     assert depends(by_kind["evaluation-set"]) == ["Depends-on: #<corpus brief>"]
     assert depends(by_kind["retrieval"]) == ["Depends-on: #<evaluation-set brief>"]
     assert depends(by_kind["answer"]) == [
@@ -207,7 +224,7 @@ def test_ac3_one_kind_prints_only_that_brief(tmp_path):
     lines = proc.stdout.splitlines()
     assert lines[0] == "work type: web-app (playbook config/playbooks/web-app.toml)"
     titles = [line for line in lines if line[:1].isdigit()]
-    assert titles == [f"5. {GOAL}: join"]
+    assert titles == [f"6. {GOAL}: join"]
     by_kind = blocks(lines)
     assert list(by_kind) == ["join"]
     assert depends(by_kind["join"]) == [

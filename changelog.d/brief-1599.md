@@ -1,0 +1,1 @@
+- In solo mode the steward does the setup for the person: it records each choice it makes with its reason, asks only whether they work alone or with a team and when they rest, and the install fills the reviewers file with the signed-in login, the solo answer and a proposed test command (SPEC-0062 build (b), brief #1599)

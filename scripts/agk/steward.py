@@ -8,6 +8,7 @@ Usage: python3 scripts/agk/steward.py start --session ID
        python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
        python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
        python3 scripts/agk/steward.py onboard [--again]
+       python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
 
 The memory is one open issue labelled `agk-steward`, created when none is open: one comment per
 entry, whose first word is one of KINDS, each ending `Who: AGK steward`. `start` reads it before any
@@ -21,9 +22,14 @@ open `Owner question:` (no later `Decision:` names its Q id), then closes the ol
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
 the value (exit 2). `end` writes the pass's counted calls and tokens on its marker, `not shown` when
 not given, never 0 (rule 13's daily list reads them). `onboard` is `steward_onboard.py onboard`
-(SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In personal mode (a `[personal]` table) the
-memory is `docs/runs/steward/memory.md` of the sidecar and nothing is posted. A failed GitHub call
-exits 4.
+(SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In solo mode a start with no `Person:` entry
+prints the one question of SPEC-0062 rule 4, and `record --kind Person` takes `<business|technical>:
+<their words>` and ends `Who: ProductOwner` (rule 15; brief #1598, ADR-0678). `setup` prints one
+`Setup: <matter>: <choice> because <reason>` line per AGK matter, the plain questions and, with the
+person's `--answer`, the install command; after the install it refuses `--answer` (SPEC-0062 rules
+2, 9 and 11; brief #1599, ADR-0679). In personal mode
+(a `[personal]` table) the memory is `docs/runs/steward/memory.md` of the sidecar and nothing is
+posted. A failed GitHub call exits 4.
 """
 
 from __future__ import annotations
@@ -40,13 +46,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, personal_table, repo_root, utf8_output  # noqa: E402
+from common import CheckError, personal_table, repo_root, review_mode, utf8_output  # noqa: E402
 
 KINDS = (
     "Decision",
     "Ranking",
     "Term",
     "Persona",
+    "Person",
     "Pattern",
     "Gap",
     "Risk",
@@ -55,11 +62,35 @@ KINDS = (
     "Triage",
     "Override",
     "Onboarded",
+    "Setup",
 )
 MARKERS = ("Started", "Ended", "Daily", "Shortened")
 LABEL = "agk-steward"
 TITLE = "AGK steward memory"
 WHO = "Who: AGK steward"
+OWNER_WHO = "Who: ProductOwner"
+PERSON = re.compile(r"(?:business|technical): \S.*", re.S)
+QUESTION = (
+    "Tell me in your own words what you want to build and who it is for; are you coming at this"
+    " from the business side or the technical side?"
+)
+SETUP = re.compile(r"[^:\n]+: \S.* because \S.*", re.S)
+# SPEC-0062 rules 2, 9 and 11 (brief #1599, ADR-0679): the only setup questions are plain ones.
+ALONE_QUESTION = (
+    "Will you run this alone, or with a team? Alone (recommended for one person) · with a team"
+)
+REST_QUESTION = "When do you rest?"
+STACK_TESTS = {
+    "python-pyproject": "python3 -m pytest -q",
+    "python-pip": "python3 -m pytest -q",
+    "node": "npm test",
+    "go-modules": "go test ./...",
+    "rust-cargo": "cargo test",
+    "java-maven": "mvn -q test",
+    "java-gradle": "./gradlew test",
+    "dart-pub": "dart test",
+}
+LOGIN_ENV = "AGK_SETUP_LOGIN"  # init.py's; the login is read by `gh api user` and never printed
 ROLL_OVER = 500
 LIVE = timedelta(minutes=60)
 PAGE = 100
@@ -224,8 +255,8 @@ def memory_issue(gh: Gh, root: Path, cache: dict) -> dict:
     return issue
 
 
-def post(gh: Gh, cache: dict, text: str) -> None:
-    item = call(gh, "POST", f"{ISSUES}/{cache['issue']}/comments", {"body": f"{text}\n\n{WHO}\n"})
+def post(gh: Gh, cache: dict, text: str, who: str = WHO) -> None:
+    item = call(gh, "POST", f"{ISSUES}/{cache['issue']}/comments", {"body": f"{text}\n\n{who}\n"})
     cache["comments"].append({k: item.get(k) for k in ("id", "body", "created_at", "updated_at")})
 
 
@@ -264,13 +295,102 @@ def personal_append(root: Path, text: str) -> None:
 # --- the commands ---------------------------------------------------------------------------------
 
 
+def first_question(root: Path, memory: dict) -> list[str]:
+    """SPEC-0062 rule 4: in solo mode, with no `Person:` entry yet, the one question to ask."""
+    if review_mode(root) != "solo" or memory["newest"].get("Person"):
+        return []
+    return [
+        "first start with this person: ask, then record the answer as --kind Person",
+        f"ask: {QUESTION}",
+    ]
+
+
+def proposed_tests(stack: dict | None) -> str:
+    """Rule 11: the test command for the stacks `front_door.py detect` read, or empty."""
+    parts = []
+    for row in (stack or {}).get("rows", []):
+        command = STACK_TESTS.get(row.get("name", ""))
+        folder = row.get("folder", ".")
+        if command and folder in (".", ""):
+            parts.append(command)
+        elif command:
+            parts.append(f"(cd {folder} && {command})")
+    return " && ".join(dict.fromkeys(parts))
+
+
+def test_outcome(code: int, output: str) -> str:
+    """Q-1599-2: the one run of a proposed command, said plainly."""
+    if code == 5 or "no tests ran" in output:
+        return "no tests"
+    return "passed" if code == 0 else "failed"
+
+
+def review_choice(answer: str) -> str | None:
+    """Rule 2 as amendment 208 proposes: the person's answer, `solo`, `team` or None (ask again)."""
+    words = answer.strip().lower().rstrip(".!")
+    if words in ("alone", "alone, by myself", "by myself", "just me", "solo"):
+        return "solo"
+    return "team" if words in ("with a team", "a team", "team") else None
+
+
+def setup_plan(root: Path, adopted: bool, stack: dict | None) -> dict:
+    """Rule 9: each AGK matter of a start, settled from the kit's defaults; plain questions only."""
+    from session import MAX_BUILDERS
+
+    entries = [
+        "models: one route for every session because the kit's default has no [models.routes]",
+        "builders: one builder per brief because the kit runs one pull request per item",
+        f"max_builders: {MAX_BUILDERS} because it is the kit's cost-effective default",
+        "pr_mode: strict because it is the kit's default (one open pull request at a time)",
+        "reviewers: the signed-in login on both lines because the person is the one reviewer",
+    ]
+    if adopted:
+        command = proposed_tests(stack)
+        names = ", ".join(row.get("name", "") for row in (stack or {}).get("rows", []))
+        entries.append(
+            f"project_tests: {command} because the detected stack is {names}"
+            if command
+            else "project_tests: empty because no stack was detected"
+        )
+    return {"entries": [f"Setup: {e}" for e in entries], "ask": [ALONE_QUESTION, REST_QUESTION]}
+
+
+def setup_lines(
+    root: Path, adopted: bool, stack: dict | None, answer: str | None
+) -> tuple[int, list[str]]:
+    """The entries to record, the questions left, and the install command to run."""
+    stamp = root / "agk.toml"
+    text = stamp.read_text(encoding="utf-8") if stamp.is_file() else ""
+    if answer is not None and re.search(r'(?m)^mode\s*=\s*"(init|adopt)"', text):
+        return 2, [
+            "refused: review_mode is set only at setup (setting: review_mode; SPEC-0062 rule 2)"
+        ]
+    plan = setup_plan(root, adopted, stack)
+    lines = list(plan["entries"])
+    tool = "adopt" if adopted else "init"
+    login = f'{LOGIN_ENV}="$(gh api user --jq .login)"'
+    run = f"run: {login} python3 scripts/agk/{tool}.py . --login-from-env"
+    command = proposed_tests(stack) if adopted else ""
+    if command:
+        run += " --project-tests " + json.dumps(command)
+    choice = review_choice(answer) if answer is not None else None
+    if choice is None:
+        return 0, [*lines, *(f"ask: {q}" for q in plan["ask"])]
+    said = (answer or "").strip()
+    lines.append(f'Setup: review_mode: {choice} because the person said "{said}"')
+    lines.append(f"ask: {REST_QUESTION}")
+    return 0, [*lines, run + (" --solo" if choice == "solo" else "")]
+
+
 def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[str]]:
     if personal_table(root) is not None:
         comments = personal_entries(root)
         if other := live_start(comments, session, now):
             return 1, [f"steward already running: {other}; this start writes nothing"]
         personal_append(root, f"Started: steward {session} {stamp(now)}")
-        return 0, [f"memory: {PERSONAL_FILE.as_posix()}", *summary(read_memory(comments))]
+        memory = read_memory(comments)
+        lines = [f"memory: {PERSONAL_FILE.as_posix()}", *summary(memory)]
+        return 0, [*lines, *first_question(root, memory)]
     cache = load_cache(root)
     issue = memory_issue(gh, root, cache)
     if other := live_start(cache["comments"], session, now):
@@ -283,7 +403,7 @@ def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[st
     memory = read_memory(cache["comments"])
     post(gh, cache, f"Started: steward {session} {stamp(now)}")
     save_cache(root, cache)
-    return 0, [f"memory: #{cache['issue']}", *summary(memory)]
+    return 0, [f"memory: #{cache['issue']}", *summary(memory), *first_question(root, memory)]
 
 
 def end(
@@ -297,6 +417,15 @@ def end(
 def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
     if kind not in KINDS:
         return 2, ["refused: not a memory kind (setting: the first word of rule 8)"]
+    if kind == "Person" and not PERSON.fullmatch(text.strip()):
+        return 2, [
+            "refused: a Person entry is `<business|technical>: <their words>` (SPEC-0062 rule 4)"
+        ]
+    if kind == "Setup" and not SETUP.fullmatch(text.strip()):
+        return 2, [
+            "refused: a Setup entry is `<setting or matter>: <choice> because <reason>`"
+            " (SPEC-0062 rule 9)"
+        ]
     from guard import scan_text
 
     from config import guard_patterns
@@ -305,17 +434,18 @@ def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
     if findings:
         classes = ", ".join(sorted({f.kind for f in findings}))
         return 2, [f"refused: the text holds {classes} (setting: [guard]; data guard, SPEC-0042)"]
-    return write(root, f"{kind}: {text.strip()}", gh)
+    who = OWNER_WHO if kind == "Person" else WHO
+    return write(root, f"{kind}: {text.strip()}", gh, who)
 
 
-def write(root: Path, text: str, gh: Gh) -> tuple[int, list[str]]:
+def write(root: Path, text: str, gh: Gh, who: str = WHO) -> tuple[int, list[str]]:
     if personal_table(root) is not None:
-        personal_append(root, text)
+        personal_append(root, text if who == WHO else f"{text}\n\n{who}")
         return 0, [f"recorded in {PERSONAL_FILE.as_posix()}"]
     cache = load_cache(root)
     if "issue" not in cache:
         memory_issue(gh, root, cache)
-    post(gh, cache, text)
+    post(gh, cache, text, who)
     save_cache(root, cache)
     return 0, [f"recorded on #{cache['issue']}"]
 
@@ -348,6 +478,10 @@ def main(argv: list[str] | None = None) -> int:
     end_p.add_argument("--calls", type=int)
     end_p.add_argument("--tokens", type=int)
     sub.add_parser("onboard").add_argument("--again", action="store_true")
+    set_p = sub.add_parser("setup")
+    set_p.add_argument("--adopted", action="store_true")
+    set_p.add_argument("--detect", type=Path, help="the output of `front_door.py detect --json`")
+    set_p.add_argument("--answer", help="the person's answer to the alone-or-team question")
     rec = sub.add_parser("record")
     rec.add_argument("--kind", required=True)
     group = rec.add_mutually_exclusive_group(required=True)
@@ -359,6 +493,15 @@ def main(argv: list[str] | None = None) -> int:
         import steward_onboard
 
         return steward_onboard.run(root, opts.again)
+    if opts.command == "setup":
+        try:
+            facts = json.loads(opts.detect.read_text(encoding="utf-8")) if opts.detect else {}
+        except (OSError, ValueError):
+            print("refused: --detect cannot be read (setting: --detect)", file=sys.stderr)
+            return 2
+        code, lines = setup_lines(root, opts.adopted, facts.get("stack"), opts.answer)
+        print("\n".join(lines))
+        return code
     try:
         if opts.command == "record":
             text = opts.text if opts.text is not None else opts.file.read_text(encoding="utf-8")

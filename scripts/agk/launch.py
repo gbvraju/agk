@@ -69,6 +69,10 @@ start, `fix` for a resume of a pull request, `build` for one without, the role f
 knows it), which the adapters add to the record as `kind=`, `item=` and `head=`; `read_record`
 reads them, leaving out a field that is absent or not of its form.
 
+SPEC-0066 rule 5 (brief #1582, ADR-0662): every adapter call also gets `AGK_AGENT`, the agent the
+adapters pass as `--agent`: `builder` for `start_with`'s builder and fix jobs, the role for `role`.
+`ROLE_PROMPT` says which agent the session runs as; it no longer asks it to start itself.
+
 Brief #1387 (ADR-0585): the supervisor's pass calls `role_main` with its checkout and
 `AGK_STEWARD_START=conductor`, which the adapter gets and the prompt names: answer from evidence
 only, relay nothing and approve nothing.
@@ -115,6 +119,7 @@ FOLLOW_UP_KINDS = (*KINDS, "mechanical")
 LEAN_KINDS = ("small", "mechanical")
 # Recaps off for agent sessions (brief #1310 answer 4, ADR-0554; verify: the runtime's variable)
 QUIET = {"CLAUDE_CODE_ENABLE_AWAY_SUMMARY": "0"}
+BUILDER_AGENT = "builder"  # `.claude/agents/builder.md`: every builder start (ADR-0662)
 TIERS = config.MODEL_TIERS  # strongest first
 EFFORTS = config.MODEL_EFFORTS  # lowest first
 KIND_LINE = "Kind: {kind}; tier: {tier}; effort: {effort}{model}. {stop}"
@@ -749,6 +754,7 @@ def start_with(
             refused = 1
             continue
         env = {**os.environ, **QUIET, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
+        env["AGK_AGENT"] = BUILDER_AGENT  # SPEC-0066 rule 5 (ADR-0662): every start names its agent
         if build:
             env["AGK_BUILD"] = build
         job_kind, item = (jobs[index] if jobs else None) or ("build", brief)
@@ -783,8 +789,8 @@ def start_with(
 
 ROLES = ("steward", "conductor")
 ROLE_PROMPT = (
-    "You are session {session}, the {role} of this repository. Start the role with "
-    "`claude --agent {role}` (verify: the flag of the runtime used) and follow "
+    "You are session {session}, the {role} of this repository, running as the `{role}` agent: "
+    "the adapter started you as `claude --agent {role}` (SPEC-0066 rule 5). Follow "
     "`.claude/agents/{role}.md`. Read CLAUDE.md, constitution/principles.md and "
     "config/core-rules.md first. {kind_line}\n"
 )

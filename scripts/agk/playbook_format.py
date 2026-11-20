@@ -34,6 +34,10 @@ the work type and the milestone shape; and the problems that refuse the split, e
 the file and the key, never a value. With no declaration there is nothing to print and no problem.
 Nothing is written.
 
+The foundation kind (SPEC-0072 rule 4; REQ-079 AC3; brief #1587, ADR-0667): every shipped
+`brief_order` starts with `foundation`; in the split, a kind that no `depends_on` pair orders after
+another depends on `foundation` when the order holds it, so every other kind follows it.
+
 The discovery questions (SPEC-0048 rule 4, SPEC-0038 rule 2 as amendment 130 widens it; REQ-055
 AC2; brief #686): every playbook holds `[[discovery]]` entries (`id`, a lower-case slug, and `text`,
 one plain question) with at least the five ids of `DISCOVERY_IDS`, each id once; `discovery(path)`
@@ -58,6 +62,16 @@ The modules a playbook names (SPEC-0048 rule 23; REQ-055 AC8; brief #693): the o
 `config/playbooks/`; one that is not shipped is a problem naming the rule, the file and the key,
 never the value. `modules(path, root)` returns the shipped names in their order, for
 `check_playbooks.py`, which composes the gates.
+
+The standard part (SPEC-0072 rules 1 and 2; REQ-079 AC1; brief #1585, ADR-0665): the optional
+tables `[architecture]` (`layers` of `{ name, paths }`, `allow` of `{ from, to }` with an optional
+`adr`) and `[[standards]]` (`stack`, `lint`, `format`, `type`, `config`, `rules = { tool, version,
+codes }`), and the gate key `reason`. A playbook's own `[architecture]` puts each `[testing] map`
+code in exactly one layer and holds no layer path that is not a map code; the base's one `src`
+layer is exempt (it constrains nothing until a work type is set). One of the eight `ENTERPRISE`
+gate ids restated as `judgement` needs a `reason` of at least `REASON_MIN` characters, and the
+refusal names that fixed id, never a value; a `[[standards]]` stack is a `[[stack]]` name of
+`config/stack-signals.toml` when that file is present.
 """
 
 from __future__ import annotations
@@ -80,6 +94,7 @@ WORK_TYPES = (
     "voice-agent",
     "pilot",
     "data-pipeline",  # amendment 130, SPEC-0048 rule 18 build (g)
+    "api-service",  # ADR-0682, brief #1602
 )
 BASE = "default"  # SPEC-0048 rule 21: a playbook every kind of work carries, never declared
 FOLDER = "config/playbooks"
@@ -143,20 +158,56 @@ TOP: dict[str, str] = {
     "discovery": TABLES,
 }
 # SPEC-0048 rule 12: a playbook may name skills; rule 23: and shipped playbooks as modules
-OPTIONAL_TOP: dict[str, str] = {"skills": STRS, "modules": STRS}
+OPTIONAL_TOP: dict[str, str] = {
+    "skills": STRS,
+    "modules": STRS,
+    "architecture": "table",  # SPEC-0072 rule 2
+    "standards": TABLES,
+}
 # section -> (required keys, optional keys), each key with its type
 SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
     "phases": ({"name": STR, "order": INT, "after": STRS}, {}),
     "split": ({"brief_order": STRS, "depends_on": PAIRS}, {}),
     "lanes": ({"name": STR, "kinds": STRS}, {}),
     "testing": ({"profile": STR, "always_full": STRS, "map": TABLES}, {}),
-    "gates": ({"id": STR, "kind": STR, "text": STR, "owner_only": BOOL}, {"step": STR}),
+    "gates": (
+        {"id": STR, "kind": STR, "text": STR, "owner_only": BOOL},
+        {"step": STR, "reason": STR},  # SPEC-0072 rule 2: `reason`
+    ),
     "milestones": ({"shape": STR, "batch_by": STR}, {}),
     # `basis` is required by rule 3 and `record` by rule 3 for a measured claim
     "claims": ({"text": STR}, {"basis": STR, "record": STR}),
     "discovery": ({"id": STR, "text": STR}, {}),
 }
 MAP_KEYS = {"code": STR, "tests": STR}
+# SPEC-0072 rule 2: the eight enterprise gates, fixed ids of the kit, so a refusal may name them.
+ENTERPRISE = (
+    "sign-in-permissions",
+    "secrets",
+    "input-validation",
+    "logging-tracing",
+    "environment-settings",
+    "migrations",
+    "accessibility",
+    "performance",
+)
+REASON_MIN = 20
+STACKS = "config/stack-signals.toml"
+SPEC72 = "SPEC-0072 rule 2"
+FOUNDATION = "foundation"  # SPEC-0072 rule 4: the first kind of every `brief_order`
+ARCH_KEYS = ({"layers": TABLES}, {"allow": TABLES})
+LAYER_KEYS = {"name": STR, "paths": STRS}
+ALLOW_KEYS = ({"from": STR, "to": STR}, {"adr": STR})
+STANDARD_KEYS = {
+    "stack": STR,
+    "lint": STR,
+    "format": STR,
+    "type": STR,
+    "config": STR,
+    "rules": "table",
+}
+RULES_KEYS = {"tool": STR, "version": STR, "codes": STRS}
+ADR_ID = re.compile(r"^ADR-\d{4}$")
 
 
 def _is(value: Any, kind: str) -> bool:
@@ -328,6 +379,13 @@ def _gates(rel: str, gates: list[dict], derived: bool = False) -> list[str]:
             out.append(f"rule 2: {rel}: a gate `kind` is not check or judgement")
         if kind == "check" and "step" not in gate:
             out.append(f"rule 2: {rel}: a check gate has no `step`")
+        reason = gate.get("reason")
+        short = not isinstance(reason, str) or len(reason.strip()) < REASON_MIN
+        if gate.get("id") in ENTERPRISE and kind == "judgement" and short:
+            out.append(
+                f"{SPEC72}: {rel}: an enterprise gate is judgement without a reason of "
+                f"{REASON_MIN} characters (gate: {gate['id']}, key: reason)"
+            )
         text = gate.get("text")
         if gate.get("owner_only") is False and isinstance(text, str) and OWNER_ACTION.search(text):
             out.append(
@@ -447,6 +505,87 @@ def modules(path: Path, root: Path) -> list[str]:
     return [name for name in names if _shipped(name, root)]
 
 
+def load(path: Path) -> dict[str, Any]:
+    """The playbook at `path`, or an empty table when it cannot be read: `problems` reports it."""
+    try:
+        return tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return {}
+
+
+def _inside(path: str) -> bool:
+    """A relative path inside the project, written with forward slashes."""
+    pure = PurePosixPath(path)
+    return bool(path) and "\\" not in path and not pure.is_absolute() and ".." not in pure.parts
+
+
+def _architecture(rel: str, data: dict, root: Path) -> list[str]:
+    """SPEC-0072 rule 2: the form of `[architecture]` and its fit to the `[testing] map`."""
+    arch = data["architecture"]
+    where = f"{SPEC72}: {rel}:"
+    out = _table_keys(rel, "[architecture]", arch, *ARCH_KEYS)
+    layers = arch.get("layers") if _is(arch.get("layers"), TABLES) else []
+    allow = arch.get("allow") if _is(arch.get("allow"), TABLES) else []
+    for layer in layers:
+        out += _table_keys(rel, "an `[architecture]` layer", layer, LAYER_KEYS, {})
+    for entry in allow:
+        out += _table_keys(rel, "an `[architecture]` allow entry", entry, *ALLOW_KEYS)
+    names = [layer["name"] for layer in layers if isinstance(layer.get("name"), str)]
+    paths = [p for layer in layers if _is(layer.get("paths"), STRS) for p in layer["paths"]]
+    if any(not SLUG.match(n) for n in names) or len(set(names)) != len(names):
+        out.append(f"{where} a layer name is not a slug or is twice (key: architecture.layers)")
+    if any(not _inside(p) for p in paths):
+        out.append(f"{where} a layer path is not inside the project (key: architecture.layers)")
+    ends = [(e.get("from"), e.get("to")) for e in allow]
+    if any(a not in names or b not in names or a == b for a, b in ends):
+        out.append(f"{where} an `allow` entry names an unknown layer (key: architecture.allow)")
+    if any("adr" in e and not ADR_ID.match(str(e["adr"])) for e in allow):
+        out.append(f"{where} an `allow` entry `adr` is not an ADR id (key: architecture.allow)")
+    work_type = data.get("work_type")
+    derived = isinstance(work_type, str) and is_derived(work_type, root)
+    if work_type not in WORK_TYPES and not derived:
+        return out  # the base (it constrains nothing), or a name rule 1 already refuses
+    testing = data.get("testing")
+    entries = testing.get("map") if isinstance(testing, dict) else None
+    codes = [e["code"] for e in entries or [] if isinstance(e, dict) and _is(e.get("code"), STR)]
+    if any(paths.count(code) != 1 for code in codes):
+        out.append(f"{where} a `[testing] map` code is in no layer (key: architecture.layers)")
+    if any(p not in codes for p in paths):
+        out.append(f"{where} a layer path is no `[testing] map` code (key: architecture.layers)")
+    return out
+
+
+def stacks(root: Path) -> list[str] | None:
+    """The `[[stack]]` names of `config/stack-signals.toml`, or None when the file is absent."""
+    path = Path(root) / STACKS
+    if not path.is_file():
+        return None
+    rows = load(path).get("stack")
+    if not isinstance(rows, list):
+        return []
+    return [r["name"] for r in rows if isinstance(r, dict) and isinstance(r.get("name"), str)]
+
+
+def _standards(rel: str, entries: list[dict], root: Path) -> list[str]:
+    """SPEC-0072 rule 2: each `[[standards]]` entry's form, a known stack once, a relative
+    config."""
+    where = f"{SPEC72}: {rel}:"
+    out = []
+    for entry in entries:
+        out += _table_keys(rel, "a `[[standards]]` entry", entry, STANDARD_KEYS, {})
+        if _is(entry.get("rules"), "table"):
+            out += _table_keys(rel, "a `[[standards]]` `rules`", entry["rules"], RULES_KEYS, {})
+    found = [e["stack"] for e in entries if isinstance(e.get("stack"), str)]
+    known = stacks(root)
+    if known is not None and any(name not in known for name in found):
+        out.append(f"{where} a `[[standards]]` stack is not a stack of {STACKS} (key: standards)")
+    if len(set(found)) != len(found):
+        out.append(f"{where} a `[[standards]]` stack appears twice (key: standards)")
+    if any(isinstance(e.get("config"), str) and not _inside(e["config"]) for e in entries):
+        out.append(f"{where} a `[[standards]]` config is not inside the project (key: standards)")
+    return out
+
+
 def _named(rel: str, data: dict) -> list[str]:
     strings = _strings(data)
     out = []
@@ -520,6 +659,10 @@ def problems(path: Path, root: Path) -> list[str]:
         out += _skills(rel, data["skills"], root)
     if _is(data.get("modules"), STRS):
         out += _modules(rel, data["modules"], root)
+    if _is(data.get("architecture"), "table"):
+        out += _architecture(rel, data, root)
+    if _is(data.get("standards"), TABLES):
+        out += _standards(rel, data["standards"], root)
     out += _named(rel, data)
     return out
 
@@ -604,6 +747,8 @@ def _blocks(data: dict, goal: str, only: str | None) -> list[str]:
         out.append(f"{number}. {goal}: {kind}" if goal else f"{number}. {kind}")
         out.append(f"   Kind: {kind}")
         earlier = sorted({e for later, e in pairs if later == kind}, key=order.index)
+        if not earlier and kind != FOUNDATION and FOUNDATION in order:  # SPEC-0072 rule 4
+            earlier = [FOUNDATION]
         out += [f"   Depends-on: #<{e} brief>" for e in earlier]
         out.append(f"   lane: {lanes.get(kind, 'none')}")
     return out

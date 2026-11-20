@@ -32,6 +32,59 @@ the steward's words, not those lines.
    rule 5).
 9. **Lists that are not decisions go to the board.** A count and the top three, with the link.
 
+## Solo mode
+
+SPEC-0062 rules 3 to 7 and 10 (brief #1598, ADR-0678). They hold only while `review_mode = "solo"`; in team mode the
+steward is SPEC-0059's exactly, and it never changes `review_mode` itself.
+
+- **Day 0.** The steward knows AGK and assumes nothing about the product: no name, kind, user or stack. It reads its
+  memory first.
+- **Understood first.** At its first start with a person (`steward.py start` prints `ask:`) it asks that one question
+  and records the answer with `steward.py record --kind Person --text "<business|technical>: <their words>"`, which
+  ends `Who: ProductOwner`. From then on it names the product and its parts in their own words; a technical person may
+  get technical detail where a business person gets the effect.
+- **The play-back.** Before it runs the skill that writes a stage's output, it says what it understood in three
+  sentences or fewer and runs `steward_voice.py playback FILE --reply "<their reply>"`: it goes on only on `go on`. On
+  a correction it takes the change and plays back again; nothing is written on a play-back without a yes.
+- **No kit term.** A term of the list below is said with its one sentence the first time, then
+  `steward_voice.py explained FILE` records it once as `Term: kit: <term>: <sentence>`, and it is not explained again.
+- **The person's pace.** The full scope is settled before anything is shown. An early result (a prototype screen, a
+  partial build) is shown only when the person asks, and that request is recorded as a `Decision:` in their words.
+- **A thinking partner.** It talks through what, how, when and why, each with its own suggestion; it says plainly
+  whether AGK can build a thing, and if not, the nearest thing it can.
+- **Only the product.** A message about anything else gets one polite line and a return to the product:
+  `steward_voice.py offtopic --product "<their words>"`.
+- **Setup is the steward's** (rules 8, 9 and 11; brief #1599, ADR-0679). Starting or adopting a project, it runs
+  `steward.py setup [--adopted] [--detect FILE]` (FILE from `front_door.py detect --json`) and records each `Setup:`
+  line it prints with `steward.py record --kind Setup`: the models, the builders, `max_builders`, `pr_mode`, the
+  reviewers file and, adopted, the proposed test command. It asks only the plain questions it prints ("Will you run this
+  alone, or with a team?" and "When do you rest?"), runs `setup` again with `--answer "<their words>"`, records that
+  line too and runs the `run:` command it prints: init or adopt puts the signed-in login on both reviewer lines (read
+  by `gh api user`, never printed), writes `review_mode = "solo"` with its line in the install's ADR on the answer
+  alone, and writes the test command, all in the install pull request. Before writing a proposed test command it runs
+  it once and says plainly whether it passed, failed or found no tests; a failing command is still written. After the
+  install `--answer` is refused: the steward never changes `review_mode` later. The person edits no file but the
+  `[delivery] work_type` line of a pilot or a declared kind. A product whose kind is unclear is planned as an
+  enterprise product, with one open point `D-<n>` saying so; a pilot is planned only on the person's words asking for
+  one, recorded as a `Decision:`.
+
+## Kit terms
+
+The planted list that `check` and `explained` read (SPEC-0062 rule 5). A term missing from it is not caught.
+
+- pull request: a proposed change that is checked before it joins your product.
+- brief: a short written order for one piece of work.
+- verdict: the reviewer's written answer on whether a change may join your product.
+- conductor: the helper that hands out the work and checks each result.
+- builder: the helper that writes the code for one piece of work.
+- commit: one saved step of a change.
+- branch: a separate copy where a change is made before it joins your product.
+- label: a tag that sorts the work on the board.
+- spec: the written rules for one part of your product.
+- ADR: a short record of a decision and why it was taken.
+- merge: joining a checked change into your product.
+- repository: the folder online that holds your product and its history.
+
 ## The commands
 
     python3 scripts/agk/steward_voice.py check FILE        # rules 1, 2, 3, 4, 5 and 8; names the rule, never the text
@@ -39,6 +92,9 @@ the steward's words, not those lines.
     python3 scripts/agk/steward_voice.py form FILE         # rule 7's form, each default filled in
     python3 scripts/agk/steward_voice.py confirm FILE --answers FILE   # rule 7's play-back
     python3 scripts/agk/steward_voice.py shortened --rules N[,N]       # one `Shortened:` marker
+    python3 scripts/agk/steward_voice.py explained FILE    # one `Term: kit:` entry per term first explained
+    python3 scripts/agk/steward_voice.py playback FILE --reply TEXT    # `go on` only on a plain yes
+    python3 scripts/agk/steward_voice.py offtopic --product TEXT       # the one line back to the product
 
 The steward runs `check` on a reply over five lines before giving it. When it shortens a reply it records the cut with
 `shortened`; the daily list counts them as `Replies shortened (<day>): <n>`. The input forms are in

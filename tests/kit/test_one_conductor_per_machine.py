@@ -340,7 +340,7 @@ def test_the_posix_adapter_starts_no_conductor_beside_a_live_one(tmp_path):
     (fake / "claude").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
     (fake / "claude").chmod(stat.S_IRWXU)
     env = {**os.environ, "PATH": f"{fake}{os.pathsep}{os.environ['PATH']}"}
-    env.update(AGK_SESSION="conductor-local", AGK_JOB_KIND="conductor")
+    env.update(AGK_SESSION="conductor-local", AGK_AGENT="conductor", AGK_JOB_KIND="conductor")
     done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["bash", str(root / "start.sh")], cwd=root, input="go", text=True, env=env,
         capture_output=True, timeout=60,

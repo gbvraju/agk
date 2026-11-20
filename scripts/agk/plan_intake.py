@@ -32,7 +32,10 @@ whose `component` names it); a brief whose `screens` use a component names that 
 its first `Source:` lines (brief #1217, `Q-1217-1`). While a `Kind: design` source has a
 `<screen>/<state>` heading, every milestone after `M1` has `screens`, its `exit` names
 `design_compare.py`, `match` and a signed-off version, and every such heading is in a milestone's
-`screens`. Rule 7: `render` runs `validate` first, prints
+`screens`. Brief #1587 (SPEC-0072 rule 4, ADR-0667): with `[delivery] work_type` declared, exactly
+one brief has `foundation` true, in `M1`, and every other `M1` brief names it in `depends_on`;
+`render` writes its `Kind: foundation` line; with no work type a foundation brief is refused naming
+the setting. Rule 7: `render` runs `validate` first, prints
 every conflict under `Conflicts for the person` and then every open question under `Open questions
 for the person`, and writes, as new files only and all or nothing, `docs/plan/scope.md`,
 `docs/plan/personas.md`, `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md` (each block
@@ -156,12 +159,20 @@ NON_EMPTY = ("goals",)  # a list that holds at least one item, as `sources` does
 OPTIONAL = {
     "conflicts": ("settled",),
     "milestones": ("screens",),
-    "briefs": ("component", "screens"),
+    "briefs": ("component", "screens", "foundation"),
 }
 OPTIONAL["requirements"] = ("statement", "changing")  # amendment 166 (`Q-1108-1`, `Q-1108-2`)
 OPTIONAL["requirements"] += ("notes",)  # brief #1221 (ADR-0520): cross-reference gaps
 KINDS |= {"statement": MAYBE, "changing": "true or false", "allowed": "yes or no", "notes": LIST}
-TYPED = ("component", "screens", "statement", "changing", "notes")  # optional keys rule 4 types
+KINDS["foundation"] = "true or false"  # SPEC-0072 rule 4 (brief #1587): the foundation brief
+TYPED = (
+    "component",
+    "screens",
+    "statement",
+    "changing",
+    "notes",
+    "foundation",
+)  # optional keys rule 4 types
 KEYED = {"personas": "P", COMPONENTS: "C"}  # keys run P1, P2, ... and C1, C2, ... in order
 FOUNDATION = "Foundation"
 ID = {"milestones": "id", "areas": "name"}
@@ -360,8 +371,7 @@ def plan_problems(root: Path, data: dict) -> list[str]:
                 for k in repeated
             }
             out += [
-                f"rule 4: briefs {k}: the key is repeated in {', '.join(held[k])}"
-                for k in repeated
+                f"rule 4: briefs {k}: the key is repeated in {', '.join(held[k])}" for k in repeated
             ]
             continue
         out += [f"rule 4: {label} {k}: the key is repeated" for k in repeated]
@@ -405,9 +415,35 @@ def plan_problems(root: Path, data: dict) -> list[str]:
     for q in data["scope"]["open_questions"]:
         if VERIFY not in q["text"]:
             out.append(f"rule 6: scope.open_questions {q['key']}: no {VERIFY} mark")
-    out += component_problems(root, data) + slice_problems(root, data)
+    out += (
+        component_problems(root, data)
+        + slice_problems(root, data)
+        + foundation_problems(root, data)
+    )
     out += openspec_problems(root, data) + rule_problems(data) + access_problems(root, data)
     return out + conflict_problems(items)
+
+
+def foundation_problems(root: Path, data: dict) -> list[str]:
+    """SPEC-0072 rule 4 (brief #1587): with a declared work type, one foundation brief in `M1` that
+    every other `M1` brief names in `depends_on`; with none, no foundation brief (rule 8's hold)."""
+    found = [b for b in data["briefs"] if b.get("foundation") is True]
+    if playbook_format.declaration(root)[0] is None:
+        return [
+            f"rule 5: briefs {b['key']}: a foundation brief needs a work type (setting: work_type)"
+            for b in found
+        ]
+    if len(found) != 1:
+        many = "more than one foundation brief" if found else "no foundation brief"
+        return [f"rule 5: briefs: {many} (setting: work_type)"]
+    key = found[0]["key"]
+    if found[0]["milestone"] != "M1":
+        return [f"rule 5: briefs {key}: the foundation brief is not in M1"]
+    return [
+        f"rule 5: briefs {b['key']}: depends_on does not name foundation {key}"
+        for b in data["briefs"]
+        if b["milestone"] == "M1" and b["key"] != key and key not in b["depends_on"]
+    ]
 
 
 def component_problems(root: Path, data: dict) -> list[str]:
@@ -852,6 +888,8 @@ def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
     if b.get("screens"):  # SPEC-0037 rule 10's line, with the signed-off version (`Q-1092-3`)
         out.append(f"Screens: {version} {', '.join(b['screens'])}")
     out += [f"Depends-on: {key}" for key in b["depends_on"]]
+    if b.get("foundation") is True:  # SPEC-0072 rule 4: the kind `check_plan.py` reads
+        out.append(f"Kind: {playbook_format.FOUNDATION}")
     out.append("Contexts: " + "; ".join(f"{c}: {VERIFY} for the person to state" for c in CONTEXTS))
     sources = list(b["sources"])
     if b.get("component"):  # Q-1217-1: the component's brief carries its key and its sources

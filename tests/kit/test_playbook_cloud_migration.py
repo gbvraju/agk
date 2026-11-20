@@ -1,13 +1,14 @@
 """Tests of the shipped cloud-migration playbook (SPEC-0038 rules 1, 10 and 12 build (j)).
 
 REQ-045 AC6. `config/playbooks/cloud-migration.toml` passes the playbook check, and
-`check_playbooks.py` passes with ten playbooks. It holds exactly the cloud-migration gates of rule
-10: inventory, then wave plan, then cut-over, `check` that each cut-over brief depends on its wave
-plan brief, which depends on the inventory brief; a rollback rehearsal as evidence, `judgement`;
-plan diffs as evidence, `judgement`, a committed plan output with no credential in it; and any
-apply, `judgement` and `owner_only`. Every speed claim is `expected`, since no run has measured it.
-It names the shape of the work and its gates, never a vendor, a cloud, a region, an account or a
-tool (brief #724 answer 1). It is shipped verbatim. Reads committed files only: no network.
+`check_playbooks.py` passes with eleven playbooks. It holds exactly the cloud-migration gates of
+rule 10: inventory, then wave plan, then cut-over, `check` that each cut-over brief depends on its
+wave plan brief, which depends on the inventory brief; a rollback rehearsal as evidence,
+`judgement`; plan diffs as evidence, `judgement`, a committed plan output with no credential in it;
+and any apply, `judgement` and `owner_only`. Every speed claim is `expected`, since no run has
+measured it. It names the shape of the work and its gates, never a vendor, a cloud, a region, an
+account or a tool (brief #724 answer 1). It is shipped verbatim. Reads committed files only: no
+network.
 """
 
 from __future__ import annotations
@@ -31,7 +32,8 @@ def data() -> dict:
 
 
 def gates() -> dict[str, dict]:
-    return {g["id"]: g for g in data()["gates"]}
+    # SPEC-0072 rule 2 (ADR-0665): the no-screen `accessibility` gate is not one of this spec
+    return {g["id"]: g for g in data()["gates"] if g["id"] != "accessibility"}
 
 
 def test_the_playbook_passes_the_check() -> None:
@@ -43,7 +45,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_ten_playbooks() -> None:
+def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -51,7 +53,7 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (10 playbooks)\n"
+    assert out.stdout == "ok playbooks (11 playbooks)\n"
 
 
 def test_phases_inventory_then_wave_plan_then_cut_over() -> None:
@@ -63,7 +65,7 @@ def test_phases_inventory_then_wave_plan_then_cut_over() -> None:
 
 def test_each_cut_over_brief_depends_on_its_wave_plan_which_depends_on_the_inventory() -> None:
     split = data()["split"]
-    assert split["brief_order"] == ORDER
+    assert split["brief_order"] == ["foundation", *ORDER]  # SPEC-0072 rule 4
     assert sorted(map(tuple, split["depends_on"])) == [
         ("cut-over", "wave-plan"),
         ("wave-plan", "inventory"),
