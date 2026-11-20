@@ -655,3 +655,239 @@ def test_the_kit_installs_it():
         (SCRIPTS.parents[1] / "kit" / "manifest.json").read_text(encoding="utf-8")
     )
     assert "scripts/agk/evidence.py" in manifest["verbatim"]
+
+
+# --- brief #1566 (ADR-0656): governance gets the pull request body -------------------------------
+
+COVERED_CLASSES = "constitution/ scripts/agk/ tests/kit/"
+COVERED_REQS = "# Requirements\n\n### REQ-001 — A\n\n- Acceptance: AC1\n- Status: planned\n"
+COVERED_ADR = (
+    "# ADR-0009: An invented decision\n\n"
+    "- Status: Accepted\n- Date: 2026-01-01\n- Deciders: maintainers\n- Related: none\n"
+    "- Requirements: REQ-001\n\n## Decision\n\nThe build changes `scripts/agk/`.\n"
+)
+REAL_GATE = (
+    f'agk-governance:\n\t@"{sys.executable}" "{SCRIPTS / "check_protected_changes.py"}"\n'
+)
+NO_BODY = "evidence: the pull request body cannot be read (option: --body)"
+
+
+def covered_body(adr_id: str = "ADR-0009", ends: str = "\n") -> str:
+    lines = ["Advances: REQ-001", "Build-state row: 2026-01-02 | x | REQ-001"]
+    lines.append(f"Covered-by: {adr_id}")
+    return ends.join(lines) + ends
+
+
+def covered_project(repo, outside: Path, protected: bool = True, mk: str = REAL_GATE) -> None:
+    """A project whose governance is the kit's own `check_protected_changes.py`, with an Accepted
+    ADR on main that names `scripts/agk/`; the feature head changes that class (or only `src/`)."""
+    files = {
+        "agk.toml": toml(outside),
+        "agk.mk": mk,
+        "Makefile": LINT_OK,
+        "config/protected-paths.txt": "# c\n" + "\n".join(COVERED_CLASSES.split()) + "\n",
+        "docs/requirements.md": COVERED_REQS,
+        "docs/adr/0009-an-invented-decision.md": COVERED_ADR,
+        "scripts/agk/tool.py": "x = 1\n",
+        "src/a.txt": "a\n",
+    }
+    repo.commit(files, "base")
+    repo.branch("feature")
+    changed = {"scripts/agk/tool.py": "x = 2\n"} if protected else {"src/a.txt": "b\n"}
+    repo.commit(changed, "change")
+
+
+def body_file(outside: Path, text: str, name: str = "pr-body.md") -> Path:
+    path = outside / name
+    path.write_bytes(text.encode("utf-8"))
+    return path
+
+
+def test_a_covered_head_agrees_with_the_body_and_differs_without_it(repo, outside):
+    """REQ-046: brief #1566 answers 1 and 5 (the body reaches governance; without it the line
+    says `body not given`)."""
+    covered_project(repo, outside)
+    record = write(outside / "record.json", repo)
+    proc = check(repo, outside, str(record))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert LINE.search(proc.stdout).group(1) == "differs"
+    assert "governance FAIL" in proc.stdout and "protected-changes" in proc.stdout
+    assert proc.stdout.rstrip().endswith(", body not given"), proc.stdout
+    body = body_file(outside, covered_body())
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert LINE.search(proc.stdout).group(1) == "agrees"
+    assert "governance ok" in proc.stdout and "body not given" not in proc.stdout
+    sha = hashlib.sha256(body.read_bytes()).hexdigest()[:12]
+    assert proc.stdout.rstrip().endswith(f", body {sha}"), proc.stdout
+    assert worktrees(repo) == 1 and left_over(outside) == []
+
+
+def test_the_body_works_without_a_record_file_too(repo, outside):
+    """REQ-046: brief #1566 answer 2 (the conductor's form: `check --head <sha> --body <file>`)."""
+    covered_project(repo, outside)
+    head = repo.git("rev-parse", "HEAD").strip()
+    shared = Path(repo.git("rev-parse", "--git-common-dir").strip())
+    shared = (repo.root / shared if not shared.is_absolute() else shared) / "agk-evidence"
+    shared.mkdir()
+    write(shared / f"{head}.json", repo)
+    body = body_file(outside, covered_body())
+    proc = check(repo, outside, "--head", head, "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert LINE.search(proc.stdout).group(1) == "agrees"
+
+
+def test_a_body_naming_an_adr_not_on_the_merge_base_still_fails(repo, outside):
+    """REQ-046: brief #1566 answer 4 (no weakening, principle 11)."""
+    covered_project(repo, outside)
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, covered_body("ADR-0042"))
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert LINE.search(proc.stdout).group(1) == "differs"
+    assert "governance FAIL" in proc.stdout and "merge base" in proc.stdout
+
+
+def test_a_body_with_windows_line_ends_reads_the_same(repo, outside):
+    """REQ-046: brief #1566 answer 4 (CRLF)."""
+    covered_project(repo, outside)
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, covered_body(ends="\r\n"))
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert LINE.search(proc.stdout).group(1) == "agrees"
+
+
+def test_a_head_with_no_protected_change_agrees_with_or_without_the_body(repo, outside):
+    """REQ-046: brief #1566 answer 4."""
+    covered_project(repo, outside, protected=False)
+    record = write(outside / "record.json", repo)
+    proc = check(repo, outside, str(record))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.rstrip().endswith(", body not given")
+    body = body_file(outside, covered_body())
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_the_body_edited_after_the_record_is_the_one_governance_reads(repo, outside):
+    """REQ-046: brief #1566 answer 4 (the body given now, quoted by its sha256)."""
+    covered_project(repo, outside)
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, "Advances: REQ-001\n")
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    body.write_bytes(covered_body().encode("utf-8"))
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert hashlib.sha256(body.read_bytes()).hexdigest()[:12] in proc.stdout
+
+
+def test_governance_reads_a_copy_inside_the_temporary_folder(repo, outside):
+    """REQ-046: brief #1566 answer 1 (`AGK_PR_BODY` names a copy, never the person's path)."""
+    seen = outside / "seen.txt"
+    mk = f"agk-governance:\n\t@echo \"$$AGK_PR_BODY\" > '{seen}'; cat \"$$AGK_PR_BODY\" >> '{seen}'\n"
+    covered_project(repo, outside, mk=mk)
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, covered_body())
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    path, rest = seen.read_text(encoding="utf-8").split("\n", 1)
+    assert path != str(body) and Path(path).parent.parent == outside / "tmp"
+    assert Path(path).parent.name.startswith("agk-evidence-")
+    assert rest == covered_body()
+    assert not Path(path).exists() and left_over(outside) == []  # removed with the folder
+
+
+def test_without_the_option_no_body_reaches_governance(repo, outside):
+    """REQ-046: brief #1566 answer 1 (the caller's own `AGK_PR_BODY` never reaches it)."""
+    seen = outside / "seen.txt"
+    covered_project(repo, outside, mk=f"agk-governance:\n\t@echo \"[$$AGK_PR_BODY]\" > '{seen}'\n")
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, covered_body())
+    temp = outside / "tmp"
+    temp.mkdir(exist_ok=True)
+    proc = repo.run(
+        "evidence.py", "check", str(record), PATH=path_with(None), TMPDIR=str(temp),
+        AGK_PR_BODY=str(body),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert seen.read_text(encoding="utf-8").strip() == "[]"
+
+
+@pytest.mark.parametrize("kind", ["missing", "too large", "not utf-8", "a folder"])
+def test_a_body_that_cannot_be_read_is_refused_and_never_agrees(repo, outside, kind):
+    """REQ-046: brief #1566 answer 3 (named by the option, never the path; the check differs)."""
+    covered_project(repo, outside, protected=False)
+    record = write(outside / "record.json", repo)
+    body = outside / "secret-name-body.md"
+    if kind == "too large":
+        body.write_text("x" * 65537, encoding="utf-8")
+    elif kind == "not utf-8":
+        body.write_bytes(b"Advances: \xff\xfe\n")
+    elif kind == "a folder":
+        body.mkdir()
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert NO_BODY in proc.stdout
+    assert LINE.search(proc.stdout).group(1) == "differs"
+    assert "secret-name-body" not in proc.stdout + proc.stderr
+
+
+def test_a_body_at_the_limit_is_read(repo, outside):
+    """REQ-046: brief #1566 answer 3 (GitHub's limit of 65536 characters is allowed)."""
+    covered_project(repo, outside)
+    record = write(outside / "record.json", repo)
+    text = covered_body()
+    body = body_file(outside, text + "é" * (65536 - len(text)))
+    proc = check(repo, outside, str(record), "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+@pytest.mark.parametrize(
+    "args", [["--body"], ["--body", "a.md", "--body", "b.md"], ["--body=a.md"]]
+)
+def test_a_body_option_without_one_value_is_a_usage_error(repo, outside, args):
+    """REQ-046: brief #1566 answer 1 (`--body FILE`, at most once)."""
+    project(repo, outside)
+    record = write(outside / "record.json", repo)
+    proc = check(repo, outside, str(record), *args)
+    assert proc.returncode == 2
+    assert "usage: evidence.py" in proc.stdout + proc.stderr
+
+
+def test_the_pr_body_unit_still_reads_only_its_recorded_path(repo, outside):
+    """REQ-046: brief #1566 answer 4 (`--body` reaches governance only; the record's `pr-body`
+    unit outside the repository stays not repeatable)."""
+    covered_project(repo, outside)
+    argv = ["python3", "scripts/agk/check_pr_body.py", "--draft", "false", "<outside>/body.md"]
+    record = write(outside / "record.json", repo, steps=[step("pr-body", argv)])
+    body = body_file(outside, covered_body())
+    proc = check(repo, outside, str(record), "--body", str(body), "--sample", "5")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "not repeatable: pr-body (a path outside the repository)" in proc.stdout
+
+
+def test_json_names_the_body():
+    """REQ-046: brief #1566 answer 1 (`--json` carries the body's sha256 or null)."""
+    import evidence
+
+    shown = evidence.report_body(None)
+    assert shown == "body not given"
+    assert evidence.report_body("ab" * 32) == "body " + "ab" * 6
+
+
+def test_personal_mode_reads_no_body():
+    """REQ-046: brief #1566 answer 3 (`[personal]`: no evidence check runs; the personal gate
+    uses only `parse` and `problems`, whose forms do not change, and passes no body)."""
+    source = (SCRIPTS / "personal.py").read_text(encoding="utf-8")
+    assert "evidence.parse(" in source and "evidence.problems(record, head)" in source
+    assert "--body" not in source.split("def evidence_step", 1)[1].split("\ndef ", 1)[0]
+    assert "AGK_PR_BODY" not in source
+
+
+def test_the_conductor_passes_the_body():
+    """REQ-046: brief #1566 answer 2 (the local-mode step names the form with `--body`)."""
+    agent = (SCRIPTS.parents[1] / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
+    local = next(p for p in agent.split("\n\n") if p.startswith("Local mode."))
+    assert "python3 scripts/agk/evidence.py check --head <sha> --body <file>" in local
