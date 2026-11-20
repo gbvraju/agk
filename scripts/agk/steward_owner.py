@@ -155,7 +155,8 @@ def unpark(root: Path, repo: str, number: int, qid: str, conductor: str | None) 
         return []  # a brief, or unreadable: the conductor's sweep unparks it
     listed, answerers = session.owner_people(root, pull)
     found = session.owner_apply(repo, number, {"minutes": 0}, listed, answerers,
-                                datetime.now(UTC), unpark_only=True)  # fmt: skip
+                                datetime.now(UTC), unpark_only=True,
+                                carried=session.carried_check(root))  # fmt: skip
     if found is None:
         return []
     return [f"unparked #{number} {found[1]}", *tell(root, conductor, number, found[1])]
@@ -191,7 +192,8 @@ def park(root: Path, number: int, conductor: str | None, now: datetime) -> tuple
         raise steward.Unreadable(f"#{number}")
     listed, answerers = session.owner_people(root, pull)
     settings = session.owner_wait_settings(root)
-    found = session.owner_apply(repo, number, settings, listed, answerers, now)  # brief #1534
+    found = session.owner_apply(repo, number, settings, listed, answerers, now,
+                                carried=session.carried_check(root))  # fmt: skip  # brief #1534
     if found and found[0] == "park":
         return 0, [f"parked #{number} {found[1]}"]
     if found:
