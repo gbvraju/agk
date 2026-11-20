@@ -14,6 +14,12 @@ clone's git common dir to its id, and `projects/<id>/` is the sidecar, a private
 with the kit's layout. Nothing is written in the clone: every git call on it is read-only and runs
 with `--no-optional-locks` (rule 4). On POSIX the state is `0700` and its files `0600` (rule 28).
 Standard library only; no network. Refusals name the rule or the setting, never a value.
+
+Build (l), rules 19, 26 and 27 (brief #1506): `attach` records the plugin version as `[personal]
+plugin_version` and never a script; `PLUGIN_SCHEMA` and `MIGRATIONS` are what `personal.py upgrade`
+reads; `install_hook` and `remove_hook` write and remove the opt-in `pre-push` hook, the one write
+under the clone's `.git/`, and `detach` removes that hook only when its bytes are what
+`install_hook` wrote.
 """
 
 from __future__ import annotations
@@ -22,17 +28,18 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError  # noqa: E402
+from common import PERSONAL_PINNED, CheckError  # noqa: E402
 from local_mode import SESSION_SETTING  # noqa: E402
 
 USAGE = (
@@ -42,12 +49,18 @@ USAGE = (
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATE = KIT / "kit" / "templates" / "personal.toml"
 DECISIONS_LOG = KIT / "kit" / "templates" / "decisions-log.md"
-LAW = (
-    "constitution/principles.md",
-    "config/core-rules.md",
-    "config/session-rules.md",
-    "config/review-checklist.md",
+PLUGIN_JSON = KIT / ".claude-plugin" / "plugin.json"
+LAW = PERSONAL_PINNED  # rule 26: the pinned copies, checked by `doctor.py`
+# Rule 27: the schema this plugin writes, and the step from each older one: a function of the
+# sidecar that changes its files and returns their paths (none yet: schema 1 is the first).
+PLUGIN_SCHEMA = 1
+MIGRATIONS: dict[int, Callable[[Path], list[str]]] = {}
+HOOK_MARK = "# agk personal mode: written by `personal.py hook install` (SPEC-0041 rule 19)"
+HOOK_GONE = (
+    "agk pre-push: refused: the plugin path this hook records is gone; "
+    "run `personal.py hook remove` and `hook install` again (rule 19)"
 )
+HOOK_EDITED = "the pre-push hook was changed by hand; left in place"
 KEEP = ("docs/adr", "docs/briefs", "docs/specs", "forge", "metrics", "records")
 HOME_SETTING = "AGK_HOME"
 REGISTRY = "registry.toml"
@@ -195,12 +208,27 @@ def private(home: Path):
             os.umask(old)
 
 
+def plugin_version() -> str | None:
+    """The version of the plugin this script runs from (rule 26), None when it cannot be read."""
+    try:
+        found = json.loads(PLUGIN_JSON.read_text(encoding="utf-8")).get("version")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return found if isinstance(found, str) and found else None
+
+
+def settings_text(version: str | None) -> str:
+    """The template's settings with the plugin version (rule 26) at the end of `[personal]`."""
+    text = TEMPLATE.read_text(encoding="utf-8")
+    return text + f"plugin_version = {json.dumps(version)}\n" if version else text
+
+
 def make_sidecar(path: Path, person: str) -> None:
     """The kit's layout of rule 2, committed once to the sidecar's own repository."""
     path.mkdir(parents=True)
     sidecar_git(path, "init", "-q", "-b", "main")
     files = {
-        "agk.toml": TEMPLATE.read_text(encoding="utf-8"),
+        "agk.toml": settings_text(plugin_version()),
         ".gitignore": "cache/\n",
         "config/reviewers.yaml": REVIEWERS.replace("PERSON", person),
         "docs/requirements.md": REQUIREMENTS,
@@ -281,6 +309,73 @@ def attach(clone: Path, home: Path, person: str | None, choice: str | None) -> i
     return 0
 
 
+def hook_path(clone: Path) -> Path:
+    """`<git common dir>/hooks/pre-push`: one hook for every worktree of the clone (rule 19)."""
+    return Path(common_dir(clone)) / "hooks" / "pre-push"
+
+
+def hook_text(script: str) -> bytes:
+    """The hook's bytes for the plugin's `personal.py` at SCRIPT: it fails closed, with one line,
+    when that path is gone, and otherwise runs the gate with the person's approval (rule 19)."""
+    lines = [
+        "#!/bin/sh",
+        HOOK_MARK,
+        f"PLUGIN={shlex.quote(script)}",
+        'if [ ! -f "$PLUGIN" ]; then',
+        f"  echo {shlex.quote(HOOK_GONE)} >&2",
+        "  exit 1",
+        "fi",
+        'exec python3 "$PLUGIN" gate --clone . --approve',
+    ]
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def hook_state(path: Path) -> str | None:
+    """None with no hook or one without the mark (not the kit's); `same` when its bytes are what
+    `hook_text` writes for the plugin path it records, else `edited`."""
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    text = data.decode("utf-8", "replace")
+    if HOOK_MARK not in text:
+        return None
+    found = re.search(r"^PLUGIN=(.*)$", text, re.MULTILINE)
+    try:
+        script = shlex.split(found.group(1)) if found else []
+    except ValueError:
+        script = []
+    return "same" if len(script) == 1 and data == hook_text(script[0]) else "edited"
+
+
+def install_hook(clone: Path, script: str) -> str:
+    """Rule 19: write the untracked `pre-push`; refused with `core.hooksPath` set or a hook in
+    place."""
+    if read(clone, "config", "--get", "core.hooksPath", check=False):
+        raise CheckError(
+            "the kit writes no hook while core.hooksPath is set (setting: core.hooksPath)"
+        )
+    path = hook_path(clone)
+    if path.exists():
+        raise CheckError("a pre-push hook exists; it is left as it is (rule 19)")
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(hook_text(script))
+    if os.name != "nt":
+        path.chmod(0o755)
+    return "hook: installed the pre-push hook; it runs the gate before each push"
+
+
+def remove_hook(clone: Path) -> str:
+    """Rule 19: remove the hook only when its bytes are what `install_hook` wrote."""
+    path = hook_path(clone)
+    found = hook_state(path)
+    if found is None:
+        raise CheckError("there is no pre-push hook of the kit here (rule 19)")
+    if found == "edited":
+        raise CheckError(f"{HOOK_EDITED} (rule 19)")
+    path.unlink()
+    return "hook: removed the pre-push hook"
+
+
 def detach(clone: Path, home: Path, delete: bool, stdin) -> int:
     cdir = common_dir(clone)
     clones = registry(home)
@@ -305,6 +400,13 @@ def detach(clone: Path, home: Path, delete: bool, stdin) -> int:
         if delete:
             shutil.rmtree(home / PROJECTS / pid)
     print(f"detach: {pid} {'deleted' if delete else 'detached; the state is kept'}")
+    hook = hook_path(clone)
+    found = hook_state(hook)
+    if found == "same":
+        hook.unlink()
+        print("detach: removed the pre-push hook")
+    elif found == "edited":
+        print(f"detach: {HOOK_EDITED}")
     return 0
 
 

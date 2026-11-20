@@ -60,6 +60,8 @@ The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/sp
 
 `python3 scripts/agk/personal.py baseline [--clone DIR] [--sidecar DIR] [--approve]` prints the test command of personal mode and, only with `--approve`, runs it once on the head tree in the sidecar and records the tests already failing in `records/baseline.json` (SPEC-0041 rule 16, ADR-0400).
 
+`python3 scripts/agk/personal.py upgrade [--clone DIR] [--sidecar DIR]` raises the sidecar's `[personal] schema` one step and one sidecar commit at a time to the plugin's, and refuses a newer schema; `personal.py hook install|remove [--clone DIR]` writes or removes the opt-in `pre-push` hook that runs `gate --approve`, the one write under the clone's `.git/`; `personal_state.py detach` removes that hook only when it is unedited, and `doctor.py` on a sidecar checks its pinned copies against `kit/hashes.json` for the recorded `plugin_version` (SPEC-0041 rules 19, 26 and 27, ADR-0637). Personal mode runs from the plugin installed at user scope: `claude plugin install agk --scope user` (verify: the install command and scope flag).
+
 `python3 scripts/agk/personal_adopt.py check|render FILE [--clone DIR] [--sidecar DIR] [--today YYYY-MM-DD]` checks the model's proposals of `/agk:personal-adopt`, refusing each claim whose citation does not exist, and `render` writes the claims left into the sidecar as Draft and Proposed records for the person to confirm (SPEC-0041 rules 13 and 14, ADR-0633).
 
 ## Drift audit
