@@ -5,7 +5,7 @@
   "notes": [],
   "result": "failed",
   "schema": 1,
-  "started": "2026-11-20T01:54:40Z",
+  "started": "2026-11-20T02:51:58Z",
   "steps": [
     {
       "argv": [],
@@ -30,7 +30,7 @@
       "outcome": "FAIL",
       "output_bytes": 194,
       "output_sha256": "dbafb19f66dd0b6a9707c4f681b80cbea95c3d5a7d0382fa6bd32369ffe4c2ee",
-      "seconds": 0.162
+      "seconds": 0.278
     }
   ],
   "tree_clean": true,
