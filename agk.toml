@@ -472,6 +472,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/doctor.py"
 tests = [
+  "tests/kit/test_personal_lifecycle.py",
   "tests/kit/test_governance_level.py",
   "tests/kit/test_kit_defect_report.py", "tests/kit/test_kit_in_repository.py", "tests/kit/test_kit_repo_local_mode.py",
   "tests/kit/test_autopilot_settings.py", "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
@@ -704,6 +705,7 @@ code = "scripts/agk/personal.py"
 tests = [
   "tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",
   "tests/kit/test_personal_gate.py", "tests/kit/test_personal_disclosure.py", "tests/kit/test_personal_change.py",
+  "tests/kit/test_personal_lifecycle.py",
 ]
 [[testing.map]]
 code = "scripts/agk/personal_adopt.py"
@@ -712,7 +714,7 @@ tests = ["tests/kit/test_personal_adopt.py", "tests/kit_dev/test_kit_manifest.py
 code = "scripts/agk/personal_state.py"
 tests = [
   "tests/kit/test_entry_points_refuse.py", "tests/kit/test_personal_state.py",
-  "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_lifecycle.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_intake.py"
@@ -900,7 +902,7 @@ code = "scripts/agk/common.py"
 tests = [
   "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_cloud_clone_local_mode.py", "tests/kit/test_plugin_version_pin.py", "tests/kit/test_shared_main.py",
-  "tests/kit/test_governance_level.py",
+  "tests/kit/test_governance_level.py", "tests/kit/test_personal_lifecycle.py",
 ]
 [[testing.map]]
 code = "scripts/agk/session.py"

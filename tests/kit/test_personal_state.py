@@ -175,7 +175,7 @@ def test_rule1_doctor_prints_the_personal_mode_line(tmp_path):
         env=env_for(tmp_path / "home"),
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert proc.stdout == "personal mode: forge files, level spec, disclosure both\n"
+    assert proc.stdout.splitlines()[0] == "personal mode: forge files, level spec, disclosure both"
     write_toml(root, '[personal]\nforge = "github"\n')
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPTS / "doctor.py"), str(root)],
