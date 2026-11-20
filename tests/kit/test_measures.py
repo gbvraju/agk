@@ -18,6 +18,7 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 
 import personal_state as ps  # noqa: E402
+from common import MERGED_BY  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "metrics"
 BUILDER = "member-example-1"
@@ -107,7 +108,7 @@ def feature(repo, api: Api) -> None:
     """Brief 50: two pull requests (one fix list, one reopen), finished by #61; a follow-up #62;
     #61 is a guarded merge and #60 a hand merge; the owner approves, asks and is answered."""
     hand = repo.git("rev-parse", "HEAD").strip()
-    repo.commit({"b.txt": "b\n"}, "guarded\n\nMerged-by: merge_cleared.py")
+    repo.commit({"b.txt": "b\n"}, f"guarded\n\n{MERGED_BY}")
     guarded = repo.git("rev-parse", "HEAD").strip()
     api.brief(50, at(1, 9), [
         taken(1, at(1, 11)),

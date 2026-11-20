@@ -179,7 +179,7 @@ class Reader:
             if isinstance(c.get("body"), str) and session.TAKE.fullmatch(session.plain(c["body"])):
                 take = c.get("created_at")
                 break
-        hours = []
+        hours: list[Any] = []
         for p in mine:
             login = metrics.author_of(p)
             now = metrics.stamp(p.get("closed_at"))
@@ -204,11 +204,11 @@ class Reader:
         rounds = total([r["review_rounds"] for r in records])
         rejected = total([r["rejected_verdicts"] for r in records] + [unmerged])
         every = [brief_comments, *threads.values()]
-        corrections: Any = UNKNOWN
+        corrections = UNKNOWN
         if all(t is not None for t in every):
             corrections = str(sum(
                 metrics.author_of(c) in self.allowed and first(c).startswith("Correction:")
-                for t in every for c in t  # type: ignore[union-attr]
+                for t in every for c in t or []
             ))  # fmt: skip
         events = [self.events(brief), *(self.events(p["number"]) for p in mine)]
         reopened = UNKNOWN
@@ -438,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
 
         config = Path(options["sidecar"])
         src: Any = FilesForge(config, clone=root)
-        msrc = None
+        msrc: Any = None
     elif "api" in options:
         config, src = root, metrics.ApiDir(Path(options["api"]))
         msrc = minutes.ApiDir(Path(options["api"]))
