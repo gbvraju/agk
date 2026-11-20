@@ -509,8 +509,9 @@ def test_the_rules_say_a_session_never_posts_a_confirmation():
     "rel", ["agk.toml", "kit/templates/agk.toml", "kit/templates/agk.adopt.toml"]
 )
 def test_the_setting_says_the_person_posts_it(rel):
-    """REQ-039: brief #277 (the verdict on 1ae4fd4, item 1)."""
+    """REQ-039: brief #277 (the verdict on 1ae4fd4, item 1); this repository runs solo by brief
+    #1615 (ADR-0684), the kit's templates keep the default `team`."""
     text = flat(rel)
-    assert 'review_mode = "team"' in text
+    assert f'review_mode = "{"solo" if rel == "agk.toml" else "team"}"' in text
     assert "the person posts from the browser or the GitHub app, never a # session" in text
     assert "posted by a session" not in text

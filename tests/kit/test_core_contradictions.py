@@ -31,9 +31,9 @@ EFFECTS = (
 )
 OPTIONS = (
     f"   - Option A — plain scripts (recommended). Trade-offs: nothing to host; {EFFECTS} "
-    "Why: a laptop is all it needs. Practices: pinned actions.\n"
+    "Why: a laptop is all it needs. Parts: a 1.0 MIT. Practices: pinned actions.\n"
     f"   - Option B — a web framework. Trade-offs: a host to run; {EFFECTS} "
-    "Practices: security headers."
+    "Parts: a 1.0 MIT. Practices: security headers."
 )
 
 

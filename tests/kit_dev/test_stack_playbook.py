@@ -240,12 +240,13 @@ def test_ac3_the_skeleton_with_the_playbook_practices_passes_the_check_once_draf
         if "Option A — " in line:  # brief #1591: the kit's default is Option A
             line = (
                 "   - Option A — scripts (recommended). Trade-offs: nothing to host. "
-                f"{EFFECTS}Why: a laptop is enough. Practices: contract-tests, test selection.\n"
+                f"{EFFECTS}Why: a laptop is enough. "
+                "Parts: a 1.0 MIT. Practices: contract-tests, test selection.\n"
             )
         elif "Option B — TODO" in line:
             line = (
                 f"   - Option B — a web framework. Trade-offs: a host to run. {EFFECTS}"
-                "Practices: mock-parity, accessibility, test selection.\n"
+                "Parts: a 1.0 MIT. Practices: mock-parity, accessibility, test selection.\n"
             )
         lines.append(line)
     path.write_text("".join(lines), encoding="utf-8")

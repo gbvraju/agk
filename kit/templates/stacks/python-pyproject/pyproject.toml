@@ -1,0 +1,23 @@
+[project]
+name = "{{project}}"
+version = "0.0.0"
+requires-python = ">=3.11"  # the runtime is the record's part; dependencies are added with "==" only
+dependencies = []
+
+[build-system]
+requires = ["setuptools==80.9.0"]  # exact (verify: the latest stable on the record date)
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts/agk"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

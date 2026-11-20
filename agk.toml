@@ -32,8 +32,8 @@ agent_apps = ["claude"]
 # Who reviews a pull request: "team" (the default: a verdict by a listed author, and a separate Approve: by a spec approver) or "solo"
 # (one person: one confirmation comment, whose text a session prints and the person posts from the browser or the GitHub app, never a
 # session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
-# nobody or more than one person). A change needs an ADR.
-review_mode = "team"
+# nobody or more than one person). A change needs an ADR. "solo" by the owner's word of 2026-11-20 (brief #1615, ADR-0684).
+review_mode = "solo"
 # From this date an item of a `Verdict: fix list` that does not end with `(rule: <file> <n>)` or `(rule: none)` fails
 # check_final_clearance.py; before it the check warns, and without the setting it only warns (brief #647, ADR-0310).
 rule_tags_from = "2026-12-06"
@@ -92,6 +92,10 @@ reviews_in_flight = 9
 brief_code_paths = { S = 3, M = 6 }
 # The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; merge-queue refuses while another holds it (ADR-0353).
 plan_issue = 661
+# The conductor lapse (brief #1615, amendment 212 of SPEC-0039, ADR-0684): in local mode the merger's sweep merges a cleared head, with
+# the verdict's local evidence and every required check green on GitHub, once the lease above has had no holder for these minutes past
+# its end (15 to 1440; absent is off). The owner-only holds stay the owner's. A change needs an ADR.
+conductor_lapse_minutes = 30
 # The heavy-run queue (SPEC-0040 rule 1, brief #529): off by default and when absent. This repository keeps it off; turning it on is the
 # owner's change, by an ADR in the same pull request.
 # [locks]
@@ -510,8 +514,14 @@ tests = [
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_playbook.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_stack_adr_testing.py",
-  "tests/kit_dev/test_start_discovery.py",
+  "tests/kit_dev/test_start_discovery.py", "tests/kit/test_pins.py",
 ]
+[[testing.map]]
+code = "scripts/agk/gates/pins.py"
+tests = ["tests/kit/test_pins.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "kit/templates/stacks/**"
+tests = ["tests/kit/test_pins.py"]
 [[testing.map]]
 code = "scripts/agk/evidence.py"
 tests = [
@@ -651,6 +661,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_merger_lapse.py",
   "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_direct_transport.py",
