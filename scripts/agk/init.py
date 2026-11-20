@@ -114,8 +114,8 @@ CLEAN_KEPT = (
 )
 CLEAN_TEMPLATE = "kit/templates/clean-claude.md"
 LAYOUT_LINE = (
-    'layout: plugin; the kit runs from the plugin, pinned by [kit] plugin_version, with execution = '
-    '"local" (SPEC-0071 rules 2, 5 and 6)'
+    'layout: plugin; the kit runs from the plugin at [kit] plugin_version, execution = "local" '
+    "(SPEC-0071 rules 2, 5 and 6)"
 )
 EXECUTION_LINE = re.compile(r'(?m)^# execution = "hosted"$')
 

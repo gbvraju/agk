@@ -55,7 +55,9 @@ def test_req078_ac1_init_layout_plugin_writes_only_rule_2_files(tmp_path, capsys
     assert init.main([str(target), "--unreleased", "--layout", "plugin", "--rehearsal"]) == 0
     files = written(target)
     assert not [rel for rel in files & KIT_FILES if not kept(rel)]
-    assert not any(rel.startswith(("scripts/agk/", ".claude/", ".github/workflows/")) for rel in files)
+    assert not any(
+        rel.startswith(("scripts/agk/", ".claude/", ".github/workflows/")) for rel in files
+    )
     for rel in ("LICENSE-AGK", ".gitignore", ".github/PULL_REQUEST_TEMPLATE.md", "agk.toml"):
         assert rel in files
     for rel in ("docs/requirements.md", "docs/build-state.md", "config/reviewers.yaml"):
@@ -142,9 +144,7 @@ def test_req078_ac3_both_refuse_hosted_and_personal_naming_the_setting(
 
 
 @pytest.mark.parametrize("tool", [init, adopt])
-@pytest.mark.parametrize(
-    "args", [["--layout"], ["--layout", "installed"], ["--rehearsal"]]
-)
+@pytest.mark.parametrize("args", [["--layout"], ["--layout", "installed"], ["--rehearsal"]])
 def test_req078_ac3_a_bad_layout_flag_is_a_usage_error(tool, args, tmp_path):
     target = repo(tmp_path / "shop-example")
     assert tool.main([str(target), "--unreleased", *args]) == 2
