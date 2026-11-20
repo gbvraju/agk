@@ -107,7 +107,7 @@ REQ-079 AC1: *the playbook carries the standard.* Rules 1 and 2. REQ-079 AC2: *e
 - github: the steps run inside the existing `governance` and `proof` jobs, with no workflow, ruleset or required-check change in this spec and each later one only by its own ADR and the owner's word.
 - local: the same steps through `agk.mk` `agk-governance` and `prepush.py`, as the local-mode guide runs governance.
 - personal: the same checks at the person's terminal through `personal.py floor` at every level, nothing posted and no forge call.
-- stacks: each stack's lint, format and type step and its configuration come from its standards pack, Python first; its build file comes from `kit/templates/stacks/`, Python and `node` first, and its lock from its own tool; no stack's test or build step changes.
+- stacks: each stack's lint, format and type step and its configuration come from its standards pack, Python first, its build file comes from `kit/templates/stacks/`, Python and `node` first, and its lock from its own tool, and no stack's test or build step changes.
 
 ## Open questions
 
