@@ -31,6 +31,7 @@ DECLARATION = '\n[delivery]\nwork_type = "web-app"\n'
 PRACTICES_HEAD = "2. **Practices**\n"
 TEMPLATE_NAMES = "local profile, fast CI, fast tests, test selection"
 DEFAULT = KIT_ROOT / "config" / "playbooks" / "default.toml"
+DEFAULTS = KIT_ROOT / "config" / "stack-defaults.toml"
 PROPOSAL = (
     "profile balanced, always_full `contracts/**`, map `contracts/** -> tests/contract/**`, "
     "`mocks/** -> tests/mocks/**`, `frontend/** -> tests/frontend/**`, "
@@ -43,6 +44,8 @@ GATES = [
     "   - e2e-smoke: judgement (playbook web-app)\n",
     "   - accessibility: judgement (playbook web-app)\n",
 ]
+# Brief #1591 (ADR-0671): the four effects of an option.
+EFFECTS = "Cost: low; Build speed: quick; Security: one sign-in; Uptime: short pauses. "
 
 
 @pytest.fixture
@@ -76,8 +79,20 @@ def declare(root, work_type: str = "web-app", playbook: str | None = "shipped") 
         path.write_text(playbook, encoding="utf-8")
 
 
-def rendered_template(names: str = TEMPLATE_NAMES) -> str:
+def recommended(shape: str) -> str:
+    """Brief #1591 (ADR-0671): Option A is the shape's row of the kit's stack defaults."""
+    rows = tomllib.loads(DEFAULTS.read_text(encoding="utf-8"))["default"]
+    row = next(r for r in rows if r["work_type"] == shape)
+    return (
+        f"{row['description']} (recommended). Trade-offs: Cost: {row['cost']}; Build speed: "
+        f"{row['build_speed']}; Security: {row['security']}; Uptime: {row['uptime']}. "
+        f"Why: {row['reason']}"
+    )
+
+
+def rendered_template(names: str = TEMPLATE_NAMES, shape: str = "default") -> str:
     text = TEMPLATE.read_text(encoding="utf-8").replace("{{adr}}", "0002")
+    text = text.replace("{{recommended}}", recommended(shape))
     return text.replace("{{date}}", DATE).replace("{{practices}}", names)
 
 
@@ -205,7 +220,7 @@ def test_ac3_nothing_else_of_the_adr_changes(started):
     for line in GATES:
         assert text.count(line) == 1
         text = text.replace(line, "", 1)
-    template = rendered_template(f"{gate_names()}, {TEMPLATE_NAMES}")
+    template = rendered_template(f"{gate_names()}, {TEMPLATE_NAMES}", "web-app")
     original = next(ln for ln in template.splitlines(keepends=True) if "- test selection:" in ln)
     assert text.count(TEST_SELECTION) == 1
     assert text.replace(TEST_SELECTION, original, 1) == template
@@ -222,14 +237,14 @@ def test_ac3_the_skeleton_with_the_playbook_practices_passes_the_check_once_draf
     text = text.replace("TODO(architect): what the product needs", "A reading list; what it needs")
     lines = []
     for line in text.splitlines(keepends=True):
-        if "Option A — TODO" in line:
+        if "Option A — " in line:  # brief #1591: the kit's default is Option A
             line = (
-                "   - Option A — plain scripts. Trade-offs: nothing to host. "
-                "Practices: contract-tests, test selection.\n"
+                "   - Option A — scripts (recommended). Trade-offs: nothing to host. "
+                f"{EFFECTS}Why: a laptop is enough. Practices: contract-tests, test selection.\n"
             )
         elif "Option B — TODO" in line:
             line = (
-                "   - Option B — a web framework. Trade-offs: a host to run. "
+                f"   - Option B — a web framework. Trade-offs: a host to run. {EFFECTS}"
                 "Practices: mock-parity, accessibility, test selection.\n"
             )
         lines.append(line)
