@@ -176,3 +176,21 @@ name = "multi-agent"
 signal = "langgraph"
 file = "requirements.txt"
 contains = "langgraph"
+
+[[work_type]]
+name = "api-service"
+signal = "fastapi"
+file = "pyproject.toml"
+contains = "fastapi"
+
+[[work_type]]
+name = "api-service"
+signal = "fastapi"
+file = "requirements.txt"
+contains = "fastapi"
+
+[[work_type]]
+name = "api-service"
+signal = "nestjs"
+file = "package.json"
+contains = "@nestjs/core"
