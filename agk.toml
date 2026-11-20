@@ -673,11 +673,16 @@ tests = [
   "tests/kit/test_kit_repo_local_mode.py",
 ]
 [[testing.map]]
+code = "scripts/agk/measures.py"
+tests = [
+  "tests/kit/test_measures.py", "tests/kit_dev/test_reference_commands.py",
+]
+[[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
   "tests/kit/test_checklist.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_forge.py",
-  "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_metrics.py",
-  "tests/kit/test_metrics_cost.py", "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
+  "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_measures.py",
+  "tests/kit/test_metrics.py", "tests/kit/test_metrics_cost.py", "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
   "tests/kit/test_over_cap_builder.py", "tests/kit/test_product_report.py", "tests/kit/test_runbook_measures.py",
   "tests/kit/test_self_clearance.py", "tests/kit/test_solo_mode.py", "tests/kit/test_usage_by_kind.py",
   "tests/kit/test_usage_transcript.py", "tests/kit/test_verdict_authors.py", "tests/kit/test_verdict_forms.py", "tests/kit_dev/test_architect_review.py",
