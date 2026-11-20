@@ -71,7 +71,8 @@ def test_a_bad_setting_is_refused_naming_the_setting_never_the_value(value):
     data = tomllib.loads(toml(ON + f"conductor_lapse_minutes = {value}\n"))
     with pytest.raises(merge_cleared.Refused) as err:
         merge_cleared.lapse_setting(data)
-    assert str(err.value).startswith(REFUSAL) and value.strip('"') not in str(err.value)
+    assert str(err.value) == merge_cleared.LAPSE_REFUSAL  # one fixed line: no value in it
+    assert str(err.value).startswith(REFUSAL)
 
 
 def test_the_flow_table_knows_the_setting():

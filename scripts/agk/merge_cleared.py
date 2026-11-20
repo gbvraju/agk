@@ -145,7 +145,12 @@ after cleared` for each it merged, and `UNMERGED #<n> cleared <m> min <reason>` 
 older than 20 minutes it could not merge (in local mode it only reports). The label is never an
 input: a cleared pull request labelled `agk:fix` or `agk:review` prints `LABEL #<n> <label> but
 cleared`, and the router runs for it when it is left unmerged. `--sweep-gate` prints `on` or `off`
-for the workflow.
+for the workflow. With `[flow] conductor_lapse_minutes` set in local mode (brief #1615, amendment
+212, ADR-0684) the gate prints `on`, and the sweep merges once the conductor's lease on the plan
+issue has had no holder for that many minutes past its end: the lapse is read again under the
+lock, the merge needs the verdict's local evidence and every required check green on GitHub, it is
+never made while the local-mode record issue is open, and its record line ends `merged by the
+sweep after a conductor lapse`. An owner-only hold's `UNMERGED` line names the owner's command.
 
 `--status --pr <n> --sha <head>` (brief #853, ADR-0387) sets the commit status `agk/verdict` by the
 reading of the merge: `success` when the head is cleared, no hold of rule 5 stands and it is not in
@@ -221,7 +226,7 @@ import time
 import tomllib
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
 from urllib.parse import quote
@@ -256,6 +261,7 @@ from reviewers import (  # noqa: E402
     CONFIG,
     approval_shas,
     approvers_of,
+    authors_of,
     conductors_of,
     head_before_comment,
     parse,
@@ -370,6 +376,15 @@ IN_SESSION = (
     "(setting: CLAUDECODE, AGK_SESSION or AGK_ROLE in the environment)"
 )
 QUEUE_SETTING = "merge_queue"
+LAPSE_SETTING = "conductor_lapse_minutes"  # brief #1615, amendment 212, ADR-0684
+LAPSE_LOW, LAPSE_HIGH = 15, 1440
+LAPSE_REFUSAL = (
+    f"{LAPSE_SETTING} of the flow table must be a whole number from {LAPSE_LOW} to {LAPSE_HIGH} "
+    f"({SETTING.format(LAPSE_SETTING)})"
+)
+LAPSE_HELD = f"the conductor's lease is not free (setting: flow.{LAPSE_SETTING})"
+LAPSE_RECORD = " merged by the sweep after a conductor lapse"  # the record line's ending
+LAPSE_RECORD_OPEN = "the local-mode record issue is open (rule 4, amendment 212)"
 QUEUE_OUTSIDE = (
     f"the merge queue is joined only by the merger job on GitHub Actions with {MERGE_ENV} "
     "(rule 2a; a session stays REST-only)"
@@ -543,6 +558,20 @@ def merge_queue_setting(data: dict) -> bool:
     value = flow.get(QUEUE_SETTING, False) if isinstance(flow, dict) else False
     if not isinstance(value, bool):
         raise Refused(f"{QUEUE_SETTING} must be true or false ({SETTING.format(QUEUE_SETTING)})")
+    return value
+
+
+def lapse_setting(data: dict) -> int | None:
+    """`[flow] conductor_lapse_minutes` (brief #1615 answer 3): None when absent (off), else a
+    whole number from 15 to 1440; anything else is refused naming the setting, never the value."""
+    flow = data.get("flow", {})
+    if not isinstance(flow, dict) or LAPSE_SETTING not in flow:
+        return None
+    value = flow[LAPSE_SETTING]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise Refused(LAPSE_REFUSAL)
+    if not LAPSE_LOW <= value <= LAPSE_HIGH:
+        raise Refused(LAPSE_REFUSAL)
     return value
 
 
@@ -1249,10 +1278,14 @@ def verdict_link(repo: str, number: int, verdict: dict) -> str:
     return f"https://github.com/{repo}/pull/{number}#issuecomment-{verdict.get('id')}"
 
 
-def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) -> bool:
-    """The one record line of SPEC-0039 rule 7, posted once; whether GitHub took it."""
+def post_record(
+    repo: str, issue: int, number: int, merged: str, verdict: dict, lapse: bool = False
+) -> bool:
+    """The one record line of SPEC-0039 rule 7, posted once; whether GitHub took it. A merge of
+    the sweep after a conductor lapse says so at its end (brief #1615 answer 1)."""
     when = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     line = f"Auto merge: #{number} {merged} {when} {verdict_link(repo, number, verdict)}"
+    line += LAPSE_RECORD if lapse else ""
     args = ["--method", "POST", f"repos/{repo}/issues/{issue}/comments", "-f", f"body={line}"]
     code, _, _ = write_once(args)
     return code == 0
@@ -1890,6 +1923,7 @@ def after_merge(
     text: str,
     fixing: int | None = None,
     title: str = "",
+    lapse: bool = False,
 ) -> tuple[bool, bool]:
     """Everything after the merge (SPEC-0039 rules 6 and 7): the record line, then governance.
     Any exception, interrupt or termination counts as red (`governance not finished`): the
@@ -1900,7 +1934,7 @@ def after_merge(
     recorded = False
     with after_merge_signals():
         try:
-            recorded = post_record(repo, record, number, merged, verdict)
+            recorded = post_record(repo, record, number, merged, verdict, lapse)
             with contextlib.suppress(Exception):  # the merge stands, nothing is held (#959)
                 close_after_merge(repo, number, merged, text, title)
             branch = str(data.get("default_branch", "main"))
@@ -1986,10 +2020,13 @@ def merger_variable_line(
     the variable is `off`; else None. PER_DAY is the schedule's starts a day, None when unknown.
     The line names the setting and the one command for the owner; nothing here runs it."""
     try:
-        github_mode(data)
-        merging = True
-    except Nothing:
+        merging = lapse_rule(data)  # the lapse sweep needs the scheduled jobs (brief #1615)
+    except (Nothing, Refused):
         merging = False
+    try:
+        merging = merging or github_mode(data) is None
+    except Nothing:
+        pass
     off = value == "off"
     if not merging and not off:
         saved = f"up to {per_day} scheduled jobs" if per_day else "the scheduled jobs"
@@ -2119,14 +2156,89 @@ def clock() -> datetime:
     return datetime.now(UTC)
 
 
-def sweep_allows(data: dict) -> bool:
+# --- the conductor lapse (brief #1615, amendment 212 of SPEC-0039, ADR-0684) ---------------------
+
+
+def lapse_rule(data: dict) -> bool:
+    """Whether the lapse rule is on: local mode, not paused, `conductor_lapse_minutes` set and
+    the other settings of `github_mode` passing; Nothing or Refused for a setting that stops it."""
+    if data.get("execution") != "local" or data.get("paused") is True:
+        return False
+    if lapse_setting(data) is None:
+        return False
+    github_mode({**data, "execution": ""})  # auto-merge on, not personal mode
+    return True
+
+
+def lapsed(data: dict, repo: str, now: datetime, authors: list[str]) -> bool:
+    """True when the conductor's lease on the plan issue (`[flow] plan_issue`) has had no holder
+    for `conductor_lapse_minutes` past its end (`conductor.lease_holder`): an active lease ends
+    `LEASE_MINUTES` after its stamp, a released one at its stamp. No setting, no plan issue, no
+    marker by a listed verdict author, a bad stamp or comments that cannot be read are never a
+    lapse (brief #1615 answers 3 and 5)."""
+    try:
+        minutes = lapse_setting(data)
+    except Refused:
+        return False
+    flow = data.get("flow")
+    issue = flow.get("plan_issue") if isinstance(flow, dict) else None
+    if minutes is None or isinstance(issue, bool) or not isinstance(issue, int) or issue < 1:
+        return False
+    import conductor  # conductor imports this module; read only for the lapse
+
+    try:
+        comments = read_pages(f"repos/{repo}/issues/{issue}/comments", "the plan issue")
+    except Unreadable:
+        return False
+    if conductor.lease_holder(comments, authors, now) is not None:
+        return False  # held, stalled or not (`lease_stall` is not a lapse)
+    found = conductor.lease_comment(comments, authors)
+    start = conductor.when(found[1].group(2)) if found else None
+    if found is None or start is None:
+        return False
+    active = found[1].group(1) == "active"
+    end = start + timedelta(minutes=conductor.LEASE_MINUTES) if active else start
+    return now >= end + timedelta(minutes=minutes)
+
+
+def lapse_recheck(data: dict, repo: str, authors: list[str]) -> None:
+    """The lapse read again under `merge_lock`: a lease renewed since the sweep's read holds."""
+    if not lapsed(data, repo, clock(), authors):
+        raise Held(LAPSE_HELD)
+
+
+def lapse_evidence(
+    repo: str, verdict: dict, comments: list[dict], sha: str, approvers: list[str],
+    required: list[str],
+) -> None:  # fmt: skip
+    """A lapse merge needs both kinds of evidence of rule 4 for its head: the verdict's local
+    evidence that agrees and every required check green on GitHub (brief #1615 answer 1)."""
+    local_evidence(verdict, comments, sha, approvers)
+    ci_evidence(repo, sha, required)
+
+
+def sweep_authors(root: Path) -> list[str]:
+    """The listed verdict authors of config/reviewers.yaml on the default branch."""
+    base, _ = default_ref(root)
+    return authors_of(reviewers_at(root, base))
+
+
+def owner_note(number: int, reason: str) -> str:
+    """A hold only the owner lifts names the owner's command (brief #1615 answer 2)."""
+    if not owner_only(reason.removeprefix("held: ")):
+        return reason
+    return f"{reason}; the owner merges with {OWNER_COMMAND.format(number)}"
+
+
+def sweep_allows(data: dict, lapse: bool = False) -> bool:
     """Brief #797 answers 3 and 6: True when a sweep may merge, False when it only reports (local
-    mode); Nothing when this project has no sweep (auto-merge off, personal mode, paused)."""
+    mode, unless the conductor LAPSEd, brief #1615); Nothing when this project has no sweep
+    (auto-merge off, personal mode, paused)."""
     if data.get("paused") is True:
         raise Nothing("paused (setting: paused in agk.toml on the default branch)")
     if data.get("execution") == "local":
         github_mode({**data, "execution": ""})  # the other settings still decide
-        return False
+        return lapse
     github_mode(data)
     return True
 
@@ -2172,7 +2284,9 @@ def reroute(root: Path, repo: str, number: int) -> None:
         print(f"LABEL #{number} router not re-run")
 
 
-def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> tuple[int, bool]:
+def sweep_one(
+    root: Path, repo: str, pull: dict, merging: bool, tried: int, lapse: bool = False
+) -> tuple[int, bool]:
     """One pull request of a sweep and its line: (the guarded merges so far, whether to stop)."""
     number = int(pull.get("number") or 0)
     head = pull.get("head")
@@ -2197,7 +2311,7 @@ def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> t
     elif tried >= SWEEP_MAX:
         reason = f"not tried: at most {SWEEP_MAX} a run"
     else:
-        line, _ = guarded(root, number, sha)
+        line, _ = guarded(root, number, sha, lapse=True) if lapse else guarded(root, number, sha)
         print(line)
         tried += 1
         if line.startswith(STOPPED):
@@ -2205,7 +2319,7 @@ def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> t
         if ": merged " in line:
             report_merged(number, verdict)
             return tried, False
-        report_unmerged(number, verdict, line.split(": ", 1)[-1])
+        report_unmerged(number, verdict, owner_note(number, line.split(": ", 1)[-1]))
         if stale:
             reroute(root, repo, number)
         return tried, False
@@ -2224,7 +2338,10 @@ def sweep_main(root: Path) -> int:
         merging = sweep_allows(data)
         repo = repo_of(root)
         issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
-        merging = merging and not titled(issues, RECORD_TITLE)
+        recorded = titled(issues, RECORD_TITLE)  # Actions blocked: never a lapse merge
+        lapse = not recorded and lapse_rule(data)
+        lapse = lapse and lapsed(data, repo, clock(), sweep_authors(root))
+        merging = sweep_allows(data, lapse) and not recorded
         endpoint = f"repos/{repo}/pulls?state=open&sort=created&direction=asc"
         pulls = sweep_list(read_pages(endpoint, "the open pull requests"))
     except (Nothing, Refused) as err:
@@ -2235,17 +2352,20 @@ def sweep_main(root: Path) -> int:
         return EXIT_CLEARED
     tried = 0
     for pull in pulls:
-        tried, stop = sweep_one(root, repo, pull, merging, tried)
+        tried, stop = sweep_one(root, repo, pull, merging, tried, lapse)
         if stop:
             break
     return EXIT_CLEARED
 
 
 def sweep_gate_main(root: Path) -> int:
-    """`--sweep-gate`: `on` when this project gets the sweep job, else `off` (brief #797)."""
+    """`--sweep-gate`: `on` when this project gets the sweep job, else `off` (brief #797). In
+    local mode with the lapse rule on it is `on` too: the gate job holds no token, so the sweep
+    reads the lease and merges only after a lapse (brief #1615)."""
     try:
         _, data = default_ref(root)
-        github_mode(data)
+        if not lapse_rule(data):
+            github_mode(data)
     except (Nothing, Refused):
         print("off")
         return EXIT_CLEARED
@@ -2566,6 +2686,7 @@ def ruled(root: Path, owner: bool = False) -> Rules:
     pre = pre_merge_setting(data)  # likewise the pre-merge tests (brief #667)
     behind = max_behind_setting(data)  # and the behind limit (brief #727)
     queue = merge_queue_setting(data)  # and the merge queue (brief #853)
+    lapse_setting(data)  # and the conductor lapse (brief #1615)
     return Rules(data, people, allowed, approvers, required, pre, behind, queue)
 
 
@@ -2583,6 +2704,7 @@ def holds(
     rules: Rules,
     lift: bool = False,
     report: bool = False,
+    lapse: bool = False,
 ) -> tuple[dict, dict, list[str], int, int | None, str | None]:
     """Every hold of SPEC-0039 rules 3, 4, 5 and 7 that reads GitHub and merges nothing, in the
     order of a run: (the pull request, its clearing verdict, the acceptance lines of rule 3a, the
@@ -2611,7 +2733,11 @@ def holds(
     record = record_issue(issues)
     if record is None:
         raise Held("no record issue (rule 7)")
-    if local_mode(rules.data, issues):
+    if lapse and titled(issues, RECORD_TITLE):
+        raise Held(LAPSE_RECORD_OPEN)
+    if lapse:
+        lapse_evidence(repo, verdict, comments, sha, rules.approvers, rules.required)
+    elif local_mode(rules.data, issues):
         local_evidence(verdict, comments, sha, rules.approvers)
     else:
         ci_evidence(repo, sha, rules.required)
@@ -2730,15 +2856,19 @@ def signed_in(rules: Rules) -> None:
         raise Refused(NOT_APPROVER)
 
 
-def outcome(root: Path, number: int, sha: str, owner: bool = False) -> tuple[str, str, int]:
+def outcome(
+    root: Path, number: int, sha: str, owner: bool = False, lapse: bool = False
+) -> tuple[str, str, int]:
     rules = ruled(root, owner)
     data = rules.data
     repo = repo_of(root)
     if owner:
         signed_in(rules)
     with merge_lock(root):
+        if lapse:  # a lease renewed since the sweep read it holds (brief #1615 answer 5)
+            lapse_recheck(data, repo, authors_of(rules.people))
         pull, verdict, accepted, record, fixing, lifted = holds(
-            root, repo, number, sha, rules, lift=owner, report=True
+            root, repo, number, sha, rules, lift=owner, report=True, lapse=lapse
         )
         if lifted is not None and not owner:
             raise owner_hold(root, repo, number, sha, rules, pull, lifted)
@@ -2774,6 +2904,7 @@ def outcome(root: Path, number: int, sha: str, owner: bool = False) -> tuple[str
             text,
             fixing,
             str(pull.get("title") or ""),
+            lapse,
         )
     if not recorded:
         return f"merged {merged[:12]}", "the record line cannot be posted (rule 7)", EXIT_REFUSED
@@ -2786,12 +2917,15 @@ def outcome(root: Path, number: int, sha: str, owner: bool = False) -> tuple[str
     return f"merged {merged[:12]}", "", EXIT_CLEARED
 
 
-def guarded(root: Path, number: int, sha: str, owner: bool = False) -> tuple[str, int]:
+def guarded(
+    root: Path, number: int, sha: str, owner: bool = False, lapse: bool = False
+) -> tuple[str, int]:
     """The one guarded merge of pull request NUMBER at SHA: (its one line, its exit code). With
-    OWNER, the owner's merge of brief #1358 (`--owner`)."""
+    OWNER, the owner's merge of brief #1358 (`--owner`); with LAPSE, the sweep's merge after a
+    conductor lapse (brief #1615)."""
     prefix = f"merge-cleared #{number} {sha[:12]}:"
     try:
-        word, reason, code = outcome(root, number, sha, owner)
+        word, reason, code = outcome(root, number, sha, owner, lapse)
     except Held as err:
         return f"{prefix} held: {err}", EXIT_HELD
     except Refused as err:
