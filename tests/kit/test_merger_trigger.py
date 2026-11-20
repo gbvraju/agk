@@ -252,3 +252,196 @@ def test_1143_the_router_documents_the_start_on_a_green_branch():
     doc = " ".join(route.__doc__.split())
     assert "Brief #1143 (ADR-0485)" in doc
     assert "turns green" in doc
+
+
+# --- brief #1554 (ADR-0654): the merger starts only where it can act ------------------------------
+
+OFF = {"AGK_MERGER": "off"}
+
+
+def merger_if() -> str:
+    from test_ci_saving import job_conditions
+
+    return job_conditions(text("merger.yml"))[0]
+
+
+def gate_if() -> str:
+    from test_ci_saving import job_conditions
+
+    return job_conditions(text("merger.yml"))[1]
+
+
+def test_1554_the_merger_starts_on_exactly_the_lines_its_reader_holds():
+    """REQ-039: brief #1554 answer 5 (the trigger list and the reader's list are one list)."""
+    from test_route_triggers import COMMENT_LINE, acting_lines
+
+    cond = merger_if()
+    assert acting_lines(cond, "created") == set(merge_cleared.MERGER_CREATED)
+    assert acting_lines(cond, "edited") == set(merge_cleared.MERGER_EDITED)
+    assert set(COMMENT_LINE.findall(cond)) == (
+        set(merge_cleared.MERGER_CREATED) | set(merge_cleared.MERGER_EDITED)
+    )
+    assert set(route.MERGER_STARTS) == set(merge_cleared.MERGER_CREATED)  # the router's reading
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["Progress:", "Tell:", "Conductor:", "Slot:", "Report:", "Question:", "Answer:", "taken:"],
+)
+def test_1554_a_session_line_starts_no_merger(line):
+    """REQ-039: brief #1554 answer 5 (only the merge lines start the merger's job)."""
+    from test_ci_saving import holds
+    from test_route_triggers import comment_on
+
+    for action in ("created", "edited"):
+        assert not holds(merger_if(), comment_on(f"{line} x", action)), (line, action)
+
+
+def test_1554_the_merger_chain_listens_only_to_the_merge_queue():
+    """REQ-039: brief #1554 answer 2 (`branches` on the merger's `workflow_run`; verify it)."""
+    head = text("merger.yml").split("\njobs:", 1)[0]
+    chain = head.split("\n  workflow_run:\n", 1)[1].split("\n  status:", 1)[0]
+    assert chain.splitlines() == [
+        "    workflows: [governance, proof]",
+        "    types: [completed]",
+        "    branches: ['gh-readonly-queue/**']",
+    ]
+
+
+def github_glob(pattern: str, name: str) -> bool:
+    """GitHub's branch filter as its documentation reads it: `**` any text, `*` any but `/`."""
+    parts = re.split(r"(\*\*|\*)", pattern)
+    rx = "".join({"**": ".*", "*": "[^/]*"}.get(p, re.escape(p)) for p in parts)
+    return re.fullmatch(rx, name) is not None
+
+
+@pytest.mark.parametrize(
+    ("branch", "event", "starts"),
+    [
+        ("gh-readonly-queue/main/pr-7-" + "0123456789abcdef" * 2 + "01234567", "merge_group", True),
+        ("feat/x", "pull_request", False),
+        ("main", "push", False),
+    ],
+)
+def test_1554_only_a_failed_queue_run_passes_the_filter_and_reaches_the_report(
+    branch, event, starts
+):
+    """REQ-039: brief #1554 answers 2 and 8 (the filter's `**` takes the slashes of a queue
+    branch; a finished run of another branch makes no merger run at all)."""
+    from test_ci_saving import holds
+
+    pattern = re.search(r"branches: \['([^']+)'\]", text("merger.yml")).group(1)
+    assert github_glob(pattern, branch) is starts
+    run = {"event": event, "conclusion": "failure", "head_branch": branch}
+    github = {"event_name": "workflow_run", "event": {"workflow_run": run}}
+    assert holds(merger_if(), github, OFF) is starts  # the variable never gates the report
+    assert holds(merger_if(), github) is starts
+
+
+@pytest.mark.parametrize("body", ["Verdict: cleared abc1234", "Approve: abc1234 SPEC-0001"])
+def test_1554_the_variable_off_keeps_the_merger_job_from_a_comment(body):
+    """REQ-039: brief #1554 answers 4 and 8 (with it unset, or any other value, as before)."""
+    from test_ci_saving import holds
+    from test_route_triggers import comment_on
+
+    event = comment_on(body)
+    assert holds(merger_if(), event)
+    assert holds(merger_if(), event, {"AGK_MERGER": "on"})
+    assert not holds(merger_if(), event, OFF)
+    edited = comment_on("Final: docs/adr/0001-x.md Proposed -> Accepted", "edited")
+    assert holds(merger_if(), edited) and not holds(merger_if(), edited, OFF)
+
+
+def test_1554_the_variable_off_keeps_the_scheduled_gate_from_starting():
+    """REQ-039: brief #1554 answer 4 (a sweep by hand and the dispatch with `pr` stay)."""
+    from test_ci_saving import holds
+
+    schedule = {"event_name": "schedule", "event": {}}
+    by_hand = {"event_name": "workflow_dispatch", "event": {"inputs": {"pr": ""}}}
+    dispatch = {"event_name": "workflow_dispatch", "event": {"inputs": {"pr": "7"}}}
+    status = {"event_name": "status", "event": {"context": "agk/verdict", "state": "success"}}
+    assert holds(gate_if(), schedule) and not holds(gate_if(), schedule, OFF)
+    assert holds(gate_if(), by_hand, OFF)
+    for github in (dispatch, status):
+        assert holds(merger_if(), github, OFF), github["event_name"]
+
+
+def test_1554_the_router_dispatches_the_merger_when_the_variable_is_off(proj, stub, tmp_path):  # noqa: F811
+    """REQ-039: brief #1554 answer 8 (`Verdict: cleared <sha>` with `AGK_MERGER = off`: the router
+    alone starts, and it dispatches the merger once, so no merge is lost)."""
+    turn_on(proj)
+    cleared_pull(stub)
+    note = {"body": f"Verdict: cleared {HEAD[:7]}"}
+    event = {
+        "action": "created",
+        "issue": {"number": 7, "pull_request": {}},
+        "comment": note,
+        "repository": REPO_INFO,
+    }
+    proc = run_router(proj, stub, tmp_path, "issue_comment", event, AGK_MERGER="off")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert len(dispatches(stub)) == 1
+    assert route.merger_starts_itself("issue_comment", event)  # unset: the merger starts itself
+
+
+def test_1554_merger_starts_itself_reads_the_variable(monkeypatch):
+    """REQ-039: brief #1554 answer 4 (`route.merger_starts_itself` is false when it is `off`)."""
+    event = {"action": "created", "comment": {"body": "Verdict: cleared abc1234"}}
+    monkeypatch.delenv("AGK_MERGER", raising=False)
+    assert route.merger_starts_itself("issue_comment", event)
+    monkeypatch.setenv("AGK_MERGER", "on")
+    assert route.merger_starts_itself("issue_comment", event)
+    monkeypatch.setenv("AGK_MERGER", "off")
+    assert not route.merger_starts_itself("issue_comment", event)
+
+
+# brief #1554 answers 3, 5 and 8 for the router: here, beside the module's other `route` readers
+
+
+def test_1554_the_router_starts_on_exactly_the_lines_its_reader_holds():
+    """REQ-039: brief #1554 answer 5 (the trigger list and the reader's list are one list)."""
+    from test_ci_saving import router_condition
+    from test_route_triggers import COMMENT_LINE, acting_lines
+
+    cond = router_condition()
+    assert acting_lines(cond, "created") == set(route.ROUTER_CREATED)
+    assert acting_lines(cond, "edited") == set(route.ROUTER_EDITED)
+    assert set(COMMENT_LINE.findall(cond)) == set(route.ROUTER_CREATED) | set(route.ROUTER_EDITED)
+    # every owner answer the router unparks on starts it (the gap `Answer:` was, brief #1534 Q-4)
+    assert set(route.OWNER_ANSWER_LINES) <= set(route.ROUTER_CREATED)
+
+
+def test_1554_answer_wakes_the_router_when_created_only():
+    """REQ-039: brief #1554 answers 3 and 8 (`Answer:` created starts it; edited does not)."""
+    from test_ci_saving import holds, router_condition
+    from test_route_triggers import comment_on
+
+    cond = router_condition()
+    assert "Answer:" in route.ROUTER_CREATED and "Answer:" not in route.ROUTER_EDITED
+    assert holds(cond, comment_on("Answer: Q-1-1 the evidence settles it"))
+    assert not holds(cond, comment_on("Answer: Q-1-1 the evidence settles it", "edited"))
+
+
+@pytest.mark.parametrize(
+    "line", ["Owner needed:", "Maintainer answer:", "Answer:", "Report:", "Question:"]
+)
+def test_1554_an_edited_ask_or_answer_starts_no_router(line):
+    """REQ-039: brief #1554 answer 8 (an edited ask, answer or report starts none, as today)."""
+    from test_ci_saving import holds, router_condition
+    from test_route_triggers import comment_on
+
+    assert line not in route.ROUTER_EDITED
+    assert not holds(router_condition(), comment_on(f"{line} x", "edited"))
+
+
+def test_1554_an_owner_line_under_another_first_line_starts_and_unparks_nothing():
+    """REQ-039: brief #1554 answer 8 (the owner's line must lead the comment)."""
+    from test_ci_saving import holds, router_condition
+    from test_route_triggers import comment_on
+
+    event = comment_on("Thanks\nMaintainer answer: yes")
+    assert not holds(router_condition(), event)
+    payload = {**event["event"], "issue": {"number": 7, "pull_request": {}}}
+    assert not route.owner_answer_event("issue_comment", payload)
+    payload["comment"] = {"body": "Maintainer answer: yes\nThanks"}
+    assert route.owner_answer_event("issue_comment", payload)

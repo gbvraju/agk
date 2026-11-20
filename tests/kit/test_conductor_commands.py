@@ -832,6 +832,52 @@ def test_lease_take_by_the_holder_renews_it(proj, stub):
     assert [c[:2] for c in posts(stub)] == [["PATCH", f"repos/{REPO}/issues/comments/5"]]
 
 
+def fresh(seconds: int, who: str = "c1") -> dict:
+    """A marker written SECONDS ago (brief #1554 answer 1)."""
+    stamp = iso(timedelta(seconds=-seconds))
+    return comment(5, "boss", f"Conductor: active {stamp} {who} since {stamp}", stamp)
+
+
+def test_1554_a_take_by_the_holder_of_a_fresh_lease_writes_nothing(proj, stub):
+    """REQ-041: brief #1554 answer 1 (30 s after its last write the holder's take makes no
+    request that writes, prints the same line with the lease's current end and keeps the mark)."""
+    marker = fresh(30)
+    with_plan(proj, stub, [marker])
+    out = run(proj, stub, "lease", "--take", "c1")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == f"lease: taken by c1 until {until(marker)}"
+    assert posts(stub) == []
+    assert (proj.root / ".git" / "agk" / "lease").read_text(encoding="utf-8").strip() == "c1"
+
+
+def test_1554_a_take_by_the_holder_at_240_seconds_writes_once(proj, stub):
+    """REQ-041: brief #1554 answer 1 (`RENEW_EVERY` old or older: renewed as before)."""
+    with_plan(proj, stub, [fresh(240)])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "lease", "--take", "c1")
+    assert out.returncode == 0, out.stderr
+    assert [c[:2] for c in posts(stub)] == [["PATCH", f"repos/{REPO}/issues/comments/5"]]
+
+
+@pytest.mark.parametrize(("minutes", "code"), [(9, 3), (11, 0)])
+def test_1554_another_names_take_reads_the_lease_as_before(proj, stub, minutes, code):
+    """REQ-041: brief #1554 answer 1 (`LEASE_MINUTES` stays 10: 9 minutes refused, 11 taken)."""
+    with_plan(proj, stub, [active(minutes)])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "lease", "--take", "c2")
+    assert out.returncode == code, out.stdout + out.stderr
+    assert len(posts(stub)) == (0 if code else 1)
+
+
+def test_1554_a_release_of_a_fresh_lease_always_writes(proj, stub):
+    """REQ-041: brief #1554 answer 1 (`--release` is never skipped)."""
+    with_plan(proj, stub, [fresh(10)])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "lease", "--release", "c1")
+    assert out.returncode == 0 and out.stdout.strip() == "lease: released by c1"
+    assert [c[:2] for c in posts(stub)] == [["PATCH", f"repos/{REPO}/issues/comments/5"]]
+
+
 def test_lease_take_is_refused_while_another_name_holds_a_valid_lease(proj, stub):
     marker = active(5)
     with_plan(proj, stub, [marker])

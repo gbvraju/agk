@@ -326,6 +326,11 @@ JOB_LINE = re.compile(
 )
 CREATED_STARTS = ("Verdict:", "Approve:")  # first lines of a new comment that may clear a head
 EDITED_STARTS = (*CREATED_STARTS, "Final:")  # and of an edited one (brief #836 answer 1)
+# brief #1554 answer 5 (ADR-0654): the first lines merger.yml's job starts on, created and edited,
+# held equal to its `if:` by the kit's own tests
+MERGER_CREATED = CREATED_STARTS
+MERGER_EDITED = EDITED_STARTS
+MERGER_VARIABLE = "AGK_MERGER"  # the repository variable whose value `off` keeps those jobs off
 STALE_LABELS = (
     "agk:build",
     "agk:fix",
@@ -1968,6 +1973,40 @@ def github_mode(data: dict) -> None:
         raise Nothing("local mode: the conductor merges (setting: execution in agk.toml)")
     if data.get("forge") == "files":
         raise Nothing("personal mode merges nothing (setting: forge in agk.toml)")
+
+
+MERGER_OFF_COMMAND = f"gh variable set {MERGER_VARIABLE} --body off"  # (verify the form)
+
+
+def merger_variable_line(
+    data: dict, value: str | None, per_day: int | None
+) -> tuple[str, str] | None:
+    """Brief #1554 answer 4 (ADR-0654): ("offer", line) where the merger would stop at its gate
+    (`github_mode`) and the repository variable is not `off`; ("warn", line) where it merges and
+    the variable is `off`; else None. PER_DAY is the schedule's starts a day, None when unknown.
+    The line names the setting and the one command for the owner; nothing here runs it."""
+    try:
+        github_mode(data)
+        merging = True
+    except Nothing:
+        merging = False
+    off = value == "off"
+    if not merging and not off:
+        saved = f"up to {per_day} scheduled jobs" if per_day else "the scheduled jobs"
+        return (
+            "offer",
+            f"the merger's jobs here would stop at its gate (setting: auto_merge and execution "
+            f"in agk.toml): the owner runs `{MERGER_OFF_COMMAND}` once; {saved} (one billed "
+            "minute each) and one job per Verdict: or Approve: comment then start no more a day",
+        )
+    if merging and off:
+        return (
+            "warn",
+            f"auto-merge is on but the repository variable {MERGER_VARIABLE} keeps the merger's "
+            "comment and scheduled jobs off: only the router's dispatch merges, with no scheduled "
+            f"sweep (remove it with `gh variable delete {MERGER_VARIABLE}`)",
+        )
+    return None
 
 
 def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:

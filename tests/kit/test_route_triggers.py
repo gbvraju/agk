@@ -10,6 +10,7 @@ here are invented.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -274,3 +275,88 @@ def test_1101e_a_comment_with_another_first_line_still_starts_no_job():
 
     for body in ("Progress: abc1234 done 1/6", "thanks", "Tell: cb1 hello", "Started: cb1"):
         assert not holds(router_condition(), comment_event(body)), body
+
+
+# --- brief #1554 (ADR-0654): a comment starts the router only where the router can act ----------
+
+# The first lines a session posts that change no state the router reads (answer 5).
+SESSION_ONLY = (
+    "Progress:",
+    "Tell:",
+    "Started:",
+    "Ended:",
+    "Decision:",
+    "Triage:",
+    "Gap:",
+    "Daily:",
+    "Evidence:",
+    "Auto merge:",
+    "Conductor:",
+    "Slot:",
+    "taken:",
+    "taken over:",
+    "released:",
+    "Who:",
+    "STALL",
+)
+COMMENT_LINE = re.compile(r"startsWith\(github\.event\.comment\.body, '([^']+)'\)")
+
+
+def comment_on(body: str, action: str = "created", user_type: str = "User") -> dict:
+    from test_ci_saving import comment_event
+
+    event = comment_event(body)
+    event["event"]["action"] = action
+    event["event"]["comment"]["user"] = {"login": "someone", "type": user_type}
+    return event
+
+
+def acting_lines(condition: str, action: str, variables: dict | None = None) -> set[str]:
+    """The first lines (of the workflow's own and the session-only ones) on which the job `if:`
+    starts, for a comment of ACTION, evaluated on saved events (a test reading, not GitHub)."""
+    from test_ci_saving import holds
+
+    candidates = set(COMMENT_LINE.findall(condition)) | set(SESSION_ONLY)
+    return {
+        line
+        for line in candidates
+        if holds(condition, comment_on(f"{line} x", action), variables)
+    }
+
+
+@pytest.mark.parametrize("line", SESSION_ONLY)
+def test_1554_no_session_only_line_starts_the_router(line):
+    """REQ-039: brief #1554 answer 5 (a session's own lines start no router job)."""
+    from test_ci_saving import holds, router_condition
+
+    for action in ("created", "edited"):
+        assert not holds(router_condition(), comment_on(f"{line} x", action)), (line, action)
+
+
+def test_1554_a_bot_verdict_starts_the_router_as_a_persons_does():
+    """REQ-039: brief #1554 answer 8 (the `if:` reads the first line; who counts is the code's)."""
+    from test_ci_saving import holds, router_condition
+
+    for kind in ("Bot", "User"):
+        assert holds(router_condition(), comment_on("Verdict: cleared abc1234", user_type=kind))
+
+
+def test_1554_the_router_chain_keeps_no_branch_filter_and_reads_the_variable():
+    """REQ-039: brief #1554 answers 4 and 5 (the red-branch detection reads every finished run;
+    the route step passes `AGK_MERGER` so the router knows the merger will not start itself)."""
+    from test_ci_saving import holds, router_condition, workflow
+
+    text = workflow("agk-route.yml")
+    head = text.split("\njobs:", 1)[0]
+    chain = head.split("\n  workflow_run:\n", 1)[1].split("\n  push:", 1)[0]
+    assert "branches" not in chain
+    red = {
+        "event_name": "workflow_run",
+        "ref_name": "main",
+        "event": {
+            "workflow_run": {"name": "governance", "conclusion": "failure", "head_branch": "main"},
+            "repository": {"default_branch": "main"},
+        },
+    }
+    assert holds(router_condition(), red)  # the red default branch still wakes the router
+    assert "          AGK_MERGER: ${{ vars.AGK_MERGER }}\n" in text

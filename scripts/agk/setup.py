@@ -73,6 +73,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import common  # noqa: E402
+import merge_cleared  # noqa: E402
 import reviewers  # noqa: E402
 import session_plan  # noqa: E402
 import wsl  # noqa: E402
@@ -1128,7 +1129,23 @@ def ci_mode(root: Path, remote: str | None) -> tuple[int, dict, list[str]]:
     pending = [r["step"] for r in steps if r["result"] == "waiting"]
     table = {"steps": steps, "pending": pending, "roles": [], "builders": None,
              "missing": missing}  # fmt: skip
-    return (1 if pending else 0), table, table_lines(steps) + missing
+    lines = table_lines(steps) + missing + merger_note(root, remote, config)
+    return (1 if pending else 0), table, lines
+
+
+def merger_note(root: Path, remote: str, config: dict) -> list[str]:
+    """Brief #1554 answer 4 (ADR-0654): the doctor's `merger-variable` line, printed once in the
+    merge step and never run; nothing when the merger is not installed or nothing is to change."""
+    try:
+        text = (root / ".github" / "workflows" / "merger.yml").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    held = gh_get(f"repos/{remote}/actions/variables/{merge_cleared.MERGER_VARIABLE}")
+    value = held.get("value") if isinstance(held, dict) else None
+    found = re.search(r'cron: "\*/([1-9][0-9]?) \* \* \* \*"', text)
+    per_day = 1440 // int(found.group(1)) if found else None
+    line = merge_cleared.merger_variable_line(config, value, per_day)
+    return [f"note: {line[1]}"] if line else []
 
 
 WSL_SCRIPT = PLUGIN / "scripts" / "agk" / "wsl_setup.ps1"  # /agk:wsl's, called and never copied
