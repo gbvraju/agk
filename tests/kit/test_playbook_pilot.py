@@ -99,7 +99,7 @@ def test_the_build_has_the_three_lanes_of_rule_11() -> None:
 def test_the_split_follows_the_phases_and_the_lanes_run_together() -> None:
     split = data()["split"]
     assert split["brief_order"] == [
-        "intake", "research", "choice", "contract", *LANES, "demo", "report",
+        "foundation", "intake", "research", "choice", "contract", *LANES, "demo", "report",
     ]
     assert sorted(map(tuple, split["depends_on"])) == sorted(
         [

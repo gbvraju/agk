@@ -70,7 +70,8 @@ def test_the_two_sides_run_in_two_parallel_lanes() -> None:
     lanes = {lane["name"]: lane["kinds"] for lane in playbook["lanes"]}
     assert lanes == {"front-end": ["front-end"], "back-end": ["back-end"]}
     split = playbook["split"]
-    assert split["brief_order"] == ["contract", "mock", "front-end", "back-end", "join"]
+    order = ["foundation", "contract", "mock", "front-end", "back-end", "join"]
+    assert split["brief_order"] == order  # SPEC-0072 rule 4
     pairs = {tuple(p) for p in split["depends_on"]}
     assert pairs == {
         ("mock", "contract"),

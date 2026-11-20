@@ -65,7 +65,7 @@ def test_answer1_the_earlier_practices_are_kept():
     block = practices(TEMPLATE.read_text(encoding="utf-8"))
     assert "   - local profile: check (step: " in block
     assert "   - fast CI: check (step: " in block
-    assert block.count("\n   - ") == 5
+    assert block.count("\n   - ") == 4  # brief #1587: the TODO practice is gone
 
 
 def test_answer3_the_template_renders_with_both_lines(started):

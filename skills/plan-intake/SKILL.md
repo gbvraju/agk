@@ -97,6 +97,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" openspec --slug <slug
    in `screens` (`<screen>/<state>` pairs of the inventory) and names in `depends_on`, directly, the brief of every
    component those screens use. Without a prototype leave `components`, `component` and `screens` out.
 
+   **The foundation brief first** (SPEC-0072 rule 4). With `[delivery] work_type` set in `agk.toml`, propose exactly
+   one brief with `"foundation": true`, in `M1`, that builds the folder skeleton of the playbook's `[architecture]
+   layers`, the architecture record, each chosen stack's pack configuration and the check steps with their tests; every
+   other brief of `M1` names it in `depends_on`. `render` writes its `Kind: foundation` line, and `check_plan.py`
+   refuses a brief of that milestone without `Depends-on:` it. With no work type, propose no foundation brief: it is
+   held, and refused, until the work type is set and the person's confirmation recorded (rule 8).
+
    **Demoable slices** (SPEC-0043 amendment 164 item 4). When a `Kind: design` source has `## <screen>/<state>`
    headings, every milestone after `M1` lists in `screens` the screens and states it makes demoable, its `exit` says
    that each of them reads `match` in `design_compare.py` against the signed-off version and names that version, and
