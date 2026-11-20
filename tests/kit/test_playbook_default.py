@@ -175,8 +175,9 @@ def test_the_kit_ships_only_default_and_kinds_of_the_list() -> None:
 
 def test_the_playbook_names_no_vendor_product_or_tool() -> None:
     lines = PLAYBOOK.read_text(encoding="utf-8").splitlines()
-    # the fixed ids and steps of SPEC-0072 rule 2's enterprise gates are names, not tools
-    text = "\n".join(s for s in lines if not s.startswith(("id = ", "step = ")))
+    # only the fixed ids and steps of SPEC-0072 rule 2's enterprise gates are skipped: names, not tools
+    fixed = {f'{key} = "{gid}"' for key in ("id", "step") for gid in ENTERPRISE}
+    text = "\n".join(s for s in lines if s not in fixed)
     assert "://" not in text and "www." not in text
     assert not re.search(r"\b\d+\.\d+(\.\d+)?\b", text)
     lowered = text.lower()
