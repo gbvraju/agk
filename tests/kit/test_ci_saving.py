@@ -187,6 +187,8 @@ PREFIXES = (
     "Question:",
     "Maintainer answer:",
     "Report:",
+    # brief #1554 answer 3 (ADR-0654): the steward's evidence answer
+    "Answer:",
 )
 
 
@@ -292,14 +294,21 @@ def starts_with(text, prefix) -> bool:
     return isinstance(text, str) and text.startswith(prefix)
 
 
-def holds(condition: str, github: dict) -> bool:
-    """A job-level `if:` of these workflows, evaluated on one event (a test reading, not GitHub)."""
+def holds(condition: str, github: dict, variables: dict | None = None) -> bool:
+    """A job-level `if:` of these workflows, evaluated on one event (a test reading, not GitHub);
+    VARIABLES are the repository variables `vars.<NAME>` reads (brief #1554), none by default, and
+    `cancelled()` is false (the run was not cancelled)."""
     expr = condition.strip().removeprefix("${{").removesuffix("}}").strip()
     expr = expr.replace("||", " or ").replace("&&", " and ")
     expr = re.sub(r"!(?!=)", " not ", expr)
     expr = re.sub(r"\btrue\b", "True", re.sub(r"\bfalse\b", "False", expr))
     expr = expr.replace("startsWith(", "starts_with(")
-    names = {"github": Ctx(github), "starts_with": starts_with}
+    names = {
+        "github": Ctx(github),
+        "vars": Ctx(variables or {}),
+        "starts_with": starts_with,
+        "cancelled": lambda: False,
+    }
     return bool(eval(expr, {"__builtins__": {}}, names))  # nosec B307 - the kit's own workflow text
 
 
