@@ -4586,7 +4586,7 @@ def unpark_pull(
     if labelled and gh(f"repos/{repo}/issues/{number}/labels/{label}", method="DELETE") is None:
         if "HTTP 404" not in LAST_ERROR:
             return False
-    body = f"body=Unparked-by: {why or f'answer {key}'}"
+    body = f"body=Unparked-by: answer {key}" if why is None else f"body=Unparked-by: {why}"
     return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
 
 
