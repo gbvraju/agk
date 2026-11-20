@@ -83,6 +83,7 @@ import signal
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
+import threading
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -577,10 +578,35 @@ def planned_runs(
     return planned
 
 
+def hold_signals() -> tuple[dict, list[int]]:
+    """Defer the stop signals: each one that arrives is noted, not handled. Only the main thread
+    can set a handler; elsewhere nothing is held. Returns (the handlers to put back, the noted)."""
+    noted: list[int] = []
+    if threading.current_thread() is not threading.main_thread():
+        return {}, noted
+    previous = {
+        sig: signal.signal(sig, lambda signum, _frame: noted.append(signum))
+        for sig in stop_signals()
+        if signal.getsignal(sig) is not None  # set outside Python: it could not be put back
+    }
+    return previous, noted
+
+
+def release_signals(held: tuple[dict, list[int]]) -> None:
+    """Put the handlers back, then deliver the first noted signal to them."""
+    previous, noted = held
+    for sig, handler in previous.items():
+        signal.signal(sig, handler)
+    if noted:
+        signal.raise_signal(noted[0])
+
+
 def spawn(cmd: list[str], cwd: Path, env: dict, limit: int | None = None) -> tuple[int | None, str]:
     """Run `cmd` in its own process group; on a timeout, a signal or any other exception the whole
     tree is killed before this returns or re-raises (verdict on 57c122a, item 3). None on a
-    timeout, 127 when it cannot start."""
+    timeout, 127 when it cannot start. A stop signal that lands while the child starts, before
+    there is a handle to kill, is held and delivered once the handle is held (brief #1543)."""
+    held = hold_signals()
     try:
         proc = subprocess.Popen(  # nosec B603 - a command rebuilt from the head, never the record
             cmd,
@@ -594,8 +620,13 @@ def spawn(cmd: list[str], cwd: Path, env: dict, limit: int | None = None) -> tup
             **popen_options(WINDOWS),
         )
     except OSError:
+        release_signals(held)
         return 127, ""
+    except BaseException:
+        release_signals(held)
+        raise
     try:
+        release_signals(held)
         out, _ = proc.communicate(timeout=limit)
     except subprocess.TimeoutExpired:
         kill_tree(proc)
