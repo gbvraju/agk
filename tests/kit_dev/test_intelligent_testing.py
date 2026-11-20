@@ -48,7 +48,7 @@ def table() -> dict:
 
 def kit_tests() -> list[str]:
     return sorted(
-        str(p.relative_to(ROOT))
+        p.relative_to(ROOT).as_posix()
         for folder in ("tests/kit", "tests/kit_dev")
         for p in (ROOT / folder).glob("test_*.py")
     )
@@ -76,7 +76,7 @@ def test_every_script_is_covered_by_an_entry_or_always_full():
     found, tests = table(), kit_tests()
     uncovered = []
     for script in sorted(SCRIPTS.glob("*.py")):
-        path = str(script.relative_to(ROOT))
+        path = script.relative_to(ROOT).as_posix()
         if any(impact.matches(path, g) for g in found["always_full"]):
             continue
         entries = [e for e in found["map"] if impact.matches(path, e["code"])]
@@ -105,7 +105,7 @@ def mirror(tmp_path: Path) -> Path:
     root = tmp_path / "mirror"
     root.mkdir()
     shutil.copy(ROOT / "agk.toml", root / "agk.toml")
-    names = [str(p.relative_to(ROOT)) for p in SCRIPTS.glob("*.py")] + kit_tests() + CORE
+    names = [p.relative_to(ROOT).as_posix() for p in SCRIPTS.glob("*.py")] + kit_tests() + CORE
     names.append("docs/guides/example.md")
     for name in names:
         target = root / name

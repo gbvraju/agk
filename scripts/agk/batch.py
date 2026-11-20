@@ -50,7 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import lock as heavy_lock
-from common import CheckError, git, resolve_base, utf8_output
+from common import CHECKOUT, CheckError, git, resolve_base, utf8_output
 from prepush import digest, safe_arg, stop_signals, take_lock, versions, write_record
 
 USAGE = "usage: batch.py PR [PR...] [--command CMD] [--base REF] [--json] [--record FILE]"
@@ -119,19 +119,18 @@ def fetch(root: Path, number: int) -> str | None:
 def merge(tree: Path, sha: str, number: int) -> bool:
     """Merge one head into the worktree; abort and say False when it does not merge cleanly."""
     message = f"batch: #{number}"
-    code, _ = quiet_git(
-        tree, *IDENTITY, "merge", "--no-ff", "--no-edit", "--no-verify", "-q", "-m", message, sha
-    )
+    argv = (*CHECKOUT, *IDENTITY, "merge", "--no-ff", "--no-edit", "--no-verify", "-q")
+    code, _ = quiet_git(tree, *argv, "-m", message, sha)
     if code != 0:
         quiet_git(tree, "merge", "--abort")
-        quiet_git(tree, "reset", "-q", "--hard")
+        quiet_git(tree, *CHECKOUT, "reset", "-q", "--hard")
         return False
     return True
 
 
 def reset(tree: Path, base: str) -> None:
-    quiet_git(tree, "checkout", "-q", "--detach", "-f", base)
-    quiet_git(tree, "reset", "-q", "--hard", base)
+    quiet_git(tree, *CHECKOUT, "checkout", "-q", "--detach", "-f", base)
+    quiet_git(tree, *CHECKOUT, "reset", "-q", "--hard", base)
     quiet_git(tree, "clean", "-q", "-ffdx")
 
 
@@ -278,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     taken = None
     previous = {sig: signal.signal(sig, heavy_lock.on_signal) for sig in stop_signals()}
     try:
-        code, _ = quiet_git(root, "worktree", "add", "-q", "--detach", str(tree), base)
+        code, _ = quiet_git(root, *CHECKOUT, "worktree", "add", "-q", "--detach", str(tree), base)
         if code != 0:
             print("batch: the scratch worktree cannot be made (path class: temporary folder)")
             return 2

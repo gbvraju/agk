@@ -40,7 +40,7 @@ def unreleased(kit: Path) -> Path:
 
 def files_of(root: Path) -> dict[str, bytes]:
     return {
-        str(p.relative_to(root)): p.read_bytes()
+        p.relative_to(root).as_posix(): p.read_bytes()
         for p in sorted(root.rglob("*"))
         if p.is_file() and ".git" not in p.relative_to(root).parts
     }

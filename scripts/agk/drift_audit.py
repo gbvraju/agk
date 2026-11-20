@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import proof
 import reviewers
 from common import (
+    CHECKOUT,
     CheckError,
     ac_coverage_mode,
     ac_markers_for,
@@ -269,13 +270,14 @@ class Releases:
         if not paths or self.check is None:
             return set()
         copy = self.clone()
-        git(copy, "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", parent)
-        git(copy, "reset", "-q", "--hard")
+        quiet = ("-c", "advice.detachedHead=false")
+        git(copy, *CHECKOUT, *quiet, "checkout", "-q", "-f", "--detach", parent)
+        git(copy, *CHECKOUT, "reset", "-q", "--hard")
         git(copy, "clean", "-q", "-f", "-d", "-x")
         kept = [p for p in paths if changes[p] != "D"]
         gone = [p for p in paths if changes[p] == "D"]
         if kept:
-            git(copy, "checkout", "-q", sha, "--", *kept)
+            git(copy, *CHECKOUT, "checkout", "-q", sha, "--", *kept)
         if gone:
             git(copy, "rm", "-q", "--", *gone)
         saved = os.environ.get("AGK_BASE")

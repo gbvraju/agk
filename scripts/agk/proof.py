@@ -54,6 +54,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    CHECKOUT,
     CheckError,
     config_source,
     declares_unchanged,
@@ -379,7 +380,7 @@ class Trees:
         try:
             for tree, ref in zip(self.trees, (self.base, self.head), strict=True):
                 try:
-                    git(self.root, "worktree", "add", "--detach", "-q", str(tree), ref)
+                    git(self.root, *CHECKOUT, "worktree", "add", "--detach", "-q", str(tree), ref)
                 except CheckError as exc:
                     raise Failure("a worktree cannot be added (path class: temporary)") from exc
                 self.added.append(tree)

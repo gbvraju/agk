@@ -12,6 +12,7 @@ owner. The platform, the paths and every GitHub answer are simulated: no Windows
 from __future__ import annotations
 
 import json
+import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
 
@@ -299,3 +300,78 @@ def test_answer3_the_doctor_leaves_gitattributes_unchanged(tmp_path):
     root = crlf_repo(tmp_path, "true", KIT_ATTRIBUTES)
     doctor.line_ending_lines(root, "win32")
     assert (root / ".gitattributes").read_text(encoding="utf-8") == KIT_ATTRIBUTES
+
+
+# --- brief #1540 answer 6: renormalising an old Windows checkout of the kit repository -----------
+
+KIT_RULE = "* text=auto eol=lf\n"
+RENORMALISE = "git rm --cached -r -q . && git reset --hard"
+KIT_ENV = {
+    "GIT_AUTHOR_NAME": "Example",
+    "GIT_AUTHOR_EMAIL": "example@example.com",
+    "GIT_COMMITTER_NAME": "Example",
+    "GIT_COMMITTER_EMAIL": "example@example.com",
+}
+
+
+def kit_git(root: Path, *args: str) -> None:
+    subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", str(root), *args], check=True, capture_output=True,
+        env={**os.environ, **KIT_ENV},
+    )  # fmt: skip
+
+
+def old_kit_checkout(tmp_path: Path, kit: bool = True) -> Path:
+    """A Windows clone (`core.autocrlf=true`) of a kit-shaped repository made before the LF rule,
+    then given the rule: its text files are still CRLF on disk and the tree is clean."""
+    origin = tmp_path / "origin"
+    origin.mkdir(parents=True)
+    kit_git(origin, "init", "-q", "-b", "main")
+    if kit:
+        (origin / "kit").mkdir()
+        manifest = origin / "kit" / "manifest.json"
+        manifest.write_text('{"kit_version": "1.0.0"}\n', encoding="utf-8")
+    (origin / "rules.toml").write_text("a = 1\nb = 2\n", encoding="utf-8")
+    kit_git(origin, "add", "-A")
+    kit_git(origin, "commit", "-q", "-m", "kit")
+    clone = tmp_path / "clone"
+    kit_git(tmp_path, "-c", "core.autocrlf=true", "clone", "-q", str(origin), str(clone))
+    kit_git(clone, "config", "core.autocrlf", "true")
+    (clone / ".gitattributes").write_text(KIT_RULE, encoding="utf-8")
+    kit_git(clone, "add", ".gitattributes")
+    kit_git(clone, "commit", "-q", "-m", "the LF rule")
+    assert b"\r\n" in (clone / "rules.toml").read_bytes()
+    return clone
+
+
+def test_brief1540_an_old_crlf_checkout_of_the_kit_is_told_the_renormalise_command(tmp_path):
+    """REQ-046: brief #1540 answer 6 (the kit repository only, on Windows, a clean tree)."""
+    root = old_kit_checkout(tmp_path)
+    lines = doctor.line_ending_lines(root, "win32")
+    assert len(lines) == 1 and RENORMALISE in lines[0]
+    assert "(setting: .gitattributes)" in lines[0]
+    assert b"\r\n" in (root / "rules.toml").read_bytes(), "the doctor prints it and never runs it"
+
+
+def test_brief1540_the_command_works_and_then_the_doctor_is_silent(tmp_path):
+    """REQ-046: brief #1540 answer 6 (the printed command renormalises the checkout)."""
+    root = old_kit_checkout(tmp_path)
+    subprocess.run(  # nosec B603 B607 - the printed command, split into its two git calls
+        ["git", "rm", "--cached", "-r", "-q", "."], cwd=root, check=True, capture_output=True
+    )
+    subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "reset", "--hard", "-q"], cwd=root, check=True, capture_output=True
+    )
+    assert (root / "rules.toml").read_bytes() == b"a = 1\nb = 2\n"
+    assert doctor.line_ending_lines(root, "win32") == []
+
+
+def test_brief1540_not_on_a_dirty_tree_off_windows_or_in_a_project(tmp_path):
+    """REQ-046: brief #1540 answer 6 and Q-6 (a dirty tree would lose work; a project's kit
+    paths were pinned at install and its own files keep its settings)."""
+    root = old_kit_checkout(tmp_path / "a")
+    assert doctor.line_ending_lines(root, "linux") == []
+    (root / "new.txt").write_text("work in progress\n", encoding="utf-8")
+    assert doctor.line_ending_lines(root, "win32") == []
+    project = old_kit_checkout(tmp_path / "b", kit=False)
+    assert doctor.line_ending_lines(project, "win32") == []

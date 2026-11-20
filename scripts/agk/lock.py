@@ -112,6 +112,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import heavy_queue
 from common import (
+    CHECKOUT,
     CheckError,
     config_source,
     lock_cleanup,
@@ -1039,7 +1040,8 @@ def execute(root: Path, held: Path, name: str, job: dict, setup: dict, children:
         return "failed (head not found)", None, None
     tree = Path(job["worktree"])
     with TREES:
-        made = git(repository, "worktree", "add", "--detach", "-q", str(tree), job["head"])[0] == 0
+        argv = (*CHECKOUT, "worktree", "add", "--detach", "-q", str(tree), job["head"])
+        made = git(repository, *argv)[0] == 0
     if not made:
         return "failed (the worktree cannot be made)", None, None
     clock = setup["clock"]

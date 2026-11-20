@@ -26,6 +26,7 @@ COMMANDS = [
     "init",
     "issue",
     "launch",
+    "personal-adopt",
     "plan-intake",
     "review",
     "review-pass",
@@ -51,6 +52,7 @@ USER_ONLY = [
     "init",
     "issue",
     "launch",
+    "personal-adopt",
     "plan-intake",
     "review-pass",
     "ruleset",
@@ -160,6 +162,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "workflow-apply": {"workflow_apply"},
         "wsl": {"wsl"},
         "setup": {"setup"},
+        "personal-adopt": {"survey", "personal_adopt"},
     }
     for name, scripts in expected.items():
         assert {script for script, _ in calls(name)} == scripts, name

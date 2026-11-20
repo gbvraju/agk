@@ -50,6 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import design_inventory
 import design_signoff
 import design_standard
+from common import committed_bytes
 
 PROTOTYPE = "docs/design/prototype"
 VERSION = re.compile(r"^v[1-9]\d*$")
@@ -453,7 +454,10 @@ def folder_problems(folder: Path, rel: str, sheets: dict[str, str]) -> list[str]
     out: list[str] = []
     runtime = folder / RUNTIME
     if runtime.is_file():
-        if hashlib.sha256(runtime.read_bytes()).hexdigest() not in RUNTIME_HASHES:
+        # Read as committed (brief #1540 Q-4, ADR-0648): a tracked runtime whose checkout changed
+        # only its line ends hashes as its blob; an untracked one keeps its bytes on disk.
+        data = committed_bytes(folder, {RUNTIME: runtime.read_bytes()})[RUNTIME]
+        if hashlib.sha256(data).hexdigest() not in RUNTIME_HASHES:
             out.append(
                 f"rule 5: {rel}/{RUNTIME}: the runtime's hash is not a released runtime hash"
             )

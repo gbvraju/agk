@@ -473,3 +473,23 @@ def test_adr0084_the_template_and_this_repository_mark_the_append_only_logs_merg
             assert f"{log} merge=union" in rules
         assert not [r for r in rules if "requirements.md" in r]
         assert len([r for r in rules if "merge=" in r]) == len(UNION_LOGS)
+
+
+def test_brief1540_every_path_the_kit_installs_or_hashes_checks_out_lf():
+    """REQ-046: brief #1540 answer 1 (ADR-0648): the kit repository's own `.gitattributes` pins
+    LF, so a Windows checkout of the kit (`core.autocrlf=true`) holds the committed bytes of every
+    installed file, template, adopt block source and of `kit/hashes.json`; the template projects
+    get is unchanged and still says no `*` (`test_windows_install.py`)."""
+    m = manifest()
+    adopt = m["adopt"]
+    paths = {*m["verbatim"], *m["experimental"], *m["templates"].values()}
+    paths |= {*adopt["templates"].values(), *adopt["blocks"], *adopt["block_sources"].values()}
+    paths |= {"kit/hashes.json", "kit/manifest.json"}
+    out = subprocess.run(
+        ["git", "check-attr", "-z", "eol", "--", *sorted(paths)],
+        cwd=KIT_ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split("\0")  # fmt: skip
+    eol = dict(zip(out[0::3], out[2::3], strict=False))
+    assert {p: eol.get(p) for p in paths if eol.get(p) != "lf"} == {}
+    own = _rules((KIT_ROOT / ".gitattributes").read_text(encoding="utf-8"))
+    assert own[0] == "* text=auto eol=lf"
