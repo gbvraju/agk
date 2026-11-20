@@ -949,6 +949,16 @@ that earlier release and is listed when your upgrade crosses it, so an upgrade f
 settings of 0.59.0 (ADR-0193). With no such entry it prints nothing more; a dry run lists none, and the listing writes
 nothing (ADR-0181). See `docs/specs/0008-upgrade.md` and ADR-0018.
 
+## Rehearsal proof
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/rehearsal.py" check [--root KIT_ROOT]
+
+Kit-only, run from the plugin. Checks the rehearsal record (`### Rehearsal record`) in SPEC-0071's proof: an `installed` and a `clean` run of the
+same five briefs, each with its dates and four figures (lead time per brief, tokens per merged pull request, first-review
+pass rate, failed checks). It fails, naming the figure and never a value, when one is missing or the clean run is worse
+by more than 10%. `upgrade.py --clean-repo` refuses without `--rehearsal` until the check passes and the record's
+`Accepted:` line carries the maintainers' date. Reads one file, writes nothing, no network. See ADR-0617.
+
 ## Experimental: reviewer agent
 
 Experimental, advisory and never a gate: the reviewer is not counted as review and human review stays required. In
