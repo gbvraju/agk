@@ -214,7 +214,12 @@ def test_ac2_plugin_ships_no_hook_server_monitor_bin_or_agent():
     for key in ("mcpServers", "lspServers", "monitors", "commands", "bin"):
         assert key not in plugin, key
     assert other_hook_commands(plugin) == []
-    assert sorted(p.name for p in PLUGIN.iterdir()) == ["marketplace.json", "plugin.json"]
+    # the plugin's default agent, its steward (SPEC-0066 rule 4, ADR-0663)
+    assert sorted(p.name for p in PLUGIN.iterdir()) == [
+        "marketplace.json",
+        "plugin.json",
+        "settings.json",
+    ]
 
 
 PLUGIN_HOOK = '"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin_hooks.py"'
@@ -235,7 +240,7 @@ def test_ac2_a_second_plugin_hook_command_is_named():
     """REQ-014 AC2: rule 7 as ADR-0612 decision 1 changed it (ADR-0641)."""
     plugin = load(PLUGIN / "plugin.json")
     assert other_hook_commands(plugin) == []
-    extra = "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/agk/example.py\""
+    extra = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/example.py"'
     plugin["hooks"]["Stop"][0]["hooks"].append({"type": "command", "command": extra})
     assert other_hook_commands(plugin) == [extra]
 

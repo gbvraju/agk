@@ -703,7 +703,15 @@ def test_ac1_a_real_old_install_upgrades_with_no_conflict(tmp_path, version, mod
     manifest = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     whole, blocks = upgrade.installed_set(manifest, mode)
     for rel in whole:
-        assert (target / rel).read_bytes() == (KIT_ROOT / rel).read_bytes(), rel
+        data = common.without_agent(rel, (target / rel).read_bytes())  # ADR-0663
+        assert data == (KIT_ROOT / rel).read_bytes(), rel
+    # SPEC-0066 rules 2 and 11 (ADR-0663): the steward, unless a kept adapter lacks --agent
+    agent = common.project_agent((target / ".claude/settings.json").read_bytes())
+    kept = [target / rel for rel in upgrade.ADAPTERS if (target / rel).is_file()]
+    if any(common.starts_unnamed(p.read_text(encoding="utf-8")) for p in kept):
+        assert agent is None and upgrade.AGENT_REFUSED in proc.stdout
+    else:
+        assert agent == "steward"
     for rel, style in blocks.items():
         _, begin, end, lines = upgrade.locate((target / rel).read_text(encoding="utf-8"), style)
         source = common.block_source(manifest, rel)
@@ -731,7 +739,8 @@ def test_ac1_a_real_legacy_install_upgrades_and_pyproject_stays_the_same(tmp_pat
     manifest = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     whole, _ = upgrade.installed_set(manifest, "init")
     for rel in whole:
-        assert (target / rel).read_bytes() == (KIT_ROOT / rel).read_bytes(), rel
+        data = common.without_agent(rel, (target / rel).read_bytes())  # ADR-0663
+        assert data == (KIT_ROOT / rel).read_bytes(), rel
     assert (target / "pyproject.toml").read_bytes() == pyproject
     config = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
     assert config["mode"] == "init" and config["version"] == manifest["kit_version"]

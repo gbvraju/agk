@@ -168,3 +168,35 @@ def test_1534_the_answer_comment_run_removes_the_wait_park(proj, stub, tmp_path)
     writes = stub.writes()
     assert any(w[0] == "DELETE" and "agk%3Aparked" in w[1] for w in writes), writes
     assert any("Unparked-by: answer Q-7-1" in " ".join(w[2]) for w in writes), writes
+
+
+# --- brief #1567 (ADR-0657): the owner's Report on its own parked pull request unparks it -------
+
+
+def labelled_event(body: str, labels=("agk:parked",), action: str = "created") -> dict:
+    event = comment_event(body, action)
+    event["issue"] = {**event["issue"], "labels": [{"name": n} for n in labels]}
+    return event
+
+
+def test_1567_a_ready_report_on_a_parked_pull_request_starts_the_unpark():
+    """REQ-066: brief #1567 answer 2, `execution` hosted: the router's own run on a ready report
+    on a parked pull request; any other report, label or event starts nothing."""
+    assert route.owner_report_event(
+        "issue_comment", labelled_event(f"Report: {HEAD} ready for review")
+    )
+    assert route.owner_report_event(
+        "issue_comment", labelled_event("Report: abc1234 merge of main")
+    )
+    assert not route.owner_report_event(
+        "issue_comment", labelled_event("Report: abc1234 handing over: done")
+    )
+    assert not route.owner_report_event(
+        "issue_comment", labelled_event("Report: abc1234 ready for review", ())
+    )
+    assert not route.owner_report_event(
+        "issue_comment", labelled_event("Report: abc1234 ready for review", action="edited")
+    )
+    brief = {**labelled_event("Report: abc1234 ready for review"), "issue": {"number": 7}}
+    assert not route.owner_report_event("issue_comment", brief)
+    assert not route.owner_answer_event("issue_comment", comment_event("Report: abc ready"))

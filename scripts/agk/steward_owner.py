@@ -68,7 +68,13 @@ import guard_logs  # noqa: E402
 import launch  # noqa: E402
 import session  # noqa: E402
 import steward  # noqa: E402
-from common import CheckError, personal_table, repo_root, utf8_output  # noqa: E402
+from common import (  # noqa: E402
+    OUTSIDE_PROJECT,
+    CheckError,
+    personal_table,
+    repo_root,
+    utf8_output,
+)
 from session_plan import KIT_DEFECT_LABEL  # noqa: E402
 
 RULE = "SPEC-0059 rule 5"
@@ -444,7 +450,11 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--session")
     w.add_argument("--refused", action="store_true")
     opts = parser.parse_args(argv)
-    root = repo_root()
+    try:
+        root = repo_root()
+    except CheckError:
+        print(OUTSIDE_PROJECT)
+        return 3
     try:
         if opts.command == "ask":
             code, lines = ask(root, opts.qid, opts.on, opts.file.read_text(encoding="utf-8"))

@@ -52,6 +52,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
 from check_release import opt_ins
 from common import (
+    PROJECT_AGENT,
+    PROJECT_SETTINGS,
     REQ_ID,
     ROUTER_WORKFLOW,
     CheckError,
@@ -60,11 +62,15 @@ from common import (
     installed_version,
     lf,
     matches,
+    project_agent,
     read_list,
     required_checks,
     router_names,
     router_wanted,
+    starts_unnamed,
+    with_agent,
     with_router_names,
+    without_agent,
 )
 from init import (
     CREATE_ONLY,
@@ -267,6 +273,64 @@ def whole_file(target: Path, rel: str, new: bytes, old: set[str], entries: list[
     if digest(data) in old:
         return Item(rel, "replace", content=new)
     return Item(rel, "conflict", f" (path class {cls}: differs from every released copy)")
+
+
+ADAPTERS = ("scripts/start-session-local.sh", "scripts/start-session-windows.ps1")
+AGENT_REFUSED = (
+    "agent not written to .claude/settings.json: a launch adapter starts claude without --agent "
+    "(setting: [flow] launch_adapter; SPEC-0066 rule 11)"
+)
+
+
+def settings_file(target: Path, new: bytes, old: set[str], entries: list[str]) -> Item:
+    """The project's settings (SPEC-0066 rule 2, ADR-0663): compared without its agent line, then
+    written as the kit's with the project's agent, or the steward when it names none."""
+    rel = PROJECT_SETTINGS
+    path = target / rel
+    if not path.is_file() or path.is_symlink():
+        item = whole_file(target, rel, new, old, entries)
+        if item.action == "create":
+            item.content = with_agent(new, PROJECT_AGENT)
+        return item
+    data = lf(path.read_bytes())
+    base, agent = without_agent(rel, data), project_agent(data)
+    if base != new and digest(base) not in old:
+        cls = path_class(rel, entries)
+        return Item(rel, "conflict", f" (path class {cls}: differs from every released copy)")
+    content = with_agent(new, agent or PROJECT_AGENT)
+    kept = f" (agent kept: {agent}; setting: agent)" if agent not in (None, PROJECT_AGENT) else ""
+    return Item(rel, "unchanged" if content == data else "replace", kept, content=content)
+
+
+def agent_refusal(target: Path, plan: Plan) -> None:
+    """SPEC-0066 rule 11: while an adapter the project keeps, or one `[flow] launch_adapter` names,
+    starts claude without `--agent`, the settings get no agent line they did not hold."""
+    found = {i.rel: i for i in plan.items}
+    item = found.get(PROJECT_SETTINGS)
+    if item is None or item.content is None:
+        return
+    try:
+        flow = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8")).get("flow")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        flow = None
+    adapter = flow.get("launch_adapter") if isinstance(flow, dict) else None
+    words = adapter.split() if isinstance(adapter, str) else []
+    named = [w for w in words if "/" in w or "\\" in w]
+    texts = []
+    for rel in sorted({*ADAPTERS, *named}):
+        mine = found.get(rel)
+        if mine is not None and mine.action in ("create", "replace") and mine.content:
+            texts.append(mine.content.decode("utf-8", "replace"))
+        elif (target / rel).is_file():
+            texts.append((target / rel).read_text(encoding="utf-8", errors="replace"))
+    if not any(starts_unnamed(t) for t in texts):
+        return
+    path = target / PROJECT_SETTINGS
+    data = lf(path.read_bytes()) if path.is_file() and not path.is_symlink() else b""
+    if project_agent(data) is None:
+        item.content = without_agent(PROJECT_SETTINGS, item.content)
+        item.action = "unchanged" if item.content == data else item.action
+        plan.notes.append(AGENT_REFUSED)
 
 
 ROUTER_NOTE = (
@@ -591,6 +655,8 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
             old = set()  # opting in creates the file; it was never installed, so it is not deleted
         if rel == ROUTER_WORKFLOW:
             plan.items.append(router_file(target, new, old, entries, required))
+        elif rel == PROJECT_SETTINGS:
+            plan.items.append(settings_file(target, new, old, entries))
         else:
             plan.items.append(whole_file(target, rel, new, old, entries))
     extendable = set(manifest.get("extendable") or {})
@@ -632,6 +698,7 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
         content = legacy_agk_toml(target, kit_root, manifest, legacy)
         plan.items.append(Item("agk.toml", "create", content=content))
         plan.items.sort(key=lambda i: i.rel)
+    agent_refusal(target, plan)
     for item in plan.writes:
         if passes_symlink(target, item.rel):
             raise Refusal(f"{item.rel} passes through a symlink (path class symlink)")
@@ -963,6 +1030,7 @@ def clean_refusal(
     Rule 11 (brief #1459, ADR-0617): the proof is held when `rehearsal.py check` passes on the
     plugin's SPEC-0071 and the maintainers' acceptance line is dated."""
     import rehearsal as proof  # noqa: PLC0415 - only this command
+
     if "personal" in data:
         raise Refusal("personal mode keeps the kit out of the product already (setting: forge)")
     if data.get("execution", "hosted") != "local":
