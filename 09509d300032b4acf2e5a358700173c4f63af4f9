@@ -3,9 +3,9 @@
   "head": "09509d300032b4acf2e5a358700173c4f63af4f9",
   "not_run": [],
   "notes": [],
-  "result": "failed",
+  "result": "passed",
   "schema": 1,
-  "started": "2026-11-20T02:54:31Z",
+  "started": "2026-11-20T02:57:07Z",
   "steps": [
     {
       "argv": [],
@@ -24,13 +24,69 @@
         "lint"
       ],
       "cwd": ".",
-      "exit": 2,
+      "exit": 0,
       "name": "lint",
       "not_run": false,
-      "outcome": "FAIL",
-      "output_bytes": 194,
-      "output_sha256": "dbafb19f66dd0b6a9707c4f681b80cbea95c3d5a7d0382fa6bd32369ffe4c2ee",
-      "seconds": 0.178
+      "outcome": "ok",
+      "output_bytes": 133,
+      "output_sha256": "a0a6e25fd710084cd43bb4f1277196999cf4f5a73106eca13e6a075477cf086d",
+      "seconds": 0.245
+    },
+    {
+      "argv": [
+        "make",
+        "-f",
+        "agk.mk",
+        "agk-governance"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "name": "governance",
+      "not_run": false,
+      "outcome": "ok",
+      "output_bytes": 1217,
+      "output_sha256": "babe79e571f28142dc54a4c59f3ea14d179466b1b2a2c4045a3cd066c242e9f3",
+      "seconds": 6.585
+    },
+    {
+      "argv": [
+        "<outside>/gitleaks",
+        "git",
+        "--no-banner",
+        "--redact",
+        "--exit-code",
+        "1",
+        "--log-opts=f73e5f352647f6b5acb0463b0e3e12721fbb824a..09509d300032b4acf2e5a358700173c4f63af4f9",
+        "."
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "name": "secret-scan",
+      "not_run": false,
+      "outcome": "ok",
+      "output_bytes": 182,
+      "output_sha256": "8efb9bbe925bfa566b89131253109a3d1b393cac9317de026cc6f4a6bb2c1545",
+      "seconds": 0.456
+    },
+    {
+      "argv": [
+        "python3",
+        "scripts/agk/test_plan.py",
+        "--json",
+        "--base",
+        "f73e5f352647f6b5acb0463b0e3e12721fbb824a",
+        "--head",
+        "HEAD"
+      ],
+      "cwd": ".",
+      "exit": 0,
+      "name": "tests",
+      "not_run": false,
+      "outcome": "ok",
+      "output_bytes": 368,
+      "output_sha256": "9e8c185f289672eefda8353cb31a3626c61a2d1fa85ea6558292b2829ed60857",
+      "runs": [],
+      "seconds": 0.215
     }
   ],
   "tree_clean": true,
