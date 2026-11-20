@@ -24,10 +24,15 @@ one login (SPEC-0059 rule 1, Q-S0059-4), so a `Report:` by that login cannot sho
    pull request's author that names the current head closes an `owner-needed` item posted before it. It never closes a Q
    id question, and an older head, `Report: <sha> handing over`, another login or a report posted before the ask
    closes nothing.
-2. `session.owner_own` decides `own` with GET reads only, and only when a report could change the step: the body has
-   a `Flow: owner change` line and no live `taken:` names its brief (`live_takes`, the brief's Q-1 reading), or the
-   author is a spec approver and no `taken:` ever named its brief. A builder's `Flow: builder ...` line is no hand
-   change, even when it says "by hand". An unreadable brief is not the owner's.
+2. `session.owner_own` decides `own` with GET reads only, and only when a report could change the step. One case: the
+   body has a `Flow: owner change` line and no live `taken:` (`live_takes`) that still counts names its brief. The
+   other: the author is a spec approver and no `taken:` ever named its brief. By the maintainer answer to Q-1567-1
+   (2026-11-20), a take no longer counts for the first case when it is older than the newest `Owner needed:` of a
+   listed verdict author on the pull request. It also stops counting when a `Report: <sha> handing over` follows it,
+   on the brief or the pull request, before the next take: each hand-over ends the newest take before it. The second
+   case keeps "no take ever": under one login it is what keeps a builder's pull request from unparking on its own
+   report. A builder's `Flow: builder ...` line is no hand change, even when it says "by hand". An unreadable brief
+   is not the owner's.
 3. `session.owner_apply` stays the one write. The unpark it writes on a report removes the label and posts one
    `Unparked-by: report <sha12>`. `UNPARKED_BY` reads both forms, so the park is over. `unparked_owed` counts only
    `Unparked-by: answer`, so `next` offers no builder the owner's own pull request; it goes to review.
@@ -50,7 +55,6 @@ the brief's comments once.
 
 ## Residual
 
-- 2026-11-20: Q-1567-1. Under the brief's Q-1 reading, #1561 itself would stay parked: brief #1536 carries three
-  `taken:` lines with no `released:` (cb1458r, cb1546, cb1536), and #1561's open `Brief: #1536` keeps them live. A
-  ruling may say that a take whose session posted `handing over`, or that predates the owner's `Owner needed:`, is not
-  live for this rule.
+- 2026-11-20: Q-1567-1 is answered (09:20Z). Before the answer, #1561 itself stayed parked: brief #1536 carries three
+  `taken:` lines with no `released:` (cb1458r, cb1546, cb1536), and #1561's open `Brief: #1536` keeps them live. All
+  three are older than #1561's `Owner needed:`, so the replay of its comments now unparks at the report.

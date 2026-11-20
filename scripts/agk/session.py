@@ -145,8 +145,9 @@ request holds no builder slot, and `next` offers an unparked one (an `Unparked-b
 not spoken after) before stalled pull requests and new briefs.
 
 Brief #1567 (ADR-0657): on the owner's own pull request (a `Flow: owner change` line and no live
-take of its brief, or a spec approver's with no take ever), the author's ready `Report:` on the
-current head ends an `owner-needed` park, with one `Unparked-by: report <sha12>`; never a Q id.
+take of its brief newer than the `Owner needed:` and not handed over, or a spec approver's with no
+take ever), the author's ready `Report:` on the current head ends an `owner-needed` park, with one
+`Unparked-by: report <sha12>`; never a Q id.
 
 Brief #1310 (ADR-0554): `watch --pr N` and `watch --assign ID` take `--until-event`: they return
 only on an event, printing every event line of one read, or after `[flow] wake_minutes` (110 by
@@ -4490,7 +4491,7 @@ def owner_apply(
         return None
     found = owner_step(*fresh, settings, now, listed, answerers)
     by_report = owner_step(*fresh, settings, now, listed, answerers, own=True)
-    reported = by_report != found and owner_own(repo, fresh[0])  # brief #1567: reads its brief
+    reported = by_report != found and owner_own(repo, *fresh, listed)  # brief #1567: its brief
     if reported:
         found = by_report
     if found is None or (unpark_only and found[0] == "park"):
@@ -4549,12 +4550,18 @@ def park_pull(repo: str, number: int, key: str) -> bool:
     return gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is not None
 
 
-def owner_own(repo: str, pr: dict) -> bool:
+HANDED_OVER = re.compile(r"Report: [0-9a-f]{7,40} handing over\b")  # route.HANDING_OVER's start
+
+
+def owner_own(repo: str, pr: dict, comments: list | None = None, listed: AbstractSet = ()) -> bool:
     """Brief #1567 answer 1 (ADR-0657): whether pull request PR is the owner's own, whose ready
     `Report:` may close an `owner-needed` wait. Its body has a `Flow: owner change` line and no
-    live `taken:` names its brief (Q-1567-1's reading of the brief's Q-1), or its author is a
-    spec approver and no `taken:` ever named its brief. Sessions and the owner post as one login,
-    so the login alone never decides. An unreadable brief is not the owner's. GET only."""
+    live `taken:` that still counts names its brief, or its author is a spec approver and no
+    `taken:` ever named its brief. A take no longer counts for the first (the maintainer answer
+    to Q-1567-1) when it is older than the newest `Owner needed:` of a listed author on the pull
+    request (COMMENTS), or when a `Report: <sha> handing over` follows it, on the brief or the pull
+    request, before the next take. Sessions and the owner post as one login, so the login alone
+    never decides. An unreadable brief is not the owner's. GET only."""
     body = str(pr.get("body") or "")
     author = str((pr.get("user") or {}).get("login") or "").lower()
     try:
@@ -4571,7 +4578,29 @@ def owner_own(repo: str, pr: dict) -> bool:
     takes = all_takes(said)
     if approver and not takes:
         return True
-    return hand and not live_takes(said, brief or 0, [pr], CLAIM_HOURS)
+    if not hand:
+        return False
+    asks = [
+        moment(c.get("created_at"))
+        for c in comments or []
+        if first_line(c).startswith(OWNER_NEEDED) and author_of(c) in listed
+    ]
+    since = max(asks, default=None)
+    overs = [
+        moment(c.get("created_at"))
+        for c in [*said, *(comments or [])]
+        if HANDED_OVER.match(first_line(c))
+    ]
+    ended = set()
+    for over in overs:  # each hand-over ends the newest take before it
+        before = [t for t in takes if t[0] < over]
+        if before:
+            ended.add(max(before)[1])
+    return not [
+        t
+        for t in live_takes(said, brief or 0, [pr], CLAIM_HOURS)
+        if t[1] not in ended and (since is None or t[0] >= since)
+    ]
 
 
 def unpark_pull(
