@@ -33,7 +33,9 @@ NOT_A_WORD = "zz-not-a-command"
 
 def _literals(module) -> set[str]:
     tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
-    return {n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    return {
+        n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    }
 
 
 def _ok(module, args: list[str]) -> bool:
@@ -141,7 +143,14 @@ def test_every_setting_is_in_the_guide_and_no_other() -> None:
 def test_the_security_guide_says_what_stays_on_the_machine() -> None:
     text = SECURITY.read_text(encoding="utf-8")
     assert "\nNothing outside your repository.\n" not in text
-    for part in ("AGK_HOME", "`0700`", "`0600`", "`quote_lines`", "`sync_remote`", "personal-mode.md"):
+    for part in (
+        "AGK_HOME",
+        "`0700`",
+        "`0600`",
+        "`quote_lines`",
+        "`sync_remote`",
+        "personal-mode.md",
+    ):
         assert part in text, part
 
 
@@ -154,14 +163,25 @@ def test_the_existing_codebase_guide_allows_observed_behaviour_as_proposed() -> 
 
 
 def test_the_readme_states_the_limits_in_two_lines() -> None:
-    lines = [line for line in README.read_text(encoding="utf-8").splitlines() if "ersonal mode" in line]
+    lines = [
+        line for line in README.read_text(encoding="utf-8").splitlines() if "ersonal mode" in line
+    ]
     assert 1 <= len(lines) <= 2
     assert any("docs/guides/personal-mode.md" in line for line in lines)
 
 
 def test_the_live_walk_is_recorded_on_an_invented_project() -> None:
     text = WALK.read_text(encoding="utf-8")
-    for step in ("attach", "survey", "render", "confirm", "tests-first", "gate", "pr-summary", "report"):
+    for step in (
+        "attach",
+        "survey",
+        "render",
+        "confirm",
+        "tests-first",
+        "gate",
+        "pr-summary",
+        "report",
+    ):
         assert step in text, step
     assert "export --check" in text and "detach" in text
     assert "git status --porcelain" in text

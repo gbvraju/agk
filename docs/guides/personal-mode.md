@@ -176,7 +176,7 @@ The `[personal]` table of the sidecar's `agk.toml`; a key not listed here is ref
   `.git/`, and the walk checks it by path, size and SHA-256.
 - No conductor, router, workflows, ruleset, CODEOWNERS or scheduled report: each is a team-mode tool.
 - The agent never pushes to a remote of the product, never confirms and never strips attribution.
-- There is no `sync`: the state stays on this machine, and `/agk:personal push` is not a command yet; use
+- There is no `sync`: the state stays on this machine. The spec's plugin command for the push is not built yet; use
   `personal.py gate` or the hook.
 - In the files forge the agent mark on a comment is written by the kit, so it is a label, not proof.
 - Security: what stays on the machine is in [the security guide](security.md).

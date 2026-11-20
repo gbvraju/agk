@@ -21,7 +21,7 @@ for its own ADR naming its classes; this is build (n).
 1. `docs/guides/personal-mode.md` covers, in order: when to use it, the user-scope install (marked `(verify)` as the
    reference is), attach, survey and adopt, the terminal confirmation, the levels and the floor, a change from start
    to finish, `pr-summary` and disclosure, `report`, export, upgrade and detach, the settings and the limits. It says
-   that there is no `sync` command and no `/agk:personal push` command on main, and that `sync_remote` is accepted
+   that there is no `sync` command on main and that the spec's plugin command for the push (rule 19) is not built, and that `sync_remote` is accepted
    but not used.
 2. `tests/kit/test_personal_guide.py` finds the commands, steps and options by asking the parsers of `personal.py` and
    `personal_state.py` which of the strings in their source they accept, so the list is the code's and not a copy. It
