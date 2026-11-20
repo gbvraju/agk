@@ -29,7 +29,8 @@ The plan, in the order it is decided:
    `max_builders` less the running builders (open builder pull requests and claims with no pull
    request yet) and `reviews_in_flight` (by default `max_builders`, brief #842, ADR-0384) less
    the pull requests waiting for a verdict: not a draft, the author's newest `Report:` says
-   `ready for review`, `fix list applied` or `merge of main`, and no `Verdict:` by a listed
+   `ready for review`, `fix list applied`, `merge of main` or `CI fix` (`READY_REPORTS`, brief
+   #1568), and no `Verdict:` by a listed
    author names the head. When
    `builder_memory_gb` of the `[flow]` table is set (brief #409, ADR-0223), also the machine's
    available memory divided by it, rounded down, and never below 1 while no builder runs (with
@@ -213,7 +214,9 @@ INDEPENDENT = "independent:"
 MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
 READY_LABELS = frozenset({"agk:merge-ready", "agk:owner-merge", "agk:ready"})  # ADR-0385
-WAITING_REPORT = re.compile(r"Report: \S+ (?:ready for review|fix list applied|merge of main)\b")
+WAITING_REPORT = re.compile(  # brief #1568 (ADR-0658): the forms of session.READY_REPORTS
+    r"Report: \S+ (?:" + "|".join(map(re.escape, reads.READY_REPORTS)) + r")\b"
+)
 GIB = 1024**3  # builder_memory_gb counts in GiB, the lower reading of a GB (Q-409-2)
 WINDOW_DAYS = 14
 DEFAULTS = {
