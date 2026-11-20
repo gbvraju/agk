@@ -518,14 +518,14 @@ def test_doctor_names_a_missing_adapter_and_the_line_to_set(tmp_path, platform, 
     import doctor
 
     write_toml(tmp_path, "[flow]\nauto_start = true\n")
-    res = doctor.launch_adapter_result(tmp_path, platform)
+    res = doctor.launch_adapter_result(tmp_path, platform, cloud=False)
     assert res.status == "fail" and file in res.message and line in res.message
     write_toml(tmp_path, f"[flow]\nauto_start = true\n{line}\n")
-    res = doctor.launch_adapter_result(tmp_path, platform)
+    res = doctor.launch_adapter_result(tmp_path, platform, cloud=False)
     assert res.status == "fail" and file in res.message
     (tmp_path / file).parent.mkdir(parents=True)
     (tmp_path / file).write_text("x\n", encoding="utf-8")
-    assert doctor.launch_adapter_result(tmp_path, platform).status == "ok"
+    assert doctor.launch_adapter_result(tmp_path, platform, cloud=False).status == "ok"
     assert doctor.CHECKS["launch-adapter"][0] == "warn"
 
 
@@ -534,7 +534,7 @@ def test_doctor_never_prints_the_projects_own_adapter(tmp_path):
     import doctor
 
     write_toml(tmp_path, '[flow]\nauto_start = true\nlaunch_adapter = "sh tools/secret-name.sh"\n')
-    res = doctor.launch_adapter_result(tmp_path, "linux")
+    res = doctor.launch_adapter_result(tmp_path, "linux", cloud=False)
     assert res.status == "fail" and "secret-name" not in res.message
 
 
@@ -546,7 +546,7 @@ def test_doctor_is_quiet_while_auto_start_is_off(tmp_path, text):
     import doctor
 
     write_toml(tmp_path, text)
-    assert doctor.launch_adapter_result(tmp_path, "linux").status == "ok"
+    assert doctor.launch_adapter_result(tmp_path, "linux", cloud=False).status == "ok"
 
 
 def test_doctor_reads_an_adapter_on_path_as_there(tmp_path):
@@ -554,7 +554,7 @@ def test_doctor_reads_an_adapter_on_path_as_there(tmp_path):
     import doctor
 
     write_toml(tmp_path, '[flow]\nauto_start = true\nlaunch_adapter = "my-launcher --cloud"\n')
-    assert doctor.launch_adapter_result(tmp_path, "linux").status == "ok"
+    assert doctor.launch_adapter_result(tmp_path, "linux", cloud=False).status == "ok"
 
 
 # --- brief #1554 answer 1 (ADR-0654): a fresh lease is not written again --------------------------

@@ -189,6 +189,11 @@ With `--kit-root` it also warns `kit-behind` when `version` in `agk.toml` is old
 repository (the `repository` of the kit's `.claude-plugin/plugin.json`), naming both versions: one more GET, of that
 repository's latest release. A kit newer than the newest release (a checkout between releases) is `ok`; a release it cannot
 read is `??` (`no-release`, `release-unreadable`, `offline`, ...), never `ok`.
+Four warnings say when the start settings do not fit how the project runs (brief #1617, ADR-0686), information only:
+`tier-use` (each tier's count of the open briefs, and a tier a brief kind uses that gets none), the `launch-adapter` lines
+for a cloud session with `auto_start` on (`not run here`) and a `.ps1` adapter off Windows, `review-ceiling`
+(`reviews_in_flight` under `max_builders`) and `slot-use` (with `builder_start = "assign"`, slots whose newest marker is
+over 24 hours old and the runs of the last 24 hours that decided `none`).
 
 ## Stalls
 
