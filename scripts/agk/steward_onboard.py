@@ -38,7 +38,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import steward  # noqa: E402
-from common import CheckError, personal_table, repo_root, utf8_output  # noqa: E402
+from common import (  # noqa: E402
+    OUTSIDE_PROJECT,
+    CheckError,
+    personal_table,
+    repo_root,
+    utf8_output,
+)
 
 ISSUES = "repos/{owner}/{repo}/issues"
 COMMENTS = ISSUES + "/comments?per_page=100&page=<page>"
@@ -285,7 +291,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("onboard").add_argument("--again", action="store_true")
     opts = parser.parse_args(argv)
-    return run(repo_root(), opts.again)
+    try:
+        root = repo_root()
+    except CheckError:
+        print(OUTSIDE_PROJECT)
+        return 3
+    return run(root, opts.again)
 
 
 def run(root: Path, again: bool) -> int:

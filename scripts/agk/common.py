@@ -316,6 +316,10 @@ def repo_root() -> Path:
     return Path(proc.stdout.strip())
 
 
+# SPEC-0066 rule 8 (brief #1583, ADR-0663): a steward script outside a git repository prints this
+# one line, exit 3, and writes nothing; the role file reads it as the first run.
+OUTSIDE_PROJECT = "outside: no project here"
+
 # The line ends of every temporary checkout the kit makes (brief #1540, ADR-0648; moved from
 # evidence.py, brief #1291, ADR-0550): the committed bytes, whatever the person's git configuration
 # says. Put before the git command (`git *CHECKOUT worktree add ...`); a project's own `eol`
@@ -1979,6 +1983,38 @@ def base_arg(argv: Sequence[str] | None) -> str | None:
 # `  workflow_run:` of agk-route.yml; upgrade.py and init.py write it, and a project may add names.
 
 ROUTER_WORKFLOW = ".github/workflows/agk-route.yml"
+
+# SPEC-0066 rule 2 (brief #1583, ADR-0663): the project's own `agent` of `.claude/settings.json`,
+# one line right after the opening brace, is read as the kit's (`project_keys` of the manifest).
+PROJECT_SETTINGS = ".claude/settings.json"
+PROJECT_AGENT = "steward"
+AGENT_LINE = re.compile(rb'  "agent": ("(?:[^"\\\n]|\\.)*"),\n')
+
+
+def project_agent(data: bytes) -> str | None:
+    """The project's agent named on the line after DATA's opening brace, or None."""
+    found = AGENT_LINE.match(data, 2) if data.startswith(b"{\n") else None
+    return json.loads(found.group(1)) if found else None
+
+
+def without_agent(rel: str, data: bytes) -> bytes:
+    """DATA without the project's agent line when REL is the project's settings."""
+    ours = rel == PROJECT_SETTINGS and data.startswith(b"{\n")
+    found = AGENT_LINE.match(data, 2) if ours else None
+    return data[:2] + data[found.end() :] if found else data
+
+
+def with_agent(data: bytes, name: str) -> bytes:
+    """The settings DATA with NAME as its one agent line, right after the opening brace."""
+    base = without_agent(PROJECT_SETTINGS, data)
+    return base[:2] + f'  "agent": {json.dumps(name)},\n'.encode() + base[2:]
+
+
+def starts_unnamed(text: str) -> bool:
+    """True when the script TEXT starts `claude` and never passes `--agent` (ADR-0662)."""
+    return re.search(r"(?<![\w./-])claude[ \t]", text) is not None and "--agent" not in text
+
+
 TRIGGER = re.compile(r"^  workflow_run:[ \t]*(#.*)?$")
 LIST_LINE = re.compile(r"^(    workflows:[ \t]*)\[(.*)\]([ \t]*(#.*)?)$")
 PLAIN = re.compile(r"^[A-Za-z0-9_./()-]+(?: +[A-Za-z0-9_./()-]+)*$")

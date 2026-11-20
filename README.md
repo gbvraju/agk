@@ -61,6 +61,8 @@ workflow can also be started by hand from the Actions tab. The schedules are in 
   the plan also prints the exact settings to set by hand.
 - **The architect session is not yet proven live.** Its start flag and its guard hook are marked `(verify)` in
   `.claude/agents/architect.md`.
+- **Personal mode ([its guide](docs/guides/personal-mode.md)) is for one developer alone and has no sync yet:** the state stays on one
+  machine, nothing reaches the team until you export it, and the agent never pushes, confirms or strips attribution.
 - **Nobody outside the project has used these guides yet.** Where you get stuck, open an issue with the
   [I got stuck form](.github/ISSUE_TEMPLATE/stuck.md).
 
@@ -70,6 +72,7 @@ workflow can also be started by hand from the Actions tab. The schedules are in 
 - [The product-owner guide](docs/guides/product-owner.md): what arrives each Monday and what to do about it.
 - [Adopting AGK in an existing codebase](docs/guides/existing-codebase.md): install without touching your product, record today's
   behaviour, then change.
+- [Personal mode](docs/guides/personal-mode.md): one developer alone, with nothing of AGK in the product repository.
 - [Security](docs/guides/security.md): what AGK stores, where code and credentials go, what each workflow may write.
 - [Reference](docs/guides/reference.md): every command and file of the kit.
 

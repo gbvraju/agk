@@ -1497,6 +1497,19 @@ def owner_answer_event(name: str, event: dict) -> bool:
     return "pull_request" in (event.get("issue") or {}) and line.startswith(OWNER_ANSWER_LINES)
 
 
+def owner_report_event(name: str, event: dict) -> bool:
+    """Brief #1567 answer 2 (ADR-0657): a created ready `Report:` (`BUILT`) on a pull request
+    that carries `agk:parked`: the owner's report on its own parked pull request may end the
+    wait, which `session.owner_apply` decides on a fresh read. Any other comment starts nothing."""
+    if name != "issue_comment" or event.get("action", "created") != "created":
+        return False
+    issue = event.get("issue") or {}
+    labels = {str(x.get("name")) for x in issue.get("labels") or [] if isinstance(x, dict)}
+    body = str((event.get("comment") or {}).get("body") or "").strip()
+    line = body.splitlines()[0].strip() if body else ""
+    return "pull_request" in issue and PARKED in labels and bool(BUILT.match(line))
+
+
 def owner_unpark(repo: str, n: int, root: Path) -> str | None:
     """Brief #1534 answer 5 (ADR-0646, Q-1534-1): on the answer's own run, the unpark half of the
     one owner step (`session.owner_apply`): an `agk:parked` that the owner wait wrote is removed,
@@ -1565,7 +1578,13 @@ def main(argv: list[str] | None = None) -> int:
 
     entered = enter if starts else None
 
-    unparks = not rest and not dry and owner_answer_event(name, event)
+    unparks = (
+        not rest
+        and not dry
+        and (
+            owner_answer_event(name, event) or owner_report_event(name, event)  # brief #1567
+        )
+    )
     try:
         for n in dict.fromkeys(numbers):
             try:

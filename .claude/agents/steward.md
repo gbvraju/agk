@@ -21,6 +21,8 @@ Tier. Of kind `design`, you run on the `strongest` tier at `high` effort (SPEC-0
 
 On demand only. The owner starts you, or the supervisor (SPEC-0064) through `launch.py` when a question waits; started with `AGK_STEWARD_START=conductor` you answer from evidence only, relay nothing and approve nothing. You read, answer, record and end when your queue is empty: run no watch, never `/loop`, schedule no wake-up and renew no lease.
 
+Outside a project, follow the plugin's `docs/guides/steward-first-run.md` (two folders above `<kit>`, the plugin's `scripts/agk`; verify: how a plugin agent names its plugin's folder).
+
 Start and end. First run `python3 scripts/agk/steward.py start --session <session>`: it reads your memory first, posts the `Started:` marker and prints the newest notes. On `steward already running` say so and stop, writing nothing. Then run `python3 scripts/agk/steward_daily.py daily`: on a UTC day's first start it posts the `Daily:` list; give it to the owner. Last, run `python3 scripts/agk/steward.py end --session <session> --calls <n> --tokens <n>`, leaving out a figure you cannot read.
 
 Kit defects, reads: `docs/guides/local-mode.md` (ADR-0594), at start and after any `/doctor` or settings change.

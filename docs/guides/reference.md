@@ -208,6 +208,13 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
     python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
     python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
+    python3 scripts/agk/steward.py first-run [--folder DIR]
+
+Outside a git repository each command of `steward.py`, `steward_daily.py`, `steward_evidence.py`, `steward_onboard.py`
+and `steward_owner.py` prints `outside: no project here`, exit 3, and writes nothing (SPEC-0066 rule 8, ADR-0663).
+`first-run` prints `first-run: <step>` for the folder (default the working one): `kit`, `project`, `adopt`, `greet` or
+`greeted`; only `greet` writes, one line of a hash of the folder's path and the date in `agk-greeted.txt` of the person's
+Claude folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`), never in the folder itself.
 
 The steward's notes (SPEC-0059 rule 8, ADR-0557): one open issue labelled `agk-steward`, created when none is open, one
 comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Person`, `Pattern`, `Gap`, `Risk`, `Lesson`,

@@ -5,7 +5,8 @@ this page from outside the project; it is a description, not a certification.
 
 ## What AGK stores
 
-Nothing outside your repository.
+In team mode, nothing outside your repository. In [personal mode](personal-mode.md), nothing in it: everything is kept in a
+private folder on your machine, described below.
 
 - **In the repository:** the files `/agk:init` or `/agk:adopt` install (list them with `init.py --dry-run`; see
   [the reference](reference.md)). AGK has no server, no database and no account.
@@ -14,6 +15,17 @@ Nothing outside your repository.
   creates its own label if it is missing.
 - **On your machine:** the plugin, in Claude Code's plugin folder. `/agk:review` writes local files that are never committed
   (the Experimental reviewer section of [the reference](reference.md)).
+
+- **In personal mode, on your machine only:** the state folder `AGK_HOME` (default `~/.agk`, `%USERPROFILE%\.agk` on
+  Windows) holds `registry.toml` and one private git repository per project, the sidecar, under `projects/<id>/`
+  (`scripts/agk/personal_state.py`). Nothing is written in the product clone or under its `.git/` but the opt-in `pre-push`
+  hook that `personal.py hook install` writes when you ask; `tests/kit/test_personal_lifecycle.py` checks the clone by path,
+  size and SHA-256. On POSIX `AGK_HOME` is made `0700` and every file in it `0600`; on Windows the folder inherits your
+  profile's permissions `(verify)` and `doctor.py` says that it did not check them. The state keeps paths, line ranges, blob
+  shas and summaries, never a code excerpt by default: `quote_lines` is `0` unless you raise it, at most 20
+  (`scripts/agk/personal_adopt.py` refuses a longer quote). It holds no token, key or password. Sync is off: no command sends
+  the state anywhere, and the `sync_remote` setting is accepted but not used yet. The agent never pushes to a remote of the
+  product; it prints the push for you.
 
 ## Where your code and prompts go
 

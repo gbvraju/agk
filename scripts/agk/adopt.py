@@ -57,6 +57,7 @@ from init import (
     check_interpreter,
     install_mode,
     kit_bytes,
+    name_agent,
     passes_symlink,
     path_class,
     plugin_settings,
@@ -195,6 +196,7 @@ def build_plan(target: Path, today: str, setup: dict | None = None):
     created: dict[str, bytes] = {}
     for rel in sorted(verbatim - set(spec["skip"]) - set(spec["blocks"])):
         created[rel] = kit_bytes(KIT_ROOT / rel)
+    name_agent(created)
     for dest, src in spec["templates"].items():
         created[dest] = render((KIT_ROOT / src).read_text(encoding="utf-8"), variables, src).encode(
             "utf-8"
