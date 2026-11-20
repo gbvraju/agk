@@ -41,6 +41,10 @@ build (l).
 5. `tests/kit/test_personal_lifecycle.py` walks one sidecar through attach, survey, the gate, report, upgrade and
    detach and checks that the clone's status stays empty and every file under its `.git/` keeps its path, size and
    SHA-256. `agk.toml` maps `personal.py`, `personal_state.py`, `doctor.py` and `common.py` to it.
+6. `tests/kit/test_prepush.py::test_the_hook_template_calls_prepush_and_installs_nothing` (brief #326 answer 2: the
+   kit never installs the team-mode hook template) keeps its check for every script but `personal_state.py`, which
+   rule 19 asks to write the personal hook; for that file it checks that the hook is written in one place only
+   (Q-1506-5). The manifest check is unchanged: the template is still never copied into a project.
 
 ## Consequences
 

@@ -35,7 +35,6 @@ import personal_state as ps  # noqa: E402
 
 PERSON = "member-example-1"
 ORIGIN = "https://example.com/team/demo-shop.git"
-VERSION = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8"))["version"]
 RUNNER = """import pathlib, runpy, sys
 sys.path.insert(0, ".")
 bad = 0
@@ -47,6 +46,11 @@ for path in sorted(pathlib.Path("tests").glob("test_*.py")):
 sys.exit(1 if bad else 0)
 """
 POSIX = pytest.mark.skipif(os.name == "nt", reason="a POSIX shell runs the hook here")
+
+
+def plugin_version() -> str:
+    """The plugin's version, read when a test runs (a copied kit may have no plugin folder)."""
+    return json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8"))["version"]
 
 
 def git(root: Path, *args: str) -> str:
@@ -154,7 +158,7 @@ def test_rule26_attach_records_the_plugin_version_and_no_script(tmp_path):
     """REQ-048 AC1: rule 26 (the sidecar stores the plugin version and never a script)."""
     _, _, side, _ = attached(tmp_path)
     table = common.personal_table(side)
-    assert table is not None and table["plugin_version"] == VERSION
+    assert table is not None and table["plugin_version"] == plugin_version()
     tracked = git(side, "ls-files").splitlines()
     assert not [p for p in tracked if p.endswith((".py", ".sh"))]
 
@@ -186,7 +190,7 @@ def test_rule26_doctor_reports_a_pinned_file_changed_by_hand(tmp_path):
 def test_rule26_doctor_says_when_it_cannot_check_the_pinned_files(tmp_path):
     """REQ-048 AC1: rule 26 (no version recorded, or none in the table: not checked, by setting)."""
     _, _, side, env = attached(tmp_path)
-    settings(side, f'plugin_version = "{VERSION}"', 'plugin_version = "0.0.0-example"')
+    settings(side, f'plugin_version = "{plugin_version()}"', 'plugin_version = "0.0.0-example"')
     done = run("doctor.py", str(side), env=env)
     assert done.returncode == 0
     assert "pinned: not checked: kit/hashes.json has no row for the recorded version " \
