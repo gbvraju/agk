@@ -20,6 +20,15 @@ same or a stronger kind and `owner_only` replaces the one held; a restatement as
 `check`, or one that turns `owner_only` from `true` to `false`, keeps the gate held and is one
 `FAIL playbooks:` line naming the rule and the key, never a value, as is a module that names
 modules of its own.
+
+The composed standard part (SPEC-0072 rule 2; REQ-079 AC1; brief #1585, ADR-0665):
+`standard(path, root)` gives the composed `[architecture]` (the last one declared), the composed
+`[[standards]]` and the problems. A weaker restatement of one of the eight enterprise gates names
+its fixed id; an `allow` entry that a project's own (derived) playbook adds without an `adr` whose
+file is under `docs/adr/` is refused naming the key `allow`; a pack restated for the same stack that
+drops a held rule code is refused naming the key `standards.rules`. A stack of
+`config/stack-signals.toml` with no `[[standards]]` entry in any playbook is one `warn playbooks:`
+line on stderr, never a failure.
 """
 
 from __future__ import annotations
@@ -96,11 +105,63 @@ def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], l
         for gate in _gates(layer):
             held = gates.get(gate["id"])
             keys = _weakened(gate, held) if held else []
-            weak.update(keys)
+            # SPEC-0072 rule 2: the eight enterprise ids are the kit's own names, never a value
+            named = gate["id"] in playbook_format.ENTERPRISE
+            weak.update(f"gate: {gate['id']}, key: {key}" if named else f"key: {key}" for key in keys)
             if not keys:
                 gates[gate["id"]] = gate
-    problems += [f"rule 21: {rel}: a gate is restated weaker (key: {key})" for key in sorted(weak)]
+    problems += [f"rule 21: {rel}: a gate is restated weaker ({key})" for key in sorted(weak)]
     return list(gates.values()), list(evidence), problems
+
+
+def _added_without_adr(layer: dict[str, Any], held: set[tuple[Any, Any]], root: Path) -> bool:
+    """A project's own playbook adds an `allow` entry that names no ADR file of the project."""
+    name = layer.get("work_type")
+    if not isinstance(name, str) or not playbook_format.is_derived(name, root):
+        return False
+    allow = layer["architecture"].get("allow", [])
+    for entry in allow if isinstance(allow, list) else []:
+        if not isinstance(entry, dict) or (entry.get("from"), entry.get("to")) in held:
+            continue
+        adr = entry.get("adr")
+        number = adr[4:] if isinstance(adr, str) and playbook_format.ADR_ID.match(adr) else None
+        if number is None or not list((root / "docs" / "adr").glob(f"{number}-*.md")):
+            return True
+    return False
+
+
+def _codes(entry: dict[str, Any]) -> set[str]:
+    rules = entry.get("rules")
+    codes = rules.get("codes") if isinstance(rules, dict) else None
+    return {c for c in codes if isinstance(c, str)} if isinstance(codes, list) else set()
+
+
+def standard(path: Path, root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    """SPEC-0072 rule 2: the composed `[architecture]` and `[[standards]]` of the playbook at
+    `path`, and the problems of their composition, naming the rule, the file and the key."""
+    path, root = Path(path), Path(root)
+    layers, _ = _layers(path, root)
+    rel = f"{playbook_format.FOLDER}/{path.name}"
+    architecture: dict[str, Any] = {}
+    packs: dict[str, dict[str, Any]] = {}
+    keys: set[str] = set()
+    for layer in layers:
+        own = layer.get("architecture")
+        if isinstance(own, dict):
+            held = {(e.get("from"), e.get("to")) for e in architecture.get("allow", [])}
+            if _added_without_adr(layer, held, root):
+                keys.add("an `allow` entry is added without an ADR in the project (key: allow)")
+            architecture = own
+        found = layer.get("standards")
+        for entry in found if isinstance(found, list) else []:
+            stack = entry.get("stack") if isinstance(entry, dict) else None
+            if not isinstance(stack, str):
+                continue
+            if stack in packs and not _codes(packs[stack]) <= _codes(entry):
+                keys.add("a pack's `rules` drops a rule code (key: standards.rules)")
+            packs[stack] = entry
+    problems = [f"{playbook_format.SPEC72}: {rel}: {key}" for key in sorted(keys)]
+    return architecture, list(packs.values()), problems
 
 
 def findings(root: Path, files: list[Path] | None = None) -> list[str]:
@@ -109,7 +170,9 @@ def findings(root: Path, files: list[Path] | None = None) -> list[str]:
     found = [
         line
         for path in paths
-        for line in playbook_format.problems(path, root) + composed(path, root)[2]
+        for line in playbook_format.problems(path, root)
+        + composed(path, root)[2]
+        + standard(path, root)[2]
     ]
     return found + playbook_format.declaration(root)[1]
 
@@ -121,6 +184,15 @@ def cmd_check(root: Path) -> int:
         print(f"FAIL {NAME}: {line}")
     if found:
         return 1
+    known = playbook_format.stacks(root) or []
+    packed = {e.get("stack") for path in files for e in standard(path, root)[1]}
+    missing = [name for name in known if name not in packed]
+    if missing:
+        print(
+            f"warn {NAME}: {len(missing)} stacks have no [[standards]] entry in any playbook: "
+            "no pack for them yet (SPEC-0072 rule 2)",
+            file=sys.stderr,
+        )
     print(f"ok {NAME} ({len(files)} playbooks)" if files else f"ok {NAME} (none)")
     return 0
 

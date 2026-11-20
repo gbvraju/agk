@@ -66,6 +66,13 @@ kind = "judgement"
 text = "Any apply of infrastructure, done and recorded by the owner alone; a session prepares the plan and stops."
 owner_only = true
 
+[[gates]]
+id = "accessibility"
+kind = "judgement"
+text = "Accessibility of the screens, where the work has any."
+owner_only = false
+reason = "This kind of work has no screens of its own, so there is nothing to check."
+
 [milestones]
 shape = "per-brief"
 batch_by = "not batched: one pull request per brief, as today"
