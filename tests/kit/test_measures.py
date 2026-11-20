@@ -128,6 +128,8 @@ def feature(repo, api: Api) -> None:
         report_line(22, at(2, 15), 2000),
         verdict(23, at(2, 17), "cleared 0061aaa"),
     ], finishes=True)  # fmt: skip
+    api.put("events-50", [])
+    api.put("events-60", [{"event": "labeled", "created_at": at(1, 13)}])
     api.put("events-61", [{"event": "reopened", "created_at": at(2, 14)}])
     api.pull(62, 50, at(4, 9), at(4, 12), guarded, [report_line(30, at(4, 10), 300)])
 

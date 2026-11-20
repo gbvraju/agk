@@ -86,6 +86,21 @@ sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.gith
 Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
 request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
 
+## Measures for a date range
+
+    python3 scripts/agk/measures.py --from YYYY-MM-DD --to YYYY-MM-DD [--json] [--repo OWNER/REPO] [--api-dir DIR | --sidecar DIR]
+
+Reads the GitHub REST API (`gh api`, GET only), saved responses (`--api-dir`) or, in personal mode, the sidecar's
+`forge/` files (`--sidecar`), and local git objects; it writes no file and posts nothing. The range is UTC days, both
+included, at most 92. It prints one row per feature, a brief whose finishing pull request (`Finishes: #n`, else the last
+merged one once the brief is closed) merged in the range: its pull requests, the hours from brief to merge (queue, build
+and the builder's own turns), rework (fix rounds, rejections, corrections, reopens, follow-ups, first-review pass), backstop
+escapes, tokens, Actions minutes and the owner's part (hand and guarded merges, owner lines, owner questions and their
+wait). Then the range totals and one row for the merged pull requests tied to no brief. The output holds numbers only,
+never a title, a login, a branch or a host; a figure whose input is missing is `unknown`, never 0, and local or personal
+mode prints `none (local mode)` or `none (personal mode)` for what it does not keep. `--json` gives the same rows. See
+ADR-0659 and amendment 191 (SPEC-0007).
+
 ## The operations checklist
 
     python3 scripts/agk/metrics.py --save-checklist [--to FILE] [--days N]

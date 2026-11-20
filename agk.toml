@@ -672,6 +672,11 @@ tests = [
   "tests/kit/test_kit_repo_local_mode.py",
 ]
 [[testing.map]]
+code = "scripts/agk/measures.py"
+tests = [
+  "tests/kit/test_measures.py", "tests/kit_dev/test_reference_commands.py",
+]
+[[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
   "tests/kit/test_checklist.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_forge.py",
