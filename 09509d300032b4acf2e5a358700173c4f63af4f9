@@ -5,7 +5,7 @@
   "notes": [],
   "result": "failed",
   "schema": 1,
-  "started": "2026-11-20T02:52:09Z",
+  "started": "2026-11-20T02:54:31Z",
   "steps": [
     {
       "argv": [],
@@ -30,12 +30,13 @@
       "outcome": "FAIL",
       "output_bytes": 194,
       "output_sha256": "dbafb19f66dd0b6a9707c4f681b80cbea95c3d5a7d0382fa6bd32369ffe4c2ee",
-      "seconds": 0.219
+      "seconds": 0.178
     }
   ],
   "tree_clean": true,
   "versions": {
     "git": "git version 2.53.0",
+    "gitleaks": "8.30.1",
     "make": "GNU Make 4.4.1",
     "python3": "3.14.4"
   }
