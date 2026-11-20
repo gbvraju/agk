@@ -68,6 +68,15 @@ map = [
   { code = "answers/**", tests = "tests/answers/**" },
 ]
 
+[architecture]
+layers = [
+  { name = "corpus", paths = ["corpus/**"] },
+  { name = "evaluation", paths = ["evaluation/**"] },
+  { name = "retrieval", paths = ["retrieval/**"] },
+  { name = "answers", paths = ["answers/**"] },
+]
+allow = []
+
 [[gates]]
 id = "evaluation-set"
 kind = "check"

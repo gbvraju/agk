@@ -33,6 +33,8 @@ GATES = ("tests-first", "contract-first", "evidence-per-gate", "rollback", "defi
 sys.path.insert(0, str(SCRIPTS))
 import playbook_format  # noqa: E402
 
+ENTERPRISE = playbook_format.ENTERPRISE  # SPEC-0072 rule 2, after the five (ADR-0665)
+
 
 def data() -> dict:
     return tomllib.loads(PLAYBOOK.read_text(encoding="utf-8"))
@@ -72,7 +74,7 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
 
 
 def test_exactly_the_five_gates_of_rule_21_in_its_order() -> None:
-    assert tuple(g["id"] for g in data()["gates"]) == GATES
+    assert tuple(g["id"] for g in data()["gates"]) == GATES + ENTERPRISE
 
 
 def test_each_gate_says_what_rule_21_says() -> None:
@@ -92,7 +94,7 @@ def test_each_gate_says_what_rule_21_says() -> None:
 
 def test_no_gate_is_a_check_without_an_existing_governance_step() -> None:
     # Q-S0048-29: the existing steps of agk-governance verify none of the five from committed files
-    by_id = gates()
+    by_id = {gid: g for gid, g in gates().items() if gid in GATES}
     assert {g["kind"] for g in by_id.values()} == {"judgement"}
     assert all("step" not in g for g in by_id.values())
 
@@ -103,7 +105,7 @@ def test_no_gate_is_owner_only() -> None:
 
 def test_a_verdict_has_one_evidence_item_per_gate() -> None:
     evidence = data()["evidence"]
-    assert len(evidence) == len(GATES)
+    assert len(evidence) == len(GATES) + len(ENTERPRISE)
     for needle in ("tests", "contract", "cites", "rollback", "acceptance criteria"):
         assert any(needle in item for item in evidence), needle
 
@@ -172,7 +174,10 @@ def test_the_kit_ships_only_default_and_kinds_of_the_list() -> None:
 
 
 def test_the_playbook_names_no_vendor_product_or_tool() -> None:
-    text = PLAYBOOK.read_text(encoding="utf-8")
+    lines = PLAYBOOK.read_text(encoding="utf-8").splitlines()
+    # only the fixed ids and steps of SPEC-0072 rule 2's enterprise gates are skipped (names)
+    fixed = {f'{key} = "{gid}"' for key in ("id", "step") for gid in ENTERPRISE}
+    text = "\n".join(s for s in lines if s not in fixed)
     assert "://" not in text and "www." not in text
     assert not re.search(r"\b\d+\.\d+(\.\d+)?\b", text)
     lowered = text.lower()

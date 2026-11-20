@@ -31,7 +31,8 @@ def data() -> dict:
 
 
 def gates() -> dict[str, dict]:
-    return {g["id"]: g for g in data()["gates"]}
+    # SPEC-0072 rule 2 (ADR-0665): the no-screen `accessibility` gate is not one of this spec
+    return {g["id"]: g for g in data()["gates"] if g["id"] != "accessibility"}
 
 
 def test_the_playbook_passes_the_check() -> None:

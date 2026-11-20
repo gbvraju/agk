@@ -1,0 +1,1 @@
+- Every playbook now states its building blocks (layers and the directions between them), has a place for each stack's coding-standards pack, and carries eight enterprise quality gates; a project's playbook that weakens one of them is refused (brief #1585)
