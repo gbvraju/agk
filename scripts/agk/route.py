@@ -128,7 +128,16 @@ from reviewers import (
     verdict_authors,
     via_agent,
 )
-from session import RED_TITLE, ROUTER_PAIR, gh, is_red, pages, repo_name
+from session import (
+    READY_REPORT,
+    READY_REPORTS,  # noqa: F401 - route.READY_REPORTS is the one list (brief #1568)
+    RED_TITLE,
+    ROUTER_PAIR,
+    gh,
+    is_red,
+    pages,
+    repo_name,
+)
 
 NAME = "route"
 USAGE = "usage: route.py [--pr N | --all | --branch | --health] [--dry-run]"
@@ -180,9 +189,7 @@ OWNER_STATES = ("agk:question", "agk:approve", "agk:owner-merge", "agk:parked")
 HANDING_OVER = re.compile(r"Report: ([0-9a-f]{7,40}) handing over\b:?\s*(.*)$")  # item 2
 NO_RESTART = re.compile(r"(?:to \S|done\b)")  # a successor named, or nothing left
 NOT_A_BUILDER = ("Verdict:", "Answer:", "Correction:")  # lines that never clear a hand-over
-BUILT = re.compile(
-    r"Report: ([0-9a-f]{7,40}) (?:ready for review|fix list applied|merge of main)\b"
-)
+BUILT = READY_REPORT  # brief #1568 (ADR-0658): the forms of `READY_REPORTS`, read in session.py
 COLORS = {
     "agk:build": "c2e0c6",
     "agk:ci-running": "fbca04",

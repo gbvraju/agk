@@ -1,0 +1,1 @@
+- A builder's `Report: <head> CI fix` on a ready pull request puts it back in review, as `ready for review` does; the ready report forms are one list read by the router, the review queue and the builder prompt (brief #1568)

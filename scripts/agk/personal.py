@@ -11,6 +11,8 @@
     python3 personal.py gate [--clone DIR] [--sidecar DIR] [--base REF] [--approve]
     python3 personal.py pr-summary [--clone DIR] [--sidecar DIR]
     python3 personal.py status [--clone DIR] [--sidecar DIR]
+    python3 personal.py upgrade [--clone DIR] [--sidecar DIR]
+    python3 personal.py hook install|remove [--clone DIR]
 
 SPEC-0041 build (h), first part, rule 16. `baseline` prints the test command it would run: the
 sidecar's `[personal] test_command`, else the one test command the survey's inventory declares
@@ -67,6 +69,12 @@ default branch) and, at `spec` and above, drafts the change's spec; `review` wri
 the read-only `personal-reviewer` agent and, with `--report`, keeps the report that
 `check_review_report` accepts, as a comment marked as an agent's; `confirm` is the person's
 `Verdict: cleared <head>` at a terminal; `finish` runs the gate and prints, never runs, the push.
+
+`upgrade` (build (l), rule 27, brief #1506) raises `[personal] schema` one step at a time to the
+plugin's `personal_state.PLUGIN_SCHEMA`, each step its own sidecar commit; it refuses a schema newer
+than the plugin's, a sidecar with uncommitted changes and a missing step. `hook install|remove`
+(rule 19) writes or removes the opt-in `pre-push` hook that runs `gate --approve`, the one write
+under the clone's `.git/`; both are in `personal_state.py`, which a project install does not hold.
 """
 
 from __future__ import annotations
@@ -101,6 +109,7 @@ USAGE = (
     "[--week YYYY-Www] [--approve]\n"
     "       personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]\n"
     "       personal.py pr-summary|status [--clone DIR] [--sidecar DIR]\n"
+    "       personal.py upgrade [--clone DIR] [--sidecar DIR] | hook install|remove [--clone DIR]\n"
     "       personal.py change start <name> [--advances REQ-nnn] [--base REF] | "
     "review [--report FILE] [--base REF] | confirm | finish [--base REF] [--approve]\n"
     "       (each with [--clone DIR] [--sidecar DIR])"
@@ -1273,6 +1282,69 @@ def parse_change(args: list[str]) -> dict | None:
     return None if out["step"] == "start" and out["name"] is None else out
 
 
+def state_module():
+    """`personal_state.py`, which the kit and the plugin hold and a project install does not."""
+    try:
+        import personal_state  # noqa: PLC0415 - kit-only (config/kit-only.txt)
+    except ImportError as exc:
+        raise CheckError(
+            "personal mode's state is not installed here (path class: scripts/agk/)"
+        ) from exc
+    return personal_state
+
+
+SCHEMA_LINE = re.compile(r"^schema = [0-9]+[ \t]*$", re.MULTILINE)
+
+
+def upgrade(sidecar: Path) -> tuple[int, list[str]]:
+    """Rule 27: one step and one sidecar commit at a time, up to the plugin's schema."""
+    state = state_module()
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    have, want = int(table.get("schema", 1)), state.PLUGIN_SCHEMA
+    if have > want:
+        raise CheckError(
+            "the sidecar's schema is newer than this plugin's (setting: personal.schema)"
+        )
+    if have == want:
+        return 0, [f"upgrade: schema {have} is current"]
+    if _sidecar_git(sidecar, "status", "--porcelain").stdout.strip():
+        raise CheckError(
+            "the sidecar has uncommitted changes; commit them first (path class: sidecar)"
+        )
+    lines = []
+    for step in range(have, want):
+        migrate = state.MIGRATIONS.get(step)
+        if migrate is None:
+            raise CheckError(
+                "this plugin has no step from the sidecar's schema (setting: personal.schema)"
+            )
+        paths = list(migrate(sidecar))
+        toml = sidecar / "agk.toml"
+        text = toml.read_text(encoding="utf-8")
+        line = f"schema = {step + 1}"
+        if SCHEMA_LINE.search(text):
+            text = SCHEMA_LINE.sub(line, text, count=1)
+        else:
+            text = text.replace("[personal]\n", f"[personal]\n{line}\n", 1)
+        toml.write_text(text, encoding="utf-8")
+        commit_sidecar(
+            sidecar, f"personal: upgrade schema {step} to {step + 1}", ["agk.toml", *paths]
+        )
+        lines.append(f"upgrade: schema {step} to {step + 1}")
+    return 0, lines
+
+
+def hook(clone: Path, action: str) -> tuple[int, list[str]]:
+    """Rule 19: install refuses a clone with no sidecar, since the hook runs the gate on it."""
+    state = state_module()
+    if action == "install":
+        find_sidecar(clone)
+        return 0, [state.install_hook(clone, str(Path(__file__).resolve()))]
+    return 0, [state.remove_hook(clone)]
+
+
 def run_change(clone: Path, sidecar: Path, options: dict) -> tuple[int, list[str]]:
     step = options["step"]
     if step == "start":
@@ -1289,6 +1361,8 @@ def parse(args: list[str]) -> dict | None:
         return parse_confirm(args[1:])
     if args and args[0] == "change":
         return parse_change(args[1:])
+    if args and args[0] in ("hook", "upgrade"):
+        return parse_upkeep(args)
     if not args or args[0] not in ("baseline", "floor", "gate", "report", "pr-summary", "status"):
         return None
     out: dict = {"command": args.pop(0), "clone": ".", "sidecar": None, "base": None}
@@ -1306,6 +1380,22 @@ def parse(args: list[str]) -> dict | None:
             out[flag[2:]] = args.pop(0)
         else:
             return None
+    return out
+
+
+def parse_upkeep(args: list[str]) -> dict | None:
+    """`hook install|remove [--clone DIR]` and `upgrade [--clone DIR] [--sidecar DIR]`."""
+    out: dict = {"command": args.pop(0), "clone": ".", "sidecar": None, "action": None}
+    if out["command"] == "hook":
+        if not args or args[0] not in ("install", "remove"):
+            return None
+        out["action"] = args.pop(0)
+    allowed = ("--clone",) if out["command"] == "hook" else ("--clone", "--sidecar")
+    while args:
+        flag = args.pop(0)
+        if flag not in allowed or not args:
+            return None
+        out[flag[2:]] = args.pop(0)
     return out
 
 
@@ -1336,11 +1426,23 @@ def main(argv: list[str] | None = None) -> int:
         if options["command"] == "status" and options["sidecar"]:
             print(status(Path(options["sidecar"])))
             return 0
+        if options["command"] == "upgrade" and options["sidecar"]:  # the clone is not read
+            code, lines = upgrade(Path(options["sidecar"]))
+            print("\n".join(lines))
+            return code
         probe = _git(Path(options["clone"]), "rev-parse", "--show-toplevel")
         if probe.returncode != 0:
             raise CheckError("the clone cannot be read as a git repository (option: --clone)")
         clone = Path(probe.stdout.decode("utf-8", "surrogateescape").strip())
+        if options["command"] == "hook":
+            code, lines = hook(clone, options["action"])
+            print("\n".join(lines))
+            return code
         sidecar = Path(options["sidecar"]) if options["sidecar"] else find_sidecar(clone)
+        if options["command"] == "upgrade":
+            code, lines = upgrade(sidecar)
+            print("\n".join(lines))
+            return code
         if options["command"] == "change":
             code, lines = run_change(clone, sidecar, options)
             print("\n".join(lines))

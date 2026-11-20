@@ -313,6 +313,11 @@ def test_the_hook_template_calls_prepush_and_installs_nothing():
     assert "pre-push" not in manifest  # never copied into a project by init or upgrade
     for script in (root / "scripts" / "agk").glob("*.py"):
         body = script.read_text(encoding="utf-8")
+        if script.name == "personal_state.py":
+            # SPEC-0041 rule 19, ADR-0637: personal mode's opt-in hook, written in one place only,
+            # on the person's `personal.py hook install`, never by init or upgrade of a project.
+            assert body.count(".write_bytes(hook_text(") == 1, script.name
+            continue
         assert "hooks/pre-push" not in body and "core.hooksPath" not in body, script.name
 
 
