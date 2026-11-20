@@ -70,6 +70,7 @@ def posix(tmp_path):
     env.update(
         PATH=f"{fake}{os.pathsep}{env['PATH']}",
         AGK_SESSION=SESSION,
+        AGK_AGENT="builder",  # SPEC-0066 rule 5 (ADR-0662)
         CLAUDE_SEEN=str(tmp_path / "seen.txt"),
         TAB_SEEN=str(tmp_path / "tab.txt"),
         DISPLAY=":0",  # a desktop is there: before this build, a tab opened for every job
@@ -107,7 +108,7 @@ def test_the_posix_adapter_runs_a_job_in_the_background_with_a_log_even_on_a_des
     """REQ-071 AC3: rules 3 and 5 (no tab, one log per job, headless; only `true` shows one)."""
     got = run_posix(posix, AGK_SHOW_JOBS=show)
     assert got["tab"] is None  # no terminal tab was opened
-    assert got["claude"] == ["-p", "build it"]
+    assert got["claude"] == ["--agent", "builder", "-p", "build it"]
     assert "job output" in got["log"]
     status = git_in(posix["worktree"], "status", "--porcelain", "--untracked-files=all")
     assert status == ""  # the log, the record and the exit file stay out of git
@@ -120,7 +121,7 @@ def test_the_posix_adapter_shows_a_tab_that_closes_with_show_jobs(posix):
     assert got["tab"] is not None and got["tab"][:3] == ["--tab", "--title", SESSION]
     command = got["tab"][got["tab"].index("--") + 1 :]
     assert command[:2] == ["bash", "-c"] and "exec bash" not in " ".join(command)
-    assert got["claude"] == ["-p", "build it"]
+    assert got["claude"] == ["--agent", "builder", "-p", "build it"]
     assert "job output" in got["log"]
 
 
@@ -162,9 +163,9 @@ def test_the_windows_wrapper_runs_claude_headless_and_writes_the_log():
     """REQ-071 AC3: rule 3 (`-p`, the output in `.agk-session.log`; show_jobs tees to the tab)."""
     wrapper = wrapper_of(windows())
     assert "'.agk-session.log'" in wrapper
-    assert "& claude @flags -p $prompt" in wrapper
+    assert "& claude --agent $Agent @flags -p $prompt" in wrapper
     assert "Tee-Object" in wrapper and "show.txt" in wrapper
-    assert "& claude @flags $prompt" not in wrapper  # no interactive session in a tab
+    assert "& claude --agent $Agent @flags $prompt" not in wrapper  # no interactive session
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell 7 (pwsh)")
@@ -191,13 +192,14 @@ def test_the_windows_wrapper_logs_the_job_in_both_modes(tmp_path, show):
     executable(fake / "claude", 'printf "%s\\n" "$@" > "$CLAUDE_SEEN"\necho "job output"\nexit 0\n')
     env = {**os.environ, "PATH": f"{fake}{os.pathsep}{os.environ['PATH']}"}
     env["CLAUDE_SEEN"] = str(tmp_path / "seen.txt")
-    args = [str(worktree), str(tmp_path / "prompt.txt"), str(tmp_path), SESSION, "1388"]
+    args = [str(worktree), str(tmp_path / "prompt.txt"), str(tmp_path), SESSION, "1388", "builder"]
     done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["pwsh", "-NoProfile", "-File", str(run), *args], env=env, capture_output=True,
         text=True, timeout=120,
     )  # fmt: skip
     assert done.returncode == 0, done.stderr
-    assert (tmp_path / "seen.txt").read_text(encoding="utf-8").splitlines() == ["-p", "build it"]
+    seen = (tmp_path / "seen.txt").read_text(encoding="utf-8").splitlines()
+    assert seen == ["--agent", "builder", "-p", "build it"]
     assert "job output" in (worktree / ".agk-session.log").read_text(encoding="utf-8")
 
 

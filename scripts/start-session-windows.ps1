@@ -6,6 +6,12 @@ $ErrorActionPreference = 'Stop'
 $session = $env:AGK_SESSION
 $brief = $env:AGK_BRIEF
 if (-not $session) { throw 'AGK_SESSION is not set' }
+# The agent the start names (SPEC-0066 rule 5): claude always gets --agent; without it nothing starts.
+$agent = $env:AGK_AGENT
+if (-not $agent) {
+    [Console]::Error.WriteLine('start-session-windows: no agent named; nothing started (setting: AGK_AGENT)')
+    exit 1
+}
 $prompt = [Console]::In.ReadToEnd()
 
 # 1. The worktree first, and wait until its folder exists.
@@ -88,7 +94,7 @@ $show = $env:AGK_SHOW_JOBS -eq 'true'
 Set-Content -LiteralPath (Join-Path $work 'show.txt') -Encoding utf8 -Value $(if ($show) { 'true' } else { 'false' })
 $wrapper = Join-Path $work 'run.ps1'
 Set-Content -LiteralPath $wrapper -Encoding utf8 -Value @'
-param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)
+param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Agent, $Model, $Effort)
 # The job's environment: PATH fresh, TEMP long, no inherited child-session marker.
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
             [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -111,7 +117,7 @@ if ($Model) { $flags += '--model', $Model; if ($Effort) { $flags += '--effort', 
 $log = Join-Path $Worktree '.agk-session.log'
 $shown = (Get-Content -LiteralPath (Join-Path (Split-Path $PromptFile -Parent) 'show.txt') -ErrorAction SilentlyContinue) -eq 'true'
 try {
-    if ($shown) { & claude @flags -p $prompt 2>&1 | Tee-Object -FilePath $log } else { & claude @flags -p $prompt *> $log }
+    if ($shown) { & claude --agent $Agent @flags -p $prompt 2>&1 | Tee-Object -FilePath $log } else { & claude --agent $Agent @flags -p $prompt *> $log }
     $code = $LASTEXITCODE
 } catch { $code = 1 }
 if ($null -eq $code) { $code = 1 }
@@ -126,9 +132,9 @@ $extra = @()
 if ($env:AGK_MODEL) { $extra += $env:AGK_MODEL; if ($env:AGK_EFFORT) { $extra += $env:AGK_EFFORT } }
 if ($show) {
     wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
-        pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief @extra
+        pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief $agent @extra
 } else {
-    $quoted = @($wrapper, $worktree, $promptFile, $longTemp, $session, $brief) + $extra | ForEach-Object { '"' + $_ + '"' }
+    $quoted = @($wrapper, $worktree, $promptFile, $longTemp, $session, $brief, $agent) + $extra | ForEach-Object { '"' + $_ + '"' }
     Start-Process -FilePath pwsh -WindowStyle Hidden -WorkingDirectory $worktree -ArgumentList (@('-NoProfile', '-File') + $quoted)
 }
 
