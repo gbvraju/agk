@@ -41,7 +41,7 @@ not a git repository the person sees a traceback.
    `kit` (the kit's own repository), `project` (a repository with `agk.toml`), `adopt` (another repository), `greet`
    or `greeted`. Only `greet` writes: one line, the SHA-256 of the folder's resolved path (case folded on Windows and
    macOS) and the date, in `agk-greeted.txt` of the person's Claude folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`,
-   `(verify: the Claude folder per platform)`), never in the opened folder. The role file names, in one line,
+   `(verify: the Claude folder per platform)`), never in the opened folder. The role file names, in one line, the plugin's copy of
    `docs/guides/steward-first-run.md` (a new verbatim guide, by the maintainers' answer on #1612 that keeps the role
    file's word budget), which reads `outside: no project here` and runs that command from the plugin's scripts
    folder, gives rule 8's three-line
@@ -53,7 +53,7 @@ not a git repository the person sees a traceback.
 Protected path classes changed: `scripts/agk/` (`common.py`, `init.py`, `adopt.py`, `upgrade.py`, `doctor.py`,
 `uninstall.py`, `steward.py`, `steward_daily.py`, `steward_evidence.py`, `steward_onboard.py`, `steward_owner.py`),
 `kit/` (`kit/manifest.json`, which also lists the new guide), `.claude/` (`.claude/agents/steward.md`, one line),
-`.claude-plugin/` (`settings.json`), `config/` (the steward's line in `config/rule-budget.txt`, 943 to 948 words), `tests/kit/` (`test_first_open.py`), `tests/kit_dev/`
+`.claude-plugin/` (`settings.json`), `config/` (the steward's line in `config/rule-budget.txt`, 943 to 966 words), `tests/kit/` (`test_first_open.py`), `tests/kit_dev/`
 (`test_init.py`, `test_upgrade.py`, `test_kit_manifest.py`, `test_distribution.py`, which now read the project's agent
 line as the kit's) and `docs/adr/` (this file).
 
