@@ -38,8 +38,8 @@ PROPOSAL = (
 )
 TEST_SELECTION = f"   - test selection: judgement (Option A: {PROPOSAL}; Option B: {PROPOSAL})\n"
 GATES = [
-    "   - contract-tests: check (step: contract-tests) (playbook web-app)\n",
-    "   - mock-parity: check (step: mock-parity) (playbook web-app)\n",
+    "   - contract-tests: judgement (playbook web-app)\n",  # ADR-0666 (brief #1586)
+    "   - mock-parity: judgement (playbook web-app)\n",
     "   - e2e-smoke: judgement (playbook web-app)\n",
     "   - accessibility: judgement (playbook web-app)\n",
 ]

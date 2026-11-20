@@ -316,9 +316,12 @@ def test_a_slug_with_no_research_record_is_still_an_unknown_work_type(root: Path
 
 
 def test_a_derived_playbook_cannot_weaken_a_module_gate(root: Path) -> None:
-    module = tomllib.loads((root / "config/playbooks/web-app.toml").read_text(encoding="utf-8"))
+    # cloud-migration holds a check: web-app's are judgement since ADR-0666 (brief #1586)
+    name = "config/playbooks/cloud-migration.toml"
+    write(root, name, (KIT_ROOT / name).read_text(encoding="utf-8"))
+    module = tomllib.loads((root / name).read_text(encoding="utf-8"))
     held = next(gate for gate in module["gates"] if gate["kind"] == "check")
-    assert derive(root, "--modules", "web-app").returncode == 0
+    assert derive(root, "--modules", "cloud-migration").returncode == 0
     path = root / REL
     weaker = (
         f'\n[[gates]]\nid = "{held["id"]}"\nkind = "judgement"\ntext = "Weaker."\n'

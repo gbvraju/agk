@@ -25,7 +25,8 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 REL = "config/playbooks/pilot.toml"
 PLAYBOOK = KIT_ROOT / REL
 SCRIPTS = KIT_ROOT / "scripts" / "agk"
-CHECKS = {
+# SPEC-0072 rule 3 (ADR-0666, brief #1586): these checks are restated as judgement with a reason
+RESTATED = {
     "research-record",
     "customer-data",
     "time-box",
@@ -33,7 +34,8 @@ CHECKS = {
     "cost-estimate",
     "pilot-report",
 }
-JUDGEMENTS = {"research-findings", "tool-choice", "credentials", "cost-estimate-holds"}
+CHECKS: set[str] = set()
+JUDGEMENTS = {"research-findings", "tool-choice", "credentials", "cost-estimate-holds", *RESTATED}
 OWNER_ONLY = {"tool-choice", "credentials"}
 PHASES = ["intake", "research", "choice", "contract", "build", "demo", "report"]
 LANES = ["integration", "demo-surface", "evaluation"]
@@ -158,12 +160,12 @@ def test_owner_only_is_the_choice_and_the_credentials_alone() -> None:
 def test_no_governance_step_is_added_for_the_check_gates() -> None:
     # until a build adds each step, the gate is read as judgement (Q-651-2, brief #805 answer 2)
     mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
-    for gid in CHECKS:
+    for gid in CHECKS | RESTATED:
         assert gid not in mk, gid
     workflows = KIT_ROOT / ".github" / "workflows"
     for wf in sorted(workflows.glob("*.yml")) if workflows.is_dir() else []:
         text = wf.read_text(encoding="utf-8")
-        assert all(gid not in text for gid in CHECKS), wf.name
+        assert all(gid not in text for gid in CHECKS | RESTATED), wf.name
 
 
 def test_the_delivery_shape_is_rule_11s_and_nothing_more() -> None:

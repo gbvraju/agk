@@ -58,7 +58,8 @@ def test_check_playbooks_passes_with_ten_playbooks() -> None:
 def test_exactly_the_mcp_server_gates_of_rule_10() -> None:
     by_id = gates()
     assert set(by_id) == GATES
-    assert all(g["kind"] == "check" for g in by_id.values())
+    # SPEC-0072 rule 3 (ADR-0666, brief #1586): restated as judgement with a reason
+    assert all(g["kind"] == "judgement" for g in by_id.values())
     schema = by_id["tool-schema-contract-tests"]["text"].lower()
     for word in ("tool schema", "contract tests", "testing map", "test glob", "every schema file"):
         assert word in schema, word
@@ -70,8 +71,8 @@ def test_exactly_the_mcp_server_gates_of_rule_10() -> None:
         assert word in injection, word
 
 
-def test_every_check_gate_names_its_step() -> None:
-    assert {gid: g["step"] for gid, g in gates().items()} == {gid: gid for gid in GATES}
+def test_every_restated_gate_names_its_reason_and_no_step() -> None:
+    assert all("step" not in g and "(ADR-0666)" in g["reason"] for g in gates().values())
 
 
 def test_no_gate_is_owner_only() -> None:

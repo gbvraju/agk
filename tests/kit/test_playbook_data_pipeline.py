@@ -28,8 +28,12 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 REL = "config/playbooks/data-pipeline.toml"
 PLAYBOOK = KIT_ROOT / REL
 SCRIPTS = KIT_ROOT / "scripts" / "agk"
-CHECKS = {"data-contract", "reconciliation-declared", "rollback-order"}
-JUDGEMENTS = {"reconciliation-matches", "dry-run-on-sample", "rollback-rehearsal", "production-run"}
+# SPEC-0072 rule 3 (ADR-0666, brief #1586): these checks are restated as judgement with a reason
+RESTATED = {"data-contract", "reconciliation-declared"}
+CHECKS = {"rollback-order"}
+JUDGEMENTS = {
+    "reconciliation-matches", "dry-run-on-sample", "rollback-rehearsal", "production-run", *RESTATED
+}
 
 
 def data() -> dict:
@@ -102,12 +106,12 @@ def test_only_a_run_against_production_data_is_owner_only() -> None:
 def test_no_governance_step_is_added_for_the_check_gates() -> None:
     # until a build adds each step, the gate is read as judgement (Q-651-2, as brief #757 read it)
     mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
-    for gid in CHECKS:
+    for gid in CHECKS | RESTATED:
         assert gid not in mk, gid
     workflows = KIT_ROOT / ".github" / "workflows"
     for wf in sorted(workflows.glob("*.yml")) if workflows.is_dir() else []:
         text = wf.read_text(encoding="utf-8")
-        assert all(gid not in text for gid in CHECKS), wf.name
+        assert all(gid not in text for gid in CHECKS | RESTATED), wf.name
 
 
 def test_the_split_puts_the_rollback_brief_before_the_cut_over_brief() -> None:

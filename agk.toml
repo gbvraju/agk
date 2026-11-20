@@ -843,6 +843,12 @@ tests = [
   "tests/kit/test_rules_dropped.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
+code = "scripts/agk/run_gates.py"
+tests = ["tests/kit/test_run_gates.py", "tests/kit/test_stop_check_changed.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/gates/*.py"
+tests = ["tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "config/rule-plan.txt"
 tests = ["tests/kit/test_rules_consolidate.py"]
 [[testing.map]]
@@ -1103,7 +1109,7 @@ tests = [
   "tests/kit/test_playbook_data_pipeline.py", "tests/kit/test_playbook_discovery.py",
   "tests/kit/test_playbook_mcp_server.py", "tests/kit/test_playbook_mobile.py",
   "tests/kit/test_playbook_multi_agent.py", "tests/kit/test_playbook_rag_app.py", "tests/kit/test_playbook_split.py",
-  "tests/kit/test_playbook_web_app.py", "tests/kit/test_session_plan_lanes.py",
+  "tests/kit/test_playbook_web_app.py", "tests/kit/test_run_gates.py", "tests/kit/test_session_plan_lanes.py",
   "tests/kit_dev/test_engines_discovery.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_stack_playbook.py",
 ]

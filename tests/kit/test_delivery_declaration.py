@@ -122,8 +122,11 @@ def test_ac2_a_declared_shipped_playbook_is_selected(tmp_path):
     assert playbook_format.declaration(root) == ("web-app", [])
     assert playbook_format.selected(root) == root / "config" / "playbooks" / "web-app.toml"
     result = check(root)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "ok playbooks (1 playbooks)"
+    # SPEC-0072 rule 3 (brief #1586): the selected playbook's check gates then run; the stub's
+    # steps have no module, so each is refused naming its gate id
+    lines = result.stdout.strip().splitlines()
+    assert lines[0] == "ok playbooks (1 playbooks)", result.stdout + result.stderr
+    assert lines[1:] and all(line.startswith("FAIL gates: ") for line in lines[1:])
 
 
 @pytest.mark.parametrize(

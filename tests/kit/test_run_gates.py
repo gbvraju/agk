@@ -132,15 +132,24 @@ def test_a_split_that_drops_the_order_fails_naming_gate_rule_and_path_class(
     assert "wave-plan" not in out and '"build"' not in out
 
 
-def test_the_runner_is_in_governance_and_no_required_check_or_workflow_names_it() -> None:
-    """REQ-079 AC2."""
-    mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
-    recipe = mk.split("agk-governance:\n", 1)[1].split("\n\n", 1)[0]
-    lines = [line.strip() for line in recipe.splitlines()]
-    assert lines.index("$(PY) scripts/agk/run_gates.py") == (
-        lines.index("$(PY) scripts/agk/check_playbooks.py") + 1
-    )
+def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079 AC2: the runner runs inside the step `check_playbooks` (Q-1586-3)."""
+    import check_playbooks
+
+    root = _project(tmp_path, "cloud-migration")
+    assert check_playbooks.main(["--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "ok playbooks (10 playbooks)\nok cut-over-order\nok gates (1 check gates)\n" in out
+    path = root / "config" / "playbooks" / "cloud-migration.toml"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace('["cut-over", "wave-plan"]', '["cut-over", "x"]')
+    path.write_text(text, encoding="utf-8")
+    assert check_playbooks.main(["--root", str(root)]) == 1
+    for name in ("agk.mk", "Makefile"):
+        assert "run_gates" not in (KIT_ROOT / name).read_text(encoding="utf-8"), name
     for flow in (KIT_ROOT / ".github" / "workflows").glob("*.yml"):
         assert "run_gates" not in flow.read_text(encoding="utf-8"), flow.name
     config = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
-    assert "gates" not in str(config.get("required_checks", []))
+    assert config.get("required_checks", ["proof", "governance"]) == ["proof", "governance"]

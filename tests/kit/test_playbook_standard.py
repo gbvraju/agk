@@ -86,14 +86,15 @@ def test_each_shipped_playbook_composes_the_eight_gates_and_an_architecture(path
 
 
 def test_the_base_holds_one_src_layer_and_the_eight_gates() -> None:
-    """REQ-079 AC1: `secrets` and `environment-settings` are checks, the other six judgement."""
+    """REQ-079 AC1: all eight are judgement; `secrets` and `environment-settings` name the brief
+    that builds their steps (SPEC-0072 rule 3, ADR-0666, brief #1586)."""
     base = KIT_ROOT / FOLDER / "default.toml"
     architecture, _, _ = check_playbooks.standard(base, KIT_ROOT)
     assert [layer["name"] for layer in architecture["layers"]] == ["src"]
     assert architecture.get("allow", []) == []
     gates = {g["id"]: g for g in check_playbooks.composed(base, KIT_ROOT)[0]}
-    checks = {gid for gid in ENTERPRISE if gates[gid]["kind"] == "check"}
-    assert checks == {"secrets", "environment-settings"}
+    assert {gid for gid in ENTERPRISE if gates[gid]["kind"] == "check"} == set()
+    assert all("#1593" in gates[gid]["reason"] for gid in ("secrets", "environment-settings"))
 
 
 @pytest.mark.parametrize("path", shipped(), ids=lambda p: p.stem)
@@ -137,6 +138,10 @@ def test_an_enterprise_check_restated_as_judgement_is_refused_naming_the_gate(
 ) -> None:
     """REQ-079 AC1."""
     root = kit_copy(tmp_path)
+    # a stub base holding `secrets` as a check, since ADR-0666 restates it as judgement
+    held = 'kind = "judgement"\ntext = "No credential'
+    edit(root, "default", held, held.replace("judgement", "check"))
+    edit(root, "default", 'reason = "No offline step scans', 'step = "secrets"\n#')
     own = (
         '\n[[gates]]\nid = "secrets"\nkind = "judgement"\ntext = "An invented gate."\n'
         'owner_only = false\nreason = "An invented reason that is long enough."\n'
@@ -245,11 +250,11 @@ def test_the_other_gates_are_still_not_named(tmp_path: Path) -> None:
     """SPEC-0048 rule 21 is unchanged: only the eight fixed ids are named in a refusal."""
     root = kit_copy(tmp_path)
     own = (
-        '\n[[gates]]\nid = "contract-tests"\nkind = "judgement"\ntext = "Invented."\n'
+        '\n[[gates]]\nid = "cut-over-order"\nkind = "judgement"\ntext = "Invented."\n'
         "owner_only = false\n"
     )
-    edit(root, "web-app", "[milestones]", own + "\n[milestones]")
+    edit(root, "cloud-migration", "[milestones]", own + "\n[milestones]")
     done = check(root)
     assert done.returncode == 1
     assert "a gate is restated weaker (key: kind)" in done.stdout
-    assert "contract-tests" not in done.stdout
+    assert "cut-over-order" not in done.stdout
