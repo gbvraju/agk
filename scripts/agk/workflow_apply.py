@@ -50,6 +50,10 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+from common import CHECKOUT  # noqa: E402
+
 PROPOSALS = ".agk/workflow-proposals"
 WORKFLOWS = ".github/workflows"
 COMMAND = "/agk:workflow-apply"
@@ -421,7 +425,7 @@ def work(args: argparse.Namespace, root: Path) -> int:
     temp = Path(tempfile.mkdtemp(prefix="agk-workflow-apply-"))
     tree = temp / "tree"
     try:
-        git(root, "worktree", "add", "--quiet", "--detach", str(tree), fetched)
+        git(root, *CHECKOUT, "worktree", "add", "--quiet", "--detach", str(tree), fetched)
         found = proposals(tree)
         if not found:
             raise Refused(f"no proposal under {PROPOSALS}/ on {ref}")

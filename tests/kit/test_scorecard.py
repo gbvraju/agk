@@ -212,7 +212,7 @@ def rows(stdout: str) -> dict[str, tuple[str, str]]:
 
 def snapshot(root: Path) -> dict[str, float]:
     return {
-        str(p.relative_to(root)): p.stat().st_mtime
+        p.relative_to(root).as_posix(): p.stat().st_mtime
         for p in root.rglob("*")
         if ".git" not in p.parts
     }

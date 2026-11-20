@@ -55,6 +55,7 @@ import guard
 import metrics
 import scorecard
 from common import (
+    CHECKOUT,
     REQUIREMENTS,
     CheckError,
     block_source,
@@ -260,7 +261,7 @@ def release_refusal(root: Path, tag: str, commit: str) -> str | None:
     with tempfile.TemporaryDirectory(prefix="agk-release-pack-") as place:
         tree = Path(place) / "tree"
         git(root, "clone", "-q", "--shared", "--no-checkout", "--", ".", str(tree))
-        git(tree, "checkout", "-q", "--detach", commit)
+        git(tree, *CHECKOUT, "checkout", "-q", "--detach", commit)
         try:
             found = check_tag.failure(tree, tag)
         except (CheckError, OSError, ValueError):

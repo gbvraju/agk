@@ -62,4 +62,30 @@ the whole run and nothing is written; user-owned files are never rewritten.
    `merge_cleared.py` holds as a release (its rule 5), so the person commits, pushes, opens the pull request with that
    body and merges it after review.
 
+## The clean layout: `--clean-repo`
+
+`/agk:upgrade --clean-repo` moves an installed project to the clean layout (SPEC-0071 rule 8), so the kit runs
+from this plugin and the repository keeps only the project. It runs only with `execution = "local"`, never in
+personal mode, only when the project is at this plugin's version (upgrade first), and, until the rehearsal's four
+figures are written (SPEC-0071 rule 11), only with `--rehearsal` on a sample project. Each refusal names the setting.
+
+1. Preview; show the output. It lists each kit file it deletes, each changed kit file it keeps (`changed`), and the
+   proof: a tracked file that still names a removed path fails the run, naming its path class. Tidy those and run
+   again.
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/upgrade.py" . --clean-repo --rehearsal
+   ```
+
+2. Only after the user agrees, write it. It makes the branch `agk-clean-repo` itself (a work tree with changes is
+   refused), writes the short `CLAUDE.md`, the `[kit]` table, the ADR and this machine's uncommitted
+   `.claude/settings.local.json`, and commits nothing:
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/upgrade.py" . --clean-repo --rehearsal --write
+   ```
+
+3. Tell the user to commit it as one commit, name each kept file in the pull request body, and open one pull
+   request; reverting that commit undoes the move.
+
 Do not commit, push or merge. Do not set a spec `Approved` or an ADR `Accepted`.

@@ -46,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import check_licence_notice as notice
 import guard
-from common import CheckError, git, repo_root, run, utf8_output
+from common import CHECKOUT, CheckError, git, repo_root, run, utf8_output
 
 NAME = "plugin-snapshot"
 USAGE = (
@@ -142,7 +142,7 @@ def hashes_problem(root: Path, commit: str) -> str | None:
     with tempfile.TemporaryDirectory(prefix="agk-snapshot-") as place:
         tree = Path(place) / "tree"
         git(root, "clone", "-q", "--shared", "--no-checkout", "--", ".", str(tree))
-        git(tree, "checkout", "-q", "--detach", commit)
+        git(tree, *CHECKOUT, "checkout", "-q", "--detach", commit)
         if not (tree / HASH_CHECK).is_file():
             return f"{HASH_CHECK} is missing at the tag (path class scripts/agk/)"
         env = {k: v for k, v in os.environ.items() if not k.startswith(("GITHUB_", "AGK_"))}

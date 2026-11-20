@@ -8,6 +8,9 @@
     python3 personal.py floor [--clone DIR] [--sidecar DIR] [--base REF] [--approve]
     python3 personal.py report [--week YYYY-Www] [--clone DIR] [--sidecar DIR]
     python3 personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]
+    python3 personal.py gate [--clone DIR] [--sidecar DIR] [--base REF] [--approve]
+    python3 personal.py pr-summary [--clone DIR] [--sidecar DIR]
+    python3 personal.py status [--clone DIR] [--sidecar DIR]
 
 SPEC-0041 build (h), first part, rule 16. `baseline` prints the test command it would run: the
 sidecar's `[personal] test_command`, else the one test command the survey's inventory declares
@@ -37,6 +40,33 @@ tree is not clean. It shows three lines, asks yes or no, and on yes writes `forg
 moves a spec to `Approved` or an ADR to `Accepted` (a requirement's status does not move), runs the
 kind's reader with `--base <C>` and `--comments`, and makes one commit, the child of `<C>`, only
 when the reader passes; else it restores the work tree to `<C>` and exits 1 naming the reader.
+
+`gate` (build (h), part 2, rules 17 to 20 and 23, brief #1503) is what `/agk:personal push` runs.
+Without `--approve` it runs nothing. With it: the floor at every level, then by `level`:
+`tests-first` (the branch's test files placed on the base tree, `proof.decide`: red on the base,
+green on the head), `spec` (a spec confirmed at a terminal before the branch's first commit),
+`review` (the context and report under `records/reviews/`, `check_review_report`, and the
+person's terminal verdict naming the head) and `evidence` (`evidence.parse` and
+`evidence.problems` on the record). It writes `records/gates/<head>.json` in the schema of
+`prepush.py --record`, one event per step and the gate's, and one sidecar commit; on a pass it
+prints the push command for the developer and runs none. With `team_refs` off it warns of a
+commit carrying an `Advances:` line or a sidecar path. `report` names each local branch whose head
+equals its upstream's remote-tracking ref (no fetch) and has no gate record.
+
+`pr-summary` (build (j), rules 21 and 22, brief #1505) prints, and never posts, what the gate
+record of the head says: the secret scan, the tests, the proof where the level ran it and whether
+a review was done, with no REQ, SPEC or ADR id unless `team_refs = true`; with no record it says
+so and invents nothing. It and `status` print the disclosure in force; with `ai_disclosure`
+`pr-note` or `both` the summary ends with the disclosure line, and with `commit-trailer` or `both`
+the gate warns of each branch commit without a `Co-Authored-By:` trailer. Nothing amends, rewrites
+or strips a trailer or a commit.
+
+`change start|review|confirm|finish` (build (i), rules 17 and 29, brief #1507) takes one change
+through the level's steps: `start` records the files-forge pull of the branch (refused on the
+default branch) and, at `spec` and above, drafts the change's spec; `review` writes the context for
+the read-only `personal-reviewer` agent and, with `--report`, keeps the report that
+`check_review_report` accepts, as a comment marked as an agent's; `confirm` is the person's
+`Verdict: cleared <head>` at a terminal; `finish` runs the gate and prints, never runs, the push.
 """
 
 from __future__ import annotations
@@ -64,12 +94,16 @@ from common import (  # noqa: E402
     personal_table,
     utf8_output,
 )
-from survey import INVENTORY, find_sidecar, write_private  # noqa: E402
+from survey import INVENTORY, detect_test_files, find_sidecar, write_private  # noqa: E402
 
 USAGE = (
-    "usage: personal.py baseline|floor|report [--clone DIR] [--sidecar DIR] [--base REF] "
+    "usage: personal.py baseline|floor|gate|report [--clone DIR] [--sidecar DIR] [--base REF] "
     "[--week YYYY-Www] [--approve]\n"
-    "       personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]"
+    "       personal.py confirm <REQ-nnn|SPEC-nnnn|ADR-nnnn> [--clone DIR] [--sidecar DIR]\n"
+    "       personal.py pr-summary|status [--clone DIR] [--sidecar DIR]\n"
+    "       personal.py change start <name> [--advances REQ-nnn] [--base REF] | "
+    "review [--report FILE] [--base REF] | confirm | finish [--base REF] [--approve]\n"
+    "       (each with [--clone DIR] [--sidecar DIR])"
 )
 SETTING = "personal.test_command"
 JUNIT = "{junit}"
@@ -125,12 +159,12 @@ def head_of(clone: Path) -> str:
     return done.stdout.decode("ascii").strip()
 
 
-def write_tree(clone: Path, head: str, sidecar: Path) -> Path:
+def write_tree(clone: Path, head: str, sidecar: Path, name: str | None = None) -> Path:
     """The head's tree under the sidecar, from git's object store; the clone is only read."""
     done = _git(clone, "archive", "--format=tar", head)
     if done.returncode != 0:
         raise CheckError("the head tree cannot be archived (option: --clone)")
-    tree = sidecar / TREES / head
+    tree = sidecar / TREES / (name or head)
     if tree.exists():
         shutil.rmtree(tree)
     tree.mkdir(mode=0o700, parents=True)
@@ -240,9 +274,12 @@ def scan_step(clone: Path, base: str) -> tuple[bool, str]:
     return False, f"floor: secret-scan FAIL: gitleaks reported a finding; {prepush.LEAK_RUNBOOK}"
 
 
-def regression_step(command: str, clone: Path, sidecar: Path, base: str, head: str) -> tuple:
-    """Step two: the test command on the base tree and on the head tree, then compared."""
-    runs = {}
+def regression_step(
+    command: str, clone: Path, sidecar: Path, base: str, head: str, runs: dict | None = None
+) -> tuple:
+    """Step two: the test command on the base tree and on the head tree, then compared; RUNS,
+    when given, keeps the two runs for the gate's proof step."""
+    runs = {} if runs is None else runs
     for name, sha in (("base", base), ("head", head)):
         report = f"cache/floor-{name}-junit.xml"
         runs[name] = run_once(command, write_tree(clone, sha, sidecar), sidecar, report)
@@ -372,8 +409,367 @@ def report(clone: Path, sidecar: Path, week: str | None) -> str:
     for name in ("review findings accepted", "rework", "time per change"):
         lines.append(f"report: {name}: unknown ({SECOND_PART})")
     lines.append("report: baseline: unknown (the attach time is not recorded)")
+    lines.extend(f"report: pushed without a gate: {name}" for name in ungated(clone, sidecar))
     lines.append(CAUTION)
     return "\n".join(lines)
+
+
+GATES = "records/gates"
+REVIEWS = "records/reviews"
+LEVELS = ("light", "tests-first", "spec", "review", "evidence")
+LEVEL_SETTING = "personal.level"
+TEAM_REFS = "personal.team_refs"
+LAYOUT = (  # SPEC-0041 rule 2: the sidecar's own paths, which a product commit should not carry
+    "agk.toml", "constitution/", "config/", "docs/requirements.md", "docs/specs/", "docs/adr/",
+    "docs/briefs/", "docs/runs/decisions-log.md", "forge/", "records/", "metrics/",
+    "test-map.toml", "cache/",
+)  # fmt: skip
+APPROVED_SPEC = re.compile(r"Approve: [0-9a-f]{40} SPEC-(\d{4})")
+
+
+def ungated(clone: Path, sidecar: Path) -> list[str]:
+    """Rule 19: each local branch whose head equals its upstream's remote-tracking ref, read
+    without a fetch, and that has no gate record."""
+    fmt = "--format=%(refname:short)%00%(objectname)%00%(upstream)"
+    rows = _git(clone, "for-each-ref", fmt, "refs/heads").stdout.decode("utf-8", "replace")
+    found = []
+    for row in rows.splitlines():
+        name, sha, upstream = (row.split("\0") + ["", ""])[:3]
+        if not upstream:
+            continue
+        pushed = _git(clone, "rev-parse", "--verify", "-q", f"{upstream}^{{commit}}")
+        same = pushed.returncode == 0 and pushed.stdout.decode("ascii").strip() == sha
+        if same and not (sidecar / GATES / f"{sha}.json").is_file():
+            found.append(name)
+    return found
+
+
+def branch_commits(clone: Path, base: str, head: str) -> list[str]:
+    """The branch's own commits, oldest first."""
+    done = _git(clone, "rev-list", "--reverse", f"{base}..{head}")
+    return done.stdout.decode("ascii").split() if done.returncode == 0 else []
+
+
+def team_ref_warnings(clone: Path, base: str, head: str, table: dict) -> list[str]:
+    """Rule 20: with `team_refs` off, one warning per commit that carries an `Advances:` line or
+    a path of the sidecar layout; the warning names the setting, never the line or the path."""
+    if table.get("team_refs") is True:
+        return []
+    found = []
+    for sha in branch_commits(clone, base, head):
+        message = _git(clone, "show", "-s", "--format=%B", sha).stdout.decode("utf-8", "replace")
+        if any(line.startswith("Advances:") for line in message.splitlines()):
+            found.append(f"gate: warning: commit {sha[:12]} carries an Advances: line "
+                         f"(setting: {TEAM_REFS})")  # fmt: skip
+        listed = _git(clone, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", sha)
+        paths = [p for p in listed.stdout.decode("utf-8", "replace").split("\0") if p]
+        if any(p == x or (x.endswith("/") and p.startswith(x)) for p in paths for x in LAYOUT):
+            found.append(f"gate: warning: commit {sha[:12]} carries a path of the sidecar layout "
+                         f"(setting: {TEAM_REFS})")  # fmt: skip
+    return found
+
+
+DISCLOSURE = "personal.ai_disclosure"
+DISCLOSURE_LINE = "This change was made with the help of an AI coding assistant."
+TRAILER_KEY = "Co-Authored-By"
+
+
+def trailer_warnings(clone: Path, base: str, head: str, table: dict) -> list[str]:
+    """Rule 22: with `commit-trailer` or `both`, one warning per commit of the branch whose
+    message has no `Co-Authored-By:` trailer (git's own trailer reading); nothing is changed."""
+    if table["ai_disclosure"] not in ("commit-trailer", "both"):
+        return []
+    found = []
+    for sha in branch_commits(clone, base, head):
+        shown = _git(clone, "show", "-s", f"--format=%(trailers:key={TRAILER_KEY},valueonly)", sha)
+        if not shown.stdout.strip():
+            found.append(
+                f"gate: warning: commit {sha[:12]} has no {TRAILER_KEY} trailer; if an agent "
+                f"session made it, add the trailer yourself (setting: {DISCLOSURE})"
+            )
+    return found
+
+
+def failed(step: str, why: str) -> tuple[bool, str]:
+    return False, f"gate: {step} FAIL: {why} (setting: {LEVEL_SETTING})"
+
+
+def proof_step(command: str, clone: Path, sidecar: Path, base: str, runs: dict, head: str):
+    """`tests-first`: the branch's test files on the base tree, then `proof.decide` (SPEC-0010)."""
+    from proof import decide, place_tests  # noqa: PLC0415 - the `tests-first` level only
+
+    listed = _git(clone, "diff", "-z", "--name-status", "--no-renames", base, head)
+    tokens = listed.stdout.decode("utf-8", "surrogateescape").split("\0")
+    changed = {tokens[i + 1]: tokens[i][:1] for i in range(0, len(tokens) - 1, 2)}
+    tests = {row["path"] for row in detect_test_files(changed)}
+    files = {path: status for path, status in changed.items() if path in tests}
+    if not any(status != "D" for status in files.values()):
+        return failed("tests-first", "the change adds or changes no test file")
+    tree = write_tree(clone, base, sidecar, f"proof-{base}")
+    place_tests(clone, tree, files, head)
+    red = run_once(command, tree, sidecar, "cache/proof-base-junit.xml")
+    code = {"passed": 0, "failed": 1}
+    outcome, reason = decide(code[red["run"]], code[runs["head"]["run"]])
+    if outcome == "proven":
+        return True, "gate: tests-first ok (red on the base, green on the head)"
+    return failed("tests-first", str(reason))
+
+
+def sidecar_comments(sidecar: Path) -> list[dict]:
+    """Every comment of the files forge; a file that cannot be read gives none."""
+    found: list[dict] = []
+    for path in sorted((sidecar / "forge").glob("comments-*.json")):
+        try:
+            items = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(items, list):
+            found.extend(x for x in items if isinstance(x, dict))
+    return found
+
+
+def spec_status(sidecar: Path, number: str) -> str | None:
+    paths = sorted((sidecar / "docs" / "specs").glob(f"{number}-*.md"))
+    if len(paths) != 1:
+        return None
+    lines = paths[0].read_text(encoding="utf-8").splitlines()
+    return next((m[1] for x in lines if (m := STATUS_LINE.match(x))), None)
+
+
+def spec_step(clone: Path, sidecar: Path, base: str, head: str) -> tuple[bool, str]:
+    """`spec`: a spec of the sidecar, Approved and confirmed at a terminal (ADR-0632) before the
+    committer time of the branch's first commit."""
+    from common import agent_apps  # noqa: PLC0415 - the `spec` level only
+    from reviewers import derived_only, solo_person  # noqa: PLC0415
+
+    commits = branch_commits(clone, base, head)
+    if not commits:
+        return failed("spec", "the branch has no commit of its own")
+    shown = _git(clone, "show", "-s", "--format=%ct", commits[0]).stdout.decode("ascii").strip()
+    first = datetime.fromtimestamp(int(shown or "0"), UTC)
+    items = derived_only(sidecar_comments(sidecar), agent_apps(sidecar), solo_person(sidecar))
+    for item in items:
+        found = APPROVED_SPEC.fullmatch(str(item.get("body") or ""))
+        try:
+            at = datetime.strptime(str(item.get("created_at")), STAMP).replace(tzinfo=UTC)
+        except ValueError:
+            continue
+        if found and at <= first and spec_status(sidecar, found[1]) == "Approved":
+            return True, f"gate: spec ok (SPEC-{found[1]} confirmed before the first commit)"
+    return failed("spec", "no spec confirmed at a terminal before the change's first commit")
+
+
+def review_step(sidecar: Path, head: str) -> tuple[bool, str]:
+    """`review`: the context and the reviewer report of the head, `check_review_report` unchanged,
+    and the person's verdict at a terminal naming the head (advisory in what it finds, rule 17)."""
+    try:
+        # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
+        from check_review_report import Context, parse_report, validate  # noqa: PLC0415 - kit-only
+    except ImportError:
+        return failed("review", "the reviewer report check is not installed "
+                      "(path: scripts/agk/check_review_report.py)")  # fmt: skip
+    from common import agent_apps  # noqa: PLC0415
+    from reviewers import TERMINAL_BY, login_of, solo_person, via_agent  # noqa: PLC0415
+
+    context, report_file = (sidecar / REVIEWS / f"{head}.{x}.md" for x in ("context", "report"))
+    if not context.is_file() or not report_file.is_file():
+        return failed("review", f"no review context and report for the head (path: {REVIEWS})")
+    problems = validate(
+        Context(context.read_text(encoding="utf-8")),
+        parse_report(report_file.read_text(encoding="utf-8")),
+    )
+    if problems:
+        return failed("review", f"the reviewer report does not hold: {problems[0]}")
+    person = (solo_person(sidecar) or "").lstrip("@").lower()
+    apps = agent_apps(sidecar)
+    for item in sidecar_comments(sidecar):
+        lines = [x.strip() for x in str(item.get("body") or "").strip().splitlines()]
+        if not person or via_agent(item, apps) or login_of(item) != person or len(lines) < 3:
+            continue
+        signed = TERMINAL_BY.fullmatch(lines[-1])
+        named = lines[:2] == [f"Confirmed: {head}", f"Verdict: cleared {head}"]
+        if named and signed and signed[1].lower() == person:
+            return True, "gate: review ok (the report holds; the person's verdict names the head)"
+    return failed("review", "no verdict confirmed at a terminal names the head")
+
+
+def step_entry(name: str, ok: bool, line: str, seconds: float) -> dict:
+    """One step as `prepush.py --record` writes it (ADR-0208); the gate runs no single argv."""
+    from prepush import digest  # noqa: PLC0415
+
+    entry: dict = {"name": name, "outcome": "ok" if ok else "FAIL", "not_run": None, "argv": []}
+    entry.update(cwd=".", exit=None, seconds=round(seconds, 3), **digest(line))
+    return entry
+
+
+def evidence_step(path: Path, head: str) -> tuple[bool, str]:
+    """`evidence`: the written record read back by `evidence.parse` and `evidence.problems`."""
+    import evidence  # noqa: PLC0415 - the `evidence` level only
+
+    try:
+        record, _ = evidence.parse(path.read_bytes())
+    except (OSError, evidence.Usage) as exc:
+        return failed("evidence", f"the record cannot be read ({exc})")
+    found = evidence.problems(record, head)
+    if found:
+        return failed("evidence", "; ".join(found))
+    return True, "gate: evidence ok (the record agrees with the head)"
+
+
+def push_line(clone: Path) -> str:
+    """The command the developer runs; the gate runs none (rule 20)."""
+    branch = _git(clone, "symbolic-ref", "--short", "-q", "HEAD").stdout.decode().strip()
+    remote = _git(clone, "config", "--get", f"branch.{branch}.remote").stdout.decode().strip()
+    target = f"{remote or 'origin'} {branch or 'HEAD:<branch>'}"
+    return f"gate: the agent pushes nothing; push it yourself: git push {target}"
+
+
+def gate(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[bool, str]:
+    """Rules 17 to 20: the floor, the steps of the level, the record, the events, one commit."""
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    command, level = test_command(sidecar), table["level"]
+    head, base = head_of(clone), merge_base(clone, ref)
+    lines = [f"gate: level {level}, base {base[:12]}, head {head[:12]}"]
+    lines.extend(team_ref_warnings(clone, base, head, table))
+    lines.extend(trailer_warnings(clone, base, head, table))
+    if not approve:
+        lines.append(f"gate: nothing ran: would run {command} on the base and head trees and the "
+                     f"steps of level {level}; run again with --approve")  # fmt: skip
+        return False, "\n".join(lines)
+    import prepush  # noqa: PLC0415
+
+    record = {"schema": prepush.SCHEMA, "head": head, "base": base, "level": level}
+    record.update(started=datetime.now(UTC).strftime(STAMP), steps=[], notes=[])
+    record["tree_clean"] = _git(clone, "status", "--porcelain").stdout.strip() == b""
+    record["versions"] = prepush.versions(clone)
+    runs: dict = {}
+    rank = LEVELS.index(level)
+    steps = [
+        ("secret-scan", lambda: scan_step(clone, base)),
+        ("no-regression", lambda: regression_step(command, clone, sidecar, base, head, runs)),
+        ("tests-first", lambda: proof_step(command, clone, sidecar, base, runs, head)),
+        ("spec", lambda: spec_step(clone, sidecar, base, head)),
+        ("review", lambda: review_step(sidecar, head)),
+    ][: 2 + min(rank, 3)]
+    results: dict[str, bool] = {}
+    for name, step in steps:
+        started = datetime.now(UTC)
+        ok, line = step()
+        lines.append(line)
+        results[name] = ok
+        seconds = (datetime.now(UTC) - started).total_seconds()
+        record["steps"].append(step_entry(name, ok, line, seconds))
+    path = sidecar / GATES / f"{head}.json"
+    record["result"] = "passed" if all(results.values()) else "failed"
+    write_private(path, json.dumps(record, indent=2, sort_keys=True) + "\n")
+    if rank == LEVELS.index("evidence"):
+        ok, line = evidence_step(path, head)
+        lines.append(line)
+        results["evidence"] = ok
+        record["steps"].append(step_entry("evidence", ok, line, 0.0))
+        record["result"] = "passed" if all(results.values()) else "failed"
+        write_private(path, json.dumps(record, indent=2, sort_keys=True) + "\n")
+    passed = record["result"] == "passed"
+    events = [("floor", results["secret-scan"] and results["no-regression"])]
+    events += [(n, ok) for n, ok in results.items() if n not in ("secret-scan", "no-regression")]
+    for name, ok in [*events, ("gate", passed)]:
+        lines.extend(append_event(sidecar, head, name, "passed" if ok else "failed"))
+    lines.extend(commit_gate(sidecar, head))
+    lines.append("gate: passed" if passed else "gate: failed")
+    if passed:
+        lines.append(push_line(clone))
+    return passed, "\n".join(lines)
+
+
+TEAM_IDS = re.compile(r"\s*\b(?:REQ-\d{3}|SPEC-\d{4}|ADR-\d{4})\b")
+SUMMARY_STEPS = {
+    "secret-scan": "Secret scan",
+    "no-regression": "No test that passed before fails now",
+    "tests-first": "Tests written first",
+    "review": "Review",
+}
+
+
+def disclosure_in_force(table: dict) -> str:
+    return f"Disclosure in force: {table['ai_disclosure']} (setting: {DISCLOSURE})"
+
+
+def status(sidecar: Path) -> str:
+    """Rule 22: the settings in force, the disclosure among them; a bad value is refused."""
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    return (f"personal mode: forge {table['forge']}, level {table['level']}, "
+            f"disclosure {table['ai_disclosure']}\n{disclosure_in_force(table)}")  # fmt: skip
+
+
+def summary_lines(record: dict) -> list[str]:
+    """What the record's steps say, in plain words; a step the level did not run is said so."""
+    steps = record.get("steps")
+    steps = steps if isinstance(steps, list) else []
+    outcome = {}
+    for step in steps:
+        if isinstance(step, dict) and isinstance(step.get("name"), str):
+            outcome[step["name"]] = "passed" if step.get("outcome") == "ok" else "failed"
+    lines = [f"{SUMMARY_STEPS[n]}: {outcome[n]}" for n in ("secret-scan", "no-regression")
+             if n in outcome]  # fmt: skip
+    proof = outcome.get("tests-first")
+    if proof is None:
+        lines.append("Tests written first: not run at this level")
+    else:
+        why = " (red before the change, green after)" if proof == "passed" else ""
+        lines.append(f"Tests written first: {proof}{why}")
+    review = outcome.get("review")
+    lines.append("Review: not done at this level" if review is None else f"Review: done ({review})")
+    lines.extend(f"Step {n}: {r}" for n, r in outcome.items() if n not in SUMMARY_STEPS)
+    level, result = record.get("level"), record.get("result")
+    lines.append(f"Gate: {result} at level {level} on {str(record.get('head'))[:12]}")
+    return lines
+
+
+def pr_summary(clone: Path, sidecar: Path) -> tuple[bool, str]:
+    """Rule 21: printed for the developer to paste; it posts and writes nothing."""
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    head = head_of(clone)
+    lines = ["pr-summary: for you to paste into the team's pull request; nothing is posted"]
+    lines.append(disclosure_in_force(table))
+    path = sidecar / GATES / f"{head}.json"
+    found = path.is_file()
+    if not found:
+        lines.append(f"pr-summary: no gate record for the head {head[:12]}; run the gate first, "
+                     f"no result is shown (path: {GATES})")  # fmt: skip
+    else:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise CheckError(f"the gate record cannot be read (path: {GATES})") from exc
+        if not isinstance(record, dict):
+            raise CheckError(f"the gate record cannot be read (path: {GATES})")
+        lines.extend(summary_lines(record))
+    if table.get("team_refs") is not True:
+        lines = [TEAM_IDS.sub("", line) for line in lines]
+    if table["ai_disclosure"] in ("pr-note", "both"):
+        lines.append(DISCLOSURE_LINE)
+    return found, "\n".join(lines)
+
+
+def commit_gate(sidecar: Path, head: str) -> list[str]:
+    """One sidecar commit of the record and the events; a failure is one line, never a loss."""
+    from reviewers import solo_person  # noqa: PLC0415
+
+    paths = [f"{GATES}/{head}.json", EVENTS]
+    added = _sidecar_git(sidecar, "add", "--", *paths)
+    options = commit_options(sidecar, solo_person(sidecar) or "personal")
+    done = None
+    if added.returncode == 0:
+        done = _sidecar_git(sidecar, *options, "-m", f"personal: gate {head[:12]}", "--", *paths)
+    if done is None or done.returncode != 0:
+        return [f"gate: the record is written but not committed (path: {GATES})"]
+    return []
 
 
 RECORD_ID = re.compile(r"(SPEC-(\d{4})|ADR-(\d{4})|REQ-\d{3})")
@@ -571,10 +967,329 @@ def _write(sidecar: Path, files, rid: str, rel: str, shown: list[str], head: str
     return 1, [*shown, *said, f"confirm: {why}; nothing committed, the sidecar is at {head}"]
 
 
+CHANGE_RULE = "SPEC-0041 rule 17"
+BRANCH_RULE = "SPEC-0041 rule 6"
+CHANGE_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,47}")
+NO_CHANGE = (
+    f"no change is started on this branch; run personal.py change start <name> ({CHANGE_RULE})"
+)
+REVIEWER = "personal-reviewer"
+CONTEXT_SCRIPT = "scripts/agk/review_context.py"
+NO_REPORT_CHECK = (
+    "the reviewer report check is not installed (path: scripts/agk/check_review_report.py)"
+)
+SPEC_DRAFT = """# SPEC-{number}: {name} (verify: say what the change does)
+
+- Status: Draft
+- Owner: reviewer group (the one person of config/reviewers.yaml)
+- Requirements: {advances}
+
+The change `{name}` on the branch `{branch}`. (verify) Write what it does and how a test shows
+it, then confirm this spec at your own terminal before the change's first code commit.
+
+## Contexts
+
+- personal: the sidecar holds this spec and the change's records
+- kit, github, local, stacks: not applicable: a change of the product, recorded in the sidecar
+"""
+
+
+def current_branch(clone: Path) -> str:
+    branch = _git(clone, "symbolic-ref", "--short", "-q", "HEAD").stdout.decode().strip()
+    if not branch:
+        raise CheckError(f"a change needs a branch, not a detached head ({BRANCH_RULE})")
+    return branch
+
+
+def default_branch(clone: Path, ref: str | None) -> str:
+    """The default branch's name: REF, else `refs/remotes/origin/HEAD` read without a fetch."""
+    if ref:
+        return ref.removeprefix("origin/")
+    found = _git(clone, "symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD")
+    name = found.stdout.decode().strip()
+    if found.returncode != 0 or "/" not in name:
+        raise CheckError("no default branch is known (option: --base)")
+    return name.split("/", 1)[1]
+
+
+def change_of(sidecar: Path, branch: str) -> dict | None:
+    """The newest open pull record titled `change <name>` whose head is BRANCH."""
+    found = None
+    for path in sorted(
+        (sidecar / "forge" / "pulls").glob("[0-9]*.json"), key=lambda p: int(p.stem)
+    ):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        title = str(record.get("title") or "")
+        ref = (record.get("head") or {}).get("ref")
+        if record.get("state") == "open" and title.startswith("change ") and ref == branch:
+            found = record
+    return found
+
+
+def started(clone: Path, sidecar: Path) -> tuple[dict, str, dict]:
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    record = change_of(sidecar, current_branch(clone))
+    if record is None:
+        raise CheckError(NO_CHANGE)
+    return record, head_of(clone), table
+
+
+def commit_sidecar(sidecar: Path, subject: str, paths: list[str]) -> None:
+    from reviewers import solo_person  # noqa: PLC0415
+
+    added = _sidecar_git(sidecar, "add", "--", *paths)
+    options = commit_options(sidecar, solo_person(sidecar) or "personal")
+    done = (
+        _sidecar_git(sidecar, *options, "-m", subject, "--", *paths)
+        if added.returncode == 0
+        else None
+    )
+    if done is None or done.returncode != 0:
+        raise CheckError("the sidecar commit failed (path class: records)")
+
+
+def change_start(clone: Path, sidecar: Path, name: str, ref: str | None, advances: str | None):
+    """Answer 1: the files-forge pull of the branch and, at `spec` and above, the drafted spec."""
+    from common import next_free_ids  # noqa: PLC0415
+    from forge import FilesForge  # noqa: PLC0415
+
+    table = personal_table(sidecar)
+    if table is None:
+        raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    if not CHANGE_NAME.fullmatch(name):
+        raise CheckError(
+            f"name the change in lower-case letters, digits and dashes ({CHANGE_RULE})"
+        )
+    if advances is not None and not re.fullmatch(r"REQ-\d{3}", advances):
+        raise CheckError("name the requirement as REQ-nnn (option: --advances)")
+    branch, base = current_branch(clone), default_branch(clone, ref)
+    if branch == base:
+        raise CheckError(f"a change never starts on the default branch ({BRANCH_RULE})")
+    if change_of(sidecar, branch) is not None:
+        raise CheckError(f"a change is already started on this branch ({CHANGE_RULE})")
+    head = head_of(clone)
+    lines, body = [], [f"Change: {name}", f"Branch: {branch}"]
+    if advances:
+        body.append(f"Advances: {advances}")
+    if LEVELS.index(table["level"]) >= LEVELS.index("spec"):
+        number = next_free_ids(sidecar, "HEAD")["spec"]
+        rel = f"docs/specs/{number}-{name}.md"
+        if (sidecar / rel).exists():
+            raise CheckError(
+                f"the change's spec already exists (path class: docs/specs, {CHANGE_RULE})"
+            )
+        text = SPEC_DRAFT.format(number=number, name=name, branch=branch,
+                                 advances=advances or "(verify: name the requirement)")  # fmt: skip
+        write_private(sidecar / rel, text)
+        commit_sidecar(sidecar, f"personal: draft SPEC-{number} for change {name}", [rel])
+        body.append(f"Spec: SPEC-{number}")
+        lines.append(f"change: drafted SPEC-{number} in {rel}; write it, then confirm it "
+                     "yourself at your terminal before the first code commit: "
+                     f"personal.py confirm SPEC-{number}")  # fmt: skip
+    pull = FilesForge(sidecar).record_pull(f"change {name}", "\n".join(body), head, branch, base)
+    lines.insert(
+        0, f"change: started {name} on {branch} (pull {pull}, base {base}, head {head[:12]})"
+    )
+    return 0, lines
+
+
+def review_context(clone: Path, sidecar: Path, base: str, head: str, body: str) -> str:
+    """Answer 2: the sections of `review_context.assemble`, the diff and the changed files from the
+    clone (read-only, the head tree under the sidecar), the records from the sidecar."""
+    try:
+        # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
+        import review_context as rc  # noqa: PLC0415 - kit-only
+    except ImportError:
+        raise CheckError(
+            f"the review context builder is not installed (path: {CONTEXT_SCRIPT})"
+        ) from None
+    os.environ["GIT_OPTIONAL_LOCKS"] = "0"  # rule 4: `review_context`'s git reads lock nothing
+    limits, other = rc.caps(sidecar), rc.caps(sidecar)["review_other_cap"]
+    listed = _git(clone, "diff", "-z", "--name-status", "--no-renames", base, head)
+    tokens = listed.stdout.decode("utf-8", "surrogateescape").split("\0")
+    changed = {tokens[i + 1]: tokens[i][:1] for i in range(0, len(tokens) - 1, 2)}
+    ids = rc.advanced(body)
+    problems = [] if ids else ["the change has no `Advances:` line with a REQ id"]
+    hunks = sorted(rc.tracked_hunks(clone, f"{base}..{head}"), key=lambda h: h.file)
+    if not hunks:
+        problems.append("the diff is empty")
+    diff, cut_diff = rc.diff_section(hunks, limits["review_diff_cap"])
+    req_text = rc.read_text(sidecar, rc.REQUIREMENTS)
+    texts = rc.requirement_texts(req_text or "")
+    problems += [f"{req} is not in {rc.REQUIREMENTS}" for req in ids if req not in texts]
+    reqs, cut_reqs = rc.requirements_section(sidecar, ids, texts, other)
+    docs, doc_problems = rc.referenced_docs(sidecar, body, ids, {})
+    docs_lines, cut_docs = rc.documents_section(sidecar, docs, other)
+    principles, cut_principles = rc.text_section(rc.read_text(sidecar, rc.PRINCIPLES), other)
+    tree = write_tree(clone, head, sidecar, f"review-{head}")
+    try:
+        files_lines, cut_files = rc.changed_files_section(tree, changed, other)
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+    body_lines, cut_body = rc.text_section(body, other)
+    cut = (cut_diff, cut_files, cut_reqs, cut_docs, cut_principles, cut_body)
+    out = ["# Review context", "", f"Truncated: {'yes' if any(cut) else 'no'}", ""]
+    for title, lines in (
+        ("Context problems", [f"- {p}" for p in problems + doc_problems] or ["- none"]),
+        ("PR body", body_lines),
+        ("Diff", diff),
+        ("Changed files", files_lines),
+        ("Requirements", reqs),
+        ("Protected classes touched", ["none (personal mode: the product's paths are the team's)"]),
+        ("Referenced specs and ADRs", docs_lines),
+        ("Principles", principles),
+        ("Operating rules", ["none (personal mode: the sidecar holds the rules)"]),
+    ):
+        out += [f"## {title}", "", *lines, ""]
+    return "\n".join(out)
+
+
+def change_review(clone: Path, sidecar: Path, ref: str | None, report: str | None):
+    """Answer 2: the context for the `personal-reviewer` agent, or its report checked and kept."""
+    from forge import FilesForge  # noqa: PLC0415
+    from local_mode import SESSION_SETTING  # noqa: PLC0415
+
+    record, head, _ = started(clone, sidecar)
+    context = f"{REVIEWS}/{head}.context.md"
+    if report is None:
+        base = merge_base(clone, ref)
+        write_private(sidecar / context, review_context(clone, sidecar, base, head, record["body"]))
+        commit_sidecar(sidecar, f"personal: review context {head[:12]}", [context])
+        return 0, [f"review: the context of {head[:12]} is in {sidecar / context}",
+                   f"review: ask the {REVIEWER} agent to review it, save its answer outside "
+                   "the clone, then run: personal.py change review --report FILE"]  # fmt: skip
+    try:
+        # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
+        from check_review_report import Context, parse_report, validate  # noqa: PLC0415 - kit-only
+    except ImportError:
+        raise CheckError(NO_REPORT_CHECK) from None
+    if not (sidecar / context).is_file():
+        raise CheckError(
+            f"no review context for the head; run personal.py change review ({CHANGE_RULE})"
+        )
+    try:
+        text = Path(report).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CheckError("the report cannot be read (option: --report)") from exc
+    parsed = parse_report(text)
+    problems = validate(Context((sidecar / context).read_text(encoding="utf-8")), parsed)
+    if problems:
+        return 1, [f"review: the report does not hold: {problems[0]}; nothing recorded"]
+    kept = f"{REVIEWS}/{head}.report.md"
+    write_private(sidecar / kept, text)
+    commit_sidecar(sidecar, f"personal: review report {head[:12]}", [kept])
+    marked = {**os.environ, SESSION_SETTING: "1"}  # the agent's words, always marked (rule 8)
+    FilesForge(sidecar, env=marked).comment(record["number"], text)
+    verdict = (parsed["verdicts"] or ["none"])[0]
+    return 0, [f"review: the report holds (verdict {verdict}); it is advisory ({CHANGE_RULE})",
+               "review: your verdict, at your terminal: personal.py change confirm"]  # fmt: skip
+
+
+def change_confirm(
+    clone: Path, sidecar: Path, ask=input, tty=None, env=None
+) -> tuple[int, list[str]]:
+    """Answer 3: the person's `Verdict: cleared <head>` at a terminal, as the gate reads it."""
+    try:
+        return _change_confirm(clone, sidecar, ask, tty, env)
+    except CheckError as exc:
+        return 1, [f"refused: {exc}"]
+
+
+def _change_confirm(clone: Path, sidecar: Path, ask, tty, env) -> tuple[int, list[str]]:
+    from forge import FilesForge  # noqa: PLC0415
+    from local_mode import SESSION_SETTING  # noqa: PLC0415
+
+    try:
+        # kit-only, guarded: an experimental file (kit/manifest.json), absent from a default install
+        from check_review_report import parse_report  # noqa: PLC0415 - kit-only
+    except ImportError:
+        raise CheckError(NO_REPORT_CHECK) from None
+    env = os.environ if env is None else env
+    if env.get(SESSION_SETTING):
+        raise CheckError(f"confirm runs only at the person's terminal (setting: {SESSION_SETTING})")
+    if not (os.isatty(0) if tty is None else tty()):
+        raise CheckError("confirm needs a terminal on standard input (SPEC-0041 rule 15)")
+    record, head, _ = started(clone, sidecar)
+    report = sidecar / REVIEWS / f"{head}.report.md"
+    if not report.is_file():
+        raise CheckError(
+            f"no review report for the head; run personal.py change review ({CHANGE_RULE})"
+        )
+    verdict = (parse_report(report.read_text(encoding="utf-8"))["verdicts"] or ["none"])[0]
+    shown = [f"{record['title']}: pull {record['number']}",
+             f"head {head} of {record['head']['ref']}",
+             f"review report: {verdict} (advisory)"]  # fmt: skip
+    answer = ask("\n".join([*shown, "clear this head? [yes/no] "]))
+    if answer.strip().lower() not in ("y", "yes"):
+        return 1, [*shown, "change confirm: nothing written"]
+    if head_of(clone) != head:
+        raise CheckError(
+            f"the clone's head moved while confirming; nothing written ({CHANGE_RULE})"
+        )
+    files = FilesForge(sidecar, env=env)
+    body = [f"Confirmed: {head}", f"Verdict: cleared {head}", "Shown:", *shown]
+    body.append(f"confirmed by {files.person} at a terminal at {files.now()}")
+    files.comment(record["number"], "\n".join(body))
+    return 0, [
+        *shown,
+        f"change confirm: {head[:12]} cleared at a terminal in pull {record['number']}",
+    ]
+
+
+def change_finish(
+    clone: Path, sidecar: Path, ref: str | None, approve: bool
+) -> tuple[int, list[str]]:
+    """Answer 4: the gate of build (h) unchanged; on a pass, the commands for the developer."""
+    started(clone, sidecar)
+    passed, text = gate(clone, sidecar, ref, approve)
+    lines = text.splitlines()
+    if passed:
+        lines.append("finish: optional, for the team's pull request: personal.py pr-summary")
+    return (0 if passed else 1), lines
+
+
+def parse_change(args: list[str]) -> dict | None:
+    if not args or args[0] not in ("start", "review", "confirm", "finish"):
+        return None
+    out: dict = {"command": "change", "step": args.pop(0), "clone": ".", "sidecar": None}
+    out.update(base=None, name=None, advances=None, report=None, approve=False)
+    allowed = {"start": ("--base", "--advances"), "review": ("--base", "--report"),
+               "finish": ("--base",), "confirm": ()}[out["step"]]  # fmt: skip
+    while args:
+        flag = args.pop(0)
+        if flag in ("--clone", "--sidecar", *allowed) and args:
+            out[flag[2:]] = args.pop(0)
+        elif flag == "--approve" and out["step"] == "finish":
+            out["approve"] = True
+        elif out["step"] == "start" and not flag.startswith("-") and out["name"] is None:
+            out["name"] = flag
+        else:
+            return None
+    return None if out["step"] == "start" and out["name"] is None else out
+
+
+def run_change(clone: Path, sidecar: Path, options: dict) -> tuple[int, list[str]]:
+    step = options["step"]
+    if step == "start":
+        return change_start(clone, sidecar, options["name"], options["base"], options["advances"])
+    if step == "review":
+        return change_review(clone, sidecar, options["base"], options["report"])
+    if step == "confirm":
+        return change_confirm(clone, sidecar)
+    return change_finish(clone, sidecar, options["base"], options["approve"])
+
+
 def parse(args: list[str]) -> dict | None:
     if args and args[0] == "confirm":
         return parse_confirm(args[1:])
-    if not args or args[0] not in ("baseline", "floor", "report"):
+    if args and args[0] == "change":
+        return parse_change(args[1:])
+    if not args or args[0] not in ("baseline", "floor", "gate", "report", "pr-summary", "status"):
         return None
     out: dict = {"command": args.pop(0), "clone": ".", "sidecar": None, "base": None}
     out["week"] = None
@@ -583,7 +1298,7 @@ def parse(args: list[str]) -> dict | None:
         flag = args.pop(0)
         if flag == "--approve" and out["command"] != "report":
             out["approve"] = True
-        elif flag == "--base" and args and out["command"] == "floor":
+        elif flag == "--base" and args and out["command"] in ("floor", "gate"):
             out["base"] = args.pop(0)
         elif flag == "--week" and args and out["command"] == "report":
             out["week"] = args.pop(0)
@@ -618,11 +1333,18 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = confirm(Path(options["sidecar"]), options["record"])
             print("\n".join(lines))
             return code
+        if options["command"] == "status" and options["sidecar"]:
+            print(status(Path(options["sidecar"])))
+            return 0
         probe = _git(Path(options["clone"]), "rev-parse", "--show-toplevel")
         if probe.returncode != 0:
             raise CheckError("the clone cannot be read as a git repository (option: --clone)")
         clone = Path(probe.stdout.decode("utf-8", "surrogateescape").strip())
         sidecar = Path(options["sidecar"]) if options["sidecar"] else find_sidecar(clone)
+        if options["command"] == "change":
+            code, lines = run_change(clone, sidecar, options)
+            print("\n".join(lines))
+            return code
         if options["command"] == "baseline":
             print(baseline(clone, sidecar, options["approve"]))
             return 0
@@ -633,7 +1355,15 @@ def main(argv: list[str] | None = None) -> int:
         if options["command"] == "report":
             print(report(clone, sidecar, options["week"]))
             return 0
-        passed, text = floor(clone, sidecar, options["base"], options["approve"])
+        if options["command"] == "status":
+            print(status(sidecar))
+            return 0
+        if options["command"] == "pr-summary":
+            passed, text = pr_summary(clone, sidecar)
+            print(text)
+            return 0 if passed else 1
+        run = gate if options["command"] == "gate" else floor
+        passed, text = run(clone, sidecar, options["base"], options["approve"])
         print(text)
     except CheckError as exc:
         print(f"refused: {exc}")
