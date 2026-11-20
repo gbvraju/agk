@@ -1,6 +1,6 @@
 # ADR-0616: Clean layout build (f): the doctor warns of kit files in a clean project and the steward never writes kit code into it
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: brief #1458, SPEC-0071 rules 2, 7 and 12 (f), ADR-0611, ADR-0613, ADR-0596, Q-S0071-3

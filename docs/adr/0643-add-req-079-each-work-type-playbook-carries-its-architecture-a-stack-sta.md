@@ -1,6 +1,6 @@
 # ADR-0643: Add REQ-079: Each playbook carries its architecture, a standards pack and enterprise checks
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0002, SPEC-0037, SPEC-0038, SPEC-0041, SPEC-0059, SPEC-0071, ADR-0007, brief #1400, brief #1524, plan #661

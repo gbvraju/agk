@@ -1,6 +1,6 @@
 # ADR-0639: Personal mode build (o): `[governance] level` in team mode, with the floor fixed at every level
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: brief #1509, SPEC-0041 rules 17, 18, 30 (o) and 31, ADR-0267, ADR-0280, ADR-0306, Q-562-1, Q-562-2
