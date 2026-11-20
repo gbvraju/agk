@@ -786,7 +786,8 @@ def test_the_body_edited_after_the_record_is_the_one_governance_reads(repo, outs
 def test_governance_reads_a_copy_inside_the_temporary_folder(repo, outside):
     """REQ-046: brief #1566 answer 1 (`AGK_PR_BODY` names a copy, never the person's path)."""
     seen = outside / "seen.txt"
-    mk = f"agk-governance:\n\t@echo \"$$AGK_PR_BODY\" > '{seen}'; cat \"$$AGK_PR_BODY\" >> '{seen}'\n"
+    recipe = f"@echo \"$$AGK_PR_BODY\" > '{seen}'; cat \"$$AGK_PR_BODY\" >> '{seen}'"
+    mk = f"agk-governance:\n\t{recipe}\n"
     covered_project(repo, outside, mk=mk)
     record = write(outside / "record.json", repo)
     body = body_file(outside, covered_body())

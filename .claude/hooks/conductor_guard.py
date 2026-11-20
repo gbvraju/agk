@@ -128,9 +128,9 @@ evidence folder (`<git common dir>/agk-evidence`, found with one `git rev-parse 
 Without a matching record the check runs the head's governance and a sample of its tests in a
 temporary worktree with the conductor's environment, so it is allowed only while the project is in
 local mode, judged as for `route.py` above; in CI mode it is refused with a message naming the
-setting. Brief #1566 (ADR-0656): the check may also take `--body <FILE>` once, the pull request body the
-conductor read with one GET and saved with Write: an existing regular file of a scratch directory,
-named by its absolute path with no link, never the shared evidence folder or another path.
+setting. Brief #1566 (ADR-0656): the check may also take `--body <FILE>` once, the pull request
+body the conductor read with one GET and saved with Write: an existing regular file of a scratch
+directory, named by its absolute path with no link, never the shared evidence folder or elsewhere.
 Another subcommand or option, a second RECORD, a record elsewhere and another copy of the
 script stay denied.
 In a clean project (`[kit] layout = "plugin"`) each `python3 scripts/agk/<script>` above is also
