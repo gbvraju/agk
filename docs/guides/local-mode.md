@@ -434,6 +434,13 @@ With `auto_merge = true`, the conductor merges a cleared pull request itself thr
 needs the verdict's `Local evidence:` and `Evidence check: agrees` for the head and posts its `Auto merge:` line on this record
 issue in place of `Local merge:`. [The auto-merge guide](auto-merge.md) says how to set it up, what each line means and how to stop it.
 
+With `[flow] conductor_lapse_minutes` set (15 to 1440 minutes; absent is off), cleared work does not wait for the next conductor
+run: once the conductor's lease on the plan issue has had no holder for that many minutes past its end, the merger's scheduled
+sweep runs the same guarded command on each cleared head. Such a merge needs the verdict's `Local evidence:` with `Evidence check:
+agrees` and every required check green on GitHub for that head, is never made while this record issue is open, and its
+`Auto merge:` line ends `merged by the sweep after a conductor lapse`. A release or a protected class still waits for the owner's
+`python3 scripts/agk/merge_cleared.py --pr <n> --owner`, which the sweep's `UNMERGED` line names (brief #1615, ADR-0684).
+
 ## Leave local mode
 
 When Actions runs again (minutes renewed, billing fixed, the outage over):
