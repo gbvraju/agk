@@ -52,7 +52,7 @@ not a git repository the person sees a traceback.
 
 Protected path classes changed: `scripts/agk/` (`common.py`, `init.py`, `adopt.py`, `upgrade.py`, `doctor.py`,
 `uninstall.py`, `steward.py`, `steward_daily.py`, `steward_evidence.py`, `steward_onboard.py`, `steward_owner.py`),
-`kit/` (`kit/manifest.json`, which also lists the new guide), `.claude/` (`.claude/agents/steward.md`, one line),
+`kit/` (`kit/manifest.json`, which also lists the new guide, and the `gitattributes` template, which pins it LF), `.claude/` (`.claude/agents/steward.md`, one line),
 `.claude-plugin/` (`settings.json`), `config/` (the steward's line in `config/rule-budget.txt`, 943 to 966 words), `tests/kit/` (`test_first_open.py`), `tests/kit_dev/`
 (`test_init.py`, `test_upgrade.py`, `test_kit_manifest.py`, `test_distribution.py`, which now read the project's agent
 line as the kit's) and `docs/adr/` (this file).
