@@ -972,6 +972,15 @@ PERSONAL_KEYS = (
     "sign",
     "team_refs",
     "schema",
+    "plugin_version",
+)
+# SPEC-0041 rule 26: the sidecar's copies of the kit's law, checked by `doctor.py` against
+# `kit/hashes.json` for the recorded `plugin_version`.
+PERSONAL_PINNED = (
+    "constitution/principles.md",
+    "config/core-rules.md",
+    "config/session-rules.md",
+    "config/review-checklist.md",
 )
 PERSONAL_CHOICES = {
     "level": ("light", "tests-first", "spec", "review", "evidence"),
@@ -979,7 +988,7 @@ PERSONAL_CHOICES = {
 }
 PERSONAL_DEFAULTS = {"level": "light", "ai_disclosure": "both"}
 PERSONAL_RANGES = {"survey_budget": (1, 1000), "quote_lines": (0, 20), "schema": (1, None)}
-PERSONAL_TEXTS = ("sync_remote", "test_command")
+PERSONAL_TEXTS = ("sync_remote", "test_command", "plugin_version")
 PERSONAL_FLAGS = ("sign", "team_refs")
 
 

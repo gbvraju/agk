@@ -76,6 +76,7 @@ from __future__ import annotations
 
 import datetime
 import fnmatch
+import hashlib
 import json
 import math
 import os
@@ -107,6 +108,7 @@ from common import (  # noqa: E402
     GITLEAKS_INSTALL,
     GITLEAKS_PIN,
     PAUSED_LINE,
+    PERSONAL_PINNED,
     REMOTE_RUNTIME,
     ROUTER_WORKFLOW,
     CheckError,
@@ -1458,8 +1460,11 @@ def model_names_result(root: Path) -> Result:
     if names is None:
         return Result("ok", message="auto_start off or no launch_adapter")
     if not names:
-        first = "the autopilot is on with [autopilot] adapter" if on else (
-            "auto_start is on with a launch_adapter")
+        first = (
+            "the autopilot is on with [autopilot] adapter"
+            if on
+            else ("auto_start is on with a launch_adapter")
+        )
         return Result(
             "fail",
             message=f"{first} and [models.names] is unset, so "
@@ -2070,9 +2075,46 @@ def render_no_kit(as_json: bool) -> str:
     return f"agk doctor none\n{NO_KIT}: {NO_KIT_TEXT}\nsummary: {NO_KIT}\n"
 
 
-def personal_line(root: Path) -> tuple[int, str] | None:
-    """On a sidecar (SPEC-0041 rule 1): the one personal-mode line and its exit, with no network
-    read; None in team mode. A malformed `[personal]` table fails naming the setting."""
+KIT_HASHES = Path(__file__).resolve().parents[2] / "kit" / "hashes.json"
+PINNED_SETTING = "(setting: personal.plugin_version)"
+NO_ROW = "kit/hashes.json has no row for the recorded version"
+WINDOWS_PERMISSIONS = (
+    "permissions: not checked on Windows; the state folder keeps the profile's permissions "
+    "(rule 28)"
+)
+
+
+def pinned_lines(root: Path, version: object, hashes: Path = KIT_HASHES) -> list[str]:
+    """SPEC-0041 rule 26: each pinned copy in the sidecar against `kit/hashes.json` for the
+    recorded plugin version, its bytes as they are and with CRLF read as LF; a difference is
+    reported, never its text and never the version (Q-1506-3: it does not fail the doctor)."""
+    if not isinstance(version, str) or not version:
+        return [f"pinned: not checked: no plugin version is recorded {PINNED_SETTING}"]
+    try:
+        releases = json.loads(hashes.read_text(encoding="utf-8")).get("releases") or {}
+    except (OSError, ValueError, AttributeError):
+        return ["pinned: not checked: kit/hashes.json cannot be read (path class: kit/)"]
+    row = releases.get(version) if isinstance(releases, dict) else None
+    if not isinstance(row, dict):
+        return [f"pinned: not checked: {NO_ROW} {PINNED_SETTING}"]
+    verbatim = row.get("verbatim") or {}
+    problems = []
+    for rel in PERSONAL_PINNED:
+        path = root / rel
+        if not path.is_file():
+            problems.append(f"pinned: {rel} is missing")
+            continue
+        data = path.read_bytes()
+        seen = {hashlib.sha256(d).hexdigest() for d in (data, data.replace(b"\r\n", b"\n"))}
+        if not seen & set(verbatim.get(rel) or ()):
+            problems.append(f"pinned: {rel} differs from kit/hashes.json")
+    return problems or [f"pinned: {len(PERSONAL_PINNED)} files match kit/hashes.json"]
+
+
+def personal_line(root: Path, osname: str | None = None) -> tuple[int, str] | None:
+    """On a sidecar (SPEC-0041 rule 1): the personal-mode line, the pinned files of rule 26 and,
+    on Windows, rule 28's note, with the exit and no network read; None in team mode. A malformed
+    `[personal]` table fails naming the setting."""
     try:
         table = personal_table(root)
     except CheckError as exc:
@@ -2081,10 +2123,14 @@ def personal_line(root: Path) -> tuple[int, str] | None:
         return 1, "refused: agk.toml cannot be read (setting: personal)"
     if table is None:
         return None
-    return 0, (
+    lines = [
         f"personal mode: forge {table['forge']}, level {table['level']}, "
-        f"disclosure {table['ai_disclosure']}"
-    )
+        f"disclosure {table['ai_disclosure']}",
+        *pinned_lines(root, table.get("plugin_version")),
+    ]
+    if (osname or os.name) == "nt":
+        lines.append(WINDOWS_PERMISSIONS)
+    return 0, "\n".join(lines)
 
 
 def paused_report(root: Path) -> str | None:
@@ -2694,7 +2740,16 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     sys.stdout.write(
         (render_json if options["json"] else render_text)(
-            report, version, tidy, extra, scan, work, deprecation, skills, design, licence,
+            report,
+            version,
+            tidy,
+            extra,
+            scan,
+            work,
+            deprecation,
+            skills,
+            design,
+            licence,
             governance=governance,
         )
     )

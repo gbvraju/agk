@@ -124,9 +124,14 @@ def product(clone: Path) -> tuple:
     for path in sorted((clone / ".git").rglob("*")):
         if path.is_file():
             data = path.read_bytes()
-            files[path.relative_to(clone).as_posix()] = (len(data), hashlib.sha256(data).hexdigest())
+            files[path.relative_to(clone).as_posix()] = (
+                len(data),
+                hashlib.sha256(data).hexdigest(),
+            )
     status = git(clone, "--no-optional-locks", "status", "--porcelain")
-    tree = sorted(p.relative_to(clone).as_posix() for p in clone.rglob("*") if ".git" not in p.parts)
+    tree = sorted(
+        p.relative_to(clone).as_posix() for p in clone.rglob("*") if ".git" not in p.parts
+    )
     return status, files, tree
 
 
@@ -246,7 +251,10 @@ def test_rule27_upgrade_takes_two_steps_as_two_commits(tmp_path, monkeypatch, ca
     assert personal.main(["upgrade", "--sidecar", str(side)]) == 0
     out = capsys.readouterr().out
     assert "upgrade: schema 1 to 2" in out and "upgrade: schema 2 to 3" in out
-    assert subjects(side)[:2] == ["personal: upgrade schema 2 to 3", "personal: upgrade schema 1 to 2"]
+    assert subjects(side)[:2] == [
+        "personal: upgrade schema 2 to 3",
+        "personal: upgrade schema 1 to 2",
+    ]
     assert git(side, "show", "--name-only", "--format=", "HEAD~1").splitlines() == [
         "agk.toml", "records/one.txt",
     ]  # fmt: skip
