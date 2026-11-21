@@ -37,8 +37,8 @@ A project started or adopted with `--layout plugin` (ADR-0683) keeps only the fi
 ## Consequences
 
 A correct clean project ends with no `fail` line, and the doctor's check count rises from 55 to 56. Tests:
-`tests/kit/test_doctor_clean.py` and `tests/kit/test_doctor.py`. Protected path classes changed: `scripts/agk/`
-(`scripts/agk/doctor.py`), `tests/kit/` (`tests/kit/test_doctor_clean.py`, `tests/kit/test_doctor.py`).
+`tests/kit/test_doctor_clean.py`, with the counts in `tests/kit/test_doctor.py` and `tests/kit/test_delivery_declaration.py`.
+Protected path classes changed: `scripts/agk/` (`scripts/agk/doctor.py`) and `tests/kit/` (those three test files).
 
 ## Residual
 
