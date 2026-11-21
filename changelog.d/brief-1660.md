@@ -1,0 +1,1 @@
+- A brief whose `Adds:` line says `none` adds no file, so two such briefs no longer clash and both can start; a brief held for a clash is listed with that clash (brief #1660)
