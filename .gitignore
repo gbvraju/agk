@@ -10,4 +10,6 @@ traceability*.txt
 .agk-pipeline.json
 # A person's own Claude Code permissions, never committed (brief #1029, ADR-0438).
 .claude/settings.local.json
+# A product's own environment file, never committed; `.env.example` holds its names (brief #1594, ADR-0674).
+.env
 # <<< agk

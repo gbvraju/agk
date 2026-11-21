@@ -517,6 +517,17 @@ no contract, or in `mode = "adopt"` one in another format, both print `not run`.
 from `kit/templates/data-model.md`, and `check_plan.py` refuses a `Kind: back-end` brief that does not depend on the
 `Kind: contract` brief while either file is missing.
 
+    python3 scripts/agk/basics.py write [--root DIR]
+
+The foundation's basics (brief #1594, ADR-0674; SPEC-0072 rule 4 as amendment 202 proposes). By `[delivery] work_type`
+(web-app and api-service a server, data-pipeline a report job) and for a chosen Python stack, `write` adds the `.env` line to
+`.gitignore` and writes, never over an existing file, `.env.example` (names and `<placeholder>`s only), the package's
+startup settings check and safe log, the health address `/health` (servers), `README.md` and `docs/deploy.md` ("local only"
+until a hosting option is chosen; a deploy is the person's own act). With `mode = "adopt"` it writes nothing and prints one
+`proposed: <path>: <question>` per missing part. A tracked `.env` is named, never removed. Another work type or stack prints
+`not written: basics: ...`; no work type prints `basics: not run`. `check_plan.py` refuses a foundation milestone with no
+`Kind: slice` brief, the first working slice.
+
     python3 scripts/agk/gates/layers.py [--root DIR] [--write-record]
 
 The `layers` step (SPEC-0072 rule 5; `default.toml`'s gate `layers`) reads each Python file of a layer of the composed

@@ -1,0 +1,4 @@
+# Example settings for {{project}} (brief #1594, ADR-0674): names and placeholders only, never a value.
+# Copy this file to `.env`, which git ignores, and fill in each value. The app refuses to start while one is
+# not set, naming the setting. A real value lives only in `.env` or in the place where the product runs.
+{{settings}}

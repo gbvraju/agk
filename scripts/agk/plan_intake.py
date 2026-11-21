@@ -159,12 +159,13 @@ NON_EMPTY = ("goals",)  # a list that holds at least one item, as `sources` does
 OPTIONAL = {
     "conflicts": ("settled",),
     "milestones": ("screens",),
-    "briefs": ("component", "screens", "foundation"),
+    "briefs": ("component", "screens", "foundation", "slice"),
 }
 OPTIONAL["requirements"] = ("statement", "changing")  # amendment 166 (`Q-1108-1`, `Q-1108-2`)
 OPTIONAL["requirements"] += ("notes",)  # brief #1221 (ADR-0520): cross-reference gaps
 KINDS |= {"statement": MAYBE, "changing": "true or false", "allowed": "yes or no", "notes": LIST}
 KINDS["foundation"] = "true or false"  # SPEC-0072 rule 4 (brief #1587): the foundation brief
+KINDS["slice"] = "true or false"  # brief #1594 (ADR-0674): the first working slice of M1
 TYPED = (
     "component",
     "screens",
@@ -172,6 +173,7 @@ TYPED = (
     "changing",
     "notes",
     "foundation",
+    "slice",
 )  # optional keys rule 4 types
 KEYED = {"personas": "P", COMPONENTS: "C"}  # keys run P1, P2, ... and C1, C2, ... in order
 FOUNDATION = "Foundation"
@@ -890,6 +892,8 @@ def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
     out += [f"Depends-on: {key}" for key in b["depends_on"]]
     if b.get("foundation") is True:  # SPEC-0072 rule 4: the kind `check_plan.py` reads
         out.append(f"Kind: {playbook_format.FOUNDATION}")
+    if b.get("slice") is True:  # brief #1594 (ADR-0674): the first slice `check_plan.py` reads
+        out.append("Kind: slice")
     out.append("Contexts: " + "; ".join(f"{c}: {VERIFY} for the person to state" for c in CONTEXTS))
     sources = list(b["sources"])
     if b.get("component"):  # Q-1217-1: the component's brief carries its key and its sources

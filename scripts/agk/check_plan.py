@@ -113,6 +113,8 @@ Brief #1587, SPEC-0072 rule 4 (ADR-0667): with `[delivery] work_type` set, the b
 one `Kind: foundation` brief in the first milestone and every other brief of that milestone names it
 on a `Depends-on:` line, so no feature brief runs before the foundation; with no work type a
 foundation brief is refused naming the setting, and nothing else is held (`Q-S0072-17`).
+Brief #1594 (ADR-0674): the foundation's milestone also holds one `Kind: slice` brief, the first
+working slice.
 
 Brief #1597 (ADR-0677): with a work type whose `brief_order` holds `contract`, while
 `contracts/openapi.json` or `docs/data-model.md` is missing, a `Kind: back-end` brief file that
@@ -756,6 +758,27 @@ def foundation_problems(root: Path) -> list[str]:
     return out
 
 
+def slice_brief_problems(root: Path) -> list[str]:
+    """Brief #1594 (ADR-0674, amendment 202): with a work type and a foundation brief, the first
+    milestone ends with one working slice, so a brief file of that milestone says `Kind: slice`."""
+    folder = root / BRIEFS
+    if playbook_format.declaration(root)[0] is None or not folder.is_dir():
+        return []
+    read = [_read(p) or "" for p in sorted(folder.rglob("*.md"))]
+
+    def kinds(value: str) -> list[str | None]:
+        lines = [(t, [ln.strip() for ln in t.splitlines()]) for t in read]
+        return [_line_value(t, "Milestone") for t, ls in lines if f"Kind: {value}" in ls]
+
+    foundation = kinds(playbook_format.FOUNDATION)
+    if len(foundation) != 1 or foundation[0] in kinds("slice"):
+        return []
+    return [
+        f"SPEC-0072 rule 4: {BRIEFS}: the first milestone has no Kind: slice brief after the "
+        "foundation (setting: work_type)"
+    ]
+
+
 def contract_problems(root: Path) -> list[str]:
     """Brief #1597 (ADR-0677): with a work type whose `brief_order` holds `contract`, while the
     contract or the data model is missing, each `Kind: back-end` brief file names the `Kind:
@@ -1395,7 +1418,7 @@ def cmd_check(
         lines += plan.rule_lines(facts is not None) + plan.access_lines(facts is not None)
         print("\n".join(lines))
     problems += plan.problems() + scope_lock_problems(root) + scope_problems(root, comments, base)
-    problems += foundation_problems(root) + contract_problems(root)
+    problems += foundation_problems(root) + contract_problems(root) + slice_brief_problems(root)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     for line in plan.unmatched():

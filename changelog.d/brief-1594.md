@@ -1,0 +1,1 @@
+- A new web app, API service or report tool now starts with an ignored settings file and a names-only example, a startup settings check, safe logs, a health check, a one-command README and written deploy steps (brief #1594)

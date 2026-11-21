@@ -287,7 +287,7 @@ tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.p
 [[testing.map]]
 code = "scripts/agk/check_plan.py"
 tests = [
-  "tests/kit/test_contracts.py", "tests/kit/test_agk_mk.py", "tests/kit/test_check_plan_kit_requirements.py", "tests/kit/test_check_plan_scope.py",
+  "tests/kit/test_contracts.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_agk_mk.py", "tests/kit/test_check_plan_kit_requirements.py", "tests/kit/test_check_plan_scope.py",
   "tests/kit/test_check_plan_sources.py", "tests/kit/test_check_plan_uncited.py", "tests/kit/test_workflow.py",
   "tests/kit_dev/test_kit_manifest.py",
 ]
@@ -756,7 +756,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/plan_intake.py"
 tests = [
-  "tests/kit/test_board.py", "tests/kit/test_plan_intake.py", "tests/kit/test_plan_questions.py",
+  "tests/kit/test_board.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_plan_intake.py", "tests/kit/test_plan_questions.py",
   "tests/kit/test_plan_render_installed.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_plan_intake_skill.py",
 ]
@@ -910,6 +910,18 @@ tests = ["tests/kit/test_contracts.py", "tests/kit/test_run_gates.py", "tests/ki
 [[testing.map]]
 code = "scripts/agk/gates/mock_parity.py"
 tests = ["tests/kit/test_contracts.py", "tests/kit/test_run_gates.py"]
+[[testing.map]]
+code = "scripts/agk/basics.py"
+tests = ["tests/kit/test_skeleton_basics.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "kit/templates/skeleton/**"
+tests = ["tests/kit/test_skeleton_basics.py"]
+[[testing.map]]
+code = "kit/templates/project-*"
+tests = ["tests/kit/test_skeleton_basics.py"]
+[[testing.map]]
+code = "kit/templates/deploy.md"
+tests = ["tests/kit/test_skeleton_basics.py"]
 [[testing.map]]
 code = "kit/templates/contract-openapi.json"
 tests = ["tests/kit/test_contracts.py"]

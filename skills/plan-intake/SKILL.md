@@ -102,7 +102,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" openspec --slug <slug
    layers`, the architecture record, each chosen stack's pack configuration and the check steps with their tests; every
    other brief of `M1` names it in `depends_on`. `render` writes its `Kind: foundation` line, and `check_plan.py`
    refuses a brief of that milestone without `Depends-on:` it. With no work type, propose no foundation brief: it is
-   held, and refused, until the work type is set and the person's confirmation recorded (rule 8).
+   held, and refused, until the work type is set and the person's confirmation recorded (rule 8). Propose also one
+   first-slice brief with `"slice": true` in `M1`, after the foundation: one screen, one address or one job working end
+   to end in the local profile, with `docs/deploy.md` written (`basics.py write`). `render` writes its `Kind: slice`
+   line, and `check_plan.py` refuses a foundation milestone without it (brief #1594, ADR-0674).
 
    **Demoable slices** (SPEC-0043 amendment 164 item 4). When a `Kind: design` source has `## <screen>/<state>`
    headings, every milestone after `M1` lists in `screens` the screens and states it makes demoable, its `exit` says
