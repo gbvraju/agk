@@ -77,10 +77,10 @@ reason = "No step can yet tell which actions of a project need an access check."
 
 [[gates]]
 id = "secrets"
-kind = "judgement"
+kind = "check"
+step = "secrets"
 text = "No credential, key or token is committed; each value comes from the environment."
 owner_only = false
-reason = "No offline step scans the committed files yet; brief #1593 builds it (ADR-0666)."
 
 [[gates]]
 id = "input-validation"
@@ -98,10 +98,10 @@ reason = "Whether the logs are enough to find a fault is a reviewer's reading of
 
 [[gates]]
 id = "environment-settings"
-kind = "judgement"
+kind = "check"
+step = "environment-settings"
 text = "A value that differs between environments is read from the environment, never fixed in code."
 owner_only = false
-reason = "No offline step reads the code for fixed settings yet; brief #1593 builds it (ADR-0666)."
 
 [[gates]]
 id = "migrations"
