@@ -135,7 +135,7 @@ def test_ac3_the_default_branch_reads_the_latest_run_of_each_check_too():
     """REQ-039 AC3: branch_state."""
     assert route.branch_state([run("proof", 10, "cancelled"), run("proof", 11)], []) == "green"
     assert route.branch_state([run("proof", 10), run("proof", 11, "failure")], []) == "red"
-    assert route.branch_state([run("proof", 10, "cancelled")], []) == "pending"  # #1656
+    assert route.branch_state([run("proof", 10, "cancelled")], []) == "red"  # Q-1656-1
     assert route.branch_state([run("proof", 10, None), run("proof", 11)], []) == "green"
     assert (
         route.branch_state([], [status("ci", 1, "failure"), status("ci", 2, "success")]) == "green"

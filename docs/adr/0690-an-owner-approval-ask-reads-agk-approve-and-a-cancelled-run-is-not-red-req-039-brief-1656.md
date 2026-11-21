@@ -23,14 +23,18 @@ tree).
    open ask gives `agk:question`. An ask that names both an approval and a plain question gives `agk:approve`. The
    same owner answers close it as before (`asks_owner`, ADR-0497), and it stays right after `agk:parked`, before every
    builder state (ADR-0471).
-2. **A latest cancelled run is not reported** (this replaces ADR-0143 decision 2 for labels). For the pull request
-   label (`base_state`) and the state of the default branch (`branch_state`), `judged(..., cancelled_unreported=True)`
-   leaves out a judged latest run whose conclusion is `cancelled`, and its name reads as not reported. In local mode
+2. **A latest cancelled run is not reported** (this replaces ADR-0143 decision 2 for the pull request label). For the
+   label (`base_state`), `judged(..., cancelled_unreported=True)` leaves out a judged latest run whose conclusion is
+   `cancelled`, and its name reads as not reported. In local mode
    the builder's evidence then decides (`local_proof`), as for a check that never ran; in hosted mode the head reads
-   `agk:ci-running` until a new run reports. On the default branch (`wait` false) a cancelled run is not waited for and
-   is not red. A newer failed run of the name, or any other conclusion of `FAILED_RUN`, stays red. With
+   `agk:ci-running` until a new run reports. A newer failed run of the name, or any other conclusion of `FAILED_RUN`, stays red. With
    `required_checks` only a listed name is judged; without it every run counts, so a cancelled run of any name waits.
-3. **What does not change.** `FAILED_RUN` keeps `cancelled`, and `judged` keeps it by default, so the callers that
+3. **The default branch does not change** (Q-1656-1). The brief's edge case says a cancelled run on the default branch
+   (`wait` false) is not red, but ADR-0302 decision 2 (Accepted) rules that a cancelled tip of the default branch
+   counts as failed for the red-branch brief, and `tests/kit/test_main_batching.py` holds it. A build does not change
+   an Accepted decision on its own reading, so `branch_state` keeps reading a cancelled tip as red until the
+   maintainers answer Q-1656-1; the change would be one argument (`cancelled_unreported=True`) in `branch_state`.
+4. **What else does not change.** `FAILED_RUN` keeps `cancelled`, and `judged` keeps it by default, so the callers that
    re-run or report a red check (`conductor.py`, `session.py`, `stalls.py`, `failing`) still see a cancelled run and
    the conductor's pass re-runs it as today (the recommendation of Q-1 of the brief). `review_mode`, `pr_mode` and
    personal mode (no labels) are unchanged.

@@ -1165,9 +1165,7 @@ def branch_state(
     required checks of the project that have a run or a status on that head (brief 231): a listed
     check that never runs on the default branch is not waited for, and a head none of them has
     reported is `pending`."""
-    checks, statuses, missing = judged(
-        checks, statuses, required, wait=False, cancelled_unreported=True
-    )
+    checks, statuses, missing = judged(checks, statuses, required, wait=False)
     if missing or (not checks and not statuses):
         return "pending"
     if any(c.get("status") != "completed" for c in checks) or any(
