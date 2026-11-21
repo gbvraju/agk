@@ -29,7 +29,8 @@ written first (`tests/kit/test_plan_names.py`: 20 failed, 25 passed on the uncha
    are read by the same function) read it the same.
 
 Protected path classes changed: `scripts/agk/` (`session.py`, `session_plan.py`, `check_brief.py`), `tests/kit/`
-(`test_plan_names.py`); `kit/hashes.json` is unchanged (`kit_hashes.py`: ok).
+(`test_plan_names.py`) and `agk.toml` (one test-map line: `test_plan_names.py` now imports `session_plan`);
+`kit/hashes.json` is unchanged (`kit_hashes.py`: ok).
 
 ## Consequences
 
