@@ -27,7 +27,9 @@ import doctor  # noqa: E402
 import init  # noqa: E402
 import upgrade  # noqa: E402
 
-MANIFEST = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+if not (ROOT / "kit" / "manifest.json").is_file():  # an install, or a copy of the kit's tests
+    pytest.skip("reads the kit's own files (kit/ is kit-only)", allow_module_level=True)
+MANIFEST =json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
 VERSION = str(MANIFEST["kit_version"])
 KIT_FILES = {*MANIFEST["verbatim"], *MANIFEST.get("experimental", [])}
 
