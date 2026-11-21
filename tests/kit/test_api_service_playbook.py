@@ -64,8 +64,8 @@ def test_it_composes_with_default_and_weakens_no_gate() -> None:
     assert found == []
     by_id = {g["id"]: g for g in gates}
     assert ENTERPRISE <= set(by_id)
-    assert {gid for gid in CHECKS if by_id[gid]["kind"] == "check"} == CHECKS
-    assert all(by_id[gid].get("step") for gid in CHECKS)
+    assert {gid for gid in CHECKS if by_id[gid]["kind"] == "judgement"} == CHECKS
+    assert all("(ADR-0666)" in by_id[gid]["reason"] and "step" not in by_id[gid] for gid in CHECKS)
     for gid in JUDGED:
         assert by_id[gid]["kind"] == "judgement"
         assert len(by_id[gid]["reason"].strip()) >= playbook_format.REASON_MIN

@@ -1317,13 +1317,13 @@ def slot_schedule_result(root: Path, reads: Reads) -> Result:
     )
     needed = f"; {count} slots x 4 starts = {count * 4} an hour: {times}"
     found, reason = reads.get(
-        "conductor-issue", f"repos/{reads.repo}/issues?state=open&labels=agk-conductor&per_page=100"
+        "conductor-issue", "/issues?state=open&labels=agk-conductor&per_page=100"
     )
     if reason or not isinstance(found, list) or not found:
         return Result("cannot-check", reason=reason or "bad-response")
     hour_ago = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1)
     since = hour_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
-    path = f"repos/{reads.repo}/issues/{found[0].get('number')}/comments?since={since}&per_page=100"
+    path = f"/issues/{found[0].get('number')}/comments?since={since}&per_page=100"
     comments, reason = reads.get("slot-markers", path)
     if reason or not isinstance(comments, list):
         return Result("cannot-check", reason=reason or "bad-response")

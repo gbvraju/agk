@@ -29,9 +29,9 @@ map = []
 
 [[gates]]
 id = "device-matrix"
-kind = "check"
+kind = "judgement"
 text = "A device and simulator matrix: the matrix file lists the minimum entries of this playbook."
-step = "device-matrix"
+reason = "No path is named for the device matrix file yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
@@ -42,9 +42,9 @@ owner_only = false
 
 [[gates]]
 id = "offline-states"
-kind = "check"
+kind = "judgement"
 text = "Offline states: each screen of the inventory lists an offline state."
-step = "offline-states"
+reason = "No path is named for the screen inventory yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]

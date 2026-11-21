@@ -7,6 +7,7 @@ Saved answers, invented names, no network.
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -216,6 +217,35 @@ def test_doctor_cannot_check_without_the_assignments_issue(tmp_path):
     """REQ-041: unknown is never ok."""
     result = doctor_script.slot_schedule_result(setting(tmp_path, ON), FakeReads([], issues=[]))
     assert result.status == "cannot-check"
+
+
+def test_a_live_run_reads_the_assignments_issue_at_a_path_relative_to_the_repository(
+    tmp_path, monkeypatch
+):
+    """REQ-041: brief #1625; `Reads.read` puts `repos/<owner>/<repo>` in front of the path, so the
+    check passes only the part after it and the GET never names the repository twice."""
+    called: list[str] = []
+
+    def run(args, **_kwargs):
+        endpoint = args[-1]
+        called.append(endpoint)
+        if "labels=" in endpoint:
+            out = [{"number": 204}]
+        else:
+            out = [
+                said(1, f"Slot: active {stamp(2)} s1 r1"),
+                said(2, f"Slot: active {stamp(3)} s2 r2"),
+            ]
+        return doctor_script.subprocess.CompletedProcess(args, 0, json.dumps(out), "")
+
+    monkeypatch.setattr(doctor_script.subprocess, "run", run)
+    reads = doctor_script.Reads(REPO, None)
+    result = doctor_script.slot_schedule_result(setting(tmp_path, ON), reads)
+    assert len(called) == 2
+    assert called[0] == f"repos/{REPO}/issues?state=open&labels=agk-conductor&per_page=100"
+    assert called[1].startswith(f"repos/{REPO}/issues/204/comments?since=")
+    assert all(c.count(f"repos/{REPO}") == 1 for c in called)
+    assert result.status == "ok"
 
 
 def test_the_slot_schedule_check_is_a_warning():

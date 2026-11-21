@@ -122,20 +122,21 @@ def test_the_four_rag_app_gates_of_rule_10() -> None:
         "version-pinning",
         "privacy-review",
     }
-    # a versioned evaluation set: check (a version line and invented data only)
-    assert gates["evaluation-set"]["kind"] == "check"
+    # the three checks are judgement with a reason since ADR-0666 (SPEC-0072 rule 3, brief #1586)
+    # a versioned evaluation set (a version line and invented data only)
+    assert gates["evaluation-set"]["kind"] == "judgement"
     assert "version" in gates["evaluation-set"]["text"]
     assert "invented" in gates["evaluation-set"]["text"]
     # a quality bar for retrieval and for answers: check that both are declared as numbers,
     # judgement that the recorded run meets them
-    assert gates["quality-bars"]["kind"] == "check"
+    assert gates["quality-bars"]["kind"] == "judgement"
     assert "retrieval" in gates["quality-bars"]["text"]
     assert "answers" in gates["quality-bars"]["text"]
     assert "numbers" in gates["quality-bars"]["text"]
     assert gates["quality-bars-met"]["kind"] == "judgement"
     assert "run" in gates["quality-bars-met"]["text"]
-    # prompt and model version pinning: check (exact versions, no floating alias)
-    assert gates["version-pinning"]["kind"] == "check"
+    # prompt and model version pinning (exact versions, no floating alias)
+    assert gates["version-pinning"]["kind"] == "judgement"
     assert "exact" in gates["version-pinning"]["text"]
     assert "alias" in gates["version-pinning"]["text"]
     # a privacy review of the corpus: judgement

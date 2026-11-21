@@ -81,16 +81,16 @@ allow = [
 
 [[gates]]
 id = "contract-tests"
-kind = "check"
+kind = "judgement"
 text = "Contract tests: the testing map names a test glob for every contract path."
-step = "contract-tests"
+reason = "No offline step reads the contract and its test globs yet; brief #1597 builds it (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "mock-parity"
-kind = "check"
+kind = "judgement"
 text = "Mock parity: the mock names exactly the operations of the contract file."
-step = "mock-parity"
+reason = "No offline step compares the mock with the contract yet; brief #1597 builds it (ADR-0666)."
 owner_only = false
 
 [[gates]]

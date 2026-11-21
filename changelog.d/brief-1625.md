@@ -1,0 +1,1 @@
+- The health check's `slot-schedule` row reads the assignments issue at a path relative to the repository, so a live run no longer asks GitHub for the repository name twice and says it cannot check (brief #1625)

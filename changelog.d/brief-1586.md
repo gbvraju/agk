@@ -1,0 +1,1 @@
+- A project's governance now runs every check its playbook promises, and refuses a promised check that has no code behind it; two checks run today and the rest are reviewer checks with their reasons until later builds (brief #1586)

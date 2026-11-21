@@ -60,18 +60,18 @@ def test_exactly_the_mobile_gates_of_rule_10() -> None:
         "offline-states",
         "store-signing",
     }
-    # a device and simulator matrix: check (the matrix file lists the minimum entries)
+    # a device and simulator matrix: judgement with a reason since ADR-0666 (brief #1586)
     matrix = by_id["device-matrix"]
-    assert matrix["kind"] == "check"
+    assert matrix["kind"] == "judgement"
     assert "matrix" in matrix["text"] and "minimum entries" in matrix["text"]
     assert "simulator" in matrix["text"]
     # ... with its results judgement
     results = by_id["device-matrix-results"]
     assert results["kind"] == "judgement"
     assert "results" in results["text"] and "matrix" in results["text"]
-    # offline states: check (each screen of the inventory lists an `offline` state)
+    # offline states: judgement with a reason since ADR-0666 (each screen lists an `offline` state)
     offline = by_id["offline-states"]
-    assert offline["kind"] == "check"
+    assert offline["kind"] == "judgement"
     assert "screen" in offline["text"] and "inventory" in offline["text"]
     assert "offline" in offline["text"]
     # store signing: judgement and owner_only
@@ -90,9 +90,9 @@ def test_check_gates_name_a_step_and_judgement_gates_none() -> None:
     # both check gates name the step a later build adds; until then they are read as judgement
     # (Q-651-2, brief #721 answer 2), and this build adds no governance step
     by_id = gates()
-    checks = {gid: g for gid, g in by_id.items() if g["kind"] == "check"}
-    assert set(checks) == {"device-matrix", "offline-states"}
-    assert all(g["step"] == gid for gid, g in checks.items())
+    # SPEC-0072 rule 3 (ADR-0666, brief #1586): both are restated as judgement with a reason
+    assert {gid for gid, g in by_id.items() if g["kind"] == "check"} == set()
+    assert all("(ADR-0666)" in by_id[gid]["reason"] for gid in ("device-matrix", "offline-states"))
     assert all("step" not in g for g in by_id.values() if g["kind"] == "judgement")
 
 

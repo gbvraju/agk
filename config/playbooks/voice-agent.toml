@@ -30,9 +30,9 @@ map = []
 
 [[gates]]
 id = "latency-budget"
-kind = "check"
+kind = "judgement"
 text = "Latency budget: the latency budget is declared."
-step = "latency-budget"
+reason = "No path is named for the latency budget yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
@@ -43,16 +43,16 @@ owner_only = false
 
 [[gates]]
 id = "asr-tts-evaluation-set"
-kind = "check"
+kind = "judgement"
 text = "ASR/TTS evaluation set: the set exists with a version line."
-step = "asr-tts-evaluation-set"
+reason = "No path is named for the ASR/TTS evaluation set yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "barge-in-fallback-scenarios"
-kind = "check"
+kind = "judgement"
 text = "Barge-in and fallback scenarios: each scenario is listed and the map names its tests."
-step = "barge-in-fallback-scenarios"
+reason = "No path is named for the scenario list yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [milestones]
