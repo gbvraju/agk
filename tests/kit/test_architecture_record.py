@@ -58,7 +58,7 @@ STACK = """# ADR-0002: Stack options
 ## Decision
 
 1. **Options**:
-   - Option A — Python. Parts: python 3.12.7 PSF-2.0. External services: {services}. Practices: tests.
+   - Option A — Python. External services: {services}. Practices: tests.
 2. **Practices**: tests.
 3. **Chosen**: Option A
 """

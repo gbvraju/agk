@@ -172,9 +172,10 @@ NEEDS = (
     "Recommended: {usual}, at most one hour down a month, under 50 dollars a month"
     " · tell me other numbers"
 )
+CALLS = ("calls per minute will it take at the busiest hour", "up to 600 calls per minute")
 SHAPES = {
-    "api-service": ("calls per minute will it take at the busiest hour", "up to 600 calls per minute"),
-    "mcp-server": ("calls per minute will it take at the busiest hour", "up to 600 calls per minute"),
+    "api-service": CALLS,
+    "mcp-server": CALLS,
     "data-pipeline": (
         "runs per day will it make, how large is the largest input file (a missed run counts as"
         " down time)",
@@ -187,6 +188,8 @@ PEOPLE = ("people will use it at the busiest hour", "up to 200 at once")
 def needs_question(kind: str | None) -> str:
     busy, usual = SHAPES.get(kind or "", PEOPLE)
     return NEEDS.format(busy=busy, usual=usual)
+
+
 INSTALLED_PLACEHOLDER = "TODO(maintainers)"
 PLACEHOLDER = re.compile(r"TODO\(owner\)")
 STACK_NAME = re.compile(r"^docs/adr/(\d{4})-stack-options\.md$")

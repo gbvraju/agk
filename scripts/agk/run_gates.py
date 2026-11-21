@@ -15,8 +15,9 @@ under `scripts/agk/gates/`, the step's name with `-` as `_`. Prints one `ok <gat
 gate that passes and one `FAIL gates: <gate id>: <rule> (path class: <class>)` line per failure,
 never a value; a step with no module is one such line naming the gate id. Ends with
 `ok gates (<n> check gates)`, or `ok gates (no check gate)`, or exits 1. The steps of the composed
-`[architecture]` (`ARCHITECTURE_STEPS`: `layers`, and `architecture-record` of brief #1595) run after
-the gates under their own name where they apply (two or more layers; the record exists), so the kit's own output is unchanged. A step module may hold
+`[architecture]` (`ARCHITECTURE_STEPS`: `layers`; `architecture-record`, brief #1595) run after the
+gates under their own name where they apply (two or more layers; the record exists), so the kit's
+own output is unchanged. A step module may hold
 `skipped(root)`: a reason it prints as `not run <gate id>: <reason>`, never `ok`, and names in the
 last line (`; not run: <ids>`; brief #1588, ADR-0668). Files only: no network,
 no hosted scanner, nothing written. From `check_playbooks.py` it prints nothing when no gate is a
