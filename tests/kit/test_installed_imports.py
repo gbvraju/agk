@@ -68,6 +68,8 @@ def test_a_every_installed_script_imports_only_installed_modules():
     for experimental in (False, True):
         scripts = installed_scripts(experimental)
         modules = {Path(p).stem for p in scripts}
+        # an installed package (`scripts/agk/gates/`, brief #1588) is imported by its folder name
+        modules |= {Path(p).parent.name for p in scripts if Path(p).name == "__init__.py"}
         for rel in scripts:
             problems += foreign_imports(KIT / rel, modules)
     assert sorted(set(problems)) == []

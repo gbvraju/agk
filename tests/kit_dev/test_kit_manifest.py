@@ -198,6 +198,7 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         ".claude/",
         ".github/",
         "docs/requirements.md",
+        "docs/architecture.md",  # brief #1588 (ADR-0668)
         "CLAUDE.md",
         "scripts/agk/",
         "Makefile",
@@ -207,7 +208,8 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         "agk.toml",
     ]
     # Brief #1155 (ADR-0491): the kit's own config/ is owner-held and has no project.mk entry.
-    own = [entry for entry in template if entry != "project.mk"]
+    # Brief #1588 (ADR-0668): `docs/architecture.md` is a project's record; the kit has none.
+    own = [entry for entry in template if entry not in ("project.mk", "docs/architecture.md")]
     assert lines("config/protected-paths.txt") == own + [
         "tests/kit/",
         "kit/",
@@ -383,6 +385,7 @@ def test_ac1_adopt_protected_template_and_reviewers_are_equal_and_exclude_projec
         ".claude/",
         ".github/",
         "docs/requirements.md",
+        "docs/architecture.md",  # brief #1588 (ADR-0668)
         "CLAUDE.md",
         "scripts/agk/",
         "agk.mk",
