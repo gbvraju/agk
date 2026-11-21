@@ -1,7 +1,7 @@
 """The router reads the latest run of each check (brief 229; SPEC-0032 rules 2 and 7; REQ-039 AC3).
 
 A cancelled or replaced run of a check name never makes a green head look red; a latest run that
-failed or was cancelled still does. Commit statuses keep the latest status per context. Saved
+failed still does, and a latest cancelled run reads as not reported (brief #1656, ADR-0690). Commit statuses keep the latest status per context. Saved
 responses as facts; no network, no model.
 """
 
@@ -62,9 +62,42 @@ def test_ac3_a_failure_replaced_by_a_success_is_not_red_and_a_success_replaced_b
     assert route.decide(facts([run("proof", 10), run("proof", 11, "failure")])) == "agk:ci-red"
 
 
-def test_ac3_a_latest_cancelled_run_still_counts_as_red():
-    """REQ-039 AC3"""
-    assert route.decide(facts([run("proof", 10), run("proof", 11, "cancelled")])) == "agk:ci-red"
+def test_1656_a_latest_cancelled_run_reads_as_not_reported_never_red():
+    """REQ-039: brief #1656 answer 2 (ADR-0690 replaces ADR-0143 decision 2): hosted waits."""
+    hosted = facts([run("proof", 10), run("proof", 11, "cancelled")])
+    assert route.decide(hosted) == "agk:ci-running"
+    assert route.decide({**hosted, "required": ["proof", "governance"]}) == "agk:ci-running"
+
+
+def test_1656_a_cancelled_run_followed_by_a_newer_failed_run_stays_red():
+    """REQ-039: brief #1656 answer 4."""
+    checks = [run("proof", 10, "cancelled"), run("proof", 11, "failure")]
+    assert route.decide(facts(checks)) == "agk:ci-red"
+    other = [run("proof", 10, "cancelled"), run("governance", 11, "failure")]
+    assert route.decide({**facts(other), "local": True}) == "agk:ci-red"
+
+
+def evidence_report(body_extra: str = "") -> dict:
+    lines = [f"Report: {HEAD[:12]} ready for review", body_extra or ""]
+    lines.append(f"Evidence: prepush schema 1, head {HEAD[:12]}, 9 steps ok, record {'ab' * 6}")
+    return {"id": 7, "user": {"login": "builder"}, "body": "\n".join(lines)}
+
+
+def test_1656_local_mode_a_lone_cancelled_proof_reads_the_builder_evidence():
+    """REQ-039: brief #1656 answers 2 and 3 (`execution = "local"`, the case of #1654)."""
+    checks = [run("proof", 10, "cancelled"), run("governance", 11)]
+    local = {**facts(checks), "local": True, "required": ["proof", "governance"]}
+    assert route.decide({**local, "comments": [evidence_report()]}) == "agk:review"
+    failed = evidence_report("prepush: stopped at tests")
+    assert route.decide({**local, "comments": [failed]}) == "agk:ci-red"
+    assert route.decide(local) == "agk:build"  # no evidence: the builder's turn, never red
+
+
+def test_1656_required_checks_judge_only_the_listed_names():
+    """REQ-039: brief #1656 answer 3 (`required_checks`): an unlisted cancelled run decides nothing."""
+    checks = [run("proof", 10), run("governance", 11), run("extra", 12, "cancelled")]
+    assert route.decide({**facts(checks), "required": ["proof", "governance"]}) == "agk:review"
+    assert route.decide(facts(checks)) == "agk:ci-running"  # without the setting every run counts
 
 
 def test_ac3_two_names_one_red_is_red_whatever_the_order_of_the_list():
@@ -102,7 +135,7 @@ def test_ac3_the_default_branch_reads_the_latest_run_of_each_check_too():
     """REQ-039 AC3: branch_state."""
     assert route.branch_state([run("proof", 10, "cancelled"), run("proof", 11)], []) == "green"
     assert route.branch_state([run("proof", 10), run("proof", 11, "failure")], []) == "red"
-    assert route.branch_state([run("proof", 10, "cancelled")], []) == "red"
+    assert route.branch_state([run("proof", 10, "cancelled")], []) == "pending"  # #1656
     assert route.branch_state([run("proof", 10, None), run("proof", 11)], []) == "green"
     assert (
         route.branch_state([], [status("ci", 1, "failure"), status("ci", 2, "success")]) == "green"

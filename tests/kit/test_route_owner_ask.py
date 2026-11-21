@@ -113,6 +113,40 @@ def test_1168_the_docstring_names_the_rule():
     assert "ADR-0497" in text and "new head" in text
 
 
+# --- brief #1656 answer 1 (ADR-0690): an owner ask for an approval reads agk:approve ----------
+
+
+def ask(body: str, login: str = "boss") -> dict:
+    return at(4, login, f"Owner needed: {body}", ASKED_AT)
+
+
+def test_1656_an_amendment_or_spec_approval_ask_gives_approve_a_plain_one_question():
+    """REQ-039: brief #1656 answers 1 and 4 (the case of #1654)."""
+    for body in (
+        "post `Maintainer answer: amendment 196 approved`",
+        "post `Approve: SPEC-0032` on the head",
+        "two asks: Maintainer answer: amendment 197 approved, and a size ruling",
+    ):
+        state = route.pr_state(facts(comments=[ask(body)], commit=PUSHED))
+        assert state == ("agk:approve", "owner"), body
+        assert route.decide(facts(draft=True, comments=[ask(body)])) == "agk:approve", body
+    plain = ask("a size ruling on this pull request")
+    assert route.decide(facts(comments=[plain], commit=PUSHED)) == "agk:question"
+    stranger = ask("Maintainer answer: amendment 196 approved", login="stranger")
+    assert route.decide(facts(comments=[stranger], commit=PUSHED)) == "agk:review"
+
+
+def test_1656_the_owner_answers_close_the_approval_ask_as_today():
+    """REQ-039: brief #1656 answer 1 (`asks_owner` closes both forms)."""
+    asked = ask("post `Maintainer answer: amendment 196 approved`")
+    for line in ("Maintainer answer: amendment 196 approved", f"Approve: {HEAD[:7]} SPEC-0032"):
+        answer = at(6, "maintainer", line, "2026-11-13T00:45:00Z")
+        comments = [asked, covered_fix_list(), answer]
+        assert route.decide(facts(comments=comments, commit=PUSHED)) == "agk:merge-ready", line
+    parked = facts(comments=[asked], labels=["agk:parked"])
+    assert route.decide(parked) == "agk:parked"
+
+
 # --- brief #1534 answer 5 (ADR-0646): the router unparks on the answer's own run ---------------
 
 
