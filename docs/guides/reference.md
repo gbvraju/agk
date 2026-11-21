@@ -513,6 +513,11 @@ One layer (`default.toml`'s `src`, a project with no work type) constrains nothi
 is not Python gives `not run: no reader for <stack>`. `--write-record` is the foundation's: it writes
 `docs/architecture.md` (a protected path of every project) from `kit/templates/architecture.md` once, with the layers,
 their paths, the allowed directions and the stack record's ADR, and is refused with no work type (setting: `work_type`).
+
+    python3 scripts/agk/gates/architecture_record.py
+
+The `architecture-record` step (brief #1595, amendment 204) is a module of the runner, never run by itself: where
+`docs/architecture.md` exists `run_gates.py` runs `front_door.py`'s record check through it (see "Front door").
 A build brief of a work-type project other than its foundation carries one line `Layer: <layer>, ...` naming every layer
 its `Touches:` meets; `check_brief.py --root` refuses one without it or with an unknown layer (SPEC-0072 rule 8).
 

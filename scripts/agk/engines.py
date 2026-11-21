@@ -168,9 +168,9 @@ TOPICS = tuple(topic for topic, _ in QUESTIONS)
 # before still passes, and asks the one needs question with its recommended answer. The numbers
 # are invented defaults that ADR-0675 states for the maintainers to accept or change.
 NEEDS = (
-    "How many {busy}, how long may it be down each month, and what may it cost each month? "
-    "Recommended: {usual}, at most one hour down a month, under 50 dollars a month"
-    " · tell me other numbers"
+    "Recommended: {usual}, at most one hour down a month, under 50 dollars a month, or tell me"
+    " other numbers. How many {busy}, how long may it be down each month, and what may it cost"
+    " each month?"
 )
 CALLS = ("calls per minute will it take at the busiest hour", "up to 600 calls per minute")
 SHAPES = {
