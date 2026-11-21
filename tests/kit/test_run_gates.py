@@ -25,7 +25,8 @@ import run_gates  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
 WORK_TYPES = sorted(p.stem for p in PLAYBOOKS.glob("*.toml") if p.stem != "default")
-IMPLEMENTED = {"cut-over-order", "rollback-order", "contract-tests", "mock-parity"}  # brief #1597
+IMPLEMENTED = {"cut-over-order", "rollback-order", "committed-secrets", "environment-settings"}
+IMPLEMENTED |= {"contract-tests", "mock-parity"}  # brief #1597
 
 
 def _project(tmp_path: Path, work_type: str | None) -> Path:
@@ -84,7 +85,7 @@ def test_the_restated_gates_are_judgement_with_a_reason_and_no_step() -> None:
                 assert len(gate["reason"]) >= 20, gate["id"]
             if gate["kind"] == "judgement":
                 assert "step" not in gate, gate["id"]
-    assert restated == 25  # brief #1597: three of the 28 are checks again (ADR-0677)
+    assert restated == 21  # brief #1593 made 4 checks, brief #1597 three (ADR-0677)
 
 
 def test_the_kit_without_a_work_type_runs_default_only(
@@ -93,7 +94,8 @@ def test_the_kit_without_a_work_type_runs_default_only(
     """REQ-079 AC2."""
     root = _project(tmp_path, None)
     assert run_gates.main(["--root", str(root)]) == 0
-    assert capsys.readouterr().out == "ok gates (no check gate)\n"
+    out = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"
+    assert capsys.readouterr().out == out
 
 
 def test_a_step_with_no_module_is_refused_naming_the_gate_id(
@@ -146,7 +148,8 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
     assert check_playbooks.main(["--root", str(root)]) == 0
     out = capsys.readouterr().out
     count = len(WORK_TYPES) + 1
-    assert f"ok playbooks ({count} playbooks)\nok cut-over-order\nok gates (1 check gates)\n" in out
+    gates = "ok secrets\nok environment-settings\nok cut-over-order\nok gates (3 check gates)\n"
+    assert f"ok playbooks ({count} playbooks)\n{gates}" in out
     path = root / "config" / "playbooks" / "cloud-migration.toml"
     text = path.read_text(encoding="utf-8")
     text = text.replace('["cut-over", "wave-plan"]', '["cut-over", "x"]')

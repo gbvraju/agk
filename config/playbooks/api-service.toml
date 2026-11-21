@@ -57,17 +57,17 @@ owner_only = false
 
 [[gates]]
 id = "secrets"
-kind = "judgement"
+kind = "check"
+step = "committed-secrets"
 text = "No credential, key or token of a caller or a store is committed; each value comes from the environment."
 owner_only = false
-reason = "No offline step scans the committed files yet; brief #1593 builds it (ADR-0666)."
 
 [[gates]]
 id = "environment-settings"
-kind = "judgement"
+kind = "check"
+step = "environment-settings"
 text = "An address, a limit or a store that differs between environments is read from the environment, never fixed in code."
 owner_only = false
-reason = "No offline step reads the code for fixed settings yet; brief #1593 builds it (ADR-0666)."
 
 [[gates]]
 id = "input-validation"

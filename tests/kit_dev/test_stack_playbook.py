@@ -164,8 +164,8 @@ def test_ac3_each_option_names_the_composed_practices_with_no_todo(started):
     assert "TODO(architect)" not in block
     for gate in ("secrets", "environment-settings", "sign-in-permissions", "contract-tests"):
         assert f"   - {gate}: " in block
-    # judgement until brief #1593 builds its step (ADR-0666, Q-1586-4)
-    assert "   - secrets: judgement (playbook web-app)\n" in block
+    # a check since brief #1593 built its step (ADR-0673)
+    assert "   - secrets: check (step: committed-secrets) (playbook web-app)\n" in block
     options = [ln for ln in text.splitlines() if ln.startswith("   - Option ")]
     assert len(options) == 2
     for line in options:
@@ -180,8 +180,8 @@ def test_ac3_without_a_declaration_default_toml_alone_fills_the_practices(starte
     assert stack_write(started).returncode == 0
     block = practices((started / ADR).read_text(encoding="utf-8"))
     assert "TODO(architect)" not in block
-    # judgement until brief #1593 builds its step (ADR-0666, Q-1586-4)
-    assert "   - secrets: judgement (playbook default)\n" in block
+    # a check since brief #1593 built its step (ADR-0673)
+    assert "   - secrets: check (step: committed-secrets) (playbook default)\n" in block
     assert "(playbook default)" not in block.split("- test selection:")[1]
 
 

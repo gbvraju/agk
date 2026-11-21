@@ -29,7 +29,11 @@ ENTERPRISE = {
     "accessibility",
     "performance",
 }
-CHECKS = {"contract-tests", "secrets", "environment-settings"}
+CHECKS = {"contract-tests"}
+STEPPED = {
+    "secrets": "committed-secrets",
+    "environment-settings": "environment-settings",
+}  # checks since brief #1593 (ADR-0673)
 JUDGED = {"input-validation", "sign-in-permissions", "logging-tracing"}
 GIT = ["git", "-c", "user.name=Ada", "-c", "user.email=ada@example.com"]
 GIT += ["-c", "commit.gpgsign=false"]
@@ -73,6 +77,10 @@ def test_it_composes_with_default_and_weakens_no_gate() -> None:
     for gid in JUDGED:
         assert by_id[gid]["kind"] == "judgement"
         assert len(by_id[gid]["reason"].strip()) >= playbook_format.REASON_MIN
+    assert all(
+        by_id[gid]["kind"] == "check" and by_id[gid]["step"] == step
+        for gid, step in STEPPED.items()
+    )
     default = playbook_format.load(KIT_ROOT / "config/playbooks/default.toml")
     base = {g["id"]: g for g in default["gates"]}
     own = {g["id"]: g for g in data()["gates"]}

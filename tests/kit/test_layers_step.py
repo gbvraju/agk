@@ -120,7 +120,8 @@ def test_no_work_type_constrains_nothing(tmp_path: Path, no_network: None, capsy
     root = _project(tmp_path, None)
     (root / "data/store.py").write_text("from api import routes\n", encoding="utf-8")
     code, out = _gates(root, capsys)
-    assert code == 0 and out == "ok gates (no check gate)\n"
+    # `default.toml`'s two checks since brief #1593 (ADR-0673); no `layers` line
+    assert code == 0 and out == "ok secrets\nok environment-settings\nok gates (2 check gates)\n"
 
 
 STACK_RECORD = (
@@ -139,8 +140,8 @@ def test_a_non_python_stack_is_not_run_never_ok(tmp_path: Path, capsys) -> None:
     code, out = _gates(root, capsys)
     assert code == 0
     assert "not run layers: no reader for node\n" in out and "ok layers" not in out
-    # brief #1597 (ADR-0677): api-service's contract-tests is a check, not run with no contract
-    assert out.splitlines()[-1] == "ok gates (2 check gates; not run: contract-tests, layers)"
+    # with `default.toml`'s two checks of brief #1593 (ADR-0673) and contract-tests (ADR-0677)
+    assert out.splitlines()[-1] == "ok gates (4 check gates; not run: contract-tests, layers)"
 
 
 def test_windows_line_ends_and_paths_compare_by_forward_slash(tmp_path: Path, capsys) -> None:
