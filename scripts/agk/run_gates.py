@@ -39,12 +39,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import check_playbooks
 import playbook_format
 from common import repo_root, run, utf8_output
-from gates import python_pack
 
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
 STEP = re.compile(r"^[a-z][a-z0-9-]*$")
-PACKS = (python_pack,)
+PACKS = ("python_pack",)  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
@@ -93,7 +92,8 @@ def pack_results(path: Path, root: Path) -> list[tuple[bool, str]]:
     done: set[str] = set()
     for entry in check_playbooks.standard(path, root)[1]:
         stack = entry.get("stack")
-        module = next((m for m in PACKS if stack in m.STACKS), None)
+        modules = [importlib.import_module(f"gates.{name}") for name in PACKS]
+        module = next((m for m in modules if stack in m.STACKS), None)
         if module is None or module.__name__ in done or not module.on(root):
             continue
         done.add(module.__name__)

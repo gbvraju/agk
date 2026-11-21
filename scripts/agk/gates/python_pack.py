@@ -122,13 +122,13 @@ def floor(root: Path, entry: dict[str, Any]) -> list[str]:
         table = _ruff_table(path) or {}
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return [f"{FLOOR}: the pack's configuration file is unreadable (setting: standards.config)"]
-    lint = table.get("lint") if isinstance(table.get("lint"), dict) else {}
+    lint: dict[str, Any] = table["lint"] if isinstance(table.get("lint"), dict) else {}
 
     def codes(key: str) -> list[str]:
         value = lint.get(key, table.get(key))
         return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
 
-    selected = codes("select") if "select" in lint or "select" in table else RUFF_DEFAULT
+    selected = codes("select") if "select" in lint or "select" in table else list(RUFF_DEFAULT)
     selected += codes("extend-select")
     ignored = codes("ignore") + codes("extend-ignore")
     per_file = lint.get("per-file-ignores", table.get("per-file-ignores"))
