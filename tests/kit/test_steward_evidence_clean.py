@@ -26,9 +26,13 @@ import steward_evidence as ev  # noqa: E402
 from common import CheckError, personal_table  # noqa: E402
 
 TABLE = "| Stage or step | Skill |\n|---|---|\n| start | `start-example` |\n"
-PLUGIN_VERSION = json.loads((KIT_ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8"))[
-    "version"
-]
+
+
+def plugin_version() -> str:
+    """The kit checkout's plugin version, read when a test needs it, never at import: a copy of
+    `scripts/agk` and `tests/kit` alone has no `.claude-plugin/` (test_agk_mk AC1, #1676)."""
+    manifest = KIT_ROOT / ".claude-plugin" / "plugin.json"
+    return json.loads(manifest.read_text("utf-8"))["version"]
 
 
 def project(tmp_path: Path, layout: str | None = "plugin", pin: str = "0.1.0") -> Path:
@@ -116,14 +120,14 @@ def run(root: Path, **env: str) -> subprocess.CompletedProcess:
 def test_req078_the_command_reads_the_running_plugins_file_in_a_clean_project(tmp_path):
     """REQ-078 measured: `skill --step start` in a clean project passes (exit 0), with the kit
     checkout as the running plugin."""
-    root = project(tmp_path, pin=PLUGIN_VERSION)
+    root = project(tmp_path, pin=plugin_version())
     done = run(root, CLAUDE_PLUGIN_ROOT=str(KIT_ROOT))
     assert (done.returncode, done.stdout) == (0, "skill: `start`\n"), done.stderr
 
 
 def test_req078_the_command_refuses_one_line_and_no_traceback(tmp_path):
     """REQ-078: an installed project without the role file: exit 2, one `refused:` line."""
-    root = project(tmp_path, None, PLUGIN_VERSION)
+    root = project(tmp_path, None, plugin_version())
     done = run(root)
     assert done.returncode == 2 and "Traceback" not in done.stderr
     assert done.stderr.splitlines() == [
