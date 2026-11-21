@@ -8,9 +8,10 @@
 
 Protected classes this pull request changes: `scripts/agk/` (the new `gates/layers.py`, `run_gates.py`, `check_brief.py`), `tests/kit/` (the new
 `test_layers_step.py`, and `test_installed_imports.py`, which now counts an installed package by its folder),
-`tests/kit_dev/` (`test_kit_manifest.py`, `test_reference_commands.py`), `kit/` (the new
-`kit/templates/architecture.md`, the four project templates of protected paths and reviewers,
-`kit/templates/runtime/builder.txt`, `kit/manifest.json`), `.claude/` (`.claude/agents/builder.md`) and `agk.toml`
+`tests/kit_dev/` (`test_kit_manifest.py`, `test_reference_commands.py`, `test_init.py`, `test_adopt.py`), `kit/` (the new
+`kit/templates/architecture.md`, the four project templates of protected paths and reviewers, the two first ADRs
+(`adr-0001.md`, `adr-0001-adopt.md`, which name every protected path),
+`kit/templates/runtime/builder.txt`, `kit/manifest.json`) and `agk.toml`
 (`[[testing.map]]` entries). No playbook changes. `kit/hashes.json` is not edited by hand.
 
 ## Context
@@ -50,8 +51,9 @@ eight enterprise gates (`tests/kit/test_playbook_default.py`), and no playbook n
    composed `[architecture]` does not hold, or leaves out a layer whose glob a `Touches:` entry meets
    (`Q-S0072-15`). The rule needs the root, so it lives beside `screens_problems` in `check_brief.py`, not in
    `session.py` `brief_problems`, which has no root.
-7. The builder's prompt (`kit/templates/runtime/builder.txt`, `.claude/agents/builder.md`) tells a builder of a
-   work-type project to read `docs/architecture.md` and the chosen stack's pack before writing code.
+7. The builder's task text (`kit/templates/runtime/builder.txt`) tells a builder of a work-type project to read
+   `docs/architecture.md` and the chosen stack's pack before writing code. `.claude/agents/builder.md` is unchanged:
+   it holds no rule of its own and points to that text, and its rule budget (`config/rule-budget.txt`) only goes down.
 
 ## Consequences
 

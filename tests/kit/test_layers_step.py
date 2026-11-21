@@ -193,11 +193,13 @@ def test_the_record_is_a_protected_path_of_every_project(rel: str) -> None:
     assert "docs/architecture.md" in (KIT_ROOT / rel).read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("rel", ["kit/templates/runtime/builder.txt", ".claude/agents/builder.md"])
-def test_the_builder_prompt_reads_the_record_and_the_pack(rel: str) -> None:
-    """REQ-079 AC6: write to the standard, not only check it (rule 8)."""
-    text = (KIT_ROOT / rel).read_text(encoding="utf-8")
+def test_the_builder_prompt_reads_the_record_and_the_pack() -> None:
+    """REQ-079 AC6: write to the standard, not only check it (rule 8). The agent file holds no
+    rule of its own (its rule budget) and points to the task text, which holds this one."""
+    text = (KIT_ROOT / "kit/templates/runtime/builder.txt").read_text(encoding="utf-8")
     assert "docs/architecture.md" in text and "pack" in text
+    agent = (KIT_ROOT / ".claude/agents/builder.md").read_text(encoding="utf-8")
+    assert "kit/templates/runtime/builder.txt" in agent
 
 
 # --- the Layer: line (rule 8) --------------------------------------------------------------------

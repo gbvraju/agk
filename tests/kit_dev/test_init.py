@@ -35,6 +35,7 @@ INSTALLED_PROTECTED = [
     ".claude/",
     ".github/",
     "docs/requirements.md",
+    "docs/architecture.md",  # brief #1588 (ADR-0668)
     "CLAUDE.md",
     "scripts/agk/",
     "Makefile",
