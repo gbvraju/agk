@@ -151,6 +151,19 @@ def stack_adr(root: Path) -> str:
     return f"ADR-{files[0].name[:4]}" if len(files) == 1 else "none chosen yet"
 
 
+def front_door_services(root: Path) -> list[str]:
+    import front_door  # noqa: PLC0415 - only the record writer needs it
+
+    return front_door.chosen_services(root)
+
+
+def services(root: Path) -> str:
+    """Brief #1595 (amendment 204): the chosen option's `External services:` as bullets; the
+    diagram draws each, so the written record passes the `architecture-record` step."""
+    names = front_door_services(root)
+    return "\n".join(f"- {n}: TODO(architect)" for n in names) or "None named by the chosen option."
+
+
 def write_record(root: Path) -> int:
     """Rule 5: the foundation writes the record once; it changes only by the project's ADR."""
     work_type = playbook_format.declaration(root)[0]
@@ -173,6 +186,8 @@ def write_record(root: Path) -> int:
         "layers": rows,
         "allow": ends,
         "stack_adr": stack_adr(root),
+        "services": services(root),
+        "drawn": "\n".join(f"app -> {n}" for n in front_door_services(root)),
     }.items():
         text = text.replace("{{" + key + "}}", value)
     target.parent.mkdir(parents=True, exist_ok=True)

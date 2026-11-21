@@ -800,6 +800,16 @@ only that the file exists and never opens or runs it. With `yes`, and with `open
 judgement, noted and never opened, never printed and never committed, and it never stands in for the artifact. The
 conductor reads the same rule: a design without its artifact is a fix item, never a clearing verdict.
 
+`docs/architecture.md` is the product's one architecture record (brief #1595, amendments 204 and 205). A design is a
+slice of it and carries one line `Architecture: docs/architecture.md`: `check-design` refuses a design named on its
+command line without it, and warns, until its next edit, about one read with the whole folder. Where the record exists
+`check-design` also checks it, as the `architecture-record` step of `run_gates.py` does: `## Context`, `## Parts`,
+`## Data stores`, `## Outside services` (each service of the chosen stack option), `## Needs` (`- Busiest hour:`,
+`- Downtime:`, `- Cost:`, `- Recovery time:`, `- Logged:`, the first three's numbers those of the quoted `scale` answer
+of the charter or a discovery document), `## Diagram` (a fenced block that draws each outside service) and
+`## Layers`. Each failure names the rule and the section, never a value; a record with none of these sections, written
+before them, is `not run` until its next edit.
+
 `status` prints one line per problem, `<slug>: phase <n> <name>; waits for <what>`, for the slugs named or else for each
 `docs/discovery/*.md`, from the files only, and writes nothing: phase 2 discovery until the discovery document passes
 `check-discovery`, phase 3 research until the record passes `check-research` and is fresh, phase 4 design until the

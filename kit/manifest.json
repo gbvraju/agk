@@ -104,6 +104,7 @@
     "scripts/agk/front_door.py",
     "scripts/agk/full_run.py",
     "scripts/agk/gates/__init__.py",
+    "scripts/agk/gates/architecture_record.py",
     "scripts/agk/gates/committed_secrets.py",
     "scripts/agk/gates/cut_over_order.py",
     "scripts/agk/gates/environment_settings.py",

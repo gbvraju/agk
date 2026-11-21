@@ -172,7 +172,9 @@ def test_req_079_ac1_a_needs_line_missing_is_refused(tmp_path):
 
 def test_req_079_ac1_the_discovery_answer_is_read_as_the_quoted_answer(tmp_path):
     project(tmp_path, answer=None)
-    write(tmp_path, f"docs/discovery/{SLUG}.md", f"# Discovery\n\n- needs: (given: {ANSWER})\n")
+    sha = "0" * 64
+    body = f"- scale: (given: in session {TODAY})\n<!-- agk:answer sha256={sha} -->\n{ANSWER}\n"
+    write(tmp_path, f"docs/discovery/{SLUG}.md", body + "<!-- agk:answer-end -->\n")
     record(tmp_path)
     assert found(tmp_path) == []
 
@@ -199,6 +201,18 @@ def test_req_079_ac1_the_runner_runs_the_step_and_names_the_section(tmp_path, ca
 def test_req_079_ac1_no_record_means_the_step_does_not_apply(tmp_path):
     project(tmp_path)
     assert not architecture_record.applies(tmp_path)
+
+
+def test_req_079_ac1_the_record_the_foundation_writes_passes_the_step(tmp_path, capsys):
+    """The foundation's record names and draws the chosen option's services, so it passes."""
+    from gates import layers  # noqa: PLC0415
+
+    project(tmp_path)
+    assert layers.main(["--root", str(tmp_path), "--write-record"]) == 0
+    text = (tmp_path / "docs/architecture.md").read_text(encoding="utf-8")
+    assert f"- {SERVICE}:" in text and "{{" not in text
+    assert found(tmp_path) == []
+    capsys.readouterr()
 
 
 def test_req_079_ac1_the_template_carries_every_section():
