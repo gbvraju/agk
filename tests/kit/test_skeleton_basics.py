@@ -13,6 +13,7 @@ fixtures in `tmp_path`; the only process started is the sample's own module; no 
 
 from __future__ import annotations
 
+import importlib.util
 import io
 import os
 import re
@@ -135,6 +136,24 @@ def test_req079_the_health_address_answers_and_the_readme_command_runs(tmp_path,
     assert done.returncode == 0, done.stderr
     assert '"status": "ok"' in done.stdout and '"database": "ok"' in done.stdout
     assert re.search(r"request_id=\w+ method=GET path=/health status=200", done.stderr)
+
+
+def test_req079_a_request_id_is_never_read_as_personal_data():
+    """REQ-079 AC3: answer 1 (d); brief #1655 (a random hex id was read as a phone number).
+
+    The id stays random and 12 characters long, but is letters only, so the log's own guard
+    (`scrub`) never changes it, and the log lines keep the id the user is shown.
+    """
+    source = KIT_ROOT / "kit" / "templates" / "skeleton" / "python" / "common" / "logs.py"
+    spec = importlib.util.spec_from_file_location("skeleton_logs_1655", source)
+    assert spec and spec.loader
+    logs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(logs)
+    ids = [logs.new_id() for _ in range(20000)]
+    assert all(re.fullmatch(r"[a-z]{12}", one) for one in ids)
+    assert all(logs.scrub(one) == one for one in ids)
+    assert len(set(ids)) == len(ids)
+    assert logs.scrub("call +44 20 7946 0000") == "call <phone>"
 
 
 @pytest.mark.parametrize("work_type", ["web-app", "api-service"])
