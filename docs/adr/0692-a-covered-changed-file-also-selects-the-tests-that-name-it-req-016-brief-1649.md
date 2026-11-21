@@ -20,7 +20,9 @@ tests without it. Any curated entry can miss a test in the same way. The tests w
 1. **The selection** (`scripts/agk/impact.py`, `select`). With `profile = "balanced"`, a changed file that an entry
    covers and whose entries select an existing test, that is not documentation, not a test file and matches no
    `always_full` glob, also selects every test file that names its path or its folder (`tests_naming`, the rule 6
-   index). The reason printed is `(names <path>)`. A test already selected keeps the reason it was selected with. The
+   index). The reason printed is `(names <path>)`. A test already selected keeps the reason it was selected with, and a
+   test file the change itself adds or edits is not added (it runs as the pull request's own test; adding it made the
+   third proof run repeat it, `tests/kit/test_proof_regression.py`). The
    file is not unmapped and is not counted in `unmapped: <path> -> <k> tests that name it`. This widens SPEC-0055
    rule 6, which named only a file no entry covers; for that file nothing changes.
 2. **What does not change.** A covered file whose entries select no existing test stays unmapped and full (brief #373,

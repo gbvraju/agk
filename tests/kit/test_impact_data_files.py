@@ -146,6 +146,14 @@ def test_a_test_the_entry_lists_keeps_its_entry_reason(repo):
     assert "(names app/billing/pay.py)" not in impact.text(found)
 
 
+def test_the_changes_own_test_that_names_a_covered_file_is_not_added(repo):
+    """REQ-016: brief #1649 answer 3 (the change's own test runs as its own, not as regression)."""
+    start(repo)
+    own = {"app/billing/pay.py": "# changed\n", "tests/test_new.py": 'P = "app/billing/pay.py"\n'}
+    repo.commit(own, "change")
+    assert picked(result(repo)) == ["tests/test_pay.py"]
+
+
 def test_a_covered_file_in_thorough_is_unchanged(repo):
     """REQ-016: brief #1649 answer 2 (`thorough` unchanged: full)."""
     start(repo, "thorough", files=NAMES_PAY)
