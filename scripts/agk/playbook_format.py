@@ -91,10 +91,13 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from types import ModuleType
+
+kit_root: ModuleType | None
 try:
     import kit_root  # standalone, so no cycle (brief #1666)
 except ImportError:  # a partial copy of the scripts (a test's stub project) reads its own folder
-    kit_root = None  # type: ignore[assignment]
+    kit_root = None
 Refused = kit_root.Refused if kit_root is not None else RuntimeError
 
 FORMAT = 1
