@@ -114,6 +114,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import run_gates  # noqa: E402  # SPEC-0072 rule 11 (brief #1601): the floor runs the gates
 from common import (  # noqa: E402
     STATUS_LINE,
     CheckError,
@@ -304,6 +305,21 @@ def scan_step(clone: Path, base: str) -> tuple[bool, str]:
     return False, f"floor: secret-scan FAIL: gitleaks reported a finding; {prepush.LEAK_RUNBOOK}"
 
 
+GATES_NOT_RUN = (
+    "floor: gates not run: would run the gate runner on the head tree; run again with --approve"
+)
+
+
+def gates_step(clone: Path, sidecar: Path, head: str) -> tuple[bool, str]:
+    """SPEC-0072 rule 11 (brief #1601, ADR-0681): `run_gates.py` on the head tree after the secret
+    scan, at every level; files only, no command, no forge call."""
+    rows = run_gates.results(write_tree(clone, head, sidecar, "floor-gates"))
+    failed = [line for ok, line in rows if ok is False]
+    if failed:
+        return False, "floor: gates FAIL: " + "; ".join(failed)
+    return True, f"floor: gates ok ({len([r for r in rows if r[0] != run_gates.NOTE])} check gates)"
+
+
 def regression_step(
     command: str, clone: Path, sidecar: Path, base: str, head: str, runs: dict | None = None
 ) -> tuple:
@@ -337,6 +353,8 @@ def floor(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[b
     lines = [f"floor: level {level}, base {base[:12]}, head {head[:12]}"]
     scanned, line = scan_step(clone, base)
     lines.append(line)
+    gated, line = gates_step(clone, sidecar, head) if approve else (False, GATES_NOT_RUN)
+    lines.append(line)
     if approve:
         tested, line = regression_step(command, clone, sidecar, base, head)
     else:
@@ -346,7 +364,7 @@ def floor(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[b
             "tree; run again with --approve"
         )
     lines.append(line)
-    passed = scanned and tested
+    passed = scanned and gated and tested
     lines.append("floor: passed" if passed else "floor: failed")
     if approve:
         lines.extend(append_event(sidecar, head, "floor", "passed" if passed else "failed"))

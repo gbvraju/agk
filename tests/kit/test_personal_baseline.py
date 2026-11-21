@@ -486,7 +486,7 @@ def test_floor_every_level_gives_the_same_two_steps(tmp_path, level):
     assert f"floor: level {level}" in leveled.stdout
     assert "floor: level light" in plain.stdout
     assert step_lines(leveled.stdout) == step_lines(plain.stdout)
-    assert len(step_lines(leveled.stdout)) == 3
+    assert len(step_lines(leveled.stdout)) == 4  # with the gates step (SPEC-0072 rule 11)
     assert leveled.returncode == plain.returncode == 1
 
 

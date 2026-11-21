@@ -13,6 +13,10 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
        python3 scripts/agk/steward_owner.py defect --title TEXT --file FILE [--refusals N] [--post]
        python3 scripts/agk/steward_owner.py defects
        python3 scripts/agk/steward_owner.py reads [--session ID] [--refused]
+       python3 scripts/agk/steward_owner.py standard [--playbook SLUG]
+       python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]
+       python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT
+       python3 scripts/agk/steward_owner.py draft --slug SLUG
 
 `ask` takes one plain business sentence (FILE): one line, a question with its choices and `I
 recommend`, and no kit term (a file name, label, rule number, id or command); it records it as an
@@ -47,6 +51,16 @@ is posted. `defects` lists the open kit defects, one line each, or `kit defects:
 setting or permission mode that refuses it and the one step that restores it (exit 1); `--refused`
 says the runtime itself refused the steward's own `gh api` call, and names the permission entry of
 `.claude/settings*.json` that explains it, else the session's permission mode `(verify)`.
+
+Brief #1601 (SPEC-0072 rule 8, ADR-0681): `standard` prints the composed standard of the declared
+work type (or `--playbook`): one plain screen in solo mode, the full list (layers, directions,
+packs, every gate with its step or reason) in team mode, or, with neither, the work-type question.
+`confirm` records one `Setup: standard: confirmed because the person said "<words>" at <time>`
+only on an explicit yes (in team mode `--by` a spec approver), else `not confirmed: nothing
+applied` (exit 1); `ready` is `not ready` without it while a work type is declared. `research`
+records the web-research permission and, only on a yes, prints `search: <TEXT>` for a generic
+description (exit 2 for anything else). `draft` writes the project playbook (`front_door.py
+derive-write`) and its Proposed ADR, never `[delivery] work_type`.
 """
 
 from __future__ import annotations
@@ -73,6 +87,7 @@ from common import (  # noqa: E402
     CheckError,
     personal_table,
     repo_root,
+    review_mode,
     utf8_output,
 )
 from session_plan import KIT_DEFECT_LABEL  # noqa: E402
@@ -228,6 +243,10 @@ def not_ready(root: Path, plan_text: str, trace_text: str) -> list[str]:
         out.append("not ready: the memory is not read (run steward.py start)")
     elif any(not (named := MILESTONE.findall(q)) or "1" in named for q in asked):
         out.append("not ready: an open owner question blocks the first milestone")
+    import playbook_format
+
+    if playbook_format.selected(root) is not None and not confirmed(root):
+        out.append(UNCONFIRMED)  # SPEC-0072 rule 8 (brief #1601): nothing before the one yes
     return out
 
 
@@ -245,6 +264,206 @@ def ready(root: Path, opts: argparse.Namespace) -> tuple[int, list[str]]:
         return 0, ["ready: the supervisor starts the conductor at its next pass "
                    "(python3 scripts/agk/conductor.py watchdog --pass)"]  # fmt: skip
     return launch.role_main(args), []
+
+
+# --- the standard: shown, confirmed on one yes, the work-type path (brief #1601, ADR-0681) -------
+
+YES_ASK = "Shall I hold the product to all of this? Say yes, or tell me what to change."
+NO_WORK_TYPE = (
+    "No kind of product I know fits yours. May I look it up, in general words only? Yes or no."
+)
+NOT_CONFIRMED = (
+    "not confirmed: nothing applied (setting: the confirmation Setup entry, SPEC-0062 rule 14)"
+)
+UNCONFIRMED = "not ready: the standard is not confirmed (setting: the confirmation Setup entry)"
+NO_SEARCH = "search: none; the playbook is drafted from the requirements alone"
+STANDARD = "Setup: standard: confirmed because"
+PLAIN = (  # SPEC-0072 rule 8: the business user's screen, one plain sentence per group of gates
+    (("tests-first", "definition-of-done"), "Every change comes with its tests, written first."),
+    (("secrets", "environment-settings"),
+     "No password or key is stored with the code; settings come from where it runs."),
+    (("sign-in-permissions", "input-validation", "logging-tracing", "migrations", "rollback",
+      "contract-first", "evidence-per-gate"),
+     "Sign-in, inputs, event records and data changes are reviewed; every change can be undone."),
+    (("accessibility", "performance"),
+     "Screens are reviewed so everyone can use them; speed is held to your budget."),
+)  # fmt: skip
+GENERIC_BAD = re.compile(r"@|://|\bwww\.|\d|\s[A-Z]")
+
+
+def composed_standard(root: Path, slug: str | None) -> tuple[list, dict, list] | None:
+    """The composed gates, architecture and packs of the declared (or named) playbook."""
+    import check_playbooks
+    import playbook_format
+
+    path = (
+        playbook_format.selected(root)
+        if slug is None
+        else root / playbook_format.FOLDER / f"{slug}.toml"
+    )
+    if path is None or not playbook_format.DERIVED_NAME.match(path.stem) or not path.is_file():
+        return None
+    gates, _, _ = check_playbooks.composed(path, root)
+    architecture, packs, _ = check_playbooks.standard(path, root)
+    return gates, architecture, packs
+
+
+def standard_screen(root: Path, slug: str | None) -> tuple[int, list[str]]:
+    """Rule 8: one plain screen in solo mode, the full list in team mode; nothing is applied."""
+    found = composed_standard(root, slug)
+    if found is None:
+        return 1, [NO_WORK_TYPE]
+    gates, architecture, packs = found
+    layers = [x for x in architecture.get("layers", []) if isinstance(x, dict)]
+    if review_mode(root) == "team":
+        out = [f"Layer {x.get('name')}: {', '.join(x.get('paths', []))}" for x in layers]
+        out += [f"Allowed: {a.get('from')} -> {a.get('to')}" for a in architecture.get("allow", [])]
+        for p in packs:
+            rules = p.get("rules") or {}
+            out.append(f"Pack {p.get('stack')}: lint {p.get('lint')}, format {p.get('format')},"
+                       " type"
+                       f" {p.get('type')}; rules {rules.get('tool')} {rules.get('version')}"
+                       f" {', '.join(rules.get('codes', []))}")  # fmt: skip
+        for g in gates:
+            why = (
+                f"step {g.get('step')}"
+                if g.get("kind") == "check"
+                else g.get("reason") or g.get("text")
+            )
+            out.append(f"Gate {g['id']}: {g['kind']} ({why})")
+        return 0, [*out, YES_ASK]
+    ids = {g["id"] for g in gates}
+    more = len(ids - {n for names, _ in PLAIN for n in names})
+    extra = f" (and {more} more checks your reviewers can list)" if more else ""
+    out = [f"Your product will be held to this{extra}:"]
+    out += [f"- {line}" for names, line in PLAIN if ids & set(names)]
+    parts = f"kept in {len(layers)} separate parts" if len(layers) > 1 else ""
+    checked = "checked for style and type mistakes on each change" if packs else ""
+    if parts or checked:  # at most five bullets and 100 characters a line (the steward's voice)
+        joined = " and ".join(x for x in (parts, checked) if x)
+        out.append(
+            f"- The code is {joined}{' that use each other only in set ways' * (not checked)}."
+        )
+    return 0, [*out, YES_ASK]
+
+
+def yes_of(
+    root: Path, words_file: Path, by: str | None, team: bool = True
+) -> tuple[int, str | None, str]:
+    """(refusal code, refusal line, the words): rule 8's explicit yes, by whom it counts."""
+    import reviewers
+
+    words = words_file.read_text(encoding="utf-8").strip()
+    if os.environ.get("AGK_STEWARD_START") == "conductor":
+        return (
+            2,
+            "refused: a steward the supervisor started confirms nothing"
+            " (setting: AGK_STEWARD_START)",
+            words,
+        )
+    if (
+        team
+        and review_mode(root) == "team"
+        and (by or "").lower() not in {a.lower() for a in reviewers.spec_approvers(root)}
+    ):
+        return (
+            2,
+            "refused: in team mode only a spec approver's yes counts (setting: spec_approvers)",
+            words,
+        )
+    return 0, None, words
+
+
+def confirm(root: Path, words_file: Path, at: str, by: str | None, gh) -> tuple[int, list[str]]:
+    """Rule 8: one explicit yes records one Setup entry; any other reply records nothing."""
+    import steward_voice
+
+    code, refusal, words = yes_of(root, words_file, by)
+    if refusal:
+        return code, [refusal]
+    if not words or not steward_voice.is_yes(words):
+        return 1, [NOT_CONFIRMED]
+    who = f" (by {by})" if by and review_mode(root) == "team" else ""
+    return steward.record(
+        root, "Setup", f'standard: confirmed because the person said "{words}" at {at}{who}', gh
+    )
+
+
+def confirmed(root: Path) -> bool:
+    """A `Setup: standard: confirmed` entry in the memory as `steward.py start` last read it."""
+    if personal_table(root) is not None:
+        items = steward.personal_entries(root)
+    else:
+        items = steward.load_cache(root).get("comments", [])
+    return any(str(i.get("body", "")).startswith(STANDARD) for i in items)
+
+
+def generic_problem(root: Path, text: str) -> str | None:
+    """Rule 8: a generic description of the product type, never a name, address or number."""
+    from guard import scan_text
+
+    from config import guard_patterns
+
+    if not text or len(text) > 120 or "\n" in text or GENERIC_BAD.search(text):
+        return "refused: not a generic description (setting: the web-research description, rule 8)"
+    if scan_text(text, guard_patterns(root)):
+        return "refused: the description holds data the guard finds (setting: [guard])"
+    return None
+
+
+def research(root: Path, words_file: Path, at: str, text: str, gh, search) -> tuple[int, list[str]]:
+    """Rule 8: the permission is recorded; only on a yes, the generic description is searched."""
+    import steward_voice
+
+    code, refusal, words = yes_of(root, words_file, None, team=False)
+    if refusal:
+        return code, [refusal]
+    yes = bool(words) and steward_voice.is_yes(words)
+    if yes and (problem := generic_problem(root, text.strip())):
+        return 2, [problem]
+    choice = "yes" if yes else "no"
+    code, lines = steward.record(
+        root, "Setup", f'web-research: {choice} because the person said "{words}" at {at}', gh
+    )
+    if code or not yes:
+        return code, [*lines, NO_SEARCH]
+    search(text.strip())
+    return 0, [*lines, f"search: {text.strip()}"]
+
+
+def next_adr(root: Path) -> int:
+    numbers = [int(p.name[:4]) for p in (root / "docs" / "adr").glob("[0-9][0-9][0-9][0-9]-*.md")]
+    return max(numbers, default=0) + 1
+
+
+def draft(root: Path, slug: str) -> tuple[int, list[str]]:
+    """Rule 8: the project playbook on `default.toml` and its Proposed ADR; never the work type."""
+    import front_door
+
+    try:
+        front_door.derive_write({"--slug": slug}, root)
+    except front_door.Refusal as exc:
+        return 2, [f"refused: {line}" for line in exc.args[0]]
+    record = (root / front_door.RESEARCH / f"{slug}.md").read_text(encoding="utf-8")
+    sources = [ln for ln in record.splitlines() if ln.startswith("- Source:")]
+    number = next_adr(root)
+    rel = f"docs/adr/{number:04d}-the-project-s-work-type-{slug}.md"
+    text = "\n".join([
+        f"# ADR-{number:04d}: The project's work type {slug}, drafted on the default playbook", "",
+        "- Status: Proposed", f"- Date: {datetime.now(UTC):%Y-%m-%d}", "- Deciders: maintainers",
+        f"- Related: config/playbooks/{slug}.toml, {front_door.RESEARCH}/{slug}.md", "",
+        "## Context", "",
+        "No shipped playbook fits the requirements the steward gathered (SPEC-0072 rule 8).", "",
+        "## Decision", "",
+        f"The project's own playbook `{slug}` is composed on `default.toml`, keeping every gate"
+        " at its kind;"
+        " the owner names it in `[delivery] work_type` after the person's yes.", "",
+        "## Sources", "", *(sources or ["- the project's requirements only"]), "",
+        "## Consequences", "", "Accepted by the project's maintainers, never by an agent.", "",
+    ])  # fmt: skip
+    (root / rel).parent.mkdir(parents=True, exist_ok=True)
+    (root / rel).write_text(text, encoding="utf-8")
+    return 0, [f"drafted config/playbooks/{slug}.toml and {rel} (Proposed)"]
 
 
 # --- kit defects and the steward's reads (brief #1411, ADR-0594) -------------------------------
@@ -448,6 +667,14 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--refusals", type=int, default=5)
     k.add_argument("--post", action="store_true")
     sub.add_parser("defects")
+    s = sub.add_parser("standard")  # SPEC-0072 rule 8 (brief #1601, ADR-0681)
+    s.add_argument("--playbook")
+    for name in ("confirm", "research"):
+        c = sub.add_parser(name)
+        c.add_argument("--said", type=Path, required=True)
+        c.add_argument("--at", required=True)
+        c.add_argument("--by" if name == "confirm" else "--describe", required=name == "research")
+    sub.add_parser("draft").add_argument("--slug", required=True)
     w = sub.add_parser("reads")
     w.add_argument("--session")
     w.add_argument("--refused", action="store_true")
@@ -468,6 +695,14 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = defect(root, opts)
         elif opts.command == "defects":
             code, lines = defects(root)
+        elif opts.command == "standard":
+            code, lines = standard_screen(root, opts.playbook)
+        elif opts.command == "confirm":
+            code, lines = confirm(root, opts.said, opts.at, opts.by, steward.gh_api)
+        elif opts.command == "research":
+            code, lines = research(root, opts.said, opts.at, opts.describe, steward.gh_api, len)
+        elif opts.command == "draft":
+            code, lines = draft(root, opts.slug)
         elif opts.command == "reads":
             code, lines = reads(root, opts.session, opts.refused)
         else:

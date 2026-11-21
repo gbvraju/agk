@@ -31,7 +31,7 @@ CONFIRMED = "Setup: standard: confirmed because the person said"
 PLAN = '{"malformed": []}'
 TRACE = "ok plan (3 briefs)\n"
 APPROVER = "approver-example-1"
-REVIEWERS = f"spec_approvers:\n  - {APPROVER}\nverdict_authors:\n  - conductor-example-1\n"
+REVIEWERS = f"spec_approvers: [{APPROVER}]\nverdict_authors: [conductor-example-1]\n"
 RESEARCH = """# Research: a booking web app for small clinics
 
 ## Option: a web app on one server
@@ -56,13 +56,17 @@ A web app on one server (proposal).
 """
 
 
-def project(tmp_path: Path, mode: str = "solo", work_type: str | None = "web-app",
-            personal_mode: bool = True) -> Path:  # fmt: skip
+def project(
+    tmp_path: Path,
+    mode: str = "solo",
+    work_type: str | None = "web-app",
+    personal_mode: bool = True,
+) -> Path:
     root = tmp_path / "product"
     shutil.copytree(ROOT / "config" / "playbooks", root / "config" / "playbooks")
     lines = [f'review_mode = "{mode}"']
     if personal_mode:
-        lines += ["", "[personal]", 'level = "light"']
+        lines += ["", "[personal]", 'level = "light"', 'forge = "files"']
     if work_type:
         lines += ["", "[delivery]", f'work_type = "{work_type}"']
     (root / "agk.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -91,7 +95,8 @@ def test_req079_ac6_a_business_user_sees_one_plain_screen_with_no_kit_term(tmp_p
     assert steward_owner.KIT_TERMS.search(text) is None, text
     assert "?" not in text.replace(steward_owner.YES_ASK, "")  # only the one yes is asked
     assert lines[-1] == steward_owner.YES_ASK
-    assert len(lines) <= 12
+    assert len([x for x in lines if x.startswith("- ")]) <= 5  # the steward's voice
+    assert all(len(x) <= 100 for x in lines)
 
 
 def test_req079_ac6_a_team_sees_the_full_list(tmp_path):
@@ -172,8 +177,9 @@ def test_req079_ac6_no_search_without_a_yes_and_only_the_generic_description(tmp
     root = project(tmp_path, work_type=None)
     sent: list[str] = []
     generic = "a booking web app for small clinics"
-    code, lines = steward_owner.research(root, said(tmp_path, "no"), AT, generic, GitHub(),
-                                         sent.append)  # fmt: skip
+    code, lines = steward_owner.research(
+        root, said(tmp_path, "no"), AT, generic, GitHub(), sent.append
+    )
     assert code == 0 and sent == [] and lines[-1] == steward_owner.NO_SEARCH
     for planted in (
         "a booking web app for Northwind Clinics",
@@ -181,12 +187,14 @@ def test_req079_ac6_no_search_without_a_yes_and_only_the_generic_description(tmp
         "a booking app like https://example.com",
         "a booking app for 3 clinics",
     ):
-        code, lines = steward_owner.research(root, said(tmp_path, "yes"), AT, planted, GitHub(),
-                                             sent.append)  # fmt: skip
+        code, lines = steward_owner.research(
+            root, said(tmp_path, "yes"), AT, planted, GitHub(), sent.append
+        )
         assert code == 2 and sent == [], planted
         assert "example.com" not in lines[0] and "Northwind" not in lines[0]
-    code, _ = steward_owner.research(root, said(tmp_path, "yes"), AT, generic, GitHub(),
-                                     sent.append)  # fmt: skip
+    code, _ = steward_owner.research(
+        root, said(tmp_path, "yes"), AT, generic, GitHub(), sent.append
+    )
     assert code == 0 and sent == [generic]
     assert memory(root) == [
         f'Setup: web-research: no because the person said "no" at {AT}',
@@ -232,10 +240,15 @@ def test_req079_ac8_the_personal_floor_runs_the_gates_with_no_forge_call(tmp_pat
     subprocess.run([*git, "commit", "-qm", "one"], check=True)
     sidecar = tmp_path / "sidecar"
     sidecar.mkdir()
-    (sidecar / "agk.toml").write_text('[personal]\nlevel = "strict"\n', encoding="utf-8")
+    (sidecar / "agk.toml").write_text(
+        '[personal]\nlevel = "review"\nforge = "files"\ntest_command = "python3 -m pytest -q"\n',
+        encoding="utf-8",
+    )
     order: list[str] = []
     monkeypatch.setattr(personal, "scan_step", lambda c, b: (order.append("scan"), (True, "s"))[1])
-    monkeypatch.setattr(personal, "forge_call", lambda *a: pytest.fail("a forge call"), raising=False)
+    monkeypatch.setattr(
+        personal, "forge_call", lambda *a: pytest.fail("a forge call"), raising=False
+    )
     seen: list[Path] = []
 
     def green(root):
@@ -244,10 +257,16 @@ def test_req079_ac8_the_personal_floor_runs_the_gates_with_no_forge_call(tmp_pat
         return [(True, "secrets")]
 
     monkeypatch.setattr(personal.run_gates, "results", green)
-    _, text = personal.floor(clone, sidecar, "HEAD", False)
+    monkeypatch.setattr(personal, "regression_step", lambda *a: (True, "floor: no-regression ok"))
+    assert personal.GATES_NOT_RUN in personal.floor(clone, sidecar, "HEAD", False)[1]
+    assert order == ["scan"]
+    order.clear()
+    _, text = personal.floor(clone, sidecar, "HEAD", True)
     assert order == ["scan", "gates"] and "floor: gates ok (1 check gates)" in text
     assert (seen[0] / "app.py").is_file() and seen[0] != clone
-    monkeypatch.setattr(personal.run_gates, "results", lambda root: [(False, "secrets: x (path class: src)")])
-    passed, text = personal.floor(clone, sidecar, "HEAD", False)
+    monkeypatch.setattr(
+        personal.run_gates, "results", lambda root: [(False, "secrets: x (path class: src)")]
+    )
+    passed, text = personal.floor(clone, sidecar, "HEAD", True)
     assert not passed and "floor: gates FAIL: secrets: x (path class: src)" in text
     assert not (sidecar / "forge").exists()
