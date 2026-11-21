@@ -27,6 +27,8 @@ With `--root DIR` and `plan_issue` in the `[flow]` table of `DIR/agk.toml` a bri
 line `Wave: n` (amendment 140), a wave of `--waves` when that list is given. With `--root DIR` the
 `Touches:` and `Adds:` lines are also judged against the tree (amendment 141 item 1); an optional
 line `Adds:` lists the new files a brief creates and `Broad: <reason>` says that it is a sweep.
+Brief #1660 (ADR-0691): `Adds: none` (any case) alone adds no file, and `Touches: none` touches
+none; `none` beside a path or with punctuation (`None.`) is refused naming the line.
 Amendment 142: one line `Contexts:` states every context of `session.CONTEXTS`, each with how the
 change works there or `not applicable: <reason>`.
 Amendment 168 (brief #1121): `Size: S` names at most 3 code paths in `Touches:` and `Size: M`

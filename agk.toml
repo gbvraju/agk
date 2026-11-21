@@ -1064,7 +1064,7 @@ tests = [
   "tests/kit/test_session_plan_reads.py", "tests/kit/test_shared_main.py",
   "tests/kit/test_github_rate_wait.py", "tests/kit/test_kit_defect_report.py",
   "tests/kit/test_owner_answer_carries.py",
-  "tests/kit/test_owner_wait.py",
+  "tests/kit/test_owner_wait.py", "tests/kit/test_plan_names.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"

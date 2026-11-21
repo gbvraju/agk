@@ -1656,6 +1656,7 @@ def line_problems(lines: list[str]) -> list[str]:
         or not all(g.strip() for x in adds for g in x[len("Adds:") :].split(","))
     ):
         problems.append("rule 4: at most one line Adds: with paths separated by commas")
+    problems += none_problems(lines)
     broad = [x for x in lines if x.startswith("Broad:")]
     if len(broad) > 1 or not all(BROAD.fullmatch(x.rstrip()) for x in broad):
         problems.append("rule 4: at most one line Broad: with its reason")
@@ -1938,11 +1939,28 @@ def judge(
 
 
 def line_entries(body: str, line: re.Pattern) -> list[str]:
-    """The comma-separated entries of the first line of a brief that LINE matches."""
+    """The comma-separated entries of the first line of a brief that LINE matches; a line whose
+    only entry is `none`, in any case, gives none (brief #1660, ADR-0691)."""
     for text in body.splitlines():
         if found := line.fullmatch(text.rstrip()):
-            return [g.strip() for g in found.group(1).split(",")]
+            entries = [g.strip() for g in found.group(1).split(",")]
+            return [] if [e.lower() for e in entries] == ["none"] else entries
     return []
+
+
+def none_problems(lines: list[str]) -> list[str]:
+    """Brief #1660: `none` beside a path, or with punctuation, is refused naming the line."""
+    out = []
+    for key, rule in (("Adds:", "rule 4"), ("Touches:", "rule 2")):
+        for text in (x for x in lines if x.startswith(key)):
+            entries = [e.strip() for e in text[len(key) :].split(",")]
+            word = [e for e in entries if re.fullmatch(r"none\W*", e, re.I)]
+            if word and [e.lower() for e in entries] != ["none"]:
+                out.append(
+                    f"{rule}: the {key} line names none beside a path or with punctuation; "
+                    f"write {key} none alone"
+                )
+    return out
 
 
 def touches_of(body: str) -> list[str]:

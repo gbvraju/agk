@@ -207,3 +207,58 @@ def test_the_check_reads_the_open_briefs_from_the_read_cache_with_no_command(tmp
     monkeypatch.setattr(pn.session, "run_gh", lambda *a, **k: pytest.fail("no command"))
     assert [b["number"] for b in pn.cached_issues(tmp_path)] == [66]
     assert pn.cached_issues(tmp_path / "nowhere") == []
+
+
+# Brief #1660 (ADR-0691): a line `Adds: none` adds no file, so two such briefs never clash.
+
+
+def none_brief(number: int, adds: str = "none") -> dict:
+    body = f'Sentence: "x"\nTouches: src/f{number}.py\nAdds: {adds}\n'
+    return {"number": number, "body": body, "labels": [{"name": "agk-brief"}]}
+
+
+@pytest.mark.parametrize("word", ["none", "None", "NONE"])
+def test_adds_none_alone_is_no_entry_for_adds_and_touches(word):
+    """REQ-050: answer 1, any case."""
+    body = f'Sentence: "x"\nTouches: {word}\nAdds: {word}\n'
+    assert pn.session.line_entries(body, pn.session.ADDS) == []
+    assert pn.session.line_entries(body, pn.session.TOUCHES) == []
+    assert pn.adds_of(body) == [] and pn.session.touches_of(body) == []
+
+
+@pytest.mark.parametrize("review_mode", ["solo", "team"])
+@pytest.mark.parametrize("pr_mode", ["flow", "strict"])
+@pytest.mark.parametrize("execution", ["hosted", "local", "personal"])
+def test_two_briefs_with_adds_none_show_no_clash_and_both_start(review_mode, pr_mode, execution):
+    """REQ-050: answers 2 and 5; no setting reads the line, so every mode reads it the same."""
+    issues = [none_brief(1648), none_brief(1650)]
+    assert pn.plan_clashes(issues, set()) == []
+    h = pn.Holders(briefs=issues)
+    assert pn.brief_problems(1650, issues[1]["body"], h) == []
+
+
+@pytest.mark.parametrize("adds", ["none, src/a.py", "src/a.py, none", "None.", "none."])
+def test_none_beside_a_path_or_with_a_full_stop_is_refused_naming_the_line(adds):
+    """REQ-050: answers 1 and 3; never read as a path."""
+    problems = pn.session.brief_problems(none_brief(1, adds)["body"])
+    assert any(p.startswith("rule 4: the Adds: line names none") for p in problems)
+
+
+def test_adds_with_nothing_after_it_stays_refused():
+    """REQ-050: answer 3, as today."""
+    body = 'Sentence: "x"\nTouches: src/a.py\nAdds:\n'
+    assert "rule 4: at most one line Adds: with paths separated by commas" in (
+        pn.session.brief_problems(body)
+    )
+
+
+def test_a_brief_held_for_a_clash_is_skipped_with_that_clash():
+    """REQ-050: answer 4, never the fallback `every build is taken or in progress`."""
+    import session_plan  # noqa: PLC0415
+
+    clashes = pn.plan_clashes([brief(66, "src/gaps2/"), brief(565, "src/gaps2/")], set())
+    ready = [{"number": 66}, {"number": 565}, {"number": 7}]
+    line = pn.clash_line(clashes[0])
+    assert session_plan.clash_skips(clashes, ready) == [(66, line), (565, line)]
+    taken = pn.plan_clashes([brief(66, "src/gaps2/", taken=True), brief(565, "src/gaps2/")], {66})
+    assert session_plan.clash_skips(taken, ready) == [(565, pn.clash_line(taken[0]))]
