@@ -50,8 +50,8 @@ STEP = re.compile(r"^[a-z][a-z0-9-]*$")
 # SPEC-0072 rule 5 (brief #1588, ADR-0668): steps of the composed `[architecture]`, not of a gate;
 # each runs, under its own name, only where its `applies(root)` is true (two or more layers).
 ARCHITECTURE_STEPS = ("layers",)
-# brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way only
-# where a stack is chosen and its lock is read, so a project without one (the kit's own) is unchanged.
+# brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way
+# only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
 PRODUCT_STEPS = ("bom", "licences")
 PACKS = ("python_pack",)  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")

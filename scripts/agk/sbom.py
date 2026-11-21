@@ -36,7 +36,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from ci_tools import LINE as CI_TOOL_LINE
 from ci_tools import PIN_FILE
 from common import CheckError, git, repo_root, utf8_output
-
 from gates import licences, pins
 
 NAME = "bom"
@@ -299,7 +298,9 @@ def lock_components(root: Path, commit: str, config: dict) -> list[dict]:
         raise not_parsed("the lock file") from None
     out = []
     for kind, name, version, licence in items:
-        purl = f"pkg:{'pypi' if kind == 'python' else 'npm'}/{name.replace('@', '%40', 1)}@{version}"
+        purl = (
+            f"pkg:{'pypi' if kind == 'python' else 'npm'}/{name.replace('@', '%40', 1)}@{version}"
+        )
         out.append(entry(kind, name, version, purl=purl, licence=licence or None))
     return out
 
@@ -363,9 +364,10 @@ def well_formed(item: dict) -> bool:
         and isinstance(named[0], dict)
         and set(named[0]) == {"expression"}
         and isinstance(named[0]["expression"], str)
-        and
-        REQUIRED <= set(item) <= FIELDS
-        and all(isinstance(item.get(k, ""), str) for k in FIELDS - {"hashes", "licenses", "properties"})
+        and REQUIRED <= set(item) <= FIELDS
+        and all(
+            isinstance(item.get(k, ""), str) for k in FIELDS - {"hashes", "licenses", "properties"}
+        )
         and isinstance(hashes, list)
         and all(isinstance(h, dict) and set(h) == {"alg", "content"} for h in hashes)
         and isinstance(properties, list)

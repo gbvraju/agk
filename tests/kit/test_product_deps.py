@@ -20,7 +20,6 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 import engines  # noqa: E402
 import run_gates  # noqa: E402
 import sbom  # noqa: E402
-
 from gates import licences  # noqa: E402
 
 RECORD = (
@@ -73,7 +72,10 @@ def gates(root: Path, capsys) -> tuple[int, str]:
 
 
 def test_the_lock_gives_a_bill_that_sbom_check_accepts(product, monkeypatch, capsys) -> None:
-    """REQ-061, REQ-079: Answer 1: each package of the committed lock, class `node`, with its version and licence."""
+    """REQ-061, REQ-079.
+
+    Answer 1: each package of the committed lock, class `node`, with its version and licence.
+    """
     monkeypatch.chdir(product.root)
     doc = bill(product.root)
     node = {c["bom-ref"]: c for c in doc["components"] if c["bom-ref"].startswith("node:")}
@@ -112,7 +114,10 @@ def test_without_a_work_type_the_lock_is_not_read(repo, monkeypatch) -> None:
 
 
 def test_an_invented_licence_off_the_list_is_red(product, capsys) -> None:
-    """REQ-061, REQ-079: Measured: red naming the licences rule and the component class, never a name or an id."""
+    """REQ-061, REQ-079.
+
+    Measured: red naming the licences rule and the component class, never a name or an id.
+    """
     odd = {"odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"}}
     product.commit({"package-lock.json": lock(**odd)})
     assert licences.main(["--root", str(product.root)]) == 1
@@ -147,7 +152,7 @@ def test_the_project_list_widens_and_an_unknown_form_is_refused(product, capsys)
     allowed = '"MIT", "ISC", "LicenseRef-Invented-1"'
     product.commit({"config/licences.toml": f"allowed = [{allowed}]\n"})
     assert licences.main(["--root", str(product.root)]) == 0
-    for bad in ("allowed = \"MIT\"\n", "allowed = []\nextra = 1\n", "allowed = [1]\n", "x = [\n"):
+    for bad in ('allowed = "MIT"\n', "allowed = []\nextra = 1\n", "allowed = [1]\n", "x = [\n"):
         product.commit({"config/licences.toml": bad})
         capsys.readouterr()
         assert licences.main(["--root", str(product.root)]) == 1
@@ -156,7 +161,10 @@ def test_the_project_list_widens_and_an_unknown_form_is_refused(product, capsys)
 
 
 def test_the_template_is_the_built_in_list() -> None:
-    """REQ-061, REQ-079: Q-1596-1: permissive licences only, until the maintainers accept the list."""
+    """REQ-061, REQ-079.
+
+    Q-1596-1: permissive licences only, until the maintainers accept the list.
+    """
     text = (KIT_ROOT / "kit" / "templates" / "licences.toml").read_text(encoding="utf-8")
     assert licences.allowed_from(text) == licences.DEFAULT
     want = ("MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0")
@@ -195,7 +203,10 @@ def test_no_stack_or_no_lock_is_not_run_never_ok(product, capsys) -> None:
 
 
 def test_adopt_holds_the_findings_until_the_baseline(product, capsys) -> None:
-    """REQ-061, REQ-079: Answer 4: brief #1600's baseline is not built, so an adopted project's findings are held."""
+    """REQ-061, REQ-079.
+
+    Answer 4: brief #1600's baseline is not built, so an adopted project's findings are held.
+    """
     toml = FILES["agk.toml"].replace('mode = "init"', 'mode = "adopt"')
     odd = {"odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"}}
     product.commit({"agk.toml": toml, "package-lock.json": lock(**odd)})
@@ -203,7 +214,10 @@ def test_adopt_holds_the_findings_until_the_baseline(product, capsys) -> None:
 
 
 def test_a_saved_scan_result_gives_the_issue_body(product, monkeypatch, capsys) -> None:
-    """REQ-061, REQ-079: Answer 3: `sbom.py findings` reads the bill's `node` components (rule 7)."""
+    """REQ-061, REQ-079.
+
+    Answer 3: `sbom.py findings` reads the bill's `node` components (rule 7).
+    """
     monkeypatch.chdir(product.root)
     bill(product.root)
     vuln = {"id": "GHSA-aaaa-bbbb-cccc", "database_specific": {"severity": "HIGH"}}
@@ -221,6 +235,7 @@ def test_a_saved_scan_result_gives_the_issue_body(product, monkeypatch, capsys) 
 
 def test_no_check_opens_a_socket(product, monkeypatch, capsys) -> None:
     """REQ-061, REQ-079."""
+
     def refuse(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("a socket was opened")
 
@@ -232,7 +247,10 @@ def test_no_check_opens_a_socket(product, monkeypatch, capsys) -> None:
 
 
 def test_the_foundation_writes_the_list_once(product, capsys) -> None:
-    """REQ-061, REQ-079: Answer 2: `stack-files` writes `config/licences.toml` from the template, never over one."""
+    """REQ-061, REQ-079.
+
+    Answer 2: `stack-files` writes `config/licences.toml` from the template, never over one.
+    """
     engines.cmd_stack_files(product.root)
     path = product.root / "config" / "licences.toml"
     template = KIT_ROOT / "kit" / "templates" / "licences.toml"
