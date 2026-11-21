@@ -51,6 +51,7 @@ config/stack-signals.toml text eol=lf
 constitution/principles.md text eol=lf
 docs/adr/TEMPLATE.md text eol=lf
 docs/briefs/TEMPLATE.md text eol=lf
+docs/guides/engineering-standard.md text eol=lf
 docs/guides/local-mode.md text eol=lf
 docs/guides/steward-first-run.md text eol=lf
 docs/guides/steward-voice.md text eol=lf

@@ -1,0 +1,1 @@
+- The installed engineering-standard guide keeps LF line endings on Windows like the other guides, so the default branch is green again (brief #1652)
