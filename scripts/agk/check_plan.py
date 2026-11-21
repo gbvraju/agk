@@ -114,6 +114,10 @@ one `Kind: foundation` brief in the first milestone and every other brief of tha
 on a `Depends-on:` line, so no feature brief runs before the foundation; with no work type a
 foundation brief is refused naming the setting, and nothing else is held (`Q-S0072-17`).
 
+Brief #1597 (ADR-0677): with a work type whose `brief_order` holds `contract`, while
+`contracts/openapi.json` or `docs/data-model.md` is missing, a `Kind: back-end` brief file that
+does not name the `Kind: contract` brief on a `Depends-on:` line is refused (`SPEC-0072 rule 5`).
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
@@ -752,6 +756,43 @@ def foundation_problems(root: Path) -> list[str]:
     return out
 
 
+def contract_problems(root: Path) -> list[str]:
+    """Brief #1597 (ADR-0677): with a work type whose `brief_order` holds `contract`, while the
+    contract or the data model is missing, each `Kind: back-end` brief file names the `Kind:
+    contract` brief on a `Depends-on:` line. Each line names the rule and the key, never a value."""
+    where, need = "SPEC-0072 rule 5", "contracts/openapi.json, docs/data-model.md"
+    path = playbook_format.selected(root)
+    if path is None or all((root / p).is_file() for p in need.split(", ")):
+        return []
+    order = (playbook_format.load(path).get("split") or {}).get("brief_order", [])
+    if "contract" not in order:
+        return []
+    folder = root / BRIEFS
+    read = [(p.stem, _read(p) or "") for p in sorted(folder.rglob("*.md")) if folder.is_dir()]
+
+    def kind(text: str, value: str) -> bool:
+        return f"Kind: {value}" in [ln.strip() for ln in text.splitlines()]
+
+    keys = [k for k, t in read if kind(t, "contract")]
+    out = []
+    for key, body in read:
+        if not kind(body, "back-end"):
+            continue
+        named = [ln.strip() for ln in body.splitlines() if ln.strip().startswith("Depends-on:")]
+        after = {w for ln in named for w in re.split(r"[,\s]+", ln[len("Depends-on:") :])}
+        if not keys:
+            out.append(
+                f"{where}: {key}: a back-end brief before the contract and the data model "
+                f"(no contract brief; path class: {need})"
+            )
+        elif not after & set(keys):
+            out.append(
+                f"{where}: {key}: a back-end brief before the contract and the data model "
+                f"(no Depends-on: {keys[0]}; path class: {need})"
+            )
+    return out
+
+
 def milestones(root: Path) -> list[str]:
     text = _read(root / MILESTONES) or ""
     return [m.group(1) for m in map(MILESTONE.match, text.splitlines()) if m]
@@ -1354,7 +1395,7 @@ def cmd_check(
         lines += plan.rule_lines(facts is not None) + plan.access_lines(facts is not None)
         print("\n".join(lines))
     problems += plan.problems() + scope_lock_problems(root) + scope_problems(root, comments, base)
-    problems += foundation_problems(root)
+    problems += foundation_problems(root) + contract_problems(root)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     for line in plan.unmatched():
