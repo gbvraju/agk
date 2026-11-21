@@ -1,0 +1,1 @@
+- The steward checks where it was opened: off the default branch, behind `origin` or in another session's worktree it says so in one line with the fix (`git switch <default branch> && git pull --ff-only`) and changes nothing, and a start hook that comes with the project's agent line prints the same line for any session opened off the default branch (SPEC-0066 rule 3, brief #1583)

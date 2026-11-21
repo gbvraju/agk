@@ -54,6 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import (  # noqa: E402
     OUTSIDE_PROJECT,
     CheckError,
+    branch_check,
     personal_table,
     repo_root,
     review_mode,
@@ -395,6 +396,8 @@ def setup_lines(
 
 
 def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[str]]:
+    if line := branch_check(root):  # SPEC-0066 rule 3 (ADR-0663): stop before any write
+        return 1, [line]
     if personal_table(root) is not None:
         comments = personal_entries(root)
         if other := live_start(comments, session, now):
@@ -532,6 +535,7 @@ def main(argv: list[str] | None = None) -> int:
     end_p.add_argument("--tokens", type=int)
     sub.add_parser("onboard").add_argument("--again", action="store_true")
     sub.add_parser("first-run").add_argument("--folder", type=Path)
+    sub.add_parser("branch")
     set_p = sub.add_parser("setup")
     set_p.add_argument("--adopted", action="store_true")
     set_p.add_argument("--detect", type=Path, help="the output of `front_door.py detect --json`")
@@ -551,6 +555,10 @@ def main(argv: list[str] | None = None) -> int:
         print(OUTSIDE_PROJECT)
         return 3
     now = datetime.now(UTC)
+    if opts.command == "branch":  # rule 3 again, when the person asks the steward to act
+        line = branch_check(root)
+        print(line or "branch: ok")
+        return 1 if line else 0
     if opts.command == "onboard":
         import steward_onboard
 

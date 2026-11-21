@@ -1527,6 +1527,57 @@ def main_folder_line(root: Path) -> str | None:
     return None if state is None else f"on {state[0]}, {state[1]} untracked"
 
 
+# SPEC-0066 rule 3 (brief #1583, ADR-0663): where the steward was opened. Its own worktree,
+# detached at `origin/<default branch>`, counts as the default branch.
+STEWARD_TREE = "agk-steward"
+
+
+def _many(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def branch_check(root: Path, fetch: bool = True) -> str | None:
+    """None when ROOT may go on: on the default branch and not behind `origin`, the steward's own
+    worktree, outside git or with no `origin`. Else one `branch:` line with the fix, which this
+    function never runs: it changes nothing but, with FETCH, the remote-tracking branch."""
+    if _git_text(root, "rev-parse", "--git-dir") is None:
+        return None
+    if not is_main_worktree(root):
+        name = Path(_git_text(root, "rev-parse", "--show-toplevel") or root).name
+        if name == STEWARD_TREE:
+            return None
+        owner = "another session"
+        if name.startswith("agk-") and len(name) > len("agk-"):
+            owner = name[len("agk-") :]
+        return (
+            f"branch: this folder is the worktree of {owner};"
+            " open the project's main folder instead"
+        )
+    if _git_text(root, "remote", "get-url", "origin") is None:
+        return None
+    default = _default_branch_of(root)
+    if fetch:
+        _git_text(root, "fetch", "-q", "origin", default)
+    fix = f"git switch {default} && git pull --ff-only"
+    branch = _git_text(root, "symbolic-ref", "--short", "-q", "HEAD")
+    behind = _git_text(root, "rev-list", "--count", f"HEAD..origin/{default}")
+    if branch == default and behind in (None, "0"):
+        return None
+    where = (
+        f"on {branch or 'a detached head'}, not {default}"
+        if branch != default
+        else f"{default} is {_many(int(behind or 0), 'commit')} behind origin"
+    )
+    status = _git_text(root, "status", "--porcelain") or ""
+    changes = len([x for x in status.splitlines() if x.strip()])
+    if changes:
+        return (
+            f"branch: {where}, with {_many(changes, 'uncommitted change')};"
+            f" keep them or set them aside first, then: {fix}"
+        )
+    return f"branch: {where}; fix: {fix}"
+
+
 def json_records(path: Path, label: str) -> list[dict]:
     """The objects in a file written by `gh api`: an array, arrays, pages or one object a line."""
     try:
@@ -1997,17 +2048,42 @@ def project_agent(data: bytes) -> str | None:
     return json.loads(found.group(1)) if found else None
 
 
+# SPEC-0066 rule 3 (ADR-0663): the start hook that comes with the agent line, the first entry of
+# `hooks`; like the agent line it is the project's, never in the kit's own copy.
+HOOKS_OPEN = b'\n  "hooks": {\n'
+START_HOOK = b"""    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/branch_check.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+"""
+
+
 def without_agent(rel: str, data: bytes) -> bytes:
-    """DATA without the project's agent line when REL is the project's settings."""
-    ours = rel == PROJECT_SETTINGS and data.startswith(b"{\n")
-    found = AGENT_LINE.match(data, 2) if ours else None
-    return data[:2] + data[found.end() :] if found else data
+    """DATA without the project's agent line and start hook when REL is the project's settings."""
+    if rel != PROJECT_SETTINGS or not data.startswith(b"{\n"):
+        return data
+    found = AGENT_LINE.match(data, 2)
+    data = data[:2] + data[found.end() :] if found else data
+    at = data.find(HOOKS_OPEN) + len(HOOKS_OPEN)
+    if at >= len(HOOKS_OPEN) and data.startswith(START_HOOK, at):
+        data = data[:at] + data[at + len(START_HOOK) :]
+    return data
 
 
 def with_agent(data: bytes, name: str) -> bytes:
-    """The settings DATA with NAME as its one agent line, right after the opening brace."""
+    """The settings DATA with NAME as its one agent line, right after the opening brace, and the
+    start hook as the first entry of `hooks`."""
     base = without_agent(PROJECT_SETTINGS, data)
-    return base[:2] + f'  "agent": {json.dumps(name)},\n'.encode() + base[2:]
+    base = base[:2] + f'  "agent": {json.dumps(name)},\n'.encode() + base[2:]
+    at = base.find(HOOKS_OPEN) + len(HOOKS_OPEN)
+    return base[:at] + START_HOOK + base[at:] if at >= len(HOOKS_OPEN) else base
 
 
 def starts_unnamed(text: str) -> bool:

@@ -11,6 +11,7 @@
     ".claude/agents/shadow.md",
     ".claude/agents/steward.md",
     ".claude/hooks/architect_guard.py",
+    ".claude/hooks/branch_check.py",
     ".claude/hooks/conductor_guard.py",
     ".claude/hooks/data_guard.py",
     ".claude/hooks/plugin_hooks.py",
@@ -240,7 +241,7 @@
     ".gitignore": "hash"
   },
   "project_keys": {
-    ".claude/settings.json": ["agent"]
+    ".claude/settings.json": ["agent", "hooks.SessionStart"]
   },
   "snapshot": [
     ".claude-plugin/",
