@@ -72,15 +72,30 @@ layer is exempt (it constrains nothing until a work type is set). One of the eig
 gate ids restated as `judgement` needs a `reason` of at least `REASON_MIN` characters, and the
 refusal names that fixed id, never a value; a `[[standards]]` stack is a `[[stack]]` name of
 `config/stack-signals.toml` when that file is present.
+
+The resolver (REQ-078; brief #1666, ADR-0697): `folder(root, name)`, `path(root, name)` and
+`default_playbook(root)` give where a playbook is read from: the project's `config/playbooks/` in
+the installed layout; in a clean project the project's own `<name>.toml` when it exists, else the
+plugin's (`kit_root.plugin_root`). Every reader, the declaration check and the modules use them;
+`playbooks(root)` still lists the project's own files alone.
 """
 
 from __future__ import annotations
 
 import datetime
 import re
+import sys
 import tomllib
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+try:
+    import kit_root  # standalone, so no cycle (brief #1666)
+except ImportError:  # a partial copy of the scripts (a test's stub project) reads its own folder
+    kit_root = None  # type: ignore[assignment]
+Refused = kit_root.Refused if kit_root is not None else RuntimeError
 
 FORMAT = 1
 # SPEC-0038 rule 1: the fixed list. One constant, so a later amendment adds one entry here.
@@ -481,9 +496,44 @@ def skills(path: Path, root: Path) -> list[str]:
     return [name for name in names if _skill_problem(name, tokens) is None]
 
 
+def folder(root: Path, name: str | None = None) -> Path:
+    """The folder a playbook is read from (brief #1666, ADR-0697): the project's `config/playbooks/`
+    in the installed layout; in a clean one (`[kit] layout = "plugin"`) the project's when it holds
+    `<name>.toml`, else the plugin's. Raises `kit_root.Refused` naming `layout` or
+    `CLAUDE_PLUGIN_ROOT`."""
+    own = Path(root) / FOLDER
+    if kit_root is None or kit_root.layout(Path(root)) != "plugin":
+        return own
+    if name and (own / f"{name}.toml").is_file():
+        return own
+    return kit_root.plugin_root(Path(root)) / FOLDER
+
+
+def clean(root: Path) -> bool:
+    """A clean-layout project, or one whose `[kit] layout` is refused (never read as installed)."""
+    try:
+        return kit_root is not None and kit_root.layout(Path(root)) == "plugin"
+    except Refused:
+        return True
+
+
+def path(root: Path, name: str) -> Path:
+    """The playbook file of `name` by `folder`; the project's own path when it is refused."""
+    try:
+        return folder(root, name) / f"{name}.toml"
+    except Refused:
+        return Path(root) / FOLDER / f"{name}.toml"
+
+
+def default_playbook(root: Path) -> Path | None:
+    """`default.toml` by `folder`, or None when it is found in neither place."""
+    found = path(root, BASE)
+    return found if found.is_file() else None
+
+
 def _shipped(name: str, root: Path) -> bool:
     """SPEC-0048 rule 23: a module is a work type of the list whose playbook is on disk."""
-    return name in WORK_TYPES and (Path(root) / FOLDER / f"{name}.toml").is_file()
+    return name in WORK_TYPES and path(root, name).is_file()
 
 
 def _modules(rel: str, names: list[str], root: Path) -> list[str]:
@@ -699,7 +749,11 @@ def _declared(root: Path) -> tuple[str | None, str | None]:
         return None, f"{where} `{WORK_TYPE}` is not one work type (setting: {WORK_TYPE})"
     if value not in WORK_TYPES:
         return None, f"{where} `{WORK_TYPE}` is not one of the work types (setting: {WORK_TYPE})"
-    if not (Path(root) / FOLDER / f"{value}.toml").is_file():
+    try:
+        found = folder(root, value) / f"{value}.toml"
+    except Refused as exc:
+        return None, str(exc)
+    if not found.is_file():
         return None, (
             f"{where} `{WORK_TYPE}` names a work type whose playbook is missing under {FOLDER}/ "
             f"(setting: {WORK_TYPE})"
@@ -715,9 +769,9 @@ def declaration(root: Path) -> tuple[str | None, list[str]]:
 
 
 def selected(root: Path) -> Path | None:
-    """The playbook the declaration selects, `config/playbooks/<work type>.toml`, or None."""
+    """The playbook the declaration selects, `<work type>.toml` by `folder`, or None."""
     value, _ = _declared(root)
-    return Path(root) / FOLDER / f"{value}.toml" if value else None
+    return path(root, value) if value else None
 
 
 # SPEC-0038 rule 7: the meaning of each milestone shape, in the rule's words.
@@ -765,12 +819,12 @@ def split(root: Path, goal: str = "", kind: str | None = None) -> tuple[list[str
         return [], problems_found
     if work_type is None:
         return [], []
-    path = root / FOLDER / f"{work_type}.toml"
+    book = path(root, work_type)
     rel = f"{FOLDER}/{work_type}.toml"
-    found = problems(path, root)
+    found = problems(book, root)
     if found:
         return [], found
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    data = tomllib.loads(book.read_text(encoding="utf-8"))
     if kind is not None and kind not in data["split"]["brief_order"]:
         return [], [f"rule 7: {rel}: the kind is not in `brief_order` (key: brief_order)"]
     shape = data["milestones"]["shape"]

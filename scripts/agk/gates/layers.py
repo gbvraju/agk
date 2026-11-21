@@ -46,8 +46,10 @@ USAGE = "usage: python3 scripts/agk/gates/layers.py [--root DIR] [--write-record
 
 def architecture(root: Path) -> tuple[list[tuple[str, list[str]]], set[tuple[str, str]]]:
     """The composed layers as (name, globs) and the allowed (from, to) pairs."""
-    path = playbook_format.selected(root) or root / playbook_format.FOLDER / "default.toml"
-    if not path.is_file():
+    import run_gates  # brief #1666: the one resolver of the gates' playbook
+
+    path = run_gates.playbook(root)
+    if path is None or not path.is_file():
         return [], set()
     arch, _, _ = check_playbooks.standard(path, root)
     layers = [

@@ -67,6 +67,7 @@ PRODUCT_STEPS = ("bom", "licences")
 PACKS = ("python_pack",)  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
+UNFOUND = "REQ-078: no playbook is found in the project or the plugin"  # brief #1666
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
 
 
@@ -80,9 +81,23 @@ def step_module(step: object) -> ModuleType | None:
     return importlib.import_module(f"gates.{name}")
 
 
-def playbook(root: Path) -> Path:
-    """The declared playbook, or `default.toml` when none is declared (the kit's own case)."""
-    return playbook_format.selected(root) or root / playbook_format.FOLDER / "default.toml"
+def playbook(root: Path) -> Path | None:
+    """The declared playbook, or `default.toml` when none is declared (the kit's own case), each
+    by the resolver (brief #1666); None when it is found in neither the project nor the plugin."""
+    work_type, found = playbook_format.declaration(root)
+    if work_type is not None or found:
+        return playbook_format.selected(root)
+    return playbook_format.default_playbook(root)
+
+
+def unfound(root: Path) -> list[Row]:
+    """Brief #1666 (ADR-0697): no playbook to run is one failure naming the setting, never a
+    silent pass; an installed project that declares nothing and carries no playbook is unchanged."""
+    declared = bool(playbook_format.declaration(root)[1])
+    if not declared and not playbook_format.clean(root):
+        return []
+    where = f"setting: {playbook_format.WORK_TYPE}" if declared else "path class: config/playbooks/"
+    return [(False, f"playbook: {UNFOUND} ({where})")]
 
 
 Row = tuple[bool | None | str, str]  # passed (True, False, None: not run) or NOTE, and the line
@@ -114,9 +129,12 @@ def ratchet(root: Path, gate_id: str, found: dict[str, int], failed: list, write
 def results(root: Path, write: bool = False) -> list[Row]:
     """(passed, line) for each check gate of the composed playbook, in the composed order; passed
     is None for a step that is not run (`skipped`), and the line gives its reason."""
-    path = playbook(root)
-    if not path.is_file():
-        return []
+    try:
+        path = playbook(root)
+    except playbook_format.Refused:
+        path = None
+    if path is None or not path.is_file():
+        return unfound(root)
     gates, _, _ = check_playbooks.composed(path, root)
     data = playbook_format.load(path)
     out: list[Row] = []
