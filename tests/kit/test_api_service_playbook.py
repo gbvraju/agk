@@ -64,9 +64,11 @@ def test_it_composes_with_default_and_weakens_no_gate() -> None:
     assert found == []
     by_id = {g["id"]: g for g in gates}
     assert ENTERPRISE <= set(by_id)
-    restated = CHECKS - {"contract-tests"}  # brief #1597 (ADR-0677): contract-tests is a check again
+    # brief #1597 (ADR-0677): contract-tests is a check again
+    restated = CHECKS - {"contract-tests"}
     assert {gid for gid in CHECKS if by_id[gid]["kind"] == "judgement"} == restated
-    assert all("(ADR-0666)" in by_id[gid]["reason"] and "step" not in by_id[gid] for gid in restated)
+    for gid in restated:
+        assert "(ADR-0666)" in by_id[gid]["reason"] and "step" not in by_id[gid]
     assert by_id["contract-tests"]["kind"] == "check" and by_id["contract-tests"]["step"]
     for gid in JUDGED:
         assert by_id[gid]["kind"] == "judgement"
