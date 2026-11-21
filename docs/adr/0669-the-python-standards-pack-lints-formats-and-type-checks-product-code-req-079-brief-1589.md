@@ -9,8 +9,7 @@
 Protected classes this pull request changes: `config/` (`config/playbooks/default.toml`), `scripts/agk/` (the new
 `gates/python_pack.py`, `run_gates.py` and `config.py`), `tests/kit/` (the new `test_python_pack.py`), `kit/`
 (`kit/manifest.json`, `kit/templates/agk.toml`, `kit/templates/agk.adopt.toml`) and `agk.toml` (the `[[testing.map]]`
-entries). `kit/hashes.json` is not edited by hand. Brief #1638 changes `config/` (`config/playbooks/default.toml`,
-`config/playbooks/api-service.toml`, `config/playbooks/web-app.toml`) and `tests/kit/` (`test_python_pack.py`).
+entries). `kit/hashes.json` is not edited by hand.
 
 ## Context
 
@@ -27,11 +26,9 @@ default branch at f5c1c29 (2026-11-21) no playbook holds a `[[standards]]` entry
    (a string, an empty list, an absolute path, a `..` part, a drive) is refused naming `setting: project_lint_paths`,
    never the value. The templates carry it as a comment only, so no project's settings change. `lint_paths`,
    `AGK_RUFF_FLAGS` and `agk-lint` are unchanged (SPEC-0002 rule 10, ADR-0007 decision 8).
-2. The Python playbooks hold the two Python entries, `python-pyproject` and `python-pip`, one entry each: after brief
-   #1638 (found bug #1636, the conductor's ruling on brief #1589), `config/playbooks/api-service.toml` and
-   `config/playbooks/web-app.toml`; the base `config/playbooks/default.toml` names no tool or version
-   (`test_playbook_default.py`), and a playbook whose own test refuses a tool or a version holds none (Q-1638-1). Each
-   entry has the steps `python-lint`, `python-format` and `python-type`; `config = "pyproject.toml"`, the file the foundation writes from
+2. `config/playbooks/default.toml` holds the two Python entries, `python-pyproject` and `python-pip`, so every playbook
+   composes them (the brief's "one entry each" is met by composition, not by seven copies): steps `python-lint`,
+   `python-format` and `python-type`; `config = "pyproject.toml"`, the file the foundation writes from
    `kit/templates/stacks/python-pyproject/`; `rules = { tool = "ruff", version = "0.17.4", codes = ["E", "F", "I", "B",
    "UP"] }`, the kit's own `AGK_RUFF_FLAGS` codes and the template's `[tool.ruff.lint] select` (the brief's Q-1). The
    `rules` table names one tool (ADR-0665's form), so mypy's pin, 2.3.1 from `config/ci-tools.txt`, is held by the pack
