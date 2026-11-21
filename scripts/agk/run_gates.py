@@ -7,7 +7,7 @@ entry of `kit/manifest.json`, with its step registry `scripts/agk/gates/`; `chec
 runs it once the playbooks pass, so it runs in the `governance` job and `make governance` with no
 workflow change (Q-1586-3).
 
-    python3 scripts/agk/run_gates.py [--root DIR]
+    python3 scripts/agk/run_gates.py [--baseline] [--root DIR]
 
 Composes the playbook of `[delivery] work_type` (or `default.toml` alone when none is declared)
 with `check_playbooks.composed` and runs the `step` of each `kind = "check"` gate from its module
@@ -28,6 +28,15 @@ The standards packs (SPEC-0072 rule 6; brief #1589, ADR-0669): after the gates, 
 that module is `on` (its stack chosen in the Accepted stack record). Its steps print `ok standards
 <stack>` or `FAIL gates: standards <stack> <step>: <rule> (path class or setting)`; a `lint`,
 `format` or `type` step name the module does not hold is refused naming the stack.
+
+The baseline (SPEC-0072 rule 7; brief #1600, ADR-0680): a step that reports per-file counts (a
+module's `counts(root, playbook)`, or a pack's tally) is held to `config/agk-baseline/<gate id>.txt`
+when that file exists: it passes while no file's count exceeds its line (`ok <id> (baseline)`),
+prints `baseline <id>: a count fell in <n> file(s)` when one falls, and otherwise adds one
+`SPEC-0072 rule 7` line to its own. In `mode = "adopt"` a missing file is written from today's
+tree and the step passes; in `mode = "init"` nothing is written. `--baseline` writes the missing
+files and lowers lines, never raising one (the owner's yes on an upgrade, `Q-S0072-5`, and the
+next build's lowering commit). Output names counts and path classes, never a file.
 """
 
 from __future__ import annotations
@@ -43,6 +52,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import check_playbooks
 import playbook_format
 from common import repo_root, run, utf8_output
+from gates import baseline
 
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
@@ -74,7 +84,33 @@ def playbook(root: Path) -> Path:
     return playbook_format.selected(root) or root / playbook_format.FOLDER / "default.toml"
 
 
-def results(root: Path) -> list[tuple[bool | None, str]]:
+Row = tuple[bool | None | str, str]  # passed (True, False, None: not run) or NOTE, and the line
+NOTE = "note"
+
+
+def ratchet(root: Path, gate_id: str, found: dict[str, int], failed: list, write: bool) -> list:
+    """The rows of a step with per-file counts against its baseline (rule 7); with no baseline
+    file, and none written, its own FAILED rows."""
+    where = f"(path class: {baseline.CLASS})"
+    notes: list[Row] = []
+    had = baseline.read(root, gate_id)
+    if (had is None and baseline.adopted(root)) or write:
+        if baseline.write(root, gate_id, found):
+            done = "written" if had is None else "lowered"
+            notes.append((NOTE, f"baseline {gate_id}: {done} {where}"))
+    base = baseline.read(root, gate_id)
+    if base is None:
+        return failed
+    over, under = baseline.compare(base, found)
+    if over:
+        return [*failed, (False, f"{gate_id}: {baseline.RULE} {where}"), *notes]
+    if under:
+        files = "file" if under == 1 else "files"
+        notes.append((NOTE, f"baseline {gate_id}: a count fell in {under} {files} {where}"))
+    return [(True, f"{gate_id} (baseline)" if failed else gate_id), *notes]
+
+
+def results(root: Path, write: bool = False) -> list[Row]:
     """(passed, line) for each check gate of the composed playbook, in the composed order; passed
     is None for a step that is not run (`skipped`), and the line gives its reason."""
     path = playbook(root)
@@ -82,7 +118,7 @@ def results(root: Path) -> list[tuple[bool | None, str]]:
         return []
     gates, _, _ = check_playbooks.composed(path, root)
     data = playbook_format.load(path)
-    out: list[tuple[bool | None, str]] = []
+    out: list[Row] = []
     checks = [g for g in gates if g.get("kind") == check_playbooks.CHECK]
     for step in ARCHITECTURE_STEPS + PRODUCT_STEPS:
         module = step_module(step)
@@ -98,15 +134,16 @@ def results(root: Path) -> list[tuple[bool | None, str]]:
             out.append((None, f"{gate['id']}: {why}"))
             continue
         failed = [x if isinstance(x, tuple) else (module.RULE, x) for x in module.check(root, data)]
-        out += [(False, f"{gate['id']}: {rule} (path class: {cls})") for rule, cls in failed]
-        if not failed:
-            out.append((True, gate["id"]))
-    return out + pack_results(path, root)
+        rows: list[Row] = [(False, f"{gate['id']}: {r} (path class: {c})") for r, c in failed]
+        if hasattr(module, "counts"):
+            rows = ratchet(root, gate["id"], module.counts(root, data), rows, write)
+        out += rows or [(True, gate["id"])]
+    return out + pack_results(path, root, write)
 
 
-def pack_results(path: Path, root: Path) -> list[tuple[bool | None, str]]:
+def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
     """(passed, line) for each standards pack that is on, once per pack module (rule 6)."""
-    out: list[tuple[bool | None, str]] = []  # main's row type; a pack row is never None
+    out: list[Row] = []  # main's row type; a pack row is never None
     done: set[str] = set()
     for entry in check_playbooks.standard(path, root)[1]:
         stack = entry.get("stack")
@@ -118,21 +155,27 @@ def pack_results(path: Path, root: Path) -> list[tuple[bool | None, str]]:
         if tuple(entry.get(k) for k in STEP_KEYS) != module.STEP_NAMES:
             out.append((False, f"standards {stack}: {NO_PACK_STEP}"))
             continue
-        steps = module.run(root, entry)
-        out += [(False, f"standards {stack} {step}: {ln}") for step, lines in steps for ln in lines]
-        if not any(lines for _, lines in steps):
+        tally: dict[str, dict[str, int]] = {}
+        rows: list[Row] = []
+        for step, lines in module.run(root, entry, tally):
+            gid = f"standards {stack} {step}"
+            failed: list[Row] = [(False, f"{gid}: {ln}") for ln in lines]
+            rows += ratchet(root, gid, tally[step], failed, write) if step in tally else failed
+        out += [r for r in rows if r[0] is not True]
+        if not any(r[0] is False for r in rows):
             out.append((True, f"standards {stack}"))
     return out
 
 
-def cmd_check(root: Path, quiet: bool = False) -> int:
+def cmd_check(root: Path, quiet: bool = False, write: bool = False) -> int:
     """Print the lines and give the exit code; `quiet` prints nothing when no gate is a check."""
-    found = results(root)
+    found = results(root, write)
     if quiet and not found:
         return 0
+    words: dict[bool | None | str, str] = {True: "ok ", None: "not run ", NOTE: ""}
     for passed, line in found:
-        word = {True: "ok ", None: "not run "}.get(passed, f"FAIL {NAME}: ")
-        print(f"{word}{line}")
+        print(f"{words.get(passed, f'FAIL {NAME}: ')}{line}")
+    found = [row for row in found if row[0] != NOTE]
     if any(passed is False for passed, _ in found):
         return 1
     count = len(found)
@@ -145,11 +188,13 @@ def cmd_check(root: Path, quiet: bool = False) -> int:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
+    write = "--baseline" in args
+    args = [a for a in args if a != "--baseline"]
     root = Path(args[1]) if args[:1] == ["--root"] and len(args) == 2 else None
     if root is None and args:
-        print("usage: run_gates.py [--root DIR]", file=sys.stderr)
+        print("usage: run_gates.py [--baseline] [--root DIR]", file=sys.stderr)
         return 2
-    return run(NAME, lambda: cmd_check(root or repo_root()))
+    return run(NAME, lambda: cmd_check(root or repo_root(), write=write))
 
 
 if __name__ == "__main__":

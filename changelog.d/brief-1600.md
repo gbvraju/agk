@@ -1,0 +1,1 @@
+- An adopted project now records today's findings of each new check as a baseline in `config/agk-baseline/` and stays green; after that only a new finding or a rising count fails, a fixed one is printed lower, `run_gates.py --baseline` commits it lowered, and a pull request that raises a baseline line needs an ADR that names it (brief #1600)
