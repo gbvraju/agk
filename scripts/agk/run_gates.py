@@ -61,6 +61,9 @@ STEP = re.compile(r"^[a-z][a-z0-9-]*$")
 # SPEC-0072 rule 5 (brief #1588, ADR-0668): steps of the composed `[architecture]`, not of a gate;
 # each runs, under its own name, only where its `applies(root)` is true.
 ARCHITECTURE_STEPS = ("layers", "architecture-record")  # brief #1595 (ADR-0675)
+# brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way
+# only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
+PRODUCT_STEPS = ("bom", "licences")
 PACKS = ("python_pack",)  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
@@ -118,7 +121,7 @@ def results(root: Path, write: bool = False) -> list[Row]:
     data = playbook_format.load(path)
     out: list[Row] = []
     checks = [g for g in gates if g.get("kind") == check_playbooks.CHECK]
-    for step in ARCHITECTURE_STEPS:
+    for step in ARCHITECTURE_STEPS + PRODUCT_STEPS:
         module = step_module(step)
         if module is not None and module.applies(root):
             checks.append({"id": step, "step": step})

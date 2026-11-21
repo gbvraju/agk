@@ -82,9 +82,14 @@ def chosen(root: Path) -> tuple[tuple[str, str, str, str], list[tuple[str, str, 
     if declaration(root)[0] is None:
         return None
     files = [p for p in root.glob("docs/adr/*.md") if RECORD.match(p.relative_to(root).as_posix())]
-    if len(files) != 1:
+    return pick([p.read_text(encoding="utf-8") for p in files])
+
+
+def pick(texts: list[str]) -> tuple[tuple[str, str, str, str], list[tuple[str, str, str]]] | None:
+    """`chosen` on the texts of the stack records, so a reader of a commit (`sbom.py`) shares it."""
+    if len(texts) != 1:
         return None
-    text = files[0].read_text(encoding="utf-8")
+    text = texts[0]
     letter = CHOSEN.search(text)
     if not ACCEPTED.search(text) or not letter:
         return None
