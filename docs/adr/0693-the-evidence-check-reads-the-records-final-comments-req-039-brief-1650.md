@@ -36,3 +36,7 @@ ADR-0233 decision 5 says the check "makes no network call"; ADR-0605 already add
 A head covered by an ADR Accepted only by its Final record reads `agrees` in the conductor's check, as in prepush, so it
 needs no owner accept. Tests: `tests/kit/test_evidence.py`. Protected path classes changed: `scripts/agk/`
 (`scripts/agk/evidence.py`) and `tests/kit/` (`tests/kit/test_evidence.py`).
+
+## Residual
+
+- 2026-11-21: a Final comment edited after the check's GET is read as it was then; the next check reads it again.
