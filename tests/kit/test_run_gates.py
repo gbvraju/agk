@@ -25,7 +25,7 @@ import run_gates  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
 WORK_TYPES = sorted(p.stem for p in PLAYBOOKS.glob("*.toml") if p.stem != "default")
-IMPLEMENTED = {"cut-over-order", "rollback-order"}
+IMPLEMENTED = {"cut-over-order", "rollback-order", "layers"}
 
 
 def _project(tmp_path: Path, work_type: str | None) -> Path:
@@ -89,7 +89,7 @@ def test_the_kit_without_a_work_type_runs_default_only(
     """REQ-079 AC2."""
     root = _project(tmp_path, None)
     assert run_gates.main(["--root", str(root)]) == 0
-    assert capsys.readouterr().out == "ok gates (no check gate)\n"
+    assert capsys.readouterr().out == "ok layers\nok gates (1 check gates)\n"  # ADR-0668
 
 
 def test_a_step_with_no_module_is_refused_naming_the_gate_id(
@@ -142,7 +142,11 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
     assert check_playbooks.main(["--root", str(root)]) == 0
     out = capsys.readouterr().out
     count = len(WORK_TYPES) + 1
-    assert f"ok playbooks ({count} playbooks)\nok cut-over-order\nok gates (1 check gates)\n" in out
+    assert (
+        f"ok playbooks ({count} playbooks)\nok layers\nok cut-over-order\n"
+        "ok gates (2 check gates)\n"
+        in out
+    )
     path = root / "config" / "playbooks" / "cloud-migration.toml"
     text = path.read_text(encoding="utf-8")
     text = text.replace('["cut-over", "wave-plan"]', '["cut-over", "x"]')

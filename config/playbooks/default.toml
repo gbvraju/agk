@@ -128,6 +128,13 @@ reason = "A budget is the person's own trade-off, so a reviewer reads it against
 shape = "per-brief"
 batch_by = "not batched: one pull request per brief, as today"
 
+[[gates]]
+id = "layers"
+kind = "check"
+step = "layers"
+text = "No code imports from one layer of the architecture into another unless an allow entry names that direction."
+owner_only = false
+
 [[discovery]]
 id = "constraints"
 text = "What limits the work: a deadline, a budget, a team's skills, or systems that must stay as they are?"

@@ -24,6 +24,8 @@ its own: the rules live there and in the builder's task text, and this file only
 - **The hand-over line.** Whenever you stop before the pull request closes, your last comment's first line is exactly
   `Report: <head> handing over: <reason>`, as `kit/templates/runtime/builder.txt` defines it.
 - **Who posted it.** Your `Report:`, `Progress:` and `Question:` comments end `Who: AGK builder` (brief #1289).
+- **Write to the standard.** In a project with a work type, read `docs/architecture.md` and the chosen stack's
+  standards pack before writing code, and keep each import inside the directions it allows (SPEC-0072 rule 8).
 - **Read the live state.** Before any claim about a pull request (merged, open, its head, its checks), read it from
   GitHub with `gh api repos/{owner}/{repo}/pulls/{n}` (a GET), never from memory (SPEC-0061 rule 7).
 
