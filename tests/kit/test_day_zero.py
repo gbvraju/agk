@@ -142,6 +142,12 @@ def test_commands_prints_the_seven_steps_one_at_a_time_in_order(shell, want, cap
     assert capsys.readouterr().out.startswith("done:")
 
 
+def test_the_repository_is_private_unless_the_person_chooses_public():
+    """Q-1584-3: `--private` by default; `--public` only on the person's own choice."""
+    assert "--private" in day_zero.steps(NAME, "posix")[4]
+    assert "--public " in day_zero.steps(NAME, "posix", public=True)[4]
+
+
 def test_powershell_never_redirects_with_echo():
     """Windows: `echo >` writes UTF-16 in Windows PowerShell; the README is written as UTF-8."""
     assert not any(">" in line for line in day_zero.steps(NAME, "powershell"))

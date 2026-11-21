@@ -11,9 +11,10 @@
         keeps one answer, quoted as given with its UTC time, in `agk-day-zero/<hash>.json` of the
         person's Claude folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`); `<hash>` is the greeting
         mark's folder hash (SPEC-0066 rule 8). Without `--yes` it writes nothing (exit 2)
-    day_zero.py commands --name NAME [--shell posix|powershell] [--step N]
+    day_zero.py commands --name NAME [--shell posix|powershell] [--step N] [--public]
         prints step N (default 1) of the seven commands that create the repository, for the person
-        to run; the steward never runs them and shows the next only after an exit of 0
+        to run, private unless `--public`; the steward never runs them and shows the next only after
+        an exit of 0
     day_zero.py write --root DIR [--folder DIR] [--answers FILE]
         writes the kept answers to `docs/sources/day-zero.md` of DIR (SPEC-0043 rule 1, `Kind:
         other`), and with `--answers` the `vision` skill's answers file, then removes the kept file;
@@ -82,7 +83,7 @@ def keep(folder: Path, topic: str, words: str, who: str | None) -> None:
     path.write_text(json.dumps({"answers": [*rows, row]}, indent=2) + "\n", encoding="utf-8")
 
 
-def steps(name: str, shell: str) -> list[str]:
+def steps(name: str, shell: str, public: bool = False) -> list[str]:
     """The seven commands, in order (verify: these gh flags on the person's gh version)."""
     readme, commit = (
         (
@@ -95,12 +96,13 @@ def steps(name: str, shell: str) -> list[str]:
             f"git add README.md && git commit -m 'Start {name}'",
         )
     )
+    seen = "public" if public else "private"
     return [
         "gh auth status",
         "git init -b main",
         readme,
         commit,
-        f"gh repo create {name} --private --source . --remote origin --push",
+        f"gh repo create {name} --{seen} --source . --remote origin --push",
         "git remote set-head origin --auto",
         "gh repo edit --enable-issues",
     ]
@@ -156,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     cmd_p.add_argument("--name", required=True)
     cmd_p.add_argument("--shell", choices=("posix", "powershell"))
     cmd_p.add_argument("--step", type=int, default=1)
+    cmd_p.add_argument("--public", action="store_true", help="only on the person's own choice")
     write_p = sub.add_parser("write")
     write_p.add_argument("--root", type=Path, required=True)
     write_p.add_argument("--folder", type=Path)
@@ -173,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         shell = opts.shell or ("powershell" if sys.platform == "win32" else "posix")
-        listed = steps(opts.name, shell)
+        listed = steps(opts.name, shell, opts.public)
         if not 1 <= opts.step <= len(listed):
             print("done: the repository is ready; next: /agk:setup in this folder")
             return 0

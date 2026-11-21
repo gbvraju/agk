@@ -228,6 +228,22 @@ and `steward_owner.py` prints `outside: no project here`, exit 3, and writes not
 `greeted`; only `greet` writes, one line of a hash of the folder's path and the date in `agk-greeted.txt` of the person's
 Claude folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`), never in the folder itself.
 
+## Day zero
+
+    python3 scripts/agk/day_zero.py offer [--folder DIR]
+    python3 scripts/agk/day_zero.py keep --yes --id TOPIC --answer-file FILE [--who NAME] [--folder DIR]
+    python3 scripts/agk/day_zero.py commands --name NAME [--shell posix|powershell] [--step N] [--public]
+    python3 scripts/agk/day_zero.py write --root DIR [--folder DIR] [--answers FILE]
+
+Before a repository exists (brief #1584, ADR-0664). `offer` prints `offer: github` for a folder that is not a git
+repository with `origin` and not a personal-mode project, else `offer: none`. `keep` writes one answer, quoted as given
+with its UTC time, to `agk-day-zero/<hash>.json` of the person's Claude folder, the hash being the greeting mark's, and
+only with `--yes` (else exit 2, nothing written). `commands` prints step N of seven commands for the person to run (the
+README in PowerShell with `Set-Content -Encoding utf8`), private unless `--public`, the next only after an exit of 0,
+and `done:` after the seventh; a name outside letters, digits, `.`, `_` and `-` is refused (exit 2). `write` writes `docs/sources/day-zero.md`
+(`Kind: other`, SPEC-0043 rule 1) and with `--answers` the `vision` skill's answers file, removes the kept file, and
+never overwrites a source (exit 1).
+
 The steward's notes (SPEC-0059 rule 8, ADR-0557): one open issue labelled `agk-steward`, created when none is open, one
 comment per note under a fixed first word (`Decision`, `Ranking`, `Term`, `Persona`, `Person`, `Pattern`, `Gap`, `Risk`, `Lesson`,
 `Owner question`, `Triage`, `Override`, `Onboarded`, `Setup`). `start` reads the notes first, with `since=` from the last one seen,

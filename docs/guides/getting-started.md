@@ -20,6 +20,9 @@ You need Claude Code, `gh`, `git`, `make` and Python 3.11 or newer. Check each:
 You should see a version for each, and `gh auth status` should say you are logged in to `github.com`. Steps 5 and 11 and the remote checks of the doctor need `gh` logged in; steps 3, 4, 6 and 7 do not. `make test` also needs
 `pytest`: run `python3 -m pip install pytest` once.
 
+No repository yet, only an idea? Type `claude` in an empty folder: the steward talks the idea through first, keeps your
+answers on your yes and shows the commands that create the repository one at a time, for you to run (brief #1584).
+
 Check three more things before step 1:
 
 - **The plan, for a private repository.** Rulesets and branch protection (step 5) need a paid plan (GitHub Pro, Team or
