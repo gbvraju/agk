@@ -882,6 +882,11 @@ def cmd_stack_files(root: Path) -> int:
         print("stack-files: not run: no stack chosen")
         return 0
     (folder, name, lock, _), _ = found
+    listed = root / "config" / "licences.toml"  # brief #1596 answer 2: written once, never over
+    if not listed.exists():
+        listed.parent.mkdir(parents=True, exist_ok=True)
+        listed.write_bytes((TEMPLATES / "licences.toml").read_bytes())
+        print("wrote config/licences.toml")
     target, variables = root / name, {"project": slug(root.resolve().name)}
     if target.exists():
         mine = TEMPLATES / name

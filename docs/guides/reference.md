@@ -926,6 +926,17 @@ version. With no `[delivery] work_type` or no Accepted stack record it prints `p
 It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
 them), with the runner's interface.
 
+    python3 scripts/agk/gates/licences.py [--root DIR]
+
+The product's own dependencies (brief #1596, ADR-0676, amendment 206): with a chosen stack, `sbom.py make` also lists each
+package of the committed lock (class `python` or `node`) with its version and its licence, from the lock where it states
+one, else the stack record's `Parts:`. The `licences` step fails on a licence outside `allowed` of `config/licences.toml`
+(absent: the list of `kit/templates/licences.toml`, which `engines.py stack-files` writes once) and on a package whose
+licence it cannot read, as `unknown`, naming the rule and the component class only; a list of another form is refused
+naming the setting. With no stack or no lock it prints `licences: not run: no lock`. `run_gates.py` runs it and the `bom`
+step (the bill of `HEAD`, made and checked in memory) where a stack is chosen and its lock is read; with
+`mode = "adopt"` the licence findings are held until the baseline. The list is a project policy, not legal advice.
+
 ## Design check
 
     python3 scripts/agk/check_design.py [--root DIR]
