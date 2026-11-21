@@ -6,7 +6,7 @@
 - Related: brief #1595, SPEC-0029, SPEC-0072, SPEC-0048, amendment 203, amendment 204, amendment 205, ADR-0668, brief #1588, plan #661
 - Requirements: REQ-079, REQ-055
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `skills/`, `config/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `skills/`, `config/`
 
 ## Context
 
