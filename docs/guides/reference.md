@@ -34,7 +34,7 @@ adopted repository only the marked block). `python3 scripts/agk/traceability.py`
 3. From a checkout of agk, run init as a maintainer-approved step (an agent session blocks running a cloned script
    until a maintainer authorizes it):
 
-       python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased] [--login-from-env] [--solo] [--project-tests CMD]
+       python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased] [--login-from-env] [--solo] [--project-tests CMD] [--layout plugin [--rehearsal]]
 
    Init never overwrites a differing file (it refuses and lists it) and a second run changes nothing.
    Init installs only the files of a release: run it from a release tag (`git checkout v<version>`). Between two
@@ -46,11 +46,18 @@ login in `AGK_SETUP_LOGIN` (read by `gh api user`, never printed) on both `@REPL
 `--solo` writes `review_mode = "solo"` and its line in ADR-0001, refused without one person in the reviewers file;
 `--project-tests CMD` writes `project_tests`. Init and adopt themselves still run no command and reach no network.
 
+`--layout plugin` on init or adopt (SPEC-0071 rule 2 as amendment 211 proposes, brief #1603, ADR-0683) starts the
+project in the clean layout: it writes only the files the migration of `upgrade.py --clean-repo` keeps (the project's
+records and settings, the short `CLAUDE.md`, `LICENSE-AGK`, `.gitignore` and the `.github/` templates) and `agk.toml`
+with `execution = "local"` and the `[kit]` table, and no kit script, hook, agent, workflow or guide. It refuses, naming
+the setting, in personal mode and with another `execution`, and, naming the proof, until the rehearsal's figures are
+accepted (SPEC-0071 rule 11) unless `--rehearsal` on the sample project.
+
 See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
 
 ## Adopting an existing repository
 
-    python3 scripts/agk/adopt.py TARGET [--dry-run] [--login-from-env] [--solo] [--project-tests CMD]
+    python3 scripts/agk/adopt.py TARGET [--dry-run] [--login-from-env] [--solo] [--project-tests CMD] [--layout plugin [--rehearsal]]
 
 Run from a checkout of agk as a maintainer-approved step. TARGET is an existing git work tree. Adopt touches no
 product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `.claude/`, `config/`,
