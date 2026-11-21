@@ -126,6 +126,54 @@ def test_a_mapped_and_a_named_file_select_together(repo):
     assert picked(found) == ["tests/test_pay.py", "tests/test_prices.py"]
 
 
+NAMES_PAY = {"tests/test_names_pay.py": 'P = "app/billing/pay.py"\n'}
+
+
+def test_a_covered_file_also_selects_a_test_the_entry_forgot(repo):
+    """REQ-016: brief #1649 answer 1 (a covered file also selects the tests that name it)."""
+    start(repo, files=NAMES_PAY)
+    found = change(repo, "app/billing/pay.py")
+    assert found.full is False and found.reason is None and found.unmapped == []
+    assert picked(found) == ["tests/test_names_pay.py", "tests/test_pay.py"]
+    assert "  file: tests/test_names_pay.py (names app/billing/pay.py)" in impact.text(found)
+
+
+def test_a_test_the_entry_lists_keeps_its_entry_reason(repo):
+    """REQ-016: brief #1649 answer 3 (a selection already holding the test is unchanged)."""
+    start(repo, files={"tests/test_pay.py": 'P = "app/billing/pay.py"\n'})
+    found = change(repo, "app/billing/pay.py")
+    assert picked(found) == ["tests/test_pay.py"]
+    assert "(names app/billing/pay.py)" not in impact.text(found)
+
+
+def test_the_changes_own_test_that_names_a_covered_file_is_not_added(repo):
+    """REQ-016: brief #1649 answer 3 (the change's own test runs as its own, not as regression)."""
+    start(repo)
+    own = {"app/billing/pay.py": "# changed\n", "tests/test_new.py": 'P = "app/billing/pay.py"\n'}
+    repo.commit(own, "change")
+    assert picked(result(repo)) == ["tests/test_pay.py"]
+
+
+def test_a_covered_file_in_thorough_is_unchanged(repo):
+    """REQ-016: brief #1649 answer 2 (`thorough` unchanged: full)."""
+    start(repo, "thorough", files=NAMES_PAY)
+    found = change(repo, "app/billing/pay.py")
+    assert found.full is True and found.reason == "profile thorough"
+
+
+def test_a_covered_file_in_fast_selects_only_the_entry(repo):
+    """REQ-016: brief #1649 answer 2 (a lighter profile: unchanged)."""
+    start(repo, "fast", files=NAMES_PAY)
+    assert picked(change(repo, "app/billing/pay.py")) == ["tests/test_pay.py"]
+
+
+def test_a_deleted_covered_file_selects_the_tests_that_name_it(repo):
+    """REQ-016: brief #1649 answer 3 (a test that names a deleted file is selected)."""
+    start(repo, files=NAMES_PAY)
+    repo.commit({"app/billing/pay.py": None}, "delete")
+    assert picked(result(repo)) == ["tests/test_names_pay.py", "tests/test_pay.py"]
+
+
 def test_a_deleted_file_still_selects_the_tests_that_name_it(repo):
     """REQ-062 AC3: SPEC-0055 rule 6 (a deletion is a change of that path)."""
     start(repo)

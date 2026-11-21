@@ -1045,6 +1045,14 @@ def select(root: Path, base: str, head: str) -> Impact:
                 named[path] = len(naming)
                 for test in naming:
                     chosen.setdefault(test, Selected(test, path, NAMED, []))
+        elif guarded and profile == "balanced" and not hit and not is_doc(path):
+            # Brief #1649, ADR-0692: a covered file also selects the tests that name it, so a
+            # test its entry forgot still runs; a test already chosen keeps its reason, and the
+            # change's own test files are not added (they run as the pull request's own tests).
+            index = name_index(root, head, tests) if index is None else index
+            for test in tests_naming(path, index):
+                if test not in changed:
+                    chosen.setdefault(test, Selected(test, path, NAMED, []))
     counts: dict[str, tuple[int, int]] = {}
     if not hit and profile != "thorough":
         counts = add_importers(root, head, changed, entries, tests, chosen, (dirs, patterns))
