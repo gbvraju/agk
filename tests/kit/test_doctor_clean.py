@@ -43,13 +43,24 @@ def project(tmp_path: Path, tool: str, *flags: str) -> Path:
         (target / "README.md").write_text("# shop\n", encoding="utf-8")
         (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
         git("-C", str(target), "add", "-A")
-        git("-C", str(target), "-c", "user.email=a@example.com", "-c", "user.name=a", "commit",
-            "-qm", "one")
+        git(
+            "-C",
+            str(target),
+            "-c",
+            "user.email=a@example.com",
+            "-c",
+            "user.name=a",
+            "commit",
+            "-qm",
+            "one",
+        )
     env = {**os.environ, "AGK_SETUP_LOGIN": "octo-example"}
     script = ROOT / "scripts" / "agk" / f"{tool}.py"
     proc = subprocess.run(  # nosec B603 - a kit script with fixed arguments, no shell
         [sys.executable, str(script), str(target), "--unreleased", "--login-from-env", *flags],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     git("-C", str(target), "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
@@ -66,7 +77,9 @@ def run(target: Path, tmp_path: Path) -> subprocess.CompletedProcess:
     args = ["--kit-root", str(ROOT), "--api-dir", str(api), "--repo", "example-owner/example-repo"]
     return subprocess.run(  # nosec B603 - the doctor with fixed arguments, no shell
         [sys.executable, str(DOCTOR), *args, "--json", str(target)],
-        capture_output=True, text=True, cwd=target,
+        capture_output=True,
+        text=True,
+        cwd=target,
     )
 
 

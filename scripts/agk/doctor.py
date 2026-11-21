@@ -1864,7 +1864,7 @@ def windows_tools_entry(res: Result) -> dict:
 
 def drift_file_result(root: Path, config: dict | None = None) -> Result:
     """The drift workflow's schedule; in the clean layout an absent file is `ok`: the drift audit
-    runs from the plugin or not at all (brief #1668, ADR-0695). A present file is checked as ever."""
+    runs from the plugin or not at all (brief #1668, ADR-0695). A present one as ever."""
     path = root / DRIFT_WORKFLOW
     if layout_of(config or {}) == "plugin" and not path.exists():
         return Result("ok", message=" or is absent (layout: plugin)")
