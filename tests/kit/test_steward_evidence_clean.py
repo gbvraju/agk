@@ -33,7 +33,7 @@ PLUGIN_VERSION = json.loads((KIT_ROOT / ".claude-plugin" / "plugin.json").read_t
 
 def project(tmp_path: Path, layout: str | None = "plugin", pin: str = "0.1.0") -> Path:
     root = tmp_path / "shop-example"
-    root.mkdir()
+    root.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed argv
     kit = "" if layout is None else f'\n[kit]\nlayout = "{layout}"\nplugin_version = "{pin}"\n'
     (root / "agk.toml").write_text(f'version = "{pin}"\n{kit}', encoding="utf-8")

@@ -101,7 +101,8 @@ def test_req078_a_clean_project_lists_its_own_workflows(repo):
 
 def test_req078_a_clean_project_with_no_lock_lists_nothing_and_the_gate_does_not_run(repo):
     """REQ-078 edge case: no lock, no component, and the bom step is not run, as today."""
-    clean(repo, "node", **{"package-lock.json": None})
+    clean(repo, "node")
+    repo.commit({"package-lock.json": None})
     assert refs(repo.root) == set()
     assert not bom.applies(repo.root)
 
