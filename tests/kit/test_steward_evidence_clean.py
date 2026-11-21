@@ -23,7 +23,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import kit_root  # noqa: E402
 import steward_evidence as ev  # noqa: E402
-from common import CheckError  # noqa: E402
+from common import CheckError, personal_table  # noqa: E402
 
 TABLE = "| Stage or step | Skill |\n|---|---|\n| start | `start-example` |\n"
 PLUGIN_VERSION = json.loads((KIT_ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8"))[
@@ -136,3 +136,28 @@ def test_req078_another_plugin_version_is_refused_naming_the_setting(tmp_path):
     root = project(tmp_path, pin="0.0.1")
     done = run(root, CLAUDE_PLUGIN_ROOT=str(KIT_ROOT))
     assert done.returncode == 1 and "(setting: plugin_version)" in done.stderr
+
+
+def test_req078_with_the_variable_unset_the_running_plugins_file_answers(tmp_path):
+    """REQ-078 answer 3: `CLAUDE_PLUGIN_ROOT` unset in a clean project, so `kit_root.plugin_root`
+    finds the plugin this script runs from (the kit checkout) and its role file answers."""
+    root = project(tmp_path)
+    assert ev.skill_line(root, "start", {}) == "skill: `start`"
+
+
+@pytest.mark.parametrize("own", [True, False])
+def test_req078_a_sidecar_reads_the_role_file_the_same_way(tmp_path, own):
+    """REQ-078 answer 3, personal mode: a sidecar (a root whose `agk.toml` has a `[personal]`
+    table, `common.PERSONAL_TABLE`) reads its own role file, else the plugin's, as a project."""
+    root = project(tmp_path)
+    with (root / "agk.toml").open("a", encoding="utf-8") as out:
+        out.write('\n[personal]\nforge = "files"\n')
+    assert personal_table(root) is not None  # the fixture is a sidecar
+    if own:
+        (root / ".claude" / "agents").mkdir(parents=True)
+        (root / ".claude" / "agents" / "steward.md").write_text(
+            TABLE.replace("start-example", "own-example"), "utf-8"
+        )
+    env = {"CLAUDE_PLUGIN_ROOT": str(plugin(tmp_path))}
+    want = "own-example" if own else "start-example"
+    assert ev.skill_line(root, "start", env) == f"skill: `{want}`"
