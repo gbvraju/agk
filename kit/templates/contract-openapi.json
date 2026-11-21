@@ -1,0 +1,69 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Studio bookings (an invented example; replace with the product's own)",
+    "version": "0.1.0",
+    "description": "The interface contract (ADR-0677): every operation has an operationId that a test under test_dirs names, and a mock under mocks/ with the same operationId and response keys."
+  },
+  "servers": [{"url": "https://api.example.com"}],
+  "paths": {
+    "/studios": {
+      "get": {
+        "operationId": "listStudios",
+        "responses": {
+          "200": {
+            "description": "The studios",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StudioList"}}}
+          }
+        }
+      }
+    },
+    "/bookings": {
+      "post": {
+        "operationId": "createBooking",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BookingRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "The booking made",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Booking"}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Studio": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {"id": {"type": "string"}, "name": {"type": "string"}}
+      },
+      "StudioList": {
+        "type": "object",
+        "required": ["studios"],
+        "properties": {"studios": {"type": "array", "items": {"$ref": "#/components/schemas/Studio"}}}
+      },
+      "BookingRequest": {
+        "type": "object",
+        "required": ["studio_id", "starts_at", "email"],
+        "properties": {
+          "studio_id": {"type": "string"},
+          "starts_at": {"type": "string", "format": "date-time"},
+          "email": {"type": "string", "format": "email"}
+        }
+      },
+      "Booking": {
+        "type": "object",
+        "required": ["id", "studio_id", "starts_at"],
+        "properties": {
+          "id": {"type": "string"},
+          "studio_id": {"type": "string"},
+          "starts_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}
