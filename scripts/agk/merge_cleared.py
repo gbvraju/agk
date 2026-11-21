@@ -234,6 +234,7 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import impact  # noqa: E402
+import kit_root  # noqa: E402
 import lock  # noqa: E402
 import session  # noqa: E402
 import session_plan  # noqa: E402
@@ -1465,26 +1466,55 @@ def lock_argv(wait: float, env: dict[str, str]) -> list[str]:
     ]
 
 
+# The clean layout's gate in the merged tree: kit_root.py finds its project from its working folder,
+# and lock.py takes its lock folder from its own, so the command changes folder itself (#1665).
+IN_TREE = (
+    "import os,runpy,sys;os.chdir(sys.argv[1]);sys.argv=sys.argv[2:];"
+    "runpy.run_path(sys.argv[0],run_name='__main__')"
+)
+
+
+def gate_refusal(tree: Path) -> str | None:
+    """None when TREE's governance can run; else kit_root's one line naming the setting: a bad
+    `[kit] layout`, a clean tree with no plugin (kit_root names the variable) or a plugin that
+    is not the pinned one (`plugin_version`). An installed tree is never refused here
+    (brief #1665)."""
+    try:
+        if kit_root.layout(tree) == "installed":
+            return None
+        return kit_root.pin_refusal(tree, kit_root.plugin_root(tree))
+    except kit_root.Refused as exc:
+        return str(exc)
+
+
 def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) -> list[str]:
     """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
     the heavy lock waited for at most WAIT seconds, and the clean environment of `run_env`, so
     that only PATH, HOME, AGK_PR_BODY (the file BODY holding the merged pull request's body,
     brief #576) and AGK_RECORD_COMMENTS (HOME's file of the records' Final comments, amendment
     122, brief #601), and on Windows its five start names, reach the merged code. No `env`
-    program (brief #1290: Git for Windows' `env` cannot read a Windows-form PATH)."""
-    env = run_env(
-        home, {"AGK_PR_BODY": str(body), "AGK_RECORD_COMMENTS": str(home / RECORD_COMMENTS)}
-    )
-    return [
-        *lock_argv(wait, env),
-        "make",
-        "-C",
-        str(tree),
-        "-f",
-        "agk.mk",  # the kit's own file, in every project, init or adopt (brief #1264)
-        "agk-governance",
-        f"AGK_BASE={base}",
-    ]
+    program (brief #1290: Git for Windows' `env` cannot read a Windows-form PATH). The command is
+    `kit_root.gate` of TREE (brief #1665, ADR-0696): in an installed tree the kit's `agk.mk`
+    (brief #1264) with AGK_BASE on its command line; in a clean tree (`[kit] layout = "plugin"`)
+    the plugin's `kit_root.py governance`, started in TREE in isolated mode (`-I`, so no module
+    of the pull request's tree shadows one of the plugin's), with AGK_BASE in its environment."""
+    extra = {"AGK_PR_BODY": str(body), "AGK_RECORD_COMMENTS": str(home / RECORD_COMMENTS)}
+    gate = None if kit_root.layout(tree) == "installed" else kit_root.gate(tree)
+    if gate is None:
+        return [
+            *lock_argv(wait, run_env(home, extra)),
+            "make",
+            "-C",
+            str(tree),
+            "-f",
+            "agk.mk",  # an installed project's file (init or adopt); a clean one has none
+            "agk-governance",
+            f"AGK_BASE={base}",
+        ]
+    python, script, *args = gate
+    env = run_env(home, {**extra, "AGK_BASE": base})
+    # -I: the merged tree, now the working folder, never joins the plugin's import path
+    return [*lock_argv(wait, env), python, "-I", "-c", IN_TREE, str(tree), script, *args]
 
 
 def tests_argv(tree: Path, home: Path, names: list[str], wait: float) -> list[str]:
@@ -1572,7 +1602,11 @@ def run_governance(
     """Run governance once in TREE; its output goes to standard error. None when it passed, else
     the failing step: `heavy lock` when lock.py did not take the lock in WAIT seconds (its exit
     3), otherwise `make governance`. An interrupt ends lock.py (which ends its command and frees
-    the heavy lock) and is raised again."""
+    the heavy lock) and is raised again. A clean tree that `gate_refusal` refuses runs nothing:
+    the step is its line, naming the setting (brief #1665)."""
+    refused = gate_refusal(tree)
+    if refused is not None:
+        return refused
     child = subprocess.Popen(  # nosec B603 - fixed argument list, no shell
         governance_argv(tree, home, body, base, wait),
         cwd=root,

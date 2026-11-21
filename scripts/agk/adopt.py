@@ -331,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
         print(LAYOUT_LINE)
     if any(action == "conflict" for _, action, _, _ in plan):
         print("refused: existing files differ; nothing was written")
-        print_branch_rules(branch, "adopt")
+        print_branch_rules(branch, "adopt", "plugin" if clean else "installed")
         return 1
     writes = [(rel, content) for rel, action, content, _ in plan if action in ("create", "append")]
     if dry_run:
@@ -350,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
     text = reviewers.read_text(encoding="utf-8") if reviewers.is_file() else PLACEHOLDER
     if PLACEHOLDER in text:
         print(f"notice: config/reviewers.yaml maps `maintainers` to the placeholder {PLACEHOLDER}")
-    print_branch_rules(branch, "adopt")
+    print_branch_rules(branch, "adopt", "plugin" if clean else "installed")
     return 0
 
 
