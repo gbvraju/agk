@@ -1,0 +1,4 @@
+# The licences a dependency of this project may carry (brief #1596, ADR-0676; SPEC-0054 rule 4 as
+# amendment 206 proposes). SPDX ids; an `OR` expression passes when one side is all on the list.
+# A policy of this project, not legal advice. Widening it is a project ADR (principle 11).
+allowed = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0"]

@@ -523,7 +523,16 @@ code = "scripts/agk/gates/python_pack.py"
 tests = ["tests/kit/test_python_pack.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/pins.py"
-tests = ["tests/kit/test_pins.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_pins.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/gates/licences.py"
+tests = ["tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/gates/bom.py"
+tests = ["tests/kit/test_product_deps.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "kit/templates/licences.toml"
+tests = ["tests/kit/test_product_deps.py"]
 [[testing.map]]
 code = "kit/templates/stacks/**"
 tests = ["tests/kit/test_pins.py"]
@@ -973,7 +982,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/sbom.py"
-tests = ["tests/kit/test_sbom.py"]
+tests = ["tests/kit/test_sbom.py", "tests/kit/test_product_deps.py"]
 [[testing.map]]
 code = "scripts/agk/scorecard.py"
 tests = ["tests/kit/test_scorecard.py"]

@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from ci_tools import LINE as CI_TOOL_LINE
 from ci_tools import PIN_FILE
 from common import CheckError, git, repo_root, utf8_output
+from gates import licences, pins
 
 NAME = "bom"
 USAGE = (
@@ -55,6 +56,7 @@ TYPES = {
     "scanner": "application",
     "action": "application",
     "kit-file": "file",
+    "node": "library",  # amendment 206: a `node` lock's packages
 }
 REQUIREMENT = re.compile(r"\s*([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)\s*(\[[^\]]*\])?\s*(.*)")
 EXACT = re.compile(r"==\s*([0-9A-Za-z][0-9A-Za-z.+!_-]*)")
@@ -64,7 +66,7 @@ SCANNER_PIN = re.compile(r"""^\s*([A-Z][A-Z0-9_]*)_(VERSION|SHA256):\s*["']?([^\
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 TOP_FIELDS = {"bomFormat", "specVersion", "version", "serialNumber", "metadata", "components"}
-FIELDS = {"type", "bom-ref", "name", "version", "purl", "hashes", "properties"}
+FIELDS = {"type", "bom-ref", "name", "version", "purl", "hashes", "licenses", "properties"}
 REQUIRED = {"type", "bom-ref", "name", "properties"}
 SEVERITIES = ("critical", "high", "medium", "low", "unknown")
 SCORES = (("critical", 9.0), ("high", 7.0), ("medium", 4.0), ("low", 0.0))
@@ -117,6 +119,7 @@ def entry(
     pin: str | None = None,
     purl: str | None = None,
     digest: str | None = None,
+    licence: str | None = None,
 ) -> dict:
     """One component; a component with no version is unpinned, except a file, which has none."""
     label = pin or version
@@ -134,6 +137,8 @@ def entry(
         item["purl"] = purl
     if digest:
         item["hashes"] = [{"alg": "SHA-256", "content": digest}]
+    if licence:
+        item["licenses"] = [{"expression": licence}]
     item["properties"] = properties
     return item
 
@@ -273,6 +278,33 @@ def kit_file_components(root: Path, commit: str) -> list[dict]:
     return items
 
 
+def lock_components(root: Path, commit: str, config: dict) -> list[dict]:
+    """Amendment 206 (rule 2): with a declared work type and one Accepted stack record, each
+    package of the chosen stack's committed lock, with its licence (`licences.components`)."""
+    delivery = config.get("delivery")
+    if not isinstance(delivery, dict) or not isinstance(delivery.get("work_type"), str):
+        return []  # the kit's own repository: rule 2's reading unchanged
+    names = git(root, "ls-tree", "--name-only", commit, "docs/adr/", check=False).split()
+    found = pins.pick([read_text(root, commit, n) for n in names if pins.RECORD.match(n)])
+    if found is None:
+        return []
+    (_, _, lock_file, reader), parts = found
+    data = show(root, commit, lock_file)
+    if data is None:
+        return []
+    try:
+        items = licences.components(reader, data.decode("utf-8"), parts)
+    except (AttributeError, UnicodeDecodeError, ValueError):
+        raise not_parsed("the lock file") from None
+    out = []
+    for kind, name, version, licence in items:
+        purl = (
+            f"pkg:{'pypi' if kind == 'python' else 'npm'}/{name.replace('@', '%40', 1)}@{version}"
+        )
+        out.append(entry(kind, name, version, purl=purl, licence=licence or None))
+    return out
+
+
 def resolve(root: Path, ref: str) -> str:
     commit = git(root, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}", check=False).strip()
     if not commit:
@@ -282,7 +314,8 @@ def resolve(root: Path, ref: str) -> str:
 
 def build(root: Path, commit: str) -> dict:
     pyproject = read_toml(root, commit, PYPROJECT)
-    version = read_toml(root, commit, AGK_TOML).get("version")
+    config = read_toml(root, commit, AGK_TOML)
+    version = config.get("version")
     project = pyproject.get("project")
     name = project.get("name") if isinstance(project, dict) else None
     if not isinstance(version, str):
@@ -299,6 +332,7 @@ def build(root: Path, commit: str) -> dict:
     for item in found:
         if unique.setdefault(item["bom-ref"], item) != item:
             raise not_parsed(WORKFLOWS)
+    unique.update((item["bom-ref"], item) for item in lock_components(root, commit, config))
     moment = datetime.fromtimestamp(int(git(root, "show", "-s", "--format=%ct", commit)), UTC)
     return {
         "bomFormat": "CycloneDX",
@@ -323,9 +357,17 @@ def property_of(item: dict, name: str) -> object:
 
 def well_formed(item: dict) -> bool:
     hashes, properties = item.get("hashes", []), item.get("properties")
+    named = item.get("licenses", [{"expression": "-"}])
     return (
-        REQUIRED <= set(item) <= FIELDS
-        and all(isinstance(item.get(k, ""), str) for k in FIELDS - {"hashes", "properties"})
+        isinstance(named, list)
+        and len(named) == 1
+        and isinstance(named[0], dict)
+        and set(named[0]) == {"expression"}
+        and isinstance(named[0]["expression"], str)
+        and REQUIRED <= set(item) <= FIELDS
+        and all(
+            isinstance(item.get(k, ""), str) for k in FIELDS - {"hashes", "licenses", "properties"}
+        )
         and isinstance(hashes, list)
         and all(isinstance(h, dict) and set(h) == {"alg", "content"} for h in hashes)
         and isinstance(properties, list)
