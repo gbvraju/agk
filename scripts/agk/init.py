@@ -69,11 +69,15 @@ REF_HINT = (
     "as printed below"
 )
 BRANCH_RULES = "kit/templates/branch-rules.txt"
+# A clean project has no workflow, so no `governance` check reports; its ruleset requires the
+# conductor's `agk/verdict` status instead (brief #1665, Q-A-1, ADR-0696).
+CLEAN_BRANCH_RULES = "kit/templates/branch-rules-clean.txt"
 RULESET_LINE = (
     "or run `/agk:ruleset` to apply them (phase 1 now, phase 2 after the first `governance` run)"
 )
 SCANNER_EXCLUDES = "kit/templates/scanner-excludes.txt"
 PLUGIN_SETTINGS = "kit/templates/plugin-settings.txt"
+CI_WITHOUT_PLUGIN = " The repository's\nchecks and CI work without the plugin."  # installed only
 PLACEHOLDER = "@REPLACE-ME"
 MIN_PYTHON = (3, 11)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -457,8 +461,13 @@ def plugin_settings() -> str:
     return text.replace("{{kit_version}}", manifest["kit_version"])
 
 
-def print_branch_rules(branch: str, tool: str = "init") -> None:
+def print_branch_rules(branch: str, tool: str = "init", layout: str = "installed") -> None:
     print(f"Apply by hand on GitHub to the default branch `{branch}` ({tool} configures nothing):")
+    if layout == "plugin":  # no scripts, hooks or workflows to name (brief #1665)
+        print((KIT_ROOT / CLEAN_BRANCH_RULES).read_text(encoding="utf-8").rstrip())
+        print()
+        print(plugin_settings().replace(CI_WITHOUT_PLUGIN, ""))
+        return
     print((KIT_ROOT / BRANCH_RULES).read_text(encoding="utf-8").rstrip())
     print(RULESET_LINE)
     print()
@@ -575,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"test_dirs: added {', '.join(added)} (front-end and end-to-end test folders found)")
     if any(action == "conflict" for _, action, _, _ in plan):
         print("refused: existing files differ; nothing was written (merging is `agk adopt`)")
-        print_branch_rules(branch)
+        print_branch_rules(branch, "init", "plugin" if clean else "installed")
         return 1
 
     created = [(rel, content) for rel, action, content, _ in plan if action == "create"]
@@ -595,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
         print("notice: TARGET is not a git work tree; the checks need git")
     if PLACEHOLDER in dict(items)["config/reviewers.yaml"].decode("utf-8"):
         print(f"notice: config/reviewers.yaml maps `maintainers` to the placeholder {PLACEHOLDER}")
-    print_branch_rules(branch)
+    print_branch_rules(branch, "init", "plugin" if clean else "installed")
     return 0
 
 

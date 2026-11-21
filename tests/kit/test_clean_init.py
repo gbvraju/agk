@@ -29,7 +29,7 @@ import upgrade  # noqa: E402
 
 if not (ROOT / "kit" / "manifest.json").is_file():  # an install, or a copy of the kit's tests
     pytest.skip("reads the kit's own files (kit/ is kit-only)", allow_module_level=True)
-MANIFEST =json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+MANIFEST = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
 VERSION = str(MANIFEST["kit_version"])
 KIT_FILES = {*MANIFEST["verbatim"], *MANIFEST.get("experimental", [])}
 
@@ -162,11 +162,12 @@ def test_req078_ac1_init_keeps_the_same_files_as_the_migration():
 
 # --- brief #1665 (ADR-0696): the printed ruleset of a clean project ---------------------------
 
-CLEAN_RULES_FILE = ROOT / "kit" / "templates" / "branch-rules-clean.txt"
+CLEAN_RULES_FILE = ROOT / "kit/templates/branch-rules-clean.txt"
 
 
 def clean_rules() -> str:
     return CLEAN_RULES_FILE.read_text(encoding="utf-8")
+
 
 NOT_IN_A_CLEAN_PRINT = (
     "required status check `governance`",

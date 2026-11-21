@@ -27,11 +27,15 @@ import merge_cleared  # noqa: E402
 
 BASE = "a" * 40
 PIN = "9.9.9"
-CLEAN = f'version = "{PIN}"\nexecution = "{{execution}}"\n[kit]\nlayout = "plugin"\nplugin_version = "{PIN}"\n'
+CLEAN = (
+    f'version = "{PIN}"\nexecution = "{{execution}}"\n'
+    f'[kit]\nlayout = "plugin"\nplugin_version = "{PIN}"\n'
+)
 FAKE_GATE = (
     "import json, os, sys\n"
     "open({seen!r}, 'w').write("
-    "json.dumps({{'cwd': os.getcwd(), 'args': sys.argv[1:], 'base': os.environ.get('AGK_BASE')}}))\n"
+    "json.dumps({{'cwd': os.getcwd(), 'args': sys.argv[1:], "
+    "'base': os.environ.get('AGK_BASE')}}))\n"
     "sys.exit({code})\n"
 )
 
@@ -68,7 +72,9 @@ def only_env(argv: list[str]) -> dict[str, str]:
 
 
 @pytest.mark.parametrize("execution", ["local", "hosted"])
-def test_req078_a_clean_tree_runs_the_plugins_governance_never_make(tmp_path, monkeypatch, execution):
+def test_req078_a_clean_tree_runs_the_plugins_governance_never_make(
+    tmp_path, monkeypatch, execution
+):
     """Answer 1 and 3: the plugin's resolver in the merged tree; `execution` reads the same."""
     found = plugin(tmp_path / "plugin")
     monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(found))
@@ -86,7 +92,9 @@ def test_req078_a_clean_tree_runs_the_plugins_governance_never_make(tmp_path, mo
     assert merge_cleared.gate_refusal(tree) is None
 
 
-@pytest.mark.parametrize("toml", [None, 'layout = "installed"\n', "[kit\nbroken", '[kit]\nlayout = "installed"\n'])
+@pytest.mark.parametrize(
+    "toml", [None, 'layout = "installed"\n', "[kit\nbroken", '[kit]\nlayout = "installed"\n']
+)
 def test_req078_an_installed_or_unreadable_tree_runs_make_as_today(tmp_path, toml):
     """Answers 3 and 4: `installed` (or no table, or an unreadable agk.toml) keeps today's form."""
     tree, home = tmp_path / "tree", tmp_path / "home"
@@ -153,7 +161,9 @@ def test_req078_a_refused_clean_tree_runs_nothing(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(("code", "step"), [(0, None), (1, merge_cleared.GOVERNANCE_STEP)])
-def test_req078_the_real_lock_runs_the_plugin_gate_in_the_merged_tree(tmp_path, monkeypatch, code, step):
+def test_req078_the_real_lock_runs_the_plugin_gate_in_the_merged_tree(
+    tmp_path, monkeypatch, code, step
+):
     """Answer 5: through the real lock.py, the plugin's gate runs with the merged tree as its
     working folder and AGK_BASE set; its exit decides the step."""
     seen = tmp_path / "seen.json"
@@ -166,7 +176,9 @@ def test_req078_the_real_lock_runs_the_plugin_gate_in_the_merged_tree(tmp_path, 
     checkout.mkdir()
     home.mkdir()
     git(checkout, "init", "-q")
-    assert merge_cleared.run_governance(checkout, tree, home, home / "pr-body.md", BASE, 60.0) == step
+    assert (
+        merge_cleared.run_governance(checkout, tree, home, home / "pr-body.md", BASE, 60.0) == step
+    )
     got = json.loads(seen.read_text(encoding="utf-8"))
     assert Path(got["cwd"]).resolve() == tree.resolve()
     assert got["args"] == ["governance"] and got["base"] == BASE
