@@ -6,8 +6,7 @@
 - Related: SPEC-0072, SPEC-0048, SPEC-0030, brief #1588, brief #1586, brief #1587, plan #661, ADR-0665, ADR-0666, ADR-0667
 - Requirements: REQ-079
 
-Protected classes this pull request changes: `config/` (`config/protected-paths.txt`, `config/reviewers.yaml`),
-`scripts/agk/` (the new `gates/layers.py`, `run_gates.py`, `check_brief.py`), `tests/kit/` (the new
+Protected classes this pull request changes: `scripts/agk/` (the new `gates/layers.py`, `run_gates.py`, `check_brief.py`), `tests/kit/` (the new
 `test_layers_step.py`, and `test_installed_imports.py`, which now counts an installed package by its folder),
 `tests/kit_dev/` (`test_kit_manifest.py`, `test_reference_commands.py`), `kit/` (the new
 `kit/templates/architecture.md`, the four project templates of protected paths and reviewers,
@@ -44,8 +43,8 @@ eight enterprise gates (`tests/kit/test_playbook_default.py`), and no playbook n
 5. `docs/architecture.md` is added to the four project templates (`protected-paths.txt`,
    `protected-paths.adopt.txt` and `classes.protected.paths` of `reviewers.yaml` and `reviewers.adopt.yaml`), so a
    project's record changes only by its own ADR; an existing project receives it by `/agk:upgrade`'s template line.
-   The kit's own `config/protected-paths.txt` and `config/reviewers.yaml` gain it too, since REQ-009 AC2 holds the
-   kit's list equal to the template's plus the kit-only entries (`tests/kit_dev/test_kit_manifest.py`).
+   The kit's own list does not gain it (the kit has no architecture record, and `.github/CODEOWNERS` is unchanged):
+   REQ-009 AC2's equality test leaves it out of the kit's list as it leaves out `project.mk`.
 6. `check_brief.py --root` refuses, naming `SPEC-0072 rule 8` and never a value, a brief of a project with a
    declared work type that is not `Kind: foundation` and has not exactly one `Layer:` line, names a layer the
    composed `[architecture]` does not hold, or leaves out a layer whose glob a `Touches:` entry meets
