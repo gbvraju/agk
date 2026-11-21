@@ -52,7 +52,8 @@ def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     )
     assert out.returncode == 0, out.stdout
     assert WEB_APP.is_file(), "the web-app playbook of build (c) is on the default branch"
-    assert out.stdout == "ok playbooks (11 playbooks)\n"
+    gates = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"  # brief #1593
+    assert out.stdout == "ok playbooks (11 playbooks)\n" + gates
 
 
 def test_phases_corpus_evaluation_set_retrieval_answers_joins() -> None:

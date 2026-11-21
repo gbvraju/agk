@@ -493,7 +493,12 @@ verdict, so nothing merges on a missing line; without a declaration no verdict c
 `make governance` and the `governance` job, with no workflow change; Q-1586-3), the `step` of each
 `kind = "check"` gate of the playbook that `[delivery] work_type` names, composed with `default.toml` (or `default.toml` alone
 with no work type) (SPEC-0072 rule 3, ADR-0666; brief #1586). Each step is one module of the registry `scripts/agk/gates/`
-(`__init__.py`; `cut_over_order.py` and `rollback_order.py`, which read the playbook's split), offline on the project's files.
+(`__init__.py`; `cut_over_order.py` and `rollback_order.py`, which read the playbook's split; `committed_secrets.py` and
+`environment_settings.py`, the `secrets` and `environment-settings` checks of `default.toml`, brief #1593, ADR-0673), offline on
+the project's files. `committed-secrets` fails on a tracked secret file, an environment file that `.gitignore` does not ignore, a tracked
+secret shape or `[guard] patterns` match, and a value in `.env.example`; `environment-settings` fails on a setting the
+project's Python code reads that `.env.example` does not list, or a required one given a default elsewhere. With
+`mode = "adopt"` both hold their findings.
 It prints `ok <gate id>` per gate that passes and `FAIL gates: <gate id>: <rule> (path class: <class>)` per failure, never a
 value; a step with no module is refused naming the gate id. It ends `ok gates (<n> check gates)` or `ok gates (no check gate)`.
 A step that cannot read the project prints `not run <gate id>: <reason>`, never `ok`, and the last line adds

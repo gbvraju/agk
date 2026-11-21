@@ -70,7 +70,8 @@ def test_the_playbook_passes_the_check() -> None:
 def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = check(KIT_ROOT)
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (11 playbooks)\n"
+    gates = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"  # brief #1593
+    assert out.stdout == "ok playbooks (11 playbooks)\n" + gates
 
 
 def test_exactly_the_five_gates_of_rule_21_in_its_order() -> None:
@@ -177,6 +178,7 @@ def test_the_playbook_names_no_vendor_product_or_tool() -> None:
     lines = PLAYBOOK.read_text(encoding="utf-8").splitlines()
     # only the fixed ids and steps of SPEC-0072 rule 2's enterprise gates are skipped (names)
     fixed = {f'{key} = "{gid}"' for key in ("id", "step") for gid in ENTERPRISE}
+    fixed.add('step = "committed-secrets"')  # the `secrets` gate's step (brief #1593, ADR-0673)
     text = "\n".join(s for s in lines if s not in fixed)
     assert "://" not in text and "www." not in text
     assert not re.search(r"\b\d+\.\d+(\.\d+)?\b", text)
