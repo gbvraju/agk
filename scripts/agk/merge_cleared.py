@@ -1496,7 +1496,8 @@ def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) 
     program (brief #1290: Git for Windows' `env` cannot read a Windows-form PATH). The command is
     `kit_root.gate` of TREE (brief #1665, ADR-0696): in an installed tree the kit's `agk.mk`
     (brief #1264) with AGK_BASE on its command line; in a clean tree (`[kit] layout = "plugin"`)
-    the plugin's `kit_root.py governance`, started in TREE, with AGK_BASE in its environment."""
+    the plugin's `kit_root.py governance`, started in TREE in isolated mode (`-I`, so no module
+    of the pull request's tree shadows one of the plugin's), with AGK_BASE in its environment."""
     extra = {"AGK_PR_BODY": str(body), "AGK_RECORD_COMMENTS": str(home / RECORD_COMMENTS)}
     gate = None if kit_root.layout(tree) == "installed" else kit_root.gate(tree)
     if gate is None:
@@ -1512,7 +1513,8 @@ def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) 
         ]
     python, script, *args = gate
     env = run_env(home, {**extra, "AGK_BASE": base})
-    return [*lock_argv(wait, env), python, "-c", IN_TREE, str(tree), script, *args]
+    # -I: the merged tree, now the working folder, never joins the plugin's import path
+    return [*lock_argv(wait, env), python, "-I", "-c", IN_TREE, str(tree), script, *args]
 
 
 def tests_argv(tree: Path, home: Path, names: list[str], wait: float) -> list[str]:

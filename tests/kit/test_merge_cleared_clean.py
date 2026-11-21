@@ -31,7 +31,7 @@ CLEAN = (
     f'[kit]\nlayout = "plugin"\nplugin_version = "{PIN}"\n'
 )
 FAKE_GATE = (
-    "import json, os, sys\n"
+    "import json, os, sys, tomllib\n"
     "open({seen!r}, 'w').write("
     "json.dumps({{'cwd': os.getcwd(), 'args': sys.argv[1:], "
     "'base': os.environ.get('AGK_BASE')}}))\n"
@@ -81,8 +81,8 @@ def test_req078_a_clean_tree_runs_the_plugins_governance_never_make(
     argv = merge_cleared.governance_argv(tree, home, home / "pr-body.md", BASE, 60.0)
     run = command(argv)
     assert "make" not in run and "agk.mk" not in run
-    assert run[0] == sys.executable and run[1] == "-c"
-    assert run[3:] == [str(tree), str(found / "scripts" / "agk" / "kit_root.py"), "governance"]
+    assert run[:3] == [sys.executable, "-I", "-c"]
+    assert run[4:] == [str(tree), str(found / "scripts" / "agk" / "kit_root.py"), "governance"]
     env = only_env(argv)
     assert env["AGK_BASE"] == BASE
     assert env["AGK_PR_BODY"] == str(home / "pr-body.md")
@@ -181,3 +181,57 @@ def test_req078_the_real_lock_runs_the_plugin_gate_in_the_merged_tree(
     got = json.loads(seen.read_text(encoding="utf-8"))
     assert Path(got["cwd"]).resolve() == tree.resolve()
     assert got["args"] == ["governance"] and got["base"] == BASE
+
+
+def test_req078_a_planted_module_in_the_merged_tree_cannot_make_the_step_pass(
+    tmp_path, monkeypatch
+):
+    """Fix list item 1 on bd4a8f3f: a top-level `tomllib.py` in the pull request's tree that
+    exits 0 is never imported by the plugin's gate, which fails, so the step holds."""
+    seen = tmp_path / "seen.json"
+    found = plugin(tmp_path / "plugin", gate=FAKE_GATE.format(seen=str(seen), code=1))
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(found))
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "temp"))
+    (tmp_path / "temp").mkdir()
+    monkeypatch.setattr(merge_cleared, "on_windows", lambda: False)
+    checkout, tree, home = tmp_path / "checkout", clean_tree(tmp_path / "tree"), tmp_path / "home"
+    checkout.mkdir()
+    home.mkdir()
+    git(checkout, "init", "-q")
+    (tree / "tomllib.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    (tree / "json.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    step = merge_cleared.run_governance(checkout, tree, home, home / "pr-body.md", BASE, 60.0)
+    assert step == merge_cleared.GOVERNANCE_STEP
+    assert json.loads(seen.read_text(encoding="utf-8"))["args"] == ["governance"]
+
+
+SETTINGS = [
+    "[flow]\nauto_merge = true\n",
+    "[flow]\nauto_merge = false\n",
+    'review_mode = "solo"\n',
+    'review_mode = "team"\n',
+    'pr_mode = "strict"\n',
+    'pr_mode = "flow"\n',
+    'required_checks = ["governance", "proof"]\n',
+    "required_checks = []\n",
+]
+
+
+@pytest.mark.parametrize("setting", SETTINGS)
+def test_req078_the_other_settings_leave_the_clean_gate_unchanged(tmp_path, monkeypatch, setting):
+    """Fix list item 2 on bd4a8f3f (brief answer 3): `[flow] auto_merge`, `review_mode`,
+    `pr_mode` and `required_checks` on a clean tree give the same command and no refusal."""
+    found = plugin(tmp_path / "plugin")
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(found))
+    plain, home = clean_tree(tmp_path / "plain"), tmp_path / "home"
+    tree = clean_tree(tmp_path / "tree")
+    text = (tree / "agk.toml").read_text(encoding="utf-8")
+    top, kit = text.split("[kit]\n", 1)
+    if setting.startswith("["):
+        (tree / "agk.toml").write_text(f"{top}[kit]\n{kit}{setting}", encoding="utf-8")
+    else:
+        (tree / "agk.toml").write_text(f"{top}{setting}[kit]\n{kit}", encoding="utf-8")
+    assert merge_cleared.gate_refusal(tree) is None
+    want = command(merge_cleared.governance_argv(plain, home, home / "b.md", BASE, 60.0))
+    got = command(merge_cleared.governance_argv(tree, home, home / "b.md", BASE, 60.0))
+    assert got == [*want[:3], want[3], str(tree), *want[5:]]

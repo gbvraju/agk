@@ -22,8 +22,9 @@ project never has.
    cannot be read) runs exactly today's `make -C <tree> -f agk.mk agk-governance AGK_BASE=<base>`. A clean tree runs
    `kit_root.gate(tree)`, the plugin's `kit_root.py governance`, under the same `lock_argv` and clean environment, with
    `AGK_BASE` in that environment. `kit_root.py` finds its project from its working folder and `lock.py` takes its lock
-   folder from its own, so the command is started through a fixed `python -c` that changes into the tree and runs the
-   script (`IN_TREE`).
+   folder from its own, so the command is started through a fixed `python -I -c` that changes into the tree and runs the
+   script (`IN_TREE`); `-I` keeps the merged tree off the plugin's import path, so no module of the pull request's tree
+   shadows one of the plugin's.
 2. Before anything runs, `gate_refusal` holds a clean tree with kit_root's own line, naming the setting and never a
    value: a `[kit] layout` that is neither `installed` nor `plugin` (`layout`), no plugin found (`CLAUDE_PLUGIN_ROOT`)
    and `kit_root.pin_refusal` (`plugin_version`). The hold is `the merge with the default branch fails governance
@@ -39,7 +40,7 @@ project never has.
 
 Protected path classes changed: `scripts/agk/` (`merge_cleared.py`, `init.py`, `adopt.py`), `kit/`
 (`kit/templates/branch-rules-clean.txt`), `tests/kit/` (`test_merge_cleared_clean.py`, `test_clean_init.py`) and
-`agk.toml` (the `[testing]` map entry of `merge_cleared.py`).
+`agk.toml` (the `[testing]` map entries of `merge_cleared.py` and `lock.py`, since the new test runs `lock.py`).
 
 ## Consequences
 
