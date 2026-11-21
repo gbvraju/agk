@@ -480,6 +480,14 @@ def claude_folder() -> Path:
     return Path(found) if found else Path.home() / ".claude"
 
 
+def folder_key(folder: Path) -> str:
+    """Rule 8's hash of the folder's path, shared by the greeting mark and the day-zero notes."""
+    text = str(folder.resolve())
+    return hashlib.sha256(
+        (text.casefold() if sys.platform in ("win32", "darwin") else text).encode("utf-8")
+    ).hexdigest()
+
+
 def first_run(folder: Path, today: str) -> str:
     """The first step for FOLDER (SPEC-0066 rule 8): `kit`, `project`, `adopt`, `greet` or
     `greeted`. Only `greet` writes, and only its mark in the person's Claude folder."""
@@ -489,10 +497,7 @@ def first_run(folder: Path, today: str) -> str:
         if (top / "kit" / "manifest.json").is_file() and (top / ".claude-plugin").is_dir():
             return "kit"
         return "project" if (top / "agk.toml").is_file() else "adopt"
-    text = str(folder)
-    key = hashlib.sha256(
-        (text.casefold() if sys.platform in ("win32", "darwin") else text).encode("utf-8")
-    ).hexdigest()
+    key = folder_key(folder)
     mark = claude_folder() / GREETED
     try:
         seen = mark.read_text(encoding="utf-8").split()
