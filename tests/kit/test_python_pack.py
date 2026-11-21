@@ -265,3 +265,16 @@ def test_the_tools_run_as_modules_of_this_python_never_a_shell(
     assert argv[:3] == [sys.executable, "-m", "ruff"]
     assert kwargs.get("shell", False) is False
     assert tomllib.loads((tmp_path / "pyproject.toml").read_text(encoding="utf-8"))
+
+
+def test_the_layers_line_comes_before_the_pack_lines(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079 AC4 (conductor's correction on #1630): an architecture of two or more layers and a
+    Python stack give the `layers` line, then the pack's lines."""
+    code, out = gates(sample(tmp_path, "import json\n" + CLEAN.split("\n", 1)[1]), capsys)
+    assert code == 1
+    lines = out.splitlines()
+    layers = next(i for i, ln in enumerate(lines) if ln == "ok layers")
+    pack = next(i for i, ln in enumerate(lines) if "standards python-pyproject" in ln)
+    assert layers < pack

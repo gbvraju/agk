@@ -27,7 +27,8 @@ changing them now needs an ADR that names the class:
    `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`; absent ones are created. The project's `Makefile`,
    `pyproject.toml`, tests and build configuration are not touched.
 2. Protected paths are listed in `config/protected-paths.txt`: `constitution/`, `config/`, `.claude/`, `.github/`,
-   `docs/requirements.md`, `CLAUDE.md`, `scripts/agk/`, `agk.mk`, `agk.toml`. They change only with an
+   `docs/requirements.md`, `docs/architecture.md` (the architecture record the foundation build writes),
+   `CLAUDE.md`, `scripts/agk/`, `agk.mk`, `agk.toml`. They change only with an
    ADR in the same PR that names each changed path class. A change that touches only `- Status:` lines of
    `docs/requirements.md` is exempt.
 3. The default branch is `{{default_branch}}`. Everything from the adoption pull request on goes through a pull
