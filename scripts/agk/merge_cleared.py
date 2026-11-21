@@ -1476,8 +1476,9 @@ IN_TREE = (
 
 def gate_refusal(tree: Path) -> str | None:
     """None when TREE's governance can run; else kit_root's one line naming the setting: a bad
-    `[kit] layout`, a clean tree with no plugin (`CLAUDE_PLUGIN_ROOT`) or a plugin that is not
-    the pinned one (`plugin_version`). An installed tree is never refused here (brief #1665)."""
+    `[kit] layout`, a clean tree with no plugin (kit_root names the variable) or a plugin that
+    is not the pinned one (`plugin_version`). An installed tree is never refused here
+    (brief #1665)."""
     try:
         if kit_root.layout(tree) == "installed":
             return None

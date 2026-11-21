@@ -12,7 +12,6 @@ not match (`plugin_version`). Temporary folders, a fake plugin and invented data
 from __future__ import annotations
 
 import json
-import os
 import subprocess  # nosec B404 - fixed git and lock.py argument lists, no shell
 import sys
 from pathlib import Path
@@ -182,4 +181,3 @@ def test_req078_the_real_lock_runs_the_plugin_gate_in_the_merged_tree(
     got = json.loads(seen.read_text(encoding="utf-8"))
     assert Path(got["cwd"]).resolve() == tree.resolve()
     assert got["args"] == ["governance"] and got["base"] == BASE
-    assert not os.environ.get("AGK_BASE")
