@@ -1,0 +1,1 @@
+- Before building starts, the steward shows one plain screen of the standard the product is held to (the full list for a team) and applies it only on one yes; with no fitting work type it drafts one, searching the web only on a yes and in general words; the personal floor runs the gates (brief #1601)

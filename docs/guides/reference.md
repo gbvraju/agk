@@ -319,6 +319,10 @@ repository that this check refuses.
     python3 scripts/agk/steward_owner.py defect --title TEXT --file FILE [--refusals N] [--post]
     python3 scripts/agk/steward_owner.py defects
     python3 scripts/agk/steward_owner.py reads [--session ID] [--refused]
+    python3 scripts/agk/steward_owner.py standard [--playbook SLUG]
+    python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]
+    python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT
+    python3 scripts/agk/steward_owner.py draft --slug SLUG
     python3 scripts/agk/launch.py role --role steward|conductor --session ID [--adapter COMMAND]
 
 The owner's question and its relay (SPEC-0059 rules 2, 5, 10 and 14, ADR-0559). `ask` takes one plain business sentence
@@ -330,6 +334,14 @@ one pull request. `ready` starts the conductor through `launch.py role` only whe
 no brief is malformed, the scope is locked and no open owner question blocks the first milestone; else `not ready:`
 lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
+
+The standard (SPEC-0072 rule 8, brief #1601, ADR-0681; `docs/guides/engineering-standard.md`). `standard` prints the
+composed standard of the declared work type, or of `--playbook`: one plain screen in solo mode, the full list in team
+mode, or the work-type question when there is none. `confirm` records one `Setup: standard: confirmed` entry only on an
+explicit yes (in team mode `--by` a spec approver), else `not confirmed: nothing applied`, exit 1; `ready` is not ready
+without it while a work type is declared. `research` records the web-research permission and, only on a yes, prints
+`search: <TEXT>` for a generic description. `draft` writes the project playbook on `default.toml` and its Proposed ADR,
+never `[delivery] work_type`.
 
 ## Autopilot status
 

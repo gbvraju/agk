@@ -740,6 +740,7 @@ tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/personal.py"
 tests = [
+  "tests/kit/test_standard_confirm.py",
   "tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",
   "tests/kit/test_personal_gate.py", "tests/kit/test_personal_disclosure.py", "tests/kit/test_personal_change.py",
   "tests/kit/test_personal_lifecycle.py", "tests/kit/test_personal_export.py", "tests/kit/test_personal_guide.py",
@@ -1122,6 +1123,7 @@ tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py
 [[testing.map]]
 code = "scripts/agk/steward_owner.py"
 tests = [
+  "tests/kit/test_standard_confirm.py",
   "tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py",
   "tests/kit/test_autopilot_supervisor.py", "tests/kit/test_kit_defect_report.py",
 ]
