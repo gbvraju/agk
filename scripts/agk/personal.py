@@ -30,7 +30,9 @@ test from a JUnit XML report when the command has the `{junit}` placeholder, els
 unchanged, and a missing gitleaks fails (`Q-S0041-15`); with `--approve` the test command runs on
 the base tree and on the head tree, and a test that passed on the base and fails on the head fails
 the floor, or, without `{junit}`, a passing base and a failing head do, and a failing base is
-`unknown`, never a pass. No setting changes a step; it exits 0 only when both pass.
+`unknown`, never a pass. No setting changes a step; it exits 0 only when both pass. With
+`--approve`, after the secret scan, `run_gates.py`'s gates run on the head tree, files only and
+with no forge call, at every level; a red gate fails the floor (SPEC-0072 rule 11; brief #1601).
 
 Rule 23 (build (k), first part): a floor with `--approve` appends one line `{head, step, result,
 time}` to the sidecar's `metrics/events.jsonl`; `report` counts, for one ISO week, the defects the

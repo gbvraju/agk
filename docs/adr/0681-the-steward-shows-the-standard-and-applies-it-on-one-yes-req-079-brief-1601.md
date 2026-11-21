@@ -14,9 +14,9 @@ it only on one explicit yes, recorded as one Setup entry with the person's quote
 no shipped playbook fits, the steward asks permission to search the web with only a generic description of the product
 type, and drafts a project playbook on `default.toml` with a Proposed project ADR (`Q-S0072-18`). On the default branch
 the role file has no standard screen, nothing records a confirmation, and `steward_owner.py ready` starts the
-conductor with no confirmed standard. Brief #1601's question 1 recommends two pull requests; this ADR covers the first
-(the screen, the confirmation and the work-type path) and the second (the personal floor, the SPEC-0037 amendment and
-the guide) adds its own decisions here before this ADR is accepted.
+conductor with no confirmed standard. Rule 11 asks `personal.py floor` to run the gate runner after its secret scan,
+and rule 10 asks this build to propose a SPEC-0037 amendment. Brief #1601's question 1 recommends two pull requests;
+the session's rule is one pull request per brief, so this ADR covers the whole build.
 
 ## Decision
 
@@ -45,11 +45,23 @@ the guide) adds its own decisions here before this ADR is accepted.
    (composed on `default.toml`, so every gate of `default.toml` is kept at its kind) and one Proposed project ADR,
    the next free number of `docs/adr/`, that names the playbook and the sources of its research record. It never
    writes `[delivery] work_type`, and refuses in the kit's own repository.
-6. The role file's `Setup.` paragraph names the four commands and the order: work type or draft, the screen, the
-   yes, then the plan.
+6. The role file gains one `Standard.` paragraph naming the four commands and their order (research and draft when
+   no work type is set, the screen, the yes, then the plan), and stays within its word budget
+   (`config/rule-budget.txt`, ADR-0310) by cutting three phrases its scripts or checks already carry.
+7. `personal.py floor --approve` runs `run_gates.results` on the head tree (written under the sidecar's
+   `cache/trees/`) after the secret scan and before the no-regression step, at every `[personal] level`; a red gate
+   fails the floor; without `--approve` it prints `floor: gates not run`, as the test step does, and writes nothing.
+   Files only, no command and no forge call.
+8. Amendment 210 proposes to SPEC-0037 rule 11 that a signed-off prototype is a reference only (SPEC-0072 rule 10),
+   for its spec approver; nothing is applied until `Approve: SPEC-0037`.
+9. The guide `docs/guides/engineering-standard.md` (installed, `kit/manifest.json` `verbatim` and `snapshot`) says
+   what the standard holds, the present-confirm-implement path, the team's own choices, the business owner's request,
+   every mode and the settings.
 
-Protected path classes changed: `.claude/` (`agents/steward.md`), `scripts/agk/` (`steward_owner.py`), `tests/kit/`
-(`test_standard_confirm.py`) and `agk.toml` (the `[testing]` map entry of the new test).
+Protected path classes changed: `.claude/` (`agents/steward.md`), `scripts/agk/` (`steward_owner.py`,
+`personal.py`), `tests/kit/` (`test_standard_confirm.py`, `test_personal_baseline.py`), `tests/kit_dev/` (`test_kit_manifest.py`),
+`kit/` (`manifest.json`) and
+`agk.toml` (the `[testing]` map entries).
 
 ## Consequences
 
@@ -62,4 +74,6 @@ generic description. The drafted playbook cannot drop or weaken a gate of `defau
 - 2026-11-21: a drafted playbook is recognised only with a research record whose options carry web sources
   (SPEC-0048 rule 22), so the no-search path of rule 8 cannot yet draft one from the requirements alone; asked as
   `Q-1601-2` (due 2027-03-31).
-- 2026-11-21: the second pull request of brief #1601 adds the personal floor, amendment 210 and the guide.
+- 2026-11-21: a business owner's plain request becoming one project requirement and one Proposed project ADR is the
+  guide's and the architect's existing path (intake, then the architect agent's draft); no command records it yet,
+  asked as `Q-1601-3` (due 2027-03-31).

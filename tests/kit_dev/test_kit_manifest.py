@@ -55,6 +55,7 @@ SINGLES = {
     "docs/adr/TEMPLATE.md",
     "docs/specs/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
+    "docs/guides/engineering-standard.md",  # brief #1601 (ADR-0681)
     "docs/guides/local-mode.md",
     "docs/guides/steward-first-run.md",
     "docs/guides/steward-voice.md",

@@ -137,7 +137,7 @@ def test_req079_ac6_one_yes_records_one_setup_entry_and_applies_all(tmp_path):
 def test_req079_ac6_hosted_memory_holds_the_entry(tmp_path):
     """REQ-079 AC6: outside personal mode the entry goes to the memory issue, read back from it."""
     root = project(tmp_path, personal_mode=False)
-    subprocess.run(["git", "init", "-q", str(root)], check=True)  # the cache lives in .git
+    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed list; the cache lives in .git
     gh = GitHub()
     code, _ = steward_owner.confirm(root, said(tmp_path, "yes"), AT, None, gh)
     assert code == 0
@@ -234,10 +234,10 @@ def test_req079_ac8_the_personal_floor_runs_the_gates_with_no_forge_call(tmp_pat
     clone = tmp_path / "clone"
     clone.mkdir()
     git = ["git", "-C", str(clone), "-c", "user.name=t", "-c", "user.email=t@example.com"]
-    subprocess.run(["git", "init", "-q", str(clone)], check=True)
+    subprocess.run(["git", "init", "-q", str(clone)], check=True)  # nosec B603 B607 - fixed list
     (clone / "app.py").write_text("print('hello')\n", encoding="utf-8")
-    subprocess.run([*git, "add", "."], check=True)
-    subprocess.run([*git, "commit", "-qm", "one"], check=True)
+    subprocess.run([*git, "add", "."], check=True)  # nosec B603 - fixed list
+    subprocess.run([*git, "commit", "-qm", "one"], check=True)  # nosec B603 - fixed list
     sidecar = tmp_path / "sidecar"
     sidecar.mkdir()
     (sidecar / "agk.toml").write_text(
