@@ -9,7 +9,10 @@ pass `--agent`. REQ-073 AC3: the plugin's `settings.json` names its steward, ser
 role file. REQ-073 AC7: outside a git repository each steward script prints one line, exit 3, and
 writes nothing; `steward.py first-run` names the first step (the kit, a project, the adopt offer,
 the greeting, or a folder already greeted) and writes only the greeting mark, a hash of the folder
-and the date, in the person's Claude folder. Invented data only; no network, no model.
+and the date, in the person's Claude folder. REQ-073 AC2 (rule 3): off the default branch, behind
+`origin` or in another session's worktree the steward's start stops with one line and the fix and
+changes nothing, and the start hook that the agent line brings prints the same line. Invented data
+only; a local git fixture as `origin`; no network, no model.
 """
 
 from __future__ import annotations
@@ -59,7 +62,7 @@ def repo(path: Path) -> Path:
 def test_the_kits_own_settings_hold_no_agent_and_the_manifest_names_the_key():
     assert "agent" not in json.loads(KIT_SETTINGS)
     manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["project_keys"] == {SETTINGS: ["agent"]}
+    assert manifest["project_keys"] == {SETTINGS: ["agent", "hooks.SessionStart"]}
     assert SETTINGS in manifest["verbatim"]
 
 
@@ -292,3 +295,118 @@ def test_uninstall_reads_a_named_copy_as_the_kits(tmp_path):
     assert common.without_agent(SETTINGS, named) == KIT_SETTINGS
     assert "without_agent(rel, data)" in (SCRIPTS / "uninstall.py").read_text(encoding="utf-8")
     assert uninstall.without_agent is common.without_agent
+
+
+# --- rule 3: land on the default branch, or stop ------------------------------------------------
+
+HOOK = ROOT / ".claude" / "hooks" / "branch_check.py"
+FIX = "git switch main && git pull --ff-only"
+
+
+def commit(cwd: Path, name: str) -> None:
+    (cwd / name).write_text("example\n", encoding="utf-8")
+    git("add", name, cwd=cwd)
+    git("-c", "user.name=member-example-1", "-c", "user.email=m1@example.com",
+        "commit", "-q", "-m", name, cwd=cwd)  # fmt: skip
+
+
+@pytest.fixture
+def clone(tmp_path, monkeypatch) -> Path:
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    monkeypatch.delenv("AGK_AGENT", raising=False)
+    up = repo(tmp_path / "up")
+    commit(up, "a.txt")
+    git("clone", "-q", str(up), str(tmp_path / "p"), cwd=tmp_path)
+    return tmp_path / "p"
+
+
+def head(cwd: Path) -> str:
+    return common.git(cwd, "rev-parse", "--abbrev-ref", "HEAD").strip()
+
+
+def test_on_the_default_branch_and_up_to_date_the_steward_goes_on(clone, capsys, monkeypatch):
+    assert common.branch_check(clone) is None
+    monkeypatch.chdir(clone)
+    assert steward.main(["branch"]) == 0
+    assert capsys.readouterr().out == "branch: ok\n"
+
+
+def test_on_another_branch_it_stops_with_the_fix_and_changes_nothing(clone):
+    git("switch", "-q", "-c", "feature-example", cwd=clone)
+    assert common.branch_check(clone) == f"branch: on feature-example, not main; fix: {FIX}"
+    assert head(clone) == "feature-example"
+
+
+def test_behind_origin_it_offers_the_pull(clone):
+    commit(clone.parent / "up", "b.txt")
+    assert common.branch_check(clone) == f"branch: main is 1 commit behind origin; fix: {FIX}"
+    assert not (clone / "b.txt").exists()
+
+
+def test_with_uncommitted_changes_it_names_their_count_and_changes_nothing(clone):
+    git("switch", "-q", "-c", "feature-example", cwd=clone)
+    (clone / "a.txt").write_text("changed\n", encoding="utf-8")
+    (clone / "new.txt").write_text("new\n", encoding="utf-8")
+    assert common.branch_check(clone) == (
+        "branch: on feature-example, not main, with 2 uncommitted changes;"
+        f" keep them or set them aside first, then: {FIX}"
+    )
+    assert (clone / "a.txt").read_text(encoding="utf-8") == "changed\n"
+
+
+def test_in_a_builders_worktree_it_names_the_owner(clone):
+    tree = clone.parent / "agk-cb-example"
+    git("worktree", "add", "-q", "-b", "claude/brief-1", str(tree), cwd=clone)
+    assert common.branch_check(tree) == (
+        "branch: this folder is the worktree of cb-example; open the project's main folder instead"
+    )
+
+
+def test_in_its_own_detached_worktree_it_goes_on(clone):
+    tree = clone.parent / "agk-steward"
+    git("worktree", "add", "-q", "--detach", str(tree), "origin/main", cwd=clone)
+    assert common.branch_check(tree) is None
+
+
+def test_outside_git_or_with_no_origin_there_is_nothing_to_check(tmp_path, monkeypatch):
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    (tmp_path / "empty").mkdir()
+    assert common.branch_check(tmp_path / "empty") is None
+    assert common.branch_check(repo(tmp_path / "new")) is None
+
+
+def test_start_off_the_default_branch_stops_before_it_writes(clone):
+    git("switch", "-q", "-c", "feature-example", cwd=clone)
+    code, lines = steward.start(clone, "s-example-1", None, None)  # no GitHub is reached
+    assert (code, lines) == (1, [f"branch: on feature-example, not main; fix: {FIX}"])
+    assert not (clone / ".agk").exists()
+
+
+def hook(cwd: Path, **env: str) -> subprocess.CompletedProcess:
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(HOOK)],
+        cwd=cwd,
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(cwd), **env},
+        input="{}",
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_the_start_hook_prints_the_line_off_the_default_branch_and_nothing_on_it(clone):
+    assert (hook(clone).returncode, hook(clone).stdout) == (0, "")
+    git("switch", "-q", "-c", "feature-example", cwd=clone)
+    found = hook(clone)
+    assert (found.returncode, found.stdout) == (0, f"branch: on feature-example, not main; fix: {FIX}\n")
+    assert hook(clone, AGK_AGENT="builder").stdout == ""  # a kit start of another role
+    assert head(clone) == "feature-example"
+
+
+def test_the_agent_line_brings_the_start_hook_and_the_kit_has_none():
+    assert "SessionStart" not in json.loads(KIT_SETTINGS)["hooks"]
+    named = json.loads(common.with_agent(KIT_SETTINGS, "steward"))
+    [entry] = named["hooks"]["SessionStart"]
+    assert entry["hooks"][0]["command"].endswith("/.claude/hooks/branch_check.py")
+    manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    assert ".claude/hooks/branch_check.py" in manifest["verbatim"]
+    assert "branch_check" in ROLE
