@@ -502,8 +502,8 @@ def skills(path: Path, root: Path) -> list[str]:
 def folder(root: Path, name: str | None = None) -> Path:
     """The folder a playbook is read from (brief #1666, ADR-0697): the project's `config/playbooks/`
     in the installed layout; in a clean one (`[kit] layout = "plugin"`) the project's when it holds
-    `<name>.toml`, else the plugin's. Raises `kit_root.Refused` naming `layout` or
-    `CLAUDE_PLUGIN_ROOT`."""
+    `<name>.toml`, else the plugin's. Raises `kit_root.Refused`, whose line
+    names the setting (`kit_root.layout`, `kit_root.plugin_root`)."""
     own = Path(root) / FOLDER
     if kit_root is None or kit_root.layout(Path(root)) != "plugin":
         return own
