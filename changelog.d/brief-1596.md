@@ -1,0 +1,1 @@
+- A product with a chosen stack lists its locked packages and their licences in its bill of materials, and `run_gates.py` fails on a licence outside `config/licences.toml` or one it cannot read (brief #1596, ADR-0676)
