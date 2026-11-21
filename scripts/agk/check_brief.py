@@ -62,7 +62,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_signoff
 import plan_names
+import playbook_format
 from common import REQ_HEADER, CheckError, config_source, run, utf8_output
+from gates.layers import architecture
+from impact import matches
 from session import (
     advances_ids,
     brief_problems,
@@ -102,6 +105,11 @@ SHAPE_OF = {
 WAVES = re.compile(r"[1-9]\d*(,[1-9]\d*)*")
 PROTECTED_PATHS = "config/protected-paths.txt"
 ADR_LINE = re.compile(r"(Reserved:.*\bADR-\d+|Covered-by:\s*ADR-\d+)")
+LAYER = "Layer:"
+FOUNDATION = re.compile(r"^Kind:\s*foundation\s*$", re.M)
+NO_LAYER = "SPEC-0072 rule 8: a build brief of a work-type project has no Layer: line, or two"
+UNKNOWN_LAYER = "SPEC-0072 rule 8: a Layer: entry is no layer of [architecture] layers"
+MISSED_LAYER = "SPEC-0072 rule 8: the Layer: line misses a layer that Touches meets"
 WARN_4B = (
     "rule 4b: Touches names a protected path class ({}) and the brief reserves no ADR and "
     "names no Covered-by"
@@ -217,6 +225,29 @@ def screens_problems(body: str, root: Path) -> list[str]:
     return []
 
 
+def layer_problems(body: str, root: Path) -> list[str]:
+    """SPEC-0072 rule 8 (brief #1588, ADR-0668): a brief of a project with a work type, other than
+    its foundation brief, has one `Layer:` line naming layers of the composed `[architecture]`,
+    every layer its `Touches:` meets among them (`Q-S0072-15`); by the rule, never a value."""
+    if playbook_format.declaration(root)[0] is None or FOUNDATION.search(body):
+        return []
+    lines = [ln for ln in body.splitlines() if ln.startswith(LAYER)]
+    if len(lines) != 1:
+        return [NO_LAYER]
+    named = {e.strip() for e in lines[0][len(LAYER) :].split(",") if e.strip()}
+    layers, _ = architecture(root)
+    if not named or not named <= {name for name, _ in layers}:
+        return [UNKNOWN_LAYER]
+    touches = [t for t in touches_of(body) if t]
+    met = {
+        name
+        for name, globs in layers
+        for glob in globs
+        if any(matches(t, glob) or matches(glob, t) for t in touches)
+    }
+    return [] if met <= named else [MISSED_LAYER]
+
+
 def protected_classes(root: Path) -> list[str]:
     try:
         text = (root / PROTECTED_PATHS).read_text(encoding="utf-8")
@@ -299,6 +330,7 @@ def body_problems(
     problems = (
         absent_requirements(body, root)
         or screens_problems(body, root)
+        or layer_problems(body, root)
         or touch_problems(body, touch_rules(root))
         or plan_names.brief_problems(
             opened.get("number"), body, open_holders(root, opened.get("file"))

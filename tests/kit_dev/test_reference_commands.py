@@ -23,7 +23,6 @@ GUIDES = KIT_ROOT / "docs" / "guides"
 # added here without a brief (Q-341-2, ADR-0201).
 NOT_YET_LISTED = {
     # A person's own check of a saved brief (SPEC-0030 rule 4); brief #341 writes no other section.
-    "check_brief.py",
     # The sign-off digest and rows (SPEC-0037 rule 9); brief #456 defines it and no installed script
     # imports it until the sign-off counting (#459); that build names it.
     "design_signoff.py",

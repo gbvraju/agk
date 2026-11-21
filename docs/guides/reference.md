@@ -496,6 +496,20 @@ with no work type) (SPEC-0072 rule 3, ADR-0666; brief #1586). Each step is one m
 (`__init__.py`; `cut_over_order.py` and `rollback_order.py`, which read the playbook's split), offline on the project's files.
 It prints `ok <gate id>` per gate that passes and `FAIL gates: <gate id>: <rule> (path class: <class>)` per failure, never a
 value; a step with no module is refused naming the gate id. It ends `ok gates (<n> check gates)` or `ok gates (no check gate)`.
+A step that cannot read the project prints `not run <gate id>: <reason>`, never `ok`, and the last line adds
+`; not run: <ids>` (brief #1588, ADR-0668).
+
+    python3 scripts/agk/gates/layers.py [--root DIR] [--write-record]
+
+The `layers` step (SPEC-0072 rule 5; `default.toml`'s gate `layers`) reads each Python file of a layer of the composed
+`[architecture]` and fails on an `import` or `from` line, relative ones included, that lands in another layer with no
+`allow` entry from the first to the second, naming the rule, both layers and the layer's glob, never a file or a module.
+One layer (`default.toml`'s `src`, a project with no work type) constrains nothing; an Accepted stack record whose runtime
+is not Python gives `not run: no reader for <stack>`. `--write-record` is the foundation's: it writes
+`docs/architecture.md` (a protected path of every project) from `kit/templates/architecture.md` once, with the layers,
+their paths, the allowed directions and the stack record's ADR, and is refused with no work type (setting: `work_type`).
+A build brief of a work-type project other than its foundation carries one line `Layer: <layer>, ...` naming every layer
+its `Touches:` meets; `check_brief.py --root` refuses one without it or with an unknown layer (SPEC-0072 rule 8).
 
 ## Pausing the kit
 
