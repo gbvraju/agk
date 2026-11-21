@@ -6,6 +6,8 @@ default_branch = "{{default_branch}}"
 test_dirs = {{test_dirs}}
 test_patterns = {{test_patterns}}
 lint_paths = ["scripts/agk", ".claude/hooks"]
+# The product code the standards pack lints, format-checks and type-checks (SPEC-0072 rule 6); unset: the paths of the
+# playbook's [architecture] layers. A list of relative globs, for example project_lint_paths = ["src/**"]. A change needs an ADR.
 # The project runs its own tests in its own CI; agk-project-test only prints a notice.
 project_tests = ""
 # Optional cleanup commands of the weekly drift audit, empty (off) by default; the kit ships no tool and installs none.
