@@ -1,0 +1,1 @@
+- The `secrets` and `environment-settings` playbook gates are checks: `run_gates.py` fails on a tracked secret file, an unignored environment file, a tracked secret shape, a value in `.env.example` and a setting the Python code reads that `.env.example` does not name, naming the gate and path class only (brief #1593, ADR-0673)
