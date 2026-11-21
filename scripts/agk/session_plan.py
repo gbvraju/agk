@@ -2066,6 +2066,7 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
     ready = milestone_order(pb, ready, unblocks)
     clashes = adds_clashes(root, s, issues, default)
     blocked = {n for c in clashes for n in c["briefs"] if n not in c["taken"]}
+    clashed = clash_skips(clashes, ready)  # brief #1660: skipped naming the clash
     ready = [b for b in ready if b["number"] not in blocked]
     chosen, waits = waves(root, s, ready)
     ranked = holders(root, s, [b for b in ready if b not in chosen], now)
@@ -2113,7 +2114,9 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
     if assigning:
         count = min(count, len(free))
     names = free[:count] if assigning else session_names(busy, count)
-    unplanned = unplaced(s, chosen[:count], chosen[count:], hold, waits, skipped, build_skips)
+    unplanned = unplaced(
+        s, chosen[:count], chosen[count:], hold, waits, [*skipped, *clashed], build_skips
+    )
     behind: list[dict] = []
     unread: list[int] = []
     updating: list[dict] = []
@@ -2167,6 +2170,7 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
             for n, why in [
                 *s.skipped,
                 *build_skips,
+                *clashed,
                 *unplanned,
                 *((b["number"], INACTIVE) for b in inactive),
             ]
@@ -2223,6 +2227,20 @@ def plan_pass(root, record: bool, want: int) -> tuple[dict, bool]:
     return found, bool(s.unread) and (
         count < fillable or ahead(s, pb, ready, chosen[:count], active)
     )
+
+
+def clash_skips(clashes: list[dict], ready: list[dict]) -> list[tuple[int, str]]:
+    """Brief #1660 answer 4: each ready brief a clash holds (not a taken one), once, with its
+    `CLASH:` line, never the fallback reason of `unplaced`."""
+    import plan_names  # noqa: PLC0415 - read only for a clash
+
+    numbers = {b["number"] for b in ready}
+    out: list[tuple[int, str]] = []
+    for c in clashes:
+        for n in c["briefs"]:
+            if n in numbers and n not in c["taken"] and n not in {x for x, _ in out}:
+                out.append((n, plan_names.clash_line(c)))
+    return out
 
 
 def adds_clashes(root, s: Survey, issues: list, default: str) -> list[dict]:
