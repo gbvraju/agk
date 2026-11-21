@@ -198,6 +198,7 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         ".claude/",
         ".github/",
         "docs/requirements.md",
+        "docs/architecture.md",  # brief #1588 (ADR-0668)
         "CLAUDE.md",
         "scripts/agk/",
         "Makefile",
@@ -383,6 +384,7 @@ def test_ac1_adopt_protected_template_and_reviewers_are_equal_and_exclude_projec
         ".claude/",
         ".github/",
         "docs/requirements.md",
+        "docs/architecture.md",  # brief #1588 (ADR-0668)
         "CLAUDE.md",
         "scripts/agk/",
         "agk.mk",

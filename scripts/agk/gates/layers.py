@@ -15,7 +15,8 @@ failure names the rule, both layers and the layer's glob, never a file, a module
 whose runtime is not Python the step is not run (`no reader for <stack>`), never a pass (brief
 #1588 `Q-1`). `--write-record` writes `docs/architecture.md` from `kit/templates/architecture.md`
 once, and never over a record. Files only: no network. Installed; it imports only installed
-modules. The runner's interface (`RULE`, `check`, `skipped`) is that of `scripts/agk/gates/`.
+modules. The runner's interface (`RULE`, `check`, `skipped`, `applies`) is that of
+`scripts/agk/gates/`; `run_gates.py` runs it after the gates, as a step of `[architecture]`.
 """
 
 from __future__ import annotations
@@ -122,6 +123,11 @@ def problems(root: Path) -> list[tuple[str, str]]:
             if other and other[0] != own[0] and (own[0], other[0]) not in allow:
                 found.add((RULE, f"{own[1]}; layers: {own[0]} to {other[0]}"))
     return sorted(found)
+
+
+def applies(root: Path) -> bool:
+    """The runner runs the step only where the architecture has two or more layers."""
+    return len(architecture(root)[0]) >= 2
 
 
 def skipped(root: Path) -> str | None:

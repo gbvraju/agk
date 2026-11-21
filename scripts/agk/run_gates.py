@@ -14,7 +14,9 @@ with `check_playbooks.composed` and runs the `step` of each `kind = "check"` gat
 under `scripts/agk/gates/`, the step's name with `-` as `_`. Prints one `ok <gate id>` line per
 gate that passes and one `FAIL gates: <gate id>: <rule> (path class: <class>)` line per failure,
 never a value; a step with no module is one such line naming the gate id. Ends with
-`ok gates (<n> check gates)`, or `ok gates (no check gate)`, or exits 1. A step module may hold
+`ok gates (<n> check gates)`, or `ok gates (no check gate)`, or exits 1. The steps of the composed
+`[architecture]` (`ARCHITECTURE_STEPS`: `layers`) run after the gates under their own name where
+they apply (two or more layers), so the kit's own output is unchanged. A step module may hold
 `skipped(root)`: a reason it prints as `not run <gate id>: <reason>`, never `ok`, and names in the
 last line (`; not run: <ids>`; brief #1588, ADR-0668). Files only: no network,
 no hosted scanner, nothing written. From `check_playbooks.py` it prints nothing when no gate is a
@@ -39,6 +41,9 @@ from common import repo_root, run, utf8_output
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
 STEP = re.compile(r"^[a-z][a-z0-9-]*$")
+# SPEC-0072 rule 5 (brief #1588, ADR-0668): steps of the composed `[architecture]`, not of a gate;
+# each runs, under its own name, only where its `applies(root)` is true (two or more layers).
+ARCHITECTURE_STEPS = ("layers",)
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
 
 
@@ -66,9 +71,12 @@ def results(root: Path) -> list[tuple[bool | None, str]]:
     gates, _, _ = check_playbooks.composed(path, root)
     data = playbook_format.load(path)
     out: list[tuple[bool | None, str]] = []
-    for gate in gates:
-        if gate.get("kind") != check_playbooks.CHECK:
-            continue
+    checks = [g for g in gates if g.get("kind") == check_playbooks.CHECK]
+    for step in ARCHITECTURE_STEPS:
+        module = step_module(step)
+        if module is not None and module.applies(root):
+            checks.append({"id": step, "step": step})
+    for gate in checks:
         module = step_module(gate.get("step"))
         if module is None:
             out.append((False, f"{gate['id']}: {MISSING}"))

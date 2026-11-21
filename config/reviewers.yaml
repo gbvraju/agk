@@ -1,6 +1,6 @@
 version: 1
 classes:
-  protected:     {paths: [constitution/, config/, .claude/, .github/, docs/requirements.md, CLAUDE.md, scripts/agk/, Makefile, pyproject.toml, agk.mk, agk.toml, tests/kit/, kit/, tests/kit_dev/, .claude-plugin/, skills/], approvers: [maintainers]}
+  protected:     {paths: [constitution/, config/, .claude/, .github/, docs/requirements.md, docs/architecture.md, CLAUDE.md, scripts/agk/, Makefile, pyproject.toml, agk.mk, agk.toml, tests/kit/, kit/, tests/kit_dev/, .claude-plugin/, skills/], approvers: [maintainers]}
   architecture:  {paths: [docs/adr/, docs/specs/], approvers: [maintainers]}
   kit:           {paths: [scripts/agk/, Makefile, pyproject.toml, agk.mk, agk.toml, tests/kit/, kit/, tests/kit_dev/, .claude-plugin/, skills/], approvers: [maintainers]}
   docs:          {paths: [docs/, README.md], approvers: [maintainers]}

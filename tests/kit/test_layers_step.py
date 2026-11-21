@@ -29,7 +29,7 @@ import run_gates  # noqa: E402
 from gates import layers  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
-SECRET = "INVENTEDSECRETWORD"
+PLANTED = "INVENTEDPLANTEDWORD"
 SAMPLE = {
     "contracts/__init__.py": "",
     "contracts/orders.py": "SHAPE = {'site': 'https://example.com'}\n",
@@ -79,8 +79,8 @@ def test_allowed_imports_pass(tmp_path: Path, no_network: None, capsys) -> None:
 @pytest.mark.parametrize(
     ("rel", "body"),
     [
-        ("data/store.py", f"from api import routes  # {SECRET}\n"),
-        ("data/store.py", f"import api.routes as {SECRET.lower()}\n"),
+        ("data/store.py", f"from api import routes  # {PLANTED}\n"),
+        ("data/store.py", f"import api.routes as {PLANTED.lower()}\n"),
         ("data/deep/repo.py", "from ...api import routes\n"),
     ],
 )
@@ -95,7 +95,7 @@ def test_a_disallowed_import_fails_naming_both_layers_and_the_path_class(
     assert code == 1
     assert "FAIL gates: layers: SPEC-0072 rule 5: " in out
     assert "(path class: data/**; layers: data to api)" in out
-    for value in (SECRET, SECRET.lower(), "routes", "store.py", "repo.py"):
+    for value in (PLANTED, PLANTED.lower(), "routes", "store.py", "repo.py"):
         assert value not in out
 
 
@@ -120,7 +120,7 @@ def test_no_work_type_constrains_nothing(tmp_path: Path, no_network: None, capsy
     root = _project(tmp_path, None)
     (root / "data/store.py").write_text("from api import routes\n", encoding="utf-8")
     code, out = _gates(root, capsys)
-    assert code == 0 and out == "ok layers\nok gates (1 check gates)\n"
+    assert code == 0 and out == "ok gates (no check gate)\n"
 
 
 STACK_RECORD = (
@@ -210,7 +210,7 @@ BRIEF = 'Sentence: "x"\nTouches: api/routes.py, domain/**, tests/api/**\n'
     [
         ("", "SPEC-0072 rule 8: a build brief of a work-type project has no Layer: line"),
         ("Layer: api, domain\nLayer: api\n", "SPEC-0072 rule 8: a build brief of a work-type"),
-        ("Layer: api, domain, " + SECRET + "\n", "SPEC-0072 rule 8: a Layer: entry is no layer"),
+        ("Layer: api, domain, " + PLANTED + "\n", "SPEC-0072 rule 8: a Layer: entry is no layer"),
         ("Layer: api\n", "SPEC-0072 rule 8: the Layer: line misses a layer that Touches meets"),
     ],
 )
@@ -221,7 +221,7 @@ def test_a_brief_without_a_sound_layer_line_is_refused(
     root = _project(tmp_path)
     problems = check_brief.layer_problems(BRIEF + extra, root)
     assert problems and problems[0].startswith(found)
-    assert SECRET not in " ".join(problems)
+    assert PLANTED not in " ".join(problems)
 
 
 def test_a_sound_layer_line_passes(tmp_path: Path) -> None:
