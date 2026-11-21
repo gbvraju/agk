@@ -75,10 +75,16 @@ before. A body that cannot be read is a finding, `evidence: the pull request bod
 (option: --body)`, so the check differs and re-runs nothing. The `Evidence check:` line ends
 `, body <sha12 of the file>`, or `, body not given` without the option.
 
+Brief #1650 (ADR-0693): when that body has a `Covered-by:` line, governance also gets the Final
+comment of each SPEC-0021 rule 3a record on the base, fetched as prepush fetches them (the same
+function, one `gh api` GET each) into a file of the temporary folder that `AGK_RECORD_COMMENTS`
+names, removed with the folder; the caller's own variable never reaches governance. Comments that
+cannot be read fail governance with prepush's line naming the option, so the check differs.
+
 Exit 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O
 error (a record that cannot be read, a worktree that cannot be made, make not installed). It posts
-nothing, needs no network but the notes fetch above and changes nothing in the repository but the
-worktree it removes (and the fetched notes ref).
+nothing, needs no network but the notes fetch and the record comments above and changes nothing
+in the repository but the worktree it removes (and the fetched notes ref).
 """
 
 from __future__ import annotations
@@ -111,9 +117,13 @@ from common import (
 from impact import impact
 from prepush import (
     LOCK,
+    NO_RECORD_COMMENTS,
     NOTE_NOT_PUSHED,
     NOTES_REF,
+    RECORD_COMMENTS,
+    covers,
     digest,
+    fetch_record_comments,
     regression_sets,
     safe_command,
     safe_cwd,
@@ -153,6 +163,7 @@ TIMING_SOURCES = ("durations", "junit", "unknown")
 GOVERNANCE = ["make", "-f", "agk.mk", "agk-governance"]
 BODY_LIMIT = 65536  # GitHub's limit for a pull request body, in characters (brief #1566)
 BODY_COPY = "pr-body.md"  # the copy of the body inside the temporary folder (ADR-0656)
+RECORDS_DIR = "records"  # the records' Final comments beside it (brief #1650, ADR-0693)
 NO_BODY = "the pull request body cannot be read (option: --body)"
 
 
@@ -740,6 +751,23 @@ def governance_env(base: str, home: Path, body: Path | None = None) -> dict:
     return temp_env(env)
 
 
+def governed(root: Path, tree: Path, base: str, env: dict) -> tuple[int, str]:
+    """Governance with ENV; when its body has a `Covered-by:` line, also the records' Final comments
+    that prepush fetches (`prepush.fetch_record_comments`, one GET each), in a file of the body's
+    temporary folder that `AGK_RECORD_COMMENTS` names, removed with it; comments that cannot be
+    read fail governance with prepush's line, never a silent pass (brief #1650)."""
+    body = env.get("AGK_PR_BODY")
+    if body and covers(Path(body)):
+        folder = Path(body).parent / RECORDS_DIR
+        folder.mkdir()
+        path = fetch_record_comments(root, base, folder)
+        if path is None:
+            return 1, NO_RECORD_COMMENTS
+        if path != folder:
+            env = {**env, RECORD_COMMENTS: str(path)}
+    return governance(tree, env)
+
+
 def in_worktree(
     root: Path, record: dict, head: str, count: int, body: bytes | None = None
 ) -> dict:
@@ -774,7 +802,7 @@ def in_worktree(
         if body is not None:
             copy = temp / BODY_COPY
             copy.write_bytes(body)
-        code, out = governance(tree, governance_env(record["base"], home, copy))
+        code, out = governed(root, tree, record["base"], governance_env(record["base"], home, copy))
         env = run_env(record["base"])
         try:
             limit = proof_timeout(tree)
