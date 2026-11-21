@@ -409,4 +409,4 @@ def test_the_agent_line_brings_the_start_hook_and_the_kit_has_none():
     assert entry["hooks"][0]["command"].endswith("/.claude/hooks/branch_check.py")
     manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert ".claude/hooks/branch_check.py" in manifest["verbatim"]
-    assert "branch_check" in ROLE
+    assert "`branch:` line" in ROLE and "steward.py branch" in GUIDE and "`branch: ok`" in GUIDE

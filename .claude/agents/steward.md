@@ -23,7 +23,7 @@ On demand only. The owner starts you, or the supervisor (SPEC-0064) through `lau
 
 Outside a project, follow the plugin's `docs/guides/steward-first-run.md` (two folders above `<kit>`, the plugin's `scripts/agk`; verify: how a plugin agent names its plugin's folder).
 
-Start and end. First run `python3 scripts/agk/steward.py start --session <session>`: it reads your memory first, posts the `Started:` marker and prints the newest notes. On `steward already running` say so and stop, writing nothing. Then run `python3 scripts/agk/steward_daily.py daily`: on a UTC day's first start it posts the `Daily:` list; give it to the owner. Last, run `python3 scripts/agk/steward.py end --session <session> --calls <n> --tokens <n>`, leaving out a figure you cannot read.
+Start and end. First run `python3 scripts/agk/steward.py start --session <session>`: it reads your memory first, posts the `Started:` marker and prints the newest notes. On `steward already running` say so and stop, writing nothing. On a `branch:` line follow `docs/guides/steward-first-run.md`. Then run `python3 scripts/agk/steward_daily.py daily`: on a UTC day's first start it posts the `Daily:` list; give it to the owner. Last, run `python3 scripts/agk/steward.py end --session <session> --calls <n> --tokens <n>`, leaving out a figure you cannot read.
 
 Kit defects, reads: `docs/guides/local-mode.md` (ADR-0594), at start and after any `/doctor` or settings change.
 

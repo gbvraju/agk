@@ -1109,6 +1109,9 @@ tests = [
   "tests/kit/test_guard_plugin_forms.py",
 ]
 [[testing.map]]
+code = ".claude/hooks/branch_check.py"
+tests = ["tests/kit/test_first_open.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = ".claude/hooks/plugin_hooks.py"
 tests = ["tests/kit/test_plugin_hooks.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
