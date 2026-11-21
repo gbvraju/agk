@@ -96,7 +96,12 @@ def rendered(root: Path, shape: str, pkg: str, what: str) -> dict[str, tuple[str
 
 def tracked_env(root: Path) -> bool:
     done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "ls-files", "--", ".env"], cwd=root, capture_output=True, text=True, check=False
+        ["git", "ls-files", "--", ".env"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
     )
     return bool(done.stdout.strip())
 
@@ -116,7 +121,9 @@ def write(root: Path) -> list[str]:
             out.append(f"proposed: .gitignore: {ASK.format('ignore line for its .env file')}")
         else:
             old = ignore.read_text(encoding="utf-8") if ignore.is_file() else ""
-            ignore.write_text(old + ("\n" if old and not old.endswith("\n") else "") + IGNORE)
+            ignore.write_text(
+                old + ("\n" if old and not old.endswith("\n") else "") + IGNORE, "utf-8"
+            )
             out.append("wrote .gitignore: the .env line")
     if work_type not in SHAPES:
         return [

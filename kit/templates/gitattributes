@@ -58,9 +58,8 @@ docs/runbooks/actions-blocked.md text eol=lf
 docs/runbooks/leaked-secret.md text eol=lf
 docs/runbooks/red-default-branch.md text eol=lf
 docs/specs/TEMPLATE.md text eol=lf
+# agk: the product's example settings file keeps LF line ends too (brief #1594).
+.env.example text eol=lf
 
 # agk: the kit's own scripts; GitHub collapses them in pull-request diffs and leaves them out of language statistics.
 scripts/agk/** linguist-generated=true
-
-# agk: the product's example settings file keeps LF line ends on every system (brief #1594, ADR-0674).
-.env.example text eol=lf
