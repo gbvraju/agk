@@ -352,6 +352,7 @@ def test_a_project_without_tests_kit_selects_nothing_new(repo):
 
 def test_a_full_selection_is_unchanged(repo):
     """REQ-016: brief #1648 answer 3 (a selection already full stays full, with its reason)."""
-    files = {**KIT_FILES, "agk.toml": KIT_TOML.replace("[testing]\n", '[testing]\nprofile = "thorough"\n')}
+    thorough = KIT_TOML.replace("[testing]\n", '[testing]\nprofile = "thorough"\n')
+    files = {**KIT_FILES, "agk.toml": thorough}
     found = regression(repo, files, {"tests/kit/test_new.py": "# new\n"})
     assert found["full"] is True and found["reason"] == "profile thorough"
