@@ -1,5 +1,5 @@
-"""Tests of the `tests-floor` step of the `tests-first` gate (brief #1590, ADR-0670, amendment 198 of
-SPEC-0072 rules 2, 4 and 9; REQ-079).
+"""Tests of the `tests-floor` step of the `tests-first` gate (brief #1590, ADR-0670, amendment 198
+of SPEC-0072 rules 2, 4 and 9; REQ-079).
 
 A work-type sample with no test file, or with no integration test, is red; a change to a layer's
 code file with no test change is red; a docs-only change, a deletion-only change and a change with
@@ -22,10 +22,17 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import run_gates  # noqa: E402
-
 from gates import tests_floor  # noqa: E402
 
-GIT = ["git", "-c", "user.name=Ada", "-c", "user.email=ada@example.com", "-c", "commit.gpgsign=false"]
+GIT = [
+    "git",
+    "-c",
+    "user.name=Ada",
+    "-c",
+    "user.email=ada@example.com",
+    "-c",
+    "commit.gpgsign=false",
+]
 UNIT = "def test_unit() -> None:\n    assert 1 + 1 == 2\n"
 INTEGRATION = 'def test_shop() -> None:\n    assert "shop.example.com".endswith(".example.com")\n'
 CODE = 'HOST = "shop.example.com"\n\n\ndef total(a: int, b: int) -> int:\n    return a + b\n'
@@ -38,7 +45,9 @@ FOUNDED = {
 
 
 def _git(root: Path, *args: str) -> str:
-    done = subprocess.run([*GIT, "-C", str(root), *args], check=True, capture_output=True, text=True)  # nosec B603 - fixed
+    done = subprocess.run(
+        [*GIT, "-C", str(root), *args], check=True, capture_output=True, text=True
+    )  # nosec B603 - fixed
     return done.stdout.strip()
 
 
@@ -87,16 +96,23 @@ def test_an_empty_tests_folder_in_a_work_type_sample_is_red(tmp_path: Path, caps
     root = _project(tmp_path, {"docs/architecture.md": "# Architecture\n", "backend/shop.py": CODE})
     lines = _floor(root, capsys)
     assert f"FAIL gates: tests-first: {tests_floor.NO_TESTS} (path class: test_dirs)" in lines
-    assert f"FAIL gates: tests-first: {tests_floor.NO_INTEGRATION} (path class: tests/integration/)" in lines
+    assert (
+        f"FAIL gates: tests-first: {tests_floor.NO_INTEGRATION} (path class: tests/integration/)"
+        in lines
+    )
     assert run_gates.main(["--root", str(root)]) == 1
     assert "shop.py" not in capsys.readouterr().out
 
 
-def test_a_sample_with_unit_tests_only_is_red_for_its_integration_folder(tmp_path: Path, capsys) -> None:
+def test_a_sample_with_unit_tests_only_is_red_for_its_integration_folder(
+    tmp_path: Path, capsys
+) -> None:
     """REQ-079 AC4: rule (b)."""
     files = {k: v for k, v in FOUNDED.items() if "integration" not in k}
     lines = _floor(_project(tmp_path, files), capsys)
-    assert lines == [f"FAIL gates: tests-first: {tests_floor.NO_INTEGRATION} (path class: tests/integration/)"]
+    assert lines == [
+        f"FAIL gates: tests-first: {tests_floor.NO_INTEGRATION} (path class: tests/integration/)"
+    ]
 
 
 def test_a_founded_sample_is_green(tmp_path: Path, capsys) -> None:
@@ -108,7 +124,8 @@ def test_a_layer_change_with_no_test_change_is_red(tmp_path: Path, capsys, monke
     """REQ-079 AC4: rule (c), naming the layer's glob, never the file."""
     root = _project(tmp_path, FOUNDED)
     _change(root, monkeypatch, {"backend/shop.py": CODE + "\nLIMIT = 10\n"})
-    want = f"FAIL gates: tests-first: {tests_floor.NO_TEST_CHANGE} (path class: backend/**; layer: backend)"
+    cls = "backend/**; layer: backend"
+    want = f"FAIL gates: tests-first: {tests_floor.NO_TEST_CHANGE} (path class: {cls})"
     assert _floor(root, capsys) == [want]
 
 
@@ -116,7 +133,11 @@ def test_a_layer_change_with_its_test_change_is_green(tmp_path: Path, capsys, mo
     """REQ-079 AC4."""
     root = _project(tmp_path, FOUNDED)
     test = UNIT + "\n\ndef test_limit() -> None:\n    assert 10 > 0\n"
-    _change(root, monkeypatch, {"backend/shop.py": CODE + "\nLIMIT = 10\n", "tests/unit/test_shop.py": test})
+    _change(
+        root,
+        monkeypatch,
+        {"backend/shop.py": CODE + "\nLIMIT = 10\n", "tests/unit/test_shop.py": test},
+    )
     assert _floor(root, capsys) == ["ok tests-first"]
 
 
@@ -131,7 +152,14 @@ def test_a_deletion_only_change_is_green(tmp_path: Path, capsys, monkeypatch) ->
     """Q-1590-1 (the brief's recommendation): removing code with no test change is never red."""
     files = {**FOUNDED, "backend/old.py": "OLD = 1\n"}
     root = _project(tmp_path, files)
-    _change(root, monkeypatch, {"backend/old.py": None, "backend/shop.py": CODE.replace('HOST = "shop.example.com"\n', "")})
+    _change(
+        root,
+        monkeypatch,
+        {
+            "backend/old.py": None,
+            "backend/shop.py": CODE.replace('HOST = "shop.example.com"\n', ""),
+        },
+    )
     assert _floor(root, capsys) == ["ok tests-first"]
 
 
@@ -163,14 +191,20 @@ def test_a_sample_before_its_foundation_merged_is_not_run(tmp_path: Path, capsys
 
 def test_an_adopted_sample_is_green_on_its_first_run(tmp_path: Path, capsys, monkeypatch) -> None:
     """REQ-079 AC5: in `mode = "adopt"` rules (a) and (b) are held; rule (c) still applies."""
-    root = _project(tmp_path, {"docs/architecture.md": "# Architecture\n", "backend/shop.py": CODE}, mode="adopt")
+    root = _project(
+        tmp_path,
+        {"docs/architecture.md": "# Architecture\n", "backend/shop.py": CODE},
+        mode="adopt",
+    )
     assert _floor(root, capsys) == ["ok tests-first"]
     _change(root, monkeypatch, {"backend/shop.py": CODE + "\nLIMIT = 10\n"})
-    assert _floor(root, capsys)[0].startswith(f"FAIL gates: tests-first: {tests_floor.NO_TEST_CHANGE}")
+    assert _floor(root, capsys)[0].startswith(
+        f"FAIL gates: tests-first: {tests_floor.NO_TEST_CHANGE}"
+    )
 
 
 def test_test_dirs_compare_by_forward_slash(tmp_path: Path, capsys) -> None:
-    """REQ-079 AC7: a `test_dirs` entry written with a back slash or a trailing slash is the same folder."""
+    """REQ-079 AC7: a `test_dirs` entry with a back slash or a trailing slash is the same folder."""
     root = _project(tmp_path, FOUNDED)
     text = (root / "agk.toml").read_text(encoding="utf-8")
     (root / "agk.toml").write_text('test_dirs = [".\\\\tests\\\\"]\n' + text, encoding="utf-8")
@@ -178,7 +212,7 @@ def test_test_dirs_compare_by_forward_slash(tmp_path: Path, capsys) -> None:
 
 
 def test_the_gate_is_a_check_with_its_step() -> None:
-    """REQ-079 AC1: `tests-first` is restated stronger, `kind = "check"` with `step = "tests-floor"`."""
+    """REQ-079 AC1: `tests-first` is restated stronger: `kind = "check"`, `step = "tests-floor"`."""
     sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
     import check_playbooks  # noqa: PLC0415
 

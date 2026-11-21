@@ -130,7 +130,8 @@ def test_the_kit_copy_passes_and_warns_of_stacks_with_no_pack(tmp_path: Path) ->
     """REQ-079 AC1: brief #1585 answer 3, a warning and never a failure."""
     done = check(kit_copy(tmp_path))
     assert done.returncode == 0, done.stdout
-    gates = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"
+    gates = "not run tests-first: no work type\nok secrets\nok environment-settings\n"
+    gates += "ok gates (3 check gates; not run: tests-first)\n"  # briefs #1593 and #1590
     assert done.stdout == "ok playbooks (11 playbooks)\n" + gates
     assert done.stderr.startswith("warn playbooks: 6 stacks have no [[standards]] entry")
 

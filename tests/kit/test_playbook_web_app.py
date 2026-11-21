@@ -49,7 +49,8 @@ def test_check_playbooks_passes_on_the_repository() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    gates = "ok secrets\nok environment-settings\nok gates \(2 check gates\)\n"  # brief #1593
+    gates = "not run tests-first: no work type\nok secrets\nok environment-settings\n"
+    gates += "ok gates \\(3 check gates; not run: tests-first\\)\n"  # briefs #1593 and #1590
     assert re.fullmatch(r"ok playbooks \(\d+ playbooks\)\n" + gates, out.stdout)
 
 

@@ -26,6 +26,9 @@ import run_gates  # noqa: E402
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
 WORK_TYPES = sorted(p.stem for p in PLAYBOOKS.glob("*.toml") if p.stem != "default")
 IMPLEMENTED = {"cut-over-order", "rollback-order", "committed-secrets", "environment-settings"}
+IMPLEMENTED.add("tests-floor")  # brief #1590 (ADR-0670)
+# a sample with no architecture record has no merged foundation (brief #1590, Q-1590-3)
+NOT_FOUNDED = "not run tests-first: no foundation yet\n"
 
 
 def _project(tmp_path: Path, work_type: str | None) -> Path:
@@ -60,7 +63,7 @@ def test_every_check_gate_of_a_playbook_runs_offline(
     assert run_gates.main(["--root", str(root)]) == 0
     out = capsys.readouterr().out
     for gid in {**_checks("default"), **_checks(work_type)}:
-        assert f"ok {gid}\n" in out, gid
+        assert f"ok {gid}\n" in out or (gid == "tests-first" and NOT_FOUNDED in out), gid
     assert out.rstrip().splitlines()[-1].startswith("ok gates (")
 
 
@@ -89,7 +92,8 @@ def test_the_kit_without_a_work_type_runs_default_only(
     """REQ-079 AC2."""
     root = _project(tmp_path, None)
     assert run_gates.main(["--root", str(root)]) == 0
-    out = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"
+    out = "not run tests-first: no work type\nok secrets\nok environment-settings\n"
+    out += "ok gates (3 check gates; not run: tests-first)\n"  # briefs #1593 and #1590
     assert capsys.readouterr().out == out
 
 
@@ -143,7 +147,8 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
     assert check_playbooks.main(["--root", str(root)]) == 0
     out = capsys.readouterr().out
     count = len(WORK_TYPES) + 1
-    gates = "ok secrets\nok environment-settings\nok cut-over-order\nok gates (3 check gates)\n"
+    gates = NOT_FOUNDED + "ok secrets\nok environment-settings\nok cut-over-order\n"
+    gates += "ok gates (4 check gates; not run: tests-first)\n"  # brief #1590
     assert f"ok playbooks ({count} playbooks)\n{gates}" in out
     path = root / "config" / "playbooks" / "cloud-migration.toml"
     text = path.read_text(encoding="utf-8")
