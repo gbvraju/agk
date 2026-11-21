@@ -1,0 +1,1 @@
+- The foundation's basics script starts under isolated Python again and no longer needs a kit-only file at start, so the default branch is green again (brief #1645)

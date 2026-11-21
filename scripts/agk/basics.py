@@ -23,9 +23,10 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from common import load_config, utf8_output
 from gates.pins import chosen
-from init import render, slug
 from playbook_format import declaration
 
 TEMPLATES = Path(__file__).resolve().parents[2] / "kit" / "templates"
@@ -64,6 +65,7 @@ PARTS = [
 
 def rendered(root: Path, shape: str, pkg: str, what: str) -> dict[str, tuple[str, str]]:
     """Each file the shape writes: target -> (its text, the adopt question's part name)."""
+    from init import render, slug  # noqa: PLC0415 - kit-only, as the kit/templates/ it renders
     names = SERVER if shape == "server" else ("APP_ENV",)
     run = f"-m {pkg}" + ("" if shape == "server" else " samples/example.csv")
     check = f"Check it: `python3 -m {pkg} --check` (asks the health address once)\n"
