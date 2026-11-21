@@ -316,7 +316,7 @@ tests = [
   "tests/kit/test_check_protected_changes.py", "tests/kit/test_engines.py",
   "tests/kit/test_protected_changes_covered_by.py", "tests/kit/test_review_context.py",
   "tests/kit/test_workflow_apply.py", "tests/kit_dev/test_merge_ref_base.py", "tests/kit_dev/test_release_check.py",
-  "tests/kit_dev/test_release_protected.py",
+  "tests/kit_dev/test_release_protected.py", "tests/kit/test_gate_baseline.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_release.py"
@@ -869,7 +869,7 @@ tests = [
 code = "scripts/agk/run_gates.py"
 tests = [
   "tests/kit/test_run_gates.py", "tests/kit/test_stop_check_changed.py", "tests/kit_dev/test_kit_manifest.py",
-  "tests/kit/test_python_pack.py",
+  "tests/kit/test_python_pack.py", "tests/kit/test_gate_baseline.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/committed_secrets.py"
@@ -880,6 +880,12 @@ tests = ["tests/kit/test_gate_secrets_settings.py", "tests/kit/test_run_gates.py
 [[testing.map]]
 code = "scripts/agk/gates/*.py"
 tests = ["tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/gates/baseline.py"
+tests = [
+  "tests/kit/test_gate_baseline.py", "tests/kit/test_run_gates.py", "tests/kit/test_check_protected_changes.py",
+  "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "scripts/agk/gates/layers.py"
 tests = [
