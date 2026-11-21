@@ -26,6 +26,7 @@ import run_gates  # noqa: E402
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
 WORK_TYPES = sorted(p.stem for p in PLAYBOOKS.glob("*.toml") if p.stem != "default")
 IMPLEMENTED = {"cut-over-order", "rollback-order", "committed-secrets", "environment-settings"}
+IMPLEMENTED |= {"contract-tests", "mock-parity"}  # brief #1597
 
 
 def _project(tmp_path: Path, work_type: str | None) -> Path:
@@ -34,6 +35,9 @@ def _project(tmp_path: Path, work_type: str | None) -> Path:
     if work_type:
         text += f'\n[delivery]\nwork_type = "{work_type}"\n'
     (tmp_path / "agk.toml").write_text(text, encoding="utf-8")
+    # brief #1597 (ADR-0677): a contract with no operation, so the contract steps run and pass
+    (tmp_path / "contracts").mkdir()
+    (tmp_path / "contracts" / "openapi.json").write_text('{"openapi": "3.1.0", "paths": {}}')
     return tmp_path
 
 
@@ -75,12 +79,13 @@ def test_the_restated_gates_are_judgement_with_a_reason_and_no_step() -> None:
     restated = 0
     for path in PLAYBOOKS.glob("*.toml"):
         for gate in tomllib.loads(path.read_text(encoding="utf-8"))["gates"]:
-            if gate["kind"] == "judgement" and "(ADR-0666)" in gate.get("reason", ""):
+            reason = gate.get("reason", "")  # brief #1597 restates one with ADR-0677
+            if gate["kind"] == "judgement" and ("(ADR-0666)" in reason or "(ADR-0677)" in reason):
                 restated += 1
                 assert len(gate["reason"]) >= 20, gate["id"]
             if gate["kind"] == "judgement":
                 assert "step" not in gate, gate["id"]
-    assert restated == 24  # brief #1593 made `secrets` and `environment-settings` checks
+    assert restated == 21  # brief #1593 made 4 checks, brief #1597 three (ADR-0677)
 
 
 def test_the_kit_without_a_work_type_runs_default_only(
