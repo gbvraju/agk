@@ -3,15 +3,16 @@
 - Status: Proposed
 - Date: 2026-11-21
 - Deciders: maintainers
-- Related: SPEC-0072, SPEC-0030, brief #1588, brief #1586, brief #1587, plan #661, ADR-0665, ADR-0666, ADR-0667
+- Related: SPEC-0072, SPEC-0048, SPEC-0030, brief #1588, brief #1586, brief #1587, plan #661, ADR-0665, ADR-0666, ADR-0667
 - Requirements: REQ-079
 
-Protected classes this pull request changes: `config/` (`config/playbooks/default.toml`), `scripts/agk/` (the new
-`gates/layers.py`, `run_gates.py`, `check_brief.py`), `tests/kit/` (the new `test_layers_step.py` and
-`test_run_gates.py`, whose no-work-type output changes), `kit/` (the new `kit/templates/architecture.md`, the four
-project templates of protected paths and reviewers, `kit/templates/runtime/builder.txt`, `kit/manifest.json`),
-`.claude/` (`.claude/agents/builder.md`) and `agk.toml` (one `[[testing.map]]` entry). `kit/hashes.json` is not
-edited by hand.
+Protected classes this pull request changes: `config/` (`config/protected-paths.txt`, `config/reviewers.yaml`),
+`scripts/agk/` (the new `gates/layers.py`, `run_gates.py`, `check_brief.py`), `tests/kit/` (the new
+`test_layers_step.py`, and `test_installed_imports.py`, which now counts an installed package by its folder),
+`tests/kit_dev/` (`test_kit_manifest.py`, `test_reference_commands.py`), `kit/` (the new
+`kit/templates/architecture.md`, the four project templates of protected paths and reviewers,
+`kit/templates/runtime/builder.txt`, `kit/manifest.json`), `.claude/` (`.claude/agents/builder.md`) and `agk.toml`
+(`[[testing.map]]` entries). No playbook changes. `kit/hashes.json` is not edited by hand.
 
 ## Context
 
@@ -19,28 +20,32 @@ SPEC-0072 (Approved, REQ-079) rule 12 build (d) builds rule 5 and rule 8's `Laye
 `docs/architecture.md` from a template, a `layers` step fails an import between layers that `[architecture] allow`
 does not list, the record joins the project's protected paths, every build brief of a work-type project after the
 foundation names its layers, and the builder's prompt names the record and the pack. On the default branch at
-f5c1c29c (2026-11-21) none of these exist; the runner of ADR-0666 runs no check gate in `default.toml`.
+f5c1c29c (2026-11-21) none of these exist. `default.toml`'s gates are exactly SPEC-0048 rule 21's five and ADR-0665's
+eight enterprise gates (`tests/kit/test_playbook_default.py`), and no playbook names a `layers` gate.
 
 ## Decision
 
-1. `default.toml` gains one check gate `layers` (step `layers`), so every composed playbook runs it. With
-   `default.toml`'s one `src` layer it constrains nothing, so the kit's own repository and a project with no work
-   type stay green; their runner output becomes `ok layers` and `ok gates (1 check gates)`.
+1. The `layers` step is a step of the composed `[architecture]`, not of a gate: `run_gates.py` runs each step of
+   `ARCHITECTURE_STEPS` (`layers`) after the check gates, under its own name, where its `applies(root)` is true (two
+   or more composed layers). No playbook gains a gate, so SPEC-0048 rule 21's base is unchanged, and `default.toml`'s
+   one `src` layer (the kit's own repository, a project with no work type) runs nothing: its output is unchanged.
 2. `scripts/agk/gates/layers.py` reads each `.py` file of a layer of the composed `[architecture]` (the first layer
    whose glob matches, paths by forward slash), resolves its `import` and `from` lines, relative ones included, to a
    module path, and fails on one that lands in another layer with no `allow` entry from the first to the second. The
    path class it returns is `<layer glob>; layers: <from> to <to>`, so the runner's line names the rule, both layers
    and the path class, never a file, a module or a value. A file it cannot parse fails naming its layer's glob.
-3. A step module may expose `skipped(root)`; the runner prints `not run <gate id>: <reason>` for it, never `ok`, and
-   ends `ok gates (<n> check gates; not run: <ids>)`. `layers` is skipped with `no reader for <stack>` when the
-   Accepted stack record (`gates/pins.py` `chosen`) names a runtime other than Python (brief #1588 `Q-1`); with no
-   record chosen it reads Python, the one reader that exists.
+3. A step module may return `(rule, path class)` pairs and may expose `skipped(root)`; the runner prints `not run
+   <id>: <reason>` for a skipped step, never `ok`, and ends `ok gates (<n> check gates; not run: <ids>)`. `layers` is
+   skipped with `no reader for <stack>` when the Accepted stack record (`gates/pins.py` `chosen`) names a runtime
+   other than Python (brief #1588 `Q-1`); with no record chosen it reads Python, the one reader that exists.
 4. `layers.py --root DIR --write-record` writes `docs/architecture.md` from `kit/templates/architecture.md` once
    (the layers and their paths, the allowed directions and the stack record's ADR number, or `none chosen yet`), is
    refused naming the setting `work_type` with no work type, and never overwrites a record.
 5. `docs/architecture.md` is added to the four project templates (`protected-paths.txt`,
    `protected-paths.adopt.txt` and `classes.protected.paths` of `reviewers.yaml` and `reviewers.adopt.yaml`), so a
    project's record changes only by its own ADR; an existing project receives it by `/agk:upgrade`'s template line.
+   The kit's own `config/protected-paths.txt` and `config/reviewers.yaml` gain it too, since REQ-009 AC2 holds the
+   kit's list equal to the template's plus the kit-only entries (`tests/kit_dev/test_kit_manifest.py`).
 6. `check_brief.py --root` refuses, naming `SPEC-0072 rule 8` and never a value, a brief of a project with a
    declared work type that is not `Kind: foundation` and has not exactly one `Layer:` line, names a layer the
    composed `[architecture]` does not hold, or leaves out a layer whose glob a `Touches:` entry meets
@@ -53,7 +58,7 @@ f5c1c29c (2026-11-21) none of these exist; the runner of ADR-0666 runs no check 
 
 A project's governance is red when its code imports across layers against its architecture, naming both layers; a
 non-Python project sees `not run` until its reader is built. A build brief of a work-type project names its layers.
-No workflow, ruleset, required check or `agk.mk` changes.
+The kit's own governance output is unchanged. No workflow, ruleset, required check or `agk.mk` changes.
 
 ## Residual
 
