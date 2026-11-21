@@ -271,7 +271,7 @@ def triage(item: dict, root: Path) -> dict:
 
 def agent_text(root: Path, env: dict | None = None) -> str:
     """The role file: the project's own, else in a clean project the plugin's (brief #1667,
-    ADR-0694); neither is one refusal naming the path class. `kit_root.Refused` names its setting."""
+    ADR-0694); neither is one refusal naming the path class; `kit_root.Refused` names a setting."""
     import kit_root
 
     places = [root / AGENT]

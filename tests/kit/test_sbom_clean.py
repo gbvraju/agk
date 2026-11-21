@@ -20,7 +20,6 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import sbom  # noqa: E402
 from common import CheckError  # noqa: E402
-
 from gates import bom  # noqa: E402
 
 SHA = "a1" * 20
@@ -108,7 +107,7 @@ def test_req078_a_clean_project_with_no_lock_lists_nothing_and_the_gate_does_not
 
 
 def test_req078_another_layout_is_refused_naming_the_setting(repo):
-    """REQ-078: a `[kit] layout` that is neither value is refused naming `layout`, never the value."""
+    """REQ-078: a `[kit] layout` that is neither value is refused naming `layout`, not the value."""
     clean(repo, "python")
     text = (repo.root / "agk.toml").read_text(encoding="utf-8")
     repo.commit({"agk.toml": text.replace('layout = "plugin"', 'layout = "sideways-x"')})

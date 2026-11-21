@@ -132,7 +132,7 @@ def test_req078_the_command_refuses_one_line_and_no_traceback(tmp_path):
 
 
 def test_req078_another_plugin_version_is_refused_naming_the_setting(tmp_path):
-    """REQ-078: a pin that is not the running plugin's stops the command (setting plugin_version)."""
+    """REQ-078: a pin that is not the running plugin's stops the command (plugin_version)."""
     root = project(tmp_path, pin="0.0.1")
     done = run(root, CLAUDE_PLUGIN_ROOT=str(KIT_ROOT))
     assert done.returncode == 1 and "(setting: plugin_version)" in done.stderr
