@@ -45,9 +45,8 @@ FOUNDED = {
 
 
 def _git(root: Path, *args: str) -> str:
-    done = subprocess.run(
-        [*GIT, "-C", str(root), *args], check=True, capture_output=True, text=True
-    )  # nosec B603 - fixed
+    cmd = [*GIT, "-C", str(root), *args]
+    done = subprocess.run(cmd, check=True, capture_output=True, text=True)  # nosec B603 - fixed
     return done.stdout.strip()
 
 
