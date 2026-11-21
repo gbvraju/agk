@@ -149,7 +149,7 @@ def test_powershell_never_redirects_with_echo():
 
 @pytest.mark.parametrize("bad", ["", "two words", "../x", "a;b", "-flag", "x" * 101])
 def test_a_name_that_is_not_a_repository_name_is_refused_naming_the_setting(bad, capsys):
-    assert day_zero.main(["commands", "--name", bad, "--shell", "posix"]) == 2
+    assert day_zero.main(["commands", f"--name={bad}", "--shell", "posix"]) == 2
     err = capsys.readouterr().err
     assert "--name" in err and (not bad or bad not in err)
 
