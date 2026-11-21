@@ -69,8 +69,13 @@ def run_module(root: Path, *args: str, env: str = LOCAL) -> subprocess.Completed
     (root / ".env").write_text(env, encoding="utf-8")
     clean = {k: v for k, v in os.environ.items() if k not in ("APP_ENV", "DATABASE_PATH", "PORT")}
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, "-m", *args], cwd=root, capture_output=True, text=True, check=False,
-        env=clean, timeout=60,
+        [sys.executable, "-m", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=clean,
+        timeout=60,
     )
 
 
@@ -87,7 +92,7 @@ def readme_command(root: Path, label: str) -> list[str]:
 def test_req079_the_environment_file_is_ignored_and_the_example_holds_names_only(
     tmp_path, work_type
 ):
-    """REQ-079: answer 1 (a) and (b); the `secrets` and `environment-settings` steps pass."""
+    """REQ-079 AC3: answer 1 (a) and (b); the `secrets` and `environment-settings` steps pass."""
     root = written(tmp_path, work_type)
     (root / ".env").write_text(LOCAL, encoding="utf-8")
     assert git(root, "check-ignore", ".env").strip() == ".env"
@@ -103,7 +108,7 @@ def test_req079_the_environment_file_is_ignored_and_the_example_holds_names_only
 
 
 def test_req079_the_template_ignore_and_line_end_lines():
-    """REQ-079: answer 1 (a) and answer 5 (LF line ends of the example file)."""
+    """REQ-079 AC3: answer 1 (a) and answer 5 (LF line ends of the example file)."""
     templates = KIT_ROOT / "kit" / "templates"
     assert ".env" in (templates / "gitignore").read_text(encoding="utf-8").splitlines()
     attributes = (templates / "gitattributes").read_text(encoding="utf-8").splitlines()
@@ -112,7 +117,7 @@ def test_req079_the_template_ignore_and_line_end_lines():
 
 @pytest.mark.parametrize("work_type", sorted(PACKAGE))
 def test_req079_a_missing_setting_stops_the_app_naming_the_setting(tmp_path, work_type):
-    """REQ-079: answer 1 (c) (the startup check names the setting, never a value)."""
+    """REQ-079 AC3: answer 1 (c) (the startup check names the setting, never a value)."""
     root = written(tmp_path, work_type)
     done = run_module(root, PACKAGE[work_type], "--check", env="APP_ENV=local\nPORT=8000\n")
     assert done.returncode != 0
@@ -124,7 +129,7 @@ def test_req079_a_missing_setting_stops_the_app_naming_the_setting(tmp_path, wor
 
 @pytest.mark.parametrize("work_type", ["web-app", "api-service"])
 def test_req079_the_health_address_answers_and_the_readme_command_runs(tmp_path, work_type):
-    """REQ-079: answer 1 (e) and (f); answer 3 (a web app and an API service)."""
+    """REQ-079 AC3: answer 1 (e) and (f); answer 3 (a web app and an API service)."""
     root = written(tmp_path, work_type)
     done = run_module(root, *readme_command(root, "Check it:"))
     assert done.returncode == 0, done.stderr
@@ -134,7 +139,7 @@ def test_req079_the_health_address_answers_and_the_readme_command_runs(tmp_path,
 
 @pytest.mark.parametrize("work_type", ["web-app", "api-service"])
 def test_req079_an_error_leaves_the_address_out_of_the_log(tmp_path, work_type):
-    """REQ-079: answer 1 (d) (a plain message to the user, the detail only in the log)."""
+    """REQ-079 AC3: answer 1 (d) (a plain message to the user, the detail only in the log)."""
     root = written(tmp_path, work_type)
     sys.path.insert(0, str(root))
     try:
@@ -152,7 +157,11 @@ def test_req079_an_error_leaves_the_address_out_of_the_log(tmp_path, work_type):
     seen: list[str] = []
     body = b"".join(
         wsgi(
-            {"PATH_INFO": "/bookings", "REQUEST_METHOD": "GET", "QUERY_STRING": "who=ana@example.com"},
+            {
+                "PATH_INFO": "/bookings",
+                "REQUEST_METHOD": "GET",
+                "QUERY_STRING": "who=ana@example.com",
+            },
             lambda status, headers: seen.append(status),
         )
     ).decode("utf-8")
@@ -166,7 +175,7 @@ def test_req079_an_error_leaves_the_address_out_of_the_log(tmp_path, work_type):
 
 
 def test_req079_the_report_tool_writes_one_run_line_and_fails_non_zero(tmp_path):
-    """REQ-079: answer 3 (a data or report tool: no health address, one run line, exit code)."""
+    """REQ-079 AC3: answer 3 (a data or report tool: no health address, one run line, exit code)."""
     root = written(tmp_path, "data-pipeline")
     assert not (root / "job" / "app.py").exists()
     done = run_module(root, *readme_command(root, "Run it:"))
@@ -181,7 +190,7 @@ def test_req079_the_report_tool_writes_one_run_line_and_fails_non_zero(tmp_path)
 
 @pytest.mark.parametrize("work_type", sorted(PACKAGE))
 def test_req079_the_readme_and_the_deploy_step(tmp_path, work_type):
-    """REQ-079: answer 1 (f) and (g), answer 2 (a deploy is the person's own act) and `Q-2`."""
+    """REQ-079 AC3: answer 1 (f) and (g), answer 2 (a deploy is the person's own act) and `Q-2`."""
     root = written(tmp_path, work_type)
     readme = (root / "README.md").read_text(encoding="utf-8")
     for label in ("Run it:", "Run it (PowerShell):", "Test it:", "Test it (PowerShell):"):
@@ -192,7 +201,7 @@ def test_req079_the_readme_and_the_deploy_step(tmp_path, work_type):
 
 
 def test_req079_nothing_is_written_over_an_existing_file(tmp_path):
-    """REQ-079: answer 1 (the foundation never writes over a project's own file)."""
+    """REQ-079 AC3: answer 1 (the foundation never writes over a project's own file)."""
     root = project(tmp_path)
     (root / "README.md").write_text("# My own readme\n", encoding="utf-8")
     assert basics.main(["write", "--root", str(root)]) == 0
@@ -201,7 +210,7 @@ def test_req079_nothing_is_written_over_an_existing_file(tmp_path):
 
 
 def test_req079_adopt_proposes_each_missing_part_and_writes_nothing(tmp_path, capsys):
-    """REQ-079: answer 4 (`mode = "adopt"`: one plain betterment per missing part)."""
+    """REQ-079 AC3: answer 4 (`mode = "adopt"`: one plain betterment per missing part)."""
     root = project(tmp_path, mode="adopt")
     before = sorted(p.relative_to(root) for p in root.rglob("*") if ".git" not in p.parts)
     assert basics.main(["write", "--root", str(root)]) == 0
@@ -212,7 +221,7 @@ def test_req079_adopt_proposes_each_missing_part_and_writes_nothing(tmp_path, ca
 
 
 def test_req079_a_tracked_environment_file_is_named_never_removed(tmp_path, capsys):
-    """REQ-079: `Q-1` (a tracked environment file is named to the person, never removed)."""
+    """REQ-079 AC3: `Q-1` (a tracked environment file is named to the person, never removed)."""
     root = project(tmp_path)
     (root / ".env").write_text(LOCAL, encoding="utf-8")
     git(root, "add", "-f", ".env")
@@ -222,15 +231,16 @@ def test_req079_a_tracked_environment_file_is_named_never_removed(tmp_path, caps
 
 
 def test_req079_no_work_type_and_other_shapes_are_said_plainly(tmp_path, capsys):
-    """REQ-079: answer 4 (`[delivery] work_type` picks the shape's parts)."""
+    """REQ-079 AC3: answer 4 (`[delivery] work_type` picks the shape's parts)."""
     root = project(tmp_path, work_type=None)
     assert basics.main(["write", "--root", str(root)]) == 0
     assert capsys.readouterr().out.strip() == "basics: not run: no work type (setting: work_type)"
     assert not (root / "README.md").exists()
     other = project(tmp_path / "other", work_type="mobile")
     assert basics.main(["write", "--root", str(other)]) == 0
-    assert "no skeleton for this work type yet (setting: work_type)" in capsys.readouterr().out
-    assert (other / "README.md").is_file() and (other / ".env.example").is_file()
+    out = capsys.readouterr().out
+    assert "not written: basics: no skeleton for this work type yet (setting: work_type)" in out
+    assert "wrote .gitignore" not in out and not (other / "README.md").exists()
 
 
 # --- check_plan: the first milestone ends with one working slice ----------------------------------
@@ -252,7 +262,7 @@ def plan_root(tmp_path: Path, work_type: str | None = "web-app") -> Path:
 
 
 def test_req079_check_plan_refuses_a_first_milestone_without_a_slice_brief(tmp_path):
-    """REQ-079: answer 2 (`check_plan.py` refuses an `M1` with no slice after the foundation)."""
+    """REQ-079 AC3: answer 2 (`check_plan.py` refuses an `M1` with no slice brief)."""
     root = plan_root(tmp_path)
     brief_file(root, "B1", "M1", "Kind: foundation")
     brief_file(root, "B2", "M2", "Depends-on: B1")
@@ -263,7 +273,7 @@ def test_req079_check_plan_refuses_a_first_milestone_without_a_slice_brief(tmp_p
 
 
 def test_req079_check_plan_accepts_a_slice_brief_after_the_foundation(tmp_path):
-    """REQ-079: answer 2 (the foundation brief and one first-slice brief in `M1`)."""
+    """REQ-079 AC3: answer 2 (the foundation brief and one first-slice brief in `M1`)."""
     root = plan_root(tmp_path)
     brief_file(root, "B1", "M1", "Kind: foundation")
     brief_file(root, "B2", "M1", "Depends-on: B1", "Kind: slice")
@@ -272,7 +282,7 @@ def test_req079_check_plan_accepts_a_slice_brief_after_the_foundation(tmp_path):
 
 
 def test_req079_check_plan_holds_nothing_without_a_work_type_or_a_foundation(tmp_path):
-    """REQ-079: answer 2 (only a work-type plan with its foundation brief is read)."""
+    """REQ-079 AC3: answer 2 (only a work-type plan with its foundation brief is read)."""
     root = plan_root(tmp_path, work_type=None)
     brief_file(root, "B2", "M1")
     assert check_plan.slice_brief_problems(root) == []
@@ -280,7 +290,7 @@ def test_req079_check_plan_holds_nothing_without_a_work_type_or_a_foundation(tmp
 
 
 def test_req079_render_writes_the_kind_line_of_the_slice_brief():
-    """REQ-079: answer 2 (`plan-intake` proposes the first-slice brief; render writes its kind)."""
+    """REQ-079 AC3: answer 2 (`plan-intake` proposes the first slice; render writes it)."""
     import plan_intake
     from test_foundation_kind import foundation_plan
 
