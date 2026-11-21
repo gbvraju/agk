@@ -21,8 +21,9 @@ and nothing on cost or on what is logged (gaps G19 and G23, brief #1595).
 1. SPEC-0029 rule 4, SPEC-0072 rule 5 and SPEC-0048 rule 7 change only through amendments 203, 204 and 205, which this
    build writes. Amendments 203 and 204 were applied word for word on the maintainer's answers on this pull request,
    "Maintainer answer: amendment 203 approved" and "Maintainer answer: amendment 204 approved" (2026-11-21).
-   Amendment 205 was approved the same way ("Maintainer answer: amendment 205 approved") and waits for Q-1595-3:
-   SPEC-0048 has no `## Contexts` section, which amendment 142 requires of an amended Approved spec.
+   Amendment 205 was approved the same way ("Maintainer answer: amendment 205 approved") and applied word for word on
+   "Maintainer answer: Q-1595-3 add the Contexts section to SPEC-0048 as proposed and apply amendment 205"
+   (2026-11-21), with the `## Contexts` section amendment 142 requires, its entries the brief's Contexts line.
 2. **The needs question.** The `scale` topic keeps its id and asks one question with a recommended answer: how many
    use it at the busiest hour, how long it may be down each month and what it may cost each month. The busiest hour is
    in people (the default), in calls per minute for `api-service` and `mcp-server`, and in runs per day with the
