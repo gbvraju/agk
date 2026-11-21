@@ -526,6 +526,11 @@ One layer (`default.toml`'s `src`, a project with no work type) constrains nothi
 is not Python gives `not run: no reader for <stack>`. `--write-record` is the foundation's: it writes
 `docs/architecture.md` (a protected path of every project) from `kit/templates/architecture.md` once, with the layers,
 their paths, the allowed directions and the stack record's ADR, and is refused with no work type (setting: `work_type`).
+
+    python3 scripts/agk/gates/architecture_record.py
+
+The `architecture-record` step (brief #1595, amendment 204) is a module of the runner, never run by itself: where
+`docs/architecture.md` exists `run_gates.py` runs `front_door.py`'s record check through it (see "Front door").
 A build brief of a work-type project other than its foundation carries one line `Layer: <layer>, ...` naming every layer
 its `Touches:` meets; `check_brief.py --root` refuses one without it or with an unknown layer (SPEC-0072 rule 8).
 
@@ -821,6 +826,16 @@ only that the file exists and never opens or runs it. With `yes`, and with `open
 `check_design.py` checks (SPEC-0037). A `Walkthrough: <where it is kept>` line may name a recorded walkthrough: it is
 judgement, noted and never opened, never printed and never committed, and it never stands in for the artifact. The
 conductor reads the same rule: a design without its artifact is a fix item, never a clearing verdict.
+
+`docs/architecture.md` is the product's one architecture record (brief #1595, amendments 204 and 205). A design is a
+slice of it and carries one line `Architecture: docs/architecture.md`: `check-design` refuses a design named on its
+command line without it, and warns, until its next edit, about one read with the whole folder. Where the record exists
+`check-design` also checks it, as the `architecture-record` step of `run_gates.py` does: `## Context`, `## Parts`,
+`## Data stores`, `## Outside services` (each service of the chosen stack option), `## Needs` (`- Busiest hour:`,
+`- Downtime:`, `- Cost:`, `- Recovery time:`, `- Logged:`, the first three's numbers those of the quoted `scale` answer
+of the charter or a discovery document), `## Diagram` (a fenced block that draws each outside service) and
+`## Layers`. Each failure names the rule and the section, never a value; a record with none of these sections, written
+before them, is `not run` until its next edit.
 
 `status` prints one line per problem, `<slug>: phase <n> <name>; waits for <what>`, for the slugs named or else for each
 `docs/discovery/*.md`, from the files only, and writes nothing: phase 2 discovery until the discovery document passes

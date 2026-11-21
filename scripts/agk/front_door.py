@@ -670,6 +670,132 @@ def design_problems(rel: str, text: str, root: Path, today: datetime.date) -> li
     return out
 
 
+# --- the one architecture record (amendments 204 and 205; brief #1595, ADR-0675) ----------------
+
+RECORD = "docs/architecture.md"
+SLICE_LINE = f"Architecture: {RECORD}"
+SLICE = re.compile(r"^Architecture:(.*)$")
+NEW_SECTIONS = ("Context", "Parts", "Data stores", "Outside services", "Needs", "Diagram")
+RECORD_SECTIONS = (*NEW_SECTIONS, "Layers")
+NEEDS_LINES = ("Busiest hour", "Downtime", "Cost", "Recovery time", "Logged")
+NUMBERED = NEEDS_LINES[:3]  # the three numbers of the needs question (amendment 203)
+NEEDS_TOPICS = ("scale", "needs")  # the topic keeps its id `scale`; `needs` is read the same
+AMOUNT = re.compile(r"\d+(?:[.,]\d+)?")
+STACK_RECORD = re.compile(r"^docs/adr/\d{4}-stack-options\.md$")
+CHARTER = re.compile(r"^docs/adr/\d{4}-project-charter\.md$")
+RULE_5 = "SPEC-0072 rule 5"
+
+
+def slice_problems(rel: str, text: str, strict: bool) -> tuple[list[str], list[str]]:
+    """Amendment 205: a design is a slice of the one record and names it on one line. Without the
+    line it is refused when named (edited), else a warning until its next edit (Q-1595-2)."""
+    found = [m.group(1).strip() for ln in text.split("\n") if (m := SLICE.match(ln))]
+    if not found:
+        why = f"the design has no `{SLICE_LINE}` line (amendment 205: a slice of the one record)"
+        if strict:
+            return [f"rule 7: {rel}: {why}"], []
+        return [], [f"rule 7: {rel}: {why}; held as a warning until its next edit"]
+    if len(found) > 1 or found[0] != RECORD:
+        return [f"rule 7: {rel}: the design needs exactly one `{SLICE_LINE}` line"], []
+    return [], []
+
+
+def numbers(text: str) -> set[str]:
+    return {n.replace(",", ".") for n in AMOUNT.findall(text)}
+
+
+def needs_answers(root: Path) -> list[str]:
+    """The quoted needs answers: the charter's `- scale:` (or `- needs:`) bullet and the answer
+    block under that bullet in each discovery document."""
+    out = []
+    bullet = re.compile(rf"^\s*[-*]\s+(?:{'|'.join(NEEDS_TOPICS)}):\s*(.*)$", re.IGNORECASE)
+    for path in sorted((root / "docs" / "adr").glob("*.md")):
+        if CHARTER.match(rel_of(path, root)):
+            lines = path.read_text(encoding="utf-8").split("\n")
+            out += [m.group(1) for ln in lines if (m := bullet.match(ln))]
+    for path in sorted((root / DIR).glob("*.md")):
+        lines = path.read_text(encoding="utf-8").split("\n")
+        for i, ln in enumerate(lines):
+            if ANSWER.match(ln) and ln[2:].split(":", 1)[0] in NEEDS_TOPICS:
+                block = []
+                for nxt in lines[i + 1 :]:
+                    if nxt == ANSWER_END or nxt.startswith("- "):
+                        break
+                    if not ANSWER_START.match(nxt):
+                        block.append(nxt)
+                out.append("\n".join(block))
+    return [a for a in out if a.strip().lower() not in ("", "open", "not known yet")]
+
+
+def chosen_services(root: Path) -> list[str]:
+    """The `External services:` of the chosen option of the one Accepted stack record."""
+    from gates import pins  # noqa: PLC0415 - only the record check needs it
+
+    files = [p for p in (root / "docs" / "adr").glob("*.md") if STACK_RECORD.match(rel_of(p, root))]
+    if len(files) != 1:
+        return []
+    text = files[0].read_text(encoding="utf-8")
+    letter = pins.CHOSEN.search(text)
+    if not pins.ACCEPTED.search(text) or not letter:
+        return []
+    options = [m for ln in text.splitlines() if (m := pins.OPTION.match(ln))]
+    body = next((m.group(2) for m in options if m.group(1) == letter.group(1)), "")
+    _, key, tail = body.partition("External services:")
+    words = tail.split("Practices:", 1)[0].strip().rstrip(".") if key else ""
+    names = [w.strip() for w in re.split(r"[,;]", words) if w.strip()]
+    return [n for n in names if n.lower() not in ("none", "todo(architect)")]
+
+
+def record_held(text: str) -> bool:
+    """A record written before this change carries none of the new sections (principle 11)."""
+    heads = {name for name, _ in sections_of(text.split("\n"))}
+    return not heads & set(NEW_SECTIONS)
+
+
+def record_problems(root: Path) -> list[tuple[str, str]]:
+    """Amendment 204: (rule, path class) of each failure of the record; never a value."""
+    text = (root / RECORD).read_text(encoding="utf-8")
+    body = dict(sections_of(text.split("\n")))
+    out = []
+
+    def fail(what: str, section: str, line: str = "") -> None:
+        cls = f"{RECORD}; section: {section}" + (f"; line: {line}" if line else "")
+        out.append((f"{RULE_5}: {what}", cls))
+
+    for name in RECORD_SECTIONS:
+        if name not in body:
+            fail("the record lacks a required section", name)
+    diagram = body.get("Diagram")
+    if diagram is not None and not diagram_of(diagram):
+        fail("the diagram is not a fenced Mermaid or text block", "Diagram")
+    drawn = "\n".join(diagram or []).lower()
+    listed = "\n".join(body.get("Outside services", [])).lower()
+    for service in chosen_services(root):
+        if "Outside services" in body and service.lower() not in listed:
+            fail("a service of the chosen option is not in the record", "Outside services")
+    for ln in body.get("Outside services", []):
+        m = re.match(r"^\s*[-*]\s+([^:]+?)\s*(?::.*)?$", ln)
+        if m and diagram is not None and m.group(1).lower() not in drawn:
+            fail("an outside service is missing from the diagram", "Diagram")
+    needs = body.get("Needs")
+    if needs is None:
+        return sorted(set(out))
+    given: set[str] = set()
+    for answer in needs_answers(root):
+        given |= numbers(answer)
+    for key in NEEDS_LINES:
+        lines = [ln for ln in needs if ln.strip().startswith(f"- {key}:")]
+        if len(lines) != 1:
+            fail("the Needs section lacks one of its lines", "Needs", key)
+            continue
+        got = numbers(lines[0].split(":", 1)[1])
+        if key in NUMBERED and got and not given:
+            fail("a Needs number has no quoted needs answer to match", "Needs", key)
+        elif key in NUMBERED and got - given:
+            fail("a Needs number does not match the quoted needs answer", "Needs", key)
+    return sorted(set(out))
+
+
 # --- the review artifact (rule 8) and the phase (rules 1 and 9) ----------------------------------
 
 RUNS = "docs/runs"
@@ -740,11 +866,22 @@ def artifact_problems(rel: str, text: str, root: Path) -> tuple[list[str], list[
 def check_design(files: list[str], root: Path, today: datetime.date) -> int:
     problems: list[str] = []
     paths, designs = read_files(files, root, DESIGN, 7, problems)
+    if (root / RECORD).is_file():
+        if record_held((root / RECORD).read_text(encoding="utf-8")):
+            print(f"note {NAME}: {RULE_5}: {RECORD}: held until its next edit (no new section)")
+        else:
+            problems += [f"{rule} (path class: {cls})" for rule, cls in record_problems(root)]
     if not paths:
+        if problems:
+            raise Refusal(problems)
         print(f"ok {NAME}: no design")
         return 0
     for rel, text in designs:
         problems += design_problems(rel, text, root, today)
+        found, notes = slice_problems(rel, text, strict=bool(files))
+        problems += found
+        for note in notes:
+            print(f"note {NAME}: {note}")
         found, notes = artifact_problems(rel, text, root)
         problems += found
         for note in notes:

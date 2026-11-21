@@ -120,6 +120,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-next-steps --brief 
 
 Do not commit or push, and do not open a pull request: the person or their session does.
 
+The product's one architecture record (amendment 205): when the foundation builds it, `python3 scripts/agk/gates/layers.py
+--write-record` writes `docs/architecture.md` with the accepted option's `External services:` under `## Outside services`
+and in the `## Diagram` (a fenced Mermaid or text block; no image); the foundation fills `## Context`, `## Parts`,
+`## Data stores` and `## Needs` from the merged discovery, the numbers quoted from the needs answer only. A project's own
+`stack` or `vision` engine fills the same sections. A front-door design under `docs/design/architecture/` carries one line
+`Architecture: docs/architecture.md` and adds only what its problem changes.
+
 Next on the path from an idea (`docs/guides/planning.md`, "From an idea"): once an option is accepted, the planning sources:
 `python3 scripts/agk/design_import.py source --version v<n> --slug <slug>`, `python3 scripts/agk/plan_sources.py vision`
 and `python3 scripts/agk/plan_sources.py architecture`, then `/agk:plan-intake <path outside docs/>`.
