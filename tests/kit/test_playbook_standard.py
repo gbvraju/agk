@@ -33,7 +33,7 @@ ENTERPRISE = (
 )
 NO_UI = ("cloud-migration", "data-pipeline", "mcp-server", "multi-agent")
 PACK = (
-    '\n[[standards]]\nstack = "python-pip"\nlint = "pack-lint"\nformat = "pack-format"\n'
+    '\n[[standards]]\nstack = "go-modules"\nlint = "pack-lint"\nformat = "pack-format"\n'
     'type = "pack-type"\nconfig = "invented.cfg"\n'
     'rules = {{ tool = "invented-tool", version = "1", codes = [{codes}] }}\n'
 )
@@ -130,7 +130,7 @@ def test_the_kit_copy_passes_and_warns_of_stacks_with_no_pack(tmp_path: Path) ->
     done = check(kit_copy(tmp_path))
     assert done.returncode == 0, done.stdout
     assert done.stdout == "ok playbooks (11 playbooks)\n"
-    assert done.stderr.startswith("warn playbooks: 8 stacks have no [[standards]] entry")
+    assert done.stderr.startswith("warn playbooks: 6 stacks have no [[standards]] entry")
 
 
 def test_an_enterprise_check_restated_as_judgement_is_refused_naming_the_gate(
@@ -232,13 +232,13 @@ def test_a_pack_that_drops_a_rule_code_is_refused_and_one_that_adds_passes(
     done = check(root)
     assert done.returncode == 1
     assert "a pack's `rules` drops a rule code (key: standards.rules)" in done.stdout
-    assert "B2" not in done.stdout and "python-pip" not in done.stdout
+    assert "B2" not in done.stdout and "go-modules" not in done.stdout
 
 
 def test_a_pack_for_a_stack_the_kit_cannot_name_is_refused(tmp_path: Path) -> None:
     """REQ-079 AC1: `stack` is a `[[stack]]` name of config/stack-signals.toml."""
     root = kit_copy(tmp_path)
-    pack = PACK.format(codes='"A1"').replace("python-pip", "zz-invented")
+    pack = PACK.format(codes='"A1"').replace("go-modules", "zz-invented")
     edit(root, "mobile", "[milestones]", pack + "\n[milestones]")
     done = check(root)
     assert done.returncode == 1

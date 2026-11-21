@@ -132,3 +132,22 @@ text = "How fast must each call answer, and what may a caller see when it is slo
 [[discovery]]
 id = "caller-sign-in"
 text = "How do callers sign in, and which callers may do which operations?"
+
+# The Python standards pack (SPEC-0072 rule 6; brief #1589, ADR-0669), one entry for each Python stack, moved here from
+# default.toml by brief #1638; it runs only when the Accepted stack record chose Python. `rules` pins ruff from
+# config/ci-tools.txt; the type step's mypy is pinned there too.
+[[standards]]
+stack = "python-pyproject"
+lint = "python-lint"
+format = "python-format"
+type = "python-type"
+config = "pyproject.toml"
+rules = { tool = "ruff", version = "0.17.4", codes = ["E", "F", "I", "B", "UP"] }
+
+[[standards]]
+stack = "python-pip"
+lint = "python-lint"
+format = "python-format"
+type = "python-type"
+config = "pyproject.toml"
+rules = { tool = "ruff", version = "0.17.4", codes = ["E", "F", "I", "B", "UP"] }

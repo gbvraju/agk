@@ -22,6 +22,12 @@ last line (`; not run: <ids>`; brief #1588, ADR-0668). Files only: no network,
 no hosted scanner, nothing written. From `check_playbooks.py` it prints nothing when no gate is a
 check, so that check's output is unchanged there (the kit's own repository's case).
 `required_checks` is unchanged: it runs inside `governance`.
+
+The standards packs (SPEC-0072 rule 6; brief #1589, ADR-0669): after the gates, each composed
+`[[standards]]` entry whose stack a pack module of `PACKS` serves is run once per module, only when
+that module is `on` (its stack chosen in the Accepted stack record). Its steps print `ok standards
+<stack>` or `FAIL gates: standards <stack> <step>: <rule> (path class or setting)`; a `lint`,
+`format` or `type` step name the module does not hold is refused naming the stack.
 """
 
 from __future__ import annotations
@@ -44,6 +50,9 @@ STEP = re.compile(r"^[a-z][a-z0-9-]*$")
 # SPEC-0072 rule 5 (brief #1588, ADR-0668): steps of the composed `[architecture]`, not of a gate;
 # each runs, under its own name, only where its `applies(root)` is true (two or more layers).
 ARCHITECTURE_STEPS = ("layers",)
+PACKS = ("python_pack",)  # pack modules of the registry, imported by name
+STEP_KEYS = ("lint", "format", "type")
+NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
 
 
@@ -89,11 +98,32 @@ def results(root: Path) -> list[tuple[bool | None, str]]:
         out += [(False, f"{gate['id']}: {rule} (path class: {cls})") for rule, cls in failed]
         if not failed:
             out.append((True, gate["id"]))
+    return out + pack_results(path, root)
+
+
+def pack_results(path: Path, root: Path) -> list[tuple[bool | None, str]]:
+    """(passed, line) for each standards pack that is on, once per pack module (rule 6)."""
+    out: list[tuple[bool | None, str]] = []  # main's row type; a pack row is never None
+    done: set[str] = set()
+    for entry in check_playbooks.standard(path, root)[1]:
+        stack = entry.get("stack")
+        modules = [importlib.import_module(f"gates.{name}") for name in PACKS]
+        module = next((m for m in modules if stack in m.STACKS), None)
+        if module is None or module.__name__ in done or not module.on(root):
+            continue
+        done.add(module.__name__)
+        if tuple(entry.get(k) for k in STEP_KEYS) != module.STEP_NAMES:
+            out.append((False, f"standards {stack}: {NO_PACK_STEP}"))
+            continue
+        steps = module.run(root, entry)
+        out += [(False, f"standards {stack} {step}: {ln}") for step, lines in steps for ln in lines]
+        if not any(lines for _, lines in steps):
+            out.append((True, f"standards {stack}"))
     return out
 
 
 def cmd_check(root: Path, quiet: bool = False) -> int:
-    """Print the lines and give the exit code; \`quiet\` prints nothing when no gate is a check."""
+    """Print the lines and give the exit code; `quiet` prints nothing when no gate is a check."""
     found = results(root)
     if quiet and not found:
         return 0

@@ -519,6 +519,15 @@ their paths, the allowed directions and the stack record's ADR, and is refused w
 A build brief of a work-type project other than its foundation carries one line `Layer: <layer>, ...` naming every layer
 its `Touches:` meets; `check_brief.py --root` refuses one without it or with an unknown layer (SPEC-0072 rule 8).
 
+After the gates it runs the standards pack of the chosen stack (SPEC-0072 rule 6, ADR-0669; brief #1589):
+`scripts/agk/gates/python_pack.py`, for the `python-pyproject` and `python-pip` entries of `[[standards]]`, only when the
+Accepted stack record chose Python. Over the product files of `project_lint_paths` (top level of `agk.toml`; unset: the
+paths of `[architecture] layers`; any other form than a list of relative globs is refused naming the setting) it checks
+that the pack's `config` file enables every pinned rule code (the `floor`, rule 8), then runs `python -m ruff check`,
+`python -m ruff format --check` and `python -m mypy`, never through a shell. A finding prints `FAIL gates: standards
+<stack> <step>: <rule> (path class: <glob>)`, a missing tool names the tool and the setting, and a passing pack prints
+`ok standards <stack>`. `lint_paths` and `agk-lint` are unchanged.
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
