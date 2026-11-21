@@ -553,8 +553,8 @@ def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     # `launch-adapter`, ADR-0525; `misplaced-settings`, ADR-0527; `reviewer-slots`, ADR-0528;
     # `model-names`, ADR-0530; `autopilot-settings`, ADR-0587;
     # `local-mode-switch`, ADR-0626; `merger-variable`, ADR-0654;
-    # `tier-use`, `review-ceiling`, `slot-use`, ADR-0686
-    assert len(IDS) == 55
+    # `tier-use`, `review-ceiling`, `slot-use`, ADR-0686; `layout`, ADR-0695
+    assert len(IDS) == 56
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")
