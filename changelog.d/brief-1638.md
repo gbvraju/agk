@@ -1,0 +1,1 @@
+- The Python standards pack moves out of the base playbook into the api-service and web-app playbooks, one entry for each Python stack, so the base playbook names no tool or version and the default branch is green again (brief #1638, found bug #1636)
