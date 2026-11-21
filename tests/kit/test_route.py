@@ -84,9 +84,11 @@ def test_ac1_a_required_check_not_completed_is_ci_running():
 
 def test_ac1_a_failed_check_is_ci_red_and_a_skipped_one_is_not():
     """REQ-039 AC1: rule 2 (agk:ci-red)."""
-    for conclusion in ("failure", "timed_out", "cancelled", "action_required"):
+    for conclusion in ("failure", "timed_out", "action_required"):
         bad = {"name": "proof", "status": "completed", "conclusion": conclusion}
         assert route.decide(facts(checks=[ok("governance"), bad])) == "agk:ci-red", conclusion
+    cancelled = {"name": "proof", "status": "completed", "conclusion": "cancelled"}  # brief #1656
+    assert route.decide(facts(checks=[ok("governance"), cancelled])) == "agk:ci-running"
     for conclusion in ("skipped", "neutral", "success"):
         fine = {"name": "proof", "status": "completed", "conclusion": conclusion}
         assert route.decide(facts(checks=[ok("governance"), fine])) == "agk:review", conclusion

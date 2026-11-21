@@ -36,7 +36,8 @@ tree).
    personal mode (no labels) are unchanged.
 
 Protected path classes changed: `scripts/agk/` (`route.py`), `tests/kit/` (`test_route_latest.py`,
-`test_route_owner_ask.py`) and `docs/adr/` (this file); `kit/hashes.json` is unchanged (`kit_hashes.py`: ok).
+`test_route_owner_ask.py`, and `test_route.py`, whose AC1 case read a cancelled run as red) and `docs/adr/` (this
+file); `kit/hashes.json` is unchanged (`kit_hashes.py`: ok).
 
 ## Consequences
 
