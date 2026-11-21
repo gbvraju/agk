@@ -139,7 +139,8 @@ def test_a_non_python_stack_is_not_run_never_ok(tmp_path: Path, capsys) -> None:
     code, out = _gates(root, capsys)
     assert code == 0
     assert "not run layers: no reader for node\n" in out and "ok layers" not in out
-    assert out.splitlines()[-1] == "ok gates (1 check gates; not run: layers)"
+    # brief #1597 (ADR-0677): api-service's contract-tests is a check, not run with no contract
+    assert out.splitlines()[-1] == "ok gates (2 check gates; not run: contract-tests, layers)"
 
 
 def test_windows_line_ends_and_paths_compare_by_forward_slash(tmp_path: Path, capsys) -> None:

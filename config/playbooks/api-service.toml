@@ -50,9 +50,9 @@ allow = [
 
 [[gates]]
 id = "contract-tests"
-kind = "judgement"
-text = "Contract tests: the testing map names a test glob for every contract path, and the contract lands before the back end."
-reason = "No offline step reads the contract and its test globs yet; brief #1597 builds it (ADR-0666)."
+kind = "check"
+text = "Contract tests: every operation of contracts/openapi.json (OpenAPI 3.1 in JSON) is named by a test under test_dirs, and the contract lands before the back end (ADR-0677)."
+step = "contract-tests"
 owner_only = false
 
 [[gates]]
