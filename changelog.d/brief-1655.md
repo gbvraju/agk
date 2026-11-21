@@ -1,0 +1,1 @@
+- A new project's request and run ids are random letters, so the safe log never mistakes one for a phone number and the default branch is green again (brief #1655)

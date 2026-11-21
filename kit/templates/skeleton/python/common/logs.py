@@ -1,15 +1,18 @@
 """Safe logs (brief #1594, ADR-0674): one line per request or run, with its id and no personal value.
 
 An e-mail address or a phone number in a message is replaced before the line is written, and a query
-string is never logged.
+string is never logged. A request or run id is 12 random lowercase letters, never digits, so the
+guard can never read it as a phone number and the id the user is shown is the one in the log
+(brief #1655).
 """
 
 from __future__ import annotations
 
 import logging
 import re
+import secrets
+import string
 import sys
-import uuid
 from typing import TextIO
 
 LOG = logging.getLogger("app")
@@ -30,7 +33,7 @@ def setup(stream: TextIO | None = None) -> None:
 
 
 def new_id() -> str:
-    return uuid.uuid4().hex[:12]
+    return "".join(secrets.choice(string.ascii_lowercase) for _ in range(12))
 
 
 def line(**fields: object) -> None:
