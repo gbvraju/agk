@@ -1,0 +1,1 @@
+- A pull request waiting on the owner to approve an amendment or a spec shows `agk:approve`, and a cancelled check no longer labels it red (brief #1656)

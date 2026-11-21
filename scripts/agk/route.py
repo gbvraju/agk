@@ -213,6 +213,8 @@ DESCRIPTIONS = {
 }
 FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 FAILED_STATUS = {"failure", "error"}
+NOT_REPORTED_RUN = "cancelled"  # a latest run so ended is not reported (brief #1656, ADR-0690)
+APPROVAL_ASK = re.compile(r"Maintainer answer: amendment \d+ approved|Approve: SPEC-\d{4}")  # #1656
 ASKED = re.compile(
     r"Approval: (SPEC-\d{4}) (\S+) Draft -> Approved, waiting for a person"
     r"(?:: post \"Approve: (SPEC-\d{4})\")?"
@@ -432,7 +434,11 @@ def latest_statuses(statuses: list[dict]) -> list[dict]:
 
 
 def judged(
-    checks: list[dict], statuses: list[dict], required: list[str] | None, wait: bool = True
+    checks: list[dict],
+    statuses: list[dict],
+    required: list[str] | None,
+    wait: bool = True,
+    cancelled_unreported: bool = False,
 ) -> tuple[list[dict], list[dict], bool]:
     """(the latest runs, the latest statuses, whether a required name has not reported).
 
@@ -440,16 +446,22 @@ def judged(
     context is named in it are judged; a check that is not listed never decides a label. Without
     it every run and status counts. The router's own job is never judged. With `wait` false (the
     default branch, where a workflow such as `proof` may never run) a listed name that has not
-    reported is not waited for: the head waits only for the names that have a run or a status."""
+    reported is not waited for: the head waits only for the names that have a run or a status.
+    With `cancelled_unreported` (the router's labels, brief #1656 answer 2, ADR-0690) a judged
+    latest run that was cancelled is left out and its name reads as not reported; the callers that
+    re-run a red check keep it as red."""
     runs = [c for c in latest_runs(checks) if c.get("name") != ROUTER_JOB]
     latest = latest_statuses(statuses)
+    if required is not None:
+        names = {x for x in required if x != ROUTER_JOB}
+        runs = [c for c in runs if c.get("name") in names]
+        latest = [s for s in latest if s.get("context") in names]
+    kept = [c for c in runs if not cancelled_unreported or c.get("conclusion") != NOT_REPORTED_RUN]
+    dropped = len(kept) < len(runs)
     if required is None:
-        return runs, latest, False
-    names = {x for x in required if x != ROUTER_JOB}
-    runs = [c for c in runs if c.get("name") in names]
-    latest = [s for s in latest if s.get("context") in names]
-    seen = {c.get("name") for c in runs} | {s.get("context") for s in latest}
-    return runs, latest, wait and bool(names - seen)
+        return kept, latest, wait and dropped
+    seen = {c.get("name") for c in kept} | {s.get("context") for s in latest}
+    return kept, latest, wait and bool(names - seen)
 
 
 def final_accept_clears(body: str, head: str, files: list[dict]) -> bool:
@@ -505,22 +517,33 @@ def asks_owner(f: dict, comments: list[dict], authors: list[str] | None) -> bool
     later such answer and no later head (amendment 150 item 1, Q-846-4, ADR-0442); the two are
     kept apart, so a question never closes an `Owner needed:`; comments are in the order GitHub
     lists them."""
+    return owner_ask(f, comments, authors) is not None
+
+
+def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str | None:
+    """The state of the open ask of `asks_owner`, which closes as it says: `agk:approve` when an
+    open `Owner needed:` names `Maintainer answer: amendment <n> approved` or `Approve: SPEC-<n>`
+    (brief #1656 answer 1, ADR-0690), `agk:question` for any other open ask, None when none."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
         (((f.get("commit") or {}).get("commit") or {}).get("committer") or {}).get("date") or ""
     )
     owner_open = False  # an `Owner needed:`: only the owner's answer closes it (brief #1168)
+    approval = False  # an open `Owner needed:` asks a spec or amendment approval (brief #1656)
     question_open = False  # a maintainers question: that answer or a newer head closes it
     for c in comments:
         line = first_line(c)
         if line.startswith("Owner needed:") and login_of(c) in listed:
             owner_open = True
+            approval = approval or bool(APPROVAL_ASK.search(str(c.get("body") or "")))
         elif for_maintainers(line):
             question_open = not pushed or str(c.get("created_at") or "") >= pushed
         elif line.startswith(("Maintainer answer:", "Approve:")) and login_of(c) in approvers:
-            owner_open = question_open = False
-    return owner_open or question_open
+            owner_open = question_open = approval = False
+    if owner_open and approval:
+        return "agk:approve"
+    return "agk:question" if owner_open or question_open else None
 
 
 def handover_reason(line: str) -> str | None:
@@ -585,8 +608,9 @@ def base_state(f: dict) -> str:
             comments, f.get("agent_apps") or (), f["solo_person"], heads=heads
         )
     authors = counted_authors(f.get("authors"), f.get("author"))
-    if asks_owner(f, comments, authors):  # on a draft too (brief #1043 answer 2, ADR-0442)
-        return "agk:question"
+    ask = owner_ask(f, comments, authors)  # on a draft too (brief #1043 answer 2, ADR-0442)
+    if ask is not None:
+        return ask
     if f.get("draft"):
         return "agk:build"
     if f.get("mergeable_state") == "dirty":  # before the checks: none start on it (Q-846-8)
@@ -599,7 +623,7 @@ def base_state(f: dict) -> str:
     if brief and not (names_head or covered or reported(f, head)):  # Q-846-3, Q-846-7
         return "agk:build"
     checks, statuses, missing = judged(
-        f.get("checks") or [], f.get("statuses") or [], f.get("required")
+        f.get("checks") or [], f.get("statuses") or [], f.get("required"), cancelled_unreported=True
     )
     unreported = missing or (not checks and not statuses)
     local = bool(f.get("local"))  # brief #1212: the local-mode record issue is open
