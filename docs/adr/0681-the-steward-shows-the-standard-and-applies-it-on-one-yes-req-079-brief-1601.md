@@ -53,7 +53,8 @@ the session's rule is one pull request per brief, so this ADR covers the whole b
    fails the floor; without `--approve` it prints `floor: gates not run`, as the test step does, and writes nothing.
    Files only, no command and no forge call.
 8. Amendment 210 proposes to SPEC-0037 rule 11 that a signed-off prototype is a reference only (SPEC-0072 rule 10),
-   for its spec approver; nothing is applied until `Approve: SPEC-0037`.
+   for its spec approver; applied word for word to rules 11 and 13 on the maintainer answer of 2026-11-21
+   ("Maintainer answer: amendment 210 approved", #1644 comment 7062667113).
 9. The guide `docs/guides/engineering-standard.md` (installed, `kit/manifest.json` `verbatim` and `snapshot`) says
    what the standard holds, the present-confirm-implement path, the team's own choices, the business owner's request,
    every mode and the settings.
@@ -73,7 +74,8 @@ generic description. The drafted playbook cannot drop or weaken a gate of `defau
 
 - 2026-11-21: a drafted playbook is recognised only with a research record whose options carry web sources
   (SPEC-0048 rule 22), so the no-search path of rule 8 cannot yet draft one from the requirements alone; asked as
-  `Q-1601-2` (due 2027-03-31).
+  `Q-1601-2` and answered 2026-11-21: a later brief lets the research record cite the project's requirement
+  files (#1644 comment 7062670742).
 - 2026-11-21: a business owner's plain request becoming one project requirement and one Proposed project ADR is the
   guide's and the architect's existing path (intake, then the architect agent's draft); no command records it yet,
   asked as `Q-1601-3` (due 2027-03-31).

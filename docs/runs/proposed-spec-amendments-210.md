@@ -27,3 +27,6 @@ Read in the code by this session on main at 4dceb89 (2026-11-21):
    approval.
 4. **Unchanged:** every other rule of SPEC-0037, `design_compare.py`'s three comparisons and `config/review-checklist.md`
    (SPEC-0072 rule 10, `Q-S0072-1`).
+
+Applied: 2026-11-21, items 1 and 2 word for word to SPEC-0037 rules 11 and 13 in pull request #1644, on "Maintainer answer:
+amendment 210 approved" (comment 7062667113); item 3 waits for its brief.
