@@ -64,6 +64,7 @@
     "docs/runbooks/red-default-branch.md",
     "docs/specs/TEMPLATE.md",
     "scripts/agk/autopilot.py",
+    "scripts/agk/basics.py",
     "scripts/agk/batch.py",
     "scripts/agk/caps.py",
     "scripts/agk/check_acceptance.py",
