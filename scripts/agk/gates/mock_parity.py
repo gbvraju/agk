@@ -38,20 +38,23 @@ def mocks(root: Path) -> dict[str, Any]:
     return out
 
 
+def dig(value: Any, *keys: str) -> Any:
+    """The value under the keys, or None where a level is not a table (a malformed contract)."""
+    for key in keys:
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+
 def expected(data: dict[str, Any], op: dict[str, Any]) -> set[str]:
     """The property names of the first 2xx JSON response schema, empty when it names none."""
-    responses = op.get("responses")
-    codes = (
-        sorted(c for c in responses if str(c).startswith("2"))
-        if isinstance(responses, dict)
-        else []
-    )
+    raw = op.get("responses")
+    responses: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    codes = sorted(str(c) for c in responses if str(c).startswith("2"))
     for code in codes:
-        body = responses[code] if isinstance(responses[code], dict) else {}
-        schema = body.get("content", {}).get("application/json", {}).get("schema", {})
+        schema = dig(responses[code], "content", "application/json", "schema")
         ref = schema.get("$ref") if isinstance(schema, dict) else None
         if isinstance(ref, str) and ref.startswith("#/components/schemas/"):
-            schema = data.get("components", {}).get("schemas", {}).get(ref.rsplit("/", 1)[1], {})
+            schema = dig(data, "components", "schemas", ref.rsplit("/", 1)[1])
         props = schema.get("properties") if isinstance(schema, dict) else None
         return set(props) if isinstance(props, dict) else set()
     return set()

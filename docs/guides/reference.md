@@ -499,6 +499,14 @@ value; a step with no module is refused naming the gate id. It ends `ok gates (<
 A step that cannot read the project prints `not run <gate id>: <reason>`, never `ok`, and the last line adds
 `; not run: <ids>` (brief #1588, ADR-0668).
 
+The contract steps (brief #1597, ADR-0677; web-app and api-service) read `contracts/openapi.json`, OpenAPI 3.1 in JSON
+written from `kit/templates/contract-openapi.json`. `contract_tests.py` (gate `contract-tests`) fails a contract that does
+not parse and an operation whose `operationId` no file under `test_dirs` names; `mock_parity.py` (gate `mock-parity`) fails
+an operation with no JSON mock under `mocks/` (`{"operationId": ..., "response": {...}}`) of the same response keys. With
+no contract, or in `mode = "adopt"` one in another format, both print `not run`. The data model is `docs/data-model.md`
+from `kit/templates/data-model.md`, and `check_plan.py` refuses a `Kind: back-end` brief that does not depend on the
+`Kind: contract` brief while either file is missing.
+
     python3 scripts/agk/gates/layers.py [--root DIR] [--write-record]
 
 The `layers` step (SPEC-0072 rule 5; `default.toml`'s gate `layers`) reads each Python file of a layer of the composed
