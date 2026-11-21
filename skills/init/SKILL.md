@@ -31,6 +31,10 @@ overwrite, and writes nothing when any file conflicts.
    settings entries and stop: the person installs the plugin at that release's tag (the `ref` of the agk marketplace
    entry), then runs `/agk:init` again.
 
+   For the clean layout (no kit file in the product, SPEC-0071 rule 2), add `--layout plugin` to both commands; it
+   refuses, naming the proof, until the rehearsal's figures are accepted, and outside local mode. Show a refusal as it
+   is and stop.
+
 3. Show the printed branch rules, scanner exclusions and plugin settings entries as they are. Do not apply any of them.
 
 Do not commit, push or merge. Do not set a spec `Approved` or an ADR `Accepted`. Stop after reporting what was created.
