@@ -1546,8 +1546,13 @@ def branch_check(root: Path, fetch: bool = True) -> str | None:
         name = Path(_git_text(root, "rev-parse", "--show-toplevel") or root).name
         if name == STEWARD_TREE:
             return None
-        owner = name[len("agk-") :] if name.startswith("agk-") and len(name) > 4 else "another session"
-        return f"branch: this folder is the worktree of {owner}; open the project's main folder instead"
+        owner = "another session"
+        if name.startswith("agk-") and len(name) > len("agk-"):
+            owner = name[len("agk-") :]
+        return (
+            f"branch: this folder is the worktree of {owner};"
+            " open the project's main folder instead"
+        )
     if _git_text(root, "remote", "get-url", "origin") is None:
         return None
     default = _default_branch_of(root)

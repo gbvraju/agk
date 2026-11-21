@@ -397,7 +397,8 @@ def test_the_start_hook_prints_the_line_off_the_default_branch_and_nothing_on_it
     assert (hook(clone).returncode, hook(clone).stdout) == (0, "")
     git("switch", "-q", "-c", "feature-example", cwd=clone)
     found = hook(clone)
-    assert (found.returncode, found.stdout) == (0, f"branch: on feature-example, not main; fix: {FIX}\n")
+    line = f"branch: on feature-example, not main; fix: {FIX}\n"
+    assert (found.returncode, found.stdout) == (0, line)
     assert hook(clone, AGK_AGENT="builder").stdout == ""  # a kit start of another role
     assert head(clone) == "feature-example"
 
