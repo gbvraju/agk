@@ -1,0 +1,1 @@
+- A changed file that a map entry covers now also runs the tests that name it, so a test the entry forgot still runs before merge (brief #1649)
