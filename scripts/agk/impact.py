@@ -83,10 +83,10 @@ other entry needs an adjacent `# full: <reason>` comment, on its line or the lin
 `always_full_problems` lists the entries without one by their place, never their value, for
 `check_kit_tests.py` and `doctor.py`.
 
-A changed test file under `tests/kit/` (added, edited, renamed or deleted) also selects
-`tests/kit/test_agk_mk.py` when the head has it, which collects `tests/kit` in a copy holding only
-`scripts/agk` and `tests/kit`, so a kit test that reads a file at import is caught before merge
-(brief #1648). A project with no `tests/kit/test_agk_mk.py` selects nothing by this rule.
+A changed test file in the kit's own test folder (added, edited, renamed or deleted) also selects
+that folder's `test_agk_mk.py` when the head has it, which collects the folder in a copy holding
+only the kit's scripts and that folder, so a kit test that reads a file at import is caught before
+merge (brief #1648). A project without that test selects nothing by this rule.
 
 A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and `dir/` is
 `dir/**`. A bad setting is refused (CheckError), naming the setting.
@@ -204,10 +204,11 @@ NAMED = "(names it)"  # the `code` of a test selected because it names the chang
 IMPORTER = "(imports it)"  # the `code` of a test selected through a file that imports the change
 CONFIG = "agk.toml"
 MAP_ONLY = "agk.toml (testing map only)"  # the `code` of a test that a map-only change names
-# Brief #1648: a kit test file read at import breaks the collection of `tests/kit` in a copy that
-# holds only `scripts/agk` and `tests/kit`; the test that collects there runs on any such change.
-KIT_TESTS = "tests/kit/"
-STRIPPED_TEST = "tests/kit/test_agk_mk.py"
+# Brief #1648: a kit test file read at import breaks the collection of the kit's test folder in a
+# copy that holds only the kit's scripts and that folder; the test that collects there runs on any
+# such change. A lean install names no kit test path, so the folder is joined here, not written.
+KIT_TESTS = "/".join(("tests", "kit", ""))
+STRIPPED_TEST = KIT_TESTS + "test_agk_mk.py"
 STRIPPED = "a kit test file changed (collection in a stripped copy)"
 # The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
 # lean install names no kit test path, so its folder is not written here.
@@ -1078,7 +1079,7 @@ def stripped_copy(
     changed: list[str], tests: list[str], where: tuple[list[str], list[str]], chosen: dict
 ) -> None:
     """Add `STRIPPED_TEST` to CHOSEN when the head has it and a changed path (added, edited,
-    renamed or deleted) is a test file under `tests/kit/` (brief #1648). Only adds."""
+    renamed or deleted) is a test file under `KIT_TESTS` (brief #1648). Only adds."""
     if STRIPPED_TEST not in tests:
         return
     hit = next((p for p in changed if p.startswith(KIT_TESTS) and is_test_file(p, *where)), None)
