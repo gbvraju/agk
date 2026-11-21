@@ -1423,7 +1423,13 @@ def cmd_check(
         print(f"FAIL {NAME}: {problem}")
     for line in plan.unmatched():
         print(line)
-    print(("plan: " if problems else "ok plan: ") + plan.coverage(facts is not None))
+    # brief #1666 (ADR-0697): a declared playbook that cannot be read leaves the work-type rules
+    # not run, never `ok`; check_playbooks.py fails the declaration itself
+    skipped = playbook_format.declaration(root)[1]
+    for line in skipped:
+        print(f"not run {NAME} work-type rules: {line}")
+    ok = "" if problems or skipped else "ok "
+    print(f"{ok}plan: " + plan.coverage(facts is not None))
     return 1 if problems else 0
 
 

@@ -103,8 +103,9 @@ from gates.pins import option_parts
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
-from playbook_format import BASE, WORK_TYPES, declaration, discovery, selected
+from playbook_format import BASE, WORK_TYPES, declaration, default_playbook, discovery, selected
 from playbook_format import FOLDER as PLAYBOOKS
+from playbook_format import path as playbook_path
 from playbook_format import problems as playbook_problems
 from pr_body import brief_option, prepare, print_body
 
@@ -286,7 +287,7 @@ def playbook_questions(root: Path, kind: str | None) -> list[tuple[str, str]]:
             return []
     elif kind not in WORK_TYPES:
         raise CheckError("rule 4: the work type is not one of the work types (setting: work-type)")
-    path = root / PLAYBOOKS / f"{kind}.toml"
+    path = playbook_path(root, kind)  # brief #1666: the project's, else the plugin's
     if not path.is_file():
         raise CheckError(
             f"rule 4: the work type has no playbook under {PLAYBOOKS}/ (setting: work-type)"
@@ -445,8 +446,8 @@ def playbook_practices(root: Path) -> tuple[list[str], str] | None:
     if found:
         raise CheckError(found[0])
     if work_type is None:  # SPEC-0072 rule 4 and `Q-S0072-17`: `default.toml`'s part alone
-        base = root / PLAYBOOKS / f"{BASE}.toml"
-        return (gate_bullets(base, root, BASE), "") if base.is_file() else None
+        base = default_playbook(root)  # brief #1666: the project's, else the plugin's
+        return (gate_bullets(base, root, BASE), "") if base is not None else None
     path = selected(root)
     if path is None or playbook_problems(path, root):
         raise CheckError(
