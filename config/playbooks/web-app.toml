@@ -81,16 +81,16 @@ allow = [
 
 [[gates]]
 id = "contract-tests"
-kind = "judgement"
-text = "Contract tests: the testing map names a test glob for every contract path."
-reason = "No offline step reads the contract and its test globs yet; brief #1597 builds it (ADR-0666)."
+kind = "check"
+text = "Contract tests: every operation of contracts/openapi.json (OpenAPI 3.1 in JSON) is named by a test under test_dirs (ADR-0677)."
+step = "contract-tests"
 owner_only = false
 
 [[gates]]
 id = "mock-parity"
-kind = "judgement"
-text = "Mock parity: the mock names exactly the operations of the contract file."
-reason = "No offline step compares the mock with the contract yet; brief #1597 builds it (ADR-0666)."
+kind = "check"
+text = "Mock parity: every operation of the contract has a mock under mocks/ with the same operationId and response keys (ADR-0677)."
+step = "mock-parity"
 owner_only = false
 
 [[gates]]
