@@ -20,6 +20,9 @@ Each tool runs as `<this python> -m <tool>` with an argument list, never a shell
 same on Windows, WSL and macOS, and writes no cache. A tool missing from this Python is a failure
 naming the tool and the setting, never a silent pass. A failure names the rule code and the path
 class (the glob the file fell under), never a file name or a value (principle 8).
+
+With a `tally` dict, `run` also fills `{step: {file: count}}` for `lint`, `format` and `type`, the
+per-file counts the runner holds to the baseline (SPEC-0072 rule 7; brief #1600, ADR-0680).
 """
 
 from __future__ import annotations
@@ -147,7 +150,17 @@ def floor(root: Path, entry: dict[str, Any]) -> list[str]:
     return out
 
 
-def _ruff(root: Path, argv: list[str], found: list[tuple[str, str]], step: str) -> list[str]:
+Tally = dict[str, int]
+
+
+def _count(tally: Tally | None, rel: str) -> None:
+    if tally is not None:
+        tally[rel] = tally.get(rel, 0) + 1
+
+
+def _ruff(
+    root: Path, argv: list[str], found: list[tuple[str, str]], step: str, tally: Tally | None = None
+) -> list[str]:
     """Ruff's JSON findings as (rule, path class) lines; exit 0 passes, 1 has findings, any other
     exit or output is a failure that the tool did not run, never a silent pass."""
     proc = _tool(root, ["ruff", *argv, "--output-format", "json", *[r for r, _ in found]])
@@ -164,8 +177,9 @@ def _ruff(root: Path, argv: list[str], found: list[tuple[str, str]], step: str) 
     for item in items:
         code = str(item.get("code") or "") if isinstance(item, dict) else ""
         path = Path(str(item.get("filename", "") if isinstance(item, dict) else "")).resolve()
-        cls = where.get(path.relative_to(base).as_posix()) if path.is_relative_to(base) else None
-        cls = cls or "product code"
+        rel = path.relative_to(base).as_posix() if path.is_relative_to(base) else ""
+        _count(tally, rel or "product code")
+        cls = where.get(rel) or "product code"
         if step == "format":
             out.add(f"{RULE}: the file is not formatted, ruff format (path class: {cls})")
         else:
@@ -174,16 +188,23 @@ def _ruff(root: Path, argv: list[str], found: list[tuple[str, str]], step: str) 
     return sorted(out)
 
 
-def lint(root: Path, codes: list[str], found: list[tuple[str, str]]) -> list[str]:
+def lint(
+    root: Path, codes: list[str], found: list[tuple[str, str]], tally: Tally | None = None
+) -> list[str]:
     argv = ["check", "--no-cache", *_config(root), "--select", ",".join(codes)]
-    return _ruff(root, argv, found, "lint")
+    return _ruff(root, argv, found, "lint", tally)
 
 
-def format_check(root: Path, found: list[tuple[str, str]]) -> list[str]:
-    return _ruff(root, ["format", "--check", "--no-cache", *_config(root)], found, "format")
+def format_check(
+    root: Path, found: list[tuple[str, str]], tally: Tally | None = None
+) -> list[str]:
+    argv = ["format", "--check", "--no-cache", *_config(root)]
+    return _ruff(root, argv, found, "format", tally)
 
 
-def type_check(root: Path, found: list[tuple[str, str]]) -> list[str]:
+def type_check(
+    root: Path, found: list[tuple[str, str]], tally: Tally | None = None
+) -> list[str]:
     config = root / "pyproject.toml"
     argv = ["mypy", *(["--config-file", str(config)] if config.is_file() else []), *MYPY_FLAGS]
     argv += ["--no-error-summary", "--no-color-output", "--show-error-codes"]
@@ -195,13 +216,17 @@ def type_check(root: Path, found: list[tuple[str, str]]) -> list[str]:
     for ln in proc.stdout.splitlines():
         m = MYPY_LINE.match(ln)
         if m:
+            _count(tally, Path(m.group(1)).as_posix())
             cls = where.get(Path(m.group(1)).as_posix(), "product code")
             out.add(f"{RULE}: type rule {m.group(2) or 'error'} (path class: {cls})")
     return sorted(out) or [f"{RULE}: the type tool did not run (setting: standards.type)"]
 
 
-def run(root: Path, entry: dict[str, Any]) -> list[tuple[str, list[str]]]:
-    """(step, failure lines) for the floor and the three steps, in order."""
+def run(
+    root: Path, entry: dict[str, Any], tally: dict[str, Tally] | None = None
+) -> list[tuple[str, list[str]]]:
+    """(step, failure lines) for the floor and the three steps, in order; TALLY gets the
+    per-file counts of the three steps when given."""
     root = Path(root)
     tools = (("ruff", "standards.rules"), ("mypy", "standards.type"))
     missing = [f"{RULE}: the pack's tool {t} is not installed (setting: {s})" for t, s in tools]
@@ -215,9 +240,12 @@ def run(root: Path, entry: dict[str, Any]) -> list[tuple[str, list[str]]]:
     codes = [c for c in entry.get("rules", {}).get("codes", []) if isinstance(c, str)]
     steps = [("floor", floor(root, entry))]
     if found:
+        own: dict[str, Tally] = {"lint": {}, "format": {}, "type": {}}
         steps += [
-            ("lint", lint(root, codes, found)),
-            ("format", format_check(root, found)),
-            ("type", type_check(root, found)),
+            ("lint", lint(root, codes, found, own["lint"])),
+            ("format", format_check(root, found, own["format"])),
+            ("type", type_check(root, found, own["type"])),
         ]
+        if tally is not None:
+            tally.update(own)
     return steps

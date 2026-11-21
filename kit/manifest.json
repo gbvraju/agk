@@ -104,6 +104,7 @@
     "scripts/agk/front_door.py",
     "scripts/agk/full_run.py",
     "scripts/agk/gates/__init__.py",
+    "scripts/agk/gates/baseline.py",
     "scripts/agk/gates/cut_over_order.py",
     "scripts/agk/gates/layers.py",
     "scripts/agk/gates/pins.py",

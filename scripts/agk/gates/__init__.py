@@ -7,6 +7,8 @@
 One module per check step, named by the step with `-` as `_`. Each holds `RULE`, the rule a
 failure names, and `check(root, playbook)`, which reads only the project's files, offline, and
 returns the path classes that fail (none when the step passes), never a value.
+A step may also hold `counts(root, playbook)`, its findings per file, which the runner holds to
+the project's baseline (SPEC-0072 rule 7; brief #1600, ADR-0680).
 """
 
 from __future__ import annotations

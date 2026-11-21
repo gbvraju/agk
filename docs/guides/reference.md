@@ -489,7 +489,7 @@ verdict, so nothing merges on a missing line; without a declaration no verdict c
 
 ## Playbook gates
 
-`python3 scripts/agk/run_gates.py [--root DIR]` runs, from `check_playbooks.py` once the playbooks pass (so inside
+`python3 scripts/agk/run_gates.py [--baseline] [--root DIR]` runs, from `check_playbooks.py` once the playbooks pass (so inside
 `make governance` and the `governance` job, with no workflow change; Q-1586-3), the `step` of each
 `kind = "check"` gate of the playbook that `[delivery] work_type` names, composed with `default.toml` (or `default.toml` alone
 with no work type) (SPEC-0072 rule 3, ADR-0666; brief #1586). Each step is one module of the registry `scripts/agk/gates/`
@@ -519,6 +519,15 @@ that the pack's `config` file enables every pinned rule code (the `floor`, rule 
 `python -m ruff format --check` and `python -m mypy`, never through a shell. A finding prints `FAIL gates: standards
 <stack> <step>: <rule> (path class: <glob>)`, a missing tool names the tool and the setting, and a passing pack prints
 `ok standards <stack>`. `lint_paths` and `agk-lint` are unchanged.
+
+The baseline of an adopted project (SPEC-0072 rule 7, ADR-0680; brief #1600): `scripts/agk/gates/baseline.py` keeps
+`config/agk-baseline/<gate id>.txt`, one line `<path> <count>` per file with findings (forward slashes, sorted bytewise),
+for each step that reports per-file counts (`layers`, and the pack's `lint`, `format` and `type`). With the file, the step
+passes while no count exceeds its line (`ok <id> (baseline)`), prints `baseline <id>: a count fell in <n> file(s)` when one
+falls, and fails with one `SPEC-0072 rule 7` line on a new finding or a rising count. Without it, `mode = "adopt"` writes it
+from today's tree and passes; `mode = "init"` writes nothing. `--baseline` writes the missing files and lowers lines, never
+raising one: the owner's yes on an upgrade and the next build's lowering commit. `check_protected_changes.py` lets a
+lowering pass with no ADR and refuses a rise, a new line, a new file or a deleted one unless an ADR names it.
 
 ## Pausing the kit
 
