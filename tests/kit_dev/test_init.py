@@ -101,8 +101,18 @@ def test_ac1_init_has_no_network_or_process_imports():
             names.add(node.module.split(".")[0])
     forbidden = {"subprocess", "socket", "urllib", "http", "ftplib", "smtplib", "requests", "ssl"}
     assert not names & forbidden
-    local = {"common", "reviewers"}
+    local = {"common", "reviewers", "rehearsal"}  # rehearsal: the proof of --layout (ADR-0683)
     assert names <= set(sys.stdlib_module_names) | local
+    proof = ast.parse((INIT.parent / "rehearsal.py").read_text(encoding="utf-8"))
+    used = {
+        a.name.split(".")[0] for n in ast.walk(proof) if isinstance(n, ast.Import) for a in n.names
+    }
+    used |= {
+        n.module.split(".")[0]
+        for n in ast.walk(proof)
+        if isinstance(n, ast.ImportFrom) and n.module
+    }
+    assert used <= set(sys.stdlib_module_names)
 
 
 def test_ac1_symlinked_path_is_refused_and_nothing_written(target, tmp_path):
