@@ -222,7 +222,9 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(rest[1]) if rest else Path.cwd()
     if write:
         return write_record(root)
-    reason = skipped(root)
+    import run_gates  # brief #1666: no playbook found is `not run`, never `ok`
+
+    reason = run_gates.missing(root) or skipped(root)
     if reason:
         print(f"layers: not run: {reason}")
         return 0

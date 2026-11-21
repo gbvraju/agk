@@ -90,14 +90,32 @@ def playbook(root: Path) -> Path | None:
     return playbook_format.default_playbook(root)
 
 
-def unfound(root: Path) -> list[Row]:
-    """Brief #1666 (ADR-0697): no playbook to run is one failure naming the setting, never a
-    silent pass; an installed project that declares nothing and carries no playbook is unchanged."""
+def missing(root: Path) -> str | None:
+    """Brief #1666 (ADR-0697): why no playbook is found, naming `layout`, `work_type` or the path
+    class; None when one is found, or for an installed project that declares nothing and carries
+    no playbook (unchanged)."""
+    try:
+        found = playbook(root)
+    except playbook_format.Refused:
+        found = None
+    if found is not None and found.is_file():
+        return None
     declared = bool(playbook_format.declaration(root)[1])
     if not declared and not playbook_format.clean(root):
-        return []
-    where = f"setting: {playbook_format.WORK_TYPE}" if declared else "path class: config/playbooks/"
-    return [(False, f"playbook: {UNFOUND} ({where})")]
+        return None
+    if playbook_format.layout_problem(root):
+        where = "setting: layout"
+    elif declared:
+        where = f"setting: {playbook_format.WORK_TYPE}"
+    else:
+        where = "path class: config/playbooks/"
+    return f"{UNFOUND} ({where})"
+
+
+def unfound(root: Path) -> list[Row]:
+    """No playbook to run is one failure naming the setting, never a silent pass."""
+    why = missing(root)
+    return [(False, f"playbook: {why}")] if why else []
 
 
 Row = tuple[bool | None | str, str]  # passed (True, False, None: not run) or NOTE, and the line

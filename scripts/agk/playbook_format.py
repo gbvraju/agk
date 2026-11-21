@@ -768,7 +768,18 @@ def declaration(root: Path) -> tuple[str | None, list[str]]:
     """SPEC-0038 rule 5: the declared work type (None when there is none or it is refused) and the
     problems of the declaration, each naming the rule, the file and the setting, never a value."""
     value, problem = _declared(root)
+    problem = problem or layout_problem(root)  # brief #1666: a refused layout, declared or not
     return value, [problem] if problem else []
+
+
+def layout_problem(root: Path) -> str | None:
+    """`kit_root.layout`'s refusal of `[kit] layout`, naming the setting, or None."""
+    try:
+        if kit_root is not None:
+            kit_root.layout(Path(root))
+    except Refused as exc:
+        return str(exc)
+    return None
 
 
 def selected(root: Path) -> Path | None:

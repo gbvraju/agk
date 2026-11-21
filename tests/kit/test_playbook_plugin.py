@@ -26,6 +26,7 @@ import engines  # noqa: E402
 import kit_root  # noqa: E402
 import playbook_format  # noqa: E402
 import run_gates  # noqa: E402
+from gates import layers  # noqa: E402
 
 PLUGIN_BOOKS = KIT_ROOT / "config" / "playbooks"
 WORK_TYPES = sorted(p.stem for p in PLUGIN_BOOKS.glob("*.toml") if p.stem != "default")
@@ -52,8 +53,8 @@ def plugin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket, "create_connection", refuse)
 
 
-def _clean(tmp_path: Path, work_type: str | None, layout: str = "plugin") -> Path:
-    text = f'mode = "init"\n\n[kit]\nlayout = "{layout}"\n'
+def _clean(tmp_path: Path, work_type: str | None, layout: str = "plugin", extra: str = "") -> Path:
+    text = f'mode = "init"\n{extra}\n[kit]\nlayout = "{layout}"\n'
     if work_type:
         text += f'\n[delivery]\nwork_type = "{work_type}"\n'
     (tmp_path / "agk.toml").write_text(text, encoding="utf-8")
@@ -107,13 +108,22 @@ def test_the_installed_layout_is_unchanged(tmp_path: Path) -> None:
     assert found[0].endswith("(setting: work_type)")
 
 
-def test_another_layout_is_refused_naming_layout(tmp_path: Path) -> None:
+def test_another_layout_is_refused_naming_layout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-078: declared or not, the refusal names `layout` and the gates never pass."""
+    _, found = playbook_format.declaration(_clean(tmp_path, None, layout="invented"))
+    assert found == ["kit_root: [kit] layout is neither installed nor plugin (setting: layout)"]
+    assert run_gates.main(["--root", str(tmp_path)]) == 1
+    assert "FAIL gates: playbook: " in capsys.readouterr().out
+    assert check_playbooks.findings(tmp_path) == found
     root = _clean(tmp_path, "web-app", layout="invented")
     _, found = playbook_format.declaration(root)
     assert found == ["kit_root: [kit] layout is neither installed nor plugin (setting: layout)"]
 
 
 def test_an_unknown_work_type_is_refused_as_today(tmp_path: Path) -> None:
+    """REQ-078."""
     root = _clean(tmp_path, "invented-kind")
     _, found = playbook_format.declaration(root)
     assert found and found[0].endswith("(setting: work_type)") and "invented" not in found[0]
@@ -191,3 +201,70 @@ def test_engines_read_the_plugins_playbook(tmp_path: Path) -> None:
     assert engines.playbook_questions(root, "web-app")
     assert engines.playbook_practices(root) is not None
     assert engines.playbook_practices(_clean(tmp_path, None)) is not None
+
+
+def test_the_layers_step_alone_is_not_run_without_a_playbook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-078: run alone, the layers step says `not run` with the setting, never `ok`."""
+    elsewhere = tmp_path / "not-a-plugin"
+    (elsewhere / "a" / "b").mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(elsewhere))
+    monkeypatch.setattr(kit_root, "HERE", elsewhere / "a" / "b")
+    (tmp_path / "project").mkdir()
+    root = _clean(tmp_path / "project", None)
+    assert layers.main(["--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("layers: not run: ") and "(path class: config/playbooks/)" in out
+    _clean(root, "api-service")
+    assert layers.main(["--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("layers: not run: ") and "(setting: work_type)" in out
+    assert "ok layers" not in out
+
+
+def test_the_variable_unset_finds_the_plugin_the_script_sits_in(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REQ-078: `CLAUDE_PLUGIN_ROOT` unset reads the plugin this kit_root.py belongs to."""
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT")
+    assert playbook_format.selected(_clean(tmp_path, "rag-app")) == PLUGIN_BOOKS / "rag-app.toml"
+
+
+def test_a_pin_that_is_not_the_running_plugin_is_refused_naming_it(tmp_path: Path) -> None:
+    """REQ-078: `kit_root.pin_refusal` stops a clean project before any reader runs."""
+    root = _clean(tmp_path, "web-app", extra='version = "0.0.1"\n')
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    (root / "agk.toml").write_text(text + 'plugin_version = "0.0.1"\n', encoding="utf-8")
+    line = kit_root.pin_refusal(root, KIT_ROOT)
+    assert line is not None and line.endswith("(setting: plugin_version)") and "0.0.1" not in line
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        'execution = "local"\n',
+        'execution = "hosted"\n',
+        'review_mode = "solo"\n',
+        'review_mode = "team"\n',
+        '\n[personal]\nforge = "files"\n',  # a personal sidecar's agk.toml, read the same way
+    ],
+)
+def test_execution_review_mode_and_personal_mode_read_the_same(extra: str, tmp_path: Path) -> None:
+    """REQ-078."""
+    root = _clean(tmp_path, "mobile", extra=extra)
+    assert playbook_format.selected(root) == PLUGIN_BOOKS / "mobile.toml"
+    assert run_gates.missing(root) is None
+
+
+def test_a_drafted_playbook_is_read_from_the_project(tmp_path: Path) -> None:
+    """REQ-078: a project-drafted playbook resolves to the project's file; declaring it is
+    refused naming `work_type` as today (`Q-1666-1`)."""
+    root = _clean(tmp_path, "invented-shop")
+    own = root / "config" / "playbooks"
+    own.mkdir(parents=True)
+    (own / "invented-shop.toml").write_text('work_type = "invented-shop"\n', encoding="utf-8")
+    assert playbook_format.folder(root, "invented-shop") == own
+    assert playbook_format.folder(root, "web-app") == PLUGIN_BOOKS
+    _, found = playbook_format.declaration(root)
+    assert found and found[0].endswith("(setting: work_type)")

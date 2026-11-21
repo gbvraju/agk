@@ -21,10 +21,11 @@ type failed `rule 5` for a missing file, and with none declared `run_gates.py` p
    `split`, the modules, `check_playbooks.py`'s composition, `run_gates.playbook`, `gates/layers.py`,
    `gates/python_pack.py` and `engines.py` read through it. A partial copy of the scripts without `kit_root.py` reads
    the project's folder alone.
-2. A refused `[kit] layout` or a missing plugin root is the declaration's problem, naming `layout` or
-   `CLAUDE_PLUGIN_ROOT`, never a value.
-3. No silent pass: with no playbook found, `run_gates.py` fails one line naming `work_type` (or the path class
-   `config/playbooks/` when none is declared); `check_plan.py` prints `not run plan work-type rules: <reason>` and
+2. A refused `[kit] layout`, with a work type declared or not, and a missing plugin root are the declaration's
+   problem, naming `layout` or `CLAUDE_PLUGIN_ROOT`, never a value.
+3. No silent pass: with no playbook found, `run_gates.py` fails one line naming `layout` when it is refused, else
+   `work_type` when one is declared, else the path class `config/playbooks/`; `gates/layers.py` run alone prints
+   `layers: not run: <that reason>`; `check_plan.py` prints `not run plan work-type rules: <reason>` and
    never `ok plan`. An installed project that declares nothing and carries no playbook keeps today's output, so the
    kit's own repository and the installed layout are unchanged.
 4. `check_playbooks.py` checks the project's own playbooks, as today, plus the plugin's file the declaration selects.
@@ -40,5 +41,8 @@ declaration is `check_playbooks.py`'s, so governance still fails once.
 
 ## Residual
 
+- 2026-11-21: declaring a playbook the project drafted (`steward_owner.py draft`) is still refused naming
+  `work_type`, as SPEC-0038 rule 5 reads today; the resolver already reads that file from the project (`Q-1666-1`,
+  due 2027-01-31).
 - 2026-11-21: `steward_owner.py standard` and the other readers that call `selected` follow the resolver with no test of
   their own here; the brief's `Touches:` names only the readers it tests (due 2027-01-31).
