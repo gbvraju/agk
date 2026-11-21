@@ -29,7 +29,10 @@ from gates import python_pack  # noqa: E402
 from config import project_lint_paths  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
-WORK_TYPES = sorted(p.stem for p in PLAYBOOKS.glob("*.toml"))
+# The playbooks that hold the two Python entries, one entry each (brief #1638, the
+# conductor's ruling on brief #1589's `Broad:` line): the base `default.toml` names no tool
+# or version, and a playbook whose own test refuses a tool or a version holds none (Q-1638-1).
+WORK_TYPES = ["api-service", "web-app"]
 CODES = ["E", "F", "I", "B", "UP"]
 VALUES = ("examplelib", "greeting", "app.py", "hello", "unused")
 CLEAN = (
@@ -94,6 +97,15 @@ def test_each_playbook_carries_the_python_pack_pinned_to_ci_tools(work_type: str
         assert entry["rules"] == {"tool": "ruff", "version": _pins("ruff"), "codes": CODES}
         assert entry["config"] == "pyproject.toml"
     assert python_pack.MYPY_VERSION == _pins("mypy")
+
+
+def test_the_base_holds_no_pack_and_the_other_playbooks_none_of_their_own() -> None:
+    """REQ-079 AC4: brief #1638, the pack moved out of `default.toml` (found bug #1636)."""
+    base = (PLAYBOOKS / "default.toml").read_text(encoding="utf-8")
+    assert "standards" not in tomllib.loads(base)
+    for path in sorted(PLAYBOOKS.glob("*.toml")):
+        if path.stem not in WORK_TYPES:
+            assert check_playbooks.standard(path, KIT_ROOT)[1] == [], path.stem
 
 
 def test_a_clean_python_service_passes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

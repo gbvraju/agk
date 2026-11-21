@@ -38,24 +38,6 @@ map = []
 layers = [{ name = "src", paths = ["**"] }]
 allow = []
 
-# The Python standards pack (SPEC-0072 rule 6; brief #1589, ADR-0669), composed into every playbook; it runs only when
-# the Accepted stack record chose Python. `rules` pins ruff from config/ci-tools.txt; the type step's mypy is pinned there too.
-[[standards]]
-stack = "python-pyproject"
-lint = "python-lint"
-format = "python-format"
-type = "python-type"
-config = "pyproject.toml"
-rules = { tool = "ruff", version = "0.17.4", codes = ["E", "F", "I", "B", "UP"] }
-
-[[standards]]
-stack = "python-pip"
-lint = "python-lint"
-format = "python-format"
-type = "python-type"
-config = "pyproject.toml"
-rules = { tool = "ruff", version = "0.17.4", codes = ["E", "F", "I", "B", "UP"] }
-
 [[gates]]
 id = "tests-first"
 kind = "judgement"
