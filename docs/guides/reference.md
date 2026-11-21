@@ -499,6 +499,11 @@ the project's files. `committed-secrets` fails on a tracked secret file, an envi
 secret shape or `[guard] patterns` match, and a value in `.env.example`; `environment-settings` fails on a setting the
 project's Python code reads that `.env.example` does not list, or a required one given a default elsewhere. With
 `mode = "adopt"` both hold their findings.
+`tests_floor.py`, the `tests-floor` step of `default.toml`'s `tests-first` check (brief #1590, ADR-0670), runs in a project
+with a `[delivery] work_type` whose architecture record exists, and fails when the `test_dirs` hold no test file, when the
+integration folder (`<first test_dirs entry>/integration/`) holds none, or when the change adds or changes a layer's code file
+and no test file; a deletion only is green, `mode = "adopt"` holds the first two, and it prints `not run tests-first: no work
+type` (the kit's own repository), `no foundation yet` or `no reader for <stack>`.
 It prints `ok <gate id>` per gate that passes and `FAIL gates: <gate id>: <rule> (path class: <class>)` per failure, never a
 value; a step with no module is refused naming the gate id. It ends `ok gates (<n> check gates)` or `ok gates (no check gate)`.
 A step that cannot read the project prints `not run <gate id>: <reason>`, never `ok`, and the last line adds

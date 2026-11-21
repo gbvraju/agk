@@ -40,7 +40,8 @@ allow = []
 
 [[gates]]
 id = "tests-first"
-kind = "judgement"
+kind = "check"
+step = "tests-floor"
 text = "The tests of a brief land before its code."
 owner_only = false
 

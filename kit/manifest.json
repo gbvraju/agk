@@ -117,6 +117,7 @@
     "scripts/agk/gates/pins.py",
     "scripts/agk/gates/python_pack.py",
     "scripts/agk/gates/rollback_order.py",
+    "scripts/agk/gates/tests_floor.py",
     "scripts/agk/governance_map.py",
     "scripts/agk/guard.py",
     "scripts/agk/guard_logs.py",

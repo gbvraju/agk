@@ -70,7 +70,8 @@ def test_the_playbook_passes_the_check() -> None:
 def test_check_playbooks_passes_with_eleven_playbooks() -> None:
     out = check(KIT_ROOT)
     assert out.returncode == 0, out.stdout
-    gates = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"  # brief #1593
+    gates = "not run tests-first: no work type\nok secrets\nok environment-settings\n"
+    gates += "ok gates (3 check gates; not run: tests-first)\n"  # briefs #1593 and #1590
     assert out.stdout == "ok playbooks (11 playbooks)\n" + gates
 
 
@@ -95,9 +96,12 @@ def test_each_gate_says_what_rule_21_says() -> None:
 
 def test_no_gate_is_a_check_without_an_existing_governance_step() -> None:
     # Q-S0048-29: the existing steps of agk-governance verify none of the five from committed files
-    by_id = {gid: g for gid, g in gates().items() if gid in GATES}
+    # but `tests-first`, a check of its own step since brief #1590 (ADR-0670)
+    by_id = {gid: g for gid, g in gates().items() if gid in GATES and gid != "tests-first"}
     assert {g["kind"] for g in by_id.values()} == {"judgement"}
     assert all("step" not in g for g in by_id.values())
+    assert gates()["tests-first"]["kind"] == "check"
+    assert gates()["tests-first"]["step"] == "tests-floor"
 
 
 def test_no_gate_is_owner_only() -> None:
