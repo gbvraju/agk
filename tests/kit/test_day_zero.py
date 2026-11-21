@@ -61,14 +61,16 @@ def all_files(path: Path) -> list[Path]:
 def test_keep_writes_nothing_before_a_yes(tmp_path, home, empty, capsys):
     """REQ-069 AC1: without the person's yes nothing is kept, anywhere."""
     words = answer(tmp_path, "People who book a table at a small restaurant.")
-    code = day_zero.main(["keep", "--folder", str(empty), "--id", "users", "--answer-file", str(words)])
+    code = day_zero.main(
+        ["keep", "--folder", str(empty), "--id", "users", "--answer-file", str(words)]
+    )
     assert code == 2
     assert "--yes" in capsys.readouterr().err
     assert all_files(home) == [] and all_files(empty) == []
 
 
 def test_keep_writes_only_to_the_claude_folder_named_by_the_folder_hash(tmp_path, home, empty):
-    """REQ-069 AC1: the kept file is the person's, named by rule 8's folder hash, outside the folder."""
+    """REQ-069 AC1: kept only in the person's Claude folder, named by rule 8's folder hash."""
     words = answer(tmp_path, "People who book a table.\nThe restaurant pays.")
     args = ["keep", "--folder", str(empty), "--yes", "--answer-file", str(words)]
     assert day_zero.main([*args, "--id", "users", "--who", "ProductOwner"]) == 0
@@ -155,7 +157,9 @@ def test_a_name_that_is_not_a_repository_name_is_refused_naming_the_setting(bad,
 # --- answer 4: the answers become the first source ------------------------------------------------
 
 
-def test_write_makes_a_source_the_plan_check_accepts_and_removes_the_kept_file(tmp_path, home, empty):
+def test_write_makes_a_source_the_plan_check_accepts_and_removes_the_kept_file(
+    tmp_path, home, empty
+):
     """REQ-069 AC1, SPEC-0043 rule 1: `Kind: other`, the person's words quoted, never rewritten."""
     words = "People who book a table.\n## not a heading\nThe restaurant pays."
     path = answer(tmp_path, words)
@@ -164,7 +168,9 @@ def test_write_makes_a_source_the_plan_check_accepts_and_removes_the_kept_file(t
     assert day_zero.main([*args, "--id", "colour-of-the-logo"]) == 0
     git("init", "-q", "-b", "main", cwd=empty)
     out = tmp_path / "answers.json"
-    code = day_zero.main(["write", "--root", str(empty), "--folder", str(empty), "--answers", str(out)])
+    code = day_zero.main(
+        ["write", "--root", str(empty), "--folder", str(empty), "--answers", str(out)]
+    )
     assert code == 0
     source = empty / "docs" / "sources" / "day-zero.md"
     text = source.read_text(encoding="utf-8")
@@ -184,7 +190,9 @@ def test_write_makes_a_source_the_plan_check_accepts_and_removes_the_kept_file(t
 
 def test_write_never_overwrites_a_source_and_keeps_the_kept_file(tmp_path, home, empty, capsys):
     path = answer(tmp_path, "Restaurants.")
-    day_zero.main(["keep", "--folder", str(empty), "--yes", "--id", "users", "--answer-file", str(path)])
+    day_zero.main(
+        ["keep", "--folder", str(empty), "--yes", "--id", "users", "--answer-file", str(path)]
+    )
     source = empty / "docs" / "sources" / "day-zero.md"
     source.parent.mkdir(parents=True)
     source.write_text("kept by the person\n", encoding="utf-8")
