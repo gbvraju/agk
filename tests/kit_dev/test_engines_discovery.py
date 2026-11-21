@@ -36,8 +36,9 @@ TEN = (
 )
 FIVE = ("constraints", "success", "data-rules", "environments", "non-functional")
 # The SHA-256 and length of `engines.py questions` on the default branch before this build.
-TODAY_SHA = "33699814eaf2861eeb35806b25f31938212c1dfa07c8acd192377eb3e0162cbf"
-TODAY_BYTES = 702
+# Brief #1595 (amendment 203): the `scale` line is the needs question with its recommendation.
+TODAY_SHA = "5bc7efa86b24e1ebec79ebad11037e07e757edd3483f808831b8b77e35d6d158"
+TODAY_BYTES = 882
 
 
 def engines(root, *args):

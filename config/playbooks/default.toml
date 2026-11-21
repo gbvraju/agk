@@ -40,7 +40,8 @@ allow = []
 
 [[gates]]
 id = "tests-first"
-kind = "judgement"
+kind = "check"
+step = "tests-floor"
 text = "The tests of a brief land before its code."
 owner_only = false
 
@@ -146,4 +147,4 @@ text = "Which environments must it run in, from a developer's machine to product
 
 [[discovery]]
 id = "non-functional"
-text = "Which needs of speed, scale, uptime, security and recovery must it meet?"
+text = "Beyond the busiest hour, the downtime and the cost already asked: how soon must it recover after a failure, what must be logged, and which needs of speed and security must it meet?"

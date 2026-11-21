@@ -150,7 +150,7 @@ QUESTIONS = (
     ),
     ("runs", "Where does it run, and must it be portable between places?"),
     ("data", "What data does it store, and for how long?"),
-    ("scale", "What scale is expected, in users, volume and growth?"),
+    ("scale", None),  # the needs question (amendment 203): `NEEDS`, in the app shape's words
     ("compliance", "Which rules, laws or contracts must it meet?"),
     (
         "devices",
@@ -164,6 +164,32 @@ QUESTIONS = (
     ),
 )
 TOPICS = tuple(topic for topic, _ in QUESTIONS)
+# Brief #1595 (amendment 203, ADR-0675): the `scale` topic keeps its id, so every answer given
+# before still passes, and asks the one needs question with its recommended answer. The numbers
+# are invented defaults that ADR-0675 states for the maintainers to accept or change.
+NEEDS = (
+    "Recommended: {usual}, at most one hour down a month, under 50 dollars a month, or tell me"
+    " other numbers. How many {busy}, how long may it be down each month, and what may it cost"
+    " each month?"
+)
+CALLS = ("calls per minute will it take at the busiest hour", "up to 600 calls per minute")
+SHAPES = {
+    "api-service": CALLS,
+    "mcp-server": CALLS,
+    "data-pipeline": (
+        "runs per day will it make, how large is the largest input file (a missed run counts as"
+        " down time)",
+        "up to 24 runs per day and a largest file of 100 MB",
+    ),
+}
+PEOPLE = ("people will use it at the busiest hour", "up to 200 at once")
+
+
+def needs_question(kind: str | None) -> str:
+    busy, usual = SHAPES.get(kind or "", PEOPLE)
+    return NEEDS.format(busy=busy, usual=usual)
+
+
 INSTALLED_PLACEHOLDER = "TODO(maintainers)"
 PLACEHOLDER = re.compile(r"TODO\(owner\)")
 STACK_NAME = re.compile(r"^docs/adr/(\d{4})-stack-options\.md$")
@@ -277,8 +303,9 @@ def playbook_questions(root: Path, kind: str | None) -> list[tuple[str, str]]:
 
 def cmd_questions(root: Path, opts: dict[str, str]) -> int:
     extra = playbook_questions(root, opts.get("work-type"))
+    kind = opts.get("work-type") or declaration(root)[0]
     for topic, question in (*QUESTIONS, *extra):
-        print(f"{topic}\t{question}")
+        print(f"{topic}\t{question or needs_question(kind)}")
     return 0
 
 
@@ -882,6 +909,11 @@ def cmd_stack_files(root: Path) -> int:
         print("stack-files: not run: no stack chosen")
         return 0
     (folder, name, lock, _), _ = found
+    listed = root / "config" / "licences.toml"  # brief #1596 answer 2: written once, never over
+    if not listed.exists():
+        listed.parent.mkdir(parents=True, exist_ok=True)
+        listed.write_bytes((TEMPLATES / "licences.toml").read_bytes())
+        print("wrote config/licences.toml")
     target, variables = root / name, {"project": slug(root.resolve().name)}
     if target.exists():
         mine = TEMPLATES / name

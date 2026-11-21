@@ -53,7 +53,8 @@ def test_check_playbooks_passes_with_eleven_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    gates = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"  # brief #1593
+    gates = "not run tests-first: no work type\nok secrets\nok environment-settings\n"
+    gates += "ok gates (3 check gates; not run: tests-first)\n"  # briefs #1593 and #1590
     assert out.stdout == "ok playbooks (11 playbooks)\n" + gates
 
 

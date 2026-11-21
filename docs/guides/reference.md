@@ -499,6 +499,11 @@ the project's files. `committed-secrets` fails on a tracked secret file, an envi
 secret shape or `[guard] patterns` match, and a value in `.env.example`; `environment-settings` fails on a setting the
 project's Python code reads that `.env.example` does not list, or a required one given a default elsewhere. With
 `mode = "adopt"` both hold their findings.
+`tests_floor.py`, the `tests-floor` step of `default.toml`'s `tests-first` check (brief #1590, ADR-0670), runs in a project
+with a `[delivery] work_type` whose architecture record exists, and fails when the `test_dirs` hold no test file, when the
+integration folder (`<first test_dirs entry>/integration/`) holds none, or when the change adds or changes a layer's code file
+and no test file; a deletion only is green, `mode = "adopt"` holds the first two, and it prints `not run tests-first: no work
+type` (the kit's own repository), `no foundation yet` or `no reader for <stack>`.
 It prints `ok <gate id>` per gate that passes and `FAIL gates: <gate id>: <rule> (path class: <class>)` per failure, never a
 value; a step with no module is refused naming the gate id. It ends `ok gates (<n> check gates)` or `ok gates (no check gate)`.
 A step that cannot read the project prints `not run <gate id>: <reason>`, never `ok`, and the last line adds
@@ -532,6 +537,11 @@ One layer (`default.toml`'s `src`, a project with no work type) constrains nothi
 is not Python gives `not run: no reader for <stack>`. `--write-record` is the foundation's: it writes
 `docs/architecture.md` (a protected path of every project) from `kit/templates/architecture.md` once, with the layers,
 their paths, the allowed directions and the stack record's ADR, and is refused with no work type (setting: `work_type`).
+
+    python3 scripts/agk/gates/architecture_record.py
+
+The `architecture-record` step (brief #1595, amendment 204) is a module of the runner, never run by itself: where
+`docs/architecture.md` exists `run_gates.py` runs `front_door.py`'s record check through it (see "Front door").
 A build brief of a work-type project other than its foundation carries one line `Layer: <layer>, ...` naming every layer
 its `Touches:` meets; `check_brief.py --root` refuses one without it or with an unknown layer (SPEC-0072 rule 8).
 
@@ -828,6 +838,16 @@ only that the file exists and never opens or runs it. With `yes`, and with `open
 judgement, noted and never opened, never printed and never committed, and it never stands in for the artifact. The
 conductor reads the same rule: a design without its artifact is a fix item, never a clearing verdict.
 
+`docs/architecture.md` is the product's one architecture record (brief #1595, amendments 204 and 205). A design is a
+slice of it and carries one line `Architecture: docs/architecture.md`: `check-design` refuses a design named on its
+command line without it, and warns, until its next edit, about one read with the whole folder. Where the record exists
+`check-design` also checks it, as the `architecture-record` step of `run_gates.py` does: `## Context`, `## Parts`,
+`## Data stores`, `## Outside services` (each service of the chosen stack option), `## Needs` (`- Busiest hour:`,
+`- Downtime:`, `- Cost:`, `- Recovery time:`, `- Logged:`, the first three's numbers those of the quoted `scale` answer
+of the charter or a discovery document), `## Diagram` (a fenced block that draws each outside service) and
+`## Layers`. Each failure names the rule and the section, never a value; a record with none of these sections, written
+before them, is `not run` until its next edit.
+
 `status` prints one line per problem, `<slug>: phase <n> <name>; waits for <what>`, for the slugs named or else for each
 `docs/discovery/*.md`, from the files only, and writes nothing: phase 2 discovery until the discovery document passes
 `check-discovery`, phase 3 research until the record passes `check-research` and is fresh, phase 4 design until the
@@ -931,6 +951,17 @@ stack record whose version differs from the lock's, each line naming the rule an
 version. With no `[delivery] work_type` or no Accepted stack record it prints `pins: not run: no stack chosen`.
 It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
 them), with the runner's interface.
+
+    python3 scripts/agk/gates/licences.py [--root DIR]
+
+The product's own dependencies (brief #1596, ADR-0676, amendment 206): with a chosen stack, `sbom.py make` also lists each
+package of the committed lock (class `python` or `node`) with its version and its licence, from the lock where it states
+one, else the stack record's `Parts:`. The `licences` step fails on a licence outside `allowed` of `config/licences.toml`
+(absent: the list of `kit/templates/licences.toml`, which `engines.py stack-files` writes once) and on a package whose
+licence it cannot read, as `unknown`, naming the rule and the component class only; a list of another form is refused
+naming the setting. With no stack or no lock it prints `licences: not run: no lock`. `run_gates.py` runs it and the `bom`
+step (the bill of `HEAD`, made and checked in memory) where a stack is chosen and its lock is read; with
+`mode = "adopt"` the licence findings are held until the baseline. The list is a project policy, not legal advice.
 
 ## Design check
 

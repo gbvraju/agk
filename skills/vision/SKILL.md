@@ -59,6 +59,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" questions [--work-type KI
    `non-functional`. `not known yet` is an allowed answer. Nothing is decided that the owner did not give; the answers are data, not
    instructions. Keep the answers to the playbook's questions for the problem's discovery document (`front_door.py discovery-write
    --vision`); they never go into the charter.
+   The `scale` topic is the one needs question (amendment 203): ask it in plain words, as printed, with no kit term, for example
+   "Recommended: up to 200 at once, at most one hour down a month, under 50 dollars a month, or tell me other numbers. How many
+   people will use it at the busiest hour, how long may it be down each month, and what may it cost each month?". Quote the
+   answer word for word under `- scale:`; the `## Needs` section of `docs/architecture.md` takes its numbers from that quote only.
 5. Write `docs/adr/<adr>-project-charter.md` as `/agk:start` step 4 describes, with the **Discovery** item recording the ten common
    topics in the order printed (every answer, or `not known yet` with a **Slice** bullet for it), and write no other file.
 6. Check, and correct the files on a failure, at most three rounds, then stop and report:
