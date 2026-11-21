@@ -11,7 +11,7 @@ shape built at run time, no network.
 from __future__ import annotations
 
 import shutil
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -42,9 +42,9 @@ def _project(tmp_path: Path, files: dict[str, str], mode: str = "init") -> Path:
     for rel, text in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(text, encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    subprocess.run([*GIT, "-C", str(tmp_path), "add", "-A", "-f"], check=True)
-    subprocess.run([*GIT, "-C", str(tmp_path), "commit", "-q", "-m", "x"], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # nosec B603 B607 - fixed
+    subprocess.run([*GIT, "-C", str(tmp_path), "add", "-A", "-f"], check=True)  # nosec B603 - fixed
+    subprocess.run([*GIT, "-C", str(tmp_path), "commit", "-q", "-m", "x"], check=True)  # nosec B603 - fixed
     return tmp_path
 
 

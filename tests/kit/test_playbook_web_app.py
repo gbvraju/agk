@@ -49,7 +49,8 @@ def test_check_playbooks_passes_on_the_repository() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert re.fullmatch(r"ok playbooks \(\d+ playbooks\)\n", out.stdout)
+    gates = "ok secrets\nok environment-settings\nok gates \(2 check gates\)\n"  # brief #1593
+    assert re.fullmatch(r"ok playbooks \(\d+ playbooks\)\n" + gates, out.stdout)
 
 
 def test_phases_contract_then_mocks_then_two_sides_then_joins() -> None:

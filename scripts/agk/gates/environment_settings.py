@@ -19,12 +19,16 @@ until brief #1600's baseline.
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 from typing import Any
 
-from . import committed_secrets as secrets
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
-load_config = secrets.load_config
+from common import load_config  # noqa: E402
+
+from . import committed_secrets as secrets  # noqa: E402
+
 RULE = "SPEC-0072 rule 2: a setting the code reads is not named or not required as the example says"
 KIT_FOLDERS = ("scripts/agk/", ".claude/")
 
@@ -45,8 +49,9 @@ def reads(tree: ast.AST) -> list[tuple[str, bool]]:
             key = node.slice
         elif isinstance(node, ast.Call) and node.args:
             func = node.func
-            env_get = isinstance(func, ast.Attribute) and func.attr == "get"
-            if _is(func, "getenv") or (env_get and _is(func.value, "environ")):
+            attr = func if isinstance(func, ast.Attribute) and func.attr == "get" else None
+            env_get = attr is not None and _is(attr.value, "environ")
+            if _is(func, "getenv") or env_get:
                 key, default = node.args[0], len(node.args) > 1 or bool(node.keywords)
         if isinstance(key, ast.Constant) and isinstance(key.value, str):
             out.append((key.value, default))

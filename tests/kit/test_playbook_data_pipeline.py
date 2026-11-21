@@ -70,7 +70,8 @@ def test_check_playbooks_passes_with_eleven_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (11 playbooks)\n"
+    gates = "ok secrets\nok environment-settings\nok gates (2 check gates)\n"  # brief #1593
+    assert out.stdout == "ok playbooks (11 playbooks)\n" + gates
 
 
 def test_exactly_the_data_pipeline_gates_of_rule_18() -> None:

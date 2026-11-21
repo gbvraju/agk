@@ -19,7 +19,7 @@ the findings are held until brief #1600's baseline, so nothing existing goes red
 from __future__ import annotations
 
 import re
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 from typing import Any
@@ -42,7 +42,7 @@ SETTING = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$")
 def files(root: Path, *extra: str) -> list[str]:
     """`git ls-files` with EXTRA options, as `/` paths; every file when ROOT is no repository."""
     cmd = ["git", "-C", str(root), "ls-files", "-z", *extra]
-    done = subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603 - fixed argv
+    done = subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603 B607 - fixed argv
     if done.returncode == 0:
         return [f for f in done.stdout.split("\0") if f]
     return [] if extra else [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
