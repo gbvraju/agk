@@ -1,0 +1,1 @@
+- In a clean-layout project the bill of materials lists only the product's own components, and the steward's skill lookup reads its role file from the plugin (brief #1667)
