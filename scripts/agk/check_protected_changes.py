@@ -25,6 +25,11 @@ line `Caps-evidence: scorecard #<issue>:<YYYY-MM-DD> usage <S>/<M>/<L>`, each si
 Brief #1189 (ADR-0505): a head that tracks a file under `.agk/workflow-proposals/` fails, whatever
 ADR it carries, with `apply it with /agk:workflow-apply <pr>`, so a proposed workflow file never
 reaches the default branch.
+
+Brief #1600 (SPEC-0072 rule 7, ADR-0680): a change of a baseline file under
+`config/agk-baseline/` that only lowers or removes lines is no protected change. A line that rises,
+a new line, a new file or a deleted one fails naming the rule and the folder, never a file or a
+count, unless an ADR of the change set names the file's path or the folder.
 """
 
 from __future__ import annotations
@@ -55,6 +60,7 @@ from common import (
     show,
     utf8_output,
 )
+from gates import baseline
 
 NAME = "protected-changes"
 LIST_PATH = "config/protected-paths.txt"
@@ -76,6 +82,37 @@ PROPOSAL_RULE = (
     f"path class '{PROPOSALS}' is still on the head: a proposed workflow file never reaches the "
     "default branch; apply it with /agk:workflow-apply <pr>"
 )
+
+
+BASELINE_RULE = (
+    "SPEC-0072 rule 7: a baseline line rose, was added or was removed without an ADR that names "
+    f"it (path class: {baseline.CLASS})"
+)
+
+
+def baseline_change(root, mb, path: str, status: str) -> str | None:
+    """None for a path that is no baseline file; else "lower" when the change only lowers or
+    removes lines, and "rise" for anything else (a new or deleted file is a rise)."""
+    if not (path.startswith(baseline.CLASS) and path.endswith(".txt")):
+        return None
+    old = show(root, mb, path)
+    if status != "M" or old is None or not (root / path).is_file():
+        return "rise"
+    before = baseline.parse(old)
+    after = baseline.parse((root / path).read_text(encoding="utf-8"))
+    return "rise" if any(n > before.get(p, 0) for p, n in after.items()) else "lower"
+
+
+def baseline_problems(root, mb, changed: dict[str, str]) -> list[str]:
+    """[] unless a baseline file rises and no ADR of the change set names it or the folder."""
+    rises = [p for p, st in changed.items() if baseline_change(root, mb, p, st) == "rise"]
+    adrs = [
+        (root / p).read_text(encoding="utf-8")
+        for p, st in sorted(changed.items())
+        if is_adr(p, st) and (root / p).is_file()
+    ]
+    named = all(any(p in t or baseline.CLASS in t for t in adrs) for p in rises)
+    return [] if named else [BASELINE_RULE]
 
 
 def proposal_problems(root) -> list[str]:
@@ -332,6 +369,8 @@ def main(argv: list[str] | None = None) -> int:
 
     classes: list[str] = []
     for path, status in sorted(changed.items()):
+        if baseline_change(root, mb, path, status) == "lower":
+            continue  # a lowered baseline is no protected change (rule 7)
         for entry in entries:
             if not matches(path, entry):
                 continue
@@ -344,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
             break
 
     always = caps_problems(root, mb, changed, argv) + proposal_problems(root)  # never covered
+    always += baseline_problems(root, mb, changed)
     ok = None
     if not classes:
         ok = f"ok {NAME}"

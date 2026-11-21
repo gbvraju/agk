@@ -103,12 +103,12 @@ def sources(root: Path) -> list[str]:
     return out
 
 
-def problems(root: Path) -> list[tuple[str, str]]:
-    """(rule, path class) of each failure, sorted and once each."""
+def findings(root: Path) -> list[tuple[str, str, str]]:
+    """(file, rule, path class) of each failure: one per disallowed import, one per unread file."""
     layers, allow = architecture(root)
     if len(layers) < 2:
         return []  # one layer constrains nothing (`default.toml`'s `src`)
-    found: set[tuple[str, str]] = set()
+    found: list[tuple[str, str, str]] = []
     for rel in sources(root):
         own = layer_of(rel, layers)
         if own is None:
@@ -116,13 +116,26 @@ def problems(root: Path) -> list[tuple[str, str]]:
         try:
             tree = ast.parse((root / rel).read_bytes())
         except (OSError, SyntaxError, ValueError):
-            found.add((UNREAD, own[1]))
+            found.append((rel, UNREAD, own[1]))
             continue
         for module in targets(rel, tree):
             other = module_layer(module, layers)
             if other and other[0] != own[0] and (own[0], other[0]) not in allow:
-                found.add((RULE, f"{own[1]}; layers: {own[0]} to {other[0]}"))
-    return sorted(found)
+                found.append((rel, RULE, f"{own[1]}; layers: {own[0]} to {other[0]}"))
+    return found
+
+
+def problems(root: Path) -> list[tuple[str, str]]:
+    """(rule, path class) of each failure, sorted and once each."""
+    return sorted({(rule, cls) for _, rule, cls in findings(root)})
+
+
+def counts(root: Path, playbook: dict[str, Any]) -> dict[str, int]:
+    """The runner's baseline interface (brief #1600, ADR-0680): findings per file."""
+    out: dict[str, int] = {}
+    for rel, _, _ in findings(root):
+        out[rel] = out.get(rel, 0) + 1
+    return out
 
 
 def applies(root: Path) -> bool:
