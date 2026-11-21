@@ -282,3 +282,77 @@ def test_usage_and_a_ref_that_does_not_resolve(repo):
     proc = plan(repo, "--base", "no-such-ref")
     assert proc.returncode == 3 and "path class: git ref" in proc.stdout
     assert "no-such-ref" not in proc.stdout
+
+
+STRIPPED = "tests/kit/test_agk_mk.py"
+STRIPPED_WHY = "a kit test file changed (collection in a stripped copy)"
+KIT_TOML = (
+    'default_branch = "main"\ntest_dirs = ["tests"]\ntest_patterns = ["test_*.py"]\n'
+    "project_tests = 'exit 0'\n[testing]\n"
+    'map = [{ code = "app/*.py", tests = ["tests/kit/test_app.py"] }]\n'
+)
+KIT_FILES = {
+    "agk.toml": KIT_TOML,
+    "app/run.py": "# run\n",
+    STRIPPED: "# collects tests/kit in a copy holding scripts/agk and tests/kit\n",
+    "tests/kit/test_app.py": "# app\n",
+    "tests/kit/test_old.py": "# old\n",
+    "tests/kit_dev/test_dev.py": "# dev\n",
+}
+
+
+def regression(repo, files: dict, change: dict) -> dict:
+    repo.commit(files, "base")
+    repo.branch("feature")
+    repo.commit(change, "change")
+    return data(repo, "--base", "main")["regression"]
+
+
+def chosen(found: dict) -> dict[str, str]:
+    return {s["file"]: s["code"] for s in found["selected"]}
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"tests/kit/test_new.py": "# reads a file at import\n"},
+        {"tests/kit/test_old.py": "# changed\n"},
+        {"tests/kit/test_old.py": None},
+    ],
+    ids=["added", "changed", "deleted"],
+)
+def test_a_kit_test_change_selects_the_stripped_copy_collection_test(repo, change):
+    """REQ-016: brief #1648 answers 1 and 3 (added, changed or deleted kit test file)."""
+    found = regression(repo, KIT_FILES, change)
+    assert found["full"] is False
+    assert chosen(found)[STRIPPED] == STRIPPED_WHY
+    out = plan(repo, "--base", "main").stdout
+    assert f"  file: {STRIPPED} ({STRIPPED_WHY}: {next(iter(change))})\n" in out
+
+
+def test_a_kit_dev_change_alone_does_not_select_it(repo):
+    """REQ-016: brief #1648 answer 3 (the stripped copy holds no tests/kit_dev)."""
+    found = regression(repo, KIT_FILES, {"tests/kit_dev/test_dev.py": "# changed\n"})
+    assert STRIPPED not in chosen(found)
+
+
+def test_a_code_change_alone_does_not_select_it(repo):
+    """REQ-016: brief #1648 answer 1 (only a kit test file change selects it)."""
+    found = regression(repo, KIT_FILES, {"app/run.py": "# changed\n"})
+    assert chosen(found) == {"tests/kit/test_app.py": "app/*.py"}
+
+
+def test_a_project_without_tests_kit_selects_nothing_new(repo):
+    """REQ-016: brief #1648 answer 2 (a project using AGK has no tests/kit of its own)."""
+    files = {k.replace("tests/kit/", "tests/unit/"): v for k, v in KIT_FILES.items()}
+    files["agk.toml"] = KIT_TOML.replace("tests/kit/", "tests/unit/")
+    found = regression(repo, files, {"tests/unit/test_new.py": "# new\n"})
+    assert found["selected"] == []
+
+
+def test_a_full_selection_is_unchanged(repo):
+    """REQ-016: brief #1648 answer 3 (a selection already full stays full, with its reason)."""
+    thorough = KIT_TOML.replace("[testing]\n", '[testing]\nprofile = "thorough"\n')
+    files = {**KIT_FILES, "agk.toml": thorough}
+    found = regression(repo, files, {"tests/kit/test_new.py": "# new\n"})
+    assert found["full"] is True and found["reason"] == "profile thorough"
