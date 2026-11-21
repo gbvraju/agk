@@ -50,24 +50,24 @@ allow = [
 
 [[gates]]
 id = "contract-tests"
-kind = "check"
+kind = "judgement"
 text = "Contract tests: the testing map names a test glob for every contract path, and the contract lands before the back end."
-step = "contract-tests"
+reason = "No offline step reads the contract and its test globs yet; brief #1597 builds it (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "secrets"
-kind = "check"
+kind = "judgement"
 text = "No credential, key or token of a caller or a store is committed; each value comes from the environment."
 owner_only = false
-step = "secrets"
+reason = "No offline step scans the committed files yet; brief #1593 builds it (ADR-0666)."
 
 [[gates]]
 id = "environment-settings"
-kind = "check"
+kind = "judgement"
 text = "An address, a limit or a store that differs between environments is read from the environment, never fixed in code."
 owner_only = false
-step = "environment-settings"
+reason = "No offline step reads the code for fixed settings yet; brief #1593 builds it (ADR-0666)."
 
 [[gates]]
 id = "input-validation"

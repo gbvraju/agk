@@ -91,13 +91,17 @@ def composed(root: Path, name: str = "mobile") -> tuple[list[dict], list[str], l
 
 
 NAMED = 'modules = ["web-app"]'
+# SPEC-0072 rule 3 (brief #1586): the runner then refuses the invented step, naming the gate id
+REFUSED = "FAIL gates: {}: SPEC-0072 rule 3: the step has no implementation"
 
 
 def test_a_playbook_with_a_module_passes(tmp_path: Path) -> None:
     root = project(tmp_path, base_files(playbook("mobile", (OWN_GATE,), NAMED)))
     done = run(root)
-    assert done.returncode == 0, done.stdout
-    assert done.stdout.strip() == "ok playbooks (3 playbooks)"
+    assert done.returncode == 1, done.stdout
+    lines = done.stdout.strip().splitlines()
+    assert lines[0] == "ok playbooks (3 playbooks)"
+    assert [line.split(" (path class")[0] for line in lines[1:]] == [REFUSED.format("base-gate")]
 
 
 def test_modules_must_be_a_list_of_names(tmp_path: Path) -> None:
@@ -162,7 +166,9 @@ def test_a_stronger_restatement_replaces_the_gate_in_place(tmp_path: Path) -> No
         ("module-gate", "check"),
     ]
     assert found == []
-    assert run(tmp_path).returncode == 0
+    done = run(tmp_path)
+    assert "FAIL playbooks" not in done.stdout
+    assert REFUSED.format("base-gate") in done.stdout  # no work type: `default` alone runs
 
 
 def test_owner_only_may_be_raised(tmp_path: Path) -> None:

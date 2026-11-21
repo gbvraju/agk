@@ -44,16 +44,16 @@ map = []
 
 [[gates]]
 id = "data-contract"
-kind = "check"
+kind = "judgement"
 text = "A data contract: a contract file names each source and target field with its type, and the testing map names a test glob for it."
-step = "data-contract"
+reason = "No path is named for the data contract yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "reconciliation-declared"
-kind = "check"
+kind = "judgement"
 text = "Row-count and checksum reconciliation: one is declared for every table or stream the contract names."
-step = "reconciliation-declared"
+reason = "No path is named for the reconciliation declarations yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]

@@ -79,16 +79,16 @@ allow = []
 
 [[gates]]
 id = "evaluation-set"
-kind = "check"
+kind = "judgement"
 text = "A versioned evaluation set: the set's file has a version line and invented data only."
-step = "evaluation-set"
+reason = "No path is named for the evaluation set yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
 id = "quality-bars"
-kind = "check"
+kind = "judgement"
 text = "Quality bars: a bar for retrieval and a bar for answers are declared as numbers."
-step = "quality-bars"
+reason = "No path is named for the quality bars yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
@@ -99,9 +99,9 @@ owner_only = false
 
 [[gates]]
 id = "version-pinning"
-kind = "check"
+kind = "judgement"
 text = "Prompt and model version pinning: the pin file names exact versions and no floating alias."
-step = "version-pinning"
+reason = "No path is named for the pin file yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]

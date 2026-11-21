@@ -29,6 +29,11 @@ file is under `docs/adr/` is refused naming the key `allow`; a pack restated for
 drops a held rule code is refused naming the key `standards.rules`. A stack of
 `config/stack-signals.toml` with no `[[standards]]` entry in any playbook is one `warn playbooks:`
 line on stderr, never a failure.
+
+The gate runner (SPEC-0072 rule 3; REQ-079 AC2; brief #1586, ADR-0666): once the playbooks pass,
+the check runs `run_gates.py` in the same process, so every check gate's step runs in the step
+`check_playbooks` of the `governance` job and in `make governance` with no workflow change
+(Q-1586-3), and its exit code is the runner's; with no check gate it adds no line.
 """
 
 from __future__ import annotations
@@ -195,7 +200,9 @@ def cmd_check(root: Path) -> int:
             file=sys.stderr,
         )
     print(f"ok {NAME} ({len(files)} playbooks)" if files else f"ok {NAME} (none)")
-    return 0
+    import run_gates  # here: the runner imports this module
+
+    return run_gates.cmd_check(root, quiet=True)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -30,9 +30,9 @@ map = []
 
 [[gates]]
 id = "role-handoff-contracts"
-kind = "check"
+kind = "judgement"
 text = "Role and handoff contracts: a contract file for each role and each handoff, with tests mapped."
-step = "role-handoff-contracts"
+reason = "No path is named for the role and handoff contracts yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
@@ -43,9 +43,9 @@ owner_only = false
 
 [[gates]]
 id = "cost-latency-budgets"
-kind = "check"
+kind = "judgement"
 text = "Cost and latency budgets: both budgets are declared as numbers."
-step = "cost-latency-budgets"
+reason = "No path is named for the cost and latency budgets yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
