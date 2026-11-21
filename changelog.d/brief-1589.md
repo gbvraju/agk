@@ -1,0 +1,1 @@
+- A Python product's own code is now linted, format-checked and type-checked by the playbook's standards pack once Python is the chosen stack, over the new `project_lint_paths` setting (default: the playbook's layers); a team's own configuration must keep every pinned rule, and a missing tool fails instead of passing (brief #1589)

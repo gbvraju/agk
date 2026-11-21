@@ -107,6 +107,7 @@
     "scripts/agk/gates/cut_over_order.py",
     "scripts/agk/gates/layers.py",
     "scripts/agk/gates/pins.py",
+    "scripts/agk/gates/python_pack.py",
     "scripts/agk/gates/rollback_order.py",
     "scripts/agk/governance_map.py",
     "scripts/agk/guard.py",

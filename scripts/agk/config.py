@@ -68,6 +68,11 @@ table, when today's `auto_start`, `launch_adapter` and `[capacity]` decide for o
 ADR-0628: the launch adapter in `[flow] launch_adapter`'s form, None when unset or ""). An unknown
 key or another value is refused naming `setting: autopilot.<key>`, never the value.
 
+`project_lint_paths(root)` reads the top-level `project_lint_paths` (SPEC-0072 rule 6, brief #1589,
+ADR-0669): the globs of the product code the standards pack reads, None when unset (the pack then
+reads the paths of `[architecture] layers`). Anything but a non-empty list of relative globs is
+refused naming `setting: project_lint_paths`, never the value. `lint_paths` is not changed by it.
+
 `TABLE_KEYS["kit"]` names the `[kit]` table of a clean project (SPEC-0071 rules 2 and 6, briefs
 #1453 and #1455, ADR-0613): `layout` and `plugin_version`, which `kit_root.py` reads; the start
 check is `kit_root.pin_refusal`, run by `common` on import.
@@ -169,6 +174,23 @@ def _guard_table(source: dict) -> dict:
     settings = {"patterns": patterns, **{k: _strings(table, k) for k in GUARD_LISTS}}
     settings["allow_paths"] = [_allow_path(e) for e in allow]
     return settings
+
+
+PROJECT_LINT = "project_lint_paths"
+
+
+def project_lint_paths(root: Path) -> list[str] | None:
+    """SPEC-0072 rule 6: the product globs the pack reads; None when unset (the layers' paths)."""
+    value = config_source(root).get(PROJECT_LINT)
+    if value is None:
+        return None
+    good = isinstance(value, list) and value and all(isinstance(v, str) for v in value)
+    if not good or any(
+        not v.strip() or v.startswith(("/", "\\")) or ":" in v or ".." in re.split(r"[/\\]", v)
+        for v in value
+    ):
+        raise CheckError(f"not an accepted value (setting: {PROJECT_LINT})")
+    return list(value)
 
 
 def guard_settings(root: Path) -> dict:
