@@ -1,5 +1,5 @@
-"""Tests of the `secrets` and `environment-settings` steps (SPEC-0072 rules 2 and 12 build (f);
-REQ-079 AC4; brief #1593, ADR-0673).
+"""Tests of the `committed-secrets` and `environment-settings` steps (SPEC-0072 rules 2 and 12
+build (f); REQ-079 AC4; brief #1593, ADR-0673).
 
 A tracked environment file, an unignored one, a planted fake key, an example settings file with a
 value and a setting the code reads that the example file does not name are each red, naming the
@@ -140,6 +140,6 @@ def test_adopt_mode_holds_the_findings(tmp_path: Path, capsys: pytest.CaptureFix
 
 def test_the_kits_own_tree_is_green() -> None:
     """REQ-079 AC4: the kit's own repository runs `default.toml`'s two checks."""
-    for step in ("secrets", "environment-settings"):
+    for step in ("committed-secrets", "environment-settings"):
         module = run_gates.step_module(step)
         assert module is not None and module.check(KIT_ROOT, {}) == [], step

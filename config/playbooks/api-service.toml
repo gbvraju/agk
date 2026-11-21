@@ -58,7 +58,7 @@ owner_only = false
 [[gates]]
 id = "secrets"
 kind = "check"
-step = "secrets"
+step = "committed-secrets"
 text = "No credential, key or token of a caller or a store is committed; each value comes from the environment."
 owner_only = false
 

@@ -78,7 +78,7 @@ reason = "No step can yet tell which actions of a project need an access check."
 [[gates]]
 id = "secrets"
 kind = "check"
-step = "secrets"
+step = "committed-secrets"
 text = "No credential, key or token is committed; each value comes from the environment."
 owner_only = false
 

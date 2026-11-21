@@ -861,6 +861,12 @@ tests = [
 code = "scripts/agk/run_gates.py"
 tests = ["tests/kit/test_run_gates.py", "tests/kit/test_stop_check_changed.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/gates/committed_secrets.py"
+tests = ["tests/kit/test_gate_secrets_settings.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/gates/environment_settings.py"
+tests = ["tests/kit/test_gate_secrets_settings.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/gates/*.py"
 tests = ["tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
