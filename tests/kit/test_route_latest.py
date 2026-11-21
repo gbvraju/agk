@@ -1,8 +1,8 @@
 """The router reads the latest run of each check (brief 229; SPEC-0032 rules 2 and 7; REQ-039 AC3).
 
 A cancelled or replaced run of a check name never makes a green head look red; a latest run that
-failed still does, and a latest cancelled run reads as not reported (brief #1656, ADR-0690). Commit statuses keep the latest status per context. Saved
-responses as facts; no network, no model.
+failed still does, and a latest cancelled run reads as not reported (brief #1656, ADR-0690).
+Commit statuses keep the latest status per context. Saved responses as facts; no network, no model.
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ def test_1656_local_mode_a_lone_cancelled_proof_reads_the_builder_evidence():
 
 
 def test_1656_required_checks_judge_only_the_listed_names():
-    """REQ-039: brief #1656 answer 3 (`required_checks`): an unlisted cancelled run decides nothing."""
+    """REQ-039: brief #1656 answer 3 (`required_checks`): an unlisted cancelled run is ignored."""
     checks = [run("proof", 10), run("governance", 11), run("extra", 12, "cancelled")]
     assert route.decide({**facts(checks), "required": ["proof", "governance"]}) == "agk:review"
     assert route.decide(facts(checks)) == "agk:ci-running"  # without the setting every run counts
