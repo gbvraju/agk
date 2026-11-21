@@ -297,6 +297,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         ".github/workflows/drift-audit.yml is absent or has no schedule with a cron",
         "restore the file from the kit",
     ),
+    "layout": (
+        "error",
+        "[kit] layout in agk.toml is installed or plugin",
+        "[kit] layout in agk.toml is neither installed nor plugin (setting: layout)",
+        'set [kit] layout = "plugin" in agk.toml, or remove it for the installed layout '
+        "(SPEC-0071 rule 2)",
+    ),
     "drift-workflow-state": (
         "error",
         "the drift-audit workflow (and the product-report workflow, where installed) is active",
@@ -1855,9 +1862,14 @@ def windows_tools_entry(res: Result) -> dict:
     }
 
 
-def drift_file_result(root: Path) -> Result:
+def drift_file_result(root: Path, config: dict | None = None) -> Result:
+    """The drift workflow's schedule; in the clean layout an absent file is `ok`: the drift audit
+    runs from the plugin or not at all (brief #1668, ADR-0695). A present one as ever."""
+    path = root / DRIFT_WORKFLOW
+    if layout_of(config or {}) == "plugin" and not path.exists():
+        return Result("ok", message=" or is absent (layout: plugin)")
     try:
-        text = (root / DRIFT_WORKFLOW).read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return Result("fail")
     lines = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
@@ -1985,11 +1997,18 @@ def kit_results(root: Path, kit_root: Path | None, config: dict) -> tuple[dict[s
         out["kit-version"] = Result("fail")
         return out, kit_version
     files, blocks = installed_files(manifest, mode, config.get("experimental_reviewer") is True)
+    clean = layout_of(config) == "plugin"
+    if clean:  # SPEC-0071 rule 2: only the kept files (brief #1668, ADR-0695)
+        files = [rel for rel in files if clean_kept(rel)]
+        blocks = {rel: style for rel, style in blocks.items() if clean_kept(rel)}
     try:
         sources = (manifest.get("adopt") or {}).get("block_sources") or {}
         kept = {rel: 0 for rel in manifest.get("extendable") or {}}
         missing, differs = compare_tree(root, kit_root, files, blocks, sources, kept)
-    except (OSError, UnicodeDecodeError):
+        if clean:
+            state = clean_claude_state(root, kit_root, kit_version, mode)
+            (missing if state == "missing" else differs).extend([] if state is None else [CLAUDE])
+    except (OSError, UnicodeDecodeError, re.error):
         return {n: Result("cannot-check", "bad-response") for n in names}, kit_version
     return {
         "kit-version": Result("ok"),
@@ -2211,16 +2230,55 @@ def licence_lines(root: Path, today: datetime.date | None = None) -> list[str]:
 # only from the repository; `CLAUDE.md` is the short project file; `LICENSE-AGK`, brief #1419).
 CLEAN_KEEPS = (".gitignore", "CLAUDE.md", "LICENSE-AGK", ".github/PULL_REQUEST_TEMPLATE.md")
 CLEAN_KEEPS_UNDER = (".github/ISSUE_TEMPLATE/",)
+CLEAN_TEMPLATE = "kit/templates/clean-claude.md"
+CLAUDE = "CLAUDE.md"
+LAYOUTS = ("installed", "plugin")
 KIT_IN_REPOSITORY = "warn kit-in-repository: "
+
+
+def layout_of(config: dict) -> object:
+    """`[kit] layout` of agk.toml: `installed` when absent, else the value as written."""
+    kit = config.get("kit")
+    return kit.get("layout", "installed") if isinstance(kit, dict) else "installed"
+
+
+def layout_result(config: dict) -> Result:
+    """The `layout` line (brief #1668, ADR-0695): ok naming the layout, else a fail naming the
+    setting, never the value."""
+    value = layout_of(config)
+    return Result("ok", message=f" (layout: {value})") if value in LAYOUTS else Result("fail")
+
+
+def clean_kept(rel: str) -> bool:
+    """A file of the manifest the clean layout keeps, but the short CLAUDE.md (SPEC-0071 rule 2)."""
+    return rel in CLEAN_KEEPS and rel != CLAUDE or rel.startswith(CLEAN_KEEPS_UNDER)
+
+
+def clean_claude_state(root: Path, kit: Path, version: str, mode: str) -> str | None:
+    """None when CLAUDE.md is the short one of `CLEAN_TEMPLATE` (for init at the top of the file,
+    the project's own rules below it; for adopt as the whole marked block, or as init's when it
+    has no markers), else missing or
+    differs. `{{project}}` is any one-line name; `{{kit_version}}` is the installed version."""
+    path = root / CLAUDE
+    if not path.is_file():
+        return "missing"
+    template = (kit / CLEAN_TEMPLATE).read_text(encoding="utf-8").rstrip("\n") + "\n"
+    parts = template.replace("{{kit_version}}", version).split("{{project}}")
+    pattern = re.compile("[^\n]+".join(re.escape(part) for part in parts))
+    text = lf(path.read_bytes()).decode("utf-8")
+    state, inner = find_block(text, "html") if mode == "adopt" else ("none", None)
+    if state == "ok":
+        return None if pattern.fullmatch(inner or "") else "differs"
+    return None if state == "none" and pattern.match(text + "\n") else "differs"
 
 
 def clean_layout(root: Path) -> bool:
     """True when `[kit] layout = "plugin"` in agk.toml (SPEC-0071 rule 2); unreadable is False."""
     try:
-        kit = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8")).get("kit")
+        config = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, ValueError):
         return False
-    return isinstance(kit, dict) and kit.get("layout") == "plugin"
+    return layout_of(config) == "plugin"
 
 
 def kit_in_repository_lines(root: Path, kit: Path | None = None) -> list[str]:
@@ -2396,7 +2454,8 @@ def run_checks(
     results["placeholder-team-reviewers"] = placeholder_result(root / "config" / "reviewers.yaml")
     results["placeholder-team-codeowners"] = placeholder_result(root / ".github" / "CODEOWNERS")
     results["origin-head"] = origin_head_result(root)
-    results["drift-workflow-file"] = drift_file_result(root)
+    results["layout"] = layout_result(config)
+    results["drift-workflow-file"] = drift_file_result(root, config)
     mode = config.get("pr_mode", "strict")
     results["pr-mode"] = (
         Result("ok", message=f" (mode: {mode})") if mode in ("strict", "flow") else Result("fail")
