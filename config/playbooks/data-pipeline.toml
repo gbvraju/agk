@@ -46,7 +46,7 @@ map = []
 id = "data-contract"
 kind = "judgement"
 text = "A data contract: a contract file names each source and target field with its type, and the testing map names a test glob for it."
-reason = "No path is named for the data contract yet, so no offline step can read it; a reviewer does (ADR-0666)."
+reason = "The data contract is a JSON Schema file under contracts/ (ADR-0677); no offline step compares its fields with the source and target yet, so a reviewer does."
 owner_only = false
 
 [[gates]]

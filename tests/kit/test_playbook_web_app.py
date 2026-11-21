@@ -108,10 +108,10 @@ def test_heavy_step_and_milestone_shape() -> None:
 def test_the_four_web_app_gates_of_rule_10() -> None:
     gates = {g["id"]: g for g in data()["gates"]}
     assert set(gates) == {"contract-tests", "mock-parity", "e2e-smoke", "accessibility"}
-    # judgement with a reason naming brief #1597 since ADR-0666 (SPEC-0072 rule 3, brief #1586)
-    assert gates["contract-tests"]["kind"] == "judgement"
-    assert gates["mock-parity"]["kind"] == "judgement"
-    assert all("#1597" in gates[gid]["reason"] for gid in ("contract-tests", "mock-parity"))
+    # checks again with their steps, brief #1597 (ADR-0677; SPEC-0072 rule 2, the stronger kind)
+    assert gates["contract-tests"]["step"] == "contract-tests" == gates["contract-tests"]["id"]
+    assert gates["mock-parity"]["step"] == "mock-parity" == gates["mock-parity"]["id"]
+    assert gates["contract-tests"]["kind"] == gates["mock-parity"]["kind"] == "check"
     assert gates["e2e-smoke"]["kind"] == "judgement"
     assert gates["accessibility"]["kind"] == "judgement"
     assert all(g["step"] for g in gates.values() if g["kind"] == "check")
