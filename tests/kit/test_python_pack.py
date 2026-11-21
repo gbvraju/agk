@@ -23,15 +23,19 @@ sys.path.insert(0, str(AGK))
 
 import check_playbooks  # noqa: E402
 import run_gates  # noqa: E402
-from common import CheckError, DEFAULT_CONFIG  # noqa: E402
-from config import project_lint_paths  # noqa: E402
+from common import DEFAULT_CONFIG, CheckError  # noqa: E402
 from gates import python_pack  # noqa: E402
+
+from config import project_lint_paths  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
 WORK_TYPES = sorted(p.stem for p in PLAYBOOKS.glob("*.toml"))
 CODES = ["E", "F", "I", "B", "UP"]
 VALUES = ("examplelib", "greeting", "app.py", "hello", "unused")
-CLEAN = '"""A greeting service at example.com."""\n\n\ndef greeting(name: str) -> str:\n    return "hello " + name\n'
+CLEAN = (
+    '"""A greeting service at example.com."""\n\n\n'
+    'def greeting(name: str) -> str:\n    return "hello " + name\n'
+)
 RECORD = """# ADR-0002: stack options
 
 - Status: Accepted
@@ -130,7 +134,9 @@ def test_an_unformatted_file_fails(tmp_path: Path, capsys: pytest.CaptureFixture
     no_values(out)
 
 
-@pytest.mark.parametrize(("tool", "setting"), [("ruff", "standards.rules"), ("mypy", "standards.type")])
+@pytest.mark.parametrize(
+    ("tool", "setting"), [("ruff", "standards.rules"), ("mypy", "standards.type")]
+)
 def test_a_missing_tool_fails_naming_the_tool_and_setting(
     tool: str,
     setting: str,
@@ -164,7 +170,10 @@ def test_a_team_configuration_missing_a_floor_rule_is_refused(
     code, out = gates(root, capsys)
     assert code == 1
     for rule in missing:
-        assert f"floor: SPEC-0072 rule 8: the configuration does not enable the pack's rule {rule} " in out
+        assert (
+            f"floor: SPEC-0072 rule 8: the configuration does not enable the pack's rule {rule} "
+            in out
+        )
     assert out.count("floor:") == len(missing)
 
 
@@ -224,9 +233,14 @@ def test_the_kit_lint_is_unchanged() -> None:
     """REQ-079 AC4: `lint_paths`, `AGK_RUFF_FLAGS` and `agk-lint` stay as they are."""
     assert DEFAULT_CONFIG["lint_paths"] == ["scripts/agk", ".claude/hooks"]
     mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
-    flags = "AGK_RUFF_FLAGS := --isolated --line-length 100 --target-version py311 --select E,F,I,B,UP"
+    flags = (
+        "AGK_RUFF_FLAGS := --isolated --line-length 100 --target-version py311 --select E,F,I,B,UP"
+    )
     assert flags in mk
-    assert "ruff check $(AGK_RUFF_FLAGS) $(wildcard $(shell $(PY) scripts/agk/config.py lint_paths))" in mk
+    assert (
+        "ruff check $(AGK_RUFF_FLAGS) $(wildcard $(shell $(PY) scripts/agk/config.py lint_paths))"
+        in mk
+    )
     assert "project_lint_paths" not in mk
     assert ",".join(CODES) in flags
 

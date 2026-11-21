@@ -18,6 +18,12 @@ never a value; a step with no module is one such line naming the gate id. Ends w
 no hosted scanner, nothing written. From `check_playbooks.py` it prints nothing when no gate is a
 check, so that check's output is unchanged there (the kit's own repository's case).
 `required_checks` is unchanged: it runs inside `governance`.
+
+The standards packs (SPEC-0072 rule 6; brief #1589, ADR-0669): after the gates, each composed
+`[[standards]]` entry whose stack a pack module of `PACKS` serves is run once per module, only when
+that module is `on` (its stack chosen in the Accepted stack record). Its steps print `ok standards
+<stack>` or `FAIL gates: standards <stack> <step>: <rule> (path class or setting)`; a `lint`,
+`format` or `type` step name the module does not hold is refused naming the stack.
 """
 
 from __future__ import annotations
@@ -33,10 +39,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import check_playbooks
 import playbook_format
 from common import repo_root, run, utf8_output
+from gates import python_pack
 
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
 STEP = re.compile(r"^[a-z][a-z0-9-]*$")
+PACKS = (python_pack,)
+STEP_KEYS = ("lint", "format", "type")
+NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
 
 
@@ -74,6 +84,26 @@ def results(root: Path) -> list[tuple[bool, str]]:
         out += [(False, f"{gate['id']}: {module.RULE} (path class: {cls})") for cls in failed]
         if not failed:
             out.append((True, gate["id"]))
+    return out + pack_results(path, root)
+
+
+def pack_results(path: Path, root: Path) -> list[tuple[bool, str]]:
+    """(passed, line) for each standards pack that is on, once per pack module (rule 6)."""
+    out: list[tuple[bool, str]] = []
+    done: set[str] = set()
+    for entry in check_playbooks.standard(path, root)[1]:
+        stack = entry.get("stack")
+        module = next((m for m in PACKS if stack in m.STACKS), None)
+        if module is None or module.__name__ in done or not module.on(root):
+            continue
+        done.add(module.__name__)
+        if tuple(entry.get(k) for k in STEP_KEYS) != module.STEP_NAMES:
+            out.append((False, f"standards {stack}: {NO_PACK_STEP}"))
+            continue
+        steps = module.run(root, entry)
+        out += [(False, f"standards {stack} {step}: {ln}") for step, lines in steps for ln in lines]
+        if not any(lines for _, lines in steps):
+            out.append((True, f"standards {stack}"))
     return out
 
 

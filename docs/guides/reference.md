@@ -490,6 +490,15 @@ with no work type) (SPEC-0072 rule 3, ADR-0666; brief #1586). Each step is one m
 It prints `ok <gate id>` per gate that passes and `FAIL gates: <gate id>: <rule> (path class: <class>)` per failure, never a
 value; a step with no module is refused naming the gate id. It ends `ok gates (<n> check gates)` or `ok gates (no check gate)`.
 
+After the gates it runs the standards pack of the chosen stack (SPEC-0072 rule 6, ADR-0669; brief #1589):
+`scripts/agk/gates/python_pack.py`, for the `python-pyproject` and `python-pip` entries of `[[standards]]`, only when the
+Accepted stack record chose Python. Over the product files of `project_lint_paths` (top level of `agk.toml`; unset: the
+paths of `[architecture] layers`; any other form than a list of relative globs is refused naming the setting) it checks
+that the pack's `config` file enables every pinned rule code (the `floor`, rule 8), then runs `python -m ruff check`,
+`python -m ruff format --check` and `python -m mypy`, never through a shell. A finding prints `FAIL gates: standards
+<stack> <step>: <rule> (path class: <glob>)`, a missing tool names the tool and the setting, and a passing pack prints
+`ok standards <stack>`. `lint_paths` and `agk-lint` are unchanged.
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
