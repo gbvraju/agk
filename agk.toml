@@ -145,6 +145,7 @@ always_full = [
 [[testing.map]]
 code = "scripts/agk/rehearsal.py"
 tests = [
+  "tests/kit/test_clean_init.py",
   "tests/kit/test_rehearsal_proof.py", "tests/kit/test_upgrade_clean_repo.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
@@ -156,6 +157,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/adopt.py"
 tests = [
+  "tests/kit/test_clean_init.py",
   "tests/kit/test_steward_setup.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_reviewers_approvers_install.py",
   "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_project_mk.py", "tests/kit/test_windows_install.py",
@@ -586,6 +588,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/init.py"
 tests = [
+  "tests/kit/test_clean_init.py",
   "tests/kit/test_steward_setup.py",
   "tests/kit/test_architect_guard.py", "tests/kit/test_flakes.py", "tests/kit/test_personal_mode_rules.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_route_triggers.py",

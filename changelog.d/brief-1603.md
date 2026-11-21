@@ -1,0 +1,1 @@
+- `init.py` and `adopt.py` take `--layout plugin [--rehearsal]`: a new or adopted project starts in the clean layout with no kit file but SPEC-0071 rule 2's, `execution = "local"` and the `[kit]` table, refused in personal mode, with another `execution` and until the rehearsal's proof is held (brief #1603, ADR-0683, amendment 211)
