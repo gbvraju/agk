@@ -1157,3 +1157,24 @@ def test_a_known_execution_keeps_github_mode(value):
     """REQ-046: brief #1709 answer 4 `execution` (hosted, hybrid and pool unchanged)."""
     data = {"flow": {"auto_merge": True, "auto_merge_method": "squash"}, "execution": value}
     assert merge_cleared.github_mode(data) is None
+
+
+@pytest.mark.parametrize(
+    "main",
+    [
+        toml(ON, "strict"),
+        toml(ON, "flow"),
+        toml(ON, local=True),
+        toml(ON).replace("[flow]\n", 'review_mode = "solo"\n[flow]\n'),
+        toml(ON).replace("[flow]\n", 'review_mode = "team"\nexecution = "hybrid"\n[flow]\n'),
+        toml(ON + "merge_queue = true\n"),
+        toml(ON + "plan_issue = 661\nconductor_lapse_minutes = 30\n", local=True),
+    ],
+    ids=["strict", "flow", "local", "solo", "team-hybrid", "merge-queue", "lapse"],
+)
+def test_a_strangers_verdict_holds_the_same_under_every_mode(tmp_path, main):
+    """REQ-046: brief #1709 answer 4 (`pr_mode`, `review_mode`, `execution`, `merge_queue` and
+    `conductor_lapse_minutes` do not change who counts)."""
+    proc, made = merge_cleared_run(tmp_path, main, [cleared(login=STRANGER)])
+    assert one_line(proc).endswith(": held: no verdict (rule 3)") and proc.returncode == 3
+    assert not any(c[c.index("--method") + 1] != "GET" for c in made if "--method" in c)
