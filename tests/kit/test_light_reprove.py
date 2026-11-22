@@ -38,6 +38,7 @@ TOP = LINES.replace("line 1", "the branch")  # each side changes its own line: a
 BOTTOM = LINES.replace("line 5", "main")
 REPO = "example/agk"
 REPORT = "merge of main (light re-prove, SPEC-0050 amendment 171)"
+LISTED = ["conductor-example"]  # the trusted verdict authors (brief #1709)
 
 
 def git(root: Path, *args: str) -> str:
@@ -261,7 +262,7 @@ def test_the_merger_carries_the_verdict_to_a_merge_that_adds_nothing(tmp_path):
     merged = update_branch(root, head, main)
     shared = list(session_plan.SHARED_INDEXES)
     assert session_plan.light_merge(root, head, merged, "main", shared)
-    state = merge_cleared.judge_carried(root, [verdict(head)], merged, [], "main", shared)
+    state = merge_cleared.judge_carried(root, [verdict(head)], merged, LISTED, "main", shared)
     assert state == ("cleared", "")
     assert merge_cleared.judge([verdict(head)], merged, ["conductor-example"]) == (
         "held",
@@ -283,7 +284,7 @@ def test_the_merger_holds_when_the_merge_adds_anything_or_the_verdict_is_not_the
         merged = commit(root, {"agk.toml": BOTTOM}, "edit")
         git(root, "checkout", "-q", "main")
     on = main if case == "other-verdict" else head
-    allowed = ["someone-else"] if case == "author" else []
+    allowed = ["someone-else"] if case == "author" else LISTED
     shared = list(session_plan.SHARED_INDEXES)
     state, reason = merge_cleared.judge_carried(
         root, [verdict(on)], merged, allowed, "main", shared
@@ -295,7 +296,7 @@ def test_the_merger_holds_when_the_merge_adds_anything_or_the_verdict_is_not_the
 def test_a_verdict_on_the_head_itself_still_clears_as_before(tmp_path):
     root, head, _ = world(tmp_path, {"agk.toml": TOP}, {"agk.toml": BOTTOM})
     shared = list(session_plan.SHARED_INDEXES)
-    assert merge_cleared.judge_carried(root, [verdict(head)], head, [], "main", shared) == (
+    assert merge_cleared.judge_carried(root, [verdict(head)], head, LISTED, "main", shared) == (
         "cleared",
         "",
     )
@@ -346,7 +347,10 @@ def test_a_covered_fix_list_on_the_old_head_carries_to_its_light_merge(tmp_path)
     assert merge_cleared.judge_carried(
         root, comments, merged, ["conductor-example"], "main", shared
     ) == ("cleared", "")
-    assert merge_cleared.carried_from(root, comments, merged, [], "main", shared) == head
+    assert (
+        merge_cleared.carried_from(root, comments, merged, ["conductor-example"], "main", shared)
+        == head
+    )
     assert merge_cleared.judge_named(root, 1, comments, merged, ["conductor-example"]) == (
         "cleared",
         "",
@@ -395,7 +399,7 @@ def test_a_fix_list_that_is_not_only_adr_finals_or_not_light_never_carries(tmp_p
         return
     merged = update_branch(root, head, main)
     comments = [fix_list(head)]
-    allowed: list[str] = []
+    allowed = ["conductor-example"]
     if case == "numbered":
         comments = [fix_list(head, extra="1. Fix the example.\n")]
     elif case == "requirement":
@@ -424,7 +428,9 @@ def test_a_fix_list_that_is_not_only_adr_finals_or_not_light_never_carries(tmp_p
 def test_the_carry_reads_flow_shared_indexes_of_the_default_branch(tmp_path, indexes, carries):
     toml = BOTTOM if indexes is None else BOTTOM + f"\n[flow]\nshared_indexes = {indexes}\n"
     root, head, _, merged = adr_world(tmp_path, toml)
-    state, reason, named = merge_cleared.judge_named(root, 1, [fix_list(head)], merged, [])
+    state, reason, named = merge_cleared.judge_named(
+        root, 1, [fix_list(head)], merged, ["conductor-example"]
+    )
     assert (state == "cleared") is carries
     assert named == (head if carries else merged)
     if not carries:
@@ -442,7 +448,10 @@ def test_a_carried_head_in_local_mode_still_needs_its_own_evidence(tmp_path):
     root, head, _, merged = adr_world(tmp_path)
     verdict_ = {**fix_list(head), "body": fix_list(head)["body"]
                 + f"Local evidence: {head[:12]} governance passed\n"}  # fmt: skip
-    assert merge_cleared.judge_named(root, 1, [verdict_], merged, [])[0] == "cleared"
+    assert (
+        merge_cleared.judge_named(root, 1, [verdict_], merged, ["conductor-example"])[0]
+        == "cleared"
+    )
     with pytest.raises(merge_cleared.Held, match=r"no local evidence for this head \(rule 4\)"):
         merge_cleared.local_evidence(verdict_, [verdict_], merged, [])
 

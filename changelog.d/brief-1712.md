@@ -1,0 +1,1 @@
+- An MCP server's prompt-injection test set is checked offline: with `work_type = "mcp-server"` and a foundation, the gates fail until a test file sits in `tests/injection/` (under any `test_dirs` entry) and a `[[testing.map]]` entry in `agk.toml` names it. An existing mcp-server project turns red on upgrade until it adds both (brief #1712)

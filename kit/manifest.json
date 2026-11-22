@@ -115,6 +115,7 @@
     "scripts/agk/gates/contract_tests.py",
     "scripts/agk/gates/cut_over_order.py",
     "scripts/agk/gates/environment_settings.py",
+    "scripts/agk/gates/injection_set.py",
     "scripts/agk/gates/layers.py",
     "scripts/agk/gates/licences.py",
     "scripts/agk/gates/mock_parity.py",

@@ -241,6 +241,7 @@ import session_plan  # noqa: E402
 from common import (  # noqa: E402
     CHECKOUT,
     DEFAULT_CONFIG,
+    EXECUTIONS,
     FINAL_ACCEPT,
     MERGED_BY,
     SPEC_RECORD,
@@ -263,10 +264,10 @@ from reviewers import (  # noqa: E402
     approval_shas,
     approvers_of,
     authors_of,
-    conductors_of,
     head_before_comment,
     parse,
     specs_named_approved,
+    trusted_verdict_authors,
 )
 
 EXIT_CLEARED, EXIT_REFUSED, EXIT_HELD, EXIT_UNREADABLE = 0, 1, 3, 4
@@ -357,7 +358,10 @@ ENDED = ("success", *RED)  # a commit status that is no longer `pending`
 STATUS_CONTEXT = "agk/verdict"  # the commit status of a verdict (brief #853)
 STATUS_LIMIT = 140  # characters GitHub takes in a status description (verify)
 OWNER_MERGE = "owner merge"
-OWNER_HOLDS = ("release", "protected class")  # the holds only the owner lifts (brief #1358)
+OWNER_HOLDS = ("release", "protected class", "outside author")  # the owner's (#1358, #1709)
+NO_AUTHOR = "no listed verdict author (rule 3; setting: verdict_authors in config/reviewers.yaml)"
+WRITERS = ("write", "maintain", "admin")  # an author's permission that is not outside (#1709)
+EXECUTION = "execution must be hosted, hybrid, pool or local (setting: execution in agk.toml)"
 OWNER_COMMAND = "python3 scripts/agk/merge_cleared.py --pr {} --owner"  # ADR-0570 decision 2
 WOULD_BE = "would-be merge"  # the result an owner hold reports (brief #1358 answer 1)
 CHECKED_FILE = "agk-would-be-merge.json"  # the results kept per head and default branch
@@ -429,7 +433,7 @@ class Rules(NamedTuple):
 
     data: dict  # agk.toml
     people: dict  # config/reviewers.yaml
-    allowed: list[str]  # conductor_accounts
+    allowed: list[str]  # the trusted verdict authors, before the pull request's own (#1709)
     approvers: list[str]  # spec_approvers
     required: list[str]  # required_checks
     pre: dict | None = None  # [testing] pre_merge_tests, checked (brief #667)
@@ -682,15 +686,25 @@ def latest_verdict(comments: list[dict]) -> dict | None:
     return max(verdicts, key=order) if verdicts else None
 
 
+def trusted(comments: list[dict], allowed: list[str]) -> list[dict]:
+    """COMMENTS without the `Verdict:` comments of a login not in ALLOWED: such a comment is not a
+    verdict, so it neither clears nor hides a listed author's (brief #1709 answer 1)."""
+    names = {a.lstrip("@").lower() for a in allowed}
+    return [c for c in comments if not first_line(c).startswith("Verdict:") or login(c) in names]
+
+
 def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]:
-    """(`cleared`, "") or (`held`, reason) for the latest verdict (SPEC-0039 rule 3)."""
-    verdict = latest_verdict(comments)
+    """(`cleared`, "") or (`held`, reason) for the latest verdict by a trusted author in ALLOWED
+    (SPEC-0039 rule 3); an empty ALLOWED is nobody, never anyone (brief #1709 answer 1)."""
+    if not allowed:
+        return "held", NO_AUTHOR
+    verdict = latest_verdict(trusted(comments, allowed))
     if verdict is None:
         return "held", "no verdict (rule 3)"
     first = first_line(verdict).removesuffix(FALLBACK)  # ADR-0431 decision 3: read as the same
     if first != f"Verdict: cleared {sha}" and accepted_adrs(verdict, sha) is None:
         return "held", "the latest verdict does not clear this head (rule 3)"
-    if allowed and login(verdict) not in allowed:
+    if login(verdict) not in {a.lstrip("@").lower() for a in allowed}:
         return "held", (
             "the verdict's author is not listed "
             "(rule 3; setting: conductor_accounts in config/reviewers.yaml)"
@@ -706,8 +720,8 @@ def carried_from(
     or a covered fix list on OLD whose `Final:` lines only accept ADRs (`accepted_adrs`), OLD is not
     SHA, and SHA is the light re-prove's merge of the default branch DEFAULT into OLD that adds
     nothing beyond the default branch's change (`session_plan.light_merge` with SHARED)."""
-    verdict = latest_verdict(comments)
-    if verdict is None or (allowed and login(verdict) not in allowed):
+    verdict = latest_verdict(trusted(comments, allowed)) if allowed else None
+    if verdict is None:
         return None
     found = CLEARED_LINE.fullmatch(first_line(verdict).removesuffix(FALLBACK))
     old = found.group(1) if found else None
@@ -753,7 +767,7 @@ def judge_named(
     clearing verdict names: SHA, or the old head after a carry). A carry that cannot be read, or a
     `shared_indexes` that is not a list of exact paths, is the plain `judge` (brief #1714)."""
     state, reason = judge(comments, sha, allowed)
-    if state == "cleared" or latest_verdict(comments) is None:
+    if state == "cleared" or not allowed or latest_verdict(trusted(comments, allowed)) is None:
         return state, reason, sha
     try:
         base, data = default_ref(root)
@@ -830,11 +844,43 @@ def reviewers_at(root: Path, sha: str) -> dict:
         ) from None
 
 
-def conductors_in(data: dict) -> list[str]:
+def trusted_in(people: dict, pull: dict | None = None) -> list[str]:
+    """`trusted_verdict_authors` of PEOPLE for the author of PULL (none: the whole list), a bad
+    `conductor_accounts` refused naming the setting (brief #1709 answer 1)."""
     try:
-        return conductors_of(data)
+        return trusted_verdict_authors(people, login(pull or {}))
     except CheckError as err:
         raise Refused(str(err)) from None
+
+
+def trusted_at(root: Path, pull: dict | None = None) -> list[str]:
+    """`trusted_in` of config/reviewers.yaml on the default branch as last fetched, never the
+    head's (brief #1709 answer 4 `default_branch`)."""
+    base, _ = default_ref(root)
+    return trusted_in(reviewers_at(root, base), pull)
+
+
+def execution_setting(data: dict) -> str:
+    """`execution` of agk.toml (absent: `hosted`); any other value is refused naming the setting
+    and never read as GitHub mode (brief #1709 answer 4)."""
+    value = data.get("execution", "hosted")
+    if not isinstance(value, str) or value not in EXECUTIONS:
+        raise Refused(EXECUTION)
+    return value
+
+
+def outside_author(repo: str, pull: dict) -> bool:
+    """Whether PULL comes from outside (brief #1709 answer 2): its head is not a branch of REPO (a
+    fork, or a deleted one), or its author's permission, read with one GET, is not write, maintain
+    or admin; an answer that cannot be read is outside."""
+    head = pull.get("head")
+    source = head.get("repo") if isinstance(head, dict) else None
+    name = source.get("full_name") if isinstance(source, dict) else None
+    author = login(pull)
+    if not isinstance(name, str) or name.lower() != repo.lower() or not author:
+        return True
+    found = read_once(f"repos/{repo}/collaborators/{quote(author)}/permission", dict)
+    return not isinstance(found, dict) or found.get("permission") not in WRITERS
 
 
 def required_of(data: dict) -> list[str]:
@@ -1212,6 +1258,8 @@ def hold_list(
         hold(DRAFT_HOLD)
     if (klass := protected_class(files)) is not None:
         hold(f"protected class {klass} (rule 5)", True)
+    if outside_author(repo, pull):  # brief #1709 answer 2: the owner reads it first
+        hold("outside author (rule 5)", True)
     if held_label(pull):
         hold("hold label (rule 5)")
     if QUESTION_LABEL in labels_of(pull):  # an open owner ask (amendment 170, brief #1134)
@@ -2072,7 +2120,10 @@ def github_mode(data: dict) -> None:
         raise Nothing(str(err)) from None
     if state != "on":
         raise Nothing(f"auto-merge is off ({SETTING.format('auto_merge')})")
-    if data.get("execution") == "local":
+    value = data.get("execution", "hosted")
+    if not isinstance(value, str) or value not in EXECUTIONS:  # brief #1709 answer 4
+        raise Nothing(EXECUTION)
+    if value == "local":
         raise Nothing("local mode: the conductor merges (setting: execution in agk.toml)")
     if data.get("forge") == "files":
         raise Nothing("personal mode merges nothing (setting: forge in agk.toml)")
@@ -2207,7 +2258,8 @@ def event_main(path: str, name: str, root: Path) -> int:
         issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
         if titled(issues, RECORD_TITLE):
             raise Nothing("local mode: the conductor merges (the local-mode record issue is open)")
-        state, reason = judge_head(root, number, read_comments(repo, number), sha, [])
+        allowed = trusted_at(root)  # brief #1709: a stranger's comment starts nothing
+        state, reason = judge_head(root, number, read_comments(repo, number), sha, allowed)
         if state != "cleared":
             raise Nothing(f"#{number} not cleared: {reason}")
     except Nothing as err:
@@ -2237,7 +2289,7 @@ def lapse_rule(data: dict) -> bool:
         return False
     if lapse_setting(data) is None:
         return False
-    github_mode({**data, "execution": ""})  # auto-merge on, not personal mode
+    github_mode({**data, "execution": "hosted"})  # auto-merge on, not personal mode
     return True
 
 
@@ -2308,7 +2360,7 @@ def sweep_allows(data: dict, lapse: bool = False) -> bool:
     if data.get("paused") is True:
         raise Nothing("paused (setting: paused in agk.toml on the default branch)")
     if data.get("execution") == "local":
-        github_mode({**data, "execution": ""})  # the other settings still decide
+        github_mode({**data, "execution": "hosted"})  # the other settings still decide
         return lapse
     github_mode(data)
     return True
@@ -2364,10 +2416,14 @@ def sweep_one(
     sha = str(head.get("sha") if isinstance(head, dict) else "")
     prefix = f"merge-cleared #{number} {sha[:12]}:"
     try:
-        comments = read_comments(repo, number)
-        state, why = judge_head(root, number, comments, sha, [])
+        allowed = trusted_at(root, pull)  # brief #1709 answer 1
+        comments = trusted(read_comments(repo, number), allowed)
+        state, why = judge_head(root, number, comments, sha, allowed)
     except Unreadable as err:
         print(f"{prefix} not read: GitHub cannot be read ({err})")
+        return tried, False
+    except Refused as err:
+        print(f"{prefix} not cleared: {err}")
         return tried, False
     if state != "cleared":
         print(f"{prefix} not cleared: {why}")
@@ -2578,8 +2634,9 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
     head = pull.get("head")
     if not isinstance(head, dict) or head.get("sha") != sha:
         raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
-    comments = read_comments(repo, number)
-    state, reason, named = judge_named(root, number, comments, sha, rules.allowed)
+    allowed = trusted_in(rules.people, pull)  # brief #1709 answer 1
+    comments = trusted(read_comments(repo, number), allowed)
+    state, reason, named = judge_named(root, number, comments, sha, allowed)
     if state != "cleared":
         return "pending", verdict_reason(comments, sha, reason)
     accepts = accepted_adrs(latest_verdict(comments) or {}, named) or []
@@ -2749,8 +2806,9 @@ def ruled(root: Path, owner: bool = False) -> Rules:
             raise Refused(str(err)) from None
     if data.get("paused") is True:
         raise Held("paused (rule 5; setting: paused in agk.toml on the default branch)")
+    execution_setting(data)  # brief #1709 answer 4: never a malformed mode
     people = reviewers_at(root, base)
-    allowed = conductors_in(people)
+    allowed = trusted_in(people)
     approvers = approvers_of(people)
     required = required_of(data)
     after_merge_seconds(data)  # a bad setting is refused before anything is merged
@@ -2790,8 +2848,9 @@ def holds(
         raise Unreadable("the pull request")
     if head_sha != sha:
         raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
-    comments = read_comments(repo, number)
-    state, reason, named = judge_named(root, number, comments, sha, rules.allowed)
+    allowed = trusted_in(rules.people, pull)  # brief #1709 answer 1
+    comments = trusted(read_comments(repo, number), allowed)
+    state, reason, named = judge_named(root, number, comments, sha, allowed)
     if state != "cleared":
         raise NotCleared(reason)
     verdict = latest_verdict(comments) or {}

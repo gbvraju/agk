@@ -644,6 +644,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/launch.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_agent_named.py",
   "tests/kit/test_autopilot_adapter.py",
   "tests/kit/test_autopilot_build_jobs.py",
@@ -679,6 +680,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_merge_cleared_clean.py",
   "tests/kit/test_merger_lapse.py",
   "tests/kit/test_merger_spec_record.py",
@@ -893,6 +895,9 @@ tests = ["tests/kit/test_gate_secrets_settings.py", "tests/kit/test_run_gates.py
 code = "scripts/agk/gates/environment_settings.py"
 tests = ["tests/kit/test_gate_secrets_settings.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/gates/injection_set.py"
+tests = ["tests/kit/test_gate_injection_set.py", "tests/kit/test_playbook_mcp_server.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/gates/tests_floor.py"
 tests = ["tests/kit/test_tests_floor.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
@@ -961,6 +966,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/reviewers.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_agent_apps.py", "tests/kit/test_agk_mk.py", "tests/kit/test_approve_short.py",
   "tests/kit/test_approved_spec_not_draft.py", "tests/kit/test_check_kit_tests.py",
   "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py",
@@ -974,6 +980,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_who_line.py", "tests/kit/test_github_read_budget.py",
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_route_owner_ask.py",
@@ -1018,6 +1025,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_guard_plugin_forms.py",
   "tests/kit/test_route_owner_ask.py",
   "tests/kit/test_entry_points_refuse.py",
@@ -1102,6 +1110,7 @@ tests = ["tests/kit/test_steward_onboarding.py", "tests/kit_dev/test_kit_manifes
 [[testing.map]]
 code = ".claude/hooks/steward_guard.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_kit_in_repository.py", "tests/kit/test_steward_guard.py", "tests/kit/test_steward_outbound_guard.py", "tests/kit/test_kit_defect_report.py",
   "tests/kit/test_guard_plugin_forms.py",
 ]
@@ -1111,6 +1120,7 @@ tests = ["tests/kit/test_architect_guard.py", "tests/kit/test_guard_plugin_forms
 [[testing.map]]
 code = ".claude/hooks/conductor_guard.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_guard_confirmed.py", "tests/kit/test_conductor_guard_issue.py",
   "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
@@ -1135,6 +1145,7 @@ tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py
 [[testing.map]]
 code = "scripts/agk/steward_owner.py"
 tests = [
+  "tests/kit/test_injection_set.py",
   "tests/kit/test_standard_confirm.py", "tests/kit/test_steward_owner_approve.py",
   "tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py",
   "tests/kit/test_autopilot_supervisor.py", "tests/kit/test_kit_defect_report.py",
@@ -1312,6 +1323,9 @@ tests = ["tests/kit/test_setup_windows.py", "tests/kit_dev/test_kit_manifest.py"
 [[testing.map]]
 code = "scripts/agk/wsl_setup.ps1"
 tests = ["tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py", "tests/kit/test_autopilot_wsl.py"]
+[[testing.map]]
+code = "tests/kit/injection_fixtures.py"
+tests = ["tests/kit/test_injection_set.py"]
 [[testing.map]]
 code = "skills/**"
 tests = [

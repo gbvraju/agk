@@ -38,7 +38,7 @@ from test_session_plan_reads import Double  # noqa: E402
 PLANTED = "-".join(("planted", "example", "value"))  # invented, built from parts
 EP = "repos/acme/widgets/issues/7"
 BODY = {"number": 7, "title": "example"}
-MERGE_READS = 8  # measured on the recorded cleared merge (brief #1336 answer 4)
+MERGE_READS = 9  # measured (brief #1336 answer 4), plus the permission read (brief #1709)
 
 
 class Answer:
