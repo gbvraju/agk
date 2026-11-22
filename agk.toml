@@ -1133,7 +1133,7 @@ tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py
 [[testing.map]]
 code = "scripts/agk/steward_owner.py"
 tests = [
-  "tests/kit/test_standard_confirm.py",
+  "tests/kit/test_standard_confirm.py", "tests/kit/test_steward_owner_approve.py",
   "tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py",
   "tests/kit/test_autopilot_supervisor.py", "tests/kit/test_kit_defect_report.py",
 ]

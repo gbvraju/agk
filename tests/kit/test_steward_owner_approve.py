@@ -25,6 +25,7 @@ MOVED = "b" * 40
 LINK = "https://example.com/acme/widgets/pull/7"
 ASK = "The login page is built and every check passed. Shall I approve it? I recommend yes."
 AT = "2026-11-22T04:05Z"
+SOLO = 'review_mode = "solo"\n'
 
 
 class GitHub:
@@ -49,7 +50,7 @@ class GitHub:
 
 @pytest.fixture
 def root(tmp_path, monkeypatch):
-    (tmp_path / "agk.toml").write_text('review_mode = "solo"\n', encoding="utf-8")
+    (tmp_path / "agk.toml").write_text(SOLO, encoding="utf-8")
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "state" / "memory.json"))
     monkeypatch.delenv("AGK_STEWARD_START", raising=False)
     monkeypatch.setattr(steward_owner.session, "repo_name", lambda root: REPO)
@@ -139,7 +140,7 @@ def test_req069_an_approve_form_is_printed_ready_to_paste_and_never_posted(root,
     code, lines = approve(base)
     assert code == 0 and len(gh.bodies) == 1  # only the question
     assert lines[0].startswith("paste on #7") and line in lines and "Who: ProductOwner" in lines
-    assert any(x.startswith('Owner said (') for x in lines)
+    assert any(x.startswith("Owner said (") for x in lines)
 
 
 def test_req069_a_confirmation_is_printed_with_the_quotes_before_shown(root):
@@ -202,15 +203,15 @@ def test_req069_a_stale_ask_is_refused_by_the_age_setting(root):
     ask(base, f"Maintainer answer: accept {HEAD}", minutes=24 * 60 + 1)
     code, lines = approve(base)
     assert code == 2 and "owner_wait_minutes" in lines[0]
-    (base / "agk.toml").write_text("[flow]\nowner_wait_minutes = 30\n", encoding="utf-8")
+    (base / "agk.toml").write_text(SOLO + "[flow]\nowner_wait_minutes = 30\n", encoding="utf-8")
     ask(base, f"Maintainer answer: accept {HEAD}", minutes=121)
     assert approve(base)[0] == 2
     ask(base, f"Maintainer answer: accept {HEAD}", minutes=119)
     assert approve(base)[0] == 0
-    (base / "agk.toml").write_text("[flow]\nowner_wait_minutes = 0\n", encoding="utf-8")
+    (base / "agk.toml").write_text(SOLO + "[flow]\nowner_wait_minutes = 0\n", encoding="utf-8")
     ask(base, f"Maintainer answer: accept {HEAD}", minutes=60)
     assert approve(base)[0] == 0
-    (base / "agk.toml").write_text('[flow]\nowner_wait_minutes = "x"\n', encoding="utf-8")
+    (base / "agk.toml").write_text(SOLO + '[flow]\nowner_wait_minutes = "x"\n', encoding="utf-8")
     ask(base, f"Maintainer answer: accept {HEAD}")
     code, lines = approve(base)
     assert code == 2 and "owner_wait_minutes" in lines[0] and '"x"' not in lines[0]
@@ -290,7 +291,7 @@ def test_req069_personal_mode_prints_the_confirm_command_and_posts_nothing(root)
     """REQ-069 AC7: rule 16, personal mode: nothing read or posted, the terminal command printed,
     the Decision to the sidecar memory."""
     base, records, gh = root
-    (base / "agk.toml").write_text('[personal]\nforge = "files"\n', encoding="utf-8")
+    (base / "agk.toml").write_text(SOLO + '[personal]\nforge = "files"\n', encoding="utf-8")
     code, lines = steward_owner.ask_target(
         base, "Q-7-1", "rec-3", ASK, write(base, "l.txt", "Maintainer answer: Q-7-1 go\n"), NOW
     )

@@ -6,6 +6,8 @@
 rules 2, 5, 10 and 14; brief #1322, ADR-0559).
 
 Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
+       python3 scripts/agk/steward_owner.py ask --target pr:N --qid Q --file FILE --line FILE
+       python3 scripts/agk/steward_owner.py approve --ask Q --said FILE --at TIME [--by LOGIN]
        python3 scripts/agk/steward_owner.py relay --qid Q --on N --answer TEXT --said FILE --at TIME
                                            [--conductor ID]
        python3 scripts/agk/steward_owner.py park --pr N [--conductor ID]
@@ -61,6 +63,12 @@ applied` (exit 1); `ready` is `not ready` without it while a work type is declar
 records the web-research permission and, only on a yes, prints `search: <TEXT>` for a generic
 description (exit 2 for anything else). `draft` writes the project playbook (`front_door.py
 derive-write`) and its Proposed ADR, never `[delivery] work_type`.
+
+Brief #1690 (SPEC-0062 rules 13, 14 and 16, ADR-0703): `ask --target pr:N --line FILE` pins the
+pull request's full head and the exact line to write as the session's one open ask; `approve`
+takes the person's yes to that latest open ask, re-reads the head, and posts a `Maintainer answer:`
+form with `Owner said`, `Asked` and `Who: ProductOwner`, or prints an `Approve:` or `Confirmed:`
+body ready to paste; anything else posts nothing.
 """
 
 from __future__ import annotations
@@ -73,7 +81,7 @@ import re
 import subprocess  # nosec B404 - one fixed argument list (`gh api rate_limit`), no shell
 import sys
 import tomllib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -639,14 +647,247 @@ def reads(root: Path, session_id: str | None, refused: bool) -> tuple[int, list[
     return 1, [line]
 
 
+# --- the one-yes approval: one pinned ask, the exact line on a yes (brief #1690, ADR-0703) -------
+
+APPROVE_RULE = "SPEC-0062 rule 13"
+BACKSTOP = re.compile(r"\?|\b(?:but|if|except|unless|change|not|later)\b", re.IGNORECASE)
+NOT_YET = re.compile(r"not yet[.!]?", re.IGNORECASE)
+TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z")
+SHA = re.compile(r"\b[0-9a-f]{40}\b")
+TARGET = re.compile(r"(?:pr:)?(\d+)")
+NEVER = re.compile(r"(?:Merge|Verdict|Final|Correction):")
+POSTED = (  # (form, pattern): the Maintainer answer forms, which count by login
+    ("answer", re.compile(r"Maintainer answer: (Q-\d+-\w+) \S.*")),
+    ("accept", re.compile(r"Maintainer answer: accept ([0-9a-f]{40})")),
+    ("amendment", re.compile(r"Maintainer answer: amendment \d+ approved")),
+)
+PRINTED = (  # an app-marked approval approves nothing (ADR-0661 decision 8): printed to paste
+    ("spec", re.compile(r"Approve: ([0-9a-f]{40}) SPEC-\d{4}")),
+    ("signoff", re.compile(r"Approve: (?:design|inventory|plan|scope) .*\b([0-9a-f]{40})")),
+)
+DAY = timedelta(hours=24)
+
+
+def asks_file(root: Path) -> Path:
+    """The session's own pending asks, beside the memory cache (never a tracked file)."""
+    return steward.cache_file(root).with_name("agk-steward-asks.json")
+
+
+def load_asks(root: Path) -> list[dict]:
+    path = asks_file(root)
+    if not path.exists():
+        return []
+    try:
+        found = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        found = None
+    if not isinstance(found, list):
+        raise CheckError("the pending ask cannot be read (setting: the steward's ask state)")
+    return found
+
+
+def save_asks(root: Path, asks: list[dict]) -> None:
+    path = asks_file(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(asks), encoding="utf-8")
+
+
+def line_form(root: Path, qid: str, text: str, head: str | None) -> str | None:
+    """The form of the asked line, or None when this command never writes it."""
+    lines = text.replace("\r\n", "\n").strip().splitlines()
+    if not lines or NEVER.match(lines[0]):
+        return None
+    if lines[0].startswith("Confirmed:"):
+        named = head is None or head in SHA.findall(text)
+        shown = any(x.startswith("Shown:") for x in lines)
+        return "confirmed" if named and shown else None
+    if len(lines) != 1:
+        return None
+    for form, pattern in (*POSTED, *PRINTED):
+        if found := pattern.fullmatch(lines[0]):
+            if form == "answer" and found[1] != qid:
+                return None
+            if form in ("accept", "spec", "signoff") and head and found[1] != head:
+                return None
+            return form
+    return None
+
+
+def pull_state(root: Path, number: int) -> tuple[str, str, str]:
+    """(state, full head, link) of pull request N, read with one GET."""
+    repo = session.repo_name(root)
+    pull = session.gh(f"repos/{repo}/pulls/{number}")
+    if not isinstance(pull, dict) or not isinstance(pull.get("head"), dict):
+        raise steward.Unreadable(f"#{number}")
+    link = pull.get("html_url") or f"https://github.com/{repo}/pull/{number}"
+    return str(pull.get("state")), str(pull["head"].get("sha")), link
+
+
+def ask_target(
+    root: Path, qid: str, target: str, text: str, line_file: Path, now: datetime
+) -> tuple[int, list[str]]:
+    """Rule 13: one plain question about one pull request head, pinned and recorded."""
+    sentence = text.strip()
+    if problem := question_problem(sentence) or (None if QID.fullmatch(qid) else "refused: Q id"):
+        return 2, [problem]
+    personal = personal_table(root) is not None
+    number = TARGET.fullmatch(target)
+    if not personal and not number:
+        return 2, [f"refused: the target is one pull request, pr:<n> (setting: --target, {RULE})"]
+    head = link = None
+    if not personal:
+        state, head, link = pull_state(root, int(number[1]))
+        if state != "open":
+            return 2, [f"refused: the target is closed ({APPROVE_RULE})"]
+    line = line_file.read_text(encoding="utf-8").replace("\r\n", "\n").strip()
+    form = line_form(root, qid, line, head)
+    if form is None:
+        return 2, [f"refused: not a line this command writes (setting: --line, {APPROVE_RULE})"]
+    if form == "confirmed" and review_mode(root) == "team":
+        return 2, ["refused: `Confirmed:` is never written in team mode (setting: review_mode)"]
+    try:
+        asks = load_asks(root)
+    except CheckError as exc:
+        return 2, [f"refused: {exc}"]
+    pinned = f" (pinned {head} {link})" if head else ""
+    code, said = steward.record(root, "Owner question", f"{qid} {sentence}{pinned}", steward.gh_api)
+    if code:
+        return code, said
+    for old in asks:  # one open ask stands: the newer closes every older one
+        old["open"] = False
+    asks.append({"id": qid, "target": target, "number": int(number[1]) if number else None,
+                 "head": head, "link": link, "question": sentence, "line": line,
+                 "form": form, "at": steward.stamp(now), "open": True})  # fmt: skip
+    save_asks(root, asks)
+    asked = f"Question: {qid} for the maintainers: {sentence}"
+    if personal:
+        return 0, [f"ask the person: {sentence}", f"post: {asked}", *said]
+    post(session.repo_name(root), int(number[1]), f"{asked}\n\n{STEWARD_WHO}")
+    return 0, [f"ask the person: {sentence}", f"asked on #{number[1]}", *said]
+
+
+def age_limit(root: Path) -> timedelta:
+    """Q-1690-2: four times `[flow] owner_wait_minutes`, 24 hours when unset or 0."""
+    from config import config_source, owner_wait_settings
+
+    minutes = owner_wait_settings(root)["minutes"]  # refuses a bad value naming the setting
+    flow = config_source(root).get("flow", {})
+    if not isinstance(flow, dict) or "owner_wait_minutes" not in flow or not minutes:
+        return DAY
+    return timedelta(minutes=4 * minutes)
+
+
+def approve_body(ask: dict, words: str, at: str) -> str:
+    quotes = [
+        f'Owner said ({at}): "{words}"',
+        f'Asked ({ask["at"]}): "{ask["question"]}" {ask["link"]}',
+    ]
+    lines = ask["line"].splitlines()
+    shown = next((i for i, x in enumerate(lines) if x.startswith("Shown:")), len(lines))
+    return "\n".join([*lines[:shown], *quotes, *lines[shown:], OWNER_WHO]) + "\n"
+
+
+def approve(
+    root: Path, qid: str, words_file: Path, at: str, by: str | None, now: datetime
+) -> tuple[int, list[str]]:
+    """Rule 13: on the person's yes to the latest open ask, the exact line, else nothing."""
+    import steward_voice
+    from guard import scan_text
+
+    from config import guard_patterns
+
+    if not TIME.fullmatch(at):
+        return 2, [
+            f"refused: the reply time is UTC, YYYY-MM-DDTHH:MMZ (setting: --at, {APPROVE_RULE})"
+        ]
+    code, refusal, words = yes_of(root, words_file, by)
+    if refusal:
+        return code, [refusal]
+    words = " ".join(words.split())
+    if len(words_file.read_text(encoding="utf-8").strip().splitlines()) != 1:
+        return 2, [f"refused: the person's words are one line, verbatim ({APPROVE_RULE})"]
+    try:
+        asks = load_asks(root)
+        limit = age_limit(root)
+    except CheckError as exc:
+        return 2, [f"refused: {exc}"]
+    open_asks = [x for x in asks if x.get("open")]
+    if not open_asks or open_asks[-1].get("id") != qid:
+        return 2, [f"refused: not the session's latest open ask; ask again ({APPROVE_RULE})"]
+    ask = open_asks[-1]
+    asked = datetime.strptime(ask["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC)
+    if at[:16] + "Z" < ask["at"]:
+        return 2, [f"refused: the reply is older than the ask; ask again ({APPROVE_RULE})"]
+    if now - asked > limit:
+        return 2, ["refused: the ask is too old; ask again (setting: [flow] owner_wait_minutes)"]
+    if findings := scan_text(words, guard_patterns(root)):
+        classes = ", ".join(sorted({f.kind for f in findings}))
+        return 2, [f"refused: the words hold {classes} (setting: [guard]; data guard, SPEC-0042)"]
+    if NOT_YET.fullmatch(words):
+        steward.record(root, "Decision", f'{qid}: not yet, the person said "{words}" at {at}',
+                       steward.gh_api)  # fmt: skip
+        return 1, ["not yet: recorded, nothing posted"]
+    if BACKSTOP.search(words):
+        return 2, ["refused: a question or a condition is not a yes; a change is a new decision,"
+                   " asked again (SPEC-0062 rule 14)"]  # fmt: skip
+    if not steward_voice.is_yes(words):
+        return 1, ["not a yes: nothing posted; ask again in other words (SPEC-0062 rule 14)"]
+    if personal_table(root) is not None:
+        ask["open"] = False
+        save_asks(root, asks)
+        steward.record(root, "Decision", f'{qid}: yes, the person said "{words}" at {at}',
+                       steward.gh_api)  # fmt: skip
+        return 0, [
+            "run in your own terminal:",
+            f"python3 scripts/agk/personal.py confirm {ask['target']}",
+        ]
+    state, head, _ = pull_state(root, ask["number"])
+    if state != "open":
+        return 2, [f"refused: the target is closed; nothing posted ({APPROVE_RULE})"]
+    if head != ask["head"]:
+        return 2, [f"refused: the head moved since the ask; ask again ({APPROVE_RULE})"]
+    body = approve_body(ask, words, at)
+    ask["open"] = False
+    save_asks(root, asks)
+    if ask["form"] in ("spec", "signoff", "confirmed"):
+        return 0, [f"paste on #{ask['number']} ({ask['link']}):", *body.splitlines()]
+    link = post_file(root, ask["number"], body)
+    steward.record(root, "Decision", f'{qid}: approved on #{ask["number"]} at {head} because the'
+                   f' person said "{words}" at {at} {link}', steward.gh_api)  # fmt: skip
+    return 0, [f"posted on #{ask['number']}: {body.splitlines()[0]}"]
+
+
+def post_file(root: Path, number: int, body: str) -> str:
+    """Post BODY with `-F body=@<file>` (UTF-8, LF), the file kept beside the ask state."""
+    folder = asks_file(root).parent
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"agk-steward-approve-{number}.md"
+    path.write_bytes(body.encode("utf-8"))
+    try:
+        endpoint = f"repos/{session.repo_name(root)}/issues/{number}/comments"
+        found = session.gh(endpoint, "-F", f"body=@{path}", method="POST")
+    finally:
+        path.unlink(missing_ok=True)
+    if found is None:
+        raise CheckError(f"the comment on #{number} could not be posted")
+    return str(found.get("html_url", "")) if isinstance(found, dict) else ""
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     parser = argparse.ArgumentParser(prog="steward_owner.py", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     a = sub.add_parser("ask")
     a.add_argument("--qid", required=True)
-    a.add_argument("--on", type=int, required=True)
+    a.add_argument("--on", type=int)
     a.add_argument("--file", type=Path, required=True)
+    a.add_argument("--target")  # brief #1690: with --line, one pinned pull request head
+    a.add_argument("--line", type=Path)
+    y = sub.add_parser("approve")
+    y.add_argument("--ask", required=True)
+    y.add_argument("--said", type=Path, required=True)
+    y.add_argument("--at", required=True)
+    y.add_argument("--by")
     r = sub.add_parser("relay")
     for name in ("--qid", "--answer", "--at"):
         r.add_argument(name, required=True)
@@ -685,8 +926,19 @@ def main(argv: list[str] | None = None) -> int:
         print(OUTSIDE_PROJECT)
         return 3
     try:
-        if opts.command == "ask":
+        if opts.command == "ask" and (opts.target is None) != (opts.line is None):
+            code, lines = 2, ["refused: --target and --line go together (setting: --target)"]
+        elif opts.command == "ask" and opts.target is not None:
+            text = opts.file.read_text(encoding="utf-8")
+            code, lines = ask_target(
+                root, opts.qid, opts.target, text, opts.line, datetime.now(UTC)
+            )
+        elif opts.command == "ask" and opts.on is None:
+            code, lines = 2, ["refused: --on or --target names where the question goes"]
+        elif opts.command == "ask":
             code, lines = ask(root, opts.qid, opts.on, opts.file.read_text(encoding="utf-8"))
+        elif opts.command == "approve":
+            code, lines = approve(root, opts.ask, opts.said, opts.at, opts.by, datetime.now(UTC))
         elif opts.command == "relay":
             code, lines = relay(root, opts)
         elif opts.command == "park":
