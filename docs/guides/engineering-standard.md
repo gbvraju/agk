@@ -15,7 +15,7 @@ work type's playbook, then the project's own module.
   the `layers` step fails an import that `allow` does not list, and `docs/architecture.md` records them (rule 5).
 - **The standards pack.** For each stack the Accepted stack record chose, the pack's lint, format and type steps over
   `project_lint_paths`, with the pinned rule codes; a team's own configuration must keep every rule code (rule 6).
-- **The gates.** Each gate is a `check` that `run_gates.py` runs inside the governance gate, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project
+- **The gates.** Each gate is a `check` that `run_gates.py` runs inside the governance gate, `python3 <plugin>/scripts/agk/kit_root.py governance` (`<plugin>` the plugin's folder) (in an installed project
   `make -f agk.mk agk-governance`), and CI's `governance` job,
   or a `judgement` with its reason that a reviewer reads (rules 2 and 3).
 - **The baseline.** An adopted project's existing findings are counted first and may only fall (rule 7).
@@ -49,7 +49,7 @@ Before the foundation brief is filed, the steward shows the standard and applies
 
 ## Every mode
 
-- **CI and local:** the same checks in `governance`, the governance gate (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`;
+- **CI and local:** the same checks in `governance`, the governance gate (`python3 <plugin>/scripts/agk/kit_root.py governance`;
   `make governance` in an installed project) and `prepush.py` (`docs/guides/local-mode.md`).
 - **Personal:** `python3 scripts/agk/personal.py floor --approve` runs the gate runner on the head tree after its
   secret scan and before the no-regression step, at every `[personal] level`, with no forge call (rule 11).

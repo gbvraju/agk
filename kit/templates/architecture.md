@@ -2,7 +2,7 @@
 
 The architecture record of this project (SPEC-0072 rule 5). The foundation build writes it once from the playbook
 `{{work_type}}`; it changes only by an ADR of the project (`docs/architecture.md` is a protected path). The `layers`
-step of the governance gate (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`; `make governance` in an installed project) fails an import from one layer into another that the allowed directions below do not list.
+step of the governance gate (`python3 <plugin>/scripts/agk/kit_root.py governance` (`<plugin>` the plugin's folder); `make governance` in an installed project) fails an import from one layer into another that the allowed directions below do not list.
 
 Its required parts (amendment 204, brief #1595): the `architecture-record` step of the same gate fails a missing
 section, an outside service missing from the diagram, and a `Needs` number other than the quoted needs answer. A

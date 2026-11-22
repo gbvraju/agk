@@ -88,7 +88,7 @@ instead of pasting output into the pull request body. Several sessions on one ma
 heavy runs never compete for the same memory and disk: each heavy step, governance included, runs under `python3 scripts/agk/lock.py run --name heavy --session <id> -- <command...>`, which waits
 its turn, runs the command without a shell and releases the lock when it ends, also when it fails or is interrupted. Each line
 stands alone, so the lines can be run one by one, as an agent runs them. In a
-clean project (`[kit] layout = "plugin"`) the governance line is `AGK_BASE="$base" python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`, which runs
+clean project (`[kit] layout = "plugin"`) the governance line is `AGK_BASE="$base" python3 <plugin>/scripts/agk/kit_root.py governance` (`<plugin>` the plugin's folder), which runs
 the same checks from the plugin; these are the lines of an installed project:
 
     base=$(git merge-base HEAD origin/main)

@@ -22,12 +22,13 @@ the `snapshot`, so a clean project could not read them.
 
 1. **One command.** Each shipped skill names `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` in
    place of the make form, with the clause that it runs `make -f agk.mk agk-governance` in an installed project. A
-   template written into a product, and a guide, name the same command with the same clause; the runtime builder
-   prompt names it through its `<kit>` placeholder.
-2. **Role files.** The architect's and the review agent's files describe their guard's list: `make governance` in an
-   installed project and `python3 <kit>/kit_root.py governance`, `<kit>` one of ADR-0631's two forms. They do not name
-   the variable form, which their guards refuse (ADR-0736 decision 4, Q-1758-1). The conductor's file says that the
-   guarded merge runs the resolver's gate after a merge.
+   guide and a template written into a product name `python3 <plugin>/scripts/agk/kit_root.py governance`, `<plugin>`
+   the plugin's folder, with the same clause: they are installed files, which never name the plugin's variable
+   (ADR-0630). The runtime builder prompt names it through its `<kit>` placeholder.
+2. **Role files.** The architect's, the review agent's and the conductor's files name `kit_root.py governance` in place
+   of `make governance`, word for word, so their rule budgets do not grow; the guards already allow it in both layouts
+   (ADR-0736) and keep allowing `make governance`. They do not name the variable form, which their guards refuse
+   (ADR-0736 decision 4, Q-1758-1).
 3. **Installed-only texts.** A text that describes the installed project only keeps its make form and says so: the
    getting-started guide in one sentence at its top, the local-mode guide beside each command.
 4. **The three guides.** `docs/guides/getting-started.md`, `docs/guides/planning.md` and `docs/guides/testing.md` join
