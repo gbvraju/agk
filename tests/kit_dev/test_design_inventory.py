@@ -190,3 +190,121 @@ def test_ac2_the_skill_has_the_inventory_step_and_leaves_agreement_to_the_person
     assert "Approve: inventory <full head ID>" in text
     assert "check_design.py" in text
     assert re.search(r"never posts? (?:that|the `Approve: inventory`) line", text)
+
+
+# Brief #1756 (amendment 217 to SPEC-0037 rule 3, ADR-0734): on the path from an idea, with no
+# product requirement yet, the skeleton takes one section per milestone of the Accepted charter.
+
+KIT_REQUIREMENTS = """# Requirements
+
+### REQ-001 — The kit keeps its rules
+
+- Acceptance: AC1 a rule is kept
+- Status: planned
+
+### REQ-002 — The kit checks its rules
+
+- Acceptance: AC1 a rule is checked
+- Status: planned
+"""
+
+CHARTER = """# ADR-0002: Project charter
+
+- Status: {status}
+- Date: 2026-11-22
+
+## Context
+
+A booking site for rooms on example.com.
+
+## Decision
+
+{milestones}2. **Non-goals**
+   - Payments.
+3. **Done means**
+   - The milestones' exit statements hold.
+
+## Consequences
+
+None.
+"""
+
+MILESTONES = """1. **Milestones**
+   - M1: a guest books a room. exit: 3 bookings can be made and read back.
+   - M2: a host sees the bookings. exit: every booking is listed.
+"""
+
+CHARTER_PATH = "docs/adr/0002-project-charter.md"
+
+
+def discovery(root, name, screens):
+    folder = root / "docs" / "discovery"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{name}.md").write_text(
+        f"# Discovery: {name}\n\n- Problem: in session 2026-11-22\n- Screens: {screens}\n\n"
+        "## Answers\n\n- users: open\n",
+        encoding="utf-8",
+    )
+
+
+def idea_project(root, status="Accepted", milestones=MILESTONES, reqs=KIT_REQUIREMENTS):
+    (root / "docs" / "adr").mkdir(parents=True)
+    (root / "docs" / "requirements.md").write_text(reqs, encoding="utf-8")
+    (root / CHARTER_PATH).write_text(
+        CHARTER.format(status=status, milestones=milestones), encoding="utf-8"
+    )
+    discovery(root, "booking", "yes")
+    discovery(root, "reports", "open")
+    discovery(root, "nightly", "no")
+    return root
+
+
+def test_ac2_the_idea_path_writes_one_section_per_charter_milestone(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 as amendment 217 proposes (brief #1756 answer 1)."""
+    idea_project(tmp_path)
+    proc = design(tmp_path, "inventory")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    reqs = sections((tmp_path / INVENTORY).read_text(encoding="utf-8"), "Requirements")
+    sources = f"- Sources: {CHARTER_PATH}, docs/discovery/booking.md, docs/discovery/reports.md"
+    assert reqs == {
+        "REQ-001 — The kit keeps its rules": [
+            "- Specs: none",
+            "- Screens: no screen: a rule of the kit",
+        ],
+        "REQ-002 — The kit checks its rules": [
+            "- Specs: none",
+            "- Screens: no screen: a rule of the kit",
+        ],
+        "M1 — a guest books a room. exit: 3 bookings can be made and read back.": [
+            sources,
+            "- Screens:",
+        ],
+        "M2 — a host sees the bookings. exit: every booking is listed.": [sources, "- Screens:"],
+    }
+
+
+def test_ac2_a_product_requirement_keeps_todays_skeleton(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1756 answer 1: with REQ-101 up, no milestone)."""
+    reqs = KIT_REQUIREMENTS + "\n### REQ-101 — A guest books a room\n\n- Status: planned\n"
+    idea_project(tmp_path, reqs=reqs)
+    assert design(tmp_path, "inventory").returncode == 0
+    reqs_found = sections((tmp_path / INVENTORY).read_text(encoding="utf-8"), "Requirements")
+    assert [h for h in reqs_found if h.startswith("M")] == []
+    assert reqs_found["REQ-101 — A guest books a room"] == ["- Specs: none", "- Screens:"]
+
+
+def test_ac2_a_proposed_charter_is_not_a_source(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1756 answer 7: only an Accepted charter counts)."""
+    idea_project(tmp_path, status="Proposed")
+    assert design(tmp_path, "inventory").returncode == 0
+    reqs = sections((tmp_path / INVENTORY).read_text(encoding="utf-8"), "Requirements")
+    assert list(reqs) == ["REQ-001 — The kit keeps its rules", "REQ-002 — The kit checks its rules"]
+
+
+def test_ac2_a_charter_with_no_milestones_is_refused_naming_its_path_class(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1756 answer 7: refused, naming `docs/adr/`)."""
+    idea_project(tmp_path, milestones="")
+    proc = design(tmp_path, "inventory")
+    assert proc.returncode == 1
+    assert "FAIL design: rule 3:" in proc.stdout and "docs/adr/" in proc.stdout
+    assert not (tmp_path / INVENTORY).exists()
