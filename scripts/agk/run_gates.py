@@ -215,6 +215,9 @@ def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
         tally: dict[str, dict[str, int]] = {}
         rows: list[Row] = []
         for step, lines in module.run(root, entry, tally):
+            if step == "note":  # brief #1766: information from the pack, never a failure
+                rows += [(NOTE, f"standards {stack}: {ln}") for ln in lines]
+                continue
             gid = f"standards {stack} {step}"
             failed: list[Row] = [(False, f"{gid}: {ln}") for ln in lines]
             rows += ratchet(root, gid, tally[step], failed, write) if step in tally else failed

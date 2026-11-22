@@ -1,11 +1,16 @@
-"""Tests of the Node standards pack (SPEC-0072 rules 6 and 8; REQ-079; brief #1764, ADR-0739).
+"""Tests of the Node standards pack (SPEC-0072 rules 6 and 8; REQ-079; briefs #1764 and #1766,
+ADR-0739 and ADR-0740).
 
 On a sample TypeScript web app with an Accepted stack record that chose Node, the pack's `floor`,
 `node-lint` and `node-format` steps run the product's own `node_modules/.bin/` tools over
 `project_lint_paths` (default: the layers' paths): a clean sample passes; a planted lint fault
 fails naming the rule and the path class and no value; an unformatted file fails; a configuration
 that turns a pinned rule off fails the floor naming the rule; a missing tool names `npm ci`; and
-the pack is off without a Node stack or a `package.json`. The tools are stand-in scripts written
+the pack is off without a Node stack or a `package.json`. The `node-type` step (brief #1766) runs
+the product's `tsc --noEmit -p tsconfig.json`: a typed sample passes, a planted type fault fails
+naming its `TS<n>` code, a weakened compiler setting (through `extends` and `references`) fails
+the type floor naming the option, and a JavaScript-only product skips the step and says so. The
+tools are stand-in scripts written
 here (no network, no real install). Fixtures in `tmp_path` only: invented data (example.com).
 """
 
@@ -66,6 +71,28 @@ for name in bad:
     print("[warn] " + name)
 sys.exit(1 if bad else 0)
 """
+# The stand-in tsc: `--noEmit -p <config>` reports TS2322 for each `.ts` file under the config's
+# folder that holds `: number = "`, as `tsc --pretty false` prints it, relative to the cwd.
+TSC = """
+import os, sys
+conf = sys.argv[sys.argv.index("-p") + 1]
+base, bad = os.path.dirname(conf) or ".", []
+for top, dirs, names in os.walk(base):
+    dirs[:] = [d for d in dirs if d != "node_modules"]
+    for name in sorted(names):
+        path = os.path.relpath(os.path.join(top, name))
+        if name.endswith(".ts") and ': number = "' in open(path).read():
+            bad.append(path)
+            print(path + "(1,14): error TS2322: Type 'string' is not assignable to type 'number'.")
+sys.exit(2 if bad else 0)
+"""
+STRICT = (
+    '{\n  // the product\'s own compiler settings\n  "compilerOptions": {"strict": true,},\n}\n'
+)
+SOLUTION = (
+    '{"compilerOptions": {"strict": true}, "files": [], "references": [{"path": "frontend"}]}'
+)
+FAULT = 'export const count: number = "hello"; // example.com\n'
 
 
 def floor_rules() -> dict[str, str]:
@@ -93,14 +120,16 @@ def sample(tmp: Path, code: str = CLEAN, rules: dict | None = None, **kw: object
     (tmp / "eslint-rules.json").write_text(json.dumps(conf), encoding="utf-8")
     bin_dir = tmp / "node_modules" / ".bin"
     bin_dir.mkdir(parents=True)
-    for name, body in (("eslint", ESLINT), ("prettier", PRETTIER)):
+    if kw.get("tsconfig", STRICT) is not None:
+        (tmp / "tsconfig.json").write_text(str(kw.get("tsconfig", STRICT)), encoding="utf-8")
+    for name, body in (("eslint", ESLINT), ("prettier", PRETTIER), ("tsc", TSC)):
         if name in kw.get("missing", ()):
             continue
         tool = bin_dir / name
         tool.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
         tool.chmod(0o755)
     (tmp / "frontend").mkdir()
-    (tmp / "frontend" / "greet.ts").write_text(code, encoding="utf-8")
+    (tmp / "frontend" / str(kw.get("name", "greet.ts"))).write_text(code, encoding="utf-8")
     (tmp / "node_modules" / "dep.js").write_text("debugger;\n", encoding="utf-8")  # never read
     return tmp
 
@@ -137,6 +166,7 @@ def test_a_clean_sample_passes(
     code, out = gates(sample(tmp_path, work_type=work_type), capsys)
     assert code == 0, out
     assert "ok standards node" in out and "no pack for node" not in out
+    assert "standards node type" not in out and "TypeScript" not in out
 
 
 def test_a_planted_lint_fault_fails_naming_the_rule_and_path_class(
@@ -175,7 +205,7 @@ def test_a_pinned_rule_turned_off_fails_the_floor(
         assert any(f"pack's rule {rule} (setting: standards.config)" in ln for ln in lines)
 
 
-@pytest.mark.parametrize("tool", ["eslint", "prettier"])
+@pytest.mark.parametrize("tool", ["eslint", "prettier", "tsc"])
 def test_a_missing_tool_names_npm_ci(
     tool: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -191,8 +221,10 @@ def test_the_pack_is_off_without_a_node_stack_or_package_json(case: str, tmp_pat
     kw = {"runtime": "python"} if case == "python" else {"package": False}
     root = sample(tmp_path, **kw)
     assert not node_pack.on(root)
-    assert not any("standards node" in line for _, line in run_gates.pack_results(
-        PLAYBOOKS / "web-app.toml", root))
+    assert not any(
+        "standards node" in line
+        for _, line in run_gates.pack_results(PLAYBOOKS / "web-app.toml", root)
+    )
 
 
 def test_an_ignored_file_is_not_counted(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -217,3 +249,105 @@ def test_project_lint_paths_chooses_the_files_and_a_bad_form_is_refused(
     )
     code, out = gates(root, capsys)
     assert code == 1 and "(setting: project_lint_paths)" in out
+
+
+def test_a_planted_type_fault_fails_naming_its_code(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1766 answer 1 and its Measured line."""
+    code, out = gates(sample(tmp_path, FAULT), capsys)
+    assert code == 1
+    assert "FAIL gates: standards node type: SPEC-0072 rule 6: type rule TS2322" in out
+    assert "(path class: frontend/**)" in out
+    no_values(out)
+    assert "count" not in out and "assignable" not in out
+
+
+def test_the_type_step_fills_the_tally(tmp_path: Path) -> None:
+    """REQ-079: brief #1766 answer 3 (per-file counts, as the Python pack's)."""
+    root = sample(tmp_path, FAULT)
+    entry = next(e for e in node_entries("web-app") if e["stack"] == "node")
+    tally: dict[str, dict[str, int]] = {}
+    steps = dict(node_pack.run(root, entry, tally))
+    assert tally["type"] == {"frontend/greet.ts": 1}
+    assert steps["type-floor"] == []
+
+
+@pytest.mark.parametrize(
+    ("options", "named"),
+    [
+        ('"strict": false', ["strict"]),
+        ('"target": "es2022"', ["strict"]),
+        ('"strict": true, "noImplicitAny": false', ["noImplicitAny"]),
+        (
+            '"strict": true, "strictNullChecks": false, "noImplicitAny": false',
+            ["noImplicitAny", "strictNullChecks"],
+        ),
+    ],
+)
+def test_a_weakened_compiler_setting_fails_the_floor(
+    options: str, named: list[str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1766 answer 2 (each option named, never its value)."""
+    root = sample(tmp_path, tsconfig='{"compilerOptions": {' + options + "}}")
+    code, out = gates(root, capsys)
+    assert code == 1
+    lines = [ln for ln in out.splitlines() if "standards node type-floor" in ln]
+    assert len(lines) == len(named), out
+    for opt in named:
+        assert any(f"compiler option {opt} (path class: tsconfig.json)" in ln for ln in lines)
+    assert "false" not in out and "es2022" not in out
+
+
+def test_the_extends_chain_is_read_inside_the_product(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1766 answers 2 and 6 (own base file; a package base when installed)."""
+    root = sample(tmp_path, tsconfig='{"extends": "./tsconfig.base.json"}')
+    (root / "tsconfig.base.json").write_text(STRICT, encoding="utf-8")
+    assert gates(root, capsys)[0] == 0
+    (root / "tsconfig.json").write_text(
+        '{"extends": ["./tsconfig.base.json", "@example/tsconfig/weak.json"]}', encoding="utf-8"
+    )
+    assert gates(root, capsys)[0] == 0  # the package is not installed: the product's own files
+    pkg = root / "node_modules" / "@example" / "tsconfig"
+    pkg.mkdir(parents=True)
+    (pkg / "weak.json").write_text('{"compilerOptions": {"strictNullChecks": false}}', "utf-8")
+    code, out = gates(root, capsys)
+    assert code == 1 and "compiler option strictNullChecks (path class: tsconfig.json)" in out
+
+
+def test_a_referenced_config_is_checked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """REQ-079: brief #1766 answer 6 (`references`, each config on its own)."""
+    root = sample(tmp_path, tsconfig=SOLUTION)
+    (root / "frontend" / "tsconfig.json").write_text(
+        '{"compilerOptions": {"strict": false}}', encoding="utf-8"
+    )
+    code, out = gates(root, capsys)
+    assert code == 1
+    assert "compiler option strict (path class: tsconfig.json references)" in out
+    (root / "frontend" / "tsconfig.json").write_text(STRICT, encoding="utf-8")
+    (root / "frontend" / "greet.ts").write_text(FAULT, encoding="utf-8")
+    code, out = gates(root, capsys)
+    assert code == 1 and "type rule TS2322 (path class: frontend/**)" in out
+
+
+def test_typescript_files_without_a_tsconfig_fail(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1766 answer 4."""
+    code, out = gates(sample(tmp_path, tsconfig=None), capsys)
+    assert code == 1
+    assert "node type-floor: SPEC-0072 rule 8: the compiler configuration is missing" in out
+    assert "(path class: tsconfig.json)" in out
+
+
+def test_a_javascript_only_product_skips_the_type_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1766 answer 1 (no tsc and no tsconfig needed, and it says so)."""
+    root = sample(tmp_path, name="greet.mjs", tsconfig=None, missing=("tsc",))
+    code, out = gates(root, capsys)
+    assert code == 0, out
+    assert "standards node: the type step is skipped: no TypeScript file" in out
+    assert "ok standards node" in out
