@@ -137,12 +137,13 @@ fails). `--follow-up TEXT` (one line, never a verdict) replaces the stop on an e
 request with the follow-up for it. The title of a brief never goes into the prompt.
 
 Brief #1282 (ADR-0543): `watch --pr N` parks the pull request when its owner wait passed (a
-`Question:` for the maintainers, an `Owner needed:`, `agk:approve` or `agk:owner-merge` unanswered
-for `[flow] owner_wait_minutes`, or at once inside `owner_rest_hours` at `owner_utc_offset`): one
-label write `agk:parked`, one comment `Parked-by: wait <Q-id>`, and it prints `parked #<n> <Q-id>`
-and the `next:` line that names the builder's hand-over and `session.py after`. A parked pull
-request holds no builder slot, and `next` offers an unparked one (an `Unparked-by:` its author has
-not spoken after) before stalled pull requests and new briefs.
+`Question:` for the maintainers, an `Owner needed:` or `agk:approve` unanswered (never an
+`owner-merge` item, brief #1733) for `[flow] owner_wait_minutes`, or at once inside
+`owner_rest_hours` at `owner_utc_offset`): one label write `agk:parked`, one comment
+`Parked-by: wait <Q-id>`, and it prints `parked #<n> <Q-id>` and the `next:` line that names
+the builder's hand-over and `session.py after`. A parked pull request holds no builder slot, and
+`next` offers an unparked one (an `Unparked-by:` its author has not spoken after) before stalled
+pull requests and new briefs.
 
 Brief #1733 (ADR-0722): an `owner-merge` item (the conductor's `Owner needed:` naming
 `merge_cleared.OWNER_COMMAND` for the pull request on a cleared head, or the label) is never

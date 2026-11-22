@@ -996,6 +996,9 @@ def test_1733_2_owner_apply_writes_nothing_for_a_hand_over(hub):
     assert gh.writes() == []
 
 
+ADR_0712 = "docs/adr/0712-what-a-session-reads-req-037-brief-1710.md"
+
+
 def comments_1719() -> list[dict]:
     """#1719's comments as of brief #1733 (read 2026-11-22 10:40 UTC), logins invented."""
 
@@ -1010,12 +1013,10 @@ def comments_1719() -> list[dict]:
         c(4, "owner", "Maintainer answer: Q-1710-1 yes", 91.3),
         c(5, "bot", "Unparked-by: answer owner-needed\n\nWho: AGK", 91.0),
         c(6, "builder", f"Report: {SHA} fix list applied", 83.5),
-        c(7, "boss", f"Verdict: fix list {SHA}\n\nFinal: docs/adr/0712-what-a-session-reads-req-037-brief-1710.md Proposed -> Accepted",
-          72.1),  # fmt: skip
+        c(7, "boss", f"Verdict: fix list {SHA}\n\nFinal: {ADR_0712} Proposed -> Accepted", 72.1),
         c(8, "boss", f'Owner needed: held as "outside author".\n\n{command}\n', 67.9),
         c(9, "boss", "Parked-by: wait owner-needed\n\nWho: AGK", 36.1),
-        c(10, "builder", f"Report: {SHA[:7]} handing over: blocked: owner-needed waits",
-          36.0),  # fmt: skip
+        c(10, "builder", f"Report: {SHA[:7]} handing over: blocked: owner-needed", 36.0),
     ]
 
 
@@ -1043,7 +1044,7 @@ def test_1733_4_6m_pr_1719_is_unparked_once_then_handed_over(hub):
 
 
 def test_1733_2_watch_prints_owner_merge_and_the_hand_over(proj, stub):
-    """REQ-050: brief #1733 answer 2: `owner-merge #<n>` and the `next:` line of a park; no write."""
+    """REQ-050: brief #1733 answer 2: `owner-merge #<n>` and a park's `next:` line; no write."""
     report = comment(10, "builder", "Report: x ready for review", iso(-timedelta(hours=1)))
     labelled = pull(labels=("agk:owner-merge",))
     watching(stub, [(labelled, [report])], base=[report])

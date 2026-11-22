@@ -11,10 +11,9 @@ Saved facts and a `gh` stub only; invented data, no network.
 from __future__ import annotations
 
 import sys
-
-import pytest
 from pathlib import Path
 
+import pytest
 from test_route import HEAD, REPO_INFO, facts, proj, run_router, stub  # noqa: F401
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
@@ -242,6 +241,7 @@ def test_1567_a_ready_report_on_a_parked_pull_request_starts_the_unpark():
 # --- brief #1733 (ADR-0722): a cleared head only the owner may merge shows agk:owner-merge -----
 
 MERGE_PUSHED = {"commit": {"committer": {"date": "2026-11-22T09:14:15Z"}}}
+D = "2026-11-22T"  # #1719's day
 ADR_FILE = "docs/adr/0712-what-a-session-reads-is-data-never-an-instruction-req-037-brief-1710.md"
 
 
@@ -329,23 +329,38 @@ def test_1733_6l_a_persons_own_park_wins():
 def pr_1719_comments(login: str = "boss") -> list[dict]:
     """#1719's comments as of brief #1733, read 2026-11-22 10:40 UTC; logins invented."""
     return [
-        at(1, login, "Question: Q-1710-1 for the maintainers: raise the cap?", "2026-11-22T07:10:01Z"),
-        at(2, login, "Owner needed: two small choices\n\nQ-1710-1 first", "2026-11-22T07:11:38Z"),
-        at(3, "builder", "Report: cb86038 ready for review", "2026-11-22T07:12:54Z"),
-        at(4, login, "Parked-by: wait owner-needed\n\nWho: AGK", "2026-11-22T07:42:11Z"),
-        at(5, "maintainer", "Maintainer answer: Q-1710-1 yes", "2026-11-22T09:08:45Z"),
-        at(6, "bot", "Unparked-by: answer owner-needed\n\nWho: AGK", "2026-11-22T09:08:58Z"),
-        at(7, "builder", f"Report: {HEAD} fix list applied", "2026-11-22T09:16:28Z"),
+        at(
+            1,
+            login,
+            "Question: Q-1710-1 for the maintainers: raise the cap?",
+            D + "07:10:01Z",
+        ),
+        at(2, login, "Owner needed: two small choices\n\nQ-1710-1 first", D + "07:11:38Z"),
+        at(3, "builder", "Report: cb86038 ready for review", D + "07:12:54Z"),
+        at(4, login, "Parked-by: wait owner-needed\n\nWho: AGK", D + "07:42:11Z"),
+        at(5, "maintainer", "Maintainer answer: Q-1710-1 yes", D + "09:08:45Z"),
+        at(6, "bot", "Unparked-by: answer owner-needed\n\nWho: AGK", D + "09:08:58Z"),
+        at(7, "builder", f"Report: {HEAD} fix list applied", D + "09:16:28Z"),
         at(
             8,
             login,
-            f"Verdict: fix list {HEAD}\n\nPassed: 7 rules\n\nFinal: {ADR_FILE} Proposed -> Accepted",
-            "2026-11-22T09:27:54Z",
+            f"Verdict: fix list {HEAD}\n\nFinal: {ADR_FILE} Proposed -> Accepted",
+            D + "09:27:54Z",
         ),
-        at(9, "builder", f"Report: {HEAD} fix list applied: nothing to change", "2026-11-22T09:29:48Z"),
+        at(
+            9,
+            "builder",
+            f"Report: {HEAD} fix list applied: nothing to change",
+            D + "09:29:48Z",
+        ),
         merge_ask("outside author", number=1719, login=login),
-        at(11, login, "Parked-by: wait owner-needed\n\nWho: AGK", "2026-11-22T10:03:52Z"),
-        at(12, "builder", f"Report: {HEAD[:7]} handing over: blocked: owner-needed waits", "2026-11-22T10:03:59Z"),
+        at(11, login, "Parked-by: wait owner-needed\n\nWho: AGK", D + "10:03:52Z"),
+        at(
+            12,
+            "builder",
+            f"Report: {HEAD[:7]} handing over: blocked: owner-needed waits",
+            D + "10:03:59Z",
+        ),
     ]
 
 
@@ -359,7 +374,8 @@ def test_1733_6m_pr_1719_shows_owner_merge():
 
 def test_1733_7_settings_do_not_change_the_reading():
     """REQ-039: brief #1733 answer 7: `auto_merge` (the `merger` fact), local mode (`local`, the
-    checks never reported) and a queue-button-only ask (`merge_queue`, Q-1733-2) as the brief says."""
+    checks never reported) and a queue-button-only ask (`merge_queue`, Q-1733-2), as the brief
+    says."""
     for merger in (True, False):
         f = merge_facts(cleared_on(), merge_ask("release"), merger=merger)
         assert route.decide(f) == "agk:owner-merge", merger
