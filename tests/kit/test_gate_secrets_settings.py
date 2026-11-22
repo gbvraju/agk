@@ -135,7 +135,10 @@ def test_kit_folders_and_tests_are_not_the_project_code(
 BAD_DIRS = "test_dirs is a list of folder paths inside the repository (setting: test_dirs)"
 
 
-@pytest.mark.parametrize("value", ["[1]", '["tests", 2]', '"tests"', '[""]', '["../up"]', '["a/*"]'])
+BAD_VALUES = ["[1]", '["tests", 2]', '"tests"', '[""]', '["../up"]', '["a/*"]']
+
+
+@pytest.mark.parametrize("value", BAD_VALUES)
 @pytest.mark.parametrize("work_type", [None, "mcp-server", "api-service"])
 def test_a_malformed_test_dirs_is_refused_naming_it(
     value: str, work_type: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]
