@@ -22,11 +22,12 @@ minutes, with no `Ended: steward <session>` after it, of any name, the starting 
 a start say so and write nothing (exit 1); `refresh` and `record` beat on the run's own marker (one
 PATCH), and `record` and `end` refuse with no start in this clone (brief #1741, ADR-0726). At 500
 comments a start opens a new memory issue whose first comment links the old one and carries every
-open `Owner question:` (no later `Decision:` or `Maintainer answer:` names its Q id), then closes the
-old one; the start lists only those open ones, at most three, and counts the answered (brief #1765). `record`
-refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
-the value (exit 2). `end` writes the pass's counted calls and tokens on its marker, `not shown` when
-not given, never 0 (rule 13's daily list reads them). `start` keeps a checkpoint in the cache;
+open `Owner question:` (no `Decision:` or `Maintainer answer:` names its Q id), then closes the old
+one; the start lists only those open ones, at most three, and counts the answered (brief #1765).
+`record` refuses an unknown kind and a text that the data guard's detectors match, naming the
+class, never the value (exit 2). `end` writes the pass's counted calls and tokens on its marker,
+`not shown` when not given, never 0 (rule 13's daily list reads them). `start` keeps a checkpoint
+in the cache;
 `refresh` posts nothing and prints only what changed since it, in three GET calls: the new or
 edited memory comments (a `Decision:` or `Maintainer answer:` first), the open pull requests whose
 head or labels changed and the ones closed or merged, then moves it (brief #1702, ADR-0708).

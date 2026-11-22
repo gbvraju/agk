@@ -703,7 +703,7 @@ def test_req066_brief_1765_an_answered_owner_question_shows_as_answered():
     ]
     comments += [
         {"id": 5, "body": "Maintainer answer: Q-3-5 yes", "created_at": stamp(50)},
-        {"id": 6, "body": "Decision: Q-3-6: not yet, ask after the release", "created_at": stamp(40)},
+        {"id": 6, "body": "Decision: Q-3-6: not yet, after the release", "created_at": stamp(40)},
     ]
     asked = [x for x in steward.summary(steward.read_memory(comments)) if "Owner question" in x]
     assert asked == ["Owner question: 3 answered"]
