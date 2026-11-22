@@ -550,12 +550,20 @@ def test_req066_brief_1741_the_summary_carries_the_owner_list_note_and_unfiled_d
     newest note and of each `Draft brief:` not yet followed by a `Filed:` naming it."""
     comments = [
         {"id": 1, "body": "Draft brief: F-s-1 Old one\nSentence: filed.", "created_at": stamp(90)},
-        {"id": 2, "body": "Draft brief: F-s-2 Kept\nSentence: still open.", "created_at": stamp(80)},
+        {
+            "id": 2,
+            "body": "Draft brief: F-s-2 Kept\nSentence: still open.",
+            "created_at": stamp(80),
+        },
         {"id": 3, "body": "Filed: F-s-1 as #9003\n\nWho: AGK steward", "created_at": stamp(70)},
         {"id": 4, "body": "Owner list: old list.\n1. done", "created_at": stamp(60)},
         {"id": 5, "body": "Owner list: new list.\n1. #9001 waits", "created_at": stamp(50)},
         {"id": 6, "body": "Note: older note.", "created_at": stamp(40)},
-        {"id": 7, "body": "Note: newest note.\nsecond line\n\nWho: AGK steward", "created_at": stamp(30)},
+        {
+            "id": 7,
+            "body": "Note: newest note.\nsecond line\n\nWho: AGK steward",
+            "created_at": stamp(30),
+        },
     ]
     lines = steward.summary(steward.read_memory(comments))
     assert "Owner list: new list." in lines and "1. #9001 waits" not in lines
