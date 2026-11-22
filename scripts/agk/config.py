@@ -836,6 +836,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
         {
             "always_full",
             "budget_seconds",
+            "every_script_tests",
             "excluded",
             "full_when_share",
             "junit",
