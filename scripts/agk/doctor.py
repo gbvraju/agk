@@ -53,6 +53,9 @@ carries it as `work_type`.
 SPEC-0048 rule 12 (brief #691): after that line, one `skill: <name> present|absent` for each skill
 the declared work type's playbook names, by the lookup of `[engines]` (`SKILL.md` exists, nothing
 is read); the JSON report carries them as `skills`. An absent skill changes no exit code.
+Brief #1757 (ADR-0735): after them, one `warn work type:` line when a discovery document names a
+work type other than `pilot` and none is declared, or one `note work type:` line when the declared
+one differs; each names the setting `work_type`, never a value, and changes no exit code.
 Brief #1685 (ADR-0702): after them, when the chosen runtime has no standards pack yet, one line
 `warn standards: no pack for this stack yet (setting: stack record)`, also under `skills` in the
 JSON report; it changes no exit code.
@@ -2867,6 +2870,28 @@ def work_type_line(root: Path) -> tuple[str, bool]:
     return f"work type: {value} (playbook {playbook_format.FOLDER}/{value}.toml)", False
 
 
+def work_type_discovery_lines(root: Path) -> list[str]:
+    """Brief #1757 (ADR-0735): one warning when discovery names a work type and `agk.toml`
+    declares none, or one note when the declared one differs; never a value, no exit code."""
+    import engines  # noqa: PLC0415 - only this line reads the discovery documents
+
+    value, problems = playbook_format.declaration(root)
+    found = engines.discovered_work_types(root) if not problems else {}
+    if not found:
+        return []
+    if value is None:
+        return [
+            "warn work type: discovery names a work type that is not declared; the owner chooses"
+            " it (setting: work_type)"
+        ]
+    if value not in found:
+        return [
+            "note work type: the declared work type differs from discovery; the declared one is"
+            " kept (setting: work_type)"
+        ]
+    return []
+
+
 def standards_lines(root: Path) -> list[str]:
     """Brief #1685 (ADR-0702): one warn line when the chosen runtime has no standards pack yet,
     by the gate runner's own reading; it changes no exit code."""
@@ -3100,6 +3125,7 @@ def main(argv: list[str] | None = None) -> int:
         scan = secret_scan_line(local=read_config(root.resolve()).get("execution") == "local")
         work, work_failed = work_type_line(root.resolve())
         skills = skill_lines(root.resolve(), Path(options["kit"]) if options["kit"] else None)
+        skills += work_type_discovery_lines(root.resolve())
         skills += standards_lines(root.resolve())
         design = design_import_lines(root.resolve())
     except Refusal as exc:

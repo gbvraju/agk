@@ -262,7 +262,11 @@ def test_req045_stack_write_refuses_a_named_but_undeclared_work_type(env):
 
 @pytest.mark.parametrize(
     ("toml", "kinds"),
-    [(SOLO, ()), (SOLO, ("pilot",)), (SOLO + '\n[delivery]\nwork_type = "web-app"\n', ("web-app",))],
+    [
+        (SOLO, ()),
+        (SOLO, ("pilot",)),
+        (SOLO + '\n[delivery]\nwork_type = "web-app"\n', ("web-app",)),
+    ],
 )
 def test_req045_stack_write_is_unchanged_otherwise(env, toml, kinds):
     """REQ-045 AC2: answers 3 and 5, no discovery, a pilot or a declared type: writes as today."""
