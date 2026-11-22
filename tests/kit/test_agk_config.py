@@ -165,3 +165,20 @@ def test_ac1_test_patterns_and_mode_are_read(tmp_path):
     (tmp_path / "agk.toml").write_text('mode = "adopt"\ntest_patterns = ["*_test.py"]\n')
     cfg = common.load_config(tmp_path)
     assert cfg["mode"] == "adopt" and cfg["test_patterns"] == ["*_test.py"]
+
+
+def test_req066_steward_fix_briefs_is_false_by_default_and_a_non_boolean_refused(tmp_path):
+    """REQ-066 AC5: brief #1715 answer 3, `[steward] fix_briefs` is `true` or `false` (default
+    `false`, Q-1715-1); a number or a string is refused naming the setting, never the value."""
+    import pytest
+    from config import StewardSettingError, steward_settings
+
+    assert steward_settings(tmp_path)["fix_briefs"] is False
+    for value, want in (("true", True), ("false", False)):
+        (tmp_path / "agk.toml").write_text(f"[steward]\nfix_briefs = {value}\n", encoding="utf-8")
+        assert steward_settings(tmp_path)["fix_briefs"] is want
+    for value in ("1", "'yes'", "0"):
+        (tmp_path / "agk.toml").write_text(f"[steward]\nfix_briefs = {value}\n", encoding="utf-8")
+        with pytest.raises(StewardSettingError) as caught:
+            steward_settings(tmp_path)
+        assert str(caught.value) == "the [steward] table is refused (setting: steward.fix_briefs)"

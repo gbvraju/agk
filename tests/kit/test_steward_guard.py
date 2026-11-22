@@ -185,10 +185,10 @@ def test_req066_the_steward_setting_is_read_and_a_bad_value_refused(tmp_path):
     sys.path.insert(0, str(HOOK.parents[2] / "scripts" / "agk"))
     from config import StewardSettingError, steward_settings
 
-    assert steward_settings(project(tmp_path, "")) == {"auto_file": 0}
+    assert steward_settings(project(tmp_path, "")) == {"auto_file": 0, "fix_briefs": False}
     for value, want in (("false", False), ("3", 3), ("0", 0)):
         root = project(tmp_path, f"[steward]\nauto_file = {value}\n")
-        assert steward_settings(root) == {"auto_file": want}
+        assert steward_settings(root) == {"auto_file": want, "fix_briefs": False}
     for table in ("auto_file = 4", "auto_file = true", "auto_file = '1'", "other = 1", "x = -1"):
         root = project(tmp_path, f"[steward]\n{table}\n")
         with pytest.raises(StewardSettingError) as caught:
@@ -348,3 +348,47 @@ def test_req069_the_layout_leaves_the_approval_rule_unchanged(tmp_path, layout):
     root = listed(project(tmp_path, SOLO + f'[kit]\nlayout = "{layout}"\n'))
     assert bash(root, body_file(root, approval())) is None
     assert bash(root, body_file(root, approval(who="Who: AGK steward")))["permissionDecision"]
+
+
+# --- brief #1715 (ADR-0714): a brief's body and its label -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh issue create --title t --label agk-brief --body 'Sentence: a fix.'",
+        "gh issue edit 5 --add-label agk-brief",
+        "gh api --method POST repos/o/r/issues -f title=t -f 'labels[]=agk-brief' -f body=x",
+        "gh api --method POST repos/o/r/issues/5/labels -f 'labels[]=agk-brief'",
+    ],
+)
+def test_req066_a_direct_agk_brief_label_stays_denied(tmp_path, command):
+    """REQ-066 AC5: brief #1715 answer 2, `steward_owner.py file-brief` is the one route."""
+    root = project(tmp_path, 'default_branch = "main"\n[steward]\nfix_briefs = true\n')
+    found = bash(root, command)
+    assert found["permissionDecision"] == "deny" and "(path class: label)" in found[
+        "permissionDecisionReason"
+    ]
+
+
+def test_req066_a_direct_issue_body_edit_needs_fix_briefs(tmp_path):
+    """REQ-066 AC5: brief #1715 answer 2, an issue body edit is denied unless `fix_briefs = true`;
+    a comment edit and a title edit are not body edits."""
+    path = tmp_path / "p1.md"
+    path.write_text("Sentence: a fix.\nPriority: 1\n", encoding="utf-8")
+    edits = (
+        f"gh api -X PATCH repos/o/r/issues/5 -F body=@{path}",
+        f"gh issue edit 5 --body-file {path}",
+        "gh issue edit 5 --body 'Sentence: a fix.'",
+    )
+    for toml in ('default_branch = "main"\n', '[steward]\nfix_briefs = false\n'):
+        root = project(tmp_path, toml)
+        for command in edits:
+            found = bash(root, command)
+            assert found["permissionDecision"] == "deny", command
+            assert "(setting: steward.fix_briefs)" in found["permissionDecisionReason"]
+        assert bash(root, f"gh api -X PATCH repos/o/r/issues/comments/7 -F body=@{path}") is None
+        assert bash(root, "gh issue edit 5 --title 'A fix'") is None
+    root = project(tmp_path, '[steward]\nfix_briefs = true\n')
+    for command in edits:
+        assert bash(root, command) is None, command
