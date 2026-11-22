@@ -901,7 +901,7 @@ def test_1616_every_execution_value_is_read(tmp_path, value):
 
 # --- brief #1733 (ADR-0722): an owner merge is handed over, never parked -----------------------
 
-MERGE_NOW = datetime(2026, 11, 22, 10, 40, tzinfo=UTC)  # the brief's read of #1719
+MERGE_NOW = NOW  # the brief's read of #1719 at 10:40 UTC, each comment kept as minutes before it
 
 
 def merge_ask(minutes: float, number: int = 7, now: datetime = NOW, login: str = "boss") -> dict:
@@ -949,7 +949,7 @@ def test_1733_7_no_wait_setting_parks_an_owner_merge(minutes):
         "handover",
         "owner-merge",
     )
-    assert step(pull(), [asked(45)], settings) == ("park", "Q-7-1")
+    assert step(pull(), [asked(45)], settings) == (("park", "Q-7-1") if minutes <= 45 else None)
 
 
 def test_1733_6g_an_open_question_or_approval_still_parks_first():
@@ -999,23 +999,23 @@ def test_1733_2_owner_apply_writes_nothing_for_a_hand_over(hub):
 def comments_1719() -> list[dict]:
     """#1719's comments as of brief #1733 (read 2026-11-22 10:40 UTC), logins invented."""
 
-    def c(cid, login, body, when):
-        return {"id": cid, "user": {"login": login}, "body": body, "created_at": when}
+    def c(cid, login, body, minutes):  # 10:40 UTC is NOW
+        return at(cid, login, body, minutes)
 
     command = session_mod.owner_command(7)  # the pull request is #7 in this hub
     return [
-        c(1, "boss", "Question: Q-1710-1 for the maintainers: raise the cap?", "2026-11-22T07:10:01Z"),
-        c(2, "boss", "Owner needed: two small yes-or-no choices", "2026-11-22T07:11:38Z"),
-        c(3, "boss", "Parked-by: wait owner-needed\n\nWho: AGK", "2026-11-22T07:42:11Z"),
-        c(4, "owner", "Maintainer answer: Q-1710-1 yes", "2026-11-22T09:08:45Z"),
-        c(5, "bot", "Unparked-by: answer owner-needed\n\nWho: AGK", "2026-11-22T09:08:58Z"),
-        c(6, "builder", f"Report: {SHA} fix list applied", "2026-11-22T09:16:28Z"),
-        c(7, "boss", f"Verdict: fix list {SHA}\n\nFinal: docs/adr/x.md Proposed -> Accepted",
-          "2026-11-22T09:27:54Z"),  # fmt: skip
-        c(8, "boss", f'Owner needed: held as "outside author".\n\n{command}\n', "2026-11-22T09:32:09Z"),
-        c(9, "boss", "Parked-by: wait owner-needed\n\nWho: AGK", "2026-11-22T10:03:52Z"),
+        c(1, "boss", "Question: Q-1710-1 for the maintainers: raise the cap?", 210.0),
+        c(2, "boss", "Owner needed: two small choices\n\nQ-1710-1 first", 208.4),
+        c(3, "boss", "Parked-by: wait owner-needed\n\nWho: AGK", 178.0),
+        c(4, "owner", "Maintainer answer: Q-1710-1 yes", 91.3),
+        c(5, "bot", "Unparked-by: answer owner-needed\n\nWho: AGK", 91.0),
+        c(6, "builder", f"Report: {SHA} fix list applied", 83.5),
+        c(7, "boss", f"Verdict: fix list {SHA}\n\nFinal: docs/adr/0712-what-a-session-reads-req-037-brief-1710.md Proposed -> Accepted",
+          72.1),  # fmt: skip
+        c(8, "boss", f'Owner needed: held as "outside author".\n\n{command}\n', 67.9),
+        c(9, "boss", "Parked-by: wait owner-needed\n\nWho: AGK", 36.1),
         c(10, "builder", f"Report: {SHA[:7]} handing over: blocked: owner-needed waits",
-          "2026-11-22T10:03:59Z"),  # fmt: skip
+          36.0),  # fmt: skip
     ]
 
 

@@ -104,6 +104,7 @@ from common import (
 from merge_cleared import (
     MERGER_CREATED,
     MERGER_VARIABLE,
+    OWNER_COMMAND,
     PROTECTED,
     RECORD_TITLE,
     Nothing,
@@ -171,7 +172,7 @@ STATES = (  # (label, actor, what), amendment 150 item 1; pr_state's precedence 
     ("agk:fix", "builder", "the fix list on the head"),
     ("agk:question", "owner", "an answer to Owner needed:"),
     ("agk:approve", "owner", "a spec approval the head needs"),
-    ("agk:owner-merge", "owner", "the merge of a path only a person merges"),
+    ("agk:owner-merge", "owner", "the merge of a cleared head only the owner may merge"),  # #1733
     ("agk:merge-ready", "merger", "the guarded merge"),
     # amendment 162 (ADR-0453): not in the order; it replaces a builder's state, see `state_of`
     ("agk:handover", "launcher", "a new builder for a pull request whose builder stopped"),
@@ -523,7 +524,12 @@ def asks_owner(f: dict, comments: list[dict], authors: list[str] | None) -> bool
 def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str | None:
     """The state of the open ask of `asks_owner`, which closes as it says: `agk:approve` when an
     open `Owner needed:` names `Maintainer answer: amendment <n> approved` or `Approve: SPEC-<n>`
-    (brief #1656 answer 1, ADR-0690), `agk:question` for any other open ask, None when none."""
+    (brief #1656 answer 1, ADR-0690), `agk:question` for any other open ask, then
+    `agk:owner-merge` for an open merge ask (`merge_ask`) on a pull request that is not a draft,
+    whose latest trusted verdict clears the head and which was asked at or after the head's last
+    push; a stale merge ask is read as absent. While an approval ask is open, the approver's answer
+    gives the approval and leaves the merge ask open (brief #1733 answers 1 and 5, ADR-0722).
+    None when no ask is open."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
@@ -532,18 +538,51 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     owner_open = False  # an `Owner needed:`: only the owner's answer closes it (brief #1168)
     approval = False  # an open `Owner needed:` asks a spec or amendment approval (brief #1656)
     question_open = False  # a maintainers question: that answer or a newer head closes it
+    merge_at: str | None = None  # an open merge ask, when it was posted (brief #1733)
     for c in comments:
         line = first_line(c)
+        body = str(c.get("body") or "")
         if line.startswith("Owner needed:") and login_of(c) in listed:
+            if merge_ask(body, f.get("number")) and not APPROVAL_ASK.search(body):
+                merge_at = str(c.get("created_at") or "")
+                continue
             owner_open = True
-            approval = approval or bool(APPROVAL_ASK.search(str(c.get("body") or "")))
+            approval = approval or bool(APPROVAL_ASK.search(body))
         elif for_maintainers(line):
             question_open = not pushed or str(c.get("created_at") or "") >= pushed
         elif line.startswith(("Maintainer answer:", "Approve:")) and login_of(c) in approvers:
+            if not approval:
+                merge_at = None
             owner_open = question_open = approval = False
     if owner_open and approval:
         return "agk:approve"
-    return "agk:question" if owner_open or question_open else None
+    if owner_open or question_open:
+        return "agk:question"
+    if merge_at is not None and not f.get("draft") and (not pushed or merge_at >= pushed):
+        if clears_head(f, comments, authors):
+            return "agk:owner-merge"
+    return None
+
+
+def merge_ask(body: str, number) -> bool:
+    """Whether an `Owner needed:` BODY names the owner's merge command of `merge_cleared.py`
+    (`OWNER_COMMAND`) for pull request NUMBER (brief #1733 answer 1, ADR-0722)."""
+    return isinstance(number, int) and OWNER_COMMAND.format(number) in body
+
+
+def clears_head(f: dict, comments: list[dict], authors: list[str] | None) -> bool:
+    """Whether the latest trusted verdict clears the head as `base_state` reads it: a cleared
+    verdict naming it, a covered fix list whose `Final:` lines it accepts, or a covered head."""
+    head = str(f.get("head") or "")
+    listed = verdicts(comments, authors) or []
+    kind, sha = listed[-1] if listed else ("", "")
+    names_head = bool(sha) and head.startswith(sha)
+    if names_head and kind == "cleared":
+        return True
+    latest = latest_verdict_body(comments, authors)
+    if names_head and final_accept_clears(latest, head, f.get("files") or []):
+        return True
+    return covered_head(Held(f.get("commit") or {}), head, comments, authors) == "yes"
 
 
 def handover_reason(line: str) -> str | None:
@@ -737,6 +776,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
     reviews = listing(f"repos/{repo}/pulls/{n}/reviews")
     commit = gh(f"repos/{repo}/commits/{head}")
     facts = {
+        "number": n,  # brief #1733: the merge ask names this pull request's number
         "head": head,
         "mergeable_state": pr.get("mergeable_state"),
         "checks": checks,

@@ -330,7 +330,7 @@ def pr_1719_comments(login: str = "boss") -> list[dict]:
     """#1719's comments as of brief #1733, read 2026-11-22 10:40 UTC; logins invented."""
     return [
         at(1, login, "Question: Q-1710-1 for the maintainers: raise the cap?", "2026-11-22T07:10:01Z"),
-        at(2, login, "Owner needed: two small yes-or-no choices", "2026-11-22T07:11:38Z"),
+        at(2, login, "Owner needed: two small choices\n\nQ-1710-1 first", "2026-11-22T07:11:38Z"),
         at(3, "builder", "Report: cb86038 ready for review", "2026-11-22T07:12:54Z"),
         at(4, login, "Parked-by: wait owner-needed\n\nWho: AGK", "2026-11-22T07:42:11Z"),
         at(5, "maintainer", "Maintainer answer: Q-1710-1 yes", "2026-11-22T09:08:45Z"),
