@@ -15,6 +15,10 @@ Run it (PowerShell): `{{run_windows}}`
 Test it: `python3 -m pytest -q`
 Test it (PowerShell): `py -m pytest -q`
 
+The kit's standards check needs its pinned tools once in this Python: `python3 -m pip install -r config/ci-tools.txt`,
+or in a project that uses the kit as a plugin
+`python3 -m pip install -r "${CLAUDE_PLUGIN_ROOT}/config/ci-tools.txt"`.
+
 ## Deploy it
 
 The written steps are in `docs/deploy.md`. A deploy is the person's own act.
