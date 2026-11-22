@@ -100,6 +100,7 @@ def test_c_the_builder_text_carries_every_rule_by_its_first_words():
         "Secret-scan: deferred to CI",
         "ESCALATION",
         "LEAN READING",
+        "LOCAL MODE",  # brief #1713 (ADR-0713)
     ):
         assert words in body, words
     tier = [ln for ln in body.splitlines() if ln.startswith("Tier:")]
@@ -218,3 +219,81 @@ def test_1202_f_the_readme_and_guide_say_the_launcher_is_the_backup():
     guide = GUIDE.read_text(encoding="utf-8")
     section = guide.split("Running around the clock", 1)[1].split("\n8. ", 1)[0]
     assert "is the supervisor in CI mode" in section and "backup" in section
+
+
+# Brief #1713 (ADR-0713): in local mode the ready report carries its own evidence record.
+
+HOSTED_GATE = "CI's governance and proof on the head are the gate."
+LOCAL_REPORTS = (
+    "`Report: <head> ready for review`",
+    "`Report: <head> fix list applied`",
+    "`Report: <head> merge of main`",
+    "`Report: <head> CI fix`",
+)
+
+
+def local_paragraph() -> str:
+    paragraphs = [p for p in text("builder.txt").split("\n\n") if p.startswith("LOCAL MODE")]
+    assert len(paragraphs) == 1, len(paragraphs)
+    return paragraphs[0]
+
+
+def test_1713_a_the_local_paragraph_names_the_record_and_the_evidence_lines():
+    """REQ-039: brief #1713 answer 1: when local mode applies, and what each report carries."""
+    body = local_paragraph()
+    for words in (
+        "`execution: local`",
+        "`Local mode since`",
+        "--record --body <body file>",
+        "evidence.py push --branch <branch>",
+        "`Evidence:`",
+        "`Local evidence: <head> ...`",
+        "fenced `json` block",
+        "byte for byte",
+        "whether the note push passed or was refused",
+        "--name heavy --session <session name>",
+        *LOCAL_REPORTS,
+    ):
+        assert words in body, words
+    assert "--record <" not in body  # no FILE: the record goes to the shared folder and the note
+
+
+def test_1713_b_the_hosted_gate_is_unchanged_and_local_mode_has_its_own():
+    """REQ-039: brief #1713 answer 2: hosted text word for word; the local gate in the paragraph."""
+    body = text("builder.txt")
+    assert body.count(HOSTED_GATE) == 1, HOSTED_GATE
+    small = [p for p in body.split("\n\n") if p.startswith("TESTS ON A SMALL MACHINE")]
+    assert len(small) == 1 and small[0].rstrip().endswith(HOSTED_GATE), small
+    local = local_paragraph()
+    assert "the record and the conductor's evidence check are the gate (session rule 30)" in local
+    assert HOSTED_GATE not in local
+
+
+def test_1713_c_every_command_resolves_through_the_kit_and_no_setting_lowers_it():
+    """REQ-039: brief #1713 answer 3: `[kit] layout` resolves each command; `pr_mode`,
+    `review_mode` and `[governance] level` leave the step unchanged, so none is named."""
+    body = local_paragraph()
+    commands = re.findall(r"`(python3 [^`]+)`", body)
+    assert len(commands) >= 3, commands
+    for command in commands:
+        for part in command.split(" -- "):
+            if part.startswith("python3 "):
+                assert part.startswith("python3 <kit>/"), command
+    for setting in ("pr_mode", "review_mode", "governance", "level", "flow", "auto_merge"):
+        assert not re.search(rf"\b{setting}\b", body.replace("governance and proof", "")), setting
+
+
+def test_1713_d_the_edge_cases_each_have_their_line():
+    """REQ-039: brief #1713 answers 3 and 4: a refused setting, gitleaks missing (Q-1713-2),
+    a dirty tree, a later push, a failed step and a `Final:`-only fix list."""
+    body = local_paragraph()
+    for words in (
+        "(setting: execution)",
+        "`gitleaks version` fails",
+        "for the maintainers",
+        "never a record of a dirty tree",
+        "any push after the report needs a new record",
+        "never post a failed record as ready",
+        "only content is a `Final:` line",
+    ):
+        assert words in body, words

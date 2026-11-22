@@ -60,8 +60,11 @@ def test_check_playbooks_passes_with_eleven_playbooks() -> None:
 def test_exactly_the_mcp_server_gates_of_rule_10() -> None:
     by_id = gates()
     assert set(by_id) == GATES
-    # SPEC-0072 rule 3 (ADR-0666, brief #1586): restated as judgement with a reason
-    assert all(g["kind"] == "judgement" for g in by_id.values())
+    # SPEC-0072 rule 3 (ADR-0666, brief #1586): restated as judgement with a reason, except the
+    # prompt-injection set, which is a check of its own step (brief #1712, ADR-0717)
+    assert all(g["kind"] == "judgement" for k, g in by_id.items() if k != "prompt-injection-set")
+    assert by_id["prompt-injection-set"]["kind"] == "check"
+    assert by_id["prompt-injection-set"]["step"] == "injection-set"
     schema = by_id["tool-schema-contract-tests"]["text"].lower()
     for word in ("tool schema", "contract tests", "testing map", "test glob", "every schema file"):
         assert word in schema, word
@@ -74,7 +77,9 @@ def test_exactly_the_mcp_server_gates_of_rule_10() -> None:
 
 
 def test_every_restated_gate_names_its_reason_and_no_step() -> None:
-    assert all("step" not in g and "(ADR-0666)" in g["reason"] for g in gates().values())
+    restated = [g for k, g in gates().items() if k != "prompt-injection-set"]
+    assert all("step" not in g and "(ADR-0666)" in g["reason"] for g in restated)
+    assert "reason" not in gates()["prompt-injection-set"]  # brief #1712: a check has none
 
 
 def test_no_gate_is_owner_only() -> None:

@@ -1898,7 +1898,7 @@ def judge(
     me: str,
     prs: list,
     hours: int,
-    shape: Callable = brief_problems,
+    shape: Callable = lambda body, _number=None: brief_problems(body),
     root=None,
     known_open: set[int] | None = None,
     read: bool = True,
@@ -1912,7 +1912,7 @@ def judge(
         return "stale", []
     if is_parked(brief):
         return "parked", []
-    problems = [] if is_red(brief) else shape(brief.get("body"))  # a record, not a brief (#854)
+    problems = [] if is_red(brief) else shape(brief.get("body"), brief.get("number"))  # #854
     if problems:
         return problems[0], []
     for dep in depends_on(brief["body"]):
@@ -1976,9 +1976,11 @@ def priority_of(body: str) -> int:
     return 2
 
 
-def brief_shape(root, repo: str) -> Callable:
-    """What this repository refuses in a brief body: rule 4, and the wave with a plan issue."""
-    from session_plan import touch_problems, touch_rules  # the plan builds on this module
+def brief_shape(root, repo: str, s: Survey | None = None) -> Callable:
+    """What this repository refuses in a brief body: rule 4, and the wave with a plan issue. With
+    the survey S and a brief's number, an `Adds:` refusal is read again against the files the
+    brief's own merged pull requests added (brief #1717)."""
+    from session_plan import ADDS_EXISTS, own_added, touch_problems, touch_rules
 
     # The default branch's files, never the main folder's (brief #1301, ADR-0551).
     rules = touch_rules(root, f"origin/{load_config(Path(root))['default_branch']}")
@@ -1986,9 +1988,15 @@ def brief_shape(root, repo: str) -> Callable:
     waves = plan_issue_set(root)
     limits = brief_code_paths(root)
 
-    def shape(body: str | None) -> list[str]:
+    def shape(body: str | None, number: int | None = None) -> list[str]:
         found = brief_problems(body, limits) + (wave_problems(body, known) if waves else [])
-        return found or touch_problems(str(body), rules)
+        if found:
+            return found
+        found = touch_problems(str(body), rules)
+        if s is not None and isinstance(number, int) and number > 0:
+            if any(p.endswith(ADDS_EXISTS) for p in found):
+                found = touch_problems(str(body), rules, own_added(s, number))
+        return found
 
     return shape
 
@@ -2071,7 +2079,7 @@ def survey(
     )
     found.briefs = {i["number"]: i for i in issues if "pull_request" not in i}
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
-    shape = brief_shape(root, repo)
+    shape = brief_shape(root, repo, found)
     known_open = None
     if walk is not None:
         known_open = {i["number"] for i in everything if isinstance(i.get("number"), int)}

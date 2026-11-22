@@ -43,9 +43,9 @@ owner_only = false
 
 [[gates]]
 id = "prompt-injection-set"
-kind = "judgement"
+kind = "check"
+step = "injection-set"
 text = "A prompt-injection test set: the set exists and the testing map names its tests."
-reason = "No path is named for the prompt-injection test set yet, so no offline step can read it; a reviewer does (ADR-0666)."
 owner_only = false
 
 [[gates]]
