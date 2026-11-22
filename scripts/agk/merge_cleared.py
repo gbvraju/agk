@@ -361,6 +361,7 @@ OWNER_MERGE = "owner merge"
 OWNER_HOLDS = ("release", "protected class", "outside author")  # the owner's (#1358, #1709)
 NO_AUTHOR = "no listed verdict author (rule 3; setting: verdict_authors in config/reviewers.yaml)"
 WRITERS = ("write", "maintain", "admin")  # an author's permission that is not outside (#1709)
+INSIDE_ASSOCIATIONS = ("OWNER",)  # inside when the permission cannot be read (Q-1729-1)
 EXECUTION = "execution must be hosted, hybrid, pool or local (setting: execution in agk.toml)"
 OWNER_COMMAND = "python3 scripts/agk/merge_cleared.py --pr {} --owner"  # ADR-0570 decision 2
 WOULD_BE = "would-be merge"  # the result an owner hold reports (brief #1358 answer 1)
@@ -872,7 +873,8 @@ def execution_setting(data: dict) -> str:
 def outside_author(repo: str, pull: dict) -> bool:
     """Whether PULL comes from outside (brief #1709 answer 2): its head is not a branch of REPO (a
     fork, or a deleted one), or its author's permission, read with one GET, is not write, maintain
-    or admin; an answer that cannot be read is outside."""
+    or admin. When that read returns nothing (a cloud session's proxy refuses it), the pull
+    request's own `author_association` decides: only OWNER is inside (brief #1729, Q-1729-1)."""
     head = pull.get("head")
     source = head.get("repo") if isinstance(head, dict) else None
     name = source.get("full_name") if isinstance(source, dict) else None
@@ -880,7 +882,9 @@ def outside_author(repo: str, pull: dict) -> bool:
     if not isinstance(name, str) or name.lower() != repo.lower() or not author:
         return True
     found = read_once(f"repos/{repo}/collaborators/{quote(author)}/permission", dict)
-    return not isinstance(found, dict) or found.get("permission") not in WRITERS
+    if not isinstance(found, dict):
+        return pull.get("author_association") not in INSIDE_ASSOCIATIONS
+    return found.get("permission") not in WRITERS
 
 
 def required_of(data: dict) -> list[str]:

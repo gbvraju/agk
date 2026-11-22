@@ -606,12 +606,16 @@ def test_with_auto_merge_off_nothing_is_read_or_merged(tmp_path):
     assert not [a for a in made if any("/collaborators/" in x for x in a)]
 
 
-@pytest.mark.parametrize("accounts", [None, 'conductor_accounts: ["@conductor-two"]'])
-def test_conductor_accounts_set_or_unset_leave_the_fallback_alone(tmp_path, accounts):
-    """REQ-046: brief #1729 answer 3 `conductor_accounts` (not read by the fallback)."""
-    listed = f'version: 1\nverdict_authors: ["@{OWNER}"]\n' + (accounts + "\n" if accounts else "")
+@pytest.mark.parametrize("conductor", [None, "conductor-two"], ids=["unset", "set"])
+def test_conductor_accounts_set_or_unset_leave_the_fallback_alone(tmp_path, conductor):
+    """REQ-046: brief #1729 answer 3 `conductor_accounts` (not read by the fallback; when set,
+    its account's verdict is the one that counts, as ADR-0711 decides)."""
+    listed = f'version: 1\nverdict_authors: ["@{OWNER}"]\n'
+    if conductor:
+        listed += f'conductor_accounts: ["@{conductor}"]\n'
     proc, _ = merge_cleared_run(
-        tmp_path, toml(ON), [cleared()], pull=association("OWNER"), reviewers_yaml=listed,
+        tmp_path, toml(ON), [cleared(login=conductor or OWNER)], pull=association("OWNER"),
+        reviewers_yaml=listed,
         **REFUSED,
     )  # fmt: skip
     assert one_line(proc).endswith(f": merged {MERGE12}"), proc.stdout + proc.stderr

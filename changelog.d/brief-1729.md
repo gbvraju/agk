@@ -1,0 +1,1 @@
+- The merger counts a pull request's own `author_association` of `OWNER` as inside when the author's permission cannot be read (a cloud session's proxy refuses it), so the owner's cleared changes merge again from a cloud session; every other association stays held for the owner (brief #1729, ADR-0720)
