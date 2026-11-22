@@ -28,8 +28,10 @@ WORK_TYPES = sorted(p.stem for p in PLAYBOOKS.glob("*.toml") if p.stem != "defau
 IMPLEMENTED = {"cut-over-order", "rollback-order", "committed-secrets", "environment-settings"}
 IMPLEMENTED |= {"contract-tests", "mock-parity"}  # brief #1597
 IMPLEMENTED.add("tests-floor")  # brief #1590 (ADR-0670)
+IMPLEMENTED.add("injection-set")  # brief #1712 (ADR-0717)
 # a sample with no architecture record has no merged foundation (brief #1590, Q-1590-3)
 NOT_FOUNDED = "not run tests-first: no foundation yet\n"
+FOUNDATION_STEPS = ("tests-first", "prompt-injection-set")  # brief #1712 (ADR-0717)
 
 
 def _project(tmp_path: Path, work_type: str | None) -> Path:
@@ -67,7 +69,8 @@ def test_every_check_gate_of_a_playbook_runs_offline(
     assert run_gates.main(["--root", str(root)]) == 0
     out = capsys.readouterr().out
     for gid in {**_checks("default"), **_checks(work_type)}:
-        assert f"ok {gid}\n" in out or (gid == "tests-first" and NOT_FOUNDED in out), gid
+        unfounded = f"not run {gid}: no foundation yet\n"  # tests-first; brief #1712's set too
+        assert f"ok {gid}\n" in out or (gid in FOUNDATION_STEPS and unfounded in out), gid
     assert out.rstrip().splitlines()[-1].startswith("ok gates (")
 
 
@@ -88,7 +91,8 @@ def test_the_restated_gates_are_judgement_with_a_reason_and_no_step() -> None:
                 assert len(gate["reason"]) >= 20, gate["id"]
             if gate["kind"] == "judgement":
                 assert "step" not in gate, gate["id"]
-    assert restated == 21  # brief #1593 made 4 checks, brief #1597 three (ADR-0677)
+    # brief #1593 made 4 checks, brief #1597 three (ADR-0677), brief #1712 one (ADR-0717)
+    assert restated == 20
 
 
 def test_the_kit_without_a_work_type_runs_default_only(

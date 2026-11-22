@@ -548,6 +548,10 @@ with a `[delivery] work_type` whose architecture record exists, and fails when t
 integration folder (`<first test_dirs entry>/integration/`) holds none, or when the change adds or changes a layer's code file
 and no test file; a deletion only is green, `mode = "adopt"` holds the first two, and it prints `not run tests-first: no work
 type` (the kit's own repository), `no foundation yet` or `no reader for <stack>`.
+`injection_set.py`, the `injection-set` step of `mcp-server.toml`'s `prompt-injection-set` check (brief #1712, ADR-0717), fails
+when no `test_dirs` entry holds an `injection/` folder, when the folder holds no file but a README, or when no `[testing] map`
+entry of `agk.toml` names a file of it; it prints `not run prompt-injection-set: no foundation yet` until `docs/architecture.md`
+exists, and refuses a `test_dirs` that is not a list of folders naming the setting.
 It prints `ok <gate id>` per gate that passes and `FAIL gates: <gate id>: <rule> (path class: <class>)` per failure, never a
 value; a step with no module is refused naming the gate id. It ends `ok gates (<n> check gates)` or `ok gates (no check gate)`.
 A step that cannot read the project prints `not run <gate id>: <reason>`, never `ok`, and the last line adds
