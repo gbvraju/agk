@@ -32,9 +32,12 @@ from test_session import (
 from test_session import (
     stub as session_stub,  # noqa: F401
 )
+from test_session_flow import DAY
+
+pytestmark = pytest.mark.usefixtures("clock")
+
 
 ROOT = Path(__file__).resolve().parents[2]
-DAY = datetime.now(UTC).strftime("%Y-%m-%d")
 BRIEF = f"{ISSUES}/5/comments"
 CONDUCTOR = ISSUES  # the stub ignores the query
 CONDUCTOR_ISSUE = {"number": 204, "title": "Conductor: assignments"}
@@ -80,6 +83,18 @@ def test_ac4_a_build_is_claimed_with_one_post_that_names_the_build(proj, stub):
     assert claim_posts(stub) == [
         ["POST", BRIEF, ["-f", f"body=taken: s-me {DAY} build (b)\n\nWho: AGK"]]
     ]
+
+
+def test_1680_the_taken_line_carries_the_day_of_the_post_not_of_the_claim(proj, stub, clock):
+    """REQ-053: a claim at 23:59:59Z posted at 00:00:01Z is dated by the post (brief #1680)."""
+    clock.set(datetime(2026, 11, 17, 23, 59, 59, tzinfo=UTC))
+    assert f"{DAY}" == "2026-11-17"
+    clock.set(datetime(2026, 11, 18, 0, 0, 1, tzinfo=UTC))
+    stub.serve(BRIEF, [], nth=1)
+    stub.serve(BRIEF, [took(1, "s-me", "b", "me")], nth=2)
+    assert claim(proj, stub).returncode == 0
+    assert claim_posts(stub)[0][2] == ["-f", "body=taken: s-me 2026-11-18 build (b)\n\nWho: AGK"]
+    assert f"{DAY}" == "2026-11-18"
 
 
 def test_ac4_a_live_take_of_the_same_build_is_never_taken_twice(proj, stub):

@@ -6,14 +6,30 @@ copies of the GitHub responses and a real git repository serves the default bran
 from __future__ import annotations
 
 import json
+import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from test_session import FREE, ISSUES, REPO, SHA, Stub, comment, iso, issue, listing, posts, session
 
+pytestmark = pytest.mark.usefixtures("clock")
+
+
 PULLS = f"repos/{REPO}/pulls"
-DAY = datetime.now(UTC).strftime("%Y-%m-%d")
+
+
+class Day:
+    """The day of the test's pinned clock (the `clock` fixture of conftest), read when formatted."""
+
+    def __format__(self, spec: str) -> str:
+        pinned = os.environ.get("AGK_TEST_NOW")
+        return (datetime.fromisoformat(pinned) if pinned else datetime.now(UTC)).strftime(
+            "%Y-%m-%d"
+        )
+
+
+DAY = Day()
 
 
 @pytest.fixture

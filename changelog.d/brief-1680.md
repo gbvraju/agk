@@ -1,0 +1,1 @@
+- The session claim and take-over tests read the day of a pinned clock, not a date taken when the file loads, so a test run that crosses midnight UTC stays green (brief #1680)
