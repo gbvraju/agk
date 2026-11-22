@@ -184,14 +184,14 @@ def test_the_three_commands_are_found_by_the_check():
 
 
 def test_req069_the_steward_section_names_ask_target_and_approve():
-    """REQ-069: brief #1692 answer 4: both commands with their flags, beside the standard's `confirm`."""
+    """REQ-069: brief #1692 answer 4: both commands and their flags, beside the standard's one."""
     body = sections()["Steward and the owner"]
     for line in (
-        "    python3 scripts/agk/steward_owner.py ask --target pr:N --qid Q --file FILE --line FILE",
-        "    python3 scripts/agk/steward_owner.py approve --ask Q --said FILE --at TIME [--by LOGIN]",
-        "    python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]",
+        "ask --target pr:N --qid Q --file FILE --line FILE",
+        "approve --ask Q --said FILE --at TIME [--by LOGIN]",
+        "confirm --said FILE --at TIME [--by LOGIN]",
     ):
-        assert line in body.splitlines(), line
+        assert f"    python3 scripts/agk/steward_owner.py {line}" in body.splitlines(), line
     prose = " ".join(body.split())
     for words in ('review_mode = "solo"', "agent_apps", "personal mode", "posts the `Approve:`"):
         assert words in prose, words

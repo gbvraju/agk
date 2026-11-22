@@ -49,11 +49,17 @@ def test_the_guide_says_the_person_posts_it_and_re_runs_governance():
     assert "| `/agk:confirm` |" in REFERENCE.read_text(encoding="utf-8")
 
 
+def section(path, heading: str) -> str:
+    """The flattened body of the `## HEADING` section of PATH."""
+    body = path.read_text(encoding="utf-8").split(f"\n## {heading}\n", 1)[1]
+    return " ".join(body.split("\n## ", 1)[0].split())
+
+
 def test_req069_the_skill_opens_with_the_natural_path():
-    """REQ-069: brief #1692 answer 2: the natural path is the first section; printing is the fallback."""
+    """REQ-069: brief #1692 answer 2: the natural path comes first; printing is the fallback."""
     text = SKILL.read_text(encoding="utf-8")
     assert text.split("\n## ", 2)[1].startswith("The natural path\n")
-    path = " ".join(text.split("\n## The natural path\n", 1)[1].split("\n## ", 1)[0].split())
+    path = section(SKILL, "The natural path")
     for words in (
         "steward_owner.py ask --target",
         "steward_owner.py approve",
@@ -70,17 +76,19 @@ def test_req069_the_steward_names_the_one_approval_path():
     text = flat(STEWARD)
     for words in ("ask --target", "approve", "paste", *SETTINGS):
         assert words in text, words
-    assert (
-        "(in solo mode, the `Approve:` and `Confirmed:` lines that `steward_owner.py approve` writes"
-        " on a recorded yes aside, session rule 29)"
-    ) in text
+    aside = (
+        "(in solo mode, the `Approve:` and `Confirmed:` lines that `steward_owner.py approve`"
+        " writes on a recorded yes aside, session rule 29)"
+    )
+    assert aside in text
 
 
 def test_req069_the_voice_guide_shows_the_question_and_the_reply_after_a_yes():
     """REQ-069: brief #1692 answer 3: two examples, the one question and the reply after a yes."""
-    text = VOICE.read_text(encoding="utf-8")
-    section = " ".join(text.split("\n## One question, one yes\n", 1)[1].split("\n## ", 1)[0].split())
-    for words in ("steward_owner.py ask --target", "steward_owner.py approve", "https://", *SETTINGS):
-        assert words in section, words
-    assert section.count("Example") >= 2
-    assert "Posted" in section and "paste this one line" in section
+    body = section(VOICE, "One question, one yes")
+    for words in ("steward_owner.py ask --target", "steward_owner.py approve", "https://"):
+        assert words in body, words
+    for words in SETTINGS:
+        assert words in body, words
+    assert body.count("Example") >= 2
+    assert "Posted" in body and "paste this one line" in body

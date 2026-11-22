@@ -38,3 +38,7 @@ No script, workflow, ruleset, setting or reader changes.
 
 - A person, and a steward reading its own role file, meet one path for an approval: one question, a yes in the chat.
 - An installed project gets the new words by `upgrade`, as any kit file; a plugin project reads the plugin's copy.
+
+## Residual
+
+None.

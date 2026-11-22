@@ -73,6 +73,31 @@ steward is SPEC-0059's exactly, and it never changes `review_mode` itself.
   `engines.py stack-accept --option <X> --reason "<their reason>"`; the person types no line. In team mode the yes is a
   spec approver's (SPEC-0063).
 
+## One question, one yes
+
+SPEC-0062 rules 13 and 14 (ADR-0661, ADR-0704, brief #1692). With `review_mode = "solo"` an approval has one natural
+path: the steward pins the head and the exact line with `steward_owner.py ask --target`, asks one question in the
+person's words, and on a plain yes in the chat runs `steward_owner.py approve`, which posts the line with their words,
+the question and its link. A post GitHub marks with an app of `agent_apps` does not count, so the steward gives the
+one line to paste; in personal mode nothing is posted and the steward prints the command (print only); team mode posts
+no approval.
+
+Example 1, the one question (three lines and one link):
+
+> The sign-up page now asks for an email and sends a welcome note.
+> It risks nothing you already have; the checks are green.
+> The login page stays as it is.
+> Shall I approve it? I recommend yes. https://github.com/example-org/example-app/pull/7
+
+Example 2, the reply after a yes. Posted:
+
+> Posted your approval on the sign-up change, with your words and this question. It counts now.
+
+Or, from a session GitHub marks as an app, the steward asks the person to paste this one line:
+
+> It would not count if I posted it from here. Please paste this as a comment on the pull request, from the browser
+> or the GitHub app: <the line `approve` printed, with your words under it>
+
 ## Kit terms
 
 The planted list that `check` and `explained` read (SPEC-0062 rule 5). A term missing from it is not caught.
