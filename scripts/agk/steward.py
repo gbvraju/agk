@@ -26,7 +26,8 @@ the value (exit 2). `end` writes the pass's counted calls and tokens on its mark
 not given, never 0 (rule 13's daily list reads them). `start` keeps a checkpoint in the cache;
 `refresh` posts nothing and prints only what changed since it, in three GET calls: the new or
 edited memory comments (a `Decision:` or `Maintainer answer:` first), the open pull requests whose
-head or labels changed and the ones closed or merged, then moves it (brief #1702, ADR-0708). `onboard` is `steward_onboard.py onboard`
+head or labels changed and the ones closed or merged, then moves it (brief #1702, ADR-0708).
+`onboard` is `steward_onboard.py onboard`
 (SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In solo mode a start with no `Person:` entry
 prints the one question of SPEC-0062 rule 4, and `record --kind Person` takes `<business|technical>:
 <their words>` and ends `Who: ProductOwner` (rule 15; brief #1598, ADR-0678). `setup` prints one
