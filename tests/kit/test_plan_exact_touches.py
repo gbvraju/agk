@@ -525,13 +525,15 @@ def test_1717_check_brief_stays_network_free_and_refuses(tmp_path):
         'execution = "pool"\n',
         'execution = "local"\n',
         '[kit]\nlayout = "installed"\n',
-        '[kit]\nlayout = "plugin"\n',
+        'version = "{pin}"\n[kit]\nlayout = "plugin"\nplugin_version = "{pin}"\n',
     ],
 )
 def test_1717_the_exemption_holds_under_each_setting(proj, stub, text):
     """REQ-041 (brief #1717 answer 4): settings the exemption does not read leave it as it is;
     `claim_hours` of one hour still counts a first build merged days before."""
-    proj.write("agk.toml", text)
+    import kit_root
+
+    proj.write("agk.toml", text.replace("{pin}", str(kit_root.plugin_version(SCRIPTS.parents[1]))))
     later_build(stub)
     timeline(stub, 5, (9, 5, "2026-01-01T00:00:00Z"))
     added(stub, 9, "src/f0.py")
