@@ -57,8 +57,9 @@ more, is refused naming `setting: flow.brief_code_paths`, never the value.
 database is needed). A bad value is refused naming `setting: flow.<key>`, never the value.
 
 `steward_settings(root)` reads the optional `[steward]` table (SPEC-0059 rule 12, brief #1320,
-ADR-0557): `auto_file`, `false` or a whole number from 0 to 3, 0 when unset. An unknown key or
-another value is refused naming `setting: steward.<key>`, never the value.
+ADR-0557): `auto_file`, `false` or a whole number from 0 to 3, 0 when unset, and `fix_briefs`,
+`true` or `false` (default, brief #1715, ADR-0714). An unknown key or another value is refused
+naming `setting: steward.<key>`, never the value.
 
 `autopilot_settings(root)` reads the optional `[autopilot]` table (SPEC-0064 rules 7 and 8, brief
 #1390, ADR-0587): `mode` (`off`, `assist` or `on`; `assist` when the table names none, None with no
@@ -694,7 +695,7 @@ def capacity_settings(root: Path) -> dict | None:
 
 # --- the [steward] table (SPEC-0059 rule 12, brief #1320, ADR-0557) -----------------------------
 
-STEWARD_DEFAULTS = {"auto_file": 0}
+STEWARD_DEFAULTS = {"auto_file": 0, "fix_briefs": False}  # brief #1715: `fix_briefs` (ADR-0714)
 
 
 class StewardSettingError(CheckError):
@@ -703,7 +704,8 @@ class StewardSettingError(CheckError):
 
 def steward_settings(root: Path) -> dict:
     """`auto_file`: the highest brief priority the steward files without the owner's word, a whole
-    number from 0 to 3, or `false` for none; 0 when unset or with no table."""
+    number from 0 to 3, or `false` for none; 0 when unset or with no table. `fix_briefs`: whether
+    `steward_owner.py fix-brief` writes a brief's mechanical lines (brief #1715), `false` unset."""
     try:
         table = config_source(root).get("steward", {})
     except (OSError, ValueError):
@@ -712,7 +714,8 @@ def steward_settings(root: Path) -> dict:
         raise StewardSettingError("the [steward] table is refused (setting: steward)")
     for key, value in table.items():
         number = isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 3
-        if key not in STEWARD_DEFAULTS or not (number or value is False):
+        ok = isinstance(value, bool) if key == "fix_briefs" else number or value is False
+        if key not in STEWARD_DEFAULTS or not ok:
             raise StewardSettingError(f"the [steward] table is refused (setting: steward.{key})")
     return {**STEWARD_DEFAULTS, **table}
 
