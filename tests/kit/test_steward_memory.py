@@ -216,6 +216,7 @@ def test_req066_personal_mode_writes_the_sidecar_file_and_posts_nothing(root):
 # --- refresh: what changed since the checkpoint (brief #1702, ADR-0708) --------------------------
 
 PULLS = re.compile(r"repos/\{owner\}/\{repo\}/pulls\?(.*)$")
+COMMENT = re.compile(r"repos/\{owner\}/\{repo\}/issues/comments/(\d+)$")
 
 
 class Forge(GitHub):
@@ -235,6 +236,14 @@ class Forge(GitHub):
         return item
 
     def __call__(self, method, endpoint, fields=None):
+        if edited := COMMENT.match(endpoint):  # brief #1741: a beat edits its own marker
+            self.calls.append((method, endpoint))
+            for issue in self.issues.values():
+                for item in issue["c"]:
+                    if item["id"] == int(edited[1]):
+                        item["body"], item["updated_at"] = fields["body"], stamp(self.clock)
+                        return dict(item)
+            return None
         found = PULLS.match(endpoint)
         if not found:
             return super().__call__(method, endpoint, fields)
@@ -267,8 +276,8 @@ def test_req066_refresh_makes_three_calls_and_prints_only_what_changed(root):
     gh.pull(8, minutes=10, labels=("agk:ci-red",), head="b" * 40)
     gh.pull(6, minutes=15, state="closed")
     code, lines = steward.refresh(root, "s1", gh, NOW)
-    assert code == 0 and gh.counted() == 3
-    comments = [e for _, e in gh.calls if "/comments" in e]
+    assert code == 0 and gets(gh) == 3
+    comments = [e for m, e in gh.calls if "/comments" in e and m == "GET"]
     assert len(comments) == 1 and "since=" in comments[0]
     assert any("pulls?state=open" in e for _, e in gh.calls)
     assert any("pulls?state=closed&sort=updated&direction=desc" in e for _, e in gh.calls)
@@ -279,9 +288,9 @@ def test_req066_refresh_makes_three_calls_and_prints_only_what_changed(root):
     assert lines[3] == "#6 merged " + stamp(15)
     gh.calls.clear()
     code, lines = steward.refresh(root, "s1", gh, NOW + timedelta(minutes=1))
-    assert code == 0 and gh.counted() == 3
+    assert code == 0 and gets(gh) == 3
     assert lines == ["refresh: nothing new since " + NOW.strftime("%Y-%m-%dT%H:%M:%SZ")]
-    assert not any(m != "GET" for m, _ in gh.calls)
+    assert [m for m, _ in gh.calls if m != "GET"] == ["PATCH"]  # the beat, brief #1741
 
 
 def test_req066_refresh_without_a_checkpoint_is_refused_naming_the_setting(root):
@@ -339,7 +348,7 @@ def test_req066_refresh_says_when_more_closed_than_one_page(root):
     for n in range(101):
         gh.pull(100 + n, minutes=200, state="closed", merged=False)
     code, lines = steward.refresh(root, "s1", gh, NOW)
-    assert code == 0 and gh.counted() == 3
+    assert code == 0 and gets(gh) == 3
     assert lines[-1].startswith("more closed since ") and lines[-1].endswith(": not listed")
     assert sum(line.startswith("#") and " closed " in line for line in lines) == 100
 
@@ -394,28 +403,12 @@ def test_req066_refresh_keeps_its_checkpoint_in_the_cache_setting(root, tmp_path
     held = steward.load_cache(root)["checkpoint"]
     assert held["at"] == (NOW - timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
     assert (tmp_path / "cache.json").is_file()
-    assert steward.refresh(root, "s1", gh, NOW)[0] == 0 and gh.counted() == 3
+    assert steward.refresh(root, "s1", gh, NOW)[0] == 0 and gets(gh) == 3
 
 
 # --- one live run at a time, and a run's work survives the next start (brief #1741, ADR-0726) ----
 
-COMMENT = re.compile(r"repos/\{owner\}/\{repo\}/issues/comments/(\d+)$")
-
-
-class Beating(Forge):
-    """The double with a comment edit: `PATCH issues/comments/<id>` changes that comment."""
-
-    def __call__(self, method, endpoint, fields=None):
-        found = COMMENT.match(endpoint)
-        if not found:
-            return super().__call__(method, endpoint, fields)
-        self.calls.append((method, endpoint))
-        for issue in self.issues.values():
-            for item in issue["c"]:
-                if item["id"] == int(found[1]):
-                    item["body"], item["updated_at"] = fields["body"], stamp(self.clock)
-                    return dict(item)
-        return None
+Beating = Forge  # the double edits a comment too (brief #1741)
 
 
 def hm(minutes: int) -> str:
