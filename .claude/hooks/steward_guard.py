@@ -10,7 +10,8 @@ a denial prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissi
 "permissionDecisionReason": ...}} and exits 0; an allow prints nothing.
 
 Denies: a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:`,
-`Correction:` or `Merge:`, zero-width characters read as nothing (brief #1732, ADR-0727), except, in solo mode with one person listed, an `Approve:` or
+`Correction:` or `Merge:`, zero-width characters read as nothing (brief #1732, ADR-0727),
+except, in solo mode with one person listed, an `Approve:` or
 `Confirmed:` body read from a file that closes with the `Owner said`, `Asked` and `Who:
 ProductOwner` lines of `steward_owner.py approve` (SPEC-0062 rule 13, brief #1691, ADR-0704; never
 with `AGK_STEWARD_START=conductor`); a `Maintainer answer:` whose second line is not `Owner said
