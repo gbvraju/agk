@@ -188,7 +188,8 @@ def test_a_missing_tool_names_npm_ci(
 @pytest.mark.parametrize("case", ["python", "no-package"])
 def test_the_pack_is_off_without_a_node_stack_or_package_json(case: str, tmp_path: Path) -> None:
     """REQ-079: brief #1764 answers 1 and 7."""
-    root = sample(tmp_path, runtime="python") if case == "python" else sample(tmp_path, package=False)
+    kw = {"runtime": "python"} if case == "python" else {"package": False}
+    root = sample(tmp_path, **kw)
     assert not node_pack.on(root)
     assert not any("standards node" in line for _, line in run_gates.pack_results(
         PLAYBOOKS / "web-app.toml", root))

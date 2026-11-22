@@ -629,7 +629,8 @@ def _standards(rel: str, entries: list[dict], root: Path) -> list[str]:
     for entry in entries:
         out += _table_keys(rel, "a `[[standards]]` entry", entry, STANDARD_KEYS, {})
         if _is(entry.get("rules"), "table"):
-            out += _table_keys(rel, "a `[[standards]]` `rules`", entry["rules"], RULES_KEYS, RULES_OPTIONAL)
+            rules = entry["rules"]
+            out += _table_keys(rel, "a `[[standards]]` `rules`", rules, RULES_KEYS, RULES_OPTIONAL)
     found = [e["stack"] for e in entries if isinstance(e.get("stack"), str)]
     known = stacks(root)
     if known is not None and any(name not in known for name in found):

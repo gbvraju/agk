@@ -8,7 +8,7 @@
 
 Protected classes this pull request changes: `scripts/agk/` (the new `gates/node_pack.py`, `run_gates.py` and
 `playbook_format.py`), `config/` (`config/playbooks/web-app.toml`, `config/playbooks/mobile.toml`), `agk.toml` (the
-`[[testing.map]]` entries), `tests/kit/` (the new `test_node_pack.py`, `test_python_pack.py`,
+`[[testing.map]]` entries), `tests/kit/` (the new `test_node_pack.py`, `test_python_pack.py`, `test_product_deps.py`,
 `test_playbook_standard.py`) and `kit/` (`kit/manifest.json`, the new installed file). `kit/hashes.json` is not edited by
 hand.
 

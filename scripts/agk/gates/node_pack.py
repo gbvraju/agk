@@ -61,7 +61,8 @@ Tally = dict[str, int]
 def on(root: Path) -> bool:
     """The pack runs only when the Accepted stack record chose Node and a `package.json` exists."""
     found = pins.chosen(Path(root))
-    return found is not None and found[0] == pins.STACKS["node"] and (root / "package.json").is_file()
+    node = found is not None and found[0] == pins.STACKS["node"]
+    return node and (Path(root) / "package.json").is_file()
 
 
 def files(root: Path, globs: list[str]) -> list[tuple[str, str]]:
@@ -141,7 +142,7 @@ def _rel(root: Path, name: str) -> str:
 
 
 def lint(root: Path, found: list[tuple[str, str]], tally: Tally | None = None) -> list[str]:
-    """ESLint's JSON findings as (rule, path class) lines; a run that did not report is a failure."""
+    """ESLint's JSON findings as (rule, path class) lines; a run that did not report fails."""
     argv = ["--max-warnings", "0", "--format", "json", *[r for r, _ in found]]
     proc = _run(root, "eslint", argv)
     if proc.returncode == 0:
