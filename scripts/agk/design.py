@@ -39,7 +39,12 @@ requirement (REQ-001 to REQ-099) reads `- Screens: no screen: a rule of the kit`
 slot. On an existing inventory it keeps every line and only appends, at the end of the Requirements
 part and in number order, a section for each requirement that has none, printing `added REQ-<n>`
 for each; it never removes or rewrites a section, refuses a file with no Requirements part and
-never fills a project requirement's slot (brief #1185, ADR-0504). Messages name the rule, never a
+never fills a project requirement's slot (brief #1185, ADR-0504). On the path from an idea (no
+product requirement, REQ-101 up, and an Accepted `docs/adr/<n>-project-charter.md`) a new skeleton
+also holds one `### M<n> — <milestone>` section for each milestone of the newest Accepted charter,
+its `- Sources:` naming the charter and each discovery document whose `Screens` is `yes` or `open`
+and its Screens slot empty; a charter with no Milestones item is refused naming `docs/adr/`
+(amendment 217, brief #1756). Messages name the rule, never a
 value. No network and no model; `check_design.py` checks what `prototype` and `inventory` made. A
 version's `screenshots/` folder is written only by `design.py screenshots`, never by hand.
 """
@@ -58,6 +63,8 @@ import design_import
 import design_inventory
 import design_prototype
 from common import PROJECT_FIRST_REQ, CheckError, parse_requirements
+from intake import section
+from playbook import charter_items
 
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
@@ -77,6 +84,8 @@ KIT_NO_SCREEN = "no screen: a rule of the kit"
 SPEC_FILE = re.compile(r"^(\d{4})-[^/]*\.md$")
 SPEC_REQS = re.compile(r"(?m)^- Requirements:\s*(.*?)\s*$")
 REQ = re.compile(r"\bREQ-\d{3}\b")
+CHARTER = re.compile(r"^(\d{4})-project-charter\.md$")
+MILESTONE = re.compile(r"^[-*]\s+(?:M(\d+):\s*)?(.*)$")
 BROWSERS = ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome")
 SHOTS = (("360", 800), ("1280", 800))
 # In Blink 0 is dark and 1 is light (measured on Chromium); both are passed so a shot never
@@ -211,6 +220,36 @@ def update_inventory(target: Path, reqs: list[dict], specs: dict[str, list[str]]
     return 0
 
 
+def milestone_sections(root: Path, reqs: list[dict]) -> str:
+    """The idea path's sections (amendment 217): one per milestone of the newest Accepted charter
+    when no product requirement is present; empty otherwise."""
+    if any(int(r["id"][4:]) >= PROJECT_FIRST_REQ for r in reqs):
+        return ""
+    folder = root / "docs" / "adr"
+    charters = sorted(p for p in folder.glob("*.md") if CHARTER.match(p.name))
+    for path in reversed(charters):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if re.search(r"(?m)^- Status: Accepted\s*$", text):
+            break
+    else:
+        return ""
+    milestones = charter_items(section(text, "Decision") or []).get("Milestones", [])
+    if not milestones:
+        raise CheckError("rule 3: the Accepted charter has no Milestones item (docs/adr/)")
+    named = [f"docs/adr/{path.name}"] + [
+        rel for rel, value in design_inventory.discovery_screens(root) if value in ("yes", "open")
+    ]
+    out = []
+    for n, line in enumerate(milestones, 1):
+        match = MILESTONE.match(line)
+        number, words = (match.group(1) or str(n), match.group(2).strip()) if match else (n, line)
+        out.append(f"### M{number} \u2014 {words}\n\n- Sources: {', '.join(named)}\n- Screens:\n\n")
+    return "".join(out)
+
+
 def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
     if set(opts) - {"root"}:
         raise UsageError("inventory takes only --root")
@@ -222,7 +261,7 @@ def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
     specs = spec_index(root)
     if target.exists():
         return update_inventory(target, reqs, specs)
-    sections = [requirement_section(req, specs) for req in reqs]
+    sections = [requirement_section(req, specs) for req in reqs] + [milestone_sections(root, reqs)]
     text = template("design-inventory.md").replace("{{requirements}}\n", "".join(sections))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")

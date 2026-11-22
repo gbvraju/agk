@@ -130,13 +130,16 @@ runs none.
 1. Fetch the default branch, make sure the work tree is clean (stop and say so if it is not), create the branch from the
    default branch, and write the skeleton. The script reads `docs/requirements.md` and the `Requirements:` lines of
    `docs/specs/`, writes one section per requirement with its specs filled and every other slot empty, refuses when the
-   file exists, and never fills a slot:
+   file exists, and never fills a slot. On the path from an idea (no requirement from REQ-101 up yet, an Accepted
+   `docs/adr/<n>-project-charter.md`) it also writes one `M<n>` section per charter milestone, whose `- Sources:` line
+   names the charter and each discovery document with `Screens: yes` or `open` (amendment 217):
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" inventory
 ```
 
-2. Fill the slots from the requirements and the specs, and from nothing else; if `[engines]` in `agk.toml` has a `design`
+2. Fill the slots from the requirements and the specs (for an `M<n>` section, from the sources it names), and from
+   nothing else; if `[engines]` in `agk.toml` has a `design`
    key, its skill may draft them, and the session writes them into the file's shape. Each requirement gets its screens or
    `no screen: <reason>`; each screen gets its own section with its flow, its pattern (one of the kit's design standard),
    the screens it links to and a `State` line for `default`, the six required states and any state a spec names, each
