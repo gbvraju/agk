@@ -46,7 +46,7 @@ def test_the_list_names_the_eight_tables():
     }
     assert {"auto_start", "launch_adapter", "min_free_memory_mb"} <= config.TABLE_KEYS["flow"]
     assert config.TABLE_KEYS["delivery"] == frozenset({"work_type"})
-    assert config.TABLE_KEYS["steward"] == frozenset({"auto_file"})
+    assert config.TABLE_KEYS["steward"] == frozenset({"auto_file", "fix_briefs"})  # brief #1715
 
 
 def test_the_list_agrees_with_the_readers_of_each_table():
