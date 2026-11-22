@@ -8,7 +8,7 @@ before any brief and takes it over with the one comment `taken over: <id> <date>
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from test_session import (
@@ -29,6 +29,9 @@ from test_session import (
 from test_session import (
     stub as session_stub,  # noqa: F401
 )
+from test_session_flow import DAY
+
+pytestmark = pytest.mark.usefixtures("clock")
 
 
 @pytest.fixture
@@ -45,7 +48,6 @@ PRS = f"repos/{REPO}/pulls"
 HEAD = SHA
 OLD = timedelta(hours=-9)
 RESUME = ("resume", "--pr", "7")
-DAY = datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 def pr_object(number: int = 7, **fields) -> dict:

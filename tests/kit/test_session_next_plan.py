@@ -26,6 +26,9 @@ from test_session import (
 from test_session_flow import DAY, PULLS, base, brief, flow, merged
 from test_session_plan import changed, data, free, labelled
 
+pytestmark = pytest.mark.usefixtures("clock")
+
+
 THREE = "Builds: (a) the first part; (b) independent: the second; (c) independent: the third\n"
 
 

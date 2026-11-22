@@ -13,6 +13,9 @@ from test_session_flow import DAY, PULLS, brief, flow, pr
 from test_session_next_plan import THREE
 from test_session_plan import changed, data, free, plan
 
+pytestmark = pytest.mark.usefixtures("clock")
+
+
 FILE = "scripts/agk/example.py"
 WAIT = f"skip #6: waits for #5 (both touch {FILE})"
 
