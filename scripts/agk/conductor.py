@@ -161,7 +161,8 @@ main (light re-prove, SPEC-0050 amendment 171)`; any other re-prove file or a co
 
 Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
-one), so the launcher restarts a builder for exactly those.
+one), so the launcher restarts a builder for exactly those. Brief #1740 (ADR-0725): the line ends
+` re-prove <file> #<m>` when a full `re-prove:` line names the pull request: the step to restart.
 
 Brief #1282 (ADR-0543): before its `START` lines `sweep` parks each open pull request whose
 owner wait passed (`[flow] owner_wait_minutes`, or at once inside `owner_rest_hours`), with one
