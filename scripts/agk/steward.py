@@ -6,6 +6,7 @@
 
 Usage: python3 scripts/agk/steward.py start --session ID
        python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
+       python3 scripts/agk/steward.py refresh --session ID [--since UTC-TIME]
        python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
        python3 scripts/agk/steward.py onboard [--again]
        python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
@@ -22,7 +23,11 @@ comments a start opens a new memory issue whose first comment links the old one 
 open `Owner question:` (no later `Decision:` names its Q id), then closes the old one. `record`
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
 the value (exit 2). `end` writes the pass's counted calls and tokens on its marker, `not shown` when
-not given, never 0 (rule 13's daily list reads them). `onboard` is `steward_onboard.py onboard`
+not given, never 0 (rule 13's daily list reads them). `start` keeps a checkpoint in the cache;
+`refresh` posts nothing and prints only what changed since it, in three GET calls: the new or
+edited memory comments (a `Decision:` or `Maintainer answer:` first), the open pull requests whose
+head or labels changed and the ones closed or merged, then moves it (brief #1702, ADR-0708).
+`onboard` is `steward_onboard.py onboard`
 (SPEC-0059 rule 20, Q-S0059-14, brief #1325, ADR-0562). In solo mode a start with no `Person:` entry
 prints the one question of SPEC-0062 rule 4, and `record --kind Person` takes `<business|technical>:
 <their words>` and ends `Who: ProductOwner` (rule 15; brief #1598, ADR-0678). `setup` prints one
@@ -109,6 +114,12 @@ LIVE = timedelta(minutes=60)
 PAGE = 100
 LISTING = f"repos/{{owner}}/{{repo}}/issues?labels={LABEL}&state=open&per_page=10"
 ISSUES = "repos/{owner}/{repo}/issues"
+PULLS = "repos/{owner}/{repo}/pulls"
+URGENT = ("Decision:", "Maintainer answer:")
+NO_CHECKPOINT = (
+    "refresh: no checkpoint (setting: AGK_STEWARD_CACHE); run start, or pass --since <UTC time>"
+)
+PERSONAL_PULLS = "pull requests: not read in personal mode"
 PERSONAL_FILE = Path("docs") / "runs" / "steward" / "memory.md"
 SEPARATOR = "\n---\n"
 FIRST = re.compile(r"^(Owner question|[A-Z][a-z]+):")
@@ -403,6 +414,7 @@ def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[st
         if other := live_start(comments, session, now):
             return 1, [f"steward already running: {other}; this start writes nothing"]
         personal_append(root, f"Started: steward {session} {stamp(now)}")
+        save_cache(root, {"personal": len(comments) + 1, "checkpoint": {"at": seconds(now)}})
         memory = read_memory(comments)
         lines = [f"memory: {PERSONAL_FILE.as_posix()}", *summary(memory)]
         return 0, [*lines, *first_question(root, memory)]
@@ -417,8 +429,88 @@ def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[st
         roll_over(gh, cache)
     memory = read_memory(cache["comments"])
     post(gh, cache, f"Started: steward {session} {stamp(now)}")
+    checkpoint(cache, now)
+    cache.pop("pulls", None)
     save_cache(root, cache)
     return 0, [f"memory: #{cache['issue']}", *summary(memory), *first_question(root, memory)]
+
+
+def seconds(now: datetime) -> str:
+    return now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def checkpoint(cache: dict, now: datetime) -> None:
+    newest = max((c.get("updated_at") or "" for c in cache.get("comments", [])), default="")
+    cache["checkpoint"] = {"memory": newest or seconds(now), "at": seconds(now)}
+
+
+def entry_line(item: dict, edited: bool = False) -> str:
+    first = (item.get("body") or "").strip().splitlines() or [""]
+    word = (first[0].split() or ["-"])[0].rstrip(":")
+    return f"{item.get('id')} {'edited ' if edited else ''}{word} {first[0][:120]}"
+
+
+def urgent(line: str) -> bool:
+    return line.split(" edited ", 1)[-1].split(" ", 2)[-1].startswith(URGENT)
+
+
+def refresh(
+    root: Path, session: str, gh: Gh, now: datetime, since: str | None = None
+) -> tuple[int, list[str]]:
+    """Brief #1702: what changed since the checkpoint, in three GET calls; nothing is posted."""
+    del session  # one checkpoint per clone; the session names the pass only
+    if since is not None:
+        try:
+            since = seconds(datetime.fromisoformat(since.replace("Z", "+00:00")).astimezone(UTC))
+        except ValueError:
+            return 2, ["refused: --since takes a UTC time, as 2026-11-22T05:20Z (setting: --since)"]
+    cache = load_cache(root)
+    held = cache.get("checkpoint", {})
+    after = since or held.get("at")
+    if not after:
+        return 2, [NO_CHECKPOINT]
+    if personal_table(root) is not None:
+        entries = personal_entries(root)
+        seen = 0 if since else cache.get("personal", 0)
+        lines = [entry_line(e) for e in entries[seen:]]
+        lines = [*sorted(lines, key=lambda line: not urgent(line))]
+        save_cache(root, {"personal": len(entries), "checkpoint": {"at": seconds(now)}})
+        return 0, [*(lines or [f"refresh: nothing new since {after}"]), PERSONAL_PULLS]
+    if "issue" not in cache:  # only with --since and a lost cache: find the memory issue
+        memory_issue(gh, root, cache)
+    known = {c["id"]: c for c in cache["comments"]}
+    lines = []
+    for item in comments_of(gh, cache["issue"], since or held.get("memory")):
+        was = known.get(item["id"])
+        if was is None or was.get("updated_at") != item.get("updated_at") or since:
+            lines.append(entry_line(item, edited=was is not None and not since))
+        known[item["id"]] = item
+    if len(known) >= ROLL_OVER:  # another start may have rolled the memory over: find it
+        issue = max(call(gh, "GET", LISTING), key=lambda i: i["number"], default=None)
+        if issue and issue["number"] != cache["issue"]:
+            known = {c["id"]: c for c in comments_of(gh, issue["number"], None)}
+            lines += [entry_line(c) for c in known.values()]
+            cache["issue"] = issue["number"]
+    cache["comments"] = sorted(known.values(), key=lambda c: (c.get("created_at") or "", c["id"]))
+    lines.sort(key=lambda line: not urgent(line))
+    pulls, shown = {}, cache.get("pulls")
+    for pr in call(gh, "GET", f"{PULLS}?state=open&per_page={PAGE}"):
+        now_is = [pr["head"]["sha"][:12], ",".join(sorted(x["name"] for x in pr["labels"])) or "-"]
+        pulls[str(pr["number"])] = now_is
+        moved = (shown or {}).get(str(pr["number"])) != now_is
+        if moved if shown is not None else pr.get("updated_at", "") > after:
+            lines.append(f"#{pr['number']} {' '.join(now_is)}")
+    closed = call(gh, "GET", f"{PULLS}?state=closed&sort=updated&direction=desc&per_page={PAGE}")
+    for pr in closed:
+        done = pr.get("merged_at") or pr.get("closed_at") or ""
+        if pr.get("updated_at", "") > after and done > after:
+            lines.append(f"#{pr['number']} {'merged' if pr.get('merged_at') else 'closed'} {done}")
+    if len(closed) >= PAGE and closed[-1].get("updated_at", "") > after:
+        lines.append(f"more closed since {after}: not listed")
+    cache["pulls"] = pulls
+    checkpoint(cache, now)
+    save_cache(root, cache)
+    return 0, lines or [f"refresh: nothing new since {after}"]
 
 
 def end(
@@ -534,6 +626,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="steward.py", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("start").add_argument("--session", required=True)
+    ref = sub.add_parser("refresh")
+    ref.add_argument("--session", required=True)
+    ref.add_argument("--since", help="a UTC time, as 2026-11-22T05:20Z, when no checkpoint is held")
     end_p = sub.add_parser("end")
     end_p.add_argument("--session", required=True)
     end_p.add_argument("--calls", type=int)
@@ -583,6 +678,8 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = record(root, opts.kind, text, gh_api)
         elif opts.command == "start":
             code, lines = start(root, opts.session, gh_api, now)
+        elif opts.command == "refresh":
+            code, lines = refresh(root, opts.session, gh_api, now, opts.since)
         else:
             code, lines = end(root, opts.session, gh_api, now, opts.calls, opts.tokens)
     except Unreadable as exc:
