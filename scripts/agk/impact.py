@@ -88,6 +88,11 @@ that folder's `test_agk_mk.py` when the head has it, which collects the folder i
 only the kit's scripts and that folder, so a kit test that reads a file at import is caught before
 merge (brief #1648). A project without that test selects nothing by this rule.
 
+Under `balanced`, a file added under `scripts/agk/` (a renamed one is added at its new path; not
+documentation, not a test file) also selects the tests of `every_script_tests`, a list of existing
+test files, empty without the key, printed `(new script) <path>` (brief #1651, ADR-0698): the tests
+that read every kit script by a glob, which no map entry of a new script names yet.
+
 A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and `dir/` is
 `dir/**`. A bad setting is refused (CheckError), naming the setting.
 """
@@ -138,6 +143,7 @@ KEYS = {
     "results_dir",
     "keep_passed",
     "keep_runs",
+    "every_script_tests",
     "pre_merge_tests",
     "rerun_alone",
     "map_source",
@@ -210,6 +216,14 @@ MAP_ONLY = "agk.toml (testing map only)"  # the `code` of a test that a map-only
 KIT_TESTS = "/".join(("tests", "kit", ""))
 STRIPPED_TEST = KIT_TESTS + "test_agk_mk.py"
 STRIPPED = "a kit test file changed (collection in a stripped copy)"
+# Brief #1651, ADR-0698: an added kit script selects the tests that read every kit script.
+KIT_SCRIPTS = "/".join(("scripts", "agk", ""))
+NEW_SCRIPT = "(new script)"
+EVERY_SCRIPT = "every_script_tests"
+EVERY_SCRIPT_BAD = (
+    "every_script_tests must be a list of existing test files "
+    "(setting: testing.every_script_tests)"
+)
 # The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
 # lean install names no kit test path, so its folder is not written here.
 MAP_INFRA = "test_always_full_infra.py"
@@ -434,8 +448,10 @@ def testing_table(root: Path) -> dict | None:
     source = table.get("map_source", MAP_SOURCES[0])
     if not isinstance(source, str) or source not in MAP_SOURCES:
         raise CheckError("map_source is curated or generated (setting: testing.map_source)")
+    every = check_every_script(table.get(EVERY_SCRIPT, []), root)
     return {
         "profile": profile,
+        EVERY_SCRIPT: every,
         "always_full": list(always_full),
         "map": mapped,
         "budget_seconds": budget,
@@ -532,6 +548,20 @@ def check_links(value: object, root: Path) -> list[dict]:
             )
         checked.append({"code": list(entry["code"]), "run": list(run)})
     return checked
+
+
+def check_every_script(value: object, root: Path) -> list[str]:
+    """`[testing] every_script_tests` (brief #1651): a list of relative test file paths, no globs,
+    each a file of ROOT; a bad one is refused (CheckError) naming the setting, never its value."""
+    if not isinstance(value, list) or not all(
+        isinstance(name, str)
+        and _glob_ok(name)
+        and not any(c in name for c in "*?[]")
+        and (root / name).is_file()
+        for name in value
+    ):
+        raise CheckError(EVERY_SCRIPT_BAD)
+    return list(value)
 
 
 def check_pre_merge_tests(value: object) -> list[str]:
@@ -1065,6 +1095,8 @@ def select(root: Path, base: str, head: str) -> Impact:
                 if test not in changed:
                     chosen.setdefault(test, Selected(test, path, NAMED, []))
     stripped_copy(changed, tests, (dirs, patterns), chosen)
+    if profile == "balanced" and not hit and table[EVERY_SCRIPT]:
+        new_scripts(root, (base, head), table[EVERY_SCRIPT], (tests, dirs, patterns), chosen)
     counts: dict[str, tuple[int, int]] = {}
     if not hit and profile != "thorough":
         counts = add_importers(root, head, changed, entries, tests, chosen, (dirs, patterns))
@@ -1093,6 +1125,28 @@ def stripped_copy(
     hit = next((p for p in changed if p.startswith(KIT_TESTS) and is_test_file(p, *where)), None)
     if hit is not None:
         chosen.setdefault(STRIPPED_TEST, Selected(STRIPPED_TEST, hit, STRIPPED, []))
+
+
+def new_scripts(
+    root: Path,
+    span: tuple[str, str],
+    every: list[str],
+    where: tuple[list[str], list[str], list[str]],
+    chosen: dict,
+) -> None:
+    """Add the EVERY tests of the head to CHOSEN when a file of SPAN added under `KIT_SCRIPTS` (a
+    rename is an added path) is neither documentation nor a test file (brief #1651). Only adds."""
+    tests, dirs, patterns = where
+    out = git(root, "diff", "-z", "--name-only", "--no-renames", "--diff-filter=A", *span)
+    added = sorted(
+        p
+        for p in out.split("\0")
+        if p.startswith(KIT_SCRIPTS) and not is_doc(p) and not is_test_file(p, dirs, patterns)
+    )
+    if added:
+        for test in every:
+            if test in tests:
+                chosen.setdefault(test, Selected(test, added[0], NEW_SCRIPT, []))
 
 
 def _map_split(text: str | None) -> tuple[dict, set[tuple[str, str]]] | None:
@@ -1278,6 +1332,8 @@ def file_line(s: Selected) -> str:
         return f"  file: {s.test} (names {s.changed})"
     if s.code == MAP_ONLY:
         return f"  file: {s.test} ({MAP_ONLY})"
+    if s.code == NEW_SCRIPT:
+        return f"  file: {s.test} {NEW_SCRIPT} {s.changed}"
     if s.code == STRIPPED:
         return f"  file: {s.test} ({STRIPPED}: {s.changed})"
     if s.code == IMPORTER:
