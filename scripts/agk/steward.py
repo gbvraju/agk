@@ -17,8 +17,10 @@ entry, whose first word is one of KINDS, each ending `Who: AGK steward`. `start`
 other step: the open listing, then the comments with `since=` from the last one seen (kept in a file
 of the clone's git folder, or AGK_STEWARD_CACHE; never a tracked file), so a quiet start is at most
 3 counted calls. It prints the newest entry of each kind first and names an entry of another first
-word. A `Started: steward <session> <UTC time>` newer than 60 minutes with no `Ended: steward
-<session>` after it, by another session, makes a start say so and write nothing (exit 1). At 500
+word. A `Started: steward <session> <UTC time> [beat <UTC time>]` whose newer time is within 60
+minutes, with no `Ended: steward <session>` after it, of any name, the starting one included, makes
+a start say so and write nothing (exit 1); `refresh` and `record` beat on the run's own marker (one
+PATCH), and `record` and `end` refuse with no start in this clone (brief #1741, ADR-0726). At 500
 comments a start opens a new memory issue whose first comment links the old one and carries every
 open `Owner question:` (no later `Decision:` names its Q id), then closes the old one. `record`
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
@@ -81,6 +83,11 @@ KINDS = (
     "Override",
     "Onboarded",
     "Setup",
+    "Note",  # brief #1741 (ADR-0726): the kinds the runs write are memory
+    "Owner list",
+    "Morning list for the owner",
+    "Draft brief",
+    "Filed",
 )
 MARKERS = ("Started", "Ended", "Daily", "Shortened")
 LABEL = "agk-steward"
@@ -122,8 +129,14 @@ NO_CHECKPOINT = (
 PERSONAL_PULLS = "pull requests: not read in personal mode"
 PERSONAL_FILE = Path("docs") / "runs" / "steward" / "memory.md"
 SEPARATOR = "\n---\n"
-FIRST = re.compile(r"^(Owner question|[A-Z][a-z]+):")
+MULTI = sorted((k for k in KINDS if " " in k), key=len, reverse=True)
+FIRST = re.compile(r"^(" + "|".join(map(re.escape, MULTI)) + r"|[A-Z][a-z]+):")
 STARTED = re.compile(r"^Started: steward (\S+) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2})Z")
+BEAT = re.compile(r"^Started: steward \S+ \S+ beat (\d{4}-\d{2}-\d{2}T\d{2}:\d{2})Z")
+DRAFT_ID = re.compile(r"F-[\w.-]+")
+DRAFT_FOR_OWNER = re.compile(r"draft for the owner", re.I)
+ONLY_NEWEST = ("Owner list", "Morning list for the owner")
+NO_START = "refused: no live start in this clone; run steward.py start --session <session> first"
 ENDED = re.compile(r"^Ended: steward (\S+)")
 QID = re.compile(r"\bQ-[\w-]+\b")
 
@@ -154,10 +167,51 @@ def read_memory(comments: list[dict]) -> dict:
     return {"newest": newest, "unknown": sorted(unknown, key=lambda i: (i is None, i))}
 
 
+def body_lines(item: dict) -> list[str]:
+    """Every line of an entry, without its closing `Who:` line and blank lines."""
+    lines = [line.rstrip() for line in (item.get("body") or "").strip().splitlines()]
+    return [line[:200] for line in lines if line.strip() and not line.startswith("Who: ")]
+
+
+def unfiled_drafts(comments: list[dict]) -> list[dict]:
+    """Each `Draft brief:` that no later `Filed:` names by its id, oldest first."""
+    ordered = sorted(comments, key=lambda c: (c.get("created_at") or "", c.get("id") or 0))
+    drafts: dict[str, dict] = {}
+    for item in ordered:
+        kind, body = entry_kind(item.get("body", "")), item.get("body", "")
+        if kind == "Draft brief" and (found := DRAFT_ID.search(body.split("\n", 1)[0])):
+            drafts[found[0]] = item
+        elif kind == "Filed":
+            for name in DRAFT_ID.findall(body):
+                drafts.pop(name, None)
+    return list(drafts.values())
+
+
+def draft_ids(comments: list[dict]) -> set[str]:
+    return {
+        found[0]
+        for c in comments
+        if entry_kind(c.get("body", "")) == "Draft brief"
+        and (found := DRAFT_ID.search(c.get("body", "").split("\n", 1)[0]))
+    }
+
+
 def summary(memory: dict) -> list[str]:
     lines = []
     for kind in KINDS:
         entries = memory["newest"].get(kind, [])
+        if kind == "Note" and entries:  # brief #1741 answer 4: every line of the newest note
+            lines += body_lines(entries[0])
+            if len(entries) > 1:
+                lines.append(f"Note: {len(entries) - 1} older entries")
+            continue
+        if kind == "Draft brief":
+            for item in reversed(unfiled_drafts(entries + memory["newest"].get("Filed", []))):
+                lines += body_lines(item)
+            continue
+        if kind in ONLY_NEWEST:
+            lines += [item["body"].strip().splitlines()[0][:200] for item in entries[:1]]
+            continue
         for item in entries[:3]:
             lines.append(item["body"].strip().splitlines()[0][:200])
         if len(entries) > 3:
@@ -168,17 +222,67 @@ def summary(memory: dict) -> list[str]:
     return lines
 
 
-def live_start(comments: list[dict], session: str, now: datetime) -> str | None:
-    """The other session whose `Started: steward` is newer than 60 minutes and not ended."""
-    ordered = sorted(comments, key=lambda c: (c.get("created_at", ""), c.get("id", 0)))
-    live: dict[str, datetime] = {}
+def minute(text: str) -> datetime | None:
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def runs(comments: list[dict]) -> dict[str, dict]:
+    """The runs not ended: {session: {"start", "last" (the newer of start and beat), "id"}}.
+    A later `Started:` closes every earlier run, since a start is written only when none is live
+    (brief #1741, ADR-0726); a malformed beat is read as the start time alone."""
+    ordered = sorted(comments, key=lambda c: (c.get("created_at") or "", c.get("id") or 0))
+    open_runs: dict[str, dict] = {}
     for item in ordered:
-        body = item.get("body", "").lstrip()
-        if found := STARTED.match(body):
-            live[found[1]] = datetime.strptime(found[2], "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
+        body = (item.get("body") or "").lstrip()
+        if (found := STARTED.match(body)) and (begun := minute(found[2])):
+            beat = BEAT.match(body)
+            beaten = minute(beat[1]) if beat else None
+            open_runs = {
+                found[1]: {
+                    "start": begun,
+                    "last": max(begun, beaten or begun),
+                    "id": item.get("id"),
+                }
+            }
         elif found := ENDED.match(body):
-            live.pop(found[1], None)
-    return next((s for s, t in live.items() if s != session and now - t < LIVE), None)
+            open_runs.pop(found[1], None)
+    return open_runs
+
+
+def live_run(comments: list[dict], now: datetime) -> tuple[str, datetime] | None:
+    """The run, of any name, whose newest start or beat is within 60 minutes and not ended."""
+    return next(
+        ((s, r["start"]) for s, r in runs(comments).items() if now - r["last"] < LIVE), None
+    )
+
+
+def live_start(comments: list[dict], session: str, now: datetime) -> str | None:
+    """The session of a live run, whatever its name, the starting one included (brief #1741)."""
+    del session
+    found = live_run(comments, now)
+    return found[0] if found else None
+
+
+def stale_lines(comments: list[dict], now: datetime) -> list[str]:
+    return [
+        f"previous run {s} ended without Ended (last beat {stamp(r['last'])})"
+        for s, r in runs(comments).items()
+        if now - r["last"] >= LIVE
+    ]
+
+
+def refused_start(session: str, other: tuple[str, datetime]) -> list[str]:
+    lines = [
+        f"steward already running: {other[0]} since {stamp(other[1])}; this start writes nothing"
+    ]
+    if os.environ.get("AGK_STEWARD_START") == "conductor":  # SPEC-0059 rule 2: never silent
+        lines.insert(
+            0, f"stuck: steward {session} not started (steward already running: {other[0]})"
+        )
+    return lines
 
 
 def open_questions(comments: list[dict]) -> list[str]:
@@ -286,6 +390,7 @@ def post(gh: Gh, cache: dict, text: str, who: str = WHO) -> None:
 
 def roll_over(gh: Gh, cache: dict) -> None:
     old, carried = cache["issue"], open_questions(cache["comments"])
+    drafts = [d["body"] for d in unfiled_drafts(cache["comments"])]
     new = call(
         gh, "POST", ISSUES, {"title": TITLE, "body": f"Continues #{old}.", "labels": [LABEL]}
     )
@@ -296,6 +401,8 @@ def roll_over(gh: Gh, cache: dict) -> None:
         *(carried or ["none"]),
     ]
     post(gh, cache, "\n".join(lines))
+    for body in drafts:  # brief #1741 7(g): every unfiled draft, one comment each
+        post(gh, cache, "\n".join(body_lines({"body": body})))
     call(gh, "PATCH", f"{ISSUES}/{old}", {"state": "closed"})
 
 
@@ -411,28 +518,36 @@ def start(root: Path, session: str, gh: Gh, now: datetime) -> tuple[int, list[st
         return 1, [line]
     if personal_table(root) is not None:
         comments = personal_entries(root)
-        if other := live_start(comments, session, now):
-            return 1, [f"steward already running: {other}; this start writes nothing"]
+        if other := live_run(comments, now):
+            return 1, refused_start(session, other)
+        stale = stale_lines(comments, now)
         personal_append(root, f"Started: steward {session} {stamp(now)}")
-        save_cache(root, {"personal": len(comments) + 1, "checkpoint": {"at": seconds(now)}})
+        run = {"session": session, "id": len(comments) + 1, "at": stamp(now)}
+        held = {"at": seconds(now)}
+        save_cache(root, {"personal": len(comments) + 1, "checkpoint": held, "running": run})
         memory = read_memory(comments)
-        lines = [f"memory: {PERSONAL_FILE.as_posix()}", *summary(memory)]
+        lines = [*stale, f"memory: {PERSONAL_FILE.as_posix()}", *summary(memory)]
         return 0, [*lines, *first_question(root, memory)]
     cache = load_cache(root)
     issue = memory_issue(gh, root, cache)
-    if other := live_start(cache["comments"], session, now):
+    if other := live_run(cache["comments"], now):
         save_cache(root, cache)
-        return 1, [f"steward already running: {other}; this start writes nothing"]
+        return 1, refused_start(session, other)
+    stale = stale_lines(cache["comments"], now)
     if issue.get("comments", 0) >= ROLL_OVER:
         if len(cache["comments"]) < issue["comments"]:
             cache["comments"] = comments_of(gh, issue["number"], None)
         roll_over(gh, cache)
     memory = read_memory(cache["comments"])
     post(gh, cache, f"Started: steward {session} {stamp(now)}")
+    mark = cache["comments"][-1]
+    cache["running"] = {"session": session, "id": mark["id"], "issue": cache["issue"]}
+    cache["running"]["at"] = stamp(now)
     checkpoint(cache, now)
     cache.pop("pulls", None)
     save_cache(root, cache)
-    return 0, [f"memory: #{cache['issue']}", *summary(memory), *first_question(root, memory)]
+    head = [*stale, f"memory: #{cache['issue']}"]
+    return 0, [*head, *summary(memory), *first_question(root, memory)]
 
 
 def seconds(now: datetime) -> str:
@@ -474,14 +589,21 @@ def refresh(
         seen = 0 if since else cache.get("personal", 0)
         lines = [entry_line(e) for e in entries[seen:]]
         lines = [*sorted(lines, key=lambda line: not urgent(line))]
-        save_cache(root, {"personal": len(entries), "checkpoint": {"at": seconds(now)}})
+        kept = {"personal": len(entries), "checkpoint": {"at": seconds(now)}}
+        if cache.get("running"):
+            kept["running"] = cache["running"]
+            beat(root, gh, now, kept)
+        save_cache(root, kept)
         return 0, [*(lines or [f"refresh: nothing new since {after}"]), PERSONAL_PULLS]
     if "issue" not in cache:  # only with --since and a lost cache: find the memory issue
         memory_issue(gh, root, cache)
     known = {c["id"]: c for c in cache["comments"]}
-    lines = []
+    lines, mine = [], (cache.get("running") or {}).get("id")
     for item in comments_of(gh, cache["issue"], since or held.get("memory")):
         was = known.get(item["id"])
+        if item["id"] == mine and was is not None:  # its own beat is not a change
+            known[item["id"]] = item
+            continue
         if was is None or was.get("updated_at") != item.get("updated_at") or since:
             lines.append(entry_line(item, edited=was is not None and not since))
         known[item["id"]] = item
@@ -508,6 +630,7 @@ def refresh(
     if len(closed) >= PAGE and closed[-1].get("updated_at", "") > after:
         lines.append(f"more closed since {after}: not listed")
     cache["pulls"] = pulls
+    beat(root, gh, now, cache)
     checkpoint(cache, now)
     save_cache(root, cache)
     return 0, lines or [f"refresh: nothing new since {after}"]
@@ -518,7 +641,12 @@ def end(
 ) -> tuple[int, list[str]]:
     del now  # the marker names the session; its time is the comment's own
     figures = f" calls {calls or 'not shown'}; tokens {tokens or 'not shown'}"
-    return write(root, f"Ended: steward {session}{figures}", gh)
+    code, lines = write(root, f"Ended: steward {session}{figures}", gh)
+    cache = load_cache(root)
+    if code == 0 and (cache.get("running") or {}).get("session") == session:
+        cache.pop("running")
+        save_cache(root, cache)
+    return code, lines
 
 
 def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
@@ -533,6 +661,14 @@ def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
             "refused: a Setup entry is `<setting or matter>: <choice> because <reason>`"
             " (SPEC-0062 rule 9)"
         ]
+    if kind == "Draft brief" and not re.match(r"F-[\w.-]+\s", text.strip() + " "):
+        return 2, ["refused: a Draft brief entry starts with its id, F-<session>-<n> (brief #1741)"]
+    if kind == "Triage" and DRAFT_FOR_OWNER.search(text):
+        if not set(DRAFT_ID.findall(text)) & draft_ids(memory_entries(root)):
+            return 2, [
+                "refused: a Triage draft for the owner names a recorded Draft brief id"
+                " (setting: the kind Draft brief)"
+            ]
     from guard import scan_text
 
     from config import guard_patterns
@@ -543,6 +679,54 @@ def record(root: Path, kind: str, text: str, gh: Gh) -> tuple[int, list[str]]:
         return 2, [f"refused: the text holds {classes} (setting: [guard]; data guard, SPEC-0042)"]
     who = OWNER_WHO if kind == "Person" else WHO
     return write(root, f"{kind}: {text.strip()}", gh, who)
+
+
+def memory_entries(root: Path) -> list[dict]:
+    """The memory this clone holds: the sidecar file, or the start's cache (no call)."""
+    if personal_table(root) is not None:
+        return personal_entries(root)
+    return load_cache(root).get("comments") or []
+
+
+def ended(run: dict, entries: list[dict]) -> bool:
+    """An `Ended: steward <session>` of the run after its own `Started:`."""
+    return any(
+        (found := ENDED.match((c.get("body") or "").lstrip())) and found[1] == run.get("session")
+        for c in entries
+        if (c.get("id") or 0) > (run.get("id") or 0)
+    )
+
+
+def no_start(root: Path) -> str | None:
+    """Brief #1741 answer 3: the refusal when this clone holds no start of a run not ended."""
+    run = load_cache(root).get("running") or {}
+    return NO_START if not run.get("session") or ended(run, memory_entries(root)) else None
+
+
+def beat(root: Path, gh: Gh, now: datetime, cache: dict) -> None:
+    """Brief #1741 answer 2: edit the run's own `Started:` in place, one PATCH, no new comment."""
+    run = cache.get("running") or {}
+    personal = personal_table(root) is not None
+    entries = personal_entries(root) if personal else cache.get("comments", [])
+    if not run.get("session") or ended(run, entries):
+        return
+    text = f"Started: steward {run['session']} {run['at']} beat {stamp(now)}"
+    if personal:
+        path = root / PERSONAL_FILE
+        parts = path.read_text(encoding="utf-8").split(SEPARATOR) if path.is_file() else []
+        kept = [p for p in parts if p.strip()]
+        index = run["id"] - 1
+        if 0 <= index < len(kept) and STARTED.match(kept[index].strip()):
+            kept[index] = text
+            path.write_text("".join(f"{p.strip()}{SEPARATOR}" for p in kept), encoding="utf-8")
+        return
+    if run.get("issue") != cache.get("issue"):
+        return  # the memory rolled over: the marker is on a closed issue
+    item = call(gh, "PATCH", f"{ISSUES}/comments/{run['id']}", {"body": f"{text}\n\n{WHO}\n"})
+    for held in cache.get("comments", []):
+        if held.get("id") == run["id"]:
+            held["body"] = item.get("body", held["body"])
+            held["updated_at"] = item.get("updated_at") or held.get("updated_at")
 
 
 def write(root: Path, text: str, gh: Gh, who: str = WHO) -> tuple[int, list[str]]:
@@ -673,9 +857,16 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(lines))
         return code
     try:
+        if opts.command in ("record", "end") and (refused := no_start(root)):
+            print(refused, file=sys.stderr)  # brief #1741 answer 3: no write without a start
+            return 2
         if opts.command == "record":
             text = opts.text if opts.text is not None else opts.file.read_text(encoding="utf-8")
             code, lines = record(root, opts.kind, text, gh_api)
+            if code == 0:
+                cache = load_cache(root)
+                beat(root, gh_api, now, cache)
+                save_cache(root, cache)
         elif opts.command == "start":
             code, lines = start(root, opts.session, gh_api, now)
         elif opts.command == "refresh":
