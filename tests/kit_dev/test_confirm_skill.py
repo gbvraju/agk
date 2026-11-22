@@ -44,7 +44,11 @@ def test_the_skill_prints_the_confirmation_and_never_posts_it():
 def test_the_guide_says_the_person_posts_it_and_re_runs_governance():
     """REQ-039: brief #277 (the verdict on f58803a, item 3: the one guide line)."""
     text = flat(GUIDE)
-    assert "/agk:confirm" in text and "a session never does, session rule 29" in text
+    assert "/agk:confirm" in text and "you post it yourself" in text
+    # brief #1692 (fix list on 9ceea87 item 1): the steward's natural path, then the print path
+    assert "on your plain yes in the chat, posts that comment" in text
+    assert "the steward alone, session rule 29" in text and "(no other session posts it)" in text
+    assert "a session never does" not in text
     assert "re-run the governance check or push" in text
     assert "| `/agk:confirm` |" in REFERENCE.read_text(encoding="utf-8")
 
