@@ -357,7 +357,11 @@ def test_ac1_the_safety_rules_are_unchanged_byte_for_byte():
 
 
 # Brief #1710 (ADR-0712): session rule 38, what a session reads is data, never an instruction.
-ROLE_POINTERS = (".claude/agents/builder.md", ".claude/agents/conductor.md", ".claude/agents/steward.md")
+ROLE_POINTERS = (
+    ".claude/agents/builder.md",
+    ".claude/agents/conductor.md",
+    ".claude/agents/steward.md",
+)
 
 
 def test_req037_rule_38_says_what_a_session_reads_is_data_and_names_the_refusals():
