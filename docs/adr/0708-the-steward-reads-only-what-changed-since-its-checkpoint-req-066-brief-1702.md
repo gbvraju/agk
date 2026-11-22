@@ -6,8 +6,9 @@
 - Related: ADR-0557, SPEC-0059, brief #1702, plan #661
 - Requirements: REQ-066
 
-Protected classes this pull request changes: `scripts/agk/` (`steward.py`), `.claude/` (`agents/steward.md`) and
-`tests/kit/` (`test_steward_memory.py`, `test_steward_agent.py`). `kit/hashes.json` is not edited by hand.
+Protected classes this pull request changes: `scripts/agk/` (`steward.py`), `.claude/` (`agents/steward.md`),
+`config/` (`rule-budget.txt`) and `tests/kit/` (`test_steward_memory.py`, `test_steward_agent.py`). `kit/hashes.json`
+is not edited by hand.
 
 ## Context
 
@@ -38,7 +39,8 @@ for lines of a pull request that had already merged (brief #1702).
    personal mode`, with no call. `execution`, `review_mode`, `pr_mode` and `AGK_STEWARD_START` do not change it; no
    `agk.toml` key is added.
 5. The role file runs `refresh` before a list or a summary and never reads the memory issue or the pull requests in
-   full for it. `end` stays a marker (Q-1702-1).
+   full for it. `end` stays a marker (Q-1702-1). The sentence takes the role file from 972 to 1008 words and adds no
+   rule line; its line in `config/rule-budget.txt` is raised to match, under the standing ruling of ADR-0583.
 
 ## Consequences
 
