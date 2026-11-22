@@ -217,6 +217,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
 ## Steward memory
 
     python3 scripts/agk/steward.py start --session ID
+    python3 scripts/agk/steward.py refresh --session ID [--since UTC-TIME]
     python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
     python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
     python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]

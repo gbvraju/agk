@@ -96,5 +96,5 @@ def test_req066_the_agent_refreshes_before_a_list_instead_of_reading_in_full():
     text = AGENT.read_text(encoding="utf-8")
     start = text.split("Start and end.", 1)[1].split("\n\n", 1)[0]
     assert "python3 scripts/agk/steward.py refresh --session <session>" in start
-    assert "before a list or a summary" in start
+    assert "Before a list or a summary is posted" in start
     assert "never read the memory issue or the pull requests in full" in start

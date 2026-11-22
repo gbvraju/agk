@@ -33,6 +33,7 @@ class GitHub:
         self.calls: list[tuple[str, str]] = []
         self.issues: dict[int, dict] = {}
         self.next_id = 100
+        self.clock = 0  # minutes before NOW at which a posted comment is created
 
     def add_issue(self, labels=("agk-steward",), state="open") -> int:
         number = len(self.issues) + 1
@@ -72,7 +73,7 @@ class GitHub:
             new = self.add_issue(tuple(fields["labels"]))
             return self.view(self.issues[new])
         if method == "POST" and comments:
-            return self.comment(int(number), fields["body"], minutes=0)
+            return self.comment(int(number), fields["body"], minutes=self.clock)
         if method == "PATCH":
             self.issues[int(number)]["state"] = fields["state"]
             return {}
@@ -245,8 +246,10 @@ class Forge(GitHub):
 
 def started(root, gh, minutes=60):
     """A start `minutes` before NOW: the checkpoint is then; the calls are cleared."""
+    gh.clock = minutes
     assert steward.start(root, "s1", gh, NOW - timedelta(minutes=minutes))[0] == 0
     gh.calls.clear()
+    gh.clock = 0
 
 
 def test_req066_refresh_makes_three_calls_and_prints_only_what_changed(root):
@@ -338,7 +341,7 @@ def test_req066_refresh_says_when_more_closed_than_one_page(root):
     code, lines = steward.refresh(root, "s1", gh, NOW)
     assert code == 0 and gh.counted() == 3
     assert lines[-1].startswith("more closed since ") and lines[-1].endswith(": not listed")
-    assert sum(" closed " in line for line in lines) == 100
+    assert sum(line.startswith("#") and " closed " in line for line in lines) == 100
 
 
 def test_req066_refresh_reads_a_rolled_over_memory_from_its_first_comment(root, monkeypatch):
@@ -353,6 +356,7 @@ def test_req066_refresh_reads_a_rolled_over_memory_from_its_first_comment(root, 
     gh.comment(old, "Ended: steward s1", minutes=35)
     mine = steward.load_cache(root)
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(root / "other.json"))
+    gh.clock = 30
     assert steward.start(root, "s3", gh, NOW - timedelta(minutes=30))[0] == 0
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(root / "cache.json"))
     assert steward.load_cache(root) == mine
