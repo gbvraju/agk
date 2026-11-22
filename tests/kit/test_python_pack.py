@@ -290,3 +290,37 @@ def test_the_layers_line_comes_before_the_pack_lines(
     layers = next(i for i, ln in enumerate(lines) if ln == "ok layers")
     pack = next(i for i, ln in enumerate(lines) if "standards python-pyproject" in ln)
     assert layers < pack
+
+
+INSTALL = {
+    "installed": "python3 -m pip install -r config/ci-tools.txt",
+    "plugin": 'python3 -m pip install -r "${CLAUDE_PLUGIN_ROOT}/config/ci-tools.txt"',
+}
+
+
+@pytest.mark.parametrize("layout", sorted(INSTALL))
+@pytest.mark.parametrize("gone", [["ruff"], ["mypy"], ["ruff", "mypy"]])
+def test_a_missing_tool_names_the_install_line_of_the_layout(
+    layout: str, gone: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REQ-079 AC4: brief #1683 answers 2 and 4: one line per missing tool, each naming the
+    tool, the setting and the install line of the layout, never a version; a present tool is
+    not named. A tool found only as a command on PATH still counts as missing (Q-1)."""
+    root = sample(tmp_path, toml='[kit]\nlayout = "plugin"\n' if layout == "plugin" else "")
+    monkeypatch.setattr(python_pack, "installed", lambda name: name not in gone)
+    steps = python_pack.run(root, {"rules": {"codes": CODES}})
+    assert [s for s, _ in steps] == ["tools"]
+    lines = steps[0][1]
+    assert len(lines) == len(gone)
+    for tool, line in zip(gone, lines, strict=True):
+        assert f"the pack's tool {tool} is not installed" in line
+        assert line.endswith(f"; install: {INSTALL[layout]}")
+        assert _pins(tool) not in line
+    for tool in {"ruff", "mypy"} - set(gone):
+        assert tool not in " ".join(lines)
+
+
+def test_the_readme_template_names_both_install_lines() -> None:
+    """REQ-079 AC4: brief #1683 answer 2: the product's README says it once."""
+    text = (KIT_ROOT / "kit" / "templates" / "project-readme.md").read_text(encoding="utf-8")
+    assert all(text.count(line) == 1 for line in INSTALL.values())

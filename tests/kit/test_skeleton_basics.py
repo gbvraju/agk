@@ -317,3 +317,40 @@ def test_req079_render_writes_the_kind_line_of_the_slice_brief():
     data["briefs"][1]["slice"] = True
     assert "\nKind: slice\n" in plan_intake.brief_text(data, data["briefs"][1])
     assert "Kind: slice" not in plan_intake.brief_text(data, data["briefs"][0])
+
+
+def pack_entry() -> dict:
+    """The `python-pyproject` entry the API service's playbook carries (brief #1683)."""
+    import check_playbooks
+
+    playbook = KIT_ROOT / "config" / "playbooks" / "api-service.toml"
+    packs = check_playbooks.standard(playbook, KIT_ROOT)[1]
+    return next(e for e in packs if e["stack"] == "python-pyproject")
+
+
+@pytest.mark.parametrize("own", [False, True])
+@pytest.mark.parametrize("crlf", [False, True])
+@pytest.mark.parametrize("work_type", sorted(PACKAGE))
+def test_req079_the_written_skeleton_passes_the_standards_pack(tmp_path, work_type, crlf, own):
+    """REQ-079 AC4: brief #1683 answers 1, 3 and 4: each shape the foundation writes, with the
+    stack's `pyproject.toml`, passes `python_pack.run` with no failure line; with
+    `project_lint_paths` set or unset, and with Windows line ends."""
+    from gates import python_pack
+
+    root = written(tmp_path, work_type)
+    stack = KIT_ROOT / "kit" / "templates" / "stacks" / "python-pyproject" / "pyproject.toml"
+    text = stack.read_text(encoding="utf-8").replace("{{project}}", "sample")
+    (root / "pyproject.toml").write_text(text, encoding="utf-8")
+    if own:
+        toml = (root / "agk.toml").read_text(encoding="utf-8")
+        line = f'project_lint_paths = ["{PACKAGE[work_type]}/**"]\n'
+        (root / "agk.toml").write_text(line + toml, encoding="utf-8")
+    found = python_pack.files(root, python_pack.patterns(root))
+    assert {rel.split("/")[0] for rel, _ in found} == {PACKAGE[work_type]}
+    if crlf:
+        for rel, _ in found:
+            path = root / rel
+            path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+    steps = python_pack.run(root, pack_entry())
+    assert [s for s, _ in steps] == ["floor", "lint", "format", "type"]
+    assert [line for _, lines in steps for line in lines] == []
