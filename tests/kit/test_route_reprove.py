@@ -22,7 +22,9 @@ import route  # noqa: E402
 import session  # noqa: E402
 import session_plan  # noqa: E402
 import uninstall  # noqa: E402
-from test_route import HEAD, REPO, facts, ok, proj, run_router, said, stub  # noqa: E402, F401
+from test_route import HEAD, REPO, facts, run_router, said  # noqa: E402
+from test_route import proj as route_proj  # noqa: E402, F401  (the fixtures of test_route)
+from test_route import stub as route_stub  # noqa: E402, F401
 
 STEWARD = ".claude/agents/steward.md"
 INDEXES = list(session_plan.SHARED_INDEXES)
@@ -30,6 +32,16 @@ CLEARED = said(1, "boss", f"Verdict: cleared {HEAD}")
 READY = said(2, "builder", f"Report: {HEAD[:7]} ready for review")
 HANDED = said(3, "builder", f"Report: {HEAD[:7]} handing over: blocked: owner-needed waits")
 PUSHED = {"commit": {"committer": {"date": "2026-10-25T09:00:00Z"}}}
+
+
+@pytest.fixture
+def stub(request):
+    return request.getfixturevalue("route_stub")
+
+
+@pytest.fixture
+def proj(request):
+    return request.getfixturevalue("route_proj")
 
 
 def changed(*paths: str, renamed_from: str | None = None) -> list[dict]:
@@ -292,4 +304,3 @@ def test_1740_the_router_creates_the_label_when_missing(proj, stub, tmp_path):
     assert writes[0][:2] == ["POST", f"repos/{REPO}/labels"]
     assert "name=agk:reprove" in writes[0][2]
     assert ["POST", f"repos/{REPO}/issues/7/labels"] == writes[1][:2]
-

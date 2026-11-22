@@ -114,8 +114,8 @@ from merge_cleared import (
     max_behind_setting,
     records_specs,
 )
-from merge_cleared import Refused as EvidenceRefused
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
+from merge_cleared import Refused as EvidenceRefused
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (
     APPROVE,
