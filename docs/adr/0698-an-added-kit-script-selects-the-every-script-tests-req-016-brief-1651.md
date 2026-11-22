@@ -33,6 +33,9 @@ pull request's proof. On main fe55eeee (after ADR-0692) two of them are selected
    are as before; a larger selection may reach `full_when_share`, as designed. `execution = "local"` (prepush) and the
    personal-mode sidecar run read the same `impact.py` selection.
 
+4. **Path classes changed:** `scripts/agk/`, `agk.toml` and `tests/kit/` (the tests, in
+   `tests/kit/test_impact_data_files.py`).
+
 ## Consequences
 
 A new kit script that breaks isolated mode, the installed imports or the core contradictions fails in its own pull
