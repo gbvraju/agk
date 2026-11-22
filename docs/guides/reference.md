@@ -329,6 +329,8 @@ repository that this check refuses.
 ## Steward and the owner
 
     python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
+    python3 scripts/agk/steward_owner.py ask --target pr:N --qid Q --file FILE --line FILE
+    python3 scripts/agk/steward_owner.py approve --ask Q --said FILE --at TIME [--by LOGIN]
     python3 scripts/agk/steward_owner.py relay --qid Q --on N --answer TEXT --said FILE --at TIME [--conductor ID]
     python3 scripts/agk/steward_owner.py park --pr N [--conductor ID]
     python3 scripts/agk/steward_owner.py ready --plan FILE --trace FILE --session ID [--start]
@@ -350,6 +352,19 @@ one pull request. `ready` starts the conductor through `launch.py role` only whe
 no brief is malformed, the scope is locked and no open owner question blocks the first milestone; else `not ready:`
 lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
+
+The one-yes approval (SPEC-0062 rules 13, 14 and 16, brief #1690, ADR-0703). `ask --target pr:<n> --line FILE`
+reads the pull request's full head with one GET, refuses a closed one and a line this command never writes (`Merge:`,
+`Verdict:`, `Final:`, `Correction:`, another head, another Q id; `Confirmed:` in team mode), records the ask with its
+head, link and session (`AGK_SESSION`, else the memory's newest open `Started: steward <id>`), keeps it as the session's one open ask (a newer ask closes the older) and posts today's `Question:`
+line. `approve --ask <Q> --said FILE --at TIME` takes the person's one-line reply to that latest open ask: it refuses an ask of
+another or an ended session, a moved head, a closed target, an older ask, a reply time before the ask or after now, an ask older than four times `[flow] owner_wait_minutes` (24 hours when unset
+or 0), a supervisor-started steward, a data-guard match, a question mark or a condition word, and in team mode a `--by`
+outside `spec_approvers`; `Not yet` is recorded and posts nothing. On a yes it records a `Decision:` first (a memory
+that cannot be written posts nothing), then posts a `Maintainer answer:` form with `Owner said`, `Asked` and
+`Who: ProductOwner` lines by `-F body=@<file>`; it reads the form again from the stored line and prints an
+`Approve:` or `Confirmed:` body ready to paste, never posting it; in personal mode (a `REQ-nnn`, `SPEC-nnnn` or `ADR-nnnn`
+target) it prints the `personal.py confirm` command and posts nothing.
 
 The standard (SPEC-0072 rule 8, brief #1601, ADR-0681; `docs/guides/engineering-standard.md`). `standard` prints the
 composed standard of the declared work type, or of `--playbook`: one plain screen in solo mode, the full list in team
