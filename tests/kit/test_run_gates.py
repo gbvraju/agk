@@ -236,7 +236,7 @@ def _settings() -> list[str]:
     rows += [f'[kit]\nlayout = "{x}"' for x in ("plugin", "installed")]
     rows += [f'execution = "{x}"' for x in ("hosted", "local")]
     rows += [f'review_mode = "{x}"' for x in ("solo", "team")]
-    return [*rows, 'forge = "files"']  # personal mode (SPEC-0041)
+    return [*rows, '[personal]\nforge = "files"']  # personal mode (SPEC-0041)
 
 
 @pytest.mark.parametrize("setting", _settings())
@@ -253,6 +253,10 @@ def test_each_setting_leaves_the_no_pack_line_and_the_exit_code(
         else f"{top}\n{setting}\n\n[delivery]{delivery}",
         encoding="utf-8",
     )
+    if setting.startswith("[personal]"):
+        from common import personal_table
+
+        assert personal_table(root) is not None  # personal mode, not team mode
     before = run_gates.main(["--root", str(root)])
     assert NO_PACK not in capsys.readouterr().out
     _record(root, "node")
