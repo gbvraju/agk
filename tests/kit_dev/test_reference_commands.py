@@ -6,6 +6,9 @@ with no guide, the ADR) that explains it (answer 1). Every installed kit script 
 reference, unless the kit itself runs it (a target of `agk.mk` or an installed workflow) or another
 installed script imports it, so a future command cannot be missed (answer 3). Files only; no
 network, no model.
+
+Brief #1692 (ADR-0705; REQ-069): the steward's section names `ask --target` and `approve` with
+their flags beside the standard's `confirm`, and says what `approve` posts in each mode.
 """
 
 from __future__ import annotations
@@ -178,3 +181,18 @@ def test_the_three_commands_are_found_by_the_check():
     assert "minutes.py" in installed_scripts()
     assert "minutes.py" not in run_by_the_kit()
     assert "minutes.py" in reference()
+
+
+def test_req069_the_steward_section_names_ask_target_and_approve():
+    """REQ-069: brief #1692 answer 4: both commands with their flags, beside the standard's `confirm`."""
+    body = sections()["Steward and the owner"]
+    for line in (
+        "    python3 scripts/agk/steward_owner.py ask --target pr:N --qid Q --file FILE --line FILE",
+        "    python3 scripts/agk/steward_owner.py approve --ask Q --said FILE --at TIME [--by LOGIN]",
+        "    python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]",
+    ):
+        assert line in body.splitlines(), line
+    prose = " ".join(body.split())
+    for words in ('review_mode = "solo"', "agent_apps", "personal mode", "posts the `Approve:`"):
+        assert words in prose, words
+    assert "never posting it" not in prose
