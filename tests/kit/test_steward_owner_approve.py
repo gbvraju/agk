@@ -261,8 +261,9 @@ def test_req069_a_supervisor_started_steward_and_a_guard_match_are_refused(root,
     code, lines = approve(base)
     assert code == 2 and "AGK_STEWARD_START" in lines[0]
     monkeypatch.delenv("AGK_STEWARD_START")
-    code, lines = approve(base, "Yes, mail me at person@example.com")
-    assert code in (1, 2) and len(gh.bodies) == 1
+    code, lines = approve(base, "Yes, call me on +44 7700 900123")
+    assert code == 2 and "PHONE" in lines[0] and "[guard]" in lines[0] and len(gh.bodies) == 1
+    assert "7700" not in lines[0]
 
 
 def test_req069_an_unreadable_ask_state_is_refused_and_posts_nothing(root):
@@ -294,12 +295,14 @@ def test_req069_personal_mode_prints_the_confirm_command_and_posts_nothing(root)
     the Decision to the sidecar memory."""
     base, records, gh = root
     (base / "agk.toml").write_text(SOLO + '[personal]\nforge = "files"\n', encoding="utf-8")
-    code, lines = steward_owner.ask_target(
-        base, "Q-7-1", "rec-3", ASK, write(base, "l.txt", "Maintainer answer: Q-7-1 go\n"), NOW
-    )
+    line = write(base, "l.txt", "Maintainer answer: Q-7-1 go\n")
+    for wrong in ("rec-3", "pr:7", "SPEC-62", "REQ-0690"):
+        code, lines = steward_owner.ask_target(base, "Q-7-1", wrong, ASK, line, NOW)
+        assert code == 2 and "--target" in lines[0], wrong
+    code, lines = steward_owner.ask_target(base, "Q-7-1", "SPEC-0062", ASK, line, NOW)
     assert code == 0
     code, lines = approve(base)
-    assert code == 0 and "python3 scripts/agk/personal.py confirm rec-3" in lines
+    assert code == 0 and "python3 scripts/agk/personal.py confirm SPEC-0062" in lines
     assert gh.calls == [] and records[-1][0] == "Decision"
 
 
@@ -337,3 +340,75 @@ def test_req069_an_ask_ends_with_its_session(root, monkeypatch):
     cache.write_text("{}")
     code, lines = ask(base, f"Maintainer answer: accept {HEAD}")
     assert code == 2 and "AGK_SESSION" in lines[0] and len(gh.bodies) == 2
+
+
+@pytest.mark.parametrize("line", [f"Approve: {HEAD} SPEC-0062", f"Confirmed: #7 {HEAD}\nShown: x"])
+def test_req069_a_stored_ask_edited_to_an_approval_is_printed_never_posted(root, line):
+    """REQ-069 AC7: session rule 29, the form is read again at the yes from the stored line, so
+    an ask state edited to an `Approve:` or `Confirmed:` line is printed, never posted."""
+    base, _, gh = root
+    ask(base, f"Maintainer answer: accept {HEAD}")
+    state = json.loads(steward_owner.asks_file(base).read_text(encoding="utf-8"))
+    state[-1]["line"] = line
+    steward_owner.asks_file(base).write_text(json.dumps(state), encoding="utf-8")
+    code, lines = approve(base)
+    assert code == 0 and lines[0].startswith("paste on #7") and len(gh.bodies) == 1
+    state[-1]["line"], state[-1]["open"] = f"Merge: #7 {HEAD}", True
+    steward_owner.asks_file(base).write_text(json.dumps(state), encoding="utf-8")
+    code, lines = approve(base)
+    assert code == 2 and "setting: --line" in lines[0] and len(gh.bodies) == 1
+
+
+def test_req069_an_unwritable_memory_is_refused_before_the_post(root, monkeypatch):
+    """REQ-069 AC7: answer 5, the `Decision:` is written first; when it cannot be, nothing is
+    posted and the ask stays open."""
+    base, _, gh = root
+    ask(base, f"Maintainer answer: accept {HEAD}")
+    monkeypatch.setattr(steward_owner.steward, "record", lambda *a: (2, ["refused: memory"]))
+    code, lines = approve(base)
+    assert code == 2 and lines == ["refused: memory"] and len(gh.bodies) == 1
+    code, _ = approve(base, "Not yet.")
+    assert code == 2 and len(gh.bodies) == 1
+
+
+def test_req069_a_reply_before_the_ask_or_in_the_future_is_refused(root):
+    """REQ-069 AC7: `--at` lies between the ask and now."""
+    base, _, gh = root
+    ask(base, f"Maintainer answer: accept {HEAD}")
+    said = write(base, "said.txt", "Yes\n")
+    for when, why in (("2026-11-22T03:50Z", "older than the ask"), ("2026-11-22T04:01Z", "future")):
+        code, lines = steward_owner.approve(base, "Q-7-1", said, when, None, NOW)
+        assert code == 2 and why in lines[0] and "--at" in lines[0], when
+    assert steward_owner.approve(base, "Q-7-1", said, "2026-11-22T04:00Z", None, NOW)[0] == 0
+    assert len(gh.bodies) == 2
+
+
+SETTINGS = [
+    ("env", "CLAUDE_CODE_REMOTE", "true"),
+    ("reviewers", "agent_apps: [claude]\n", None),
+    ("toml", 'pr_mode = "flow"\n[flow]\nauto_merge = true\n', None),
+    ("toml", 'pr_mode = "strict"\n[flow]\nauto_merge = false\n', None),
+    ("toml", '[kit]\nlayout = "plugin"\n', None),
+    ("toml", '[kit]\nlayout = "installed"\n', None),
+]
+
+
+@pytest.mark.parametrize(("where", "text", "value"), SETTINGS)
+def test_req069_the_other_settings_leave_the_approval_unchanged(
+    root, monkeypatch, where, text, value
+):
+    """REQ-069 AC7: answer 4, a cloud session, `agent_apps`, `pr_mode`, `[flow] auto_merge` and
+    `[kit] layout` change nothing: the `Maintainer answer:` is posted and an `Approve:` printed."""
+    base, _, gh = root
+    if where == "env":
+        monkeypatch.setenv(text, value)
+    elif where == "reviewers":
+        (base / "config").mkdir()
+        (base / "config" / "reviewers.yaml").write_text(text, encoding="utf-8")
+    else:
+        (base / "agk.toml").write_text(SOLO + text, encoding="utf-8")
+    ask(base, f"Maintainer answer: accept {HEAD}")
+    assert approve(base)[0] == 0 and gh.bodies[-1].startswith(f"Maintainer answer: accept {HEAD}")
+    ask(base, f"Approve: {HEAD} SPEC-0062")
+    code, lines = approve(base)
+    assert code == 0 and lines[0].startswith("paste on #7") and len(gh.bodies) == 3
