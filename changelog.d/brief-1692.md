@@ -1,0 +1,1 @@
+- The steward, the `confirm` skill and the guides name the natural path of an approval: one plain question, the person's yes in the chat, and `steward_owner.py approve` posts it in solo mode; a session GitHub marks as an agent app gets the line to paste, and personal mode prints only (brief #1692)
