@@ -216,6 +216,11 @@ FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_f
 FAILED_STATUS = {"failure", "error"}
 NOT_REPORTED_RUN = "cancelled"  # a latest run so ended is not reported (brief #1656, ADR-0690)
 APPROVAL_ASK = re.compile(r"Maintainer answer: amendment \d+ approved|Approve: SPEC-\d{4}")  # #1656
+# brief #1735 (ADR-0723): the offered line, alone, and the approval an answer's first line gives
+APPROVAL_LINE = re.compile(r"Approve: SPEC-(\d{4})|Maintainer answer: amendment (\d+) approved")
+APPROVAL_ANSWER = re.compile(
+    r"Approve: (?:[0-9a-f]{7,40} )?SPEC-(\d{4})(?!\d)|Maintainer answer: amendment (\d+) approved\b"
+)
 ASKED = re.compile(
     r"Approval: (SPEC-\d{4}) (\S+) Draft -> Approved, waiting for a person"
     r"(?:: post \"Approve: (SPEC-\d{4})\")?"
@@ -529,32 +534,40 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     whose latest trusted verdict clears the head and which was asked at or after the head's last
     push; a stale merge ask is read as absent. While an approval ask is open, the approver's answer
     gives the approval and leaves the merge ask open (brief #1733 answers 1 and 5, ADR-0722).
-    None when no ask is open."""
+    Brief #1735 (ADR-0723): an approval ask is an offered line for a spec or amendment this pull
+    request changes (`approval_ask`), so a recap or a quote inside a merge ask or a note asks
+    nothing; an approval line for a spec the pull request does not change closes nothing, and one
+    of several asked approvals closes only its own (`answer_step`). None when no ask is open."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
         (((f.get("commit") or {}).get("commit") or {}).get("committer") or {}).get("date") or ""
     )
+    files = f.get("files")  # None: unread, today's reading (brief #1735 Q-1)
     owner_open = False  # an `Owner needed:`: only the owner's answer closes it (brief #1168)
-    approval = False  # an open `Owner needed:` asks a spec or amendment approval (brief #1656)
+    pending: set[str] = set()  # the approvals open asks offer (brief #1656, brief #1735)
     question_open = False  # a maintainers question: that answer or a newer head closes it
     merge_at: str | None = None  # an open merge ask, when it was posted (brief #1733)
     for c in comments:
         line = first_line(c)
         body = str(c.get("body") or "")
         if line.startswith("Owner needed:") and login_of(c) in listed:
-            if merge_ask(body, f.get("number")) and not APPROVAL_ASK.search(body):
+            asked = approval_ask(body, files)
+            if merge_ask(body, f.get("number")) and not asked:
                 merge_at = str(c.get("created_at") or "")
                 continue
             owner_open = True
-            approval = approval or bool(APPROVAL_ASK.search(body))
+            pending |= asked
         elif for_maintainers(line):
             question_open = not pushed or str(c.get("created_at") or "") >= pushed
         elif line.startswith(("Maintainer answer:", "Approve:")) and login_of(c) in approvers:
-            if not approval:
+            if answer_step(line, files, pending) != "all":
+                continue  # misplaced, or one of several asked approvals (brief #1735)
+            if not pending:
                 merge_at = None
-            owner_open = question_open = approval = False
-    if owner_open and approval:
+            owner_open = question_open = False
+            pending = set()
+    if owner_open and pending:
         return "agk:approve"
     if owner_open or question_open:
         return "agk:question"
@@ -562,6 +575,77 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
         if clears_head(f, comments, authors):
             return "agk:owner-merge"
     return None
+
+
+def approval_key(found: re.Match) -> str:
+    """`SPEC-<nnnn>` or `amendment <n>` of an `APPROVAL_LINE`, `APPROVAL_ASK` or answer match."""
+    text = found.group(0)
+    spec = re.search(r"SPEC-(\d{4})", text)
+    if spec is not None:
+        return f"SPEC-{spec.group(1)}"
+    number = re.search(r"amendment (\d+)", text)
+    return f"amendment {int(number.group(1)) if number else 0}"
+
+
+def changed_names(files) -> set[str] | None:
+    """The changed file names of FILES (dicts with `filename`, or names); None when unread."""
+    if not isinstance(files, list):
+        return None
+    return {str(x.get("filename") or "") if isinstance(x, dict) else str(x) for x in files}
+
+
+def changes(key: str, names: set[str]) -> bool:
+    """Whether NAMES change the spec or amendment KEY names: `docs/specs/<nnnn>-*.md` or
+    `docs/runs/proposed-spec-amendments-<n>.md` (brief #1735 answer 1)."""
+    if key.startswith("SPEC-"):
+        lead = f"docs/specs/{key[5:]}-"
+        return any(n.startswith(lead) and n.endswith(".md") for n in names)
+    return f"docs/runs/proposed-spec-amendments-{key.split()[1]}.md" in names
+
+
+def approval_ask(body: str, files) -> set[str]:
+    """The approvals an `Owner needed:` BODY asks for (brief #1735 answer 1, ADR-0723): each line
+    that, stripped of spaces and of one wrapping pair of backticks, is exactly
+    `Approve: SPEC-<nnnn>` or `Maintainer answer: amendment <n> approved`, for a spec or amendment
+    whose file FILES (the pull request's changed files) holds. A line inside a sentence or a quote,
+    or for a spec the pull request does not change, asks nothing. FILES None (unread): every
+    `APPROVAL_ASK` match anywhere counts, as before (Q-1735-1)."""
+    names = changed_names(files)
+    if names is None:
+        return {approval_key(m) for m in APPROVAL_ASK.finditer(body)}
+    asked = set()
+    for raw in body.splitlines():
+        line = raw.strip()
+        if len(line) > 1 and line[0] == line[-1] == "`":
+            line = line[1:-1].strip()
+        found = APPROVAL_LINE.fullmatch(line)
+        if found is not None and changes(key := approval_key(found), names):
+            asked.add(key)
+    return asked
+
+
+def approval_answer(line: str) -> str | None:
+    """The spec or amendment an answer's first LINE approves (`Approve: [<sha> ]SPEC-<nnnn>` or
+    `Maintainer answer: amendment <n> approved`), else None (brief #1735 answer 3)."""
+    found = APPROVAL_ANSWER.match(line)
+    return approval_key(found) if found is not None else None
+
+
+def answer_step(line: str, files, pending: set[str]) -> str:
+    """What an approver's `Approve:` or `Maintainer answer:` first LINE does (brief #1735 answers 2
+    and 3, ADR-0723): `none` for an approval of a spec or amendment that FILES do not change;
+    `one` when it approves one asked approval of PENDING (removed from it) and another stays
+    open; else `all`, every open item closing as before. FILES None: `all`, as before."""
+    key = approval_answer(line)
+    names = changed_names(files)
+    if key is None or names is None:
+        return "all"
+    if not changes(key, names):
+        return "none"
+    if pending - {key}:
+        pending.discard(key)
+        return "one"
+    return "all"
 
 
 def merge_ask(body: str, number) -> bool:

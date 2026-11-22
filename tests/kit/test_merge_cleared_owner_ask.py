@@ -222,3 +222,38 @@ def test_req039_unapproved_reads_the_body_and_the_clearing_verdict():
     assert merge_cleared.asked_specs(both, [bare(OLD, extra="Approval: SPEC-0030\n")], HEAD) == [
         "SPEC-0042"
     ]
+
+
+# --- brief #1735 answer 5 (k): the owner's merge of a cleared head waiting on their merge ---------
+
+
+def owner_run(tmp_path: Path, labels: list[dict]):
+    """`--pr 7 --owner` as the owner runs it (test_merge_cleared_owner's checkout) on a cleared,
+    protected head labelled LABELS, with the conductor's open merge ask after the verdict."""
+    import json
+
+    from test_merge_cleared_owner import checkout, merges
+    from test_merge_cleared_owner import run as owner
+
+    root, bin_dir, log = checkout(tmp_path)
+    saved = json.loads((tmp_path / "saved.json").read_text(encoding="utf-8"))
+    ask = f'Owner needed: held as "protected class".\n\n{merge_cleared.OWNER_COMMAND.format(7)}\n'
+    saved["comments"] = [*saved["comments"], comment(ask, OWNER, 30)]
+    saved["pull"] = {**saved["pull"], "labels": labels}
+    (tmp_path / "saved.json").write_text(json.dumps(saved), encoding="utf-8")
+    proc = owner(root, bin_dir, "--pr", "7", "--owner")
+    return proc, merges(calls(log))
+
+
+def test_req039_1735_5k_the_owner_merges_a_head_labelled_owner_merge(tmp_path):
+    """REQ-039: brief #1735 answer 5 (k) (brief #1733's `agk:owner-merge` holds nothing)."""
+    proc, put = owner_run(tmp_path, [{"name": "agk:owner-merge"}])
+    assert one_line(proc) == MERGED and proc.returncode == 0
+    assert len(put) == 1
+
+
+def test_req039_1735_5k_a_persons_own_park_still_holds_the_owners_merge(tmp_path):
+    """REQ-039: brief #1735 answer 5 (k): `agk:parked` is a hold label (rule 5), as today."""
+    proc, put = owner_run(tmp_path, [{"name": "agk:owner-merge"}, {"name": "agk:parked"}])
+    held(proc, "hold label (rule 5)")
+    assert put == []
