@@ -1,0 +1,1 @@
+- The steward fixes a brief's mechanical lines and files a draft the owner said yes to as a buildable brief: `steward_owner.py fix-brief` and `file-brief`, behind the new `[steward] fix_briefs` setting (default `false`); the steward's guard denies a direct issue body edit unless it is `true` (brief #1715)
