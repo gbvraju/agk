@@ -6,7 +6,8 @@
 - Related: brief #1691, brief #1690, ADR-0661, ADR-0703, ADR-0179, ADR-0546, SPEC-0062, amendment 194, Q-1691-1, Q-1691-2, Q-1691-3, plan #661
 - Requirements: REQ-069
 
-Protected classes this decision changes: `.claude/`, `scripts/agk/`, `config/`, `CLAUDE.md` and `tests/kit/`.
+Protected classes this decision changes: `.claude/`, `scripts/agk/`, `config/`, `CLAUDE.md`, `tests/kit/` and
+`agk.toml` (one `[[testing.map]]` line: `tests/kit/test_who_line.py` now names `reviewers.py`).
 
 ## Context
 
