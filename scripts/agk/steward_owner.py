@@ -731,12 +731,13 @@ def ask_target(
     if problem := question_problem(sentence) or (None if QID.fullmatch(qid) else "refused: Q id"):
         return 2, [problem]
     personal = personal_table(root) is not None
-    number = TARGET.fullmatch(target)
-    if not personal and not number:
+    found = TARGET.fullmatch(target)
+    number = int(found[1]) if found else None
+    if not personal and number is None:
         return 2, [f"refused: the target is one pull request, pr:<n> (setting: --target, {RULE})"]
     head = link = None
-    if not personal:
-        state, head, link = pull_state(root, int(number[1]))
+    if number is not None and not personal:
+        state, head, link = pull_state(root, number)
         if state != "open":
             return 2, [f"refused: the target is closed ({APPROVE_RULE})"]
     line = line_file.read_text(encoding="utf-8").replace("\r\n", "\n").strip()
@@ -755,15 +756,15 @@ def ask_target(
         return code, said
     for old in asks:  # one open ask stands: the newer closes every older one
         old["open"] = False
-    asks.append({"id": qid, "target": target, "number": int(number[1]) if number else None,
+    asks.append({"id": qid, "target": target, "number": number,
                  "head": head, "link": link, "question": sentence, "line": line,
                  "form": form, "at": steward.stamp(now), "open": True})  # fmt: skip
     save_asks(root, asks)
     asked = f"Question: {qid} for the maintainers: {sentence}"
-    if personal:
+    if personal or number is None:
         return 0, [f"ask the person: {sentence}", f"post: {asked}", *said]
-    post(session.repo_name(root), int(number[1]), f"{asked}\n\n{STEWARD_WHO}")
-    return 0, [f"ask the person: {sentence}", f"asked on #{number[1]}", *said]
+    post(session.repo_name(root), number, f"{asked}\n\n{STEWARD_WHO}")
+    return 0, [f"ask the person: {sentence}", f"asked on #{number}", *said]
 
 
 def age_limit(root: Path) -> timedelta:
@@ -803,7 +804,6 @@ def approve(
     code, refusal, words = yes_of(root, words_file, by)
     if refusal:
         return code, [refusal]
-    words = " ".join(words.split())
     if len(words_file.read_text(encoding="utf-8").strip().splitlines()) != 1:
         return 2, [f"refused: the person's words are one line, verbatim ({APPROVE_RULE})"]
     try:
