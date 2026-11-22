@@ -27,11 +27,12 @@ request body that passed the target's body check (`pr_body.py`); it writes only 
 target's git directory.
 
 `--clean-repo [--rehearsal] [--write]` (SPEC-0071 rule 8, brief #1456, ADR-0614) moves an installed
-local-mode project to the clean layout: see `clean_main`. It refuses, naming the setting, outside
-`execution = "local"`, in personal mode, until the rehearsal's proof is written (rule 11) unless
-`--rehearsal` (`rehearsal.py check`, brief #1459, ADR-0617), and when the project's version has no
-row of the table or is not this kit's. A dry
-run is the default; `--write` makes one new branch with `git switch -c` and commits nothing.
+local-mode project to the clean layout: see `clean_main`. The kept files the kit wrote and the
+person left unchanged are rewritten to the clean form (brief #1684, ADR-0701). It refuses, naming
+the setting, outside `execution = "local"`, in personal mode, until the rehearsal's proof is
+written (rule 11) unless `--rehearsal` (`rehearsal.py check`, brief #1459, ADR-0617), and when the
+project's version has no row of the table or is not this kit's. A dry run is the default;
+`--write` makes one new branch with `git switch -c` and commits nothing.
 """
 
 from __future__ import annotations
@@ -1021,6 +1022,15 @@ LOCAL_RULES = ".claude/settings.local.json"  # ADR-0612 decision 4: uncommitted,
 PLUGIN_PATH = re.compile(r'"?\$\{CLAUDE_PLUGIN_ROOT\}"?/[\w./*<>-]*')
 WORD = re.compile(r"[\w./-]+")
 CLEAN_SHOWN = 40  # the lines of the proof shown, as uninstall.py shows its leftovers
+# Brief #1684 (Q-1684-3, ADR-0701): the kept files the kit wrote are rewritten to the clean form
+# when the person has not changed them; these records and the protected list keep their text and
+# are excepted from the proof, and in these files a line naming a removed path is an entry, dropped.
+CLEAN_RECORDS = ("LICENSE-AGK", "config/protected-paths.txt", "docs/adr/0001-adopt-agk.md")
+ENTRY_FILES = (".gitattributes", ".github/CODEOWNERS")
+PROSE_FILES = ("docs/runs/flakes.md",)
+LIST_VALUE = re.compile(r"\[[^\[\]\n]*\]")
+EMPTY_KEY = re.compile(r"\s*[\w.-]+\s*=\s*\[\]\s*")
+PLUGIN = "${CLAUDE_PLUGIN_ROOT}/"
 
 
 def clean_refusal(
@@ -1084,12 +1094,150 @@ def clean_plan(target: Path, kit_root: Path, rehearsal: bool):
         content = (short + ("\n" + rest if rest.strip() else "")).encode("utf-8")
         plan.items = [i for i in plan.items if i is not old]
         plan.items.append(uninstall.Item("CLAUDE.md", "edit", " (the short CLAUDE.md)", content))
+    mode = "adopt" if data.get("mode") == "adopt" else "init"
+    names = removed_names(target, plan)
+    planned = {i.rel for i in plan.items}
+    plan.items += [
+        i for i in clean_rewrites(target, kit_root, manifest, mode, names) if i.rel not in planned
+    ]
+    # agk.toml: only the kit's own lines are rewritten; a line the person set is kept (Q-1684-1)
+    src = (manifest["adopt"]["templates"] if mode == "adopt" else manifest["templates"]).get(
+        "agk.toml"
+    )
+    ours = set((kit_root / src).read_text(encoding="utf-8").splitlines()) if src else set()
+    clean = clean_text(lf(text.encode("utf-8")).decode("utf-8"), "agk.toml", names, ours)
+    dropped = [
+        m.group(1)
+        for line in set(text.splitlines()) - set(clean.splitlines())
+        if (m := re.match(r"^([A-Za-z_][\w-]*)\s*=", line))
+    ]
+    text = clean
     sep = "" if text.endswith("\n") else "\n"
     table_text = f'{text}{sep}\n[kit]\nlayout = "plugin"\nplugin_version = "{version}"\n'
-    detail = " ([kit] layout and plugin_version added last)"
+    detail = " ([kit] layout and plugin_version added last" + (
+        f"; kit-path keys dropped: {', '.join(sorted(dropped))})" if dropped else ")"
+    )
     plan.items.append(uninstall.Item("agk.toml", "edit", detail, table_text.encode("utf-8")))
     plan.items.sort(key=lambda i: i.rel)
     return plan, version
+
+
+def bare(word: str) -> str:
+    """WORD as a path: only a leading `./` or `/` goes, so `.claude/hooks` stays itself (#1695)."""
+    return word.removeprefix("./").removeprefix("/").rstrip(".,:;/")
+
+
+def removed_names(target: Path, plan) -> set[str]:
+    """The removed files and the folders the removal empties, but the project's record folders."""
+    import uninstall  # noqa: PLC0415 - only this command
+
+    gone = {i.rel for i in plan.of("delete")}
+    empty, _held = uninstall.emptied(target, gone)
+    own = uninstall.OWN_DIRS  # the folders of the project's own records stay (rule 2)
+    return gone | {
+        d for d in empty if not any(f"{d}/".startswith(o) or o.startswith(f"{d}/") for o in own)
+    }
+
+
+def names_removed(text: str, names: set[str]) -> bool:
+    return any(bare(w) in names for w in WORD.findall(PLUGIN_PATH.sub(" ", text)))
+
+
+def clean_line(line: str, rel: str, names: set[str]) -> str | None:
+    """LINE in the clean form, or None to drop it (Q-1684-3): in prose each removed path takes the
+    plugin's root; an entry line of ENTRY_FILES is dropped; a removed item leaves a list value,
+    and a `key = []` left empty goes. Any other line is kept, and the proof names it."""
+    if not names_removed(line, names):
+        return line
+    if rel in PROSE_FILES or line.lstrip().startswith("#"):
+        parts = re.split(f"({PLUGIN_PATH.pattern})", line)
+        return "".join(
+            part
+            if i % 2
+            else WORD.sub(
+                lambda m: (
+                    PLUGIN + m.group(0).removeprefix("./").removeprefix("/")
+                    if bare(m.group(0)) in names
+                    else m.group(0)
+                ),
+                part,
+            )
+            for i, part in enumerate(parts)
+        )
+    if rel in ENTRY_FILES:
+        return None
+
+    def kept(match: re.Match) -> str:
+        items = [i.strip() for i in match.group(0)[1:-1].split(",") if i.strip()]
+        return "[" + ", ".join(i for i in items if bare(i.strip("'\"")) not in names) + "]"
+
+    new = LIST_VALUE.sub(kept, line)
+    return None if EMPTY_KEY.fullmatch(new) else new
+
+
+def clean_text(text: str, rel: str, names: set[str], only: set[str] | None = None) -> str:
+    """TEXT with each line in the clean form; with ONLY, the lines it holds (the kit's) alone."""
+    out = []
+    for line in text.splitlines(keepends=True):
+        body = line.rstrip("\n")
+        new = clean_line(body, rel, names) if only is None or body in only else body
+        if new is not None:
+            out.append(new + line[len(body) :])
+    return "".join(out)
+
+
+def clean_rewrites(target: Path, kit_root: Path, manifest: dict, mode: str, names: set[str]):
+    """The edits of brief #1684 answer 1: each kept file the kit wrote, equal (line ends aside) to
+    what this plugin renders for the project, in the clean form; a changed or deleted one is left
+    alone. A file with adopt's agk markers is compared and rewritten inside its block only."""
+    import reviewers  # noqa: PLC0415 - only this command
+    import uninstall  # noqa: PLC0415 - only this command
+
+    variables = template_variables(target, manifest)
+    templates = manifest["templates"] if mode == "init" else manifest["adopt"]["templates"]
+    kit = {}
+    for dest, src in templates.items():
+        if dest not in ("agk.toml", "CLAUDE.md", *CLEAN_RECORDS):
+            try:
+                kit[dest] = render((kit_root / src).read_text(encoding="utf-8"), variables, src)
+            except Refusal:
+                continue  # a template of another variable cannot be compared: the proof reads it
+    blocks = manifest["adopt"]["blocks"] if mode == "adopt" else {}
+    if ".gitattributes" in blocks:
+        source = block_source(manifest, ".gitattributes")
+        kit[".gitattributes"] = (kit_root / source).read_text(encoding="utf-8")
+    try:
+        listed = (target / "config" / "reviewers.yaml").read_text(encoding="utf-8")
+        kit[".github/CODEOWNERS"] = reviewers.render_codeowners(reviewers.parse(listed))
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError):
+        pass  # no readable reviewers file: CODEOWNERS is the person's, and the proof reads it
+    items = []
+    for rel, body in sorted(kit.items()):
+        path = target / rel
+        if path.is_symlink() or not path.is_file() or passes_symlink(target, rel):
+            continue  # a file the person deleted is not recreated (answer 5)
+        try:
+            text = lf(path.read_bytes()).decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        whole = body.rstrip("\n") + "\n"
+        state, begin, end, lines = (
+            locate(text, blocks[rel]) if rel in blocks else ("none", 0, 0, [])
+        )
+        if state == "ok":  # adopt's marked block, the person's lines around it kept (answer 4)
+            if "".join(lines[begin + 1 : end]) != whole:
+                continue
+            inner = clean_text("".join(lines[begin + 1 : end]), rel, names)
+            new = "".join([*lines[: begin + 1], inner, *lines[end:]])
+        elif text.rstrip("\n") + "\n" == whole:
+            new = clean_text(text, rel, names)
+        elif rel == ".gitattributes":  # independent patterns: the kit's lines alone (Q-1684-4)
+            new = clean_text(text, rel, names, set(body.splitlines()))
+        else:
+            continue
+        if new != text:
+            items.append(uninstall.Item(rel, "edit", " (the clean layout's form)", new.encode()))
+    return items
 
 
 def tracked(target: Path) -> list[str]:
@@ -1103,20 +1251,17 @@ def tracked(target: Path) -> list[str]:
 
 def dangling(target: Path, plan) -> list[tuple[str, int]]:
     """Rule 8's proof: each line of a tracked text file that remains (with its planned content)
-    naming a removed file or a folder the removal empties; the plugin's paths are excepted."""
-    import uninstall  # noqa: PLC0415 - only this command
-
+    naming a removed file or a folder the removal empties; the plugin's paths and CLEAN_RECORDS
+    are excepted."""
     gone = {i.rel for i in plan.of("delete")}
-    empty, _held = uninstall.emptied(target, gone)
-    own = uninstall.OWN_DIRS  # the folders of the project's own records stay (rule 2)
-    names = gone | {
-        d for d in empty if not any(f"{d}/".startswith(o) or o.startswith(f"{d}/") for o in own)
-    }
+    names = removed_names(target, plan)
     edited = {i.rel: i.content or b"" for i in plan.of("edit")}
     found: list[tuple[str, int]] = []
     for rel in tracked(target):
         path = target / rel
-        if rel in gone or (rel not in edited and (path.is_symlink() or not path.is_file())):
+        if rel in gone or rel in CLEAN_RECORDS:  # records keep their text (Q-1684-3)
+            continue
+        if rel not in edited and (path.is_symlink() or not path.is_file()):
             continue
         try:
             data = edited[rel] if rel in edited else path.read_bytes()
@@ -1126,10 +1271,7 @@ def dangling(target: Path, plan) -> list[tuple[str, int]]:
         except (OSError, UnicodeDecodeError):
             continue
         for n, line in enumerate(text.splitlines(), 1):
-            words = (
-                w.lstrip("./").rstrip(".,:;/") for w in WORD.findall(PLUGIN_PATH.sub(" ", line))
-            )
-            if any(w in names for w in words):
+            if names_removed(line, names):
                 found.append((rel, n))
     return found
 
@@ -1159,6 +1301,10 @@ def clean_adr(target: Path, plan, version: str, today: str) -> tuple[Path, str]:
     classes = uninstall.protected_classes(touched, plan.entries)
     named = ", ".join(f"`{c}`" for c in classes) if classes else "none"
     kept = ", ".join(f"`{i.rel}`" for i in plan.of("changed")) or "none"
+    rewritten = ", ".join(
+        f"`{i.rel}`" for i in plan.of("edit") if i.detail.startswith(" (the clean")
+    )
+    records = ", ".join(f"`{rel}`" for rel in CLEAN_RECORDS if (target / rel).is_file()) or "none"
     text = "\n".join(
         [
             f"# ADR-{number:04d}: Move agk {version} to the clean layout",
@@ -1182,7 +1328,8 @@ def clean_adr(target: Path, plan, version: str, today: str) -> tuple[Path, str]:
             "",
             f'Set `[kit] layout = "plugin"` and `plugin_version = "{version}"` in `agk.toml`, '
             "keep the project's own files, and keep these changed kit files for the person to "
-            f"decide: {kept}.",
+            f"decide: {kept}. Rewrite the unchanged files the kit wrote to the clean form "
+            f"({rewritten}), and keep these records as they are: {records}.",
             "",
             "## Consequences",
             "",

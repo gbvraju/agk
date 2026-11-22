@@ -1034,3 +1034,150 @@ def test_ac1_upgrade_adds_the_gitattributes_block_to_an_adopted_file_it_has_neve
     assert text.startswith(own) and "# >>> agk" in text and "# <<< agk" in text
     assert "scripts/agk/** linguist-generated=true" in text
     assert upgrade_cli(target).stdout.splitlines()[-1] == "nothing to do"
+
+
+# --- the clean-layout move of an untouched install (brief #1684, SPEC-0071 rule 8, REQ-078) -----
+
+
+def released(tmp_path: Path, mode: str, before: dict[str, str] | None = None):
+    """(plugin, target): this kit's release from its tag with this tree's scripts laid over it, as
+    the next release ships them, and a repository its own `init.py` or `adopt.py` installed, in
+    local mode and committed. Skipped where the tag is not fetched (a release pull request)."""
+    version = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text())["kit_version"]
+    tag = subprocess.run(
+        ["git", "rev-parse", "-q", "--verify", f"refs/tags/v{version}^{{commit}}"],
+        cwd=KIT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if tag.returncode != 0:
+        pytest.skip(f"the release tag of kit {version} is not fetched here")
+    plugin = checkout(tag.stdout.strip(), tmp_path / "plugin-example")
+    target = make_repo(tmp_path / "product-example")
+    put(target, before or {})
+    proc = subprocess.run(
+        [sys.executable, str(plugin / "scripts" / "agk" / f"{mode}.py"), str(target)],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    for src in (KIT_ROOT / "scripts" / "agk").glob("*.py"):
+        (plugin / "scripts" / "agk" / src.name).write_bytes(src.read_bytes())
+    clean = KIT_ROOT / upgrade.CLEAN_TEMPLATE
+    (plugin / upgrade.CLEAN_TEMPLATE).write_bytes(clean.read_bytes())
+    toml = target / "agk.toml"
+    text = toml.read_text(encoding="utf-8")
+    text, count = re.subn(r'(?m)^#? ?execution = "hosted"$', 'execution = "local"', text, count=1)
+    toml.write_text(text if count else 'execution = "local"\n' + text, encoding="utf-8")
+    commit(target, "install")
+    return plugin, target
+
+
+def commit(target: Path, message: str) -> None:
+    subprocess.run(["git", "add", "-A"], cwd=target, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", message], cwd=target, check=True)
+
+
+def clean_cli(plugin: Path, target: Path, *args: str):
+    script = plugin / "scripts" / "agk" / "upgrade.py"
+    return subprocess.run(
+        [sys.executable, str(script), str(target), "--clean-repo", "--rehearsal", *args],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+
+
+@pytest.mark.parametrize("mode", ["init", "adopt"])
+def test_req078_an_untouched_install_moves_to_the_clean_layout(tmp_path, mode):
+    """REQ-078: brief #1684 answers 1, 2, 4 and 6 (the proof passes; the records keep their bytes;
+    every setting but the kit-path keys is kept, and `lint_paths` names no removed path; the report
+    and the branch carry one plan)."""
+    plugin, target = released(tmp_path, mode)
+    records = ("docs/adr/0001-adopt-agk.md", "LICENSE-AGK", "config/protected-paths.txt")
+    kept = {rel: (target / rel).read_bytes() for rel in records}
+    settings = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+    dry = clean_cli(plugin, target)
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert "proof: no tracked file names a removed kit path" in dry.stdout.splitlines()
+    proc = clean_cli(plugin, target, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    def plan(out: str) -> list[str]:
+        return [ln for ln in out.splitlines() if ln.startswith(("edit ", "delete ", "changed "))]
+
+    assert plan(proc.stdout) == plan(dry.stdout)
+    assert "edit .github/CODEOWNERS (the clean layout's form)" in plan(proc.stdout)
+    assert {rel: (target / rel).read_bytes() for rel in records} == kept
+    after = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+    assert after.pop("kit") == {"layout": "plugin", "plugin_version": settings["version"]}
+    assert {k: v for k, v in after.items() if k != "lint_paths"} == {
+        k: v for k, v in settings.items() if k != "lint_paths"
+    }
+    assert all((target / path).exists() for path in after.get("lint_paths", []))
+
+
+def test_req078_a_projects_own_gitattributes_lines_are_kept_in_adopt_mode(tmp_path):
+    """REQ-078: brief #1684 answer 4 (outside adopt's block the lines are the project's, kept; the
+    kit's lines inside it are rewritten)."""
+    plugin, target = released(tmp_path, "adopt", {".gitattributes": "*.png binary\n"})
+    proc = clean_cli(plugin, target, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = (target / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "*.png binary" and "# >>> agk" in lines
+    assert "scripts/agk/** text eol=lf" not in lines
+
+
+def test_req078_init_mode_rewrites_only_the_kit_lines_of_gitattributes(tmp_path):
+    """REQ-078: brief #1684 answer 4 and Q-1684-4 (an init install writes `.gitattributes` whole:
+    the template's lines are rewritten, the person's kept, one naming a removed path refuses)."""
+    plugin, target = released(tmp_path, "init")
+    attributes = target / ".gitattributes"
+    attributes.write_text(attributes.read_text(encoding="utf-8") + "*.png binary\n", "utf-8")
+    commit(target, "mine")
+    proc = clean_cli(plugin, target, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = attributes.read_text(encoding="utf-8").splitlines()
+    assert lines[-1] == "*.png binary" and "scripts/agk/** text eol=lf" not in lines
+    other, target = released(tmp_path / "other", "init")
+    attributes = target / ".gitattributes"
+    attributes.write_text(attributes.read_text(encoding="utf-8") + "agk.mk -diff\n", "utf-8")
+    commit(target, "mine")
+    proc = clean_cli(other, target)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    named = [ln for ln in proc.stdout.splitlines() if "names a" in ln]
+    assert len(named) == 1 and named[0].startswith("names a removed kit path: .gitattributes:")
+
+
+def test_req078_a_changed_kit_file_naming_a_removed_path_still_refuses(tmp_path):
+    """REQ-078: brief #1684 answers 3 and Q-1684-1 (a changed file and a key the person set are
+    listed and refused; nothing is written)."""
+    plugin, target = released(tmp_path, "init")
+    flakes = target / "docs" / "runs" / "flakes.md"
+    flakes.write_text(flakes.read_text(encoding="utf-8") + "See agk.mk too.\n", encoding="utf-8")
+    toml = target / "agk.toml"
+    mine = '\n[[testing.map]]\ncode = ["scripts/agk/"]\ntests = ["tests/test_x.py"]\n'
+    toml.write_text(toml.read_text(encoding="utf-8") + mine, encoding="utf-8")
+    commit(target, "mine")
+    proc = clean_cli(plugin, target)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    named = {
+        ln.split(": ", 1)[1].split(":")[0] for ln in proc.stdout.splitlines() if "names a" in ln
+    }
+    assert named == {"docs/runs/flakes.md", "agk.toml"}
+    assert proc.stdout.splitlines()[-1].endswith("nothing was written")
+
+
+def test_req078_a_crlf_copy_is_rewritten_and_a_deleted_one_is_not_recreated(tmp_path):
+    """REQ-078: brief #1684 answer 5 (line ends aside; a file the person deleted stays deleted)."""
+    plugin, target = released(tmp_path, "init")
+    flakes = target / "docs" / "runs" / "flakes.md"
+    flakes.write_bytes(flakes.read_bytes().replace(b"\n", b"\r\n"))
+    (target / "pyproject.toml").unlink()
+    commit(target, "mine")
+    proc = clean_cli(plugin, target, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "edit docs/runs/flakes.md (the clean layout's form)" in proc.stdout.splitlines()
+    assert b"${CLAUDE_PLUGIN_ROOT}/scripts/agk/flakes.py" in flakes.read_bytes()
+    assert not (target / "pyproject.toml").exists()

@@ -1,0 +1,1 @@
+- Moving an untouched installed project to the clean layout succeeds: `upgrade.py --clean-repo` rewrites the files the kit wrote to their clean form instead of refusing over them (brief #1684)
