@@ -17,8 +17,10 @@ entry, whose first word is one of KINDS, each ending `Who: AGK steward`. `start`
 other step: the open listing, then the comments with `since=` from the last one seen (kept in a file
 of the clone's git folder, or AGK_STEWARD_CACHE; never a tracked file), so a quiet start is at most
 3 counted calls. It prints the newest entry of each kind first and names an entry of another first
-word. A `Started: steward <session> <UTC time>` newer than 60 minutes with no `Ended: steward
-<session>` after it, by another session, makes a start say so and write nothing (exit 1). At 500
+word. A `Started: steward <session> <UTC time> [beat <UTC time>]` whose newer time is within 60
+minutes, with no `Ended: steward <session>` after it, of any name, the starting one included, makes
+a start say so and write nothing (exit 1); `refresh` and `record` beat on the run's own marker (one
+PATCH), and `record` and `end` refuse with no start in this clone (brief #1741, ADR-0726). At 500
 comments a start opens a new memory issue whose first comment links the old one and carries every
 open `Owner question:` (no later `Decision:` names its Q id), then closes the old one. `record`
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never

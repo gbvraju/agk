@@ -671,3 +671,14 @@ def test_req066_brief_1741_personal_mode_beats_the_sidecar_file_with_no_call(roo
     code, lines = steward.start(root, "s1", gh, NOW + timedelta(minutes=55))
     assert code == 1 and "already running: s1" in lines[-1]
     assert gh.calls == []
+
+
+def test_req066_brief_1741_the_agent_file_starts_again_at_each_resume():
+    """REQ-066 AC1: brief #1741 answer 3, the agent file says a chat runs `start` at each resume
+    and ends with `end`."""
+    text = (Path(__file__).resolve().parents[2] / ".claude" / "agents" / "steward.md").read_text(
+        encoding="utf-8"
+    )
+    start = text.split("Start and end.", 1)[1].split("\n\n", 1)[0]
+    assert "steward.py start --session <session>`, and at each resume" in start
+    assert "Last, `steward.py end --session <session>" in start
