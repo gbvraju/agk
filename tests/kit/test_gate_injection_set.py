@@ -59,8 +59,12 @@ def _project(
         toml += f'[delivery]\nwork_type = "{work_type}"\n\n'
     toml += tail
     found = {"docs/architecture.md": "# Architecture\n"} if founded else {}
-    for rel, text in {"agk.toml": toml, "server/tools.py": "HOST = 'mcp.example.com'\n",
-                      **found, **files}.items():
+    for rel, text in {
+        "agk.toml": toml,
+        "server/tools.py": "HOST = 'mcp.example.com'\n",
+        **found,
+        **files,
+    }.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text, encoding="utf-8")
     return root
@@ -168,9 +172,8 @@ def test_an_unknown_work_type_is_refused_naming_it(tmp_path: Path, capsys) -> No
 def test_a_set_under_any_test_dirs_entry_passes(tmp_path: Path, capsys) -> None:
     """REQ-079: brief #1712 answer 4 (`test_dirs`)."""
     tail = '[[testing.map]]\ncode = "server/**"\ntests = ["checks/injection/*.py"]\n'
-    root = _project(
-        tmp_path, {"checks/injection/test_a.py": TEST}, tail=tail, top='test_dirs = ["tests", "checks"]'
-    )
+    dirs = 'test_dirs = ["tests", "checks"]'
+    root = _project(tmp_path, {"checks/injection/test_a.py": TEST}, tail=tail, top=dirs)
     assert _lines(root, capsys) == [f"ok {GATE}"]
 
 
@@ -189,8 +192,10 @@ def test_a_malformed_test_dirs_is_refused_naming_it(value: str, tmp_path: Path, 
     ("tail", "setting"),
     [
         ('[[testing.map]]\ncode = "server/**"\n', "testing.map[1].tests"),
-        ('[[testing.map]]\ncode = "server/**"\ntests = ["tests\\\\injection\\\\*"]\n',
-         "testing.map[1].tests"),
+        (
+            '[[testing.map]]\ncode = "server/**"\ntests = ["tests\\\\injection\\\\*"]\n',
+            "testing.map[1].tests",
+        ),
         ('[testing]\nmap_source = "guessed"\n\n' + MAP, "testing.map_source"),
     ],
 )
@@ -206,9 +211,7 @@ def test_a_malformed_testing_setting_is_refused_naming_it(
 
 
 @pytest.mark.parametrize("source", ["curated", "generated"])
-def test_either_map_source_reads_the_committed_entries(
-    source: str, tmp_path: Path, capsys
-) -> None:
+def test_either_map_source_reads_the_committed_entries(source: str, tmp_path: Path, capsys) -> None:
     """REQ-079: brief #1712 answer 4 and Q-1712-2 (a generated map file does not count)."""
     tail = f'[testing]\nmap_source = "{source}"\n\n'
     assert _lines(_project(tmp_path, SET, tail=tail + MAP), capsys) == [f"ok {GATE}"]
