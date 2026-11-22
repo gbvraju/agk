@@ -183,9 +183,8 @@ def test_a_malformed_test_dirs_is_refused_naming_it(value: str, tmp_path: Path, 
     root = _project(tmp_path, SET, top=f"test_dirs = {value}")
     with pytest.raises(injection_set.CheckError, match=r"\(setting: test_dirs\)$"):
         injection_set.check(root, {})
-    if value.startswith('"'):  # a list of non-strings stops an earlier step first (found-bug)
-        assert run_gates.main(["--root", str(root)]) == 1
-        assert "(setting: test_dirs)" in capsys.readouterr().out
+    assert run_gates.main(["--root", str(root)]) == 1  # every value now, brief #1725
+    assert "(setting: test_dirs)" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(

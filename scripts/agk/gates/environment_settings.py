@@ -11,9 +11,10 @@ literal name (`os.environ[...]`, `os.getenv(...)`, `os.environ.get(...)`, and `e
 Q-1593-1) does not list, and on a required name (one read somewhere with no default) that the
 code reads with a default elsewhere (Q-1593-2). A project with no example file fails only when
 its code reads a setting. The kit's installed folders (`scripts/agk/`, `.claude/`) and the
-`test_dirs` folders are not the project's code. Other stacks' readers come with their packs. Each
-failure is one path class, never a name or a value (principle 8); `mode = "adopt"` holds them
-until brief #1600's baseline.
+`test_dirs` folders are not the project's code; a `test_dirs` value that is not a list of folders
+inside the repository is refused naming `test_dirs` (brief #1725, ADR-0728). Other stacks' readers
+come with their packs. Each failure is one path class, never a name or a value (principle 8);
+`mode = "adopt"` holds them until brief #1600's baseline.
 """
 
 from __future__ import annotations
@@ -25,12 +26,14 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
-from common import load_config  # noqa: E402
+from common import CheckError, load_config  # noqa: E402
+from impact import _folder_ok  # noqa: E402
 
 from . import committed_secrets as secrets  # noqa: E402
 
 RULE = "SPEC-0072 rule 2: a setting the code reads is not named or not required as the example says"
 KIT_FOLDERS = ("scripts/agk/", ".claude/")
+BAD_DIRS = "test_dirs is a list of folder paths inside the repository (setting: test_dirs)"
 
 
 def _is(node: ast.AST, name: str) -> bool:
@@ -64,8 +67,28 @@ def project_code(root: Path, rel: str, tests: list[str]) -> bool:
     return rel.endswith(".py") and not kit and not any(t.strip("/") in folders for t in tests)
 
 
+def _folder(value: object) -> str | None:
+    """A `test_dirs` entry with no leading `./` or trailing `/`, or None when it is no folder."""
+    if not isinstance(value, str):
+        return None
+    rel = value.strip("/")
+    while rel.startswith("./"):
+        rel = rel[2:].strip("/")
+    return rel if _folder_ok(rel) else None
+
+
+def test_folders(root: Path) -> list[str]:
+    """The `test_dirs` entries; a value that is not a list of folders is refused (an empty list is
+    no test folder, as before)."""
+    raw = load_config(root)["test_dirs"]
+    out = [_folder(t) for t in raw] if isinstance(raw, list) else [None]
+    if None in out:
+        raise CheckError(BAD_DIRS)
+    return [t for t in out if t is not None]
+
+
 def problems(root: Path) -> list[str]:
-    tests = list(load_config(root)["test_dirs"])
+    tests = test_folders(root)
     found: list[tuple[str, bool]] = []
     for rel in secrets.files(root):
         if project_code(root, rel, tests) and (root / rel).is_file():
