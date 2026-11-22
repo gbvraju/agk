@@ -219,7 +219,7 @@ def test_a_stack_outside_the_signal_table_prints_unknown(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """REQ-079: brief #1685 answer 4 (a name outside `config/stack-signals.toml`: `unknown`)."""
-    import pins
+    from gates import pins
 
     row = ("zz-invented", *pins.STACKS["node"][1:])
     monkeypatch.setitem(pins.STACKS, "node", row)

@@ -28,7 +28,10 @@ The standards packs (SPEC-0072 rule 6; brief #1589, ADR-0669): after the gates, 
 `[[standards]]` entry whose stack a pack module of `PACKS` serves is run once per module, only when
 that module is `on` (its stack chosen in the Accepted stack record). Its steps print `ok standards
 <stack>` or `FAIL gates: standards <stack> <step>: <rule> (path class or setting)`; a `lint`,
-`format` or `type` step name the module does not hold is refused naming the stack.
+`format` or `type` step name the module does not hold is refused naming the stack. A chosen runtime
+that no pack module serves prints `not run standards: no pack for <stack>` (the stack class of
+`config/stack-signals.toml`, `unknown` outside it, never a version) and names `standards` in the
+last line; the exit code is unchanged (brief #1685, ADR-0702).
 
 The baseline (SPEC-0072 rule 7; brief #1600, ADR-0680): a step that reports per-file counts (a
 module's `counts(root, playbook)`, or a pack's tally) is held to `config/agk-baseline/<gate id>.txt`
@@ -53,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import check_playbooks
 import playbook_format
 from common import repo_root, run, utf8_output
-from gates import baseline
+from gates import baseline, pins
 
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
@@ -175,7 +178,24 @@ def results(root: Path, write: bool = False) -> list[Row]:
         if hasattr(module, "counts"):
             rows = ratchet(root, gate["id"], module.counts(root, data), rows, write)
         out += rows or [(True, gate["id"])]
-    return out + pack_results(path, root, write)
+    return out + pack_results(path, root, write) + no_pack_rows(root)
+
+
+def no_pack(root: Path) -> str | None:
+    """Brief #1685: the stack class of a chosen runtime that no module of `PACKS` serves, else
+    None (no stack chosen, or a pack is on)."""
+    picked = pins.chosen(Path(root))
+    if picked is None:
+        return None
+    if any(importlib.import_module(f"gates.{name}").on(root) for name in PACKS):
+        return None
+    known = playbook_format.stacks(Path(__file__).resolve().parents[2]) or []
+    return picked[0][0] if picked[0][0] in known else "unknown"
+
+
+def no_pack_rows(root: Path) -> list[Row]:
+    stack = no_pack(root)
+    return [(None, f"standards: no pack for {stack}")] if stack else []
 
 
 def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
