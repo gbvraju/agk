@@ -21,6 +21,16 @@ strict mode, when no version is raised and when the base does not have this scri
 request that adds it is the last build that bumps itself, SPEC-0028 rule 9) it prints `ok release`
 and checks nothing. Git and files only: no network, no model. Messages name the rule and the
 path, never a version.
+
+A pull request merged by hand carries no record (brief #1738, ADR-0724, Q-1738-2). With `--body
+FILE` and `--pulls FILE` (the merged pull requests as `GET pulls/<n>` returns them), the release may
+also flip an ADR that a body line `Hand-merged: #<n> Final <id>` names, only when all hold: the
+Final comment verifies on #<n> (`final_record_verified`); the payload says `merged: true`; its
+`merge_commit_sha` is a one-parent commit of the base's first-parent line whose subject ends
+`(#<n>)` with no `Merged-by:` line; its `head.sha` is the head the Final verdict names; and the ADR reads
+`Proposed` at the base and only its Status line changes. A `Hand-merged:` line without `--pulls`,
+or one whose payload is missing or does not match, fails closed naming the option, never a value. A
+body with no such line checks as before.
 """
 
 from __future__ import annotations
@@ -43,6 +53,8 @@ from common import (
     CheckError,
     changed_files,
     changed_lines,
+    covered_fix_list,
+    final_accepts,
     git,
     merge_base,
     pr_mode,
@@ -199,6 +211,53 @@ def recorded_adrs(root: Path, mb: str, comments: list[dict] | None = None) -> se
     }
 
 
+HAND_REFUSED = (
+    "rule 5: a Hand-merged line of the body does not verify against its pull request "
+    "(options --pulls and --comments)"
+)
+HAND_NO_PULLS = "rule 5: a Hand-merged line of the body needs the pull requests (option --pulls)"
+
+
+def hand_merged_adrs(
+    root: Path, mb: str, body: str | None, comments: list[dict] | None, pulls_path: str | None
+) -> set[str]:
+    """The ADR paths that the `Hand-merged:` lines of BODY let the release flip (Q-1738-2), each
+    checked against PULLS_PATH and COMMENTS; a CheckError naming the option when one does not."""
+    lines = check_adrs.hand_lines(body or "")
+    if not lines:
+        return set()
+    if pulls_path is None:
+        raise CheckError(HAND_NO_PULLS)
+    try:
+        pulls = {p["number"]: p for p in check_adrs.read_pulls(pulls_path) or []}
+    except CheckError:
+        raise CheckError(HAND_NO_PULLS) from None
+    by_id = {c.get("id"): c for c in comments or [] if isinstance(c, dict)}
+    authors = check_adrs.record_authors(root)
+    found: set[str] = set()
+    for number, cid in lines:
+        pull, comment = pulls.get(number), by_id.get(cid)
+        head = pull.get("head") if isinstance(pull, dict) else None
+        covered = covered_fix_list(str(comment.get("body") or "")) if comment else None
+        paths = final_accepts(covered[1]) if covered else None
+        if (
+            not isinstance(pull, dict)
+            or pull.get("merged") is not True
+            or not check_adrs.is_hand_merge(root, mb, str(pull.get("merge_commit_sha")), number)
+            or not isinstance(head, dict)
+            or covered is None
+            or head.get("sha") != covered[0]
+            or not paths
+        ):
+            raise CheckError(HAND_REFUSED)
+        for path in paths:
+            if not check_adrs.final_record_verified(path, (number, cid), comment, authors):
+                raise CheckError(HAND_REFUSED)
+            if status_of(show(root, mb, path) or "") == "Proposed":
+                found.add(path)
+    return found
+
+
 def status_flip(root: Path, mb: str, path: str) -> bool:
     """Whether PATH changes only its Status line, from Proposed to Accepted."""
     lines = changed_lines(root, mb, path)
@@ -224,7 +283,12 @@ def reads_records(root: Path, mb: str) -> bool:
     return not (new is None or old is None or new == old)
 
 
-def check(root: Path, comments: list[dict] | None = None) -> int:
+def check(
+    root: Path,
+    comments: list[dict] | None = None,
+    body: str | None = None,
+    pulls: str | None = None,
+) -> int:
     if pr_mode(root) != "flow":
         print(f"ok {NAME}")
         return 0
@@ -240,6 +304,7 @@ def check(root: Path, comments: list[dict] | None = None) -> int:
     changes = changed_files(root, mb)
     fragments = set(tree_fragments(root, mb))
     flips = recorded_adrs(root, mb, comments)
+    flips |= hand_merged_adrs(root, mb, body, comments, pulls)  # brief #1738, Q-1738-2
     for path in sorted(set(changes) - set(ALLOWED)):
         if path in fragments and changes[path] == "D":
             continue
@@ -273,7 +338,13 @@ def check(root: Path, comments: list[dict] | None = None) -> int:
     return 0
 
 
-def valid_release(root: Path, mb: str, comments: list[dict] | None = None) -> bool:
+def valid_release(
+    root: Path,
+    mb: str,
+    comments: list[dict] | None = None,
+    body: str | None = None,
+    pulls: str | None = None,
+) -> bool:
     """Whether the change set from `mb` is a valid release pull request: flow mode, a raised
     version, nothing changed outside the release files (a deleted fragment is part of it) and
     every rule of `check` met, with the Final COMMENTS of the base's records (SPEC-0021 rule 3a;
@@ -283,22 +354,31 @@ def valid_release(root: Path, mb: str, comments: list[dict] | None = None) -> bo
         return False
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            return check(root, comments) == 0
+            return check(root, comments, body, pulls) == 0
     except CheckError:
         return False
 
 
-USAGE = "usage: check_release.py [--comments FILE]"
+USAGE = "usage: check_release.py [--comments FILE] [--body FILE] [--pulls FILE]"
+OPTIONS = ("--comments", "--body", "--pulls")
 
 
 def main() -> int:
     args = sys.argv[1:]
-    if args and (len(args) != 2 or args[0] != "--comments"):
+    names = args[::2]
+    if len(args) % 2 or any(n not in OPTIONS for n in names) or len(set(names)) != len(names):
         raise CheckError(USAGE)
+    opts = dict(zip(args[::2], args[1::2], strict=True))
     root = repo_root()
     # without the option, the file AGK_RECORD_COMMENTS names (amendment 122, brief #601)
-    path = args[1] if args else os.environ.get("AGK_RECORD_COMMENTS") or None
-    return check(root, check_adrs.read_comments(path))
+    path = opts.get("--comments") or os.environ.get("AGK_RECORD_COMMENTS") or None
+    body = None
+    if "--body" in opts:
+        try:
+            body = Path(opts["--body"]).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            raise CheckError("rule 5: the body cannot be read (option --body)") from None
+    return check(root, check_adrs.read_comments(path), body, opts.get("--pulls"))
 
 
 if __name__ == "__main__":

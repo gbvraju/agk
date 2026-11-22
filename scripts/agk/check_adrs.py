@@ -24,7 +24,9 @@ of its latest verdict by a record author that no record accepts (doctor's `lost-
 lists such an ADR, only when its Final comment in `--comments FILE` verifies, is the latest verdict
 there, and the payload says `merged: true`, names that squash commit as `merge_commit_sha` and the
 verdict's head as `head.sha`. Without `--pulls` nothing changes; a FILE that is not such a list is
-refused naming the option.
+refused naming the option. The release body names each hand merge it accepts in one line
+`Hand-merged: #<n> Final <id>` (Q-1738-2): `--record-ids --body FILE` also prints those ids, and
+`--hand-merged --body FILE` prints each `<n>`, offline, for the workflow's `GET pulls/<n>`.
 
 In a sidecar only (SPEC-0041 rule 8, brief #1502), `check_adrs.py --comments FILE` also fails an ADR
 whose status line moves to `Accepted` without the `Accept: <C> ADR-nnnn` line of the person's
@@ -318,16 +320,69 @@ def hand_merged_records(
     return found
 
 
+HAND_MERGED = "Hand-merged:"
+HAND_LINE = re.compile(r"Hand-merged: #(\d+) Final (\d+)")
+
+
+def hand_lines(body: str) -> list[tuple[int, int]]:
+    """(pull request, Final comment id) of each `Hand-merged: #<n> Final <id>` line of a release
+    pull request BODY (brief #1738, Q-1738-2), in order; a line of another form is not read."""
+    return [
+        (int(m.group(1)), int(m.group(2)))
+        for line in body.splitlines()
+        if (m := HAND_LINE.fullmatch(line.strip()))
+    ]
+
+
+def is_hand_merge(root: Path, ref: str, sha: str, number: int) -> bool:
+    """Whether SHA is on REF's first-parent line with one parent, a subject that ends `(#NUMBER)`
+    and no `MERGED_BY` line: a squash commit of pull request NUMBER that the merger did not make."""
+    if not SHA.fullmatch(sha or ""):
+        return False
+    line = git(root, "rev-list", "--first-parent", ref, check=False).split()
+    if sha not in line:
+        return False
+    out = git(root, "log", "-1", "--format=%P%x1f%B", sha, check=False)
+    parents, _, message = out.partition("\x1f")
+    lines = [ln.strip() for ln in message.strip().splitlines()]
+    subject = SQUASH_SUBJECT.fullmatch(lines[0]) if lines else None
+    return (
+        len(parents.split()) == 1
+        and subject is not None
+        and int(subject.group(1)) == number
+        and MERGED_BY not in lines
+    )
+
+
+def hand_merged_numbers(argv: list[str]) -> int:
+    """`--hand-merged --body FILE`: print the `<n>` of each `Hand-merged:` line of FILE, one a
+    line, offline, so that the workflow reads `GET pulls/<n>` for `--pulls` (Q-1738-2)."""
+    at = argv.index("--body") + 1 if "--body" in argv else None
+    if at is None or at >= len(argv):
+        print(f"FAIL {NAME}: --hand-merged needs --body FILE (option --body)")
+        return 1
+    try:
+        text = Path(argv[at]).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        print(f"FAIL {NAME}: the body cannot be read (option --body)")
+        return 1
+    for number in dict.fromkeys(n for n, _ in hand_lines(text)):
+        print(number)
+    return 0
+
+
 def record_ids(root: Path, argv: list[str]) -> int:
     """Print, one a line, the Final comment id of each record that `final_records` reads in HEAD's
     history: the governance workflow fetches each one for `--comments`. With `--body FILE` (the pull
     request body), only the ids a check will read (brief #1181, ADR-0501): every record's (in HEAD's
     history or the merge base's) for a release pull request (`check_release.reads_records`), else
     those of each ADR that a `Covered-by:` line of FILE names, else none. A body that cannot be
-    read or a base that does not resolve narrows nothing: every id, as without the option."""
+    read or a base that does not resolve narrows nothing: every id, as without the option. A body
+    that was read also adds the Final id of each `Hand-merged:` line (brief #1738)."""
     records = final_records(root, "HEAD")
     wanted = {record[1] for record in records.values()}
     at = argv.index("--body") + 1 if "--body" in argv else None
+    text = None
     try:
         if at is not None:
             if at >= len(argv):
@@ -338,6 +393,8 @@ def record_ids(root: Path, argv: list[str]) -> int:
             wanted = needed_ids(root, mb, text, records)
     except (OSError, UnicodeDecodeError, CheckError):
         pass  # fail closed: every id
+    if text is not None:  # each `Hand-merged:` line's Final (brief #1738, Q-1738-2)
+        wanted |= {cid for _, cid in hand_lines(text)}
     for cid in sorted(wanted):
         print(cid)
     return 0
@@ -519,6 +576,8 @@ def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if "--record-ids" in args:
         return record_ids(root, list(args))
+    if "--hand-merged" in args:
+        return hand_merged_numbers(list(args))
     if "--pending" in args:
         at = args.index("--comments") + 1 if "--comments" in args else None
         try:

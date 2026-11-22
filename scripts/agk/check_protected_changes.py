@@ -335,11 +335,25 @@ def comments_arg(argv: list[str] | None) -> str | None:
     return args[i + 1]
 
 
-def release_pull_request(root, mb, comments_file: str | None = None) -> bool:
+def pulls_arg(argv: list[str] | None) -> str | None:
+    """The file of `--pulls FILE` (brief #1738), or None; a CheckError naming it when empty."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    if "--pulls" not in args:
+        return None
+    i = args.index("--pulls")
+    if i + 1 >= len(args):
+        raise CheckError("--pulls needs a value")
+    return args[i + 1]
+
+
+def release_pull_request(
+    root, mb, comments_file: str | None = None, body: str | None = None, pulls: str | None = None
+) -> bool:
     """A valid release pull request of SPEC-0028 needs no ADR: it changes only the release files,
     and the release check passes, given the Final comments of COMMENTS_FILE (SPEC-0021 rule 3a;
     an unreadable file is no exemption). That check is kit-only, so a project, which does not
-    have it, has no exemption."""
+    have it, has no exemption. BODY and PULLS (`--pulls FILE`) let it verify the body's
+    `Hand-merged:` lines (brief #1738, Q-1738-2); without them such a line is no exemption."""
     try:
         import check_adrs  # noqa: PLC0415 - kit-only reader of the comments
         import check_release  # noqa: PLC0415 - kit-only, absent from an installed copy
@@ -349,7 +363,7 @@ def release_pull_request(root, mb, comments_file: str | None = None) -> bool:
         comments = check_adrs.read_comments(comments_file)
     except CheckError:
         return False
-    return check_release.valid_release(root, mb, comments)
+    return check_release.valid_release(root, mb, comments, body, pulls)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -387,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
     ok = None
     if not classes:
         ok = f"ok {NAME}"
-    elif release_pull_request(root, mb, comments_arg(argv)):
+    elif release_pull_request(root, mb, comments_arg(argv), body_text(argv), pulls_arg(argv)):
         ok = f"ok {NAME} (a release pull request)"
     elif covering_adrs(root, mb, changed, classes):
         ok = f"ok {NAME} (protected change covered by an ADR)"

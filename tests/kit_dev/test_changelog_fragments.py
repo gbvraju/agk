@@ -751,3 +751,114 @@ def test_1738_a_bad_pulls_file_is_refused_naming_the_option_and_writes_nothing(t
     assert proc.returncode != 0
     assert "--pulls" in proc.stdout + proc.stderr and "invented-value" not in proc.stdout
     assert changed(root) == []
+
+
+# --- the release pull request's own check accepts a hand-merged flip (Q-1738-2) ------------------
+# The release body names each accepted hand merge in one line `Hand-merged: #<n> Final <id>`;
+# `check_release.py --body FILE --pulls FILE` lets the release flip its ADR only when the Final
+# verifies, the payload names a hand-merge squash and the head the verdict names. Fixtures only.
+
+ADRS_SCRIPT = KIT_ROOT / "scripts" / "agk" / "check_adrs.py"
+HAND_LINE = "Hand-merged: #12 Final 120"
+
+
+def accepted_release(tmp_path: Path, line: str = HAND_LINE) -> tuple[Path, str, str, str, str]:
+    """hand_merged, accepted with --pulls and committed; returns the root, the comments, the
+    pulls file, the body file and the hand merge's commit."""
+    root, saved, sha = hand_merged(tmp_path)
+    pulls = pulls_file(tmp_path, sha)
+    assert accept(root, "--comments", saved, "--pulls", pulls, "--base", "main").returncode == 0
+    commit_as(root, "release: accept")
+    body = tmp_path / "body.md"
+    body.write_text(f"Summary: a release\n{line}\n", encoding="utf-8")
+    return root, saved, pulls, str(body), sha
+
+
+def release_check(root: Path, *args: str):
+    return run(RELEASE, root, *args, base="main")
+
+
+def test_1738_q2_the_release_check_passes_a_verified_hand_merged_flip(tmp_path):
+    """REQ-035: Q-1738-2 (3): every fact holds, so the flip is part of the release."""
+    root, saved, pulls, body, _ = accepted_release(tmp_path)
+    proc = release_check(root, "--comments", saved, "--body", body, "--pulls", pulls)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_1738_q2_a_hand_merged_line_without_pulls_fails_closed_naming_the_option(tmp_path):
+    """REQ-035: Q-1738-2 (4)."""
+    root, saved, _, body, _ = accepted_release(tmp_path)
+    proc = release_check(root, "--comments", saved, "--body", body)
+    assert proc.returncode == 1 and "option --pulls" in proc.stdout, proc.stdout
+
+
+def test_1738_q2_without_the_body_the_flip_is_refused_as_today(tmp_path):
+    """REQ-035: Q-1738-2 (4): no line read, so the flip is a change outside the release files."""
+    root, saved, pulls, _, _ = accepted_release(tmp_path)
+    proc = release_check(root, "--comments", saved, "--pulls", pulls)
+    assert proc.returncode == 1 and "rule 5" in proc.stdout and HAND_ADR in proc.stdout
+
+
+def test_1738_q2_a_head_mismatch_or_a_missing_payload_fails_closed(tmp_path):
+    """REQ-035: Q-1738-2 (4) and (6): a head mismatch, another merge commit, a missing payload."""
+    root, saved, _, body, sha = accepted_release(tmp_path)
+    for name, payload in (
+        ("head", {"merge_commit_sha": sha, "head": {"sha": "f" * 40}}),
+        ("commit", {"merge_commit_sha": "c" * 40, "head": {"sha": HAND_HEAD}}),
+        ("merged", {"merge_commit_sha": sha, "head": {"sha": HAND_HEAD}, "merged": False}),
+        ("missing", {"number": 13, "merge_commit_sha": sha, "head": {"sha": HAND_HEAD}}),
+    ):
+        path = tmp_path / f"pulls-{name}.json"
+        path.write_text(json.dumps([{"number": 12, "merged": True, **payload}]), encoding="utf-8")
+        proc = release_check(root, "--comments", saved, "--body", body, "--pulls", str(path))
+        assert proc.returncode == 1, name
+        assert "--pulls" in proc.stdout and sha not in proc.stdout, (name, proc.stdout)
+
+
+def test_1738_q2_a_forged_hand_merged_line_fails_closed(tmp_path):
+    """REQ-035: Q-1738-2 (6): a line naming another pull request's Final, or a merged squash."""
+    for at, line in enumerate(("Hand-merged: #12 Final 42", "Hand-merged: #7 Final 42")):
+        (tmp_path / str(at)).mkdir()
+        root, saved, pulls, body, _ = accepted_release(tmp_path / str(at), line)
+        proc = release_check(root, "--comments", saved, "--body", body, "--pulls", pulls)
+        assert proc.returncode == 1, line
+        assert "--pulls" in proc.stdout, proc.stdout
+
+
+def test_1738_q2_a_body_with_no_hand_merged_line_checks_as_before(tmp_path):
+    """REQ-035: Q-1738-2 (6): unchanged; the brief #1706 release still passes with the options."""
+    root, saved = accept_world(tmp_path)
+    assert accept(root, "--comments", saved).returncode == 0
+    commit_as(root, "release: 1.1.0")
+    body = tmp_path / "plain.md"
+    body.write_text("Summary: a release\n", encoding="utf-8")
+    empty = tmp_path / "empty-pulls.json"
+    empty.write_text("", encoding="utf-8")
+    for args in ((), ("--body", str(body)), ("--body", str(body), "--pulls", str(empty))):
+        proc = release_check(root, "--comments", saved, *args)
+        assert proc.returncode == 0, (args, proc.stdout + proc.stderr)
+
+
+def test_1738_q2_record_ids_and_hand_merged_read_the_lines_offline(tmp_path):
+    """REQ-035: Q-1738-2 (2): `--record-ids --body` adds the Final id, `--hand-merged` the number."""
+    root, _, _, body, _ = accepted_release(tmp_path)
+    ids = run(ADRS_SCRIPT, root, "--record-ids", "--body", body, base="main")
+    assert "120" in ids.stdout.split(), ids.stdout
+    numbers = run(ADRS_SCRIPT, root, "--hand-merged", "--body", body)
+    assert (numbers.returncode, numbers.stdout) == (0, "12\n")
+    none = run(ADRS_SCRIPT, root, "--hand-merged")
+    assert none.returncode == 1 and "option --body" in none.stdout
+
+
+def test_1738_q2_the_release_exemption_of_protected_changes_reads_the_lines(tmp_path):
+    """REQ-035: Q-1738-2 (3): `valid_release`, which check_protected_changes asks, takes both."""
+    import check_adrs
+    import check_release
+    from common import merge_base
+
+    root, saved, pulls, body, _ = accepted_release(tmp_path)
+    comments = check_adrs.read_comments(saved)
+    mb = merge_base(root, "main")
+    text = Path(body).read_text(encoding="utf-8")
+    assert check_release.valid_release(root, mb, comments, text, pulls)
+    assert not check_release.valid_release(root, mb, comments, text)
