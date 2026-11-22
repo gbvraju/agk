@@ -27,10 +27,10 @@ FILE` and `--pulls FILE` (the merged pull requests as `GET pulls/<n>` returns th
 also flip an ADR that a body line `Hand-merged: #<n> Final <id>` names, only when all hold: the
 Final comment verifies on #<n> (`final_record_verified`); the payload says `merged: true`; its
 `merge_commit_sha` is a one-parent commit of the base's first-parent line whose subject ends
-`(#<n>)` with no `Merged-by:` line; its `head.sha` is the head the Final verdict names; and the ADR reads
-`Proposed` at the base and only its Status line changes. A `Hand-merged:` line without `--pulls`,
-or one whose payload is missing or does not match, fails closed naming the option, never a value. A
-body with no such line checks as before.
+`(#<n>)` with no `Merged-by:` line; its `head.sha` is the head the Final verdict names; and the
+ADR reads `Proposed` at the base and only its Status line changes. A `Hand-merged:` line without
+`--pulls`, or one whose payload is missing or does not match, fails closed naming the option, never
+a value. A body with no such line checks as before.
 """
 
 from __future__ import annotations

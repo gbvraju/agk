@@ -840,7 +840,7 @@ def test_1738_q2_a_body_with_no_hand_merged_line_checks_as_before(tmp_path):
 
 
 def test_1738_q2_record_ids_and_hand_merged_read_the_lines_offline(tmp_path):
-    """REQ-035: Q-1738-2 (2): `--record-ids --body` adds the Final id, `--hand-merged` the number."""
+    """REQ-035: Q-1738-2 (2): `--record-ids --body` adds the Final id; `--hand-merged`, the n."""
     root, _, _, body, _ = accepted_release(tmp_path)
     ids = run(ADRS_SCRIPT, root, "--record-ids", "--body", body, base="main")
     assert "120" in ids.stdout.split(), ids.stdout
