@@ -390,3 +390,199 @@ def test_1733_the_states_and_docstring_name_the_rule():
     """REQ-039: brief #1733 answer 8 (the `owner-merge` line of `route.STATES`)."""
     assert "only the owner may merge" in route.description_of("agk:owner-merge")
     assert "ADR-0722" in (route.owner_ask.__doc__ or "")
+
+
+# --- brief #1735 (ADR-0723): an approval ask is an offered line for this pull request's own spec --
+
+SPEC_0059 = "docs/specs/0059-a-steward-answers-what-the-evidence-settles.md"
+SPEC_0050 = "docs/specs/0050-overlapping-work-never-runs-at-once.md"
+AMEND_215 = "docs/runs/proposed-spec-amendments-215.md"
+AMEND_216 = "docs/runs/proposed-spec-amendments-216.md"
+FILES_1723 = [{"filename": AMEND_215, "status": "added"}, {"filename": SPEC_0059}]
+FILES_1726 = [{"filename": AMEND_216, "status": "added"}, {"filename": SPEC_0050}]
+OFFER = "\n\nIf you agree, post this line on its own:\n\n{}\n\nWho: AGK conductor"
+
+
+def pr_1723_comments(note: str = "Owner needed:") -> list[dict]:
+    """#1723's comments up to 11:57:19Z (read 2026-11-22 12:16 UTC), trimmed, logins invented;
+    NOTE is the first word of the conductor's notice at 11:57:19Z."""
+    command = route.OWNER_COMMAND.format(1723)
+    return [
+        at(1, "boss", "Owner needed: the steward rules change (amendment 215)."
+           + OFFER.format("Maintainer answer: amendment 215 approved"), D + "07:36:16Z"),
+        at(2, "maintainer", "Maintainer answer: amendment 215 approved\nWho: ProductOwner",
+           D + "09:09:48Z"),
+        at(3, "boss", "Owner needed: the changed rule text needs your approval."
+           + OFFER.format("Approve: SPEC-0059"), D + "09:14:08Z"),
+        at(4, "maintainer", "Approve: SPEC-0059", D + "10:31:47Z"),
+        at(5, "boss", "Owner needed: this change is cleared. To merge it, use the Merge button "
+           f"on this pull request (squash), or run on your computer:\n\n{command}\n\nWho: AGK",
+           D + "10:34:19Z"),
+        at(6, "maintainer", "Maintainer answer: merge it now; I merge with merge_cleared.py",
+           D + "11:12:54Z"),
+        at(7, "maintainer", "Approve: SPEC-0050", D + "11:56:38Z"),
+        at(8, "boss", f"{note} the line `Approve: SPEC-0050` just posted here belongs on #1726, "
+           "the change that edits SPEC-0050; it does nothing here.\n\nWho: AGK conductor",
+           D + "11:57:19Z"),
+    ]  # fmt: skip
+
+
+def f_1723(comments, files=FILES_1723, **kw) -> dict:
+    return facts(number=1723, comments=comments, commit=MERGE_PUSHED, files=files, **kw)
+
+
+def test_1735_5a_pr_1723_a_quoted_misplaced_line_asks_no_approval():
+    """REQ-039: brief #1735 `Measured:` and answer 5 (a). Before: `agk:approve`. The conductor's
+    notice still is an `Owner needed:` that asks nothing, so it is an owner question (answer 1,
+    Q-1735-1); posted as `Note:` (answer 4 (c)) it is no ask at all and nothing is open."""
+    f = f_1723(pr_1723_comments())
+    assert route.owner_ask(f, f["comments"], f["authors"]) == "agk:question"
+    noted = f_1723(pr_1723_comments(note="Note:"))
+    assert route.owner_ask(noted, noted["comments"], noted["authors"]) is None
+    assert route.approval_ask(pr_1723_comments()[-1]["body"], FILES_1723) == set()
+
+
+def test_1735_5b_the_real_asks_on_their_own_pull_requests_still_ask():
+    """REQ-039: brief #1735 answer 5 (b): amendment 215 and SPEC-0059 on #1723, SPEC-0050 on
+    #1726, each `agk:approve` until its line is posted."""
+    said = pr_1723_comments()
+    assert route.decide(f_1723(said[:1])) == "agk:approve"
+    assert route.decide(f_1723(said[:2])) == "agk:review"
+    assert route.decide(f_1723(said[:3])) == "agk:approve"
+    assert route.decide(f_1723(said[:4])) == "agk:review"
+    ask_1726 = at(1, "boss", "Owner needed: the rule text." + OFFER.format("Approve: SPEC-0050"),
+                  D + "11:50:46Z")  # fmt: skip
+    f = facts(number=1726, comments=[ask_1726], commit=MERGE_PUSHED, files=FILES_1726)
+    assert route.decide(f) == "agk:approve"
+    given = at(2, "maintainer", "Approve: SPEC-0050", D + "12:10:05Z")
+    f = facts(number=1726, comments=[ask_1726, given], commit=MERGE_PUSHED, files=FILES_1726)
+    assert route.decide(f) == "agk:review"
+
+
+def test_1735_5b_an_ask_for_an_amendment_this_pull_request_does_not_change_asks_nothing():
+    """REQ-039: brief #1735 answer 1: #1726's first ask named amendment 215, but #1726 changes
+    amendment 216; the answer for 216 closes it as a plain owner question."""
+    offered = OFFER.format("Maintainer answer: amendment 215 approved")
+    wrong = at(1, "boss", "Owner needed: the rule change." + offered, D + "07:34:18Z")
+    f = facts(number=1726, comments=[wrong], commit=MERGE_PUSHED, files=FILES_1726)
+    assert route.decide(f) == "agk:question"
+    answer = at(2, "maintainer", "Maintainer answer: amendment 216 approved", D + "09:10:16Z")
+    f = facts(number=1726, comments=[wrong, answer], commit=MERGE_PUSHED, files=FILES_1726)
+    assert route.decide(f) == "agk:review"
+
+
+RECAP = (
+    "Owner needed: thank you, your Approve: SPEC-0059 is in. To merge, run "
+    + route.OWNER_COMMAND.format(1723)
+)
+
+
+def test_1735_5c_a_merge_ask_that_recaps_an_approval_stays_owner_merge():
+    """REQ-039: brief #1735 `Measured:` and answer 5 (c): before `agk:approve`."""
+    f = f_1723([cleared_on(), at(40, "boss", RECAP, D + "10:34:19Z")])
+    assert route.decide(f) == "agk:owner-merge"
+
+
+def test_1735_5d_a_merge_ask_with_a_real_approval_ask_approves_first():
+    """REQ-039: brief #1735 answer 5 (d) (ADR-0722 decision 2)."""
+    ask = at(41, "boss", "Owner needed: the rule text." + OFFER.format("Approve: SPEC-0059"),
+             D + "10:35:00Z")  # fmt: skip
+    said = [cleared_on(), at(40, "boss", RECAP, D + "10:34:19Z"), ask]
+    assert route.decide(f_1723(said)) == "agk:approve"
+    given = at(42, "maintainer", "Approve: SPEC-0059", D + "10:40:00Z")
+    assert route.decide(f_1723([*said, given])) == "agk:owner-merge"
+
+
+def open_q(misplaced: str = "Approve: SPEC-0050") -> list[dict]:
+    return [
+        at(1, "builder", "Question: Q-1723-9 for the maintainers: a or b?", D + "11:00:00Z"),
+        at(2, "boss", "Owner needed: Q-1723-9 pick a or b", D + "11:01:00Z"),
+        at(3, "maintainer", misplaced, D + "11:56:38Z"),
+    ]
+
+
+def test_1735_5e_a_misplaced_approval_closes_no_open_question():
+    """REQ-039: brief #1735 `Measured:` and answer 3, 5 (e): before None."""
+    for line in ("Approve: SPEC-0050", f"Approve: {HEAD} SPEC-0050",
+                 "Maintainer answer: amendment 216 approved"):  # fmt: skip
+        f = f_1723(open_q(line))
+        assert route.owner_ask(f, f["comments"], f["authors"]) == "agk:question", line
+
+
+def test_1735_5f_the_same_approval_on_the_pull_request_that_changes_the_spec_closes():
+    """REQ-039: brief #1735 answer 5 (f): it closes as today."""
+    f = f_1723(open_q(), files=FILES_1726)
+    assert route.owner_ask(f, f["comments"], f["authors"]) is None
+    plain = f_1723(open_q("Maintainer answer: no Q id, all done"))
+    assert route.owner_ask(plain, plain["comments"], plain["authors"]) is None
+
+
+@pytest.mark.parametrize(
+    ("body", "asked"),
+    [
+        ("post this:\n\n```\nApprove: SPEC-0059\n```\n", {"SPEC-0059"}),
+        ("post this:\n\n`Approve: SPEC-0059`\n", {"SPEC-0059"}),
+        ("post this:\n\n   Approve: SPEC-0059   \n", {"SPEC-0059"}),
+        ("post\n\nMaintainer answer: amendment 215 approved\n", {"amendment 215"}),
+        ("post `Approve: SPEC-0059` on the head", set()),
+        ("> Approve: SPEC-0059", set()),
+        ("Approve: SPEC-0059 and more", set()),
+        ("``Approve: SPEC-0059``", set()),
+        ("Approve: SPEC-0050", set()),
+        ("Maintainer answer: amendment 216 approved", set()),
+    ],
+)
+def test_1735_5g_a_line_counts_alone_never_inside_a_sentence(body, asked):
+    """REQ-039: brief #1735 answers 1 and 5 (g): alone, in a fence or in one pair of backticks."""
+    assert route.approval_ask(body, FILES_1723) == asked
+
+
+def test_1735_5h_an_ask_naming_two_specs_asks_only_the_changed_one():
+    """REQ-039: brief #1735 answer 5 (h); and answer 2: each approval closes its own ask."""
+    body = "Owner needed: two lines.\n\nApprove: SPEC-0059\n\nApprove: SPEC-0050\n"
+    assert route.approval_ask(body, FILES_1723) == {"SPEC-0059"}
+    both = FILES_1723 + FILES_1726
+    assert route.approval_ask(body, both) == {"SPEC-0059", "SPEC-0050"}
+    ask = at(1, "boss", body, D + "10:00:00Z")
+    one = at(2, "maintainer", "Approve: SPEC-0050", D + "10:05:00Z")
+    two = at(3, "maintainer", "Approve: SPEC-0059", D + "10:06:00Z")
+    assert route.decide(f_1723([ask, one], files=both)) == "agk:approve"
+    assert route.decide(f_1723([ask, one, two], files=both)) == "agk:review"
+
+
+def test_1735_5i_a_note_holds_no_state():
+    """REQ-039: brief #1735 answers 4 (c) and 5 (i) (Q-1735-2: `Note:` is read by no reader)."""
+    note = at(9, "boss", "Note: `Approve: SPEC-0050` belongs on #1726.", D + "11:57:19Z")
+    f = f_1723([note])
+    assert route.owner_ask(f, f["comments"], f["authors"]) is None
+    assert route.decide(f) == "agk:review"
+
+
+def test_1735_5j_files_that_cannot_be_read_keep_todays_reading():
+    """REQ-039: brief #1735 answers 1 and 3 and Q-1735-1 (files None: every match counts, and an
+    approval line closes as today)."""
+    assert route.approval_ask("post `Approve: SPEC-0050` on the head", None) == {"SPEC-0050"}
+    f = f_1723(pr_1723_comments(), files=None)
+    assert route.owner_ask(f, f["comments"], f["authors"]) == "agk:approve"
+    f = f_1723(open_q(), files=None)
+    assert route.owner_ask(f, f["comments"], f["authors"]) is None
+
+
+@pytest.mark.parametrize("merger", [True, False])
+def test_1735_6_settings_do_not_change_the_reading(merger):
+    """REQ-039: brief #1735 answer 6 (`auto_merge` as the `merger` fact, local mode, an unlisted
+    author, no approvers)."""
+    f = f_1723([cleared_on(), at(40, "boss", RECAP, D + "10:34:19Z")], merger=merger)
+    assert route.decide(f) == "agk:owner-merge"
+    local = f_1723(open_q(), merger=merger, checks=[], local=True)
+    assert route.owner_ask(local, local["comments"], local["authors"]) == "agk:question"
+    nobody = f_1723(open_q(), files=FILES_1726, approvers=[])
+    assert route.owner_ask(nobody, nobody["comments"], nobody["authors"]) == "agk:question"
+    stranger = at(1, "stranger", "Owner needed:" + OFFER.format("Approve: SPEC-0059"), D + "09:00Z")
+    assert route.decide(f_1723([stranger])) == "agk:review"
+
+
+def test_1735_the_docstring_names_the_rule():
+    """REQ-039: brief #1735 answer 7."""
+    assert "ADR-0723" in (route.owner_ask.__doc__ or "")
+    assert "ADR-0723" in (route.approval_ask.__doc__ or "")
