@@ -712,46 +712,80 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
     return "cleared", ""
 
 
+def carried_from(
+    root: Path, comments: list[dict], sha: str, allowed: list[str], default: str, shared: list[str]
+) -> str | None:
+    """The old head a carried verdict names (SPEC-0050 amendment 171, brief #1163, ADR-0495; brief
+    #1714, ADR-0718), or None: the latest verdict, by an allowed author, is `Verdict: cleared <old>`
+    or a covered fix list on OLD whose `Final:` lines only accept ADRs (`accepted_adrs`), OLD is not
+    SHA, and SHA is the light re-prove's merge of the default branch DEFAULT into OLD that adds
+    nothing beyond the default branch's change (`session_plan.light_merge` with SHARED)."""
+    verdict = latest_verdict(trusted(comments, allowed)) if allowed else None
+    if verdict is None:
+        return None
+    found = CLEARED_LINE.fullmatch(first_line(verdict).removesuffix(FALLBACK))
+    old = found.group(1) if found else None
+    covered = None if found else covered_fix_list(str(verdict.get("body") or ""))
+    if covered is not None and accepted_adrs(verdict, covered[0]) is not None:
+        old = covered[0]
+    if old is None or old == sha or not SHA.fullmatch(old):
+        return None
+    return old if session_plan.light_merge(root, old, sha, default, shared) else None
+
+
 def judge_carried(
     root: Path, comments: list[dict], sha: str, allowed: list[str], default: str, shared: list[str]
 ) -> tuple[str, str]:
-    """`judge`, and the carried verdict of SPEC-0050 amendment 171 (brief #1163, ADR-0495): when
-    the latest verdict is `Verdict: cleared <old>` by an allowed author and SHA is the light
-    re-prove's merge of the default branch DEFAULT into OLD that adds nothing beyond the default
-    branch's change (`session_plan.light_merge` with the shared indexes SHARED), it clears SHA.
-    Only a plain clearing verdict carries; a fix list with `Final:` lines never does."""
+    """`judge`, and the carried verdict of `carried_from`: it clears SHA when a verdict on the old
+    head carries to it; a fix list with a numbered item or another `Final:` line never does."""
     state, reason = judge(comments, sha, allowed)
-    verdict = latest_verdict(trusted(comments, allowed)) if allowed else None
-    if state == "cleared" or verdict is None:
-        return state, reason
-    found = CLEARED_LINE.fullmatch(first_line(verdict).removesuffix(FALLBACK))
-    if found is None or found.group(1) == sha:
-        return state, reason
-    if not session_plan.light_merge(root, found.group(1), sha, default, shared):
+    if state == "cleared" or carried_from(root, comments, sha, allowed, default, shared) is None:
         return state, reason
     return "cleared", ""
+
+
+def shared_of(data: dict) -> list[str] | None:
+    """`[flow] shared_indexes` of the default branch's agk.toml as `session_plan.shared_indexes`
+    reads it (the default when unset), or None for a value that is not a list of exact paths."""
+    flow = data.get("flow")
+    value = (flow if isinstance(flow, dict) else {}).get(
+        "shared_indexes", list(session_plan.SHARED_INDEXES)
+    )
+    wild = session_plan.has_wildcard
+    if not isinstance(value, list) or not all(
+        isinstance(v, str) and v.strip() and not wild(v) and not v.endswith("/") for v in value
+    ):
+        return None
+    return list(value)
+
+
+def judge_named(
+    root: Path, number: int, comments: list[dict], sha: str, allowed: list[str]
+) -> tuple[str, str, str]:
+    """`judge` and its carry on the default branch as last fetched and its `[flow] shared_indexes`,
+    fetching the head once when it is not in the checkout: (the state, the reason, the head the
+    clearing verdict names: SHA, or the old head after a carry). A carry that cannot be read, or a
+    `shared_indexes` that is not a list of exact paths, is the plain `judge` (brief #1714)."""
+    state, reason = judge(comments, sha, allowed)
+    if state == "cleared" or not allowed or latest_verdict(trusted(comments, allowed)) is None:
+        return state, reason, sha
+    try:
+        base, data = default_ref(root)
+    except Refused:
+        return state, reason, sha
+    shared = shared_of(data)
+    if shared is None or not head_present(root, number, sha):
+        return state, reason, sha
+    old = carried_from(root, comments, sha, allowed, base, shared)
+    return ("cleared", "", old) if old is not None else (state, reason, sha)
 
 
 def judge_head(
     root: Path, number: int, comments: list[dict], sha: str, allowed: list[str]
 ) -> tuple[str, str]:
-    """`judge_carried` on the default branch as last fetched and its `[flow] shared_indexes`,
-    fetching the head once when it is not in the checkout; a carry that cannot be read is the
-    plain `judge`."""
-    state, reason = judge(comments, sha, allowed)
-    if state == "cleared" or not allowed or latest_verdict(trusted(comments, allowed)) is None:
-        return state, reason
-    try:
-        base, data = default_ref(root)
-    except Refused:
-        return state, reason
-    flow = data.get("flow")
-    shared = (flow if isinstance(flow, dict) else {}).get(
-        "shared_indexes", list(session_plan.SHARED_INDEXES)
-    )
-    if not isinstance(shared, list) or not head_present(root, number, sha):
-        return state, reason
-    return judge_carried(root, comments, sha, allowed, base, [str(p) for p in shared])
+    """`judge_named` without the head it names."""
+    state, reason, _ = judge_named(root, number, comments, sha, allowed)
+    return state, reason
 
 
 def accepted_adrs(verdict: dict, sha: str) -> list[str] | None:
@@ -779,11 +813,12 @@ def adr_status(
     return found[0] if found else None
 
 
-def acceptance_lines(repo: str, sha: str, verdict: dict) -> list[str]:
-    """The squash message lines `ADR-nnnn Accepted (Final <comment id>)` of a Final accept, after
-    each named ADR is read as `Proposed` at the head; a held run otherwise (rule 3a)."""
+def acceptance_lines(repo: str, sha: str, verdict: dict, named: str | None = None) -> list[str]:
+    """The squash message lines `ADR-nnnn Accepted (Final <comment id>)` of a Final accept of the
+    head NAMED (SHA when None; the old head after a carry, brief #1714), after each named ADR is
+    read as `Proposed` at the head SHA; a held run otherwise (rule 3a)."""
     lines = []
-    for path in accepted_adrs(verdict, sha) or []:
+    for path in accepted_adrs(verdict, named or sha) or []:
         if adr_status(repo, sha, path) != "Proposed":
             raise Held("a Final line accepts an ADR that is not Proposed at the head (rule 3)")
         number = path.split("/")[-1][:4]
@@ -2601,10 +2636,10 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
         raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
     allowed = trusted_in(rules.people, pull)  # brief #1709 answer 1
     comments = trusted(read_comments(repo, number), allowed)
-    state, reason = judge_head(root, number, comments, sha, allowed)
+    state, reason, named = judge_named(root, number, comments, sha, allowed)
     if state != "cleared":
         return "pending", verdict_reason(comments, sha, reason)
-    accepts = accepted_adrs(latest_verdict(comments) or {}, sha) or []
+    accepts = accepted_adrs(latest_verdict(comments) or {}, named) or []
     try:
         records: list[str] | None = [] if records_specs(rules.data) else None
         hold_list(repo, number, pull, comments, rules.approvers, accepts, root, records=records)
@@ -2815,11 +2850,11 @@ def holds(
         raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
     allowed = trusted_in(rules.people, pull)  # brief #1709 answer 1
     comments = trusted(read_comments(repo, number), allowed)
-    state, reason = judge_head(root, number, comments, sha, allowed)
+    state, reason, named = judge_named(root, number, comments, sha, allowed)
     if state != "cleared":
         raise NotCleared(reason)
     verdict = latest_verdict(comments) or {}
-    accepted = acceptance_lines(repo, sha, verdict)
+    accepted = acceptance_lines(repo, sha, verdict, named)
     issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
     reds = red_issues(issues)
     fixing = red_fix(pull, reds) if reds else None
@@ -2836,7 +2871,7 @@ def holds(
         local_evidence(verdict, comments, sha, rules.approvers)
     else:
         ci_evidence(repo, sha, rules.required)
-    accepts = accepted_adrs(verdict, sha) or []
+    accepts = accepted_adrs(verdict, named) or []
     records: list[str] | None = [] if records_specs(rules.data) else None
     owner = hold_list(
         repo, number, pull, comments, rules.approvers, accepts, root, lift, report, records
