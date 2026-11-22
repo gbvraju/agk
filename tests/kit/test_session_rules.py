@@ -230,7 +230,11 @@ SAFETY = {
         "not a reason to try another name."
     ),
     29: (  # brief #976 (ADR-0418, SPEC-0037 rule 9) added the sign-off lines' sentence
-        "A session never posts a comment whose first line is `Confirmed:`. In solo mode "
+        "A session never posts a comment whose first line is `Confirmed:`. The one exception: "
+        "in solo mode the steward posts that text when `steward_owner.py approve` wrote it on "
+        "the person's recorded plain yes (SPEC-0062 rules 13 and 14), with the `Owner said`, "
+        "`Asked` and `Who: ProductOwner` lines; every other session, and every session in team "
+        "mode, still never posts it. In solo mode "
         '(`review_mode = "solo"` in `agk.toml`) that comment is the one person\'s yes: '
         "the verdict, its `Final:` lines and the spec approval of the head it names. The "
         "session prints its exact text (the `Confirmed:` and `Verdict:` lines, the "

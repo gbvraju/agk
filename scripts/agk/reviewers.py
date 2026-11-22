@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import (
     STATUS_LINE,
+    WHO_FOOTER,
+    WHO_LINE,
     CheckError,
     load_config,
     read_list,
@@ -27,6 +29,7 @@ from common import (
     review_mode,
     run,
     utf8_output,
+    without_who,
 )
 
 NAME = "reviewers"
@@ -57,6 +60,11 @@ CONFIRMED_BY = re.compile(
     r"confirmed by @?([A-Za-z0-9_.-]+) in a session at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
 )
 SHOWN = "Shown:"
+# Brief #1691 (amendment 194 item 5, ADR-0704): the closing lines of an approval the solo steward
+# posts on the person's recorded yes (`steward_owner.py approve`).
+OWNER_QUOTE = re.compile(r'Owner said \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z\): ".+"')
+ASKED_QUOTE = re.compile(r'Asked \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z\): ".+"(?: \S+)?')
+OWNER_WHO = "Who: ProductOwner"
 SOLO_SETTING = "(setting: review_mode in agk.toml)"
 PLACEHOLDER = "replace-me"  # the installed handle `@REPLACE-ME`: a login a stranger could own
 
@@ -246,6 +254,34 @@ def via_agent(item: dict, agent_apps: tuple[str, ...] | list[str]) -> bool:
     return isinstance(slug, str) and slug.lower() in {a.lower() for a in agent_apps}
 
 
+def as_posted(item):
+    """ITEM read as posted, for the approval readers (brief #1691, ADR-0704): CRLF read as LF and
+    the runtime's footer and the last `Who:` line dropped (`common.without_who`). None when it
+    approves nothing: a `Who:` line other than `Who: ProductOwner` (any `Who: AGK…`), or that
+    line without both an `Owner said` and an `Asked` line. A comment with no `Who:` line, the
+    person's own typed one, is read as today; anything that is not a dict is passed through."""
+    if not isinstance(item, dict):
+        return item
+    text = WHO_FOOTER.sub("", str(item.get("body") or "").replace("\r\n", "\n"))
+    lines = text.rstrip().splitlines()
+    if not lines or not WHO_LINE.fullmatch(lines[-1].strip()):
+        return item
+    body = without_who(text)
+    while (shorter := without_who(body)) != body:  # two `Who:` lines: the last one is read
+        body = shorter
+    rest = [x.strip() for x in body.splitlines()]
+    if lines[-1].strip() != OWNER_WHO or not any(OWNER_QUOTE.fullmatch(x) for x in rest):
+        return None
+    if not any(ASKED_QUOTE.fullmatch(x) for x in rest):
+        return None
+    return {**item, "body": body}
+
+
+def as_posted_all(items: list[dict]) -> list[dict]:
+    """ITEMS read by `as_posted`, without those that approve nothing."""
+    return [x for x in (as_posted(item) for item in items) if x is not None]
+
+
 def first_line(item: dict) -> str:
     lines = str(item.get("body") or "").splitlines()
     return lines[0].strip() if lines else ""
@@ -323,7 +359,7 @@ def approval_shas(
             found.setdefault(spec, []).append(sha)
 
     for kind, items in (("comment", comments), ("review", reviews)):
-        for item in items:
+        for item in as_posted_all(items):
             if login_of(item) not in allowed:
                 continue
             if agent_apps and (kind == "review" or via_agent(item, agent_apps)):
@@ -356,7 +392,7 @@ def person_approvals(
     """The specs a listed approver approved in a comment or a review (SPEC-0032 rule 5)."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found = set(approval_shas(comments, reviews, approvers, [], flipped, agent_apps))
-    for item in comments:  # a short line is pinned later, by the runs of check_specs
+    for item in as_posted_all(comments):  # a short line is pinned later, by check_specs' runs
         named = APPROVE_SHORT.fullmatch(first_line(item))
         if named and login_of(item) in allowed and not via_agent(item, agent_apps):
             found.add(named.group(1))
@@ -388,7 +424,8 @@ def confirmed_comments(
     confirmed sha as its own comment (brief #459; `plan`, brief #1078; `scope`, brief #1095). A
     comment posted through an app of `agent_apps`, or of any other shape, adds nothing (answers 2,
     3 and 7; the verdicts on f58803a and 1ae4fd4). Only the person posts a confirmation; a session
-    never does (session rule 29)."""
+    never does (session rule 29), but the solo steward on the person's recorded yes, whose body is
+    read by `as_posted` and whose `Owner said` and `Asked` lines are not counted (brief #1691)."""
     if not person:
         return list(comments)
     found: list[dict] = []
@@ -398,7 +435,14 @@ def confirmed_comments(
             continue
         if login_of(item) != person.lstrip("@").lower():
             continue
-        lines = str(item.get("body") or "").strip().splitlines()
+        posted = as_posted(item)  # brief #1691: the steward's post, its quotes not counted
+        if posted is None:
+            continue
+        lines = [
+            x
+            for x in str(posted.get("body") or "").strip().splitlines()
+            if not OWNER_QUOTE.fullmatch(x.strip()) and not ASKED_QUOTE.fullmatch(x.strip())
+        ]
         if len(lines) < 7:
             continue
         sha = CONFIRMED.fullmatch(lines[0].strip())
@@ -516,7 +560,7 @@ def design_approvals(
     `confirmed_comments` output so a solo confirmation counts too."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found: set[tuple[str, str, str]] = set()
-    for item in items:
+    for item in as_posted_all(items):
         if login_of(item) not in allowed or via_agent(item, agent_apps):
             continue
         line = first_line(item)
@@ -537,7 +581,7 @@ def plan_approvals(
     allowed = {a.lstrip("@").lower() for a in approvers}
     return {
         named[1]
-        for item in items
+        for item in as_posted_all(items)
         if login_of(item) in allowed and not via_agent(item, agent_apps)
         if (named := APPROVE_PLAN.fullmatch(first_line(item)))
     }
@@ -553,7 +597,7 @@ def scope_approvals(
     allowed = {a.lstrip("@").lower() for a in approvers}
     return {
         (named[1], named[2])
-        for item in items
+        for item in as_posted_all(items)
         if login_of(item) in allowed and not via_agent(item, agent_apps)
         if (named := APPROVE_SCOPE.fullmatch(first_line(item)))
     }

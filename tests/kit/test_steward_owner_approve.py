@@ -54,6 +54,7 @@ def root(tmp_path, monkeypatch):
     (tmp_path / "agk.toml").write_text(SOLO, encoding="utf-8")
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "state" / "memory.json"))
     monkeypatch.delenv("AGK_STEWARD_START", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)  # brief #1691: a cloud test runner
     monkeypatch.setenv("AGK_SESSION", "s1")
     monkeypatch.setattr(steward_owner.session, "repo_name", lambda root: REPO)
     records: list = []
@@ -503,7 +504,7 @@ def test_req069_a_cloud_session_still_prints_and_posts_nothing(root, monkeypatch
 
 
 def test_req069_team_mode_refuses_an_approve_naming_the_setting(root, monkeypatch):
-    """REQ-069 AC7: Q-1691-1, team mode refuses `Approve:` naming `review_mode` and posts nothing."""
+    """REQ-069 AC7: Q-1691-1, team mode refuses `Approve:` naming `review_mode`; nothing posted."""
     base, _, gh = root
     one_person(base, gh)
     (base / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")

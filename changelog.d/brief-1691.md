@@ -1,0 +1,1 @@
+- In solo mode, the steward on the person's own computer posts the `Approve:` or `Confirmed:` line on the person's recorded clear yes, with their words, the question and its link, and the kit counts it; a post GitHub marks as made through an agent app does not count, and the steward prints the body to paste; a comment marked `Who: AGK…` never approves (brief #1691)
