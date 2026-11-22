@@ -76,6 +76,15 @@ exit code or the one stdout line of `--paused`.
 SPEC-0066 rule 5 (brief #1582, ADR-0662): `launch-adapter` also warns, naming
 `flow.launch_adapter` and never the command, when a script file the setting names starts `claude`
 and never passes `--agent`; nothing is refused (the upgrade's refusal is build (d)'s).
+Brief #1738 (ADR-0724), beside `brief-finished`: `lost-record` prints, before the summary, one line
+`lost-record: #<n> ADR-<nnnn>[, ADR-<nnnn>] merged without the merger (the release cannot accept
+it)` for each squash commit `(#n)` on the default branch's first-parent line that merge_cleared.py
+did not make and that adds or changes an ADR the default branch reads `Proposed`, when that pull
+request's latest verdict by a record author is a covered fix list whose `Final:` lines accept such
+ADRs and no record accepts them (`check_adrs.hand_merges`, `check_adrs.lost_final`). The commits
+come from local `git`; only those pull requests' comments are read, with GET. A read that fails
+prints `lost-record: #<n> unknown (cannot be read)`. It is a warning: no exit code changes; the
+JSON report carries the lines as `lost_record`.
 """
 
 from __future__ import annotations
@@ -1145,6 +1154,62 @@ def finished_result(reads: Reads, now: datetime.datetime | None = None) -> Resul
         if times and now - max(times) > FINISHED_AFTER:
             listed.append(f"#{number}")
     return Result("fail", message=listing(listed)) if listed else Result("ok")
+
+
+LOST_PAGES = 10  # pages of 100 comments read per pull request at most
+
+
+def lost_ref(root: Path, config: dict) -> str | None:
+    """The default branch to read: `origin/<default_branch>`, else the local branch, else None."""
+    branch = str(config.get("default_branch") or "main")
+    for ref in (f"origin/{branch}", branch):
+        code, _ = git_read(root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+        if code == 0:
+            return ref
+    return None
+
+
+def pull_comments(reads: Reads, number: int) -> list[dict] | None:
+    """Every comment of pull request NUMBER, read 100 a page with GET; None when a read fails."""
+    found: list[dict] = []
+    for page in range(1, LOST_PAGES + 1):
+        name = f"comments-{number}" + (f"-p{page}" if page > 1 else "")
+        data, why = reads.get(name, f"/issues/{number}/comments?per_page=100&page={page}")
+        if why or not isinstance(data, list):
+            return None
+        found += [c for c in data if isinstance(c, dict)]
+        if len(data) < 100:
+            return found
+    return None  # more than the pages read: not a clean result
+
+
+def lost_record_lines(root: Path, reads: Reads) -> list[str]:
+    """`lost-record` (brief #1738, ADR-0724): one line per hand-merged pull request whose Final
+    accepts ADRs the release cannot accept; `unknown` for one whose comments cannot be read."""
+    import check_adrs
+
+    ref = lost_ref(root, read_config(root))
+    if ref is None:
+        return []
+    try:
+        merges = check_adrs.hand_merges(root, ref)
+        authors = check_adrs.record_authors(root) if merges else []
+    except (CheckError, OSError):
+        return []
+    lines: list[str] = []
+    for number, _ in merges:
+        comments = pull_comments(reads, number)
+        if comments is None:
+            lines.append(f"lost-record: #{number} unknown (cannot be read)")
+            continue
+        lost = check_adrs.lost_final(root, ref, comments, authors)
+        if lost is not None:
+            names = ", ".join(f"ADR-{p.removeprefix('docs/adr/')[:4]}" for p in lost[2])
+            lines.append(
+                f"lost-record: #{number} {names} merged without the merger "
+                "(the release cannot accept it)"
+            )
+    return lines
 
 
 def state_labels_result(root: Path, config: dict, reads: Reads) -> Result:
@@ -2882,6 +2947,7 @@ def render_text(
     design: list[str] | None = None,
     licence: list[str] | None = None,
     governance: str | None = None,
+    lost: list[str] | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -2896,6 +2962,7 @@ def render_text(
     # secret scan (ADR-0306) and work type (SPEC-0038 rule 5); the suite lines of SPEC-0044
     # (`extra`) stay last, right before the summary (its rule 7's test).
     lines += [tidy] if tidy else []
+    lines += lost or []  # brief #1738: a decision a hand merge left Proposed, a warning only
     lines += deprecation or []
     lines += licence or []  # the licence grant (ADR-0596), a warning only
     lines += [scan] if scan else []
@@ -2920,6 +2987,7 @@ def render_json(
     design: list[str] | None = None,
     licence: list[str] | None = None,
     governance: str | None = None,
+    lost: list[str] | None = None,
 ) -> str:
     data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
     if scan:
@@ -2934,6 +3002,8 @@ def render_json(
         data["design_import"] = design
     if tidy:
         data["tidy"] = tidy
+    if lost:
+        data["lost_record"] = lost
     if licence:
         data["licence"] = licence
     if extra or deprecation:  # `tests` carries the suite and deprecation lines, as before
@@ -3009,7 +3079,9 @@ def main(argv: list[str] | None = None) -> int:
             Path(options["api"]) if options["api"] else None,
         )
         api = Path(options["api"]) if options["api"] else None
-        tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
+        reads = Reads(options["repo"] or origin_repo(root.resolve()), api)
+        tidy = tidy_line(root.resolve(), reads)
+        lost = lost_record_lines(root.resolve(), reads)
         extra = record_lines(root.resolve(), Path(options["record"])) if options["record"] else []
         extra = (
             extra
@@ -3049,6 +3121,7 @@ def main(argv: list[str] | None = None) -> int:
             design,
             licence,
             governance=governance,
+            lost=lost,
         )
     )
     return 1 if work_failed else exit_code(report)

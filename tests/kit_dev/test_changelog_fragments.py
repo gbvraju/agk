@@ -670,3 +670,83 @@ def test_1706_the_release_script_is_never_installed():
     """REQ-035: brief #1706 answer 4 (personal mode and a project using AGK: not installed)."""
     text = (KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8")
     assert "changelog_fragments.py" not in text
+
+
+# --- the release accepts a hand-merged decision on the owner's yes (brief #1738, ADR-0724) -------
+# `accept --pulls FILE` also flips an ADR of a squash commit that merge_cleared.py did not make,
+# when its latest verdict's Final verifies and the payload says that head merged as that commit.
+
+HAND_ADR = "docs/adr/0014-a-hand-merged-decision.md"
+HAND_HEAD = "e" * 40
+
+
+def hand_merged(tmp_path: Path) -> tuple[Path, str, str]:
+    """accept_world, then main gains a hand merge `(#12)` adding ADR-0014, merged into the
+    release branch. Returns the root, the comments file (with #12's Final) and the commit."""
+    root, saved = accept_world(tmp_path)
+    git(root, "add", "-A")
+    commit_as(root, "release: 1.1.0")
+    git(root, "switch", "-q", "main")
+    (root / HAND_ADR).write_bytes(decision("0014", "Proposed").encode())
+    commit_as(root, "Add a hand-merged decision (#12)")
+    sha = gitout(root, "rev-parse", "HEAD").strip()
+    git(root, "switch", "-q", "release")
+    git(root, "merge", "-q", "--no-ff", "-m", "Merge main", "main")
+    comments = json.loads(Path(saved).read_text(encoding="utf-8"))
+    comments.append(
+        {
+            "id": 120,
+            "issue_url": "https://api.example.com/repos/example-owner/example-repo/issues/12",
+            "user": {"login": "reviewer"},
+            "created_at": "2026-11-21T10:00:00Z",
+            "body": f"Verdict: fix list {HAND_HEAD}\n\nok.\n\nFinal: {HAND_ADR} Proposed -> Accepted\n",
+        }
+    )
+    Path(saved).write_text(json.dumps(comments), encoding="utf-8")
+    return root, saved, sha
+
+
+def pulls_file(tmp_path: Path, sha: str, head: str = HAND_HEAD) -> str:
+    path = tmp_path / "pulls.json"
+    payload = {"number": 12, "merged": True, "merge_commit_sha": sha, "head": {"sha": head}}
+    path.write_text(json.dumps([payload]), encoding="utf-8")
+    return str(path)
+
+
+def test_1738_accept_with_pulls_also_flips_the_hand_merged_decision(tmp_path):
+    """REQ-035: brief #1738 answer 2 and edge case 5(a)."""
+    root, saved, sha = hand_merged(tmp_path)
+    proc = accept(root, "--comments", saved, "--pulls", pulls_file(tmp_path, sha), "--base", "main")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert f"accepted: {HAND_ADR}" in proc.stdout.splitlines()
+    assert proc.stdout.splitlines()[-1] == "accept: 4 decisions"
+    assert (root / HAND_ADR).read_bytes() == decision("0014", "Accepted").encode()
+
+
+def test_1738_accept_without_pulls_leaves_the_hand_merged_decision(tmp_path):
+    """REQ-035: brief #1738 answer 2 (without --pulls nothing changes)."""
+    root, saved, _ = hand_merged(tmp_path)
+    proc = accept(root, "--comments", saved, "--base", "main")
+    assert proc.returncode == 0 and f"accepted: {HAND_ADR}" not in proc.stdout
+    assert (root / HAND_ADR).read_bytes() == decision("0014", "Proposed").encode()
+
+
+def test_1738_accept_never_flips_a_verdict_on_an_older_head(tmp_path):
+    """REQ-035: brief #1738 edge cases 5(c) and 5(h)."""
+    root, saved, sha = hand_merged(tmp_path)
+    for pulls in (pulls_file(tmp_path, sha, head="f" * 40), pulls_file(tmp_path, "c" * 40)):
+        proc = accept(root, "--comments", saved, "--pulls", pulls, "--base", "main")
+        assert f"accepted: {HAND_ADR}" not in proc.stdout
+        assert (root / HAND_ADR).read_bytes() == decision("0014", "Proposed").encode()
+        git(root, "checkout", "-q", "--", ".")
+
+
+def test_1738_a_bad_pulls_file_is_refused_naming_the_option_and_writes_nothing(tmp_path):
+    """REQ-035: brief #1738 answer 2 (refused naming the option, never a value)."""
+    root, saved, _ = hand_merged(tmp_path)
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"title": "invented-value"}', encoding="utf-8")
+    proc = accept(root, "--comments", saved, "--pulls", str(bad), "--base", "main")
+    assert proc.returncode != 0
+    assert "--pulls" in proc.stdout + proc.stderr and "invented-value" not in proc.stdout
+    assert changed(root) == []

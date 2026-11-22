@@ -211,3 +211,169 @@ def test_pending_fails_closed_on_a_record_of_the_merge_base_without_the_comments
     proc = repo.run("check_adrs.py", "--pending", "--base", "main")
     assert proc.returncode == 1
     assert proc.stdout.startswith("FAIL adrs: rule 3a")
+
+
+# --- a decision cleared on a pull request merged by hand (brief #1738, ADR-0724) ---------------
+# `--pending --pulls FILE` also lists an ADR of a squash commit that merge_cleared.py did not make,
+# only when the latest verdict's Final verifies and the payload says that the head it named merged
+# as that commit. Commits come from a temporary repository; comments and payloads are fixtures.
+
+HEAD_A = "a" * 40
+HEAD_B = "b" * 40
+
+
+def hand_verdict(pr: int, cid: int, head: str = HEAD_A, path: str = PENDING_ADR, **extra) -> dict:
+    return {
+        "id": cid,
+        "issue_url": f"https://api.example.com/repos/example-owner/example-repo/issues/{pr}",
+        "user": {"login": "reviewer"},
+        "created_at": extra.get("at", "2026-11-20T10:00:00Z"),
+        "body": extra.get(
+            "body", f"Verdict: fix list {head}\n\nreviewed.\n\nFinal: {path} Proposed -> Accepted\n"
+        ),
+    }
+
+
+def pull_payload(pr: int, sha: str, head: str = HEAD_A, merged: bool = True) -> dict:
+    return {"number": pr, "merged": merged, "merge_commit_sha": sha, "head": {"sha": head}}
+
+
+def pulls_at(repo, *items) -> str:
+    import json
+
+    path = repo.root.parent / "pulls.json"
+    path.write_text(json.dumps(list(items)), encoding="utf-8")
+    return str(path)
+
+
+def hand_world(repo, message: str = "Add the second decision (#7)", status: str = "Proposed"):
+    """main: a base, then a squash commit `(#7)` that adds ADR-0002; a release branch from it."""
+    repo.commit({"config/reviewers.yaml": REVIEWERS, "docs/adr/0001-first.md": adr()}, "base")
+    repo.commit({PENDING_ADR: adr("0002", status=status)}, message)
+    sha = repo.git("rev-parse", "HEAD").strip()
+    repo.branch("release")
+    repo.commit({"CHANGELOG.md": "release\n"}, "release notes")
+    return sha
+
+
+def pending_pulls(repo, comments: str, pulls: str):
+    args = ("--pending", "--comments", comments, "--pulls", pulls, "--base", "main")
+    return repo.run("check_adrs.py", *args)
+
+
+def test_1738_a_hand_merged_decision_is_listed_with_pulls_only(repo):
+    """REQ-035: brief #1738 answer 2 and edge case 5(a) (#1719's facts)."""
+    sha = hand_world(repo)
+    saved = comments_at(repo, hand_verdict(7, 42))
+    assert pending(repo, saved).stdout == ""  # without --pulls nothing changes
+    proc = pending_pulls(repo, saved, pulls_at(repo, pull_payload(7, sha)))
+    assert proc.returncode == 0, proc.stdout
+    assert proc.stdout.splitlines() == [PENDING_ADR]
+
+
+def test_1738_a_verdict_on_an_older_head_is_never_accepted(repo):
+    """REQ-035: brief #1738 edge case 5(c)."""
+    sha = hand_world(repo)
+    saved = comments_at(repo, hand_verdict(7, 42, head=HEAD_A))
+    proc = pending_pulls(repo, saved, pulls_at(repo, pull_payload(7, sha, head=HEAD_B)))
+    assert (proc.returncode, proc.stdout) == (0, "")
+
+
+def test_1738_a_payload_naming_another_merge_commit_or_not_merged_is_not_accepted(repo):
+    """REQ-035: brief #1738 edge case 5(h) and answer 2 (`merged: true`)."""
+    sha = hand_world(repo)
+    saved = comments_at(repo, hand_verdict(7, 42))
+    other = pending_pulls(repo, saved, pulls_at(repo, pull_payload(7, "c" * 40)))
+    assert (other.returncode, other.stdout) == (0, "")
+    unmerged = pending_pulls(repo, saved, pulls_at(repo, pull_payload(7, sha, merged=False)))
+    assert (unmerged.returncode, unmerged.stdout) == (0, "")
+    absent = pending_pulls(repo, saved, pulls_at(repo, pull_payload(8, sha)))
+    assert (absent.returncode, absent.stdout) == (0, "")
+
+
+def test_1738_a_later_numbered_fix_list_or_rejection_is_the_latest_verdict(repo):
+    """REQ-035: brief #1738 edge case 5(d) (the latest verdict by a record author decides)."""
+    sha = hand_world(repo)
+    pulls = pulls_at(repo, pull_payload(7, sha))
+    for body in (f"Verdict: fix list {HEAD_A}\n\n1. fix it (rule: none).\n", f"Verdict: rejected {HEAD_A}\n"):
+        later = hand_verdict(7, 43, at="2026-11-21T10:00:00Z", body=body)
+        proc = pending_pulls(repo, comments_at(repo, hand_verdict(7, 42), later), pulls)
+        assert (proc.returncode, proc.stdout) == (0, ""), body
+
+
+def test_1738_a_verdict_by_an_unlisted_author_does_not_count(repo):
+    """REQ-035: brief #1738 answer 1 (a record author, `check_adrs.record_authors`)."""
+    sha = hand_world(repo)
+    verdict = hand_verdict(7, 42)
+    verdict["user"] = {"login": "someone-else"}
+    proc = pending_pulls(repo, comments_at(repo, verdict), pulls_at(repo, pull_payload(7, sha)))
+    assert (proc.returncode, proc.stdout) == (0, "")
+
+
+def test_1738_a_merger_made_squash_is_read_as_today(repo):
+    """REQ-035: brief #1738 edge case 5(b)."""
+    sha = hand_world(repo, message=final_record(7, 42))
+    saved = comments_at(repo, final_comment(7, 42))
+    import check_adrs
+
+    assert check_adrs.hand_merges(repo.root, "main") == []
+    for proc in (pending(repo, saved), pending_pulls(repo, saved, pulls_at(repo, pull_payload(7, sha)))):
+        assert proc.stdout.splitlines() == [PENDING_ADR], proc.stdout
+
+
+def test_1738_an_adr_the_default_branch_reads_accepted_is_not_read(repo):
+    """REQ-035: brief #1738 edge case 5(e)."""
+    import check_adrs
+
+    sha = hand_world(repo, status="Accepted")
+    assert check_adrs.hand_merges(repo.root, "main") == []
+    proc = pending_pulls(repo, comments_at(repo, hand_verdict(7, 42)), pulls_at(repo, pull_payload(7, sha)))
+    assert (proc.returncode, proc.stdout) == (0, "")
+
+
+def test_1738_a_two_parent_merge_or_a_commit_off_the_first_parent_line_is_not_read(repo):
+    """REQ-035: brief #1738 edge case 5(f)."""
+    import check_adrs
+
+    repo.commit({"config/reviewers.yaml": REVIEWERS, "docs/adr/0001-first.md": adr()}, "base")
+    repo.branch("side")
+    repo.commit({PENDING_ADR: adr("0002", status="Proposed")}, "Add the second decision (#7)")
+    repo.git("checkout", "-q", "main")
+    repo.git("merge", "-q", "--no-ff", "-m", "Merge the side (#8)", "side")
+    assert check_adrs.hand_merges(repo.root, "main") == []
+
+
+def test_1738_a_copied_record_line_in_a_hand_merge_is_still_not_a_record(repo):
+    """REQ-035: brief #1738 edge case 5(g)."""
+    import check_adrs
+
+    sha = hand_world(repo, message="Add the second decision (#7)\n\nADR-0002 Accepted (Final 42)\n")
+    assert check_adrs.final_records(repo.root, "main") == {}
+    assert check_adrs.hand_merges(repo.root, "main") == [(7, sha)]
+    assert pending(repo, comments_at(repo, hand_verdict(7, 42))).stdout == ""
+
+
+def test_1738_a_pulls_file_that_is_not_a_list_of_pull_requests_is_refused(repo):
+    """REQ-035: brief #1738 answer 2 (refused naming the option, never a value)."""
+    hand_world(repo)
+    saved = comments_at(repo, hand_verdict(7, 42))
+    bad = repo.root.parent / "bad-pulls.json"
+    for text in ("not json at all", '{"title": "secret-value"}', "[]"):
+        bad.write_text(text, encoding="utf-8")
+        proc = pending_pulls(repo, saved, str(bad))
+        assert proc.returncode == 1, text
+        assert "option --pulls" in proc.stdout and "secret-value" not in proc.stdout
+
+
+def test_1738_payloads_one_after_another_are_read_like_a_list(repo):
+    """REQ-035: brief #1738 answer 2 (GET pulls/<n> payloads appended to one file)."""
+    import json
+
+    sha = hand_world(repo)
+    path = repo.root.parent / "pulls-stream.json"
+    path.write_text(
+        json.dumps(pull_payload(9, "d" * 40)) + "\n" + json.dumps(pull_payload(7, sha)) + "\n",
+        encoding="utf-8",
+    )
+    proc = pending_pulls(repo, comments_at(repo, hand_verdict(7, 42)), str(path))
+    assert proc.stdout.splitlines() == [PENDING_ADR], proc.stdout

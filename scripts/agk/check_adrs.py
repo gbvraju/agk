@@ -16,6 +16,16 @@ HEAD's history, one a line, so that the governance workflow can fetch those comm
 `--body FILE` only those a check will read: all for a release pull request, those of the ADRs a
 `Covered-by:` line names, else none (brief #1181, ADR-0501).
 
+A pull request merged by hand (brief #1738, ADR-0724) carries no record: `hand_merges` lists each
+first-parent squash commit `(#n)` with one parent and no `MERGED_BY` line that adds or changes an
+ADR the ref reads `Proposed`, and `lost_final` reads, from that pull request's comments, the Final
+of its latest verdict by a record author that no record accepts (doctor's `lost-record` line).
+`--pending --pulls FILE` (FILE holds the merged pull requests as `GET pulls/<n>` returns them) also
+lists such an ADR, only when its Final comment in `--comments FILE` verifies, is the latest verdict
+there, and the payload says `merged: true`, names that squash commit as `merge_commit_sha` and the
+verdict's head as `head.sha`. Without `--pulls` nothing changes; a FILE that is not such a list is
+refused naming the option.
+
 In a sidecar only (SPEC-0041 rule 8, brief #1502), `check_adrs.py --comments FILE` also fails an ADR
 whose status line moves to `Accepted` without the `Accept: <C> ADR-nnnn` line of the person's
 terminal confirmation at a `<C>` where the ADR equals its text apart from its status line; without
@@ -24,6 +34,7 @@ terminal confirmation at a `<C>` where the ADR equals its text apart from its st
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -31,6 +42,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    MERGED_BY,
+    SQUASH_SUBJECT,
     STATUS_LINE,
     CheckError,
     accepted_by_final,
@@ -144,6 +157,161 @@ def read_comments(path: str | None) -> list[dict] | None:
     return comments_of(Path(path))
 
 
+# --- a decision cleared on a pull request merged by hand (brief #1738, ADR-0724) --------------
+
+PULLS = "--pulls"
+BAD_PULLS = "--pulls must name a JSON list of pull requests as GET pulls/<n> returns them (option --pulls)"
+SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def adr_paths(names: list[str]) -> list[str]:
+    return [n for n in names if n.startswith("docs/adr/") and FILE_RE.match(n[len("docs/adr/") :])]
+
+
+def hand_merges(root: Path, ref: str) -> list[tuple[int, str]]:
+    """(pull request, commit) of each squash commit on REF's first-parent line, newest first, that
+    merge_cleared.py did not make: one parent, a subject that ends `(#n)`, no `MERGED_BY` line, and
+    a change to (or the addition of) an ADR that REF reads `Proposed`. Local git only."""
+    out = git(
+        root,
+        "log",
+        "--first-parent",
+        "--name-only",
+        "--format=%x1e%H%x1f%P%x1f%B%x1f",
+        ref,
+        "--",
+        "docs/adr/",
+        check=False,
+    )
+    found: list[tuple[int, str]] = []
+    status: dict[str, str | None] = {}
+    for record in out.split("\x1e")[1:]:
+        parts = record.split("\x1f")
+        if len(parts) < 4:
+            continue
+        sha, parents, message, names = parts[0], parts[1], parts[2], parts[3]
+        lines = [ln.strip() for ln in message.strip().splitlines()]
+        subject = SQUASH_SUBJECT.fullmatch(lines[0]) if lines else None
+        if len(parents.split()) != 1 or subject is None or MERGED_BY in lines:
+            continue
+        for path in adr_paths(names.split()):
+            if path not in status:
+                status[path] = status_of(show(root, ref, path) or "")
+            if status[path] == "Proposed":
+                found.append((int(subject.group(1)), sha))
+                break
+    return found
+
+
+def login_of(comment: dict) -> str | None:
+    user = comment.get("user")
+    return user.get("login") if isinstance(user, dict) else None
+
+
+def latest_verdict(comments: list[dict], authors: list[str] | None) -> dict | None:
+    """The latest comment (by time, then id) whose first line starts `Verdict:`, by an author of
+    AUTHORS; None when there is none or AUTHORS is empty."""
+    if not authors:
+        return None
+    verdicts = [
+        c
+        for c in comments
+        if isinstance(c, dict)
+        and str(c.get("body") or "").startswith("Verdict:")
+        and login_of(c) in authors
+    ]
+
+    def order(c: dict) -> tuple[str, int]:
+        cid = c.get("id")
+        return str(c.get("created_at") or ""), cid if isinstance(cid, int) else -1
+
+    return max(verdicts, key=order) if verdicts else None
+
+
+def lost_final(
+    root: Path, ref: str, comments: list[dict], authors: list[str] | None
+) -> tuple[dict, str, list[str]] | None:
+    """(verdict, head it names, ADR paths) when the latest verdict among COMMENTS by AUTHORS is a
+    covered fix list whose `Final:` lines accept ADRs that REF reads `Proposed` and no record of
+    REF accepts; else None (a numbered fix list, `rejected` or a cleared verdict among them)."""
+    verdict = latest_verdict(comments, authors)
+    covered = covered_fix_list(str(verdict.get("body") or "")) if verdict else None
+    paths = final_accepts(covered[1]) if covered else None
+    if verdict is None or covered is None or not paths:
+        return None
+    recorded = set(final_records(root, ref))
+    left = [
+        path
+        for path in paths
+        if (m := FILE_RE.match(path.removeprefix("docs/adr/")))
+        and m.group(1) not in recorded
+        and status_of(show(root, ref, path) or "") == "Proposed"
+    ]
+    return (verdict, covered[0], left) if left else None
+
+
+def read_pulls(path: str | None) -> list[dict] | None:
+    """The pull requests of `--pulls FILE`: a JSON list, or payloads one after another, each an
+    object with an integer `number`; a CheckError naming the option for anything else."""
+    if path is None:
+        return None
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise CheckError(BAD_PULLS) from None
+    decoder, items, at = json.JSONDecoder(), [], 0
+    try:
+        while (at := len(text) - len(text[at:].lstrip())) < len(text):
+            value, at = decoder.raw_decode(text, at)
+            items.extend(value if isinstance(value, list) else [value])
+    except ValueError:
+        raise CheckError(BAD_PULLS) from None
+    if not items or not all(
+        isinstance(i, dict) and isinstance(i.get("number"), int) and not isinstance(i["number"], bool)
+        for i in items
+    ):
+        raise CheckError(BAD_PULLS)
+    return items
+
+
+def hand_merged_records(
+    root: Path, ref: str, comments: list[dict] | None, pulls: list[dict]
+) -> set[str]:
+    """The ADR numbers of REF's hand merges (`hand_merges`) that the release may accept: the latest
+    verdict by a record author among the pull request's COMMENTS verifies as a record would
+    (`final_record_verified`), and its payload in PULLS says `merged: true`, names that squash
+    commit as `merge_commit_sha` and the verdict's head as `head.sha` (Q-1738-1)."""
+    merges = hand_merges(root, ref)
+    if not merges or not comments:
+        return set()
+    authors = record_authors(root)
+    by_number = {p["number"]: p for p in pulls}
+    found: set[str] = set()
+    for number, sha in merges:
+        pull = by_number.get(number)
+        head = pull.get("head") if isinstance(pull, dict) else None
+        if (
+            not isinstance(pull, dict)
+            or pull.get("merged") is not True
+            or pull.get("merge_commit_sha") != sha
+            or not isinstance(head, dict)
+        ):
+            continue
+        own = [
+            c
+            for c in comments
+            if isinstance(c, dict) and str(c.get("issue_url") or "").endswith(f"/issues/{number}")
+        ]
+        lost = lost_final(root, ref, own, authors)
+        if lost is None or not SHA.fullmatch(lost[1]) or head.get("sha") != lost[1]:
+            continue
+        verdict = lost[0]
+        for path in lost[2]:
+            if final_record_verified(path, (number, verdict.get("id")), verdict, authors):
+                found.add(path.removeprefix("docs/adr/")[:4])
+    return found
+
+
 def record_ids(root: Path, argv: list[str]) -> int:
     """Print, one a line, the Final comment id of each record that `final_records` reads in HEAD's
     history: the governance workflow fetches each one for `--comments`. With `--body FILE` (the pull
@@ -187,13 +355,17 @@ def needed_ids(root: Path, mb: str, body: str, records: dict[str, tuple[int, int
 
 
 def pending(
-    root: Path, files: list[Path], comments: list[dict] | None = None, base: str | None = None
+    root: Path,
+    files: list[Path],
+    comments: list[dict] | None = None,
+    base: str | None = None,
+    pulls: list[dict] | None = None,
 ) -> int:
     """Print, once each, every ADR accepted by a verified Final record of HEAD's history or of the
     merge base with BASE (the records a merge of main brought in sit on the merge's second parent,
     brief #1370, ADR-0575) whose file still says Proposed; HEAD alone when no base resolves."""
     try:
-        listed = pending_paths(root, files, comments, base)
+        listed = pending_paths(root, files, comments, base, pulls)
     except CheckError as err:
         print(f"FAIL {NAME}: {err}")
         return 1
@@ -203,14 +375,23 @@ def pending(
 
 
 def pending_paths(
-    root: Path, files: list[Path], comments: list[dict] | None = None, base: str | None = None
+    root: Path,
+    files: list[Path],
+    comments: list[dict] | None = None,
+    base: str | None = None,
+    pulls: list[dict] | None = None,
 ) -> list[Path]:
     """The FILES that `pending` prints, in order; a CheckError as `verified_records` raises one.
-    The release script flips exactly these (`changelog_fragments.py accept`, brief #1706)."""
+    The release script flips exactly these (`changelog_fragments.py accept`, brief #1706). With
+    PULLS, also the ADRs of a hand merge that `hand_merged_records` verifies (brief #1738)."""
     recorded = verified_records(root, "HEAD", comments)
     resolved = resolve_base(root, base)
+    refs = ["HEAD"] + ([merge_base(root, resolved)] if resolved is not None else [])
     if resolved is not None:
-        recorded |= verified_records(root, merge_base(root, resolved), comments)
+        recorded |= verified_records(root, refs[1], comments)
+    if pulls is not None:
+        for ref in refs:
+            recorded |= hand_merged_records(root, ref, comments, pulls)
     return [
         p
         for p in files
@@ -218,6 +399,16 @@ def pending_paths(
         and m.group(1) in recorded
         and status_of(p.read_text(encoding="utf-8")) == "Proposed"
     ]
+
+
+def pulls_arg(args: list[str]) -> str | None:
+    """The value of `--pulls`, or None without the option; a CheckError naming it when empty."""
+    if PULLS not in args:
+        return None
+    at = args.index(PULLS) + 1
+    if at >= len(args) or args[at].startswith("--"):
+        raise CheckError(BAD_PULLS)
+    return args[at]
 
 
 def adr_files(root: Path) -> list[Path]:
@@ -327,10 +518,11 @@ def main(argv: list[str] | None = None) -> int:
         try:
             comments = read_comments(args[at] if at is not None and at < len(args) else None)
             base = base_arg(args)
+            pulls = read_pulls(pulls_arg(args))
         except CheckError as err:
             print(f"FAIL {NAME}: {err}")
             return 1
-        return pending(root, files, comments, base)
+        return pending(root, files, comments, base, pulls)
     problems: list[str] = []
 
     numbers: dict[str, str] = {}
