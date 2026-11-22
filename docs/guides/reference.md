@@ -362,10 +362,14 @@ line. `approve --ask <Q> --said FILE --at TIME` takes the person's one-line repl
 another or an ended session, a moved head, a closed target, an older ask, a reply time before the ask or after now, an ask older than four times `[flow] owner_wait_minutes` (24 hours when unset
 or 0), a supervisor-started steward, a data-guard match, a question mark or a condition word, and in team mode a `--by`
 outside `spec_approvers`; `Not yet` is recorded and posts nothing. On a yes it records a `Decision:` first (a memory
-that cannot be written posts nothing), then posts a `Maintainer answer:` form with `Owner said`, `Asked` and
-`Who: ProductOwner` lines by `-F body=@<file>`; it reads the form again from the stored line and prints an
-`Approve:` or `Confirmed:` body ready to paste, never posting it; in personal mode (a `REQ-nnn`, `SPEC-nnnn` or `ADR-nnnn`
-target) it prints the `personal.py confirm` command and posts nothing.
+that cannot be written posts nothing), then posts the line it reads again from the stored ask, with `Owner said`, `Asked`
+and `Who: ProductOwner` lines, by `-F body=@<file>`: a `Maintainer answer:` form in either mode, and, only with
+`review_mode = "solo"` and one person listed (brief #1691, ADR-0704), it posts the `Approve:` or `Confirmed:` body too
+and reads it back; a post GitHub marks with an app of `agent_apps` does not count, so it says so and prints the body to
+paste, as it does in a cloud session (`common.REMOTE_RUNTIME`) and with nobody or two people listed. Team mode posts no
+approval, naming `review_mode`. In personal mode (a `REQ-nnn`, `SPEC-nnnn` or `ADR-nnnn` target) it prints the
+`personal.py confirm` command and posts nothing. These two are the steward's natural path (`skills/confirm/SKILL.md`,
+`docs/guides/steward-voice.md`, brief #1692); the standard's `confirm` below is another command.
 
 The standard (SPEC-0072 rule 8, brief #1601, ADR-0681; `docs/guides/engineering-standard.md`). `standard` prints the
 composed standard of the declared work type, or of `--playbook`: one plain screen in solo mode, the full list in team
