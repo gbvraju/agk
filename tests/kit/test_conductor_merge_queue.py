@@ -629,3 +629,67 @@ def test_a_plan_issue_that_cannot_be_read_holds_the_queue(queue, capsys, monkeyp
     assert queue.run() == 1
     assert "cannot be read" in capsys.readouterr().err
     assert queue.steps == []
+
+
+# --- brief #1740 (ADR-0725): no owner command while a re-prove is due -------------------------
+
+
+def test_1740_7m_an_owner_hold_in_reprove_names_the_reprove_not_the_owner_command(
+    queue, capsys, monkeypatch
+):
+    """REQ-057: brief #1740 answer 4 and test 7 (m) (#1723's facts: outside author, re-prove)."""
+    queue.add(7, at=10, outcome=merge_cleared.Held("outside author (rule 5)"))
+    queue.add(8, at=20, outcome=merge_cleared.Held("outside author (rule 5)"))
+    queue.add(9, at=30, outcome=merge_cleared.Held("spec approval (rule 5)"))
+    due = {7: merge_cleared.REPROVE, 8: None}
+    asked: list[int] = []
+
+    def hold(root, branch, number, sha):
+        asked.append(number)
+        assert branch == "main" and sha == head(number)
+        return due[number]
+
+    monkeypatch.setattr(conductor, "reprove_hold", hold)
+    assert queue.run("--dry-run") == 0
+    assert lines(capsys) == [
+        f"not queued: #7 {head(7)[:12]}: re-prove (rule 6 of SPEC-0050)",
+        f"not queued: #8 {head(8)[:12]}: outside author (rule 5); the owner merges with "
+        "python3 scripts/agk/merge_cleared.py --pr 8 --owner",
+        f"not queued: #9 {head(9)[:12]}: spec approval (rule 5)",
+        "merge-queue: nothing to merge",
+    ]
+    assert asked == [7, 8]  # only an owner-only hold is read again
+
+
+def git(cwd, *args: str) -> str:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com"}
+    env.update(GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com")
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True
+    )
+    return proc.stdout.strip()
+
+
+def test_1740_reprove_hold_reads_the_fetched_default_branch_with_git(tmp_path):
+    """REQ-057: brief #1740 answer 4 (`session_plan.reprove_files` on the fetched branch)."""
+    origin, clone = tmp_path / "origin", tmp_path / "clone"
+    origin.mkdir()
+    git(origin, "init", "-q", "-b", "main")
+    (origin / "steward.md").write_text("one\n", encoding="utf-8")
+    (origin / "other.md").write_text("one\n", encoding="utf-8")
+    git(origin, "add", "-A")
+    git(origin, "commit", "-qm", "base")
+    git(origin, "checkout", "-qb", "work")
+    (origin / "steward.md").write_text("mine\n", encoding="utf-8")
+    git(origin, "commit", "-qam", "mine")
+    mine = git(origin, "rev-parse", "HEAD")
+    git(origin, "update-ref", "refs/pull/7/head", mine)
+    git(origin, "checkout", "-q", "main")
+    (origin / "other.md").write_text("theirs\n", encoding="utf-8")
+    git(origin, "commit", "-qam", "theirs (#41)")
+    git(tmp_path, "clone", "-q", str(origin), str(clone))
+    assert conductor.reprove_hold(clone, "main", 7, mine) is None
+    (origin / "steward.md").write_text("theirs\n", encoding="utf-8")
+    git(origin, "commit", "-qam", "steward (#1719)")
+    assert conductor.reprove_hold(clone, "main", 7, mine) == merge_cleared.REPROVE
+    assert conductor.reprove_hold(clone, "main", 7, "f" * 40) == merge_cleared.REPROVE_UNKNOWN

@@ -1,0 +1,1 @@
+- A cleared pull request that a newer merge puts in the re-prove state is labelled `agk:reprove` and goes back to a builder: the conductor's hand-over line names the re-prove step, and no owner merge is asked meanwhile (brief #1740, ADR-0725)

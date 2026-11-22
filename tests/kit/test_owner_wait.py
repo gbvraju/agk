@@ -1167,3 +1167,22 @@ def test_1735_6_the_stewards_recorded_line_counts_only_on_its_own_pull_request(m
 def test_1735_the_docstring_names_the_rule():
     """REQ-050: brief #1735 answer 7."""
     assert "ADR-0723" in (session_mod.open_owner_items.__doc__ or "")
+
+
+# --- brief #1740 (ADR-0725): no owner merge is asked while a re-prove is due -------------------
+
+
+def test_1740_7h_no_owner_merge_item_while_labelled_reprove():
+    """REQ-057: brief #1740 answer 4 and test 7 (h): the label `agk:reprove` drops the item."""
+    said = [cleared(50), merge_ask(45)]
+    assert list(session_mod.open_owner_items(merge_pull(), said, LISTED, ANSWERERS)) == [
+        "owner-merge"
+    ]
+    reproving = merge_pull(labels=("agk:reprove",))
+    assert session_mod.open_owner_items(reproving, said, LISTED, ANSWERERS) == {}
+    both = merge_pull(labels=("agk:reprove", "agk:owner-merge"))
+    assert session_mod.open_owner_items(both, said, LISTED, ANSWERERS) == {}
+    question = [cleared(50), at(41, "boss", "Owner needed: Q-7-2 which reading?", 40)]
+    assert list(session_mod.open_owner_items(reproving, question, LISTED, ANSWERERS)) == [
+        "owner-needed"
+    ]

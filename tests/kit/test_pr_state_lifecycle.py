@@ -38,6 +38,7 @@ ORDER = [
     "agk:owner-merge",
     "agk:merge-ready",
     "agk:handover",
+    "agk:reprove",  # brief #1740 (ADR-0725): replaces a cleared state, see `route.cleared_state`
 ]
 ACTORS = {"builder", "checks", "conductor", "owner", "merger", "launcher"}
 BRIEF = "Brief: #5\nSummary: A person sees who acts next.\n"
@@ -200,6 +201,7 @@ def test_each_role_lists_its_own_labels():
         "agk:ci-red",
         "agk:conflict",
         "agk:fix",
+        "agk:reprove",  # brief #1740 (ADR-0725)
     }
     assert set(session.ROLES["conductor"]) == {"agk:review", "agk:ci-red"}
     assert set(session.ROLES["person"]) == {

@@ -161,7 +161,8 @@ main (light re-prove, SPEC-0050 amendment 171)`; any other re-prove file or a co
 
 Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
-one), so the launcher restarts a builder for exactly those.
+one), so the launcher restarts a builder for exactly those. Brief #1740 (ADR-0725): the line ends
+` re-prove <file> #<m>` when a full `re-prove:` line names the pull request: the step to restart.
 
 Brief #1282 (ADR-0543): before its `START` lines `sweep` parks each open pull request whose
 owner wait passed (`[flow] owner_wait_minutes`, or at once inside `owner_rest_hours`), with one
@@ -889,9 +890,11 @@ def pull_line(root, repo: str, pull: dict, authors, approvers, late: int, now) -
     return f"#{number} {head[:7]} {text}"
 
 
-def handover_line(repo: str, pull: dict, now) -> str:
+def handover_line(repo: str, pull: dict, now, step: str | None = None) -> str:
     """`HANDOVER #<pr> <minutes>m` from the newest handing-over `Report:` of the pull request's
-    author, or `unknown` (amendment 162 item 4); the label is the router's, never recounted."""
+    author, or `unknown` (amendment 162 item 4); the label is the router's, never recounted. With
+    STEP (`<file> #<m>` of a full `re-prove:` line, `reprove_steps`), it ends ` re-prove <step>`
+    (brief #1740 answer 3, ADR-0725)."""
     from route import handover_reason  # route imports session
 
     number = pull["number"]
@@ -904,7 +907,17 @@ def handover_line(repo: str, pull: dict, now) -> str:
     ]
     when = max((t for t in said if t is not None), default=None)
     minutes = f"{max(0, int((now - when).total_seconds() // 60))}m" if when else "unknown"
-    return f"HANDOVER #{number} {minutes}"
+    return f"HANDOVER #{number} {minutes}" + (f" re-prove {step}" if step else "")
+
+
+REPROVE_LINE = re.compile(r"re-prove: #(\d+) (\S+) \(changed by #(\d+)\)$")  # a full one
+
+
+def reprove_steps(lines: list[str]) -> dict[int, str]:
+    """{pull request: `<file> #<m>`} of the full `re-prove:` lines of `proof_lines`; a light or an
+    unknown one names no step (brief #1740 answer 3)."""
+    found = (REPROVE_LINE.match(line) for line in lines)
+    return {int(m.group(1)): f"{m.group(2)} #{m.group(3)}" for m in found if m}
 
 
 def held_verdict_line(root, repo: str, pull: dict, authors, now) -> str | None:
@@ -1266,10 +1279,16 @@ def sweep(root) -> int:
     branch = info.get("default_branch") if isinstance(info, dict) else None
     if not branch:
         raise CheckError("the default branch cannot be read")
-    lines += proof_lines(root, repo, pulls, branch)
+    proved = proof_lines(root, repo, pulls, branch)
+    lines += proved
+    steps = reprove_steps(proved)
     lines += caps.over_lines(root, repo, pulls, {a.lower() for a in authors}, now)
     lines += [x for p in pulls if (x := held_verdict_line(root, repo, p, authors, now))]
-    lines += [handover_line(repo, p, now) for p in pulls if session.label_of(p) == HANDOVER_LABEL]
+    lines += [
+        handover_line(repo, p, now, steps.get(p["number"]))
+        for p in pulls
+        if session.label_of(p) == HANDOVER_LABEL
+    ]
     lines.append(branch_line(root, repo, branch))
     lines += main_folder_lines(root)
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]
@@ -1690,6 +1709,7 @@ def queued(root, repo: str, rules: merge_cleared.Rules) -> tuple[list[tuple[int,
     """The open pull requests to merge, as (number, head) in the order of their clearing verdicts,
     and one `not queued:` line for each cleared one that a hold or an unlisted author keeps out."""
     authors = authors_of(rules.people)
+    branch = str(rules.data.get("default_branch", "main"))
     found, kept_out = [], []
     for pull in read(f"repos/{repo}/pulls?state=open", "the open pull requests"):
         number, sha = int(pull["number"]), str((pull.get("head") or {}).get("sha") or "")
@@ -1703,16 +1723,33 @@ def queued(root, repo: str, rules: merge_cleared.Rules) -> tuple[list[tuple[int,
         except merge_cleared.NotCleared:
             continue
         except (merge_cleared.Held, merge_cleared.Refused) as exc:
-            kept_out.append(kept_out_line(number, sha, str(exc)))
+            why = str(exc)
+            due = reprove_hold(root, branch, number, sha) if merge_cleared.owner_only(why) else None
+            kept_out.append(kept_out_line(number, sha, why, due))
             continue
         found.append((merge_cleared.stamp(verdict), number, sha))
     return [(number, sha) for _, number, sha in sorted(found)], kept_out
 
 
-def kept_out_line(number: int, sha: str, reason: str) -> str:
+def reprove_hold(root, branch: str, number: int, sha: str) -> str | None:
+    """`merge_cleared.reprove_check`'s re-prove hold of SHA on the default branch BRANCH as just
+    fetched (with `refs/pull/<n>/head`), read with local git: `re-prove (rule 6 of SPEC-0050)`,
+    `re-prove (unknown)` when a read fails, or None (brief #1740 answer 4, ADR-0725)."""
+    base = merge_cleared.fetched_base(root, branch, number, sha)
+    files = session_plan.reprove_files(root, base, sha) if base else None
+    if files is None:
+        return merge_cleared.REPROVE_UNKNOWN
+    return merge_cleared.REPROVE if files else None
+
+
+def kept_out_line(number: int, sha: str, reason: str, reprove: str | None = None) -> str:
     """One `not queued:` line; for a hold only the owner lifts (a release or a protected class) it
     names the owner's merge through the kit, `merge_cleared.py --pr <n> --owner`, which merges
-    only a passing would-be merge (brief #1358 answer 2, ADR-0570), never the GitHub button."""
+    only a passing would-be merge (brief #1358 answer 2, ADR-0570), never the GitHub button. A
+    re-prove hold (REPROVE, from `reprove_hold`) is named instead, with no owner command: the
+    owner's merge would be held (brief #1740 answer 4, ADR-0725)."""
+    if reprove:
+        return f"not queued: #{number} {sha[:12]}: {reprove}"
     line = f"not queued: #{number} {sha[:12]}: {reason}"
     if merge_cleared.owner_only(reason):
         line += "; the owner merges with " + merge_cleared.OWNER_COMMAND.format(number)
