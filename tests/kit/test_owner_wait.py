@@ -72,7 +72,7 @@ def test_1282a_a_question_unanswered_for_the_wait_parks_the_pull_request():
     owner = at(11, "boss", "Owner needed: the scope of the acceptance check", 45)
     assert step(pull(), [owner]) == ("park", "owner-needed")
     assert step(pull(labels=("agk:owner-merge",)), [at(12, "builder", "Report: x", 40)]) == (
-        "park",
+        "handover",  # brief #1733 (ADR-0722): an owner merge is handed over, never parked
         "owner-merge",
     )
     assert step(pull(), [asked(29)]) is None
@@ -897,3 +897,169 @@ def test_1616_every_execution_value_is_read(tmp_path, value):
 
     (tmp_path / "agk.toml").write_text(f'execution = "{value}"\n', encoding="utf-8")
     assert common.execution(tmp_path) == value
+
+
+# --- brief #1733 (ADR-0722): an owner merge is handed over, never parked -----------------------
+
+MERGE_NOW = datetime(2026, 11, 22, 10, 40, tzinfo=UTC)  # the brief's read of #1719
+
+
+def merge_ask(minutes: float, number: int = 7, now: datetime = NOW, login: str = "boss") -> dict:
+    command = session_mod.owner_command(number)
+    body = f'Owner needed: cleared, but held as "outside author".\n\nRun: {command}\n'
+    return at(40, login, body, minutes, now)
+
+
+def cleared(minutes: float, head: str = SHA, now: datetime = NOW) -> dict:
+    return at(30, "boss", f"Verdict: cleared {head}", minutes, now)
+
+
+def merge_pull(**kw) -> dict:
+    return {**pull(**kw), "number": 7}
+
+
+def test_1733_2_a_merge_ask_is_keyed_owner_merge_and_handed_over_at_once():
+    """REQ-050: brief #1733 answer 2 and 6 (b): never `owner-needed`, never parked."""
+    said = [cleared(50), merge_ask(45)]
+    items = session_mod.open_owner_items(merge_pull(), said, LISTED, ANSWERERS)
+    assert list(items) == ["owner-merge"]
+    assert step(merge_pull(), said) == ("handover", "owner-merge")
+    assert step(merge_pull(), [cleared(50), merge_ask(1)]) == ("handover", "owner-merge")
+    other = [cleared(50), merge_ask(45, number=8)]  # another pull request's command
+    assert step(merge_pull(), other) == ("park", "owner-needed")
+
+
+def test_1733_6a_the_label_alone_is_handed_over_too():
+    """REQ-050: brief #1733 answers 2 and 6 (a): `agk:owner-merge` of a protected path."""
+    labelled = merge_pull(labels=("agk:owner-merge",))
+    assert step(labelled, [at(12, "builder", "Report: x", 40)]) == ("handover", "owner-merge")
+    assert step(labelled, []) == ("handover", "owner-merge")
+
+
+@pytest.mark.parametrize("minutes", [0, 1, 30, 100000])
+def test_1733_7_no_wait_setting_parks_an_owner_merge(minutes):
+    """REQ-050: brief #1733 answer 7 (`owner_wait_minutes`, any whole number), and 6 (k): rest
+    hours. A question still parks as today."""
+    settings = {**PLAIN, "minutes": minutes}
+    said = [cleared(50), merge_ask(45)]
+    assert step(merge_pull(), said, settings) == ("handover", "owner-merge")
+    rest = {**NIGHTS, "minutes": minutes}
+    night = datetime(2026, 11, 14, 17, 0, tzinfo=UTC)  # 22:30 at +05:30
+    assert step(merge_pull(), [cleared(50, now=night), merge_ask(45, now=night)], rest, night) == (
+        "handover",
+        "owner-merge",
+    )
+    assert step(pull(), [asked(45)], settings) == ("park", "Q-7-1")
+
+
+def test_1733_6g_an_open_question_or_approval_still_parks_first():
+    """REQ-050: brief #1733 answer 6 (g): another owner item is parked as today; once it is
+    answered, the merge ask is handed over."""
+    approval = at(41, "boss", "Owner needed: post `Approve: SPEC-0032`", 44)
+    said = [cleared(50), merge_ask(45), approval]
+    assert step(merge_pull(), said) == ("park", "owner-needed")
+    given = at(42, "owner", "Approve: SPEC-0032", 40)
+    assert step(merge_pull(), [*said, given]) == ("handover", "owner-merge")
+    plain = at(43, "owner", "Maintainer answer: merged by hand", 30)
+    assert step(merge_pull(), [cleared(50), merge_ask(45), plain]) is None
+
+
+def test_1733_5_6h_6i_6j_a_stale_draft_or_unlisted_ask_is_no_owner_merge():
+    """REQ-050: brief #1733 answers 5 and 6 (h), (i), (j)."""
+    moved = [cleared(50, head="b" * 40), merge_ask(45)]  # a push: the verdict names an old head
+    assert step(merge_pull(), moved) is None
+    newer = [cleared(50), merge_ask(45), at(44, "boss", "Verdict: fix list " + "b" * 40, 40)]
+    assert step(merge_pull(), newer) is None
+    draft = {**merge_pull(), "draft": True}
+    assert step(draft, [cleared(50), merge_ask(45)]) is None
+    assert step(merge_pull(), [cleared(50), merge_ask(45, login="stranger")]) is None
+
+
+def test_1733_6l_a_persons_own_park_is_left():
+    """REQ-050: brief #1733 answer 6 (l) (brief #1282)."""
+    held = merge_pull(labels=("agk:parked",))
+    assert step(held, [cleared(50), merge_ask(45)]) is None
+
+
+def test_1733_3_an_owner_merge_holds_no_builder_slot():
+    """REQ-050: brief #1733 answer 3."""
+    building = {"number": 7, "labels": [{"name": "agk:build"}]}
+    merging = {"number": 8, "labels": [{"name": "agk:owner-merge"}]}
+    assert session_mod.running_builders([building, merging]) == [building]
+
+
+def test_1733_2_owner_apply_writes_nothing_for_a_hand_over(hub):
+    """REQ-050: brief #1733 answer 2: the conductor, the steward and the router write nothing."""
+    gh = hub([cleared(50), merge_ask(45)])
+    assert apply() is None
+    assert apply(seen=(merge_pull(), [cleared(50), merge_ask(45)])) is None
+    assert gh.writes() == []
+
+
+def comments_1719() -> list[dict]:
+    """#1719's comments as of brief #1733 (read 2026-11-22 10:40 UTC), logins invented."""
+
+    def c(cid, login, body, when):
+        return {"id": cid, "user": {"login": login}, "body": body, "created_at": when}
+
+    command = session_mod.owner_command(7)  # the pull request is #7 in this hub
+    return [
+        c(1, "boss", "Question: Q-1710-1 for the maintainers: raise the cap?", "2026-11-22T07:10:01Z"),
+        c(2, "boss", "Owner needed: two small yes-or-no choices", "2026-11-22T07:11:38Z"),
+        c(3, "boss", "Parked-by: wait owner-needed\n\nWho: AGK", "2026-11-22T07:42:11Z"),
+        c(4, "owner", "Maintainer answer: Q-1710-1 yes", "2026-11-22T09:08:45Z"),
+        c(5, "bot", "Unparked-by: answer owner-needed\n\nWho: AGK", "2026-11-22T09:08:58Z"),
+        c(6, "builder", f"Report: {SHA} fix list applied", "2026-11-22T09:16:28Z"),
+        c(7, "boss", f"Verdict: fix list {SHA}\n\nFinal: docs/adr/x.md Proposed -> Accepted",
+          "2026-11-22T09:27:54Z"),  # fmt: skip
+        c(8, "boss", f'Owner needed: held as "outside author".\n\n{command}\n', "2026-11-22T09:32:09Z"),
+        c(9, "boss", "Parked-by: wait owner-needed\n\nWho: AGK", "2026-11-22T10:03:52Z"),
+        c(10, "builder", f"Report: {SHA[:7]} handing over: blocked: owner-needed waits",
+          "2026-11-22T10:03:59Z"),  # fmt: skip
+    ]
+
+
+def test_1733_4_6m_pr_1719_is_unparked_once_then_handed_over(hub):
+    """REQ-050: brief #1733 `Measured:`, answers 4 and 6 (m): on main the park stays (its item is
+    `owner-needed`); now the item is `owner-merge`, the old park is removed with one
+    `Unparked-by:` and the next step is the hand-over, which writes nothing."""
+    said = comments_1719()
+    parked = merge_pull(labels=("agk:parked",))
+    items = session_mod.open_owner_items(parked, said, LISTED, ANSWERERS)
+    assert list(items) == ["owner-merge"]
+    assert session_mod.owner_step(parked, said, PLAIN, MERGE_NOW, LISTED, ANSWERERS) == (
+        "unpark",
+        "owner-needed",
+    )
+    gh = hub(said, labels=("agk:parked",))
+    found = session_mod.owner_apply(REPO, 7, PLAIN, LISTED, ANSWERERS, MERGE_NOW)
+    assert found == ("unpark", "owner-needed")
+    assert gh.labels == set()
+    assert gh.posted() == ["Unparked-by: answer owner-needed"]
+    assert session_mod.owner_apply(REPO, 7, PLAIN, LISTED, ANSWERERS, MERGE_NOW) is None
+    assert gh.posted() == ["Unparked-by: answer owner-needed"]  # once
+    again = session_mod.owner_step(merge_pull(), gh.comments, PLAIN, MERGE_NOW, LISTED, ANSWERERS)
+    assert again == ("handover", "owner-merge")
+
+
+def test_1733_2_watch_prints_owner_merge_and_the_hand_over(proj, stub):
+    """REQ-050: brief #1733 answer 2: `owner-merge #<n>` and the `next:` line of a park; no write."""
+    report = comment(10, "builder", "Report: x ready for review", iso(-timedelta(hours=1)))
+    labelled = pull(labels=("agk:owner-merge",))
+    watching(stub, [(labelled, [report])], base=[report])
+    stub.serve(f"repos/{REPO}/issues", [])
+    out = session(proj, stub, *WATCH)
+    assert out.returncode == 0, out.stdout + out.stderr
+    lines = out.stdout.strip().splitlines()
+    assert lines[-2] == "owner-merge #7"
+    assert lines[-1] == (
+        f"next: post `Report: {SHA[:7]} handing over: blocked: owner-merge waits for the owner`, "
+        "then run python3 scripts/agk/session.py after --session s-me"
+    )
+    assert [c for c in stub.calls() if c[0] != "GET"] == []
+
+
+def test_1733_8_the_docstrings_name_the_rule():
+    """REQ-050: brief #1733 answer 8 (the `session.py` docstring of brief #1282)."""
+    assert "ADR-0722" in (session_mod.__doc__ or "")
+    assert "handover" in (session_mod.owner_step.__doc__ or "")
