@@ -1092,10 +1092,9 @@ def clean_cli(plugin: Path, target: Path, *args: str):
 @pytest.mark.parametrize("mode", ["init", "adopt"])
 def test_req078_an_untouched_install_moves_to_the_clean_layout(tmp_path, mode):
     """REQ-078: brief #1684 answers 1, 2, 4 and 6 (the proof passes; the records keep their bytes;
-    every setting but the kit-path keys is kept; the report and the branch carry one plan; the
-    project's own `.gitattributes` lines stay outside adopt's block)."""
-    own = {".gitattributes": "*.png binary\n"} if mode == "adopt" else {}
-    plugin, target = released(tmp_path, mode, own)
+    every setting but the kit-path keys is kept, and `lint_paths` names no removed path; the report
+    and the branch carry one plan)."""
+    plugin, target = released(tmp_path, mode)
     records = ("docs/adr/0001-adopt-agk.md", "LICENSE-AGK", "config/protected-paths.txt")
     kept = {rel: (target / rel).read_bytes() for rel in records}
     settings = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
@@ -1116,8 +1115,18 @@ def test_req078_an_untouched_install_moves_to_the_clean_layout(tmp_path, mode):
     assert {k: v for k, v in after.items() if k != "lint_paths"} == {
         k: v for k, v in settings.items() if k != "lint_paths"
     }
-    if own:
-        assert (target / ".gitattributes").read_text(encoding="utf-8").startswith("*.png binary\n")
+    assert all((target / path).exists() for path in after.get("lint_paths", []))
+
+
+def test_req078_a_projects_own_gitattributes_lines_are_kept_in_adopt_mode(tmp_path):
+    """REQ-078: brief #1684 answer 4 (outside adopt's block the lines are the project's, kept; the
+    kit's lines inside it are rewritten)."""
+    plugin, target = released(tmp_path, "adopt", {".gitattributes": "*.png binary\n"})
+    proc = clean_cli(plugin, target, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = (target / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "*.png binary" and "# >>> agk" in lines
+    assert "scripts/agk/** text eol=lf" not in lines
 
 
 def test_req078_a_changed_kit_file_naming_a_removed_path_still_refuses(tmp_path):

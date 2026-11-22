@@ -35,7 +35,11 @@ maintainers' answer to Q-1684-3 (on pull request #1688) set the rule below.
    proof, as the plugin's own paths are; a removed path stays protected (Q-1684-3). The move's ADR names them as kept.
 4. A changed file, or one the person deleted, is not rewritten: a changed one that names a removed path is still listed
    and refused, and a deleted one is not recreated.
-5. Read as part of rule 8's removal (Q-1684-2): editing these unchanged kit-written files is part of the move; if the
+5. The proof and the rewrite read a word as a path through one function that takes off only a leading `./` or `/`. Before,
+   `lstrip("./")` also took the dot off `.claude/hooks`, so a line naming a removed dot path passed the proof (#1695). The
+   proof is stricter by that (principle 11: changed by this ADR), and `lint_paths` is dropped once every path in it is
+   removed.
+6. Read as part of rule 8's removal (Q-1684-2): editing these unchanged kit-written files is part of the move; if the
    architect reads rule 8 otherwise, an amendment follows.
 
 Protected path classes changed: `scripts/agk/` (`upgrade.py`), `tests/kit/` (`test_upgrade_clean_repo.py`: the
@@ -45,7 +49,7 @@ protected list is now excepted, ruled by Q-1684-3) and `tests/kit_dev/` (`test_u
 
 An untouched install of a release, in init or adopt mode, now moves to the clean layout with
 `proof: no tracked file names a removed kit path`. The proof is narrower by the three record files above, by the
-maintainers' answer (principle 11: changed by this ADR).
+maintainers' answer, and stricter by dot paths (decision 5); both are changes of a check by this ADR (principle 11).
 
 ## Residual
 

@@ -227,6 +227,13 @@ def test_a_protected_setting_naming_a_removed_folder_names_its_class(tmp_path, k
     assert code == 1 and "config/settings-example.txt:2 (path class config/)" in out
 
 
+def test_a_removed_path_that_starts_with_a_dot_is_named(tmp_path, kit, capsys):
+    """Issue #1695 (brief #1684, ADR-0701): only a leading `./` or `/` is taken off a word."""
+    root = sample(tmp_path, over={"docs/notes.md": "The guard is .claude/hooks/guard_x.py.\n"})
+    code, out = run(capsys, root, "--rehearsal")
+    assert code == 1 and "docs/notes.md:1 (path class docs/)" in out
+
+
 def test_the_protected_list_keeps_its_removed_paths_and_is_excepted(tmp_path, kit, capsys):
     """Q-1684-3 (brief #1684, ADR-0701): a removed path stays protected, so the list keeps it."""
     listed = "config/\nagk.toml\nscripts/agk/\n"

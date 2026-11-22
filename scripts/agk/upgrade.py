@@ -1123,7 +1123,8 @@ def clean_plan(target: Path, kit_root: Path, rehearsal: bool):
 
 
 def bare(word: str) -> str:
-    return word.lstrip("./").rstrip(".,:;/")
+    """WORD as a path: only a leading `./` or `/` goes, so `.claude/hooks` stays itself (#1695)."""
+    return word.removeprefix("./").removeprefix("/").rstrip(".,:;/")
 
 
 def removed_names(target: Path, plan) -> set[str]:
@@ -1268,10 +1269,7 @@ def dangling(target: Path, plan) -> list[tuple[str, int]]:
         except (OSError, UnicodeDecodeError):
             continue
         for n, line in enumerate(text.splitlines(), 1):
-            words = (
-                w.lstrip("./").rstrip(".,:;/") for w in WORD.findall(PLUGIN_PATH.sub(" ", line))
-            )
-            if any(w in names for w in words):
+            if names_removed(line, names):
                 found.append((rel, n))
     return found
 
