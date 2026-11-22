@@ -594,7 +594,9 @@ VERDICT_CASES = [
     ("upper case", [comment(f"Verdict: cleared {HEAD.upper()}", at=5)], "held"),
     ("a multi-line fix list", [FIX_LIST], "held"),
     ("hidden by a newer verdict", [cleared(at=5), REJECTED], "held"),
-    ("hidden by a builder's verdict", [cleared(at=5), comment("Verdict: hm", BUILDER, 7)], "held"),
+    # brief #1709 answer 1: an unlisted builder's `Verdict:` is not a verdict, so it no longer
+    # hides a listed one (test_the_merge_run_ignores_a_strangers_verdict)
+    ("only a builder's verdict", [comment(f"Verdict: cleared {HEAD}", BUILDER, 7)], "held"),
     ("no verdict at all", [comment("Report: ready", BUILDER, 3)], "held"),
     ("no comment at all", [], "held"),
 ]
@@ -736,8 +738,8 @@ def test_with_conductor_accounts_only_a_listed_author_clears(tmp_path):
     proc, _ = merge_cleared_run(
         tmp_path / "b", toml(ON), [cleared(login=BUILDER)], reviewers_yaml=listed
     )
-    line = one_line(proc)
-    assert ": held: " in line and "conductor_accounts" in line and BUILDER not in line
+    line = one_line(proc)  # brief #1709: an unlisted author's verdict is not a verdict
+    assert ": held: no verdict (rule 3)" in line and BUILDER not in line
     assert proc.returncode == 3
 
 
@@ -820,6 +822,8 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
         ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/status?per_page=100&page=1", "-i"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1", "-i"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/commits?per_page=100&page=1", "-i"],
+        # brief #1709 answer 2: the author's permission, one GET
+        ["api", "--method", "GET", f"repos/{REPO}/collaborators/{BUILDER}/permission", "-i"],
         merge_call(),
         made[-2],
         ["api", "--method", "GET", f"repos/{REPO}/issues/500", "-i"],
@@ -1061,7 +1065,7 @@ def test_the_merge_run_ignores_a_strangers_verdict(tmp_path):
 
 def test_a_pull_request_that_adds_its_author_to_the_list_does_not_count(tmp_path):
     """REQ-046 AC2: brief #1709 answer 4 `default_branch` (the list of the default branch)."""
-    root = repo(tmp_path, toml(ON), head=toml(ON))
+    root = repo(tmp_path, toml(ON), head=toml(ON) + "# the head\n")
     (root / "config" / "reviewers.yaml").write_text(
         f'version: 1\nverdict_authors: ["@{OWNER}", "@{STRANGER}"]\n', encoding="utf-8"
     )
@@ -1076,8 +1080,8 @@ def test_a_pull_request_that_adds_its_author_to_the_list_does_not_count(tmp_path
         (f'verdict_authors: ["@{OWNER}"]', OWNER, [OWNER]),  # solo: the one login counts
         (f'verdict_authors: ["@{OWNER}", "@{CONDUCTOR}"]', OWNER, [CONDUCTOR]),  # team
         (f'verdict_authors: ["@{OWNER}", "@{CONDUCTOR}"]', "", [OWNER, CONDUCTOR]),
-        (f'teams:\n  maintainers:\n    github_team: "@{OWNER}"', BUILDER, [OWNER]),
-        ('teams:\n  maintainers:\n    github_team: "@example-org/maintainers"', OWNER, []),
+        (f'teams:\n  maintainers: {{github_team: "@{OWNER}"}}', BUILDER, [OWNER]),
+        ('teams:\n  maintainers: {github_team: "@example-org/maintainers"}', OWNER, []),
         ('verdict_authors: ["@REPLACE-ME"]', OWNER, []),
         ("verdict_authors: []", OWNER, []),
         ("", OWNER, []),
