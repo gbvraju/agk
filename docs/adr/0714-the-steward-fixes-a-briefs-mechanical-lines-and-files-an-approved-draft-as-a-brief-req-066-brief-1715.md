@@ -6,8 +6,8 @@
 - Related: brief #1715, ADR-0557, ADR-0594, ADR-0704, SPEC-0059, amendment 215, Q-1715-1 to Q-1715-4, plan #661
 - Requirements: REQ-066
 
-Protected classes this decision changes: `.claude/`, `scripts/agk/`, `config/`, `agk.toml` (one `[[testing.map]]`
-line: `scripts/agk/steward_owner.py` names `tests/kit/test_steward_fix_brief.py`) and `tests/kit/`.
+Protected classes this decision changes: `.claude/`, `scripts/agk/`, `agk.toml` (two `[[testing.map]]`
+lines: `steward_owner.py` and `session_plan.py` name `tests/kit/test_steward_fix_brief.py`) and `tests/kit/`.
 
 ## Context
 
