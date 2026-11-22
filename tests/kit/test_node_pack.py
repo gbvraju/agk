@@ -86,7 +86,12 @@ for top, dirs, names in os.walk(base):
             print(path + "(1,14): error TS2322: Type 'string' is not assignable to type 'number'.")
 sys.exit(2 if bad else 0)
 """
-STRICT = '{\n  // the product\'s own compiler settings\n  "compilerOptions": {"strict": true,},\n}\n'
+STRICT = (
+    '{\n  // the product\'s own compiler settings\n  "compilerOptions": {"strict": true,},\n}\n'
+)
+SOLUTION = (
+    '{"compilerOptions": {"strict": true}, "files": [], "references": [{"path": "frontend"}]}'
+)
 FAULT = 'export const count: number = "hello"; // example.com\n'
 
 
@@ -216,8 +221,10 @@ def test_the_pack_is_off_without_a_node_stack_or_package_json(case: str, tmp_pat
     kw = {"runtime": "python"} if case == "python" else {"package": False}
     root = sample(tmp_path, **kw)
     assert not node_pack.on(root)
-    assert not any("standards node" in line for _, line in run_gates.pack_results(
-        PLAYBOOKS / "web-app.toml", root))
+    assert not any(
+        "standards node" in line
+        for _, line in run_gates.pack_results(PLAYBOOKS / "web-app.toml", root)
+    )
 
 
 def test_an_ignored_file_is_not_counted(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -272,15 +279,17 @@ def test_the_type_step_fills_the_tally(tmp_path: Path) -> None:
         ('"strict": false', ["strict"]),
         ('"target": "es2022"', ["strict"]),
         ('"strict": true, "noImplicitAny": false', ["noImplicitAny"]),
-        ('"strict": true, "strictNullChecks": false, "noImplicitAny": false',
-         ["noImplicitAny", "strictNullChecks"]),
+        (
+            '"strict": true, "strictNullChecks": false, "noImplicitAny": false',
+            ["noImplicitAny", "strictNullChecks"],
+        ),
     ],
 )
 def test_a_weakened_compiler_setting_fails_the_floor(
     options: str, named: list[str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """REQ-079: brief #1766 answer 2 (each option named, never its value)."""
-    root = sample(tmp_path, tsconfig='{"compilerOptions": {%s}}' % options)
+    root = sample(tmp_path, tsconfig='{"compilerOptions": {' + options + "}}")
     code, out = gates(root, capsys)
     assert code == 1
     lines = [ln for ln in out.splitlines() if "standards node type-floor" in ln]
@@ -308,11 +317,9 @@ def test_the_extends_chain_is_read_inside_the_product(
     assert code == 1 and "compiler option strictNullChecks (path class: tsconfig.json)" in out
 
 
-def test_a_referenced_config_is_checked(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_referenced_config_is_checked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """REQ-079: brief #1766 answer 6 (`references`, each config on its own)."""
-    root = sample(tmp_path, tsconfig='{"files": [], "references": [{"path": "./frontend"}]}')
+    root = sample(tmp_path, tsconfig=SOLUTION)
     (root / "frontend" / "tsconfig.json").write_text(
         '{"compilerOptions": {"strict": false}}', encoding="utf-8"
     )
@@ -331,7 +338,7 @@ def test_typescript_files_without_a_tsconfig_fail(
     """REQ-079: brief #1766 answer 4."""
     code, out = gates(sample(tmp_path, tsconfig=None), capsys)
     assert code == 1
-    assert "standards node type-floor: SPEC-0072 rule 8: the compiler configuration is missing" in out
+    assert "node type-floor: SPEC-0072 rule 8: the compiler configuration is missing" in out
     assert "(path class: tsconfig.json)" in out
 
 

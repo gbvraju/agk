@@ -1,0 +1,1 @@
+- A TypeScript product whose stack record chose Node gets the `node-type` step: the product's own `tsc` checks types, and a `tsconfig.json` that is not strict is refused (brief #1766)

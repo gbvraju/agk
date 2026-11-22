@@ -2,26 +2,33 @@
 # SPDX-License-Identifier: LicenseRef-AGK-Proprietary
 # AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
-"""The Node standards pack (SPEC-0072 rules 6 and 8; REQ-079; brief #1764, ADR-0739).
+"""The Node standards pack (SPEC-0072 rules 6 and 8; REQ-079; briefs #1764 and #1766, ADR-0739
+and ADR-0740).
 
 `run_gates.py` runs it for the `node` entry of `[[standards]]`, only when the one Accepted stack
 record chose a Node runtime (`pins.chosen`) and the product has a `package.json`. Over the product
 `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` files that `project_lint_paths` names (unset: the
 paths of `[architecture] layers`, as for Python), less hidden, `node_modules/`, build folders and
-the kit's own `lint_paths`, it runs three steps:
+the kit's own `lint_paths`, it runs these steps:
 
 - `floor` (rule 8): `eslint --print-config <file>` shows every rule id of `rules.codes` at `error`
   or `warn`, never `off` or absent, else it names each missing id;
 - `node-lint`: `eslint --max-warnings 0` (a "File ignored" notice of the config's own `ignores` is
   not counted);
-- `node-format`: `prettier --check`.
+- `node-format`: `prettier --check`;
+- `type-floor` (rule 8, brief #1766): `tsconfig.json`, read as JSON with comments through its
+  `extends` chain inside the product (a package base from `node_modules/` when installed, else
+  skipped) and each config of its `references`, sets `strict` and leaves `noImplicitAny` and
+  `strictNullChecks` on; each option that is not is named, never its value;
+- `node-type`: `tsc --noEmit -p <config>` for the root config and each referenced one; a failure
+  names the compiler's `TS<n>` code and the path class.
 
-The `node-type` step is part 2 of the brief's plan; the entry names it and this part runs none.
+A product with no `.ts` or `.tsx` file skips both type steps and says so in one note.
 Each tool is the product's own pinned copy in `node_modules/.bin/` (its exact `devDependencies`,
 which the pins gate holds), run with an argument list and never a shell, `npx` or a download. A
 tool that is missing fails naming the tool, the setting and `npm ci`, never a version. A failure
 names the rule id (or the format) and the path class, never a file name or a value (principle 8).
-With a `tally` dict, `run` fills `{step: {file: count}}` for `lint` and `format` (rule 7).
+With a `tally` dict, `run` fills `{step: {file: count}}` for `lint`, `format` and `type` (rule 7).
 """
 
 from __future__ import annotations
@@ -51,6 +58,11 @@ INSTALL = "npm ci"
 SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
 SKIP = {"node_modules", "build", "dist", "out", "coverage", "vendor", "third_party"}
 TOOLS = (("eslint", "standards.rules"), ("prettier", "standards.format"))
+TYPED = {".ts", ".tsx"}
+TSCONFIG = "tsconfig.json"
+STRICT_OFF = ("noImplicitAny", "strictNullChecks")  # each on under `strict`; `false` weakens it
+TSC_LINE = re.compile(r"^(?:(.+?)\(\d+,\d+\): )?error (TS\d+):")
+SKIPPED = "the type step is skipped: no TypeScript file"
 RULE_ID = re.compile(r"^(?:@?[a-z0-9-]+/)?[a-z][a-z0-9-]*$")
 IGNORED = "File ignored"
 OFF = ("off", 0)
@@ -184,31 +196,148 @@ def format_check(root: Path, found: list[tuple[str, str]], tally: Tally | None =
     return sorted(out)
 
 
+def _jsonc(path: Path) -> dict[str, Any] | None:
+    """A tsconfig file read as JSON with comments and trailing commas, or None."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    strings = r'"(?:\\.|[^"\\])*"'
+    text = re.sub(
+        strings + r"|//[^\n]*|/\*.*?\*/",
+        lambda m: m.group(0) if m.group(0)[0] == '"' else "",
+        text,
+        flags=re.S,
+    )
+    text = re.sub(strings + r"|,(\s*[}\]])", lambda m: m.group(1) or m.group(0), text)
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _base(root: Path, here: Path, spec: str) -> Path | None:
+    """The file an `extends` names, inside the product, or None (absent: the own file alone)."""
+    if spec.startswith("."):
+        tries = [here.parent / spec, here.parent / f"{spec}.json"]
+    else:
+        mod = root / "node_modules" / spec
+        tries = [mod, mod.with_name(mod.name + ".json"), mod / TSCONFIG]
+    base = root.resolve()
+    for path in tries:
+        if path.is_file() and path.resolve().is_relative_to(base):
+            return path
+    return None
+
+
+def options(root: Path, path: Path, seen: frozenset[Path] = frozenset()) -> dict[str, Any] | None:
+    """The `compilerOptions` of PATH merged over its `extends` chain (later wins), or None."""
+    data = _jsonc(path)
+    if data is None or path.resolve() in seen:
+        return None
+    merged: dict[str, Any] = {}
+    chain = data.get("extends")
+    for spec in chain if isinstance(chain, list) else [chain] if chain else []:
+        found = _base(root, path, spec) if isinstance(spec, str) else None
+        merged.update((options(root, found, seen | {path.resolve()}) or {}) if found else {})
+    own = data.get("compilerOptions")
+    merged.update(own if isinstance(own, dict) else {})
+    return merged
+
+
+def configs(root: Path) -> list[tuple[Path, str]]:
+    """(config, path class) of the root `tsconfig.json` and each config its `references` name."""
+    top = root / TSCONFIG
+    out = [(top, TSCONFIG)]
+    refs = (_jsonc(top) or {}).get("references")
+    for ref in refs if isinstance(refs, list) else []:
+        rel = ref.get("path") if isinstance(ref, dict) else None
+        path = root / rel if isinstance(rel, str) else None
+        path = path / TSCONFIG if path is not None and path.is_dir() else path
+        if path is not None and path.resolve().is_relative_to(root.resolve()):
+            out.append((path, f"{TSCONFIG} references"))
+    return out
+
+
+def type_floor(root: Path) -> list[str]:
+    """Rule 8: each compiler option of each config that is not at strict, named, never a value."""
+    if not (root / TSCONFIG).is_file():
+        return [f"{FLOOR}: the compiler configuration is missing (path class: {TSCONFIG})"]
+    out = []
+    for path, cls in configs(root):
+        opts = options(root, path)
+        if opts is None:
+            out.append(f"{FLOOR}: the compiler configuration is unreadable (path class: {cls})")
+            continue
+        weak = ([] if opts.get("strict") is True else ["strict"]) + [
+            o for o in STRICT_OFF if opts.get(o) is False
+        ]
+        out += [
+            f"{FLOOR}: the configuration weakens the compiler option {o} (path class: {cls})"
+            for o in weak
+        ]
+    return sorted(set(out))
+
+
+def type_check(root: Path, found: list[tuple[str, str]], tally: Tally | None = None) -> list[str]:
+    """`tsc --noEmit -p <config>` per config: each error as (TS code, path class)."""
+    where, out = dict(found), set()
+    for path, cls in configs(root) if (root / TSCONFIG).is_file() else []:
+        argv = ["--noEmit", "--pretty", "false", "-p", path.relative_to(root).as_posix()]
+        proc = _run(root, "tsc", argv)
+        if proc.returncode == 0:
+            continue
+        hits = [m for m in map(TSC_LINE.match, proc.stdout.splitlines()) if m]
+        for m in hits:
+            rel = _rel(root, m.group(1)) if m.group(1) else ""
+            _count(tally, rel or cls)
+            out.add(f"{RULE}: type rule {m.group(2)} (path class: {where.get(rel) or cls})")
+        if not hits:
+            out.add(f"{RULE}: the type tool did not run (setting: standards.type)")
+    return sorted(out)
+
+
 def run(
     root: Path, entry: dict[str, Any], tally: dict[str, Tally] | None = None
 ) -> list[tuple[str, list[str]]]:
-    """(step, failure lines) for the floor and the two steps, in order; TALLY gets the per-file
-    counts of the two steps when given."""
+    """(step, failure lines) for the floors and the three steps, in order (`note` lines are
+    information, not failures); TALLY gets the per-file counts of the three steps when given."""
     root = Path(root)
     gone = [
         f"{RULE}: the pack's tool {t} is not installed (setting: {s}); install: {INSTALL}"
         for t, s in TOOLS
         if tool(root, t) is None
     ]
-    if gone:
-        return [("tools", gone)]
     try:
         found = files(root, patterns(root))
     except CheckError:
-        return [("paths", [f"{RULE}: not an accepted value (setting: {PROJECT_LINT})"])]
+        return (
+            [("tools", gone)]
+            if gone
+            else [("paths", [f"{RULE}: not an accepted value (setting: {PROJECT_LINT})"])]
+        )
+    typed = any(Path(rel).suffix in TYPED for rel, _ in found)
+    if typed and tool(root, "tsc") is None:
+        gone.append(
+            f"{RULE}: the pack's tool tsc is not installed (setting: standards.type); "
+            f"install: {INSTALL}"
+        )
+    if gone:
+        return [("tools", gone)]
     if not found:
         return []
-    own: dict[str, Tally] = {"lint": {}, "format": {}}
+    own: dict[str, Tally] = {"lint": {}, "format": {}, "type": {}}
     steps = [
         ("floor", floor(root, entry, found)),
         ("lint", lint(root, found, own["lint"])),
         ("format", format_check(root, found, own["format"])),
     ]
+    if typed:
+        steps += [("type-floor", type_floor(root)), ("type", type_check(root, found, own["type"]))]
+    else:
+        del own["type"]
+        steps.append(("note", [SKIPPED]))
     if tally is not None:
         tally.update(own)
     return steps
