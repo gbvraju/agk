@@ -202,9 +202,12 @@ def test_1202_e_the_builder_text_carries_the_running_rules():
     kit_only = "Kit repository only (where kit/agk-kit.mk exists):"
     assert body.count(kit_only) == 1, kit_only
     tail = body.split(kit_only, 1)[1]
-    for words in ("ALWAYS ALSO", "RELEASE EXCEPTION", "kit_hashes.py", "changelog.d"):
+    release = "changelog_fragments.py accept --comments <file>"  # brief #1706 (ADR-0710)
+    for words in ("ALWAYS ALSO", release, "kit_hashes.py", "changelog.d"):
         assert words in tail, words
         assert words not in body.split(kit_only, 1)[0], words
+    assert "RELEASE EXCEPTION" not in body  # brief #1706: no session edits a Status line by hand
+    assert "you never edit a Status line" in tail
 
 
 def test_1202_f_the_readme_and_guide_say_the_launcher_is_the_backup():

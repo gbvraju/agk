@@ -1,0 +1,1 @@
+- The release script accepts the decisions their Final comments accepted: `changelog_fragments.py accept --comments FILE` sets to `Accepted` the one Status line of each ADR that `check_adrs.py --pending` lists, byte for byte otherwise, and the builder's RELEASE EXCEPTION is gone (brief #1706)

@@ -1292,7 +1292,9 @@ In flow mode (`pr_mode = "flow"`, which this repository uses) a kit build pull r
 One release pull request bumps for all the builds. A session opens it on the maintainers' word. It runs
 `python3 scripts/agk/changelog_fragments.py gather --version <new version>`, which moves the lines under `## Unreleased` and
 the line of every fragment (as `- #<n> <one-line change>`, `<n>` read from the commit that added it, in pull request
-order) under `## <new version> (<date>)` of `CHANGELOG.md` and deletes the fragments; it then raises the three versions
+order) under `## <new version> (<date>)` of `CHANGELOG.md` and deletes the fragments. It also runs
+`python3 scripts/agk/changelog_fragments.py accept --comments <file>`, which sets to `Accepted` the one Status line of each
+ADR that `check_adrs.py --pending` lists (brief #1706), so no session edits a Status line by hand; it then raises the three versions
 (together, to one greater number) and regenerates the table with `python3 scripts/agk/kit_hashes.py --write`. The pull
 request changes only `CHANGELOG.md`, the deleted fragments, the three versions and `kit/hashes.json`.
 `scripts/agk/check_release.py` fails a release pull request that changes any other file, leaves a fragment or does not move a
