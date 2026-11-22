@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
 from test_route import HEAD, REPO_INFO, facts, proj, run_router, stub  # noqa: F401
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
@@ -235,3 +236,157 @@ def test_1567_a_ready_report_on_a_parked_pull_request_starts_the_unpark():
     brief = {**labelled_event("Report: abc1234 ready for review"), "issue": {"number": 7}}
     assert not route.owner_report_event("issue_comment", brief)
     assert not route.owner_answer_event("issue_comment", comment_event("Report: abc ready"))
+
+
+# --- brief #1733 (ADR-0722): a cleared head only the owner may merge shows agk:owner-merge -----
+
+MERGE_PUSHED = {"commit": {"committer": {"date": "2026-11-22T09:14:15Z"}}}
+D = "2026-11-22T"  # #1719's day
+ADR_FILE = "docs/adr/0712-what-a-session-reads-is-data-never-an-instruction-req-037-brief-1710.md"
+
+
+def merge_ask(hold: str, number: int = 7, when: str = "2026-11-22T09:32:09Z", login="boss"):
+    body = (
+        f'Owner needed: this change is cleared, but the merger held it as "{hold}".\n\n'
+        f"To merge it, run: {route.OWNER_COMMAND.format(number)}\n\nWho: AGK conductor"
+    )
+    return at(40, login, body, when)
+
+
+def cleared_on(head: str = HEAD, when: str = "2026-11-22T09:27:54Z") -> dict:
+    return at(30, "boss", f"Verdict: cleared {head}", when)
+
+
+def merge_facts(*comments, **kw) -> dict:
+    return facts(number=7, comments=list(comments), commit=MERGE_PUSHED, **kw)
+
+
+@pytest.mark.parametrize("hold", ["outside author", "release", "protected class"])
+def test_1733_6bcd_a_merger_hold_for_the_owner_shows_owner_merge(hold):
+    """REQ-039: brief #1733 answers 1 and 6 (b), (c), (d): the conductor's ask names the command."""
+    state = route.pr_state(merge_facts(cleared_on(), merge_ask(hold)))
+    assert state == ("agk:owner-merge", "owner"), hold
+    other = merge_facts(cleared_on(), merge_ask(hold, number=8))  # another pull request's command
+    assert route.decide(other) == "agk:question"
+
+
+def test_1733_6a_a_protected_path_still_shows_owner_merge():
+    """REQ-039: brief #1733 answer 6 (a): the file test of ADR-0385 as today."""
+    files = [{"filename": "constitution/principles.md", "status": "modified"}]
+    assert route.decide(merge_facts(cleared_on(), files=files)) == "agk:owner-merge"
+
+
+def test_1733_6ef_no_owner_ask_or_a_hold_that_is_not_the_owners_never_owner_merge():
+    """REQ-039: brief #1733 answer 6 (e) and (f): no ask is a builder or merger state; another
+    `Owner needed:` (checks pending, behind, re-prove, lease) stays `agk:question`."""
+    assert route.decide(merge_facts(cleared_on())) == "agk:merge-ready"
+    for hold in ("checks pending", "behind the default branch", "re-prove", "LAPSE_HELD"):
+        plain = at(40, "boss", f"Owner needed: held as {hold}", "2026-11-22T09:32:09Z")
+        assert route.decide(merge_facts(cleared_on(), plain)) == "agk:question", hold
+
+
+def test_1733_6g_an_approval_ask_comes_before_the_merge_ask():
+    """REQ-039: brief #1733 answers 1 and 6 (g): `agk:approve`, then `agk:owner-merge` once the
+    approval is given; a later plain answer closes the merge ask (answer 5)."""
+    approval = at(41, "boss", "Owner needed: post `Approve: SPEC-0032`", "2026-11-22T09:33:00Z")
+    both = [cleared_on(), merge_ask("release"), approval]
+    assert route.decide(merge_facts(*both)) == "agk:approve"
+    given = at(42, "maintainer", "Approve: SPEC-0032", "2026-11-22T09:40:00Z")
+    assert route.decide(merge_facts(*both, given)) == "agk:owner-merge"
+    done = at(43, "maintainer", "Maintainer answer: merged by hand", "2026-11-22T09:50:00Z")
+    assert route.decide(merge_facts(*both, given, done)) == "agk:merge-ready"
+    alone = at(42, "maintainer", "Approve: SPEC-0032", "2026-11-22T09:40:00Z")
+    assert route.decide(merge_facts(cleared_on(), merge_ask("release"), alone)) == (
+        "agk:merge-ready"
+    )
+
+
+def test_1733_6h_a_push_or_a_newer_verdict_after_the_ask_closes_it():
+    """REQ-039: brief #1733 answers 1, 5 and 6 (h): a stale ask is read as absent."""
+    later = {"commit": {"committer": {"date": "2026-11-22T09:40:00Z"}}}
+    pushed = facts(number=7, comments=[cleared_on(), merge_ask("release")], commit=later)
+    assert route.decide(pushed) == "agk:merge-ready"
+    moved = merge_facts(cleared_on(), merge_ask("release"), head="b" * 40)
+    assert route.decide(moved) == "agk:review"
+    fix = at(44, "boss", f"Verdict: fix list {HEAD}\n\n1. one more test", "2026-11-22T09:45:00Z")
+    assert route.decide(merge_facts(cleared_on(), merge_ask("release"), fix)) == "agk:fix"
+
+
+def test_1733_6ij_a_draft_or_an_unlisted_author_reads_no_merge_ask():
+    """REQ-039: brief #1733 answer 6 (i) and (j)."""
+    draft = merge_facts(cleared_on(), merge_ask("release"), draft=True)
+    assert route.decide(draft) == "agk:build"
+    stranger = merge_facts(cleared_on(), merge_ask("release", login="stranger"))
+    assert route.decide(stranger) == "agk:merge-ready"
+
+
+def test_1733_6l_a_persons_own_park_wins():
+    """REQ-039: brief #1733 answer 6 (l)."""
+    held = merge_facts(cleared_on(), merge_ask("release"), labels=["agk:parked"])
+    assert route.decide(held) == "agk:parked"
+
+
+def pr_1719_comments(login: str = "boss") -> list[dict]:
+    """#1719's comments as of brief #1733, read 2026-11-22 10:40 UTC; logins invented."""
+    return [
+        at(
+            1,
+            login,
+            "Question: Q-1710-1 for the maintainers: raise the cap?",
+            D + "07:10:01Z",
+        ),
+        at(2, login, "Owner needed: two small choices\n\nQ-1710-1 first", D + "07:11:38Z"),
+        at(3, "builder", "Report: cb86038 ready for review", D + "07:12:54Z"),
+        at(4, login, "Parked-by: wait owner-needed\n\nWho: AGK", D + "07:42:11Z"),
+        at(5, "maintainer", "Maintainer answer: Q-1710-1 yes", D + "09:08:45Z"),
+        at(6, "bot", "Unparked-by: answer owner-needed\n\nWho: AGK", D + "09:08:58Z"),
+        at(7, "builder", f"Report: {HEAD} fix list applied", D + "09:16:28Z"),
+        at(
+            8,
+            login,
+            f"Verdict: fix list {HEAD}\n\nFinal: {ADR_FILE} Proposed -> Accepted",
+            D + "09:27:54Z",
+        ),
+        at(
+            9,
+            "builder",
+            f"Report: {HEAD} fix list applied: nothing to change",
+            D + "09:29:48Z",
+        ),
+        merge_ask("outside author", number=1719, login=login),
+        at(11, login, "Parked-by: wait owner-needed\n\nWho: AGK", D + "10:03:52Z"),
+        at(
+            12,
+            "builder",
+            f"Report: {HEAD[:7]} handing over: blocked: owner-needed waits",
+            D + "10:03:59Z",
+        ),
+    ]
+
+
+def test_1733_6m_pr_1719_shows_owner_merge():
+    """REQ-039: brief #1733 `Measured:` and answer 6 (m): before `agk:question`, after
+    `agk:owner-merge` (the park itself is the owner wait's, read in test_owner_wait.py)."""
+    files = [{"filename": ADR_FILE, "status": "added"}]
+    f = facts(number=1719, comments=pr_1719_comments(), commit=MERGE_PUSHED, files=files)
+    assert route.decide(f) == "agk:owner-merge"
+
+
+def test_1733_7_settings_do_not_change_the_reading():
+    """REQ-039: brief #1733 answer 7: `auto_merge` (the `merger` fact), local mode (`local`, the
+    checks never reported) and a queue-button-only ask (`merge_queue`, Q-1733-2), as the brief
+    says."""
+    for merger in (True, False):
+        f = merge_facts(cleared_on(), merge_ask("release"), merger=merger)
+        assert route.decide(f) == "agk:owner-merge", merger
+        assert route.decide(merge_facts(cleared_on(), merger=merger)) == "agk:merge-ready"
+    local = merge_facts(cleared_on(), merge_ask("release"), checks=[], local=True)
+    assert route.decide(local) == "agk:owner-merge"
+    button = at(40, "boss", "Owner needed: press the queue's merge button", "2026-11-22T09:32:09Z")
+    assert route.decide(merge_facts(cleared_on(), button)) == "agk:question"
+
+
+def test_1733_the_states_and_docstring_name_the_rule():
+    """REQ-039: brief #1733 answer 8 (the `owner-merge` line of `route.STATES`)."""
+    assert "only the owner may merge" in route.description_of("agk:owner-merge")
+    assert "ADR-0722" in (route.owner_ask.__doc__ or "")
