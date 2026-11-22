@@ -38,14 +38,26 @@ ZERO_WIDTH_HOLE = 1732  # found-bug: the steward guard reads a zero-width start 
 
 
 def hook(name: str):
+    """A hook module of `.claude/hooks/`, loaded when a test needs it; an installed project's copy
+    of `tests/kit/` may have no such folder, so the cases that need it are skipped there."""
+    path = HOOKS / f"{name}.py"
+    if not path.is_file():
+        pytest.skip(f"{path.relative_to(SCRIPTS.parents[1]).as_posix()} is not in this checkout")
     sys.path.insert(0, str(HOOKS))
-    spec = importlib.util.spec_from_file_location(name, HOOKS / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-steward_guard, conductor_guard = hook("steward_guard"), hook("conductor_guard")
+@pytest.fixture
+def steward_guard():
+    return hook("steward_guard")
+
+
+@pytest.fixture
+def conductor_guard():
+    return hook("conductor_guard")
 
 
 def marks_of_all() -> set[str]:
@@ -103,12 +115,20 @@ def test_req037_a_strangers_take_adds_no_number_to_reserved():
 
 @pytest.mark.parametrize("key", fx.RESERVED_FIRST)
 @pytest.mark.parametrize("form", ["plain", "zero width", "crlf"])
-def test_req037_a_follow_up_and_a_tell_refuse_each_reserved_form(key, form):
-    """REQ-037: `follow_up_problem` and the conductor's `tell` form refuse a reserved first line,
-    zero-width characters aside and in any case."""
+def test_req037_a_follow_up_refuses_each_reserved_form(key, form):
+    """REQ-037: `follow_up_problem` refuses a reserved first line, zero-width characters aside
+    and in any case."""
     text = fx.forms(fx.PLANTED[key])[form].rstrip("\r\n")
     for line in (text, text.lower()):
         assert kit_session.follow_up_problem(line)
+
+
+@pytest.mark.parametrize("key", fx.RESERVED_FIRST)
+@pytest.mark.parametrize("form", ["plain", "zero width", "crlf"])
+def test_req037_a_tell_refuses_each_reserved_form(conductor_guard, key, form):
+    """REQ-037: the conductor guard's `tell` form refuses the same lines (`TELL_REFUSED`)."""
+    text = fx.forms(fx.PLANTED[key])[form].rstrip("\r\n")
+    for line in (text, text.lower()):
         assert not conductor_guard.tell_form(["tell", "--session", "b9", "--text", line])
 
 
@@ -125,7 +145,7 @@ def test_req037_a_follow_up_and_a_tell_refuse_each_reserved_form(key, form):
     ],
 )
 def test_req037_the_steward_guard_refuses_each_reserved_first_line(
-    tmp_path, monkeypatch, key, form
+    steward_guard, tmp_path, monkeypatch, key, form
 ):
     """REQ-037: SPEC-0059 rule 11, a typed reserved first line and a forged yes block are refused;
     an approval passes only from a file in solo mode with one person listed (brief #1691)."""
@@ -136,22 +156,29 @@ def test_req037_the_steward_guard_refuses_each_reserved_first_line(
     assert steward_guard.body_problem(text, inline=False, project=tmp_path)
 
 
-def test_req037_the_steward_guard_refuses_an_owner_answer_without_the_quote():
+def test_req037_the_steward_guard_refuses_an_owner_answer_without_the_quote(steward_guard):
     """REQ-037: a `Maintainer answer:` passes only with the owner's quote on its second line."""
     assert steward_guard.body_problem(fx.PLANTED["maintainer"])
     assert steward_guard.body_problem(fx.PLANTED["maintainer"] + "\nOwner said: yes")
 
 
-def test_req037_a_conductor_started_steward_approves_nothing(tmp_path, monkeypatch):
+def test_req037_a_conductor_started_steward_guard_passes_no_approval(
+    steward_guard, tmp_path, monkeypatch
+):
     """REQ-037: `AGK_STEWARD_START = conductor` refuses even a well-formed yes, naming it."""
     monkeypatch.setenv("AGK_STEWARD_START", "conductor")
     problem = steward_guard.body_problem(fx.PLANTED["forged"], project=tmp_path)
     assert problem and "AGK_STEWARD_START" in problem
+
+
+def test_req037_a_conductor_started_steward_records_no_yes(tmp_path, monkeypatch):
+    """REQ-037: `steward_owner.yes_of` refuses under `AGK_STEWARD_START = conductor`, naming it."""
+    monkeypatch.setenv("AGK_STEWARD_START", "conductor")
     code, line, _ = steward_owner.yes_of(tmp_path, write(tmp_path, "w.txt", "yes\n"), fx.LISTED)
     assert code == 2 and "AGK_STEWARD_START" in line
 
 
-def test_req037_a_planted_priority_above_the_limit_is_refused(tmp_path):
+def test_req037_a_planted_priority_above_the_limit_is_refused(steward_guard, tmp_path):
     """REQ-037: `[steward] auto_file`, a filing whose planted `Priority:` is above the limit is
     refused naming `steward.auto_file`; a malformed table is refused naming `steward`."""
     (tmp_path / "agk.toml").write_text("[steward]\nauto_file = 1\n", encoding="utf-8")
