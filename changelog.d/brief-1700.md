@@ -1,0 +1,1 @@
+- The kit evidence test that proves a failed comment read is not echoed now checks for the fake error's own words (`HTTP 502`, `Bad Gateway`) and not the bare digits 502, so a random temporary commit id can no longer turn a pull request's full check red (brief #1700)

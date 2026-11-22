@@ -108,6 +108,35 @@ def attached(tmp_path: Path) -> tuple[Path, Path, Path, dict]:
     return clone, home, side, env
 
 
+def own_table(tmp_path: Path, source: Path = ROOT) -> Path:
+    """A copy of the kit's scripts whose `kit/hashes.json` row for the plugin version holds the
+    digests of the pinned files under `source`, this checkout by default (brief #1704): the
+    doctor's comparison is proved on any change to a pinned file between releases, not the release
+    table's freshness (session rule 14: a build never edits `kit/hashes.json`)."""
+    plugin = tmp_path / "plugin"
+    script = plugin / "scripts" / "agk" / "doctor.py"
+    if script.is_file():
+        return script
+    shutil.copytree(SCRIPTS, plugin / "scripts" / "agk",
+                    ignore=shutil.ignore_patterns("__pycache__"))  # fmt: skip
+    verbatim = {
+        rel: [hashlib.sha256((source / rel).read_bytes()).hexdigest()]
+        for rel in common.PERSONAL_PINNED
+    }
+    table = {"releases": {plugin_version(): {"verbatim": verbatim}}}
+    (plugin / "kit").mkdir()
+    (plugin / "kit" / "hashes.json").write_text(json.dumps(table), encoding="utf-8")
+    return script
+
+
+def doctor_of(tmp_path: Path, side: Path, env: dict, source: Path = ROOT):
+    """`doctor.py` on the sidecar, run from the copy of `own_table`."""
+    script = own_table(tmp_path, source)
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(script), str(side)], capture_output=True, text=True, env=env
+    )  # fmt: skip
+
+
 def scanner(tmp_path: Path) -> str:
     """A PATH with git and python and a stub gitleaks that finds nothing."""
     folder = tmp_path / "bin"
@@ -166,7 +195,7 @@ def test_rule26_attach_records_the_plugin_version_and_no_script(tmp_path):
 def test_rule26_doctor_on_a_fresh_sidecar_finds_the_pinned_files_unchanged(tmp_path):
     """REQ-048 AC1: rule 26 (the four pinned files match `kit/hashes.json` for the version)."""
     _, _, side, env = attached(tmp_path)
-    done = run("doctor.py", str(side), env=env)
+    done = doctor_of(tmp_path, side, env)
     assert done.returncode == 0, done.stdout + done.stderr
     lines = done.stdout.splitlines()
     assert lines[0] == "personal mode: forge files, level light, disclosure both"
@@ -178,13 +207,26 @@ def test_rule26_doctor_reports_a_pinned_file_changed_by_hand(tmp_path):
     _, _, side, env = attached(tmp_path)
     law = side / "constitution" / "principles.md"
     law.write_text(law.read_text(encoding="utf-8") + "13. A rule of my own.\n", encoding="utf-8")
-    done = run("doctor.py", str(side), env=env)
+    done = doctor_of(tmp_path, side, env)
     assert "pinned: constitution/principles.md differs from kit/hashes.json" in done.stdout
     assert "A rule of my own" not in done.stdout
     assert "config/core-rules.md differs" not in done.stdout
     (side / "config" / "core-rules.md").unlink()
-    done = run("doctor.py", str(side), env=env)
+    done = doctor_of(tmp_path, side, env)
     assert "pinned: config/core-rules.md is missing" in done.stdout
+
+
+def test_rule26_doctor_passes_a_pinned_file_changed_between_releases(tmp_path):
+    """REQ-048 AC1: rule 26 and brief #1704 (a pull request that changes a pinned file: the copy
+    matches the plugin's own table, and the released row still reports it)."""
+    _, _, side, env = attached(tmp_path)
+    rules = side / "config" / "session-rules.md"
+    rules.write_text(rules.read_text(encoding="utf-8") + "A word.\n", encoding="utf-8")
+    done = doctor_of(tmp_path, side, env, source=side)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert f"pinned: {len(common.PERSONAL_PINNED)} files match kit/hashes.json" in done.stdout
+    done = run("doctor.py", str(side), env=env)
+    assert "pinned: config/session-rules.md differs from kit/hashes.json" in done.stdout
 
 
 def test_rule26_doctor_says_when_it_cannot_check_the_pinned_files(tmp_path):

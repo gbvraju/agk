@@ -1,0 +1,1 @@
+- The personal-mode doctor tests now check the sidecar's pinned rule files against a table made from the checkout's own copies, so a pull request that changes a pinned rule file between releases no longer fails them; every assertion stays (brief #1704)

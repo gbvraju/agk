@@ -938,6 +938,12 @@ def final_record_project(repo, outside: Path, execution: str = "", fail: bool = 
     return tools
 
 
+def echoes_gh_error(text: str) -> bool:
+    """True when `text` holds the fake gh's own error words (not the bare digits, which a
+    temporary head id can hold)."""
+    return "HTTP 502" in text or "Bad Gateway" in text
+
+
 def gh_calls(outside: Path) -> list[list[str]]:
     log = outside / "gh-calls.jsonl"
     lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
@@ -976,6 +982,13 @@ def test_without_the_comments_the_same_head_differs(repo, outside):
     assert "governance FAIL" in proc.stdout and gh_calls(outside) == []
 
 
+def test_the_error_check_reads_the_fakes_words_not_the_digits():
+    """REQ-039: brief #1700 (a head id holding 502 is not the fake gh's error; its words are)."""
+    assert not echoes_gh_error("differs: head of 79e6735025b0\n")
+    assert echoes_gh_error("gh: HTTP 502: Bad Gateway\n")
+    assert echoes_gh_error("the Bad Gateway text\n")
+
+
 def test_comments_that_cannot_be_read_fail_closed_with_prepushs_line(repo, outside):
     """REQ-039: brief #1650 answer 2 (never a silent pass; the line names the option)."""
     from prepush import NO_RECORD_COMMENTS
@@ -987,7 +1000,7 @@ def test_comments_that_cannot_be_read_fail_closed_with_prepushs_line(repo, outsi
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert LINE.search(proc.stdout).group(1) == "differs"
     assert "governance FAIL" in proc.stdout and NO_RECORD_COMMENTS in proc.stdout
-    assert NO_COMMENTS in NO_RECORD_COMMENTS and "502" not in proc.stdout
+    assert NO_COMMENTS in NO_RECORD_COMMENTS and not echoes_gh_error(proc.stdout)
     assert left_over(outside) == []
 
 
