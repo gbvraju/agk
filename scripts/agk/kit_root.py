@@ -41,7 +41,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 HERE = Path(__file__).resolve().parent
 INSTALLED_FORM = "scripts/agk"
-PLUGIN_FORM = '"${CLAUDE_PLUGIN_ROOT}/scripts/agk"'
+PLUGIN_ROOT = "${CLAUDE_PLUGIN_ROOT}"  # the plugin root as a command names it (brief #1696)
+PLUGIN_FORM = f'"{PLUGIN_ROOT}/scripts/agk"'
 MAKE_GATE = ["make", "-f", "agk.mk", "agk-governance"]
 LAYOUTS = ("installed", "plugin")
 USAGE = "usage: kit_root.py [--form | governance]"
