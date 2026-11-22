@@ -504,15 +504,13 @@ def open_brief(number: int, title: str, body: str) -> dict:
 
 
 @pytest.mark.parametrize("same", ["title", "body"])
-def test_req066_a_second_filing_of_an_open_briefs_title_or_body_is_refused(
-    root, same, monkeypatch
-):
+def test_req066_a_second_filing_of_an_open_briefs_title_or_body_is_refused(root, same, monkeypatch):
     """REQ-066: brief #1753 answer 3, one GET listing of the open briefs, and nothing recorded."""
     base, records, gh, _ = root
     asked: list = []
     title = "  a PERSON   signs in " if same == "title" else "Another title"
     body = (
-        BODY.replace("\nWho:", f'\nOwner said (2026-11-22T07:00Z): "Yes, go ahead."\nWho:')
+        BODY.replace("\nWho:", '\nOwner said (2026-11-22T07:00Z): "Yes, go ahead."\nWho:')
         if same == "body"
         else "Sentence: other.\n"
     )
@@ -526,7 +524,8 @@ def test_req066_a_second_filing_of_an_open_briefs_title_or_body_is_refused(
         "refused: #4 is an open brief with this title or body; nothing filed (setting: --title)"
     ]
     assert asked == [f"repos/{REPO}/issues?labels=agk-brief&state=open"]
-    code, lines = named(base, None, None, BODY.replace("Priority: 1", "Priority: 0"))
+    toml(base, SOLO + "[steward]\nauto_file = 1\n")
+    code, lines = named(base, None, None)
     assert code == 2 and gh.created == [], "the auto_file path is held the same way"
 
 
@@ -564,5 +563,8 @@ def test_req066_the_cli_passes_name_through(root, monkeypatch):
         steward_owner, "file_brief", lambda *a, name=None: seen.update(name=name) or (0, [])
     )
     draft = write(base, "draft.md", BODY)
-    assert steward_owner.main(["file-brief", "--file", str(draft), "--title", "T", "--name", NAME]) == 0
+    assert (
+        steward_owner.main(["file-brief", "--file", str(draft), "--title", "T", "--name", NAME])
+        == 0
+    )
     assert seen == {"name": NAME}

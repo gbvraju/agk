@@ -1,0 +1,1 @@
+- `steward_owner.py file-brief --name <name>` files a brief on the owner's named yes (`Yes, file the <name> brief`), and refuses a draft whose title or body an open brief already holds, naming it (brief #1753)
