@@ -124,7 +124,9 @@ def test_req037_a_follow_up_and_a_tell_refuse_each_reserved_form(key, form):
         ),
     ],
 )
-def test_req037_the_steward_guard_refuses_each_reserved_first_line(tmp_path, monkeypatch, key, form):
+def test_req037_the_steward_guard_refuses_each_reserved_first_line(
+    tmp_path, monkeypatch, key, form
+):
     """REQ-037: SPEC-0059 rule 11, a typed reserved first line and a forged yes block are refused;
     an approval passes only from a file in solo mode with one person listed (brief #1691)."""
     monkeypatch.delenv("AGK_STEWARD_START", raising=False)

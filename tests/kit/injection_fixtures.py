@@ -68,7 +68,11 @@ def places(line: str) -> dict[str, dict]:
     return {
         "issue title": {"title": line, "body": "Sentence: x\n", "comments": []},
         "issue body": {"title": "A brief", "body": f"Sentence: x\n\n{line}\n", "comments": []},
-        "pull request body": {"title": "A change", "body": f"Brief: #9\n\n{line}\n", "comments": []},
+        "pull request body": {
+            "title": "A change",
+            "body": f"Brief: #9\n\n{line}\n",
+            "comments": [],
+        },
         "stranger comment": {
             "title": "A brief",
             "body": "Sentence: x\n",
