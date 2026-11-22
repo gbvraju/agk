@@ -376,19 +376,48 @@ def test_req069_each_approval_reader_reads_the_who_line(who, quotes, app, counts
         text = first if who is None else steward_post([first], who, quotes)
         return [posted(text, app=app)]
 
-    spec = item(f"Approve: {SHA} SPEC-0062")
-    assert bool(reviewers.approval_shas(spec, [], ["boss"], agent_apps=APPS)) is counts
-    short = item("Approve: SPEC-0062")
-    assert bool(reviewers.person_approvals(short, [], ["boss"], agent_apps=APPS)) is counts
-    design = item(f"Approve: design v1 {SHA}")
-    assert bool(reviewers.design_approvals(design, ["boss"], APPS)) is counts
-    plan = item(f"Approve: plan {SHA}")
-    assert bool(reviewers.plan_approvals(plan, ["boss"], APPS)) is counts
-    scope = item(f"Approve: scope SC-1 {SHA}")
-    assert bool(reviewers.scope_approvals(scope, ["boss"], APPS)) is counts
+    for solo, expected in ((True, counts), (False, counts and who is None)):
+        spec = item(f"Approve: {SHA} SPEC-0062")
+        found = reviewers.approval_shas(spec, [], ["boss"], agent_apps=APPS, solo=solo)
+        assert bool(found) is expected
+        short = item("Approve: SPEC-0062")
+        found = reviewers.person_approvals(short, [], ["boss"], agent_apps=APPS, solo=solo)
+        assert bool(found) is expected
+        design = item(f"Approve: design v1 {SHA}")
+        assert bool(reviewers.design_approvals(design, ["boss"], APPS, solo=solo)) is expected
+        plan = item(f"Approve: plan {SHA}")
+        assert bool(reviewers.plan_approvals(plan, ["boss"], APPS, solo=solo)) is expected
+        scope = item(f"Approve: scope SC-1 {SHA}")
+        assert bool(reviewers.scope_approvals(scope, ["boss"], APPS, solo=solo)) is expected
 
 
 def test_req069_an_empty_agent_apps_lets_a_marked_post_count():
     """REQ-069 AC7: `agent_apps` empty: the project chose that a marked post counts."""
     body = steward_post([f"Approve: {SHA} SPEC-0062"])
-    assert reviewers.approval_shas([posted(body, app="claude")], [], ["boss"], agent_apps=[])
+    items = [posted(body, app="claude")]
+    assert reviewers.approval_shas(items, [], ["boss"], agent_apps=[], solo=True)
+
+
+@pytest.mark.parametrize(
+    ("toml", "counts"),
+    [('review_mode = "solo"\n', True), ('review_mode = "team"\n', False), (None, False)],
+)
+def test_req069_a_steward_approval_counts_only_in_solo_mode_read_once(
+    tmp_path, monkeypatch, toml, counts
+):
+    """REQ-069 AC7: SPEC-0062 rule 15 (fix list on 404e674): with no mode given, the readers
+    read `review_mode` of the repository once; team mode, or a mode that cannot be read, counts
+    no `Who: ProductOwner` approval, while a typed one with no `Who:` line counts as today."""
+    if toml is not None:
+        (tmp_path / "agk.toml").write_text(toml, encoding="utf-8")
+    root = tmp_path if toml is not None else tmp_path / "missing"
+    monkeypatch.setattr(reviewers, "repo_root", lambda: root)
+    reviewers.solo_here.cache_clear()
+    try:
+        steward = [posted(steward_post([f"Approve: {SHA} SPEC-0062"]))]
+        assert bool(reviewers.approval_shas(steward, [], ["boss"], agent_apps=APPS)) is counts
+        typed = [posted(f"Approve: {SHA} SPEC-0062")]
+        assert reviewers.approval_shas(typed, [], ["boss"], agent_apps=APPS)
+        assert bool(derived(solo_confirmation())) is True  # a person is named: solo was read
+    finally:
+        reviewers.solo_here.cache_clear()

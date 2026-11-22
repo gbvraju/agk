@@ -30,8 +30,9 @@ sentence. Build (a) (brief #1690, ADR-0703) writes the `Approve:` and `Confirmed
    and `Merge:` as a first line stay denied in every mode. The conductor's guard is unchanged.
 4. **The readers.** `reviewers.py` reads each comment as posted without the runtime's footer and its last `Who:`
    line (`common.without_who`), with CRLF read as LF. A comment with no `Who:` line counts as today. One with a `Who:`
-   line counts only when it is `Who: ProductOwner` and holds both quote lines; any other `Who:` line, `Who: AGK…`
-   among them, approves nothing. The quote lines are not part of a confirmation's verdict. `via_agent` is unchanged.
+   line counts only when it is `Who: ProductOwner`, holds both quote lines and the mode is solo (SPEC-0062 rule 15:
+   the caller's `solo=`, else `review_mode` of the repository read once, failing closed); any other `Who:` line,
+   `Who: AGK…` among them, approves nothing. The quote lines are not part of a confirmation's verdict. `via_agent` is unchanged.
    This changes ADR-0546 decision 4 for approvals only, as SPEC-0062 rule 13 says.
 5. **The rules.** Session rule 29 gains the sentence of ADR-0661 decision 6 with `approve` for `confirm`; its summary
    in `config/core-rules.md` and `CLAUDE.md` item 2 gain "(the solo steward's recorded yes aside, session rule 29)"

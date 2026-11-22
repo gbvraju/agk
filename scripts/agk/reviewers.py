@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 import sys
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -254,11 +255,22 @@ def via_agent(item: dict, agent_apps: tuple[str, ...] | list[str]) -> bool:
     return isinstance(slug, str) and slug.lower() in {a.lower() for a in agent_apps}
 
 
-def as_posted(item):
+@lru_cache(maxsize=1)
+def solo_here() -> bool:
+    """True when the repository of the working directory has `review_mode = "solo"`, read once;
+    False in team mode or when it cannot be read (fails closed; SPEC-0062 rule 15)."""
+    try:
+        return review_mode(repo_root()) == "solo"
+    except Exception:  # noqa: BLE001 - an unreadable mode counts no steward approval
+        return False
+
+
+def as_posted(item, solo: bool | None = None):
     """ITEM read as posted, for the approval readers (brief #1691, ADR-0704): CRLF read as LF and
     the runtime's footer and the last `Who:` line dropped (`common.without_who`). None when it
-    approves nothing: a `Who:` line other than `Who: ProductOwner` (any `Who: AGK…`), or that
-    line without both an `Owner said` and an `Asked` line. A comment with no `Who:` line, the
+    approves nothing: a `Who:` line other than `Who: ProductOwner` (any `Who: AGK…`), that line
+    without both an `Owner said` and an `Asked` line, or that line outside solo mode (SPEC-0062
+    rule 15: SOLO as the caller read it, else `solo_here`). A comment with no `Who:` line, the
     person's own typed one, is read as today; anything that is not a dict is passed through."""
     if not isinstance(item, dict):
         return item
@@ -274,12 +286,14 @@ def as_posted(item):
         return None
     if not any(ASKED_QUOTE.fullmatch(x) for x in rest):
         return None
+    if not (solo_here() if solo is None else solo):
+        return None
     return {**item, "body": body}
 
 
-def as_posted_all(items: list[dict]) -> list[dict]:
+def as_posted_all(items: list[dict], solo: bool | None = None) -> list[dict]:
     """ITEMS read by `as_posted`, without those that approve nothing."""
-    return [x for x in (as_posted(item) for item in items) if x is not None]
+    return [x for x in (as_posted(item, solo) for item in items) if x is not None]
 
 
 def first_line(item: dict) -> str:
@@ -337,6 +351,7 @@ def approval_shas(
     runs: list[dict] | None = None,
     flipped: tuple[str, ...] | set[str] = (),
     agent_apps: tuple[str, ...] | list[str] = (),
+    solo: bool | None = None,
 ) -> dict[str, list[str]]:
     """spec -> the shas of the texts that a listed approver approved (SPEC-0032 rule 5).
 
@@ -359,7 +374,7 @@ def approval_shas(
             found.setdefault(spec, []).append(sha)
 
     for kind, items in (("comment", comments), ("review", reviews)):
-        for item in as_posted_all(items):
+        for item in as_posted_all(items, solo):
             if login_of(item) not in allowed:
                 continue
             if agent_apps and (kind == "review" or via_agent(item, agent_apps)):
@@ -388,11 +403,12 @@ def person_approvals(
     approvers: list[str],
     flipped: tuple[str, ...] | set[str] = (),
     agent_apps: tuple[str, ...] | list[str] = (),
+    solo: bool | None = None,
 ) -> set[str]:
     """The specs a listed approver approved in a comment or a review (SPEC-0032 rule 5)."""
     allowed = {a.lstrip("@").lower() for a in approvers}
-    found = set(approval_shas(comments, reviews, approvers, [], flipped, agent_apps))
-    for item in as_posted_all(comments):  # a short line is pinned later, by check_specs' runs
+    found = set(approval_shas(comments, reviews, approvers, [], flipped, agent_apps, solo))
+    for item in as_posted_all(comments, solo):  # a short line is pinned later, by check_specs' runs
         named = APPROVE_SHORT.fullmatch(first_line(item))
         if named and login_of(item) in allowed and not via_agent(item, agent_apps):
             found.add(named.group(1))
@@ -435,7 +451,7 @@ def confirmed_comments(
             continue
         if login_of(item) != person.lstrip("@").lower():
             continue
-        posted = as_posted(item)  # brief #1691: the steward's post, its quotes not counted
+        posted = as_posted(item, True)  # brief #1691: a person is named only in solo mode
         if posted is None:
             continue
         lines = [
@@ -552,7 +568,10 @@ def status_moved_only(old: str, new: str) -> bool:
 
 
 def design_approvals(
-    items: list[dict], approvers: list[str], agent_apps: tuple[str, ...] | list[str] = ()
+    items: list[dict],
+    approvers: list[str],
+    agent_apps: tuple[str, ...] | list[str] = (),
+    solo: bool | None = None,
 ) -> set[tuple[str, str, str]]:
     """The (`inventory`, `-`, head) and (`design`, version, head) a listed approver gave by the
     first line `Approve: inventory <full head ID>` or `Approve: design v<n>|i<n> <full head ID>`,
@@ -560,7 +579,7 @@ def design_approvals(
     `confirmed_comments` output so a solo confirmation counts too."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found: set[tuple[str, str, str]] = set()
-    for item in as_posted_all(items):
+    for item in as_posted_all(items, solo):
         if login_of(item) not in allowed or via_agent(item, agent_apps):
             continue
         line = first_line(item)
@@ -572,7 +591,10 @@ def design_approvals(
 
 
 def plan_approvals(
-    items: list[dict], approvers: list[str], agent_apps: tuple[str, ...] | list[str] = ()
+    items: list[dict],
+    approvers: list[str],
+    agent_apps: tuple[str, ...] | list[str] = (),
+    solo: bool | None = None,
 ) -> set[str]:
     """The full head IDs of a plan's pull request that a listed approver confirmed by the first
     line `Approve: plan <full head ID>`, never through an app of `agent_apps` (SPEC-0043 rule 8,
@@ -581,14 +603,17 @@ def plan_approvals(
     allowed = {a.lstrip("@").lower() for a in approvers}
     return {
         named[1]
-        for item in as_posted_all(items)
+        for item in as_posted_all(items, solo)
         if login_of(item) in allowed and not via_agent(item, agent_apps)
         if (named := APPROVE_PLAN.fullmatch(first_line(item)))
     }
 
 
 def scope_approvals(
-    items: list[dict], approvers: list[str], agent_apps: tuple[str, ...] | list[str] = ()
+    items: list[dict],
+    approvers: list[str],
+    agent_apps: tuple[str, ...] | list[str] = (),
+    solo: bool | None = None,
 ) -> set[tuple[str, str]]:
     """The (`SC-<n>`, full head ID) pairs a listed approver approved by the first line `Approve:
     scope SC-<n> <full head ID>`, never through an app of `agent_apps` (SPEC-0043 rule 22,
@@ -597,7 +622,7 @@ def scope_approvals(
     allowed = {a.lstrip("@").lower() for a in approvers}
     return {
         (named[1], named[2])
-        for item in as_posted_all(items)
+        for item in as_posted_all(items, solo)
         if login_of(item) in allowed and not via_agent(item, agent_apps)
         if (named := APPROVE_SCOPE.fullmatch(first_line(item)))
     }
