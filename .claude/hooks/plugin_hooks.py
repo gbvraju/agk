@@ -33,7 +33,8 @@ import tomllib
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent
-AGENT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Bash", "PowerShell"}  # the agents' matcher
+# the agents' matcher; PowerShell reaches the role's guard, which refuses it (brief #1763)
+AGENT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Bash", "PowerShell"}
 ROLE_GUARDS = {
     "architect": ("architect_guard.py",),
     "architect-review": ("architect_guard.py", "--review"),

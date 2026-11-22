@@ -347,7 +347,9 @@ def powershell_refused(line: str | None) -> bool:
 
 
 @pytest.mark.parametrize("layout", ["clean", "installed"])
-def test_ac1_a_guarded_role_is_refused_the_powershell_tool_in_both_layouts(tmp_path, plugin, layout):
+def test_ac1_a_guarded_role_is_refused_the_powershell_tool_in_both_layouts(
+    tmp_path, plugin, layout
+):
     """REQ-078 AC1: each of the five roles' PowerShell calls reaches its guard and is refused,
     naming the tool and never the command; the main session keeps its PowerShell tool."""
     root = project(tmp_path, layout, plugin)
@@ -370,10 +372,12 @@ def test_ac1_a_guarded_role_is_refused_the_powershell_tool_in_both_layouts(tmp_p
     ],
 )
 def test_ac1_each_installed_role_guard_refuses_the_powershell_tool(tmp_path, plugin, guard, args):
-    """REQ-078 AC1: in the installed layout the role file's own hook runs the guard, which denies."""
+    """REQ-078 AC1: installed, the role file's own hook runs its guard, which refuses it."""
     root = project(tmp_path, "installed", plugin)
     for tool in ("PowerShell", "POWERSHELL"):
-        line = reason(hook(root / ".claude/hooks" / guard, root, pre(root, tool, command=PWSH), *args))
+        line = reason(
+            hook(root / ".claude/hooks" / guard, root, pre(root, tool, command=PWSH), *args)
+        )
         assert powershell_refused(line), (guard, args, tool, line)
         assert line.split(":", 1)[0] in ("steward guard", "conductor guard", "architect guard")
 
@@ -383,6 +387,9 @@ def test_ac1_each_guarded_role_file_matches_the_powershell_tool():
     for name in ("steward", "conductor", "shadow", "architect", "architect-review"):
         front = (ROOT / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
         front = front.split("\n---", 1)[0]
-        matchers = [ln.split(":", 1)[1].strip().strip('"') for ln in front.splitlines()
-                    if ln.strip().startswith("- matcher:")]
+        matchers = [
+            ln.split(":", 1)[1].strip().strip('"')
+            for ln in front.splitlines()
+            if ln.strip().startswith("- matcher:")
+        ]
         assert matchers and all("PowerShell" in m.split("|") for m in matchers), name
