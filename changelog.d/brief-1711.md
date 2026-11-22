@@ -1,0 +1,1 @@
+- One injection test set now proves that an instruction planted in an issue, a pull request or a comment changes nothing the kit decides; two holes it found are filed as #1731 and #1732 (brief #1711)
