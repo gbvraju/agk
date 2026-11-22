@@ -33,7 +33,6 @@ import steward_owner  # noqa: E402
 
 HOOKS = SCRIPTS.parents[1] / ".claude" / "hooks"
 ALL = "\n\n".join(text for key in fx.PLANTED for text in fx.forms(fx.PLANTED[key]).values())
-ZERO_WIDTH_HOLE = 1732  # found-bug: the steward guard reads a zero-width start as text
 
 
 def hook(name: str):
@@ -142,17 +141,7 @@ def test_req037_a_tell_refuses_each_reserved_form(conductor_guard, key, form):
 
 
 @pytest.mark.parametrize("key", [*fx.RESERVED_FIRST, "forged"])
-@pytest.mark.parametrize(
-    "form",
-    [
-        "plain",
-        "crlf",
-        pytest.param(
-            "zero width",
-            marks=pytest.mark.xfail(reason=f"found-bug #{ZERO_WIDTH_HOLE}", strict=True),
-        ),
-    ],
-)
+@pytest.mark.parametrize("form", ["plain", "zero width", "crlf"])
 def test_req037_the_steward_guard_refuses_each_reserved_first_line(
     steward_guard, tmp_path, monkeypatch, key, form
 ):
@@ -163,6 +152,27 @@ def test_req037_the_steward_guard_refuses_each_reserved_first_line(
     text = fx.forms(fx.PLANTED[key])[form]
     assert steward_guard.body_problem(text, inline=True, project=tmp_path)
     assert steward_guard.body_problem(text, inline=False, project=tmp_path)
+
+
+@pytest.mark.parametrize("mark", ["\u200b", "\u200d", "\u2060", "\ufeff"])
+@pytest.mark.parametrize("key", fx.RESERVED_FIRST)
+def test_req037_the_steward_guard_reads_zero_width_characters_as_nothing(
+    steward_guard, tmp_path, monkeypatch, key, mark
+):
+    """REQ-037: brief #1732 (ADR-0727), a zero-width character before, inside or after the reserved
+    word of the first line is read as nothing, as `session.ZERO_WIDTH` reads it, so the line is
+    refused as without it."""
+    monkeypatch.delenv("AGK_STEWARD_START", raising=False)
+    (tmp_path / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
+    line = fx.PLANTED[key]
+    for text in (mark + line, " " + mark + line, line[:2] + mark + line[2:], mark * 3 + line):
+        assert steward_guard.body_problem(text, inline=True, project=tmp_path)
+        assert steward_guard.body_problem(text, inline=False, project=tmp_path)
+
+
+def test_req037_the_steward_guard_passes_a_plain_line_with_a_zero_width_character(steward_guard):
+    """REQ-037: brief #1732, a first line that is not reserved still passes with one."""
+    assert steward_guard.body_problem("\u200bProgress: notes for the owner") is None
 
 
 def test_req037_the_steward_guard_refuses_an_owner_answer_without_the_quote(steward_guard):

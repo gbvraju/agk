@@ -10,7 +10,8 @@ a denial prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissi
 "permissionDecisionReason": ...}} and exits 0; an allow prints nothing.
 
 Denies: a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:`,
-`Correction:` or `Merge:`, except, in solo mode with one person listed, an `Approve:` or
+`Correction:` or `Merge:`, zero-width characters read as nothing (brief #1732, ADR-0727),
+except, in solo mode with one person listed, an `Approve:` or
 `Confirmed:` body read from a file that closes with the `Owner said`, `Asked` and `Who:
 ProductOwner` lines of `steward_owner.py approve` (SPEC-0062 rule 13, brief #1691, ADR-0704; never
 with `AGK_STEWARD_START=conductor`); a `Maintainer answer:` whose second line is not `Owner said
@@ -42,6 +43,8 @@ from pathlib import Path
 
 RULE = "SPEC-0059 rule 11"
 RESERVED = ("Approve:", "Confirmed:", "Verdict:", "Final:", "Correction:", "Merge:")
+# Brief #1732 (ADR-0727): read as nothing before the first-line checks, as `session.ZERO_WIDTH`.
+ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")
 APPROVALS = ("Approve:", "Confirmed:")  # brief #1691: the solo steward's post on a recorded yes
 ASKED = re.compile(r'Asked \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z\): ".+"(?: \S+)?')
 OWNER_WHO = "Who: ProductOwner"
@@ -221,9 +224,10 @@ def body_problem(text: str | None, inline: bool = False, project: Path | None = 
     """A typed body may hold no substitution (`$(` or a backtick): the shell would run it."""
     if text is None or (inline and ("$(" in text or "`" in text)):
         return reason("a body it cannot read", "comment body")
-    lines = text.lstrip().splitlines() or [""]
+    text = ZERO_WIDTH.sub("", text).lstrip()  # brief #1732: a zero-width start reads as the line
+    lines = text.splitlines() or [""]
     if lines[0].startswith(APPROVALS):
-        return approval_problem(text.lstrip(), inline, project)
+        return approval_problem(text, inline, project)
     if lines[0].startswith(RESERVED):
         return reason("a reserved first line", "comment first line")
     if lines[0].startswith("Maintainer answer:"):
