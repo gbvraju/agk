@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -79,3 +80,37 @@ def repo(tmp_path: Path) -> Repo:
     r.git("config", "user.name", "t")
     r.git("config", "commit.gpgsign", "false")
     return r
+
+
+# The clock a test sees (brief #1680). The session tests run session.py as a child process, so
+# the clock is pinned through a sitecustomize on its PYTHONPATH that reads AGK_TEST_NOW; the
+# script itself is unchanged. A test that crosses midnight UTC then agrees with the code under test.
+_PIN = (
+    "import datetime as _d, os\n"
+    "_t = os.environ.get('AGK_TEST_NOW')\n"
+    "if _t:\n"
+    "    _at = _d.datetime.fromisoformat(_t)\n"
+    "    class _Pinned(_d.datetime):\n"
+    "        @classmethod\n"
+    "        def now(cls, tz=None):\n"
+    "            return _at.astimezone(tz) if tz else _at.replace(tzinfo=None)\n"
+    "    _d.datetime = _Pinned\n"
+)
+
+
+class Clock:
+    def set(self, instant: datetime) -> None:
+        os.environ["AGK_TEST_NOW"] = instant.astimezone(UTC).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def clock(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Clock:
+    pin = tmp_path_factory.mktemp("pin")
+    (pin / "sitecustomize.py").write_text(_PIN, encoding="utf-8")
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join(filter(None, [str(pin), os.environ.get("PYTHONPATH")]))
+    )
+    monkeypatch.setenv("AGK_TEST_NOW", "")
+    pinned = Clock()
+    pinned.set(datetime.now(UTC))
+    return pinned
