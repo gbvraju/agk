@@ -30,7 +30,8 @@ and draft briefs the runs wrote were not memory kinds, so the next start named 5
    beat's one PATCH, which is not printed as a change.
 3. `steward.py record` and `steward.py end` refuse (exit 2, no call) naming `steward.py start` when this clone's cache
    holds no start of a run that has not ended. The scripts that call `record` as a function (`steward_owner.py`,
-   `steward_voice.py`) are unchanged.
+   `steward_voice.py`) are unchanged. The agent file says a chat runs `start` again at each resume and ends with
+   `end`, within its word budget (`config/rule-budget.txt` unchanged).
 4. `KINDS` gains `Note`, `Owner list`, `Morning list for the owner`, `Draft brief` and `Filed`, and the first-word
    pattern reads those multi-word kinds. The start's summary prints the newest owner list's and morning list's first
    line, every line of the newest `Note:`, and every line of each `Draft brief:` that no later `Filed:` names, from the
