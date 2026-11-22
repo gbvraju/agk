@@ -49,3 +49,7 @@ a cleared head that changes a path of `OWNER_PATHS`, and the owner wait parked e
 The owner sees `agk:owner-merge` on every change that waits only on their merge, and it is never parked. A builder
 whose pull request waits on that merge hands over at once and frees its slot. The label still closes at the merge,
 at a push after the ask, at a newer verdict that does not clear the head, or at the owner's answer.
+
+## Residual
+
+- 2026-11-22: a queue-button-only ask (`merge_queue = true`) stays `agk:question`, and `[flow] auto_merge = false` leaves a cleared head `agk:merge-ready` (brief #1733 Q-2 and Q-3: later briefs).
