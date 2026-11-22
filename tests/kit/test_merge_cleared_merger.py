@@ -25,6 +25,7 @@ import pytest
 from test_merge_cleared_verdict import (
     HEAD,
     MERGE12,
+    OWNER,
     OLD,
     ON,
     REPO,
@@ -33,6 +34,8 @@ from test_merge_cleared_verdict import (
     cleared,
     comment,
     fake_gh,
+    merge_cleared_run,
+    one_line,
     repo,
     run,
     toml,
@@ -529,3 +532,86 @@ def test_a_malformed_execution_does_nothing_naming_the_setting(tmp_path, value):
     )  # fmt: skip
     assert proc.stdout == "" and "setting: execution" in proc.stderr
     assert "Local" not in proc.stderr and made == []
+
+
+# --- brief #1729: an unreadable permission falls back to the pull request's own association -----
+
+REFUSED = {"permission": {"http": 403}}  # a cloud session's proxy refuses the permission path
+
+
+def association(value: str | None, **change: object) -> dict:
+    """The saved pull request with author_association VALUE (None: the key is absent)."""
+    pull = {**world()["pull"], **change}
+    if value is not None:
+        pull["author_association"] = value
+    return pull
+
+
+@pytest.mark.parametrize("local", [True, False], ids=["local", "hosted"])
+def test_an_owners_pull_request_merges_when_the_permission_cannot_be_read(tmp_path, local):
+    """REQ-046: brief #1729 answers 1 and 3 `execution` (OWNER is inside when the permission read
+    returns nothing, in local and hosted mode alike; Q-1729-1)."""
+    proc, made = merge_cleared_run(
+        tmp_path, toml(ON, local=local), [cleared()], pull=association("OWNER"), **REFUSED
+    )
+    assert one_line(proc).endswith(f": merged {MERGE12}"), proc.stdout + proc.stderr
+    assert len([a for a in made if any("/collaborators/" in x for x in a)]) == 1
+
+
+@pytest.mark.parametrize(
+    "value", ["MEMBER", "COLLABORATOR", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER",
+              "NONE", "owner", None],
+)  # fmt: skip
+def test_any_other_association_stays_outside_when_the_permission_cannot_be_read(tmp_path, value):
+    """REQ-046: brief #1729 answers 1 and 4 (only OWNER, Q-1729-1; missing is outside)."""
+    proc, _ = merge_cleared_run(
+        tmp_path, toml(ON), [cleared()], pull=association(value), **REFUSED
+    )
+    line = one_line(proc)
+    assert ": held: outside author (rule 5)" in line and proc.returncode == 3
+
+
+@pytest.mark.parametrize("level", ["read", "triage", "none"])
+def test_a_readable_permission_below_write_is_outside_whatever_the_association(tmp_path, level):
+    """REQ-046: brief #1729 answer 4 (the permission decides when it answers, as today)."""
+    proc, _ = merge_cleared_run(
+        tmp_path, toml(ON), [cleared()], pull=association("OWNER"),
+        permission={"permission": level},
+    )  # fmt: skip
+    assert ": held: outside author (rule 5)" in one_line(proc) and proc.returncode == 3
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"head": {"sha": HEAD, "repo": {"full_name": "someone-else/example-repo"}}},
+     {"head": {"sha": HEAD, "repo": None}}, {"user": None}],
+    ids=["fork", "deleted-fork", "no-author"],
+)  # fmt: skip
+def test_a_fork_or_a_missing_author_with_owner_is_still_outside(tmp_path, change):
+    """REQ-046: brief #1729 answers 1 and 4 (a fork with OWNER is outside; no new call)."""
+    proc, made = merge_cleared_run(
+        tmp_path, toml(ON), [cleared()], pull=association("OWNER", **change), **REFUSED
+    )
+    assert ": held: outside author (rule 5)" in one_line(proc) and proc.returncode == 3
+    assert not [a for a in made if any("/collaborators/" in x for x in a)]
+
+
+def test_with_auto_merge_off_nothing_is_read_or_merged(tmp_path):
+    """REQ-046: brief #1729 answer 3 `[flow] auto_merge` (the hold is read only when merging)."""
+    off = 'auto_merge = false\nauto_merge_method = "squash"\n'
+    proc, made = merge_cleared_run(
+        tmp_path, toml(off), [cleared()], pull=association("OWNER"), **REFUSED
+    )
+    assert ": refused: " in one_line(proc) and "auto_merge" in one_line(proc)
+    assert not [a for a in made if any("/collaborators/" in x for x in a)]
+
+
+@pytest.mark.parametrize("accounts", [None, 'conductor_accounts: ["@conductor-two"]'])
+def test_conductor_accounts_set_or_unset_leave_the_fallback_alone(tmp_path, accounts):
+    """REQ-046: brief #1729 answer 3 `conductor_accounts` (not read by the fallback)."""
+    listed = f'version: 1\nverdict_authors: ["@{OWNER}"]\n' + (accounts + "\n" if accounts else "")
+    proc, _ = merge_cleared_run(
+        tmp_path, toml(ON), [cleared()], pull=association("OWNER"), reviewers_yaml=listed,
+        **REFUSED,
+    )  # fmt: skip
+    assert one_line(proc).endswith(f": merged {MERGE12}"), proc.stdout + proc.stderr
