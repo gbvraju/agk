@@ -14,8 +14,9 @@ list (Q-S0059-9: no scheduler; the days missed are listed): each steward `Answer
 id and evidence, each pass's calls and tokens from its `Ended:` marker, each brief filed without an
 `Owner said` line with its priority, the owner questions asked and answered, the override share and
 any warning. It reads the repository's comments once with `since=` (seven days before the first day
-listed) and the issues once; a figure it cannot read is `unknown`, never 0. Each new override (an
-owner's `Maintainer answer:` that changes a steward answer, or a `Correction:` naming its Q id) is
+listed) and the issues once; a figure it cannot read is `unknown`, never 0. Each new override (the
+owner's `Maintainer answer:` that changes a steward answer, or the owner's `Correction:` naming its
+Q id: no `Who:` line or `Who: ProductOwner`, never a role's; one per answer, brief #1716) is
 posted first as one `Override: Q-<id> class <class>: ...` entry. Two overrides of one class within
 seven days are a warning, lifted by a later `Decision:` that names `class <class>`. In personal mode
 the list is printed and kept in the sidecar's memory file, and nothing is posted. `bundle` prints
@@ -34,7 +35,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import OUTSIDE_PROJECT, CheckError, personal_table, repo_root, utf8_output  # noqa: E402
+from common import (  # noqa: E402
+    OUTSIDE_PROJECT,
+    WHO_FOOTER,
+    WHO_LINE,
+    CheckError,
+    personal_table,
+    repo_root,
+    utf8_output,
+)
 
 WHO = "Who: AGK steward"
 MAX_DAYS = 14
@@ -48,6 +57,7 @@ ENDED = re.compile(r"^Ended: steward (\S+)(?: calls (.+?); tokens (.+))?$")
 OVERRIDE = re.compile(r"^Override: (Q-[\w-]+) class (\S+):")
 PRIORITY = re.compile(r"^Priority: ([0-3])\s*$", re.M)
 OWNER_SAID = re.compile(r"^Owner said \(", re.M)
+OWNER_WHO = "Who: ProductOwner"  # a relayed owner decision (SPEC-0059 rule 5)
 COMMENTS = "repos/{owner}/{repo}/issues/comments?per_page=100&since={since}&page={page}"
 LISTED = "repos/{owner}/{repo}/issues?state=all&per_page=100&since={since}&page={page}"
 
@@ -95,21 +105,31 @@ def steward_answers(comments: list[dict]) -> list[dict]:
     return out
 
 
+def owners(body: str) -> bool:
+    """Brief #1716: the owner's own comment (no `Who:` line, SPEC-0059 rule 5) or a relayed owner
+    decision (`Who: ProductOwner`); the last `Who:` line is read, so a role's is never the owner's."""
+    text = WHO_FOOTER.sub("", (body or "").replace("\r\n", "\n"))
+    marks = [x.strip() for x in text.splitlines() if WHO_LINE.fullmatch(x.strip())]
+    return not marks or marks[-1] == OWNER_WHO
+
+
 def overrides(comments: list[dict], answers: list[dict]) -> list[dict]:
-    """Rule 13: an owner's answer that changes a steward answer, or a correction naming it."""
-    out = []
-    for item in comments:
+    """Rule 13: the owner's answer that changes a steward answer, or the owner's correction naming
+    it; each steward answer (the newest for its Q id before the comment) is overridden once."""
+    out, done = [], set()
+    for item in sorted(comments, key=lambda x: str(x.get("created_at", ""))):
         found = OWNER.match(first(item["body"]))
-        if not found:
+        if not found or not owners(item["body"]):
             continue
         qids = [found[1]] if found[1] else QID.findall(first(item["body"]))
-        for ans in answers:
-            if ans["qid"] in qids and ans["created_at"] < item["created_at"]:
-                if found[1] and norm(found[2]) == norm(ans["answer"]):
-                    continue
-                out.append({"qid": ans["qid"], "cls": ans["cls"], "id": item["id"], "of": ans})
-                out[-1]["created_at"] = item["created_at"]
-                break
+        before = [a for a in answers if a["qid"] in qids and a["created_at"] < item["created_at"]]
+        for ans in before[-1:] if found[1] else before:
+            if ans["id"] in done or (found[1] and norm(found[2]) == norm(ans["answer"])):
+                continue
+            done.add(ans["id"])
+            out.append({"qid": ans["qid"], "cls": ans["cls"], "id": item["id"], "of": ans})
+            out[-1]["created_at"] = item["created_at"]
+            break
     return out
 
 
@@ -227,9 +247,11 @@ def post_daily(cache: dict, gh, now: datetime) -> tuple[int, list[str]]:
     issues = read_all(gh, LISTED, f"{days[0].isoformat()}T00:00:00Z")
     issues = None if issues is None else [i for i in issues if "pull_request" not in i]
     if comments is not None:
-        recorded = {m[1] for c in cache["comments"] if (m := OVERRIDE.match(first(c["body"])))}
+        read = [*cache["comments"], *comments]  # a rolled-over memory issue's entries too
+        recorded = {m[1] for c in read if (m := OVERRIDE.match(first(c["body"])))}
         for item in overrides(comments, steward_answers(comments)):
             if item["qid"] not in recorded:
+                recorded.add(item["qid"])
                 post(
                     gh,
                     cache,
