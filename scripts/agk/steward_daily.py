@@ -107,7 +107,7 @@ def steward_answers(comments: list[dict]) -> list[dict]:
 
 def owners(body: str) -> bool:
     """Brief #1716: the owner's own comment (no `Who:` line, SPEC-0059 rule 5) or a relayed owner
-    decision (`Who: ProductOwner`); the last `Who:` line is read, so a role's is never the owner's."""
+    decision (`Who: ProductOwner`); the last `Who:` line is read: a role's is never the owner's."""
     text = WHO_FOOTER.sub("", (body or "").replace("\r\n", "\n"))
     marks = [x.strip() for x in text.splitlines() if WHO_LINE.fullmatch(x.strip())]
     return not marks or marks[-1] == OWNER_WHO
