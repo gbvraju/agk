@@ -606,6 +606,14 @@ that the pack's `config` file enables every pinned rule code (the `floor`, rule 
 <stack> <step>: <rule> (path class: <glob>)`, a missing tool names the tool and the setting, and a passing pack prints
 `ok standards <stack>`. `lint_paths` and `agk-lint` are unchanged.
 
+A TypeScript or JavaScript product gets `scripts/agk/gates/node_pack.py` (ADR-0739; brief #1764), for the `node` entry
+of `[[standards]]` in the `web-app` and `mobile` playbooks, only when the Accepted stack record chose Node and the
+product has a `package.json`. Over its `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` files of the same
+`project_lint_paths` (less `node_modules/` and build folders) it runs the product's own pinned `node_modules/.bin/eslint`
+and `prettier`, never `npx`, a shell or a download: the `floor` (`eslint --print-config` shows every rule id of
+`rules.codes` at `error` or `warn`), `eslint --max-warnings 0` and `prettier --check`. A missing tool names the tool,
+the setting and `npm ci`; a finding names the rule id and the path class. The type step is a later build.
+
 The baseline of an adopted project (SPEC-0072 rule 7, ADR-0680; brief #1600): `scripts/agk/gates/baseline.py` keeps
 `config/agk-baseline/<gate id>.txt`, one line `<path> <count>` per file with findings (forward slashes, sorted bytewise),
 for each step that reports per-file counts (`layers`, and the pack's `lint`, `format` and `type`). With the file, the step
