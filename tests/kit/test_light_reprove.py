@@ -38,6 +38,7 @@ TOP = LINES.replace("line 1", "the branch")  # each side changes its own line: a
 BOTTOM = LINES.replace("line 5", "main")
 REPO = "example/agk"
 REPORT = "merge of main (light re-prove, SPEC-0050 amendment 171)"
+LISTED = ["conductor-example"]  # the trusted verdict authors (brief #1709)
 
 
 def git(root: Path, *args: str) -> str:
@@ -261,7 +262,7 @@ def test_the_merger_carries_the_verdict_to_a_merge_that_adds_nothing(tmp_path):
     merged = update_branch(root, head, main)
     shared = list(session_plan.SHARED_INDEXES)
     assert session_plan.light_merge(root, head, merged, "main", shared)
-    state = merge_cleared.judge_carried(root, [verdict(head)], merged, [], "main", shared)
+    state = merge_cleared.judge_carried(root, [verdict(head)], merged, LISTED, "main", shared)
     assert state == ("cleared", "")
     assert merge_cleared.judge([verdict(head)], merged, ["conductor-example"]) == (
         "held",
@@ -283,7 +284,7 @@ def test_the_merger_holds_when_the_merge_adds_anything_or_the_verdict_is_not_the
         merged = commit(root, {"agk.toml": BOTTOM}, "edit")
         git(root, "checkout", "-q", "main")
     on = main if case == "other-verdict" else head
-    allowed = ["someone-else"] if case == "author" else []
+    allowed = ["someone-else"] if case == "author" else LISTED
     shared = list(session_plan.SHARED_INDEXES)
     state, reason = merge_cleared.judge_carried(
         root, [verdict(on)], merged, allowed, "main", shared
@@ -295,7 +296,7 @@ def test_the_merger_holds_when_the_merge_adds_anything_or_the_verdict_is_not_the
 def test_a_verdict_on_the_head_itself_still_clears_as_before(tmp_path):
     root, head, _ = world(tmp_path, {"agk.toml": TOP}, {"agk.toml": BOTTOM})
     shared = list(session_plan.SHARED_INDEXES)
-    assert merge_cleared.judge_carried(root, [verdict(head)], head, [], "main", shared) == (
+    assert merge_cleared.judge_carried(root, [verdict(head)], head, LISTED, "main", shared) == (
         "cleared",
         "",
     )
