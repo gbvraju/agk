@@ -375,3 +375,201 @@ def test_item9_the_row_is_a_warning_after_the_invalid_label_row():
     assert doctor.CHECKS["brief-broad-touches"][0] == "warn"
     names = list(doctor.CHECKS)
     assert names.index("brief-broad-touches") == names.index("brief-invalid-label") + 1
+
+
+# --- brief #1717: a later build is not refused for a file its own earlier build added -----------
+
+OWN = "rule 4: Adds entry src/f0.py names an existing file"
+
+
+def timeline(stub, number: int, *pulls: tuple[int, int, str | None]) -> None:
+    """The timeline of brief NUMBER: one cross-reference per (pull, brief it names, merged_at)."""
+    events = [
+        {
+            "event": "cross-referenced",
+            "source": {
+                "issue": {
+                    "number": p,
+                    "body": f"Advances: REQ-001\nBrief: #{b}\n",
+                    "pull_request": {"merged_at": at},
+                }
+            },
+        }
+        for p, b, at in pulls
+    ]
+    stub.serve(f"{ISSUES}/{number}/timeline", events)
+
+
+def added(stub, pull: int, *files: str, status: str = "added") -> None:
+    stub.serve(f"repos/{REPO}/pulls/{pull}/files", [{"filename": f, "status": status} for f in files])
+
+
+MERGED = "2026-11-20T10:00:00Z"
+
+
+def later_build(stub, adds: str = "src/f0.py") -> None:
+    listing(stub, [issue(5, brief("a.txt") + f"Adds: {adds}\n")])
+    free(stub, 5)
+
+
+def malformed(proj, stub) -> list[str]:
+    out = plan(proj, stub)
+    assert out.returncode == 0, out.stdout + out.stderr
+    return [x for x in out.stdout.splitlines() if x.startswith("MALFORMED: #5")]
+
+
+def test_1717_touch_problems_sets_aside_the_brief_s_own_added_files(tmp_path):
+    """REQ-041 (brief #1717 answer 1): an entry whose every match is the brief's own is not refused."""
+    tree(tmp_path, src=2)
+    rules = session_plan.touch_rules(tmp_path)
+    body = with_touches("x.py", "Adds: src/f0.py")
+    assert session_plan.touch_problems(body, rules) == [OWN]
+    assert session_plan.touch_problems(body, rules, frozenset({"src/f0.py"})) == []
+    globbed = with_touches("x.py", "Adds: src/**")
+    assert session_plan.touch_problems(globbed, rules, frozenset({"src/f0.py"})) == [
+        EXISTS.format("src/**")
+    ]
+
+
+def test_1717_plan_offers_a_later_build_whose_own_merged_pull_request_added_the_file(proj, stub):
+    """REQ-041 (brief #1717 answers 2 and 3): the plan reads the brief's own merged pull request."""
+    later_build(stub)
+    timeline(stub, 5, (9, 5, MERGED))
+    added(stub, 9, "src/f0.py")
+    assert malformed(proj, stub) == []
+    assert all(c[0] == "GET" for c in stub.calls())
+
+
+def test_1717_next_takes_the_later_build(proj, stub):
+    """REQ-041 (brief #1717 answer 3): `next` reads the same shape."""
+    later_build(stub)
+    timeline(stub, 5, (9, 5, MERGED))
+    added(stub, 9, "src/f0.py")
+    out = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPTS / "session.py"), "next", "--session", "s1"],
+        cwd=proj.root,
+        capture_output=True,
+        text=True,
+        env=stub_env(stub),
+    )
+    assert OWN not in out.stdout + out.stderr and "#5" in out.stdout
+
+
+@pytest.mark.parametrize(
+    "pulls, status",
+    [
+        ([(9, 6, MERGED)], "added"),  # another brief's pull request added it
+        ([(9, 5, None)], "added"),  # closed without merge
+        ([(9, 5, MERGED)], "modified"),  # merged, but it changed the file, not added it
+        ([], "added"),  # no pull request of the brief at all
+    ],
+)
+def test_1717_every_other_history_is_refused_as_today(proj, stub, pulls, status):
+    """REQ-041 (brief #1717 answer 5): only a merged pull request of the brief that added it."""
+    later_build(stub)
+    timeline(stub, 5, *pulls)
+    added(stub, 9, "src/f0.py", status=status)
+    assert malformed(proj, stub) == [f"MALFORMED: #5 {OWN}"]
+
+
+def test_1717_a_glob_over_an_own_file_and_another_file_is_refused(proj, stub):
+    """REQ-041 (brief #1717 answer 5): every match must be the brief's own."""
+    later_build(stub, "src/**")
+    timeline(stub, 5, (9, 5, MERGED))
+    added(stub, 9, "src/f0.py")
+    assert malformed(proj, stub) == [f"MALFORMED: #5 {EXISTS.format('src/**')}"]
+
+
+@pytest.mark.parametrize("unread", ["timeline", "files"])
+def test_1717_an_unreadable_history_fails_closed(proj, stub, unread):
+    """REQ-041 (brief #1717 answer 2): a timeline or file list that cannot be read refuses."""
+    later_build(stub)
+    if unread != "timeline":
+        timeline(stub, 5, (9, 5, MERGED))
+    assert malformed(proj, stub) == [f"MALFORMED: #5 {OWN}"]
+
+
+def test_1717_a_brief_with_no_adds_refusal_reads_no_timeline(proj, stub):
+    """REQ-041 (brief #1717 answer 2): nothing is read for a brief that is not refused."""
+    listing(stub, [issue(5, brief("a.txt") + "Adds: new/one.py\n")])
+    free(stub, 5)
+    assert malformed(proj, stub) == []
+    assert not any(c[1].split("?")[0].endswith("/issues/5/timeline") for c in stub.calls())
+
+
+def test_1717_check_brief_stays_network_free_and_refuses(tmp_path):
+    """REQ-041 (brief #1717 answer 3, Q-1717-2): the brief check passes no own files."""
+    tree(tmp_path, src=2)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/requirements.md").write_text("### REQ-001 — a\n", encoding="utf-8")
+    proc = check(tmp_path, GOOD + "Adds: src/f0.py\n", "--root", str(tmp_path))
+    assert proc.returncode == 1 and OWN in proc.stdout
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'default_branch = "trunk"\n',
+        "[flow]\nclaim_hours = 1\n",
+        '[flow]\nassign = "next"\n',
+        '[flow]\nassign = "conductor"\n',
+        '[flow]\nbuilder_start = "start"\n',
+        '[flow]\nbuilder_start = "assign"\n',
+        "[flow]\nmax_builders = 1\n",
+        'pr_mode = "strict"\n',
+        'pr_mode = "flow"\n',
+        'review_mode = "solo"\n',
+        'review_mode = "team"\n',
+        'execution = "hosted"\n',
+        'execution = "hybrid"\n',
+        'execution = "pool"\n',
+        'execution = "local"\n',
+        '[kit]\nlayout = "installed"\n',
+        '[kit]\nlayout = "plugin"\n',
+    ],
+)
+def test_1717_the_exemption_holds_under_each_setting(proj, stub, text):
+    """REQ-041 (brief #1717 answer 4): settings the exemption does not read leave it as it is;
+    `claim_hours` of one hour still counts a first build merged days before."""
+    proj.write("agk.toml", text)
+    later_build(stub)
+    timeline(stub, 5, (9, 5, "2026-01-01T00:00:00Z"))
+    added(stub, 9, "src/f0.py")
+    assert malformed(proj, stub) == []
+
+
+def test_1717_a_shared_index_refuses_unless_it_is_the_brief_s_own(proj, stub):
+    """REQ-041 (brief #1717 answer 4): `[flow] shared_indexes` gives no exemption of its own."""
+    flow(proj, 'shared_indexes = ["src/f0.py"]')
+    later_build(stub)
+    timeline(stub, 5, (9, 6, MERGED))
+    added(stub, 9, "src/f0.py")
+    assert malformed(proj, stub) == [f"MALFORMED: #5 {OWN}"]
+    timeline(stub, 5, (9, 5, MERGED))
+    assert malformed(proj, stub) == []
+
+
+def test_1717_a_merge_union_file_never_refuses(proj, stub):
+    """REQ-041 (brief #1717 answer 4): a shared-mechanical file is set aside as today."""
+    proj.commit({".gitattributes": "src/f0.py merge=union\n"}, "union")
+    later_build(stub)
+    assert malformed(proj, stub) == []
+
+
+@pytest.mark.parametrize("key", ["max_touch_glob", "claim_hours"])
+def test_1717_a_bad_flow_number_is_refused_naming_the_setting(proj, stub, key):
+    """REQ-041 (brief #1717 answer 4): a value below 1 is refused by its name, never the value."""
+    flow(proj, f"{key} = 0")
+    later_build(stub)
+    timeline(stub, 5, (9, 5, MERGED))
+    added(stub, 9, "src/f0.py")
+    out = plan(proj, stub)
+    assert out.returncode != 0
+    assert f"{key} of the flow table must be a whole number, 1 or more" in out.stdout + out.stderr
+
+
+def test_1717_personal_files_mode_reads_no_pull_request_and_keeps_the_refusal(proj, stub):
+    """REQ-041 (brief #1717 answer 4, Q-1717-1): no pull request exists to read, so own is empty."""
+    proj.write("agk.toml", '[personal]\nforge = "files"\n')
+    later_build(stub)
+    assert malformed(proj, stub) == [f"MALFORMED: #5 {OWN}"]
