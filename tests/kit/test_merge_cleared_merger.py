@@ -25,9 +25,9 @@ import pytest
 from test_merge_cleared_verdict import (
     HEAD,
     MERGE12,
-    OWNER,
     OLD,
     ON,
+    OWNER,
     REPO,
     SHA12,
     calls,
