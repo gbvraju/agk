@@ -42,3 +42,9 @@ sentence. Build (a) (brief #1690, ADR-0703) writes the `Approve:` and `Confirmed
 - A person in solo mode approves by answering one plain question on their own computer; the comment counts.
 - A post made through an agent app never counts, and the person gets the body to paste.
 - A comment the steward posts with `Who: AGK steward` never approves, even if its first line is an approval.
+
+## Residual
+
+- (due 2026-12-20) With ADR-0661's residual: count the approvals `approve` posted, the read-backs that did not count
+  and the guard's approval denials by kind, and propose a change only from that count.
+- The team side (SPEC-0063 rule 7) waits for the kept login of SPEC-0063 rule 4 (Q-1691-1).
