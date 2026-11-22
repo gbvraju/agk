@@ -23,14 +23,15 @@ the standard's confirm of SPEC-0072 rule 8 (brief #1601, ADR-0681). Amendment 19
    takes the person's reply only to the latest open ask of the same session and refuses, naming the rule or setting, a moved head, a closed
    target, an unreadable ask state, a reply older than the ask, an ask older than four times `[flow]
    owner_wait_minutes` (24 hours when the key is unset or 0; Q-1690-2), `AGK_STEWARD_START=conductor`, a data-guard
-   match, and a question mark or a condition word (rule 14's backstop). `Not yet` records a `Decision:` and posts
+   match, a reply time before the ask or after now, and a question mark or a condition word (rule 14's backstop). `Not yet` records a `Decision:` and posts
    nothing; any other reply that is not a yes by `steward_voice.is_yes` posts nothing.
 3. On a yes the `Maintainer answer:` forms (an owner question's answer, `accept <head>`, `amendment <n> approved`) are
-   posted with `-F body=@<file>`, UTF-8 with LF, with `Owner said`, `Asked` and `Who: ProductOwner`, and one `Decision:`
-   is recorded; an `Approve: <head> SPEC-nnnn`, a sign-off `Approve:` and the `Confirmed:` text are printed ready to
+   posted with `-F body=@<file>`, UTF-8 with LF, with `Owner said`, `Asked` and `Who: ProductOwner`, after one `Decision:`
+   (with the pull request's link) is recorded, so a memory that cannot be written posts nothing; the form is read again
+   from the stored line at the yes, never taken from the state; an `Approve: <head> SPEC-nnnn`, a sign-off `Approve:` and the `Confirmed:` text are printed ready to
    paste and never posted (ADR-0661 decision 8). `Merge:`, `Verdict:`, `Final:` and `Correction:` are never written.
-4. Team mode counts only a `--by` login of `spec_approvers` and never writes `Confirmed:`; personal mode reads and posts
-   nothing, prints `python3 scripts/agk/personal.py confirm <target>` and records the `Decision:` in the sidecar.
+4. Team mode counts only a `--by` login of `spec_approvers` and never writes `Confirmed:`; personal mode takes a
+   `REQ-nnn`, `SPEC-nnnn` or `ADR-nnnn` target, reads and posts nothing, prints `python3 scripts/agk/personal.py confirm <target>` and records the `Decision:` in the sidecar.
 5. Amendment 194 items 1 to 4, 7 and 8 are applied to SPEC-0062 word for word, with `confirm` read as `approve`.
 6. Path classes changed: `scripts/agk/`, `tests/kit/`, `agk.toml`.
 

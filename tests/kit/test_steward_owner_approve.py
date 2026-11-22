@@ -25,7 +25,7 @@ HEAD = "a" * 40
 MOVED = "b" * 40
 LINK = "https://example.com/acme/widgets/pull/7"
 ASK = "The login page is built and every check passed. Shall I approve it? I recommend yes."
-AT = "2026-11-22T04:05Z"
+AT = "2026-11-22T03:58Z"
 SOLO = 'review_mode = "solo"\n'
 
 
@@ -299,10 +299,12 @@ def test_req069_personal_mode_prints_the_confirm_command_and_posts_nothing(root)
     for wrong in ("rec-3", "pr:7", "SPEC-62", "REQ-0690"):
         code, lines = steward_owner.ask_target(base, "Q-7-1", wrong, ASK, line, NOW)
         assert code == 2 and "--target" in lines[0], wrong
-    code, lines = steward_owner.ask_target(base, "Q-7-1", "SPEC-0062", ASK, line, NOW)
+    code, lines = steward_owner.ask_target(
+        base, "Q-7-1", "SPEC-0062", ASK, line, NOW - timedelta(minutes=5)
+    )
     assert code == 0
     code, lines = approve(base)
-    assert code == 0 and "python3 scripts/agk/personal.py confirm SPEC-0062" in lines
+    assert code == 0 and "python3 scripts/agk/personal.py confirm SPEC-0062" in lines, lines
     assert gh.calls == [] and records[-1][0] == "Decision"
 
 

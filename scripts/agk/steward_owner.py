@@ -655,6 +655,7 @@ NOT_YET = re.compile(r"not yet[.!]?", re.IGNORECASE)
 TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z")
 SHA = re.compile(r"\b[0-9a-f]{40}\b")
 TARGET = re.compile(r"(?:pr:)?(\d+)")
+RECORD_ID = re.compile(r"SPEC-\d{4}|ADR-\d{4}|REQ-\d{3}")
 NEVER = re.compile(r"(?:Merge|Verdict|Final|Correction):")
 POSTED = (  # (form, pattern): the Maintainer answer forms, which count by login
     ("answer", re.compile(r"Maintainer answer: (Q-\d+-\w+) \S.*")),
@@ -751,6 +752,8 @@ def ask_target(
     number = int(found[1]) if found else None
     if not personal and number is None:
         return 2, [f"refused: the target is one pull request, pr:<n> (setting: --target, {RULE})"]
+    if personal and not RECORD_ID.fullmatch(target):  # what `personal.py confirm` takes
+        return 2, ["refused: the target is REQ-nnn, SPEC-nnnn or ADR-nnnn (setting: --target)"]
     head = link = None
     if number is not None and not personal:
         state, head, link = pull_state(root, number)
@@ -839,44 +842,56 @@ def approve(
         return 2, [f"refused: the ask was made in another session; ask again ({APPROVE_RULE})"]
     asked = datetime.strptime(ask["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC)
     if at[:16] + "Z" < ask["at"]:
-        return 2, [f"refused: the reply is older than the ask; ask again ({APPROVE_RULE})"]
+        return 2, [f"refused: the reply is older than the ask (setting: --at, {APPROVE_RULE})"]
+    if at[:16] + "Z" > steward.stamp(now):
+        return 2, [f"refused: the reply time is in the future (setting: --at, {APPROVE_RULE})"]
     if now - asked > limit:
         return 2, ["refused: the ask is too old; ask again (setting: [flow] owner_wait_minutes)"]
     if findings := scan_text(words, guard_patterns(root)):
         classes = ", ".join(sorted({f.kind for f in findings}))
         return 2, [f"refused: the words hold {classes} (setting: [guard]; data guard, SPEC-0042)"]
     if NOT_YET.fullmatch(words):
-        steward.record(root, "Decision", f'{qid}: not yet, the person said "{words}" at {at}',
-                       steward.gh_api)  # fmt: skip
-        return 1, ["not yet: recorded, nothing posted"]
+        code, said = steward.record(
+            root, "Decision", f'{qid}: not yet, the person said "{words}" at {at}', steward.gh_api
+        )
+        return code or 1, said if code else ["not yet: recorded, nothing posted"]
     if BACKSTOP.search(words):
         return 2, ["refused: a question or a condition is not a yes; a change is a new decision,"
                    " asked again (SPEC-0062 rule 14)"]  # fmt: skip
     if not steward_voice.is_yes(words):
         return 1, ["not a yes: nothing posted; ask again in other words (SPEC-0062 rule 14)"]
-    if personal_table(root) is not None:
+    personal = personal_table(root) is not None
+    head = None
+    if not personal:
+        state, head, _ = pull_state(root, ask["number"])
+        if state != "open":
+            return 2, [f"refused: the target is closed; nothing posted ({APPROVE_RULE})"]
+        if head != ask["head"]:
+            return 2, [f"refused: the head moved since the ask; ask again ({APPROVE_RULE})"]
+    form = line_form(root, qid, str(ask.get("line", "")), head)  # read again: never the stored form
+    if form is None or (form == "confirmed" and review_mode(root) == "team"):
+        return 2, [f"refused: not a line this command writes (setting: --line, {APPROVE_RULE})"]
+    body = approve_body(ask, words, at)
+    if form not in ("answer", "accept", "amendment") and not personal:
         ask["open"] = False
         save_asks(root, asks)
-        steward.record(root, "Decision", f'{qid}: yes, the person said "{words}" at {at}',
-                       steward.gh_api)  # fmt: skip
+        return 0, [f"paste on #{ask['number']} ({ask['link']}):", *body.splitlines()]
+    where = f"{ask['target']}" if personal else f"#{ask['number']} at {head} {ask['link']}"
+    code, said = steward.record(  # first: a memory that cannot be written posts nothing
+        root, "Decision", f'{qid}: yes on {where}, the person said "{words}" at {at}',
+        steward.gh_api,
+    )  # fmt: skip
+    if code:
+        return code, said
+    ask["open"] = False
+    save_asks(root, asks)
+    if personal:
         return 0, [
             "run in your own terminal:",
             f"python3 scripts/agk/personal.py confirm {ask['target']}",
         ]
-    state, head, _ = pull_state(root, ask["number"])
-    if state != "open":
-        return 2, [f"refused: the target is closed; nothing posted ({APPROVE_RULE})"]
-    if head != ask["head"]:
-        return 2, [f"refused: the head moved since the ask; ask again ({APPROVE_RULE})"]
-    body = approve_body(ask, words, at)
-    ask["open"] = False
-    save_asks(root, asks)
-    if ask["form"] in ("spec", "signoff", "confirmed"):
-        return 0, [f"paste on #{ask['number']} ({ask['link']}):", *body.splitlines()]
     link = post_file(root, ask["number"], body)
-    steward.record(root, "Decision", f'{qid}: approved on #{ask["number"]} at {head} because the'
-                   f' person said "{words}" at {at} {link}', steward.gh_api)  # fmt: skip
-    return 0, [f"posted on #{ask['number']}: {body.splitlines()[0]}"]
+    return 0, [f"posted on #{ask['number']}: {body.splitlines()[0]}", link]
 
 
 def post_file(root: Path, number: int, body: str) -> str:

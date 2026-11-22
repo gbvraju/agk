@@ -358,12 +358,13 @@ reads the pull request's full head with one GET, refuses a closed one and a line
 `Verdict:`, `Final:`, `Correction:`, another head, another Q id; `Confirmed:` in team mode), records the ask with its
 head, link and session (`AGK_SESSION`, else the memory's newest open `Started: steward <id>`), keeps it as the session's one open ask (a newer ask closes the older) and posts today's `Question:`
 line. `approve --ask <Q> --said FILE --at TIME` takes the person's one-line reply to that latest open ask: it refuses an ask of
-another or an ended session, a moved head, a closed target, an older ask, an ask older than four times `[flow] owner_wait_minutes` (24 hours when unset
+another or an ended session, a moved head, a closed target, an older ask, a reply time before the ask or after now, an ask older than four times `[flow] owner_wait_minutes` (24 hours when unset
 or 0), a supervisor-started steward, a data-guard match, a question mark or a condition word, and in team mode a `--by`
-outside `spec_approvers`; `Not yet` is recorded and posts nothing. On a yes it posts a `Maintainer answer:` form with
-`Owner said`, `Asked` and `Who: ProductOwner` lines by `-F body=@<file>` and records a `Decision:`, and prints an
-`Approve:` or `Confirmed:` body ready to paste, never posting it; in personal mode it prints the `personal.py confirm`
-command and posts nothing.
+outside `spec_approvers`; `Not yet` is recorded and posts nothing. On a yes it records a `Decision:` first (a memory
+that cannot be written posts nothing), then posts a `Maintainer answer:` form with `Owner said`, `Asked` and
+`Who: ProductOwner` lines by `-F body=@<file>`; it reads the form again from the stored line and prints an
+`Approve:` or `Confirmed:` body ready to paste, never posting it; in personal mode (a `REQ-nnn`, `SPEC-nnnn` or `ADR-nnnn`
+target) it prints the `personal.py confirm` command and posts nothing.
 
 The standard (SPEC-0072 rule 8, brief #1601, ADR-0681; `docs/guides/engineering-standard.md`). `standard` prints the
 composed standard of the declared work type, or of `--playbook`: one plain screen in solo mode, the full list in team
