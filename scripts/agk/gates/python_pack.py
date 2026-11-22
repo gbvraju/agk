@@ -54,11 +54,9 @@ RULE = "SPEC-0072 rule 6"
 FLOOR = "SPEC-0072 rule 8"
 RUFF_DEFAULT = ["E4", "E7", "E9", "F"]  # ruff's own selection when a configuration sets none
 SKIP = {".venv", "venv", "node_modules", "__pycache__", "vendor", "third_party", "build", "dist"}
-# The install line of each layout (`[kit] layout`, kit_root.py): the pins of config/ci-tools.txt.
-INSTALL = {
-    "installed": "python3 -m pip install -r config/ci-tools.txt",
-    "plugin": 'python3 -m pip install -r "${CLAUDE_PLUGIN_ROOT}/config/ci-tools.txt"',
-}
+# The install line of each layout (`[kit] layout`, kit_root.py): the pins of config/ci-tools.txt;
+# the plugin's root comes from the resolver, the one file that names it (ADR-0630, brief #1696).
+INSTALL = "python3 -m pip install -r config/ci-tools.txt"
 MYPY_FLAGS = ["--strict-optional", "--disallow-untyped-defs", "--disallow-incomplete-defs"]
 RUFF_CODE = re.compile(r"^[A-Z]{1,4}[0-9]{0,4}$")
 MYPY_LINE = re.compile(r"^(.+?):\d+(?::\d+)?: error: .*?(?:\[([a-z][a-z-]*)\])?$")
@@ -79,9 +77,12 @@ def install_line(root: Path) -> str:
     import kit_root
 
     try:
-        return INSTALL[kit_root.layout(root)]
+        plugin = kit_root.layout(root) == "plugin"
     except kit_root.Refused:
-        return INSTALL["installed"]
+        plugin = False
+    if not plugin:
+        return INSTALL
+    return f'python3 -m pip install -r "{kit_root.PLUGIN_ROOT}/config/ci-tools.txt"'
 
 
 def patterns(root: Path) -> list[str]:

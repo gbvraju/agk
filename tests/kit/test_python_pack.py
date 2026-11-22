@@ -320,6 +320,28 @@ def test_a_missing_tool_names_the_install_line_of_the_layout(
         assert tool not in " ".join(lines)
 
 
+@pytest.mark.parametrize(
+    ("toml", "layout"),
+    [
+        ('[kit]\nlayout = "plugin"\n', "plugin"),
+        ("", "installed"),
+        ("[kit\nlayout = \n", "installed"),
+        ('[kit]\nlayout = "other"\n', "installed"),
+    ],
+)
+def test_the_install_line_comes_from_the_layout(tmp_path: Path, toml: str, layout: str) -> None:
+    """REQ-079 AC4: brief #1696 answers 1 and 5: the plugin line is built from the resolver's
+    plugin root, the same text as before; an unreadable or unknown layout keeps the installed one."""
+    (tmp_path / "agk.toml").write_text(toml, encoding="utf-8")
+    assert python_pack.install_line(tmp_path) == INSTALL[layout]
+
+
+def test_the_install_line_names_no_plugin_variable_in_the_pack() -> None:
+    """REQ-079 AC4: brief #1696 answer 1 (ADR-0630): only the resolver names the variable."""
+    text = (KIT_ROOT / "scripts" / "agk" / "gates" / "python_pack.py").read_text(encoding="utf-8")
+    assert "CLAUDE_PLUGIN" not in text
+
+
 def test_the_readme_template_names_both_install_lines() -> None:
     """REQ-079 AC4: brief #1683 answer 2: the product's README says it once."""
     text = (KIT_ROOT / "kit" / "templates" / "project-readme.md").read_text(encoding="utf-8")
