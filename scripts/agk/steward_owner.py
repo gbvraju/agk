@@ -21,7 +21,7 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
        python3 scripts/agk/steward_owner.py draft --slug SLUG
        python3 scripts/agk/steward_owner.py fix-brief --brief N --file FILE --seen UPDATED_AT
        python3 scripts/agk/steward_owner.py file-brief --file FILE --title TEXT
-                                           [--said FILE --at TIME [--by LOGIN]]
+                                           [--said FILE --at TIME [--by LOGIN] [--name NAME]]
 
 `ask` takes one plain business sentence (FILE): one line, a question with its choices and `I
 recommend`, and no kit term (a file name, label, rule number, id or command); it records it as an
@@ -82,8 +82,10 @@ the body, records one note and prints the new `seen:`; anything else prints `Pro
 writes nothing (exit 1). `file-brief` opens one issue labelled `agk-brief` when the draft passes
 the same checks and its `Priority:` is at or below `[steward] auto_file`, or on the person's
 explicit yes (`--said`, `--at`; in team mode `--by` a spec approver), no older than four times
-`[flow] owner_wait_minutes` (24 hours unset), quoted in an `Owner said` line. In personal mode both
-print and write nothing; a steward the supervisor started runs neither (exit 2).
+`[flow] owner_wait_minutes` (24 hours unset), quoted in an `Owner said` line; with `--name`, also
+`Yes, file the <NAME> brief` (brief #1753). It files nothing when an open brief has the same title
+or body. In personal mode both print and write nothing; a steward the supervisor started runs
+neither (exit 2).
 """
 
 from __future__ import annotations
@@ -1094,9 +1096,44 @@ def with_owner_said(body: str, at: str, words: str) -> str:
     )
 
 
+def named_yes(words: str, name: str) -> bool:
+    """Brief #1753 answer 1: `yes, file the <name> brief` and its three shorter forms."""
+    said, name = (" ".join(x.lower().split()) for x in (words.strip().removesuffix("."), name))
+    n = re.escape(name)
+    return bool(
+        re.fullmatch(rf"yes,? (?:file the {n} brief|file {n}|brief the {n}|brief {n})", said)
+    )
+
+
+def flat(text: object) -> str:
+    return " ".join(str(text or "").lower().split())
+
+
+def duplicate(root: Path, title: str, body: str) -> int | None:
+    """Brief #1753 answer 3: the open brief with this title or body (no `Owner said` line)."""
+
+    def bare(text: object) -> str:
+        lines = str(text or "").replace("\r\n", "\n").splitlines()
+        return "\n".join(x for x in lines if not x.startswith("Owner said (")).strip()
+
+    found = session.pages(
+        f"repos/{session.repo_name(root)}/issues?labels={session.LABEL}&state=open"
+    )
+    if found is None:
+        raise steward.Unreadable("the open briefs")
+    for issue in found:
+        if (
+            isinstance(issue, dict)
+            and "pull_request" not in issue
+            and (flat(issue.get("title")) == flat(title) or bare(issue.get("body")) == bare(body))
+        ):
+            return issue.get("number")
+    return None
+
+
 def file_brief(
     root: Path, draft_file: Path, title: str, said: Path | None, at: str | None,
-    by: str | None, now: datetime,
+    by: str | None, now: datetime, name: str | None = None,
 ) -> tuple[int, list[str]]:  # fmt: skip
     """Answer 2: open one `agk-brief` at or below `auto_file`, or on the person's explicit yes."""
     import reviewers
@@ -1107,6 +1144,12 @@ def file_brief(
 
     if refusal := gate(root):
         return 2, [refusal]
+    if name is not None and said is None:
+        return 2, ["refused: --name goes with --said (setting: --name)"]
+    if name is not None and not (0 < len(name) <= 80 and "`" not in name and name.isprintable()):
+        return 2, [
+            "refused: --name is one line of 1 to 80 characters, no backquote (setting: --name)"
+        ]
     body, title = (
         draft_file.read_text(encoding="utf-8").replace("\r\n", "\n"),
         " ".join(title.split()),
@@ -1129,7 +1172,9 @@ def file_brief(
             return 2, [
                 "refused: in team mode only a spec approver's yes counts (setting: spec_approvers)"
             ]
-        if BACKSTOP.search(words) or not steward_voice.is_yes(words):
+        if BACKSTOP.search(words) or not (
+            steward_voice.is_yes(words) or (name is not None and named_yes(words, name))
+        ):
             return 1, [*draft, "not a yes: nothing filed; ask again in other words"]
         moment = datetime.strptime(at[:16], "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
         if moment > now or now - moment > age_limit(root):
@@ -1141,6 +1186,9 @@ def file_brief(
         return 2, [refusal]
     if personal_table(root) is not None:
         return 0, ["personal mode: nothing is posted; the developer files this brief:", *draft]
+    if (held := duplicate(root, title, body)) is not None:
+        return 2, [f"refused: #{held} is an open brief with this title or body; nothing filed"
+                   " (setting: --title)"]  # fmt: skip
     repo = session.repo_name(root)
     kit = outbound.kit_repo(root)
     if kit == repo.lower() and not outbound.is_kit(outbound.remotes(root), kit):
@@ -1210,6 +1258,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--said", type=Path)
     b.add_argument("--at")
     b.add_argument("--by")
+    b.add_argument("--name")  # brief #1753: the short name the steward offered for this draft
     w = sub.add_parser("reads")
     w.add_argument("--session")
     w.add_argument("--refused", action="store_true")
@@ -1253,7 +1302,14 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = fix_brief(root, opts.brief, opts.file, opts.seen)
         elif opts.command == "file-brief":
             code, lines = file_brief(
-                root, opts.file, opts.title, opts.said, opts.at, opts.by, datetime.now(UTC)
+                root,
+                opts.file,
+                opts.title,
+                opts.said,
+                opts.at,
+                opts.by,
+                datetime.now(UTC),
+                name=opts.name,
             )
         elif opts.command == "reads":
             code, lines = reads(root, opts.session, opts.refused)
