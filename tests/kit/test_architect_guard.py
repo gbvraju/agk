@@ -393,3 +393,99 @@ def test_the_method_reader_is_shared_by_the_conductor_guard():
     ]:
         found = architect_guard.gh_api_methods(["gh", "api", *form, "repos/o/r/issues/7/comments"])
         assert found == ([method] if method else []), form
+
+
+# --- brief #1758 (ADR-0736): the resolver's governance command ------------------------------------
+
+from test_guard_plugin_forms import (  # noqa: E402
+    CLEAN,
+    FULL,
+    ROOT,
+    VARIABLE,
+    decision,
+    make_project,
+)
+
+KIT_ROOT = f"{ROOT}/scripts/agk/kit_root.py"
+MODES = ([], ["--review"])
+
+
+def guard_allows(root: Path, command: str, flags: list[str]) -> bool:
+    return decision("architect_guard.py", root, command, *flags) is None
+
+
+@pytest.mark.parametrize("flags", MODES)
+@pytest.mark.parametrize(
+    "command",
+    [
+        f'python3 "{KIT_ROOT}" governance',
+        f"python3 {KIT_ROOT} governance",
+        f'AGK_BASE=origin/main python3 "{KIT_ROOT}" governance',
+        f'AGK_BASE={FULL} python3 "{KIT_ROOT}" governance',
+        "make governance",
+    ],
+)
+def test_req078_a_clean_project_runs_the_resolvers_governance(tmp_path, command, flags):
+    """REQ-078: brief #1758 answer 1: both modes allow `python3 <plugin>/scripts/agk/kit_root.py
+    governance`, the plugin's folder in full, quoted or not, with one optional AGK_BASE before it;
+    `make governance` stays allowed."""
+    assert guard_allows(make_project(tmp_path, CLEAN), command, flags), command
+
+
+@pytest.mark.parametrize("flags", MODES)
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python3 scripts/agk/kit_root.py governance",
+        "AGK_BASE=origin/main python3 ./scripts/agk/kit_root.py governance",
+        "make governance",
+    ],
+)
+def test_req078_an_installed_project_runs_the_same_command(tmp_path, command, flags):
+    """REQ-078: brief #1758 answer 3: one rule in both layouts; installed, `<kit>` is
+    scripts/agk."""
+    assert guard_allows(make_project(tmp_path, "", installed=True), command, flags), command
+
+
+def other_copy(tmp_path: Path) -> str:
+    copy = tmp_path / "copy" / "scripts" / "agk"
+    copy.mkdir(parents=True)
+    (copy / "kit_root.py").write_text("print('x')\n", encoding="utf-8")
+    return str(copy / "kit_root.py")
+
+
+@pytest.mark.parametrize("flags", MODES)
+def test_req078_every_neighbour_of_the_governance_command_stays_denied(tmp_path, flags):
+    """REQ-078: brief #1758 answer 6: a second segment, another folder, the variable, another
+    argument, an option, another variable or a redirect is denied."""
+    root = make_project(tmp_path, CLEAN)
+    copy = other_copy(tmp_path)
+    for command in (
+        f'python3 "{KIT_ROOT}" governance; rm -rf x',
+        f'python3 "{KIT_ROOT}" governance && rm -rf x',
+        f'python3 "{KIT_ROOT}" governance > out.txt',
+        f'python3 "{copy}" governance',
+        f'python3 {VARIABLE}kit_root.py" governance',
+        "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py governance",
+        f'python3 "{KIT_ROOT}"',
+        f'python3 "{KIT_ROOT}" governance --x',
+        f'python3 "{KIT_ROOT}" governance governance',
+        f'python3 -I "{KIT_ROOT}" governance',
+        f'python3 "{KIT_ROOT}" --form governance',
+        f'python3 "{ROOT}/scripts/agk/../agk/kit_root.py" governance',
+        f'AGK_BASE=-x python3 "{KIT_ROOT}" governance',
+        f'AGK_BASE= python3 "{KIT_ROOT}" governance',
+        f'AGK_BASE=a AGK_BASE=b python3 "{KIT_ROOT}" governance',
+        f'PYTHONPATH=x python3 "{KIT_ROOT}" governance',
+        f'env AGK_BASE=a python3 "{KIT_ROOT}" governance',
+        f'AGK_BASE=a python3 "{ROOT}/scripts/agk/traceability.py"',
+    ):
+        assert not guard_allows(root, command, flags), command
+
+
+@pytest.mark.parametrize("flags", MODES)
+def test_req078_an_installed_project_refuses_the_plugins_path(tmp_path, flags):
+    """REQ-078: brief #1758 answer 3 with ADR-0631 decision 2: the plugin's form is read only in a
+    clean project."""
+    root = make_project(tmp_path, "", installed=True)
+    assert not guard_allows(root, f'python3 "{KIT_ROOT}" governance', flags)
