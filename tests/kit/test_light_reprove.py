@@ -408,8 +408,8 @@ def test_a_fix_list_that_is_not_only_adr_finals_or_not_light_never_carries(tmp_p
         newer = commit(root, {"docs/example.md": "b\n"}, "main again")
         merged = update_branch(root, merged, newer)
     elif case == "later":
-        comments = [fix_list(head), {**fix_list(merged, cid=9), "created_at": "2026-11-22T11:00:00Z",
-                                     "body": f"Verdict: fix list {merged}\n\n1. Fix it.\n"}]  # fmt: skip
+        later = {**fix_list(merged, cid=9), "created_at": "2026-11-22T11:00:00Z"}
+        comments = [fix_list(head), {**later, "body": f"Verdict: fix list {merged}\n\n1. Fix.\n"}]
     state, reason = merge_cleared.judge_carried(root, comments, merged, allowed, "main", shared)
     assert state == "held"
     assert reason
