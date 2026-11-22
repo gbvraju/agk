@@ -284,8 +284,10 @@ def test_no_check_reads_the_who_line():
         and any(name in p.read_text(encoding="utf-8") for name in ("WHO_LINE", "without_who("))
     )
     # route.py: its `Unreadable:` dedupe compares bodies without the line; reviewers.py: the
-    # approval readers drop it and count only `Who: ProductOwner` (brief #1691, ADR-0704 decision 4)
-    assert readers == ["reviewers.py", "route.py"]
+    # approval readers drop it and count only `Who: ProductOwner` (brief #1691, ADR-0704 decision 4);
+    # steward_daily.py: the override count reads only the owner's comments (brief #1716, ADR-0715
+    # decision 1)
+    assert readers == ["reviewers.py", "route.py", "steward_daily.py"]
 
 
 # --- (e) a body read from a file is left alone (brief #1369, ADR-0574) ----------------------
