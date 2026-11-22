@@ -34,3 +34,7 @@ does not know what to do.
 A new Python product's first governance run passes the pack; the skeleton's test now runs the pack over each shape,
 so a skeleton change that breaks it fails in the kit. A project's own code is checked as before; nothing in it is
 rewritten.
+
+## Residual
+
+- None.
