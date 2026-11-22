@@ -366,9 +366,10 @@ def test_req066_a_direct_agk_brief_label_stays_denied(tmp_path, command):
     """REQ-066 AC5: brief #1715 answer 2, `steward_owner.py file-brief` is the one route."""
     root = project(tmp_path, 'default_branch = "main"\n[steward]\nfix_briefs = true\n')
     found = bash(root, command)
-    assert found["permissionDecision"] == "deny" and "(path class: label)" in found[
-        "permissionDecisionReason"
-    ]
+    assert (
+        found["permissionDecision"] == "deny"
+        and "(path class: label)" in found["permissionDecisionReason"]
+    )
 
 
 def test_req066_a_direct_issue_body_edit_needs_fix_briefs(tmp_path):
@@ -381,7 +382,7 @@ def test_req066_a_direct_issue_body_edit_needs_fix_briefs(tmp_path):
         f"gh issue edit 5 --body-file {path}",
         "gh issue edit 5 --body 'Sentence: a fix.'",
     )
-    for toml in ('default_branch = "main"\n', '[steward]\nfix_briefs = false\n'):
+    for toml in ('default_branch = "main"\n', "[steward]\nfix_briefs = false\n"):
         root = project(tmp_path, toml)
         for command in edits:
             found = bash(root, command)
@@ -389,6 +390,6 @@ def test_req066_a_direct_issue_body_edit_needs_fix_briefs(tmp_path):
             assert "(setting: steward.fix_briefs)" in found["permissionDecisionReason"]
         assert bash(root, f"gh api -X PATCH repos/o/r/issues/comments/7 -F body=@{path}") is None
         assert bash(root, "gh issue edit 5 --title 'A fix'") is None
-    root = project(tmp_path, '[steward]\nfix_briefs = true\n')
+    root = project(tmp_path, "[steward]\nfix_briefs = true\n")
     for command in edits:
         assert bash(root, command) is None, command

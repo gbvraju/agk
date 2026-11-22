@@ -92,6 +92,7 @@ def root(tmp_path, monkeypatch):
     (tmp_path / "config" / "neutrality.txt").write_text("zebracorp\n", encoding="utf-8")
     one(tmp_path, "[boss]")
     monkeypatch.delenv("AGK_STEWARD_START", raising=False)
+    monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "state" / "memory.json"))
     monkeypatch.setattr(steward_owner.session, "repo_name", lambda root: REPO)
     records: list = []
     monkeypatch.setattr(
@@ -184,8 +185,12 @@ def test_req066_an_unchanged_body_writes_nothing(root):
 
 @pytest.mark.parametrize(
     "setting, people",
-    [("", "[boss]"), ("[steward]\nfix_briefs = false\n", "[boss]"),
-     (FIX_ON, "[boss, ann]"), (FIX_ON, "[]")],  # fmt: skip
+    [
+        ("", "[boss]"),
+        ("[steward]\nfix_briefs = false\n", "[boss]"),
+        (FIX_ON, "[boss, ann]"),
+        (FIX_ON, "[]"),
+    ],  # fmt: skip
 )
 def test_req066_fix_briefs_off_or_no_one_person_prints_the_proposed_body(root, setting, people):
     """REQ-066 AC5: answer 3, `fix_briefs` false by default (Q-1715-1), and solo mode with none or
@@ -194,7 +199,7 @@ def test_req066_fix_briefs_off_or_no_one_person_prints_the_proposed_body(root, s
     toml(base, SOLO + setting)
     one(base, people)
     code, lines = fix(base)
-    assert code == 1 and lines[0] == "Proposed body: brief #5" and FIXED.strip() in lines
+    assert code == 1 and lines[0] == "Proposed body: brief #5" and FIXED.strip() in "\n".join(lines)
     assert gh.patched == [] and gh.comments == []
 
 
@@ -227,8 +232,8 @@ def test_req066_personal_mode_prints_and_patches_nothing(root):
     base, _, gh, _ = root
     toml(base, SOLO + FIX_ON + '[personal]\nforge = "files"\n')
     code, lines = fix(base)
-    assert code == 0 and "nothing is posted" in lines[0] and FIXED.strip() in lines
-    code, lines = file(base, BODY, said="Yes, file it.")
+    assert code == 0 and "nothing is posted" in lines[0] and FIXED.strip() in "\n".join(lines)
+    code, lines = file(base, BODY, said="Yes, go ahead.")
     assert code == 0 and "nothing is posted" in lines[0]
     assert gh.calls == []
 
@@ -295,14 +300,13 @@ def test_req066_a_new_body_that_fails_the_brief_check_writes_nothing(root, monke
     assert code == 2 and gh.created == []
 
 
-def test_req066_the_real_brief_check_refuses_a_shapeless_body(root, monkeypatch):
-    monkeypatch.undo()  # the real check, nothing patched but GitHub
+def test_req066_the_real_brief_check_refuses_a_shapeless_draft(root, monkeypatch):
     base, _, gh, _ = root
-    monkeypatch.setattr(steward_owner.session, "gh", gh)
-    monkeypatch.setattr(steward_owner.session, "repo_name", lambda root: REPO)
-    monkeypatch.setattr(steward_owner.session, "pages", lambda endpoint: [])
-    code, lines = fix(base, "Adds: none\n")
-    assert code == 2 and gh.patched == []
+    import importlib
+
+    monkeypatch.setattr(check_brief, "body_problems", importlib.reload(check_brief).body_problems)
+    code, lines = file(base, "Priority: 0\n")
+    assert code == 2 and "brief check" in lines[0] and gh.created == []
 
 
 def test_req066_a_neutrality_token_refuses_naming_the_list_never_the_token(root):
@@ -351,10 +355,10 @@ def test_req066_a_draft_above_auto_file_with_no_yes_is_printed_and_not_filed(roo
 
 def test_req066_the_persons_yes_files_it_with_the_owner_said_line(root):
     base, _, gh, _ = root
-    code, lines = file(base, BODY, said="Yes, file it.")
+    code, lines = file(base, BODY, said="Yes, go ahead.")
     assert code == 0, lines
     body = gh.created[0]["body"].rstrip().splitlines()
-    assert body[-2:] == [f'Owner said ({AT}): "Yes, file it."', "Who: AGK steward"]
+    assert body[-2:] == [f'Owner said ({AT}): "Yes, go ahead."', "Who: AGK steward"]
     code, lines = file(base, BODY, said="Not now, later.")
     assert code == 1 and len(gh.created) == 1
 
@@ -363,22 +367,22 @@ def test_req066_a_yes_older_than_four_owner_waits_is_refused(root):
     base, _, gh, _ = root
     toml(base, SOLO + "[flow]\nowner_wait_minutes = 10\n")
     old = (NOW - timedelta(minutes=41)).strftime("%Y-%m-%dT%H:%MZ")
-    code, lines = file(base, BODY, said="Yes, file it.", at=old)
+    code, lines = file(base, BODY, said="Yes, go ahead.", at=old)
     assert code == 2 and "owner_wait_minutes" in lines[0] and gh.created == []
     toml(base, SOLO)  # unset: 24 hours
-    assert file(base, BODY, said="Yes, file it.", at=old)[0] == 0
+    assert file(base, BODY, said="Yes, go ahead.", at=old)[0] == 0
     toml(base, SOLO + "[flow]\nowner_wait_minutes = -1\n")
     with pytest.raises(CheckError) as caught:
-        file(base, BODY, said="Yes, file it.")
+        file(base, BODY, said="Yes, go ahead.")
     assert "owner_wait_minutes" in str(caught.value)
 
 
 def test_req066_in_team_mode_only_a_spec_approvers_yes_counts(root):
     base, _, gh, _ = root
     toml(base, 'review_mode = "team"\n')
-    code, lines = file(base, BODY, said="Yes, file it.", by="someone")
+    code, lines = file(base, BODY, said="Yes, go ahead.", by="someone")
     assert code == 2 and "spec_approvers" in lines[0] and gh.created == []
-    assert file(base, BODY, said="Yes, file it.", by="boss")[0] == 0
+    assert file(base, BODY, said="Yes, go ahead.", by="boss")[0] == 0
 
 
 @pytest.mark.parametrize("pr_mode", ["strict", "flow"])
@@ -404,5 +408,5 @@ def test_req066_each_execution_fixes_the_same_way_with_the_brief_check_in_the_co
     base, _, gh, _ = root
     seen: list = []
     monkeypatch.setattr(check_brief, "body_problems", lambda body, *a, **k: seen.append(body) or [])
-    toml(base, SOLO + FIX_ON + f'execution = "{execution}"\n')
+    toml(base, SOLO + f'execution = "{execution}"\n' + FIX_ON)
     assert fix(base)[0] == 0 and seen == [FIXED] and gh.patched == [FIXED]

@@ -19,6 +19,9 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
        python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]
        python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT
        python3 scripts/agk/steward_owner.py draft --slug SLUG
+       python3 scripts/agk/steward_owner.py fix-brief --brief N --file FILE --seen UPDATED_AT
+       python3 scripts/agk/steward_owner.py file-brief --file FILE --title TEXT
+                                           [--said FILE --at TIME [--by LOGIN]]
 
 `ask` takes one plain business sentence (FILE): one line, a question with its choices and `I
 recommend`, and no kit term (a file name, label, rule number, id or command); it records it as an
@@ -69,6 +72,18 @@ pull request's full head and the exact line to write as the session's one open a
 takes the person's yes to that latest open ask, re-reads the head, and posts a `Maintainer answer:`
 form with `Owner said`, `Asked` and `Who: ProductOwner`, or prints an `Approve:` or `Confirmed:`
 body ready to paste; anything else posts nothing.
+
+Brief #1715 (SPEC-0059 rule 6, ADR-0714): with `[steward] fix_briefs = true` and solo mode with
+one person listed, `fix-brief` replaces an open, untaken `agk-brief` issue's body (never an
+`Intake:`) when every changed line is an `Adds:`, `Touches:`, `Reserved:`, `Depends-on:` or
+`Evidence` line, its `updated_at` still equals `--seen` and the new body passes `check_brief.py
+--root` and the neutrality lists: it posts the old body as one `Body fixed:` comment first, then
+the body, records one note and prints the new `seen:`; anything else prints `Proposed body:` and
+writes nothing (exit 1). `file-brief` opens one issue labelled `agk-brief` when the draft passes
+the same checks and its `Priority:` is at or below `[steward] auto_file`, or on the person's
+explicit yes (`--said`, `--at`; in team mode `--by` a spec approver), no older than four times
+`[flow] owner_wait_minutes` (24 hours unset), quoted in an `Owner said` line. In personal mode both
+print and write nothing; a steward the supervisor started runs neither (exit 2).
 """
 
 from __future__ import annotations
@@ -932,20 +947,214 @@ def read_back(root: Path, posted: dict) -> str | None:
     return None
 
 
-def post_file(root: Path, number: int, body: str) -> dict:
-    """Post BODY with `-F body=@<file>` (UTF-8, LF), the file kept beside the ask state."""
+def post_file(
+    root: Path, number: int, body: str, endpoint: str = "", method: str = "POST", extra=()
+) -> dict:
+    """Post BODY with `-F body=@<file>` (UTF-8, LF), the file kept beside the ask state; by
+    default a comment on #NUMBER, else ENDPOINT with EXTRA fields (brief #1715)."""
     folder = asks_file(root).parent
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"agk-steward-approve-{number}.md"
     path.write_bytes(body.encode("utf-8"))
     try:
-        endpoint = f"repos/{session.repo_name(root)}/issues/{number}/comments"
-        found = session.gh(endpoint, "-F", f"body=@{path}", method="POST")
+        endpoint = endpoint or f"repos/{session.repo_name(root)}/issues/{number}/comments"
+        found = session.gh(endpoint, *extra, "-F", f"body=@{path}", method=method)
     finally:
         path.unlink(missing_ok=True)
     if found is None:
         raise CheckError(f"the comment on #{number} could not be posted")
     return found if isinstance(found, dict) else {}
+
+
+# --- brief #1715 (ADR-0714): a brief's mechanical lines fixed, an approved draft filed ----------
+
+FIX_RULE = "SPEC-0059 rule 6"
+MECHANICAL = ("Adds:", "Touches:", "Reserved:", "Depends-on:", "Evidence")
+PRIORITY = re.compile(r"^Priority:\s*(\d+)", re.M)
+TAKE = re.compile(r"(taken|Started|released):")
+
+
+def gate(root: Path) -> str | None:
+    """Neither command runs in a steward the supervisor started; a bad layout is refused by name."""
+    import kit_root
+
+    if os.environ.get("AGK_STEWARD_START") == "conductor":
+        return ("refused: a steward the supervisor started fixes and files nothing"
+                " (setting: AGK_STEWARD_START)")  # fmt: skip
+    try:
+        kit_root.layout(root)
+    except kit_root.Refused as exc:
+        raise CheckError(str(exc)) from None
+    return None
+
+
+def brief_refusal(root: Path, body: str, number: int | None) -> str | None:
+    """The in-command checks: `check_brief.py --root` on the body, then the neutrality lists."""
+    import check_brief
+    import steward_outbound
+
+    if problems := check_brief.body_problems(body, root, None, {"number": number}):
+        return f"refused: the body fails the brief check: {'; '.join(problems)} ({FIX_RULE})"
+    lists = steward_outbound.tokens(root)
+    if isinstance(lists, str):
+        return f"refused: the neutrality list cannot be read (setting: {lists})"
+    for setting, tokens in lists:
+        if any(t in body.lower() for t in tokens):
+            return f"refused: the body holds a token of {setting} (setting: {setting})"
+    return None
+
+
+def proposed(number: int, body: str, setting: str) -> tuple[int, list[str]]:
+    return 1, [f"Proposed body: brief #{number}", *body.rstrip().splitlines(),
+               f"not written: the owner applies it (setting: {setting})"]  # fmt: skip
+
+
+def take_refusal(issue: dict, comments: list) -> str | None:
+    """The brief as read is the brief fixed: open, an `agk-brief`, no intake, no live take."""
+    labels = {str(x.get("name")) for x in issue.get("labels") or [] if isinstance(x, dict)}
+    taken = False
+    for c in comments:
+        first = (str(c.get("body") or "").strip().splitlines() or [""])[0]
+        if found := TAKE.match(first):
+            taken = found[1] != "released"
+    for bad, setting in (
+        (issue.get("state") != "open" or "pull_request" in issue, "state"),
+        (session.LABEL not in labels, session.LABEL),
+        (str(issue.get("title") or "").startswith("Intake:"), "Intake:"),
+        (session.TAKEN_LABEL in labels or taken, session.TAKEN_LABEL),
+    ):
+        if bad:
+            number = issue.get("number")
+            return f"refused: #{number} is not a brief the steward fixes (setting: {setting})"
+    return None
+
+
+def fix_brief(root: Path, number: int, new_file: Path, seen: str) -> tuple[int, list[str]]:
+    """Answer 1: replace an open brief's body when only its mechanical lines change."""
+    import difflib
+
+    import reviewers
+
+    from config import steward_settings
+
+    if refusal := gate(root):
+        return 2, [refusal]
+    new = new_file.read_text(encoding="utf-8").replace("\r\n", "\n")
+    settings = steward_settings(root)  # a malformed table is refused naming the setting
+    if personal_table(root) is not None:
+        if refusal := brief_refusal(root, new, number):
+            return 2, [refusal]
+        return 0, ["personal mode: nothing is posted or patched; the developer applies this body:",
+                   *new.rstrip().splitlines()]  # fmt: skip
+    if settings["fix_briefs"] is not True:
+        return proposed(number, new, "steward.fix_briefs")
+    if reviewers.solo_person(root) is None:
+        return proposed(number, new, "review_mode")
+    repo = session.repo_name(root)
+    issue = session.gh(f"repos/{repo}/issues/{number}")
+    comments = session.pages(f"repos/{repo}/issues/{number}/comments") if issue else None
+    if not isinstance(issue, dict) or comments is None:
+        raise steward.Unreadable(f"#{number}")
+    if refusal := take_refusal(issue, comments):
+        return 2, [refusal]
+    if issue.get("updated_at") != seen:
+        return 2, [f"refused: #{number} changed since it was read; read it again (setting: --seen)"]
+    old = str(issue.get("body") or "").replace("\r\n", "\n")
+    changed = [
+        x[2:] for x in difflib.ndiff(old.splitlines(), new.splitlines()) if x[:2] in ("- ", "+ ")
+    ]
+    if not changed:
+        return 0, [f"#{number}: nothing to change"]
+    if any(x.strip() and not x.strip().startswith(MECHANICAL) for x in changed):
+        return proposed(number, new, "a line that is not mechanical")
+    if refusal := brief_refusal(root, new, number):
+        return 2, [refusal]
+    saved = (f"Body fixed: #{number} by the steward, its mechanical lines only; the old body "
+             f"follows, one copy restores it.\n\n{old.rstrip()}\n\n{STEWARD_WHO}\n")  # fmt: skip
+    post_file(root, number, saved)  # first: a failed post writes no body
+    found = post_file(root, number, new, f"repos/{repo}/issues/{number}", "PATCH")
+    keys = sorted({x.strip().split(":")[0].split(" ")[0] for x in changed if x.strip()})
+    code, said = steward.record(
+        root, "Decision", f"#{number} body fixed by the steward: {', '.join(keys)} lines "
+        "(the old body is its Body fixed: comment)", steward.gh_api,
+    )  # fmt: skip
+    return code, [
+        f"fixed #{number}: {len(changed)} lines",
+        f"seen: {found.get('updated_at')}",
+        *said,
+    ]
+
+
+def with_owner_said(body: str, at: str, words: str) -> str:
+    lines = body.rstrip().splitlines()
+    who = [STEWARD_WHO] if lines and lines[-1] == STEWARD_WHO else []
+    return (
+        "\n".join([*lines[: len(lines) - len(who)], f'Owner said ({at}): "{words}"', STEWARD_WHO])
+        + "\n"
+    )
+
+
+def file_brief(
+    root: Path, draft_file: Path, title: str, said: Path | None, at: str | None,
+    by: str | None, now: datetime,
+) -> tuple[int, list[str]]:  # fmt: skip
+    """Answer 2: open one `agk-brief` at or below `auto_file`, or on the person's explicit yes."""
+    import reviewers
+    import steward_outbound as outbound
+    import steward_voice
+
+    from config import steward_settings
+
+    if refusal := gate(root):
+        return 2, [refusal]
+    body, title = (
+        draft_file.read_text(encoding="utf-8").replace("\r\n", "\n"),
+        " ".join(title.split()),
+    )
+    if not title or len(title) > 200:
+        return 2, ["refused: a brief has a one-line title (setting: --title)"]
+    limit = steward_settings(root)["auto_file"]
+    draft = [f"brief draft: {title}", *body.rstrip().splitlines()]
+    if said is None:
+        priority = PRIORITY.search(body)
+        if limit is False or priority is None or int(priority[1]) > limit:
+            return 1, [*draft, "not filed: above what the steward files without the person's yes"
+                       " (setting: steward.auto_file)"]  # fmt: skip
+    else:
+        words = said.read_text(encoding="utf-8").strip()
+        if not at or not TIME.fullmatch(at) or len(words.splitlines()) != 1:
+            return 2, ["refused: the person's words are one line with a UTC time (setting: --at)"]
+        approvers = {a.lower() for a in reviewers.spec_approvers(root)}
+        if reviewers.solo_person(root) is None and (by or "").lower() not in approvers:
+            return 2, [
+                "refused: in team mode only a spec approver's yes counts (setting: spec_approvers)"
+            ]
+        if BACKSTOP.search(words) or not steward_voice.is_yes(words):
+            return 1, [*draft, "not a yes: nothing filed; ask again in other words"]
+        moment = datetime.strptime(at[:16], "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
+        if moment > now or now - moment > age_limit(root):
+            return 2, [
+                "refused: the yes is too old or in the future (setting: [flow] owner_wait_minutes)"
+            ]
+        body = with_owner_said(body, at, words)
+    if refusal := brief_refusal(root, body, None):
+        return 2, [refusal]
+    if personal_table(root) is not None:
+        return 0, ["personal mode: nothing is posted; the developer files this brief:", *draft]
+    repo = session.repo_name(root)
+    kit = outbound.kit_repo(root)
+    if kit == repo.lower() and not outbound.is_kit(outbound.remotes(root), kit):
+        if refused := outbound.check(f"{title}\n{body}", root):
+            return 2, refused
+    made = post_file(root, 0, body, f"repos/{repo}/issues", "POST",
+                     ("-f", f"title={title}", "-f", f"labels[]={session.LABEL}"))  # fmt: skip
+    if not made.get("number"):
+        raise CheckError("the brief could not be filed")
+    why = "the person's yes" if said else "at or below steward.auto_file"
+    code, lines = steward.record(
+        root, "Decision", f"#{made['number']} filed as a brief: {why}", steward.gh_api
+    )
+    return code, [f"brief filed: #{made['number']} ({session.LABEL})", *lines]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -991,6 +1200,16 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--at", required=True)
         c.add_argument("--by" if name == "confirm" else "--describe", required=name == "research")
     sub.add_parser("draft").add_argument("--slug", required=True)
+    f = sub.add_parser("fix-brief")  # brief #1715 (ADR-0714)
+    f.add_argument("--brief", type=int, required=True)
+    f.add_argument("--file", type=Path, required=True)
+    f.add_argument("--seen", required=True)
+    b = sub.add_parser("file-brief")
+    b.add_argument("--file", type=Path, required=True)
+    b.add_argument("--title", required=True)
+    b.add_argument("--said", type=Path)
+    b.add_argument("--at")
+    b.add_argument("--by")
     w = sub.add_parser("reads")
     w.add_argument("--session")
     w.add_argument("--refused", action="store_true")
@@ -1030,6 +1249,12 @@ def main(argv: list[str] | None = None) -> int:
             code, lines = research(root, opts.said, opts.at, opts.describe, steward.gh_api, len)
         elif opts.command == "draft":
             code, lines = draft(root, opts.slug)
+        elif opts.command == "fix-brief":
+            code, lines = fix_brief(root, opts.brief, opts.file, opts.seen)
+        elif opts.command == "file-brief":
+            code, lines = file_brief(
+                root, opts.file, opts.title, opts.said, opts.at, opts.by, datetime.now(UTC)
+            )
         elif opts.command == "reads":
             code, lines = reads(root, opts.session, opts.refused)
         else:

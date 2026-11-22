@@ -171,6 +171,7 @@ def test_req066_steward_fix_briefs_is_false_by_default_and_a_non_boolean_refused
     """REQ-066 AC5: brief #1715 answer 3, `[steward] fix_briefs` is `true` or `false` (default
     `false`, Q-1715-1); a number or a string is refused naming the setting, never the value."""
     import pytest
+
     from config import StewardSettingError, steward_settings
 
     assert steward_settings(tmp_path)["fix_briefs"] is False

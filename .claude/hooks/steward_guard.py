@@ -18,9 +18,11 @@ with `AGK_STEWARD_START=conductor`); a `Maintainer answer:` whose second line is
 push, a tag; a change to a file under `.github/`, the ruleset, a required check or a secret; an
 issue creation whose `Priority:` is above `[steward] auto_file` with no `Owner said` line; any label
 write other than `agk:parked` and `agk-steward`, and `agk-kit-defect` on a new issue (brief #1411,
-ADR-0594); a comment or issue body it cannot read (fail closed); a GraphQL call (`CLAUDE.md item
-10`); a post to the kit repository from another project whose title or body the outbound data guard
-(`scripts/agk/steward_outbound.py`, rule 6, ADR-0561) matches or cannot check; in a clean project
+ADR-0594), so `agk-brief` only through `steward_owner.py file-brief`; an issue body edit unless
+`[steward] fix_briefs = true` (brief #1715, ADR-0714); a comment or issue body it cannot read
+(fail closed); a GraphQL call (`CLAUDE.md item 10`); a post to the kit repository from another
+project whose title or body the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6,
+ADR-0561) matches or cannot check; in a clean project
 (`[kit] layout = "plugin"`), a write of a path the plugin's kit manifest lists into the product, by
 a write tool or a Bash command that is not a read (SPEC-0071 rule 7, brief #1458, ADR-0616; an
 unreadable manifest denies the write tools). Each denial names the rule
@@ -252,6 +254,19 @@ def filing_problem(text: str | None, project: Path) -> str | None:
     return None
 
 
+def body_edit_problem(project: Path) -> str | None:
+    """Brief #1715 (ADR-0714): an issue body edit passes only with `[steward] fix_briefs = true`."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
+    try:
+        from config import steward_settings
+
+        if steward_settings(project)["fix_briefs"] is True:
+            return None
+    except Exception:  # noqa: BLE001, S110 - a refused or unreadable table fails closed
+        pass
+    return f"steward guard: {RULE} denies a brief body edit (setting: steward.fix_briefs)"
+
+
 def outbound_problem(target: str | None, texts: list[str | None], project: Path) -> str | None:
     """Rule 11: a post to the kit repository from another project passes the outbound guard."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
@@ -316,6 +331,8 @@ def gh_problem(words: list[str], cwd: Path, project: Path) -> str | None:
     texts = [(v, True) for v in option_values(words, BODY_FLAGS)]
     files = option_values(words, frozenset({"--body-file", "-F"}))
     texts += [(None if v == "-" else read_value("@" + v, cwd), False) for v in files]
+    if sub == "issue" and verb == "edit" and texts and (problem := body_edit_problem(project)):
+        return problem
     for text, inline in texts:
         if sub == "issue" and verb == "create":
             problem = filing_problem(text, project) or body_problem(text, inline, project)
@@ -380,6 +397,9 @@ def api_problem(words: list[str], cwd: Path, project: Path) -> str | None:
         return filing_problem(text, project) or body_problem(text, "body" in inline, project)
     if named:
         return reason("a label write", "label")
+    if re.search(r"/issues/\d+$", path) and "body" in fields:
+        if problem := body_edit_problem(project):
+            return problem
     for text in fields.get("body", []):
         if problem := body_problem(text, "body" in inline, project):
             return problem
