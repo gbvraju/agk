@@ -160,7 +160,9 @@ def read_comments(path: str | None) -> list[dict] | None:
 # --- a decision cleared on a pull request merged by hand (brief #1738, ADR-0724) --------------
 
 PULLS = "--pulls"
-BAD_PULLS = "--pulls must name a JSON list of pull requests as GET pulls/<n> returns them (option --pulls)"
+BAD_PULLS = (
+    "--pulls must name a JSON list of pull requests as GET pulls/<n> returns them (option --pulls)"
+)
 SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -267,7 +269,9 @@ def read_pulls(path: str | None) -> list[dict] | None:
     except ValueError:
         raise CheckError(BAD_PULLS) from None
     if not items or not all(
-        isinstance(i, dict) and isinstance(i.get("number"), int) and not isinstance(i["number"], bool)
+        isinstance(i, dict)
+        and isinstance(i.get("number"), int)
+        and not isinstance(i["number"], bool)
         for i in items
     ):
         raise CheckError(BAD_PULLS)
@@ -305,9 +309,11 @@ def hand_merged_records(
         lost = lost_final(root, ref, own, authors)
         if lost is None or not SHA.fullmatch(lost[1]) or head.get("sha") != lost[1]:
             continue
-        verdict = lost[0]
+        verdict, cid = lost[0], lost[0].get("id")
         for path in lost[2]:
-            if final_record_verified(path, (number, verdict.get("id")), verdict, authors):
+            if isinstance(cid, int) and final_record_verified(
+                path, (number, cid), verdict, authors
+            ):
                 found.add(path.removeprefix("docs/adr/")[:4])
     return found
 

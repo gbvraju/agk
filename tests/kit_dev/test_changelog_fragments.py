@@ -673,7 +673,7 @@ def test_1706_the_release_script_is_never_installed():
 
 
 # --- the release accepts a hand-merged decision on the owner's yes (brief #1738, ADR-0724) -------
-# `accept --pulls FILE` also flips an ADR of a squash commit that merge_cleared.py did not make,
+# `accept --pulls FILE` also flips an ADR of a squash commit the merger did not make,
 # when its latest verdict's Final verifies and the payload says that head merged as that commit.
 
 HAND_ADR = "docs/adr/0014-a-hand-merged-decision.md"
@@ -699,7 +699,8 @@ def hand_merged(tmp_path: Path) -> tuple[Path, str, str]:
             "issue_url": "https://api.example.com/repos/example-owner/example-repo/issues/12",
             "user": {"login": "reviewer"},
             "created_at": "2026-11-21T10:00:00Z",
-            "body": f"Verdict: fix list {HAND_HEAD}\n\nok.\n\nFinal: {HAND_ADR} Proposed -> Accepted\n",
+            "body": f"Verdict: fix list {HAND_HEAD}\n\nok.\n\n"
+            f"Final: {HAND_ADR} Proposed -> Accepted\n",
         }
     )
     Path(saved).write_text(json.dumps(comments), encoding="utf-8")

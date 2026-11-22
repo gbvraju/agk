@@ -214,7 +214,7 @@ def test_pending_fails_closed_on_a_record_of_the_merge_base_without_the_comments
 
 
 # --- a decision cleared on a pull request merged by hand (brief #1738, ADR-0724) ---------------
-# `--pending --pulls FILE` also lists an ADR of a squash commit that merge_cleared.py did not make,
+# `--pending --pulls FILE` also lists an ADR of a squash commit the merger did not make,
 # only when the latest verdict's Final verifies and the payload says that the head it named merged
 # as that commit. Commits come from a temporary repository; comments and payloads are fixtures.
 
@@ -295,7 +295,10 @@ def test_1738_a_later_numbered_fix_list_or_rejection_is_the_latest_verdict(repo)
     """REQ-035: brief #1738 edge case 5(d) (the latest verdict by a record author decides)."""
     sha = hand_world(repo)
     pulls = pulls_at(repo, pull_payload(7, sha))
-    for body in (f"Verdict: fix list {HEAD_A}\n\n1. fix it (rule: none).\n", f"Verdict: rejected {HEAD_A}\n"):
+    for body in (
+        f"Verdict: fix list {HEAD_A}\n\n1. fix it (rule: none).\n",
+        f"Verdict: rejected {HEAD_A}\n",
+    ):
         later = hand_verdict(7, 43, at="2026-11-21T10:00:00Z", body=body)
         proc = pending_pulls(repo, comments_at(repo, hand_verdict(7, 42), later), pulls)
         assert (proc.returncode, proc.stdout) == (0, ""), body
@@ -317,7 +320,10 @@ def test_1738_a_merger_made_squash_is_read_as_today(repo):
     import check_adrs
 
     assert check_adrs.hand_merges(repo.root, "main") == []
-    for proc in (pending(repo, saved), pending_pulls(repo, saved, pulls_at(repo, pull_payload(7, sha)))):
+    for proc in (
+        pending(repo, saved),
+        pending_pulls(repo, saved, pulls_at(repo, pull_payload(7, sha))),
+    ):
         assert proc.stdout.splitlines() == [PENDING_ADR], proc.stdout
 
 
@@ -327,7 +333,9 @@ def test_1738_an_adr_the_default_branch_reads_accepted_is_not_read(repo):
 
     sha = hand_world(repo, status="Accepted")
     assert check_adrs.hand_merges(repo.root, "main") == []
-    proc = pending_pulls(repo, comments_at(repo, hand_verdict(7, 42)), pulls_at(repo, pull_payload(7, sha)))
+    proc = pending_pulls(
+        repo, comments_at(repo, hand_verdict(7, 42)), pulls_at(repo, pull_payload(7, sha))
+    )
     assert (proc.returncode, proc.stdout) == (0, "")
 
 

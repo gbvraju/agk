@@ -1,6 +1,6 @@
 """The doctor names a decision a hand merge left Proposed (brief #1738 answer 1; REQ-035, ADR-0724).
 
-`lost-record` prints one line per first-parent squash commit `(#n)` that merge_cleared.py did not
+`lost-record` prints one line per first-parent squash commit `(#n)` that the merger did not
 make and that adds or changes an ADR the default branch reads `Proposed`, when the pull request's
 latest verdict by a record author is a covered fix list whose `Final:` lines accept it and no record
 does. Commits come from a temporary git repository; comments are `--api-dir` fixtures. No network.
@@ -105,7 +105,10 @@ def test_1738_a_merger_made_squash_is_never_named(tmp_path):
 def test_1738_a_numbered_fix_list_or_a_rejection_as_the_latest_verdict_is_not_named(tmp_path):
     """REQ-035: brief #1738 edge case 5(d)."""
     dirs = world(tmp_path)
-    for body in (f"Verdict: fix list {HEAD}\n\n1. fix it (rule: none).\n", f"Verdict: rejected {HEAD}\n"):
+    for body in (
+        f"Verdict: fix list {HEAD}\n\n1. fix it (rule: none).\n",
+        f"Verdict: rejected {HEAD}\n",
+    ):
         later = verdict(43, body=body, at="2026-11-21T10:00:00Z")
         assert lost(dirs, [verdict(), later])[0] == [], body
 
