@@ -1,4 +1,5 @@
-"""Safe logs (brief #1594, ADR-0674): one line per request or run, with its id and no personal value.
+"""Safe logs (brief #1594, ADR-0674): one line per request or run, with its id and no personal
+value.
 
 An e-mail address or a phone number in a message is replaced before the line is written, and a query
 string is never logged. A request or run id is 12 random lowercase letters, never digits, so the
