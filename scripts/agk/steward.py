@@ -22,7 +22,8 @@ minutes, with no `Ended: steward <session>` after it, of any name, the starting 
 a start say so and write nothing (exit 1); `refresh` and `record` beat on the run's own marker (one
 PATCH), and `record` and `end` refuse with no start in this clone (brief #1741, ADR-0726). At 500
 comments a start opens a new memory issue whose first comment links the old one and carries every
-open `Owner question:` (no later `Decision:` names its Q id), then closes the old one. `record`
+open `Owner question:` (no later `Decision:` or `Maintainer answer:` names its Q id), then closes the
+old one; the start lists only those open ones, at most three, and counts the answered (brief #1765). `record`
 refuses an unknown kind and a text that the data guard's detectors match, naming the class, never
 the value (exit 2). `end` writes the pass's counted calls and tokens on its marker, `not shown` when
 not given, never 0 (rule 13's daily list reads them). `start` keeps a checkpoint in the cache;
@@ -153,18 +154,21 @@ def entry_kind(body: str) -> str | None:
 
 
 def read_memory(comments: list[dict]) -> dict:
-    """{"newest": {kind: [entries newest first]}, "unknown": [ids of other first words]}."""
+    """{"newest": {kind: [entries newest first]}, "unknown": [ids of other first words],
+    "comments": [every comment, newest first]}."""
     newest: dict[str, list[dict]] = {}
     unknown = []
-    for item in sorted(
+    ordered = sorted(
         comments, key=lambda c: (c.get("created_at", ""), c.get("id", 0)), reverse=True
-    ):
+    )
+    for item in ordered:
         kind = entry_kind(item.get("body", ""))
         if kind is None:
             unknown.append(item.get("id"))
         elif kind in KINDS:
             newest.setdefault(kind, []).append(item)
-    return {"newest": newest, "unknown": sorted(unknown, key=lambda i: (i is None, i))}
+    unknown.sort(key=lambda i: (i is None, i))
+    return {"newest": newest, "unknown": unknown, "comments": ordered}
 
 
 def body_lines(item: dict) -> list[str]:
@@ -208,6 +212,14 @@ def summary(memory: dict) -> list[str]:
         if kind == "Draft brief":
             for item in reversed(unfiled_drafts(entries + memory["newest"].get("Filed", []))):
                 lines += body_lines(item)
+            continue
+        if kind == "Owner question":  # brief #1765 answers 1 and 2: open first, answered counted
+            still = open_questions(memory.get("comments", entries))
+            lines += [line[:200] for line in still[:3]]
+            if len(still) > 3:
+                lines.append(f"Owner question: {len(still) - 3} more open")
+            if len(entries) > len(still):
+                lines.append(f"Owner question: {len(entries) - len(still)} answered")
             continue
         if kind in ONLY_NEWEST:
             lines += [item["body"].strip().splitlines()[0][:200] for item in entries[:1]]
@@ -286,9 +298,9 @@ def refused_start(session: str, other: tuple[str, datetime]) -> list[str]:
 
 
 def open_questions(comments: list[dict]) -> list[str]:
-    decided = {
-        q for c in comments if entry_kind(c["body"]) == "Decision" for q in QID.findall(c["body"])
-    }
+    answers = [c["body"] for c in comments if entry_kind(c["body"]) == "Decision"]
+    answers += [c["body"] for c in comments if c["body"].lstrip().startswith("Maintainer answer:")]
+    decided = {q for body in answers for q in QID.findall(body)}  # brief #1765 answer 2
     asked = [
         c["body"].strip().splitlines()[0]
         for c in comments
