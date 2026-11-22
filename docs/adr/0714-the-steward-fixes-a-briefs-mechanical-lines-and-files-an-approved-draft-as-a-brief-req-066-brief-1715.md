@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-22
 - Deciders: maintainers
-- Related: brief #1715, ADR-0557, ADR-0594, ADR-0704, SPEC-0059, Q-1715-1, Q-1715-2, Q-1715-3, plan #661
+- Related: brief #1715, ADR-0557, ADR-0594, ADR-0704, SPEC-0059, amendment 215, Q-1715-1 to Q-1715-4, plan #661
 - Requirements: REQ-066
 
 Protected classes this decision changes: `.claude/`, `scripts/agk/`, `config/`, `agk.toml` (one `[[testing.map]]`
@@ -36,7 +36,8 @@ decision 4 deny the `agk-brief` label (Q-1715-3).
 3. **The guard.** `steward_guard.py` keeps denying `agk-brief` on a direct `gh` call, so the command is the one route,
    and denies a direct issue body edit (`gh issue edit --body`/`--body-file`, a `PATCH` of `issues/N` with a body)
    unless `fix_briefs = true`, naming `setting: steward.fix_briefs`. This changes ADR-0594 decision 4 and SPEC-0059
-   rule 11 for `agk-brief` through the command only; the patch of rules 11 and 12 waits for the spec approvers.
+   rule 11 for `agk-brief` through the command only; the patch of rules 11 and 12 is proposed in
+   `docs/runs/proposed-spec-amendments-215.md` and waits for the spec approvers (Q-1715-3).
 4. **The setting.** `[steward] fix_briefs`, `true` or `false`, default `false` (Q-1715-1); another value is refused
    naming `setting: steward.fix_briefs`, never the value.
 5. **By mode.** In personal mode both commands print and write nothing. `pr_mode`, `[flow] assign`, `builder_start`
