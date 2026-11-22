@@ -210,3 +210,184 @@ def test_req066_personal_mode_writes_the_sidecar_file_and_posts_nothing(root):
     assert "Started: steward s1" in text and "Term: a widget is a part." in text
     memory = steward.read_memory(steward.personal_entries(root))
     assert memory["newest"]["Term"][0]["body"].startswith("Term: a widget")
+
+
+# --- refresh: what changed since the checkpoint (brief #1702, ADR-0708) --------------------------
+
+PULLS = re.compile(r"repos/\{owner\}/\{repo\}/pulls\?(.*)$")
+
+
+class Forge(GitHub):
+    """The double with pull requests: an open listing and a closed listing, newest updated first."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pulls: list[dict] = []
+
+    def pull(self, number, minutes=5, state="open", merged=True, labels=(), head="a" * 40):
+        when = stamp(minutes)
+        item = {"number": number, "state": state, "updated_at": when, "head": {"sha": head}}
+        item["labels"] = [{"name": n} for n in labels]
+        item["closed_at"] = when if state == "closed" else None
+        item["merged_at"] = when if state == "closed" and merged else None
+        self.pulls.append(item)
+        return item
+
+    def __call__(self, method, endpoint, fields=None):
+        found = PULLS.match(endpoint)
+        if not found:
+            return super().__call__(method, endpoint, fields)
+        self.calls.append((method, endpoint))
+        state = re.search(r"state=(\w+)", found[1])[1]
+        items = [p for p in self.pulls if p["state"] == state]
+        return sorted(items, key=lambda p: p["updated_at"], reverse=True)[:100]
+
+
+def started(root, gh, minutes=60):
+    """A start `minutes` before NOW: the checkpoint is then; the calls are cleared."""
+    assert steward.start(root, "s1", gh, NOW - timedelta(minutes=minutes))[0] == 0
+    gh.calls.clear()
+
+
+def test_req066_refresh_makes_three_calls_and_prints_only_what_changed(root):
+    """REQ-066 AC1: brief #1702 Measured, 2 new comments, 1 merged and 1 changed open pull request
+    since the checkpoint make exactly 3 calls and 4 lines, a `Decision:` first; then the checkpoint
+    moves, so a second refresh prints nothing new."""
+    gh = Forge()
+    number = gh.add_issue()
+    gh.comment(number, "Term: a widget is a part.", minutes=200)
+    gh.pull(7, minutes=200)  # unchanged since the checkpoint
+    gh.pull(5, minutes=300, state="closed")  # closed before it
+    started(root, gh)
+    gh.comment(number, "Lesson: read the memory before a list.", minutes=30)
+    gh.comment(number, "Decision: Q-9-1 class technical (evidence: the owner)", minutes=20)
+    gh.pull(8, minutes=10, labels=("agk:ci-red",), head="b" * 40)
+    gh.pull(6, minutes=15, state="closed")
+    code, lines = steward.refresh(root, "s1", gh, NOW)
+    assert code == 0 and gh.counted() == 3
+    comments = [e for _, e in gh.calls if "/comments" in e]
+    assert len(comments) == 1 and "since=" in comments[0]
+    assert any("pulls?state=open" in e for _, e in gh.calls)
+    assert any("pulls?state=closed&sort=updated&direction=desc" in e for _, e in gh.calls)
+    assert len(lines) == 4
+    assert lines[0].split()[1] == "Decision" and "Q-9-1" in lines[0]
+    assert lines[1].split()[1] == "Lesson"
+    assert lines[2] == "#8 " + "b" * 12 + " agk:ci-red"
+    assert lines[3] == "#6 merged " + stamp(15)
+    gh.calls.clear()
+    code, lines = steward.refresh(root, "s1", gh, NOW + timedelta(minutes=1))
+    assert code == 0 and gh.counted() == 3
+    assert lines == ["refresh: nothing new since " + NOW.strftime("%Y-%m-%dT%H:%M:%SZ")]
+    assert not any(m != "GET" for m, _ in gh.calls)
+
+
+def test_req066_refresh_without_a_checkpoint_is_refused_naming_the_setting(root):
+    """REQ-066 AC1: brief #1702 answer 5, no `start` in this clone: refused, no call; `--since`
+    takes a UTC time instead."""
+    gh = Forge()
+    number = gh.add_issue()
+    code, lines = steward.refresh(root, "s1", gh, NOW)
+    assert code == 2 and gh.calls == []
+    assert lines == [
+        "refresh: no checkpoint (setting: AGK_STEWARD_CACHE); run start, or pass --since <UTC time>"
+    ]
+    gh.comment(number, "Gap: no source for totals.", minutes=5)
+    code, lines = steward.refresh(root, "s1", gh, NOW, since="2026-11-15T10:00Z")
+    assert code == 0 and any("Gap" in line for line in lines)
+    assert steward.refresh(root, "s1", gh, NOW, since="yesterday")[0] == 2
+
+
+def test_req066_refresh_prints_an_edited_comment_as_edited(root):
+    """REQ-066 AC1: brief #1702 answer 5, an edited old comment comes back with `since=`."""
+    gh = Forge()
+    number = gh.add_issue()
+    old = gh.comment(number, "Risk: the export is slow.", minutes=200)
+    started(root, gh)
+    old["body"], old["updated_at"] = "Risk: the export is slow on Fridays.", stamp(5)
+    code, lines = steward.refresh(root, "s1", gh, NOW)
+    assert code == 0 and lines == [f"{old['id']} edited Risk Risk: the export is slow on Fridays."]
+
+
+def test_req066_a_failed_refresh_call_leaves_the_checkpoint(root, monkeypatch):
+    """REQ-066 AC1: brief #1702 answer 5, a failed call raises Unreadable (exit 4) and the
+    checkpoint is not moved."""
+    gh = Forge()
+    number = gh.add_issue()
+    started(root, gh)
+    before = steward.load_cache(root)["checkpoint"]
+    gh.comment(number, "Term: a gadget is a tool.", minutes=5)
+
+    def broken(method, endpoint, fields=None):
+        return None if "state=closed" in endpoint else gh(method, endpoint, fields)
+
+    with pytest.raises(steward.Unreadable):
+        steward.refresh(root, "s1", broken, NOW)
+    assert steward.load_cache(root)["checkpoint"] == before
+    monkeypatch.setattr(steward, "gh_api", broken)
+    monkeypatch.setattr(steward, "repo_root", lambda: root)
+    assert steward.main(["refresh", "--session", "s1"]) == 4
+
+
+def test_req066_refresh_says_when_more_closed_than_one_page(root):
+    """REQ-066 AC1: brief #1702 answer 5, more than 100 closed since the checkpoint."""
+    gh = Forge()
+    gh.add_issue()
+    started(root, gh, minutes=300)
+    for n in range(101):
+        gh.pull(100 + n, minutes=200, state="closed", merged=False)
+    code, lines = steward.refresh(root, "s1", gh, NOW)
+    assert code == 0 and gh.counted() == 3
+    assert lines[-1].startswith("more closed since ") and lines[-1].endswith(": not listed")
+    assert sum(" closed " in line for line in lines) == 100
+
+
+def test_req066_refresh_reads_a_rolled_over_memory_from_its_first_comment(root, monkeypatch):
+    """REQ-066 AC1: brief #1702 answer 5, another clone's start rolled the memory over since the
+    checkpoint: the new issue is read from its first comment."""
+    gh = Forge()
+    old = gh.add_issue()
+    for n in range(497):
+        gh.comment(old, f"Term: word{n} means thing{n}.", minutes=300)
+    started(root, gh)
+    gh.comment(old, "Term: one more.", minutes=40)
+    gh.comment(old, "Ended: steward s1", minutes=35)
+    mine = steward.load_cache(root)
+    monkeypatch.setenv("AGK_STEWARD_CACHE", str(root / "other.json"))
+    assert steward.start(root, "s3", gh, NOW - timedelta(minutes=30))[0] == 0
+    monkeypatch.setenv("AGK_STEWARD_CACHE", str(root / "cache.json"))
+    assert steward.load_cache(root) == mine
+    gh.calls.clear()
+    code, lines = steward.refresh(root, "s1", gh, NOW)
+    new = max(gh.issues)
+    assert code == 0 and new != old and gh.issues[old]["state"] == "closed"
+    assert any("Term: one more." in line for line in lines)
+    assert any("Memory continued from" in line for line in lines)
+    assert any("Started: steward s3" in line for line in lines)
+    assert steward.load_cache(root)["issue"] == new
+
+
+def test_req066_refresh_in_personal_mode_reads_the_sidecar_file_only(root):
+    """REQ-066 AC1: brief #1702 answer 4, personal mode reads the entries after the checkpoint
+    and reads no pull request: no call."""
+    (root / "agk.toml").write_text('[personal]\nforge = "files"\n', encoding="utf-8")
+    gh = Forge()
+    assert steward.start(root, "s1", gh, NOW - timedelta(minutes=10))[0] == 0
+    assert steward.record(root, "Term", "a widget is a part.", gh)[0] == 0
+    code, lines = steward.refresh(root, "s1", gh, NOW)
+    assert code == 0 and gh.calls == []
+    assert any("Term: a widget is a part." in line for line in lines)
+    assert lines[-1] == "pull requests: not read in personal mode"
+    assert steward.refresh(root, "s1", gh, NOW)[1][0].startswith("refresh: nothing new since ")
+
+
+def test_req066_refresh_keeps_its_checkpoint_in_the_cache_setting(root, tmp_path, monkeypatch):
+    """REQ-066 AC1: brief #1702 answer 4, `AGK_STEWARD_CACHE` holds the checkpoint; the steward
+    started by the conductor runs the same command."""
+    monkeypatch.setenv("AGK_STEWARD_START", "conductor")
+    gh = Forge()
+    gh.add_issue()
+    started(root, gh)
+    held = steward.load_cache(root)["checkpoint"]
+    assert held["at"] == (NOW - timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert (tmp_path / "cache.json").is_file()
+    assert steward.refresh(root, "s1", gh, NOW)[0] == 0 and gh.counted() == 3

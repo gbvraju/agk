@@ -88,3 +88,13 @@ def test_req066_principle_7_and_claude_item_1_carry_the_steward_class():
     core = (ROOT / "config" / "core-rules.md").read_text(encoding="utf-8")
     item = core.split("\n1. You implement;", 1)[1].split("\n\n", 1)[0]
     assert "steward" in item and "SPEC-0059 rule 3" in item and "the owner" in item
+
+
+def test_req066_the_agent_refreshes_before_a_list_instead_of_reading_in_full():
+    """REQ-066 AC1: brief #1702 answer 3, before a list or a summary the steward runs `refresh`
+    and never reads the memory issue or the pull requests in full for it."""
+    text = AGENT.read_text(encoding="utf-8")
+    start = text.split("Start and end.", 1)[1].split("\n\n", 1)[0]
+    assert "python3 scripts/agk/steward.py refresh --session <session>" in start
+    assert "before a list or a summary" in start
+    assert "never read the memory issue or the pull requests in full" in start
