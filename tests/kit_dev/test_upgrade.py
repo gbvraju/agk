@@ -1034,3 +1034,64 @@ def test_ac1_upgrade_adds_the_gitattributes_block_to_an_adopted_file_it_has_neve
     assert text.startswith(own) and "# >>> agk" in text and "# <<< agk" in text
     assert "scripts/agk/** linguist-generated=true" in text
     assert upgrade_cli(target).stdout.splitlines()[-1] == "nothing to do"
+
+
+# --- the clean-layout move of an untouched install (brief #1684, SPEC-0071 rule 8, REQ-078) -----
+
+
+def released_install(tmp_path: Path, mode: str) -> Path:
+    """This kit's release, installed by its own `init.py` or `adopt.py` from the release tag, in
+    local mode and committed; skipped where the tag is not fetched (a release pull request)."""
+    version = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text())["kit_version"]
+    tag = subprocess.run(
+        ["git", "rev-parse", "-q", "--verify", f"refs/tags/v{version}"],
+        cwd=KIT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if tag.returncode != 0:
+        pytest.skip(f"the release tag of kit {version} is not fetched here")
+    old = checkout(tag.stdout.strip(), tmp_path / "released_kit")
+    target = make_repo(tmp_path / "product-example")
+    proc = subprocess.run(
+        [sys.executable, str(old / "scripts" / "agk" / f"{mode}.py"), str(target)],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    toml = target / "agk.toml"
+    text = toml.read_text(encoding="utf-8")
+    text, count = re.subn(r'(?m)^#? ?execution = "hosted"$', 'execution = "local"', text, count=1)
+    toml.write_text(text if count else 'execution = "local"\n' + text, encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=target, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "install"], cwd=target, check=True)
+    return target
+
+
+@pytest.mark.parametrize("mode", ["init", "adopt"])
+def test_req078_an_untouched_install_moves_to_the_clean_layout(tmp_path, mode):
+    """REQ-078: brief #1684 answers 1, 2 and 6 (an untouched install of the release passes the
+    proof; the adopt ADR and LICENSE-AGK are kept byte for byte)."""
+    target = released_install(tmp_path, mode)
+    records = {
+        rel: (target / rel).read_bytes()
+        for rel in ("docs/adr/0001-adopt-agk.md", "LICENSE-AGK")
+        if (target / rel).is_file()
+    }
+    proc = upgrade_cli(target, "--clean-repo", "--rehearsal", "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "proof: no tracked file names a removed kit path" in proc.stdout.splitlines()
+    assert {rel: (target / rel).read_bytes() for rel in records} == records
+
+
+def test_req078_a_changed_kit_file_naming_a_removed_path_still_refuses(tmp_path):
+    """REQ-078: brief #1684 answer 3 (a file the person changed is listed and refused)."""
+    target = released_install(tmp_path, "init")
+    flakes = target / "docs" / "runs" / "flakes.md"
+    flakes.write_text(flakes.read_text(encoding="utf-8") + "See agk.mk too.\n", encoding="utf-8")
+    subprocess.run(["git", "commit", "-q", "-am", "mine"], cwd=target, check=True)
+    proc = upgrade_cli(target, "--clean-repo", "--rehearsal")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "names a removed kit path: docs/runs/flakes.md" in proc.stdout
+    assert "nothing was written" in proc.stdout.splitlines()[-1]
