@@ -7,8 +7,9 @@
 - Requirements: REQ-035
 
 Protected classes this pull request changes: `scripts/agk/` (`changelog_fragments.py`, `check_adrs.py`), `kit/`
-(`templates/runtime/builder.txt`), `tests/kit/` (`test_runtime_templates.py`) and `tests/kit_dev/`
-(`test_changelog_fragments.py`). `kit/hashes.json` is not edited by hand.
+(`templates/runtime/builder.txt`), `tests/kit/` (`test_runtime_templates.py`), `tests/kit_dev/`
+(`test_changelog_fragments.py`), and `agk.toml` (the new test file joins the `[[testing.map]]` entry of
+`check_adrs.py`, whose `pending_paths` it runs). `kit/hashes.json` is not edited by hand.
 
 ## Context
 

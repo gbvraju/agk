@@ -161,7 +161,8 @@ def accept(root: Path, comments_path: str | None, base: str | None) -> None:
 
 
 def accept_main(rest: list[str]) -> int:
-    if len(rest) % 2 or any(rest[i] not in ("--comments", "--base") for i in range(0, len(rest), 2)):
+    names = rest[::2]
+    if len(rest) % 2 or any(name not in ("--comments", "--base") for name in names):
         print(USAGE, file=sys.stderr)
         return 2
     opts = dict(zip(rest[::2], rest[1::2], strict=True))

@@ -448,7 +448,13 @@ ACCEPT_ADRS = {
     "0012": "docs/adr/0012-an-unverified-decision.md",
     "0013": "docs/adr/0013-an-accepted-decision.md",
 }
-ACCEPT_RECORDS = {"0009": (7, 42), "0010": (8, 77), "0011": (9, 88), "0012": (10, 99), "0013": (11, 55)}
+ACCEPT_RECORDS = {
+    "0009": (7, 42),
+    "0010": (8, 77),
+    "0011": (9, 88),
+    "0012": (10, 99),
+    "0013": (11, 55),
+}
 VERIFIED = ("0009", "0010", "0011")
 ACCEPT_CLASSES = "config/\nscripts/agk/\nkit/\nagk.toml\n.claude-plugin/\ndocs/adr/\n"
 ACCEPT_TOML = 'version = "{v}"\npr_mode = "flow"\n'
@@ -480,6 +486,8 @@ def accept_world(tmp_path: Path, toml: str = ACCEPT_TOML, crlf: bool = False) ->
     """A kit at 1.0.0 whose main records five Finals (0009 to 0013): three verified, one whose
     comment is by an unlisted account (0012), one whose file already says Accepted (0013); and a
     release branch that raises the version. Returns the root and the comments file."""
+    from common import MERGED_BY  # the merger's squash message line (test_kit_hashes adds the path)
+
     root = tmp_path / "acc"
     root.mkdir()
     for args in (
@@ -503,9 +511,7 @@ def accept_world(tmp_path: Path, toml: str = ACCEPT_TOML, crlf: bool = False) ->
     commit_as(root, "base")
     for number, (pr, cid) in sorted(ACCEPT_RECORDS.items()):
         put(root, "README.md", f"{number}\n")
-        commit_as(
-            root, f"Example (#{pr})\n\nADR-{number} Accepted (Final {cid})\nMerged-by: merge_cleared.py\n"
-        )
+        commit_as(root, f"Example (#{pr})\n\nADR-{number} Accepted (Final {cid})\n{MERGED_BY}\n")
     git(root, "switch", "-q", "-c", "release")
     for name, text in versions_of("1.1.0", toml).items():
         put(root, name, text)
