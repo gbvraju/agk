@@ -21,6 +21,7 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import run_gates  # noqa: E402
+from gates import environment_settings  # noqa: E402
 
 GIT = [
     "git",
@@ -129,6 +130,49 @@ def test_kit_folders_and_tests_are_not_the_project_code(
     read = 'import os\nX = os.environ["AGK_EXAMPLE"]\n'
     files = {"scripts/agk/x.py": read, ".claude/hooks/x.py": read, "tests/test_x.py": read}
     assert _run(_project(tmp_path, files), capsys)[0] == 0
+
+
+BAD_DIRS = "test_dirs is a list of folder paths inside the repository (setting: test_dirs)"
+
+
+BAD_VALUES = ["[1]", '["tests", 2]', '"tests"', '[""]', '["../up"]', '["a/*"]']
+
+
+@pytest.mark.parametrize("value", BAD_VALUES)
+@pytest.mark.parametrize("work_type", [None, "mcp-server", "api-service"])
+def test_a_malformed_test_dirs_is_refused_naming_it(
+    value: str, work_type: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079 AC4: brief #1725 (ADR-0728): one refusal naming `test_dirs`, never a traceback."""
+    toml = f'mode = "init"\ntest_dirs = {value}\n'
+    if work_type:
+        toml += f'[delivery]\nwork_type = "{work_type}"\n'
+    files = {"agk.toml": toml, "app/main.py": "print(1)\n", "docs/architecture.md": "# A\n"}
+    root = _project(tmp_path, files)
+    with pytest.raises(environment_settings.CheckError, match=r"\(setting: test_dirs\)$"):
+        environment_settings.check(root, {})
+    code, out = _run(root, capsys)
+    assert code == 1 and out.splitlines() == [f"FAIL gates: {BAD_DIRS}"], out
+
+
+@pytest.mark.parametrize("value", ["[]", '["tests", "./checks/", "e2e/web"]'])
+def test_a_list_of_folders_is_read_as_before(
+    value: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079 AC4: brief #1725: an empty list and a list of folders are taken as they were."""
+    files = {"agk.toml": f'mode = "init"\ntest_dirs = {value}\n', "app/main.py": "print(1)\n"}
+    assert _run(_project(tmp_path, files), capsys)[0] == 0
+
+
+def test_a_back_slash_test_folder_reads_as_the_same_folder(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079 AC7: brief #1748: `.\\tests\\` is the folder `tests`, as the tests floor reads it."""
+    read = 'import os\nX = os.environ["AGK_EXAMPLE"]\n'
+    toml = "mode = \"init\"\ntest_dirs = ['.\\tests\\']\n"
+    root = _project(tmp_path, {"agk.toml": toml, "tests/test_x.py": read})
+    assert environment_settings.test_folders(root) == ["tests"]
+    assert _run(root, capsys)[0] == 0
 
 
 def test_adopt_mode_holds_the_findings(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

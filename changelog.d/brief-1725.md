@@ -1,0 +1,1 @@
+- A `test_dirs` setting that is not a list of folders (for example `test_dirs = [1]`) is now refused by the environment-settings gate step with one line naming `test_dirs`, instead of stopping with a traceback (brief #1725, ADR-0728)
