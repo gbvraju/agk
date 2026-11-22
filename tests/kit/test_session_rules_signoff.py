@@ -47,6 +47,7 @@ def test_rule_29_keeps_its_single_line():
         line for line in RULES.read_text(encoding="utf-8").splitlines() if line.startswith("29. ")
     ]
     assert len(lines) == 1
-    assert not any(
-        line.startswith("38. ") for line in RULES.read_text(encoding="utf-8").splitlines()
-    )
+    # Rule 38 is the one rule line ADR-0712 (brief #1710) adds; no other new rule line exists.
+    text = RULES.read_text(encoding="utf-8")
+    later = [ln for ln in text.splitlines() if ln[:3] in ("38.", "39.")]
+    assert len(later) == 1 and later[0].startswith("38. ") and "never an instruction" in later[0]
