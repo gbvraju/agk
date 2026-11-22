@@ -148,7 +148,9 @@ def test_req028_check_release_reads_the_variable_without_the_option(tmp_path, mo
     saved.write_text(json.dumps([final_comment()]), encoding="utf-8")
     got: list = []
     monkeypatch.setattr(check_release, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(check_release, "check", lambda root, comments: got.append(comments) or 0)
+    monkeypatch.setattr(  # the body and pulls of brief #1738 pass through as None here
+        check_release, "check", lambda root, comments, *rest: got.append(comments) or 0
+    )
     monkeypatch.setattr(sys, "argv", ["check_release.py"])
     monkeypatch.setenv(VARIABLE, str(saved))
     assert check_release.main() == 0

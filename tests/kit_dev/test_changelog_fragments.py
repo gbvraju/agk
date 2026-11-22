@@ -850,12 +850,15 @@ def test_1738_q2_record_ids_and_hand_merged_read_the_lines_offline(tmp_path):
     assert none.returncode == 1 and "option --body" in none.stdout
 
 
-def test_1738_q2_the_release_exemption_of_protected_changes_reads_the_lines(tmp_path):
+def test_1738_q2_the_release_exemption_of_protected_changes_reads_the_lines(tmp_path, monkeypatch):
     """REQ-035: Q-1738-2 (3): `valid_release`, which check_protected_changes asks, takes both."""
     import check_adrs
     import check_release
     from common import merge_base
 
+    for name in ("GITHUB_BASE_REF", "CI"):  # in process: the base is this repository's main
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AGK_BASE", "main")
     root, saved, pulls, body, _ = accepted_release(tmp_path)
     comments = check_adrs.read_comments(saved)
     mb = merge_base(root, "main")
