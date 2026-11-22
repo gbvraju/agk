@@ -45,7 +45,7 @@ def test_ac1_the_review_agent_has_exactly_the_read_tools_and_the_review_guard():
     assert re.search(r"(?m)^name: architect-review$", front)
     assert re.search(r"(?m)^tools: Read, Grep, Glob, Bash$", front)
     assert "PreToolUse:" in front and "architect_guard.py --review" in front
-    assert re.search(r"matcher: \"Edit\|Write\|MultiEdit\|NotebookEdit\|Bash\"", front)
+    assert re.search(r"matcher: \"Edit\|Write\|MultiEdit\|NotebookEdit\|Bash\|PowerShell\"", front)
 
 
 def test_ac1_the_review_agent_forbids_editing_building_merging_and_a_commit():

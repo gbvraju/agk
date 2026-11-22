@@ -146,6 +146,7 @@ REMOTE_SECTION = re.compile(r'^\[remote "origin"\]\s*$')
 URL_LINE = re.compile(r"^\s*url\s*=\s*(\S.*?)\s*$")
 PATH_RULE = "architect guard rule 9: writes only under docs/ and constitution/vision.md"
 BASH_RULE = "architect guard rule 9: this command is not on the architect's list"
+POWERSHELL_RULE = "architect guard: rule 9 denies the PowerShell tool; use Bash (tool: PowerShell)"
 REVIEW_RULE = "architect guard rule 9: the review agent writes only in its scratch directory"
 # Brief #1050 (ADR-0444): the reviewer slot's steps. The scratch test is the conductor guard's
 # (`conductor_guard.scratch_dir`) with this role's name; it is copied, not imported, because that
@@ -605,6 +606,8 @@ def decide(payload: dict, review: bool = False) -> str | None:
     tool = payload.get("tool_name")
     data = payload.get("tool_input")
     data = data if isinstance(data, dict) else {}
+    if str(tool or "").casefold() == "powershell":  # brief #1763: one reader per tool
+        return POWERSHELL_RULE
     if tool in WRITE_TOOLS:
         if review:
             ok = tool == "Write" and review_write_ok(data.get("file_path"))
