@@ -410,3 +410,159 @@ def test_req066_each_execution_fixes_the_same_way_with_the_brief_check_in_the_co
     monkeypatch.setattr(check_brief, "body_problems", lambda body, *a, **k: seen.append(body) or [])
     toml(base, SOLO + f'execution = "{execution}"\n' + FIX_ON)
     assert fix(base)[0] == 0 and seen == [FIXED] and gh.patched == [FIXED]
+
+
+# --- brief #1753 (ADR-0733): the owner's named yes, and never the same draft twice ---------------
+
+NAME = "gate-runner test map"
+
+
+def named(base: Path, said: str | None, name: str | None, text: str = BODY, title: str = ""):
+    words = write(base, "said.txt", said + "\n") if said is not None else None
+    return steward_owner.file_brief(
+        base, write(base, "draft.md", text), title or "A person signs in", words, AT, None, NOW,
+        name=name,
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Yes, file the gate-runner test map brief.",
+        "yes file gate-runner test map",
+        "YES, FILE THE  Gate-Runner Test Map  BRIEF",
+        "Yes, brief the gate-runner test map",
+        "yes brief gate-runner test map.",
+    ],
+)
+def test_req066_a_named_yes_with_its_name_files_once_with_the_owner_said_line(root, said):
+    """REQ-066: brief #1753 answer 1, the named yes the steward's list offered counts."""
+    base, records, gh, _ = root
+    code, lines = named(base, said, NAME)
+    assert code == 0, lines
+    assert len(gh.created) == 1 and lines[0] == "brief filed: #12 (agk-brief)"
+    body = gh.created[0]["body"].rstrip().splitlines()
+    assert body[-2:] == [f'Owner said ({AT}): "{said}"', "Who: AGK steward"]
+    assert [kind for kind, _ in records] == ["Decision"]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Yes, file the checkout brief",  # another draft's name
+        "Yes, file the gate-runner test map brief but later",  # a condition
+        "Comprehensively think all scenarios then Yes, file the gate-runner test map brief",
+        "file the gate-runner test map brief",  # Q-1753-1: no `yes`, no yes
+        "Yes, file the gate-runner test map brief!!",
+    ],
+)
+def test_req066_a_named_yes_for_another_name_or_with_a_condition_is_not_a_yes(root, said):
+    """REQ-066: brief #1753 answers 1 and 2, a yes given for one draft never files another."""
+    base, records, gh, _ = root
+    code, lines = named(base, said, NAME)
+    assert code == 1 and lines[-1] == "not a yes: nothing filed; ask again in other words"
+    assert gh.created == [] and records == []
+
+
+def test_req066_without_name_only_a_plain_yes_counts(root):
+    """REQ-066: brief #1753 answer 1, with no `--name` the named form is not a yes, as before."""
+    base, _, gh, _ = root
+    code, lines = named(base, f"Yes, file the {NAME} brief", None)
+    assert code == 1 and gh.created == []
+    assert named(base, "Yes, go ahead.", None)[0] == 0
+
+
+@pytest.mark.parametrize("name", ["", "a`b", "x" * 81, "two\nlines"])
+def test_req066_a_malformed_name_is_refused_naming_the_setting_never_the_value(root, name):
+    """REQ-066: brief #1753 answer 2."""
+    base, _, gh, _ = root
+    code, lines = named(base, f"Yes, file the {name} brief", name)
+    assert code == 2 and lines[0].endswith("(setting: --name)") and gh.created == []
+    if name:
+        assert name not in lines[0]
+
+
+def test_req066_name_without_said_is_refused_naming_the_setting(root):
+    """REQ-066: brief #1753 answer 2, `--name` only ever qualifies the person's words."""
+    base, _, gh, _ = root
+    code, lines = named(base, None, NAME, BODY.replace("Priority: 1", "Priority: 0"))
+    assert code == 2 and lines == ["refused: --name goes with --said (setting: --name)"]
+    assert gh.created == []
+
+
+def test_req066_approve_still_needs_a_plain_yes():
+    """REQ-066: brief #1753 answer 1, `is_yes` (approve, relay) is unchanged by the named form."""
+    import steward_voice
+
+    assert not steward_voice.is_yes("Yes, file the checkout brief")
+    assert steward_voice.is_yes("Yes, go ahead.")
+
+
+def open_brief(number: int, title: str, body: str) -> dict:
+    return {"number": number, "title": title, "body": body, "state": "open",
+            "labels": [{"name": "agk-brief"}]}  # fmt: skip
+
+
+@pytest.mark.parametrize("same", ["title", "body"])
+def test_req066_a_second_filing_of_an_open_briefs_title_or_body_is_refused(
+    root, same, monkeypatch
+):
+    """REQ-066: brief #1753 answer 3, one GET listing of the open briefs, and nothing recorded."""
+    base, records, gh, _ = root
+    asked: list = []
+    title = "  a PERSON   signs in " if same == "title" else "Another title"
+    body = (
+        BODY.replace("\nWho:", f'\nOwner said (2026-11-22T07:00Z): "Yes, go ahead."\nWho:')
+        if same == "body"
+        else "Sentence: other.\n"
+    )
+    listed = [open_brief(4, title, body), {"number": 9, "pull_request": {}, "title": title}]
+    monkeypatch.setattr(
+        steward_owner.session, "pages", lambda endpoint: asked.append(endpoint) or listed
+    )
+    code, lines = named(base, "Yes, go ahead.", None)
+    assert code == 2 and gh.created == [] and records == []
+    assert lines == [
+        "refused: #4 is an open brief with this title or body; nothing filed (setting: --title)"
+    ]
+    assert asked == [f"repos/{REPO}/issues?labels=agk-brief&state=open"]
+    code, lines = named(base, None, None, BODY.replace("Priority: 1", "Priority: 0"))
+    assert code == 2 and gh.created == [], "the auto_file path is held the same way"
+
+
+def test_req066_another_open_brief_does_not_block_and_an_unreadable_list_fails_closed(
+    root, monkeypatch
+):
+    """REQ-066: brief #1753 answers 3 and 7; a closed brief is not listed (state=open)."""
+    base, _, gh, _ = root
+    listed = [open_brief(4, "Something else", "Sentence: other.\n")]
+    monkeypatch.setattr(steward_owner.session, "pages", lambda endpoint: listed)
+    assert named(base, "Yes, go ahead.", None)[0] == 0 and len(gh.created) == 1
+    monkeypatch.setattr(steward_owner.session, "pages", lambda endpoint: None)
+    with pytest.raises(steward_owner.steward.Unreadable):
+        named(base, "Yes, go ahead.", None)
+    assert len(gh.created) == 1
+
+
+def test_req066_personal_mode_reads_no_open_briefs(root, monkeypatch):
+    """REQ-066: brief #1753 answer 5, personal mode prints the brief and makes no forge call."""
+    base, _, gh, _ = root
+    monkeypatch.setattr(steward_owner, "personal_table", lambda root: {"forge": "files"})
+    monkeypatch.setattr(
+        steward_owner.session, "pages", lambda endpoint: pytest.fail("a forge read")
+    )
+    code, lines = named(base, f"Yes, file the {NAME} brief.", NAME)
+    assert code == 0 and lines[0].startswith("personal mode:") and gh.created == []
+
+
+def test_req066_the_cli_passes_name_through(root, monkeypatch):
+    """REQ-066: brief #1753 answer 1, `file-brief --name` reaches the command."""
+    base, _, _, _ = root
+    seen: dict = {}
+    monkeypatch.setattr(steward_owner, "repo_root", lambda: base)
+    monkeypatch.setattr(
+        steward_owner, "file_brief", lambda *a, name=None: seen.update(name=name) or (0, [])
+    )
+    draft = write(base, "draft.md", BODY)
+    assert steward_owner.main(["file-brief", "--file", str(draft), "--title", "T", "--name", NAME]) == 0
+    assert seen == {"name": NAME}
