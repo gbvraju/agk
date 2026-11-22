@@ -387,6 +387,33 @@ def test_1071g_sweep_prints_a_handover_line_with_its_minutes(proj, stub):
     assert "HANDOVER #7 42m" in sweep(proj, stub)
 
 
+def test_1740_7a_a_handover_in_reprove_names_the_step(proj, stub):
+    """REQ-057: brief #1740 answer 3 and test 7 (a): `HANDOVER #<pr> ... re-prove <file> #<m>`."""
+    item = pr(7, body="Brief: #1715\n")
+    item["labels"] = [{"name": "agk:handover"}]
+    gone = comment(6, "builder", f"Report: {SHORT} handing over: blocked: owner-needed", ago(42))
+    serve_pr(stub, item, [verdict("cleared", minutes=60), gone])
+    steward = ".claude/agents/steward.md"
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed(steward))
+    main_changed(stub, SHA, changed(steward), ahead=1, by=((OLD, "Steward (#1719)"),))
+    out = sweep(proj, stub)
+    assert "re-prove: #7 .claude/agents/steward.md (changed by #1719)" in out
+    assert f"HANDOVER #7 42m re-prove {steward} #1719" in out
+
+
+def test_1740_a_light_or_unknown_reprove_names_no_step():
+    """REQ-057: brief #1740 answer 3 (only a full `re-prove:` line names a step)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import conductor  # noqa: PLC0415 - the command's own module, for one pure function
+
+    lines = [
+        "re-prove: #7 agk.toml (changed by #41) light",
+        "re-prove: #8 unknown (cannot be read)",
+        "re-prove: #9 docs/x.md (changed by #42)",
+    ]
+    assert conductor.reprove_steps(lines) == {9: "docs/x.md #42"}
+
+
 def test_a_quiet_sweep_is_unchanged_byte_for_byte(proj, stub):
     """REQ-057 AC7: rule 5, with no overlap, no re-prove and nothing behind, nothing more."""
     serve_pr(stub, pr(7), [verdict("cleared")])

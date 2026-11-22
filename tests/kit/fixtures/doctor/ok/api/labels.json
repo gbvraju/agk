@@ -46,5 +46,9 @@
   {
     "name": "agk:handover",
     "description": "AGK: launcher acts next: a new builder for a pull request whose builder stopped"
+  },
+  {
+    "name": "agk:reprove",
+    "description": "AGK: builder acts next: merge the default branch and re-prove"
   }
 ]

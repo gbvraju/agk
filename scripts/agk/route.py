@@ -111,8 +111,10 @@ from merge_cleared import (
     github_mode,
     local_evidence,
     local_mode,
+    max_behind_setting,
     records_specs,
 )
+from merge_cleared import Refused as EvidenceRefused
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (
@@ -139,6 +141,7 @@ from session import (
     pages,
     repo_name,
 )
+from session_plan import shared_indexes  # SPEC-0050 rule 3 (brief #1740)
 
 NAME = "route"
 USAGE = "usage: route.py [--pr N | --all | --branch | --health] [--dry-run]"
@@ -174,6 +177,8 @@ STATES = (  # (label, actor, what), amendment 150 item 1; pr_state's precedence 
     ("agk:approve", "owner", "a spec approval the head needs"),
     ("agk:owner-merge", "owner", "the merge of a cleared head only the owner may merge"),  # #1733
     ("agk:merge-ready", "merger", "the guarded merge"),
+    # brief #1740 (ADR-0725): not in the order; it replaces a cleared state, see `cleared_state`
+    ("agk:reprove", "builder", "merge the default branch and re-prove"),
     # amendment 162 (ADR-0453): not in the order; it replaces a builder's state, see `state_of`
     ("agk:handover", "launcher", "a new builder for a pull request whose builder stopped"),
 )
@@ -184,7 +189,11 @@ LABELS = (*(label for label, _, _ in STATES if label != PARKED), OLD_READY)  # s
 OWNER_PATHS = PROTECTED  # the one list merge_cleared.py refuses (SPEC-0039 rule 5)
 BRIEF_LINE = re.compile(r"^Brief: #\d+", re.MULTILINE)
 HANDOVER = "agk:handover"
-BUILDER_STATES = ("agk:build", "agk:ci-red", "agk:conflict", "agk:fix")  # amendment 162 item 3
+REPROVE = "agk:reprove"  # brief #1740 (ADR-0725): a cleared head in SPEC-0050 rule 6's state
+CLEARED_STATES = ("agk:merge-ready", "agk:owner-merge")  # the states `agk:reprove` replaces
+REPROVE_UNKNOWN = "re-prove: #{} unknown (cannot be read)"  # SPEC-0050 rule 5's form
+# amendment 162 item 3; agk:reprove since brief #1740 (ADR-0725)
+BUILDER_STATES = ("agk:build", "agk:ci-red", "agk:conflict", "agk:fix", REPROVE)
 # brief #1101 answer 1 (ADR-0471): the owner's turn; never replaced by agk:handover
 OWNER_STATES = ("agk:question", "agk:approve", "agk:owner-merge", "agk:parked")
 HANDING_OVER = re.compile(r"Report: ([0-9a-f]{7,40}) handing over\b:?\s*(.*)$")  # item 2
@@ -203,6 +212,7 @@ COLORS = {
     "agk:owner-merge": "5319e7",
     "agk:merge-ready": "0e8a16",
     "agk:handover": "f9d0c4",
+    "agk:reprove": "fef2c0",
     "agk-brief": "1d76db",
     "agk-health": "b60205",
     "agk:parked": "c5def5",
@@ -733,7 +743,7 @@ def base_state(f: dict) -> str:
     authors = counted_authors(f.get("authors"), f.get("author"))
     ask = owner_ask(f, comments, authors)  # on a draft too (brief #1043 answer 2, ADR-0442)
     if ask is not None:
-        return ask
+        return cleared_state(f, ask)
     if f.get("draft"):
         return "agk:build"
     if f.get("mergeable_state") == "dirty":  # before the checks: none start on it (Q-846-8)
@@ -795,11 +805,82 @@ def base_state(f: dict) -> str:
         files = {str(x.get("filename") or "") for x in f.get("files") or []}
         owner = any(p.startswith(OWNER_PATHS) for p in files)
         if owner:
-            return "agk:owner-merge"
+            return cleared_state(f, "agk:owner-merge")
         if local and not local_cleared(f, comments, authors, head):
             return "agk:review"  # brief #1212: the merger needs the verdict's local evidence
-        return "agk:merge-ready"
+        return cleared_state(f, "agk:merge-ready")
     return "agk:review"
+
+
+def cleared_state(f: dict, label: str) -> str:
+    """LABEL, unless it is a cleared state (`CLEARED_STATES`) and the facts' `reprove` (from
+    `reprove_of`, absent or None when not read) puts the head in SPEC-0050 rule 6's state: then
+    `agk:conflict` on a dirty merge, `agk:review` for the light re-prove of rule 7a (the
+    conductor's `reprove --apply`), else `agk:reprove` (brief #1740 answers 1 and 2, ADR-0725)."""
+    kind = f.get("reprove")
+    if label not in CLEARED_STATES or kind not in ("full", "light", "behind"):
+        return label
+    if f.get("mergeable_state") == "dirty":
+        return "agk:conflict"
+    return "agk:review" if kind == "light" else REPROVE
+
+
+def paths_of(files) -> set[str]:
+    """The paths a list of changed files names: each file, and a renamed file's old name."""
+    found: set[str] = set()
+    for item in files:
+        if isinstance(item, dict) and item.get("filename"):
+            found.add(str(item["filename"]))
+            if item.get("status") == "renamed" and item.get("previous_filename"):
+                found.add(str(item["previous_filename"]))
+    return found
+
+
+def reprove_of(
+    files, compare, indexes: list[str], limit: int | None
+) -> tuple[str, list[str]] | None:
+    """(`full`, `light`, `behind` or `none`, the re-prove files) of a pull request from its
+    changed FILES and the COMPARE of its head with the default branch (`compare/<head>...<default>`,
+    whose files and `ahead_by` are the default branch's since the merge base), SPEC-0050 rules 6
+    to 8 (brief #1740 answer 1, ADR-0725): `light` when every file both change is one of INDEXES
+    (`[flow] shared_indexes`), `behind` with LIMIT (`[flow] max_behind_merges`) set and more
+    commits than it, else `none`. None when either cannot be read: never a clean state."""
+    theirs = compare.get("files") if isinstance(compare, dict) else None
+    if not isinstance(files, list) or not isinstance(theirs, list):
+        return None
+    both = sorted(paths_of(files) & paths_of(theirs))
+    if both:
+        return ("light" if all(p in indexes for p in both) else "full"), both
+    if limit is None:
+        return "none", []
+    ahead = compare.get("ahead_by")
+    if isinstance(ahead, bool) or not isinstance(ahead, int):
+        return None
+    return ("behind" if ahead > limit else "none"), []
+
+
+def reprove_settings(root: Path) -> tuple[list[str], int | None]:
+    """(`[flow] shared_indexes`, `[flow] max_behind_merges`) of the checkout, each refused as its
+    own readers refuse it, naming the setting (brief #1740 answer 6)."""
+    try:
+        limit = max_behind_setting(checkout_settings(root))
+    except EvidenceRefused as exc:
+        raise CheckError(f"rule 2: {exc}") from None
+    return shared_indexes(root), limit
+
+
+def read_reprove(repo: str, n: int, facts: dict, root: Path) -> str | None:
+    """The `reprove` fact of a pull request whose state would be cleared: one GET of the compare
+    of its head with the checkout's default branch; a read that fails prints SPEC-0050 rule 5's
+    `re-prove: #<n> unknown (cannot be read)` and leaves today's state (None)."""
+    indexes, limit = reprove_settings(root)
+    default = str(checkout_settings(root).get("default_branch") or "main")
+    found = gh(f"repos/{repo}/compare/{facts['head']}...{quote(default, safe='')}")
+    kind = reprove_of(facts.get("files"), found, indexes, limit)
+    if kind is None:
+        print(REPROVE_UNKNOWN.format(n), file=sys.stderr)
+        return None
+    return kind[0]
 
 
 # --- reading the facts and writing the label (rules 1 and 8) ----------------------------------
@@ -884,6 +965,8 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
     }
     facts["found"] = unreadable_lines(repo, n, facts)
     facts["unreadable"] = newest_is_unreadable(comments, facts["authors"], facts["found"])
+    if base_state(facts) in CLEARED_STATES:  # brief #1740: the one compare, only when cleared
+        facts["reprove"] = read_reprove(repo, n, facts, root)
     return pr, facts
 
 

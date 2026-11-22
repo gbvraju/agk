@@ -32,7 +32,8 @@ request's author, and with `approve <head7> SPEC-nnnn` on a new `Approve: <sha> 
 spec approver that names the current head. It prints its event and exits (no
 loop): each event is one wake. `queue` prints `#N <label>` for each open pull request whose router
 label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder:
-`agk:handover` first (amendment 162), then `agk:build`, `agk:fix`, `agk:conflict`, `agk:ci-red`, of
+`agk:handover` first (amendment 162), then `agk:build`, `agk:fix`, `agk:conflict`, `agk:ci-red`,
+`agk:reprove` (brief #1740), of
 `--author` when given; person: `agk:question`, `agk:approve`, `agk:owner-merge`, `agk:parked`;
 merger: `agk:merge-ready`, `agk:ready`), or `empty`, so a session that starts or restarts resumes
 from GitHub with one GET.
@@ -349,7 +350,14 @@ STATE_PREFIX = "agk:"
 UNSET = object()
 ROLES = {  # amendment 150 item 4; agk:ready is the merger's until the next release (ADR-0385)
     "conductor": ("agk:review", "agk:ci-red"),
-    "builder": ("agk:handover", "agk:build", "agk:fix", "agk:conflict", "agk:ci-red"),
+    "builder": (
+        "agk:handover",
+        "agk:build",
+        "agk:fix",
+        "agk:conflict",
+        "agk:ci-red",
+        "agk:reprove",  # brief #1740 (ADR-0725): a cleared head in SPEC-0050 rule 6's state
+    ),
     "person": ("agk:question", "agk:approve", "agk:owner-merge", "agk:parked"),
     "merger": ("agk:merge-ready", "agk:ready"),
 }
@@ -4353,6 +4361,7 @@ OWNER_CHANGE = re.compile(r"^Flow: owner change\b", re.MULTILINE)  # brief #1567
 OWNER_NEEDED = "Owner needed:"
 OWNER_ANSWERS = ("Maintainer answer:", "Answer:", "Approve:", "Correction:")
 OWNER_LABELS = {"agk:approve": "approve", "agk:owner-merge": "owner-merge"}
+REPROVE_LABEL = "agk:reprove"  # route.REPROVE (brief #1740); route imports this file
 
 
 def resting(settings: dict, now: datetime) -> bool:
@@ -4445,7 +4454,9 @@ def open_owner_items(
     body and the pull request's changed files (`pr["files"]`, which `owner_read` adds; absent or
     None: unread, today's reading), so a recap inside a merge ask keeps it `owner-merge`; an
     approval line for a spec or amendment the pull request does not change closes nothing, and
-    one of several asked approvals closes only its own (`route.answer_step`)."""
+    one of several asked approvals closes only its own (`route.answer_step`).
+    Brief #1740 (ADR-0725): no `owner-merge` item while the pull request is labelled `agk:reprove`:
+    the merge it asks for is held until the builder re-proves the head."""
     from route import answer_step, approval_ask  # here: route imports this file
 
     open_items: dict[str, datetime] = {}
@@ -4499,11 +4510,13 @@ def open_owner_items(
         elif line.startswith("Correction:"):
             for qid in QUESTION_ID.findall(str(c.get("body") or "")):
                 open_items.pop(qid, None)
-    if merge_at is not None and pr.get("draft") is not True and clears_head(newest_verdict, head):
-        open_items["owner-merge"] = merge_at
     names = labels_of(pr)
+    reproving = REPROVE_LABEL in names  # brief #1740: the merge ask waits for the re-prove
+    if merge_at is not None and pr.get("draft") is not True and clears_head(newest_verdict, head):
+        if not reproving:
+            open_items["owner-merge"] = merge_at
     for label, key in OWNER_LABELS.items():
-        if label in names and key not in open_items:
+        if label in names and key not in open_items and not (reproving and key == "owner-merge"):
             newest_post = moment(ordered[-1].get("created_at")) if ordered else None
             open_items[key] = newest_post or moment(pr.get("created_at"))
     return open_items

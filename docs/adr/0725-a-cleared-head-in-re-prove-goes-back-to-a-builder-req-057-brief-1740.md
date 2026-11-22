@@ -6,7 +6,7 @@
 - Related: brief #1740, brief #1735, brief #1733, brief #1071, brief #1358, ADR-0385, ADR-0453, ADR-0570, ADR-0722
 - Requirements: REQ-057, REQ-039
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `.claude/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `.claude/`, `config/`, `agk.toml`
 
 ## Context
 
