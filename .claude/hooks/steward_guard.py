@@ -25,8 +25,10 @@ ADR-0594), so `agk-brief` only through `steward_owner.py file-brief`; an issue b
 project whose title or body the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6,
 ADR-0561) matches or cannot check; in a clean project
 (`[kit] layout = "plugin"`), a write of a path the plugin's kit manifest lists into the product, by
-a write tool or a Bash command that is not a read (SPEC-0071 rule 7, brief #1458, ADR-0616; an
-unreadable manifest denies the write tools). Each denial names the rule
+a write tool or a Bash command that is not a read (SPEC-0071 rule 7, brief #1458, ADR-0616), any
+write under a kit-only folder of its `snapshot`, and a recursive copy or an unpack into a folder
+that is, lies under or holds one (brief #1752, ADR-0732; a manifest that cannot be read or has no
+`snapshot` denies the write tools and a recursive copy into the project). Each denial names the rule
 and the setting or path class, never the value. It reads the command, the files a body names,
 `agk.toml` and the plugin's kit manifest; no network, nothing stored.
 """
@@ -123,10 +125,27 @@ def default_branch(project: Path) -> str:
         return "main"
 
 
+def kit_only_folders(manifest: dict) -> tuple[str, ...]:
+    """Brief #1752 (ADR-0732): the `snapshot` folders under which no template, rendered or rule 2
+    kept path lies. Raises ValueError without a `snapshot` list."""
+    snapshot = manifest.get("snapshot")
+    if not isinstance(snapshot, list):
+        raise ValueError("snapshot")
+    held = [
+        *(manifest.get("templates") or {}),
+        *(manifest.get("rendered") or []),
+        *KEEPS,
+        *KEEPS_UNDER,
+    ]
+    folders = [str(p) for p in snapshot if str(p).endswith("/")]
+    return tuple(f for f in folders if not any(str(h).startswith(f) for h in held))
+
+
 @lru_cache(maxsize=4)
-def kit_paths(project: str) -> tuple[frozenset[str], str] | None:
-    """In a clean project, the plugin's manifest paths a product never holds and its kit tests'
-    folder; None in an installed project. Raises ValueError when the manifest cannot be read."""
+def kit_paths(project: str) -> tuple[frozenset[str], str, tuple[str, ...]] | None:
+    """In a clean project, the plugin's manifest paths a product never holds, its kit tests' folder
+    and its kit-only folders; None in an installed project. Raises ValueError when the manifest
+    cannot be read or has no `snapshot` list."""
     try:
         import tomllib
 
@@ -140,41 +159,156 @@ def kit_paths(project: str) -> tuple[frozenset[str], str] | None:
         manifest = json.loads(path.read_text(encoding="utf-8"))
         listed = [*manifest.get("verbatim", []), *manifest.get("experimental", [])]
         tests = str(manifest.get("kit_tests") or "").strip("/")
+        folders = kit_only_folders(manifest)
     except (OSError, ValueError, AttributeError, TypeError):
         raise ValueError("manifest") from None
     keep = [p for p in listed if p not in KEEPS and not p.startswith(KEEPS_UNDER)]
-    return frozenset(keep), tests
+    return frozenset(keep), tests, folders
 
 
-def kit_paths_known(project: Path) -> bool:
-    """True in a clean project whose manifest was read (Bash is then checked word by word)."""
+def kit_state(project: Path) -> str | None:
+    """`clean` when the manifest was read, `unknown` when it cannot be, None in an installed one."""
     try:
-        return kit_paths(str(project)) is not None
+        return "clean" if kit_paths(str(project)) is not None else None
     except ValueError:
-        return False
+        return "unknown"
+
+
+CANNOT = f"steward guard: {KIT_RULE} denies a write it cannot check (path class: kit/manifest.json)"
+
+
+def project_rel(target: str, cwd: Path, project: Path) -> str:
+    """`target` relative to the project, a back slash read as a forward slash (brief #1748)."""
+    path = Path(target.replace("\\", "/"))
+    whole = os.path.normpath(path if path.is_absolute() else cwd / path)
+    return os.path.relpath(whole, os.path.normpath(project)).replace("\\", "/")
+
+
+def kit_denial(where: str) -> str:
+    return (
+        f"steward guard: {KIT_RULE} denies kit code written into the product (path class: {where})"
+    )
 
 
 def kit_write(target: str, cwd: Path, project: Path) -> str | None:
-    """The denial of a write of `target` when it is a kit manifest path in a clean product."""
+    """The denial of a write of `target` when it is a kit manifest path, or lies in a kit-only
+    folder, in a clean product."""
     try:
         found = kit_paths(str(project))
     except ValueError:
-        where = "kit/manifest.json"
-        return f"steward guard: {KIT_RULE} denies a write it cannot check (path class: {where})"
+        return CANNOT
     if found is None or not target:
         return None
-    path = Path(target)
-    rel = os.path.relpath(path if path.is_absolute() else cwd / path, project).replace("\\", "/")
-    paths, tests = found
-    if rel in paths:
+    rel = project_rel(target, cwd, project)
+    paths, tests, folders = found
+    if inside := [f for f in folders if (rel + "/").startswith(f)]:
+        where = inside[0]
+    elif rel in paths:
         where = rel.rsplit("/", 1)[0] + "/" if "/" in rel else rel
     elif tests and rel.startswith(tests + "/"):
         where = tests + "/"
     else:
         return None
-    return (
-        f"steward guard: {KIT_RULE} denies kit code written into the product (path class: {where})"
-    )
+    return kit_denial(where)
+
+
+COPIERS = frozenset({"cp", "mv", "install", "ln", "rsync", "scp", "ditto"})
+UNPACK_DIR = {
+    "tar": ("-C", "--directory"),
+    "unzip": ("-d",),
+    "cpio": ("-D", "--directory"),
+    "7z": ("-o",),
+}
+
+
+def option_value(words: list[str], flags: tuple[str, ...]) -> str | None:
+    """The value of the last of `flags` given (`-C dir`, `--directory=dir`, `-odir`)."""
+    value = None
+    for i, word in enumerate(words):
+        for flag in flags:
+            if word == flag and i + 1 < len(words):
+                value = words[i + 1]
+            elif flag.startswith("--") and word.startswith(flag + "="):
+                value = word[len(flag) + 1 :]
+            elif flag in ("-o", "-t") and word.startswith(flag) and len(word) > 2:
+                value = word[2:]
+    return value
+
+
+def operands(words: list[str]) -> list[str]:
+    """The words after the command that are neither options nor redirections (nor their files)."""
+    out, skip = [], False
+    for word in words[1:]:
+        if skip:
+            skip = False
+        elif REDIRECT.match(word):
+            skip = not REDIRECT.sub("", word)
+        elif word in ("-t", "-S", "--suffix"):
+            skip = True
+        elif not word.startswith("-"):
+            out.append(word)
+    return out
+
+
+def short_flag(words: list[str], letters: str) -> bool:
+    return any(w[:1] == "-" and w[1:2] != "-" and set(w[1:]) & set(letters) for w in words[1:])
+
+
+def copy_target(words: list[str], cwd: Path) -> tuple[str, bool, list[str]] | None:
+    """Brief #1752 answer 3: a copy's or an unpack's destination, whether it is recursive and the
+    sources of a copy; None for another command."""
+    name, first = os.path.basename(words[0]), (words[1:] or [""])[0]
+    if name in COPIERS:
+        rest, target = operands(words), option_value(words, ("-t", "--target-directory"))
+        if target is None and len(rest) < 2:
+            return None
+        target, rest = (target, rest) if target is not None else (rest[-1], rest[:-1])
+        long = {"--recursive", "--archive"} & set(words)
+        return target, name in ("rsync", "ditto") or short_flag(words, "rRa") or bool(long), rest
+    unpack = {
+        "tar": short_flag(words, "x")
+        or "--extract" in words
+        or (first[:1] != "-" and "x" in first),
+        "unzip": True,
+        "cpio": short_flag(words, "i") or "--extract" in words,
+        "7z": first in ("x", "e"),
+    }.get(name, False)
+    return (option_value(words, UNPACK_DIR[name]) or str(cwd), True, []) if unpack else None
+
+
+def copy_problem(words: list[str], cwd: Path, project: Path, state: str) -> str | None:
+    """A recursive copy or unpack whose destination is, lies under or holds a kit-only folder;
+    a plain copy judged by each path it makes (ADR-0732 decision 3)."""
+    if (found := copy_target(words, cwd)) is None:
+        return None
+    target, recursive, sources = found
+    rel = project_rel(target, cwd, project)
+    above = rel == "." or set(rel.split("/")) == {".."}  # the project's root or a folder holding it
+    if rel.startswith("..") and not above:
+        return None
+    if state == "unknown":
+        return CANNOT if recursive else None
+    if recursive:
+        prefix = "" if above else rel + "/"
+        found = kit_paths(str(project))
+        held = [f for f in (found[2] if found else ()) if f.startswith(prefix)]
+        return kit_write(target, cwd, project) or (kit_denial(", ".join(held)) if held else None)
+    folder = target.endswith(("/", "\\")) or len(sources) > 1 or (cwd / target).is_dir()
+    made = [f"{target}/{os.path.basename(x.rstrip('/'))}" for x in sources] if folder else []
+    return next((p for m in made if (p := kit_write(m, cwd, project))), None)
+
+
+def git_gh_targets(words: list[str]) -> list[str]:
+    """Q-A-1's conservative reading: the paths `git checkout <ref> -- <paths>`, `git restore
+    --source` and `gh release download -D/-O` write; git and gh stay readers otherwise."""
+    if words[0] == "git" and "checkout" in words and "--" in words:
+        return words[words.index("--") + 1 :]
+    if words[0] == "git" and "restore" in words and option_value(words, ("--source",)):
+        source = option_value(words, ("--source",))
+        return [w for w in operands(words) if w not in ("restore", source)]
+    if words[0] == "gh" and words[1:3] == ["release", "download"]:
+        return [v for f in (("-D", "--dir"), ("-O", "--output")) if (v := option_value(words, f))]
+    return []
 
 
 def read_value(value: str, cwd: Path) -> str | None:
@@ -503,13 +637,16 @@ def command_problem(words: list[str], cwd: Path, project: Path, depth: int) -> s
     if (inner := unwrap(words)) is not None:
         return command_problem(inner, cwd, project, depth + 1) if depth < 8 else None
     name = os.path.basename(words[0])
-    if kit_paths_known(project):
-        named = redirect_targets(words)
+    state = kit_state(project)
+    if state == "clean":
+        named = redirect_targets(words) + git_gh_targets(words)
         if name not in READERS:
             named += [REDIRECT.sub("", word) for word in words[1:]]
         for word in named:
             if word and (problem := kit_write(word, cwd, project)):
                 return problem
+    if state and (problem := copy_problem(words, cwd, project, state)):
+        return problem
     if name == "find":
         found = [i for i, w in enumerate(words) if w in ("-exec", "-execdir", "-ok", "-okdir")]
         return next(
