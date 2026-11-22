@@ -1,0 +1,1 @@
+- A pull request that adds, changes or deletes a kit test file also runs the stripped-copy collection test (`tests/kit/test_agk_mk.py`), so a kit test that reads a file at import no longer turns the default branch red after merge (brief #1648)
