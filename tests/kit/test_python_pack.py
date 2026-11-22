@@ -290,3 +290,70 @@ def test_the_layers_line_comes_before_the_pack_lines(
     layers = next(i for i, ln in enumerate(lines) if ln == "ok layers")
     pack = next(i for i, ln in enumerate(lines) if "standards python-pyproject" in ln)
     assert layers < pack
+
+
+INSTALL = {
+    "installed": "python3 -m pip install -r config/ci-tools.txt",
+    "plugin": 'python3 -m pip install -r "${CLAUDE_PLUGIN_ROOT}/config/ci-tools.txt"',
+}
+
+
+@pytest.mark.parametrize("layout", sorted(INSTALL))
+@pytest.mark.parametrize("gone", [["ruff"], ["mypy"], ["ruff", "mypy"]])
+def test_a_missing_tool_names_the_install_line_of_the_layout(
+    layout: str, gone: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REQ-079 AC4: brief #1683 answers 2 and 4: one line per missing tool, each naming the
+    tool, the setting and the install line of the layout, never a version; a present tool is
+    not named."""
+    root = sample(tmp_path, toml='[kit]\nlayout = "plugin"\n' if layout == "plugin" else "")
+    monkeypatch.setattr(python_pack, "installed", lambda name: name not in gone)
+    steps = python_pack.run(root, {"rules": {"codes": CODES}})
+    assert [s for s, _ in steps] == ["tools"]
+    lines = steps[0][1]
+    assert len(lines) == len(gone)
+    for tool, line in zip(gone, lines, strict=True):
+        assert f"the pack's tool {tool} is not installed" in line
+        assert line.endswith(f"; install: {INSTALL[layout]}")
+        assert _pins(tool) not in line
+    for tool in {"ruff", "mypy"} - set(gone):
+        assert tool not in " ".join(lines)
+
+
+def test_the_readme_template_names_both_install_lines() -> None:
+    """REQ-079 AC4: brief #1683 answer 2: the product's README says it once."""
+    text = (KIT_ROOT / "kit" / "templates" / "project-readme.md").read_text(encoding="utf-8")
+    assert all(text.count(line) == 1 for line in INSTALL.values())
+
+
+def test_a_ruff_command_on_path_without_the_module_names_the_install_line(tmp_path: Path) -> None:
+    """REQ-079 AC4: brief #1683 answer 4 and Q-1: a `ruff` executable on PATH while this
+    Python has no ruff module (`-S` leaves site-packages off) is still a missing tool."""
+    import os
+    import subprocess  # nosec B404 - fixed argument list, no shell
+
+    root = sample(tmp_path / "sample")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "ruff"
+    fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake.chmod(0o755)
+    code = (
+        "import shutil, sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; "
+        "from gates import python_pack; "
+        "print(shutil.which('ruff') == sys.argv[3]); "
+        "[print(line) for _, lines in python_pack.run(Path(sys.argv[2]), {}) for line in lines]"
+    )
+    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, "-S", "-c", code, str(AGK), str(root), str(fake)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+        timeout=60,
+    )
+    lines = done.stdout.splitlines()
+    assert lines[0] == "True", done.stderr
+    ruff = [ln for ln in lines if "the pack's tool ruff is not installed" in ln]
+    assert len(ruff) == 1 and ruff[0].endswith(f"; install: {INSTALL['installed']}")

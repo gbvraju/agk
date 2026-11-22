@@ -1,0 +1,1 @@
+- A new Python product's skeleton passes the kit's standards pack, and a missing pack tool is named with the line that installs it (brief #1683)
