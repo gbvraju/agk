@@ -52,7 +52,8 @@ def test_1168b_a_later_maintainer_answer_by_a_spec_approver_clears_it():
     for line in ("Maintainer answer: the size is fine", f"Approve: {HEAD[:7]} SPEC-0032"):
         answer = at(6, "maintainer", line, "2026-11-13T00:45:00Z")
         comments = [owner_needed(), covered_fix_list(), answer]
-        assert route.decide(facts(comments=comments, commit=PUSHED)) == "agk:merge-ready", line
+        f = facts(comments=comments, commit=PUSHED, files=CHANGES_0032)  # brief #1735: its spec
+        assert route.decide(f) == "agk:merge-ready", line
     stranger = at(6, "stranger", "Maintainer answer: the size is fine", "2026-11-13T00:45:00Z")
     comments = [owner_needed(), covered_fix_list(), stranger]
     assert route.decide(facts(comments=comments, commit=PUSHED)) == "agk:question"
@@ -121,16 +122,31 @@ def ask(body: str, login: str = "boss") -> dict:
     return at(4, login, f"Owner needed: {body}", ASKED_AT)
 
 
+# brief #1735 (ADR-0723): the line is offered alone, for a spec or amendment the change touches
+CHANGES_0032 = [
+    {"filename": "docs/specs/0032-an-invented-spec.md"},
+    {"filename": "docs/runs/proposed-spec-amendments-196.md"},
+    {"filename": "docs/runs/proposed-spec-amendments-197.md"},
+]
+
+
 def test_1656_an_amendment_or_spec_approval_ask_gives_approve_a_plain_one_question():
     """REQ-039: brief #1656 answers 1 and 4 (the case of #1654)."""
     for body in (
+        "post this line:\n\n`Maintainer answer: amendment 196 approved`",
+        "post on the head:\n\nApprove: SPEC-0032\n",
+        "two asks, a size ruling and:\n\nMaintainer answer: amendment 197 approved",
+    ):
+        state = route.pr_state(facts(comments=[ask(body)], commit=PUSHED, files=CHANGES_0032))
+        assert state == ("agk:approve", "owner"), body
+        draft = facts(draft=True, comments=[ask(body)], files=CHANGES_0032)
+        assert route.decide(draft) == "agk:approve", body
+    for body in (  # brief #1735 Q-1: with the files unread, a line in a sentence counts as before
         "post `Maintainer answer: amendment 196 approved`",
         "post `Approve: SPEC-0032` on the head",
-        "two asks: Maintainer answer: amendment 197 approved, and a size ruling",
     ):
-        state = route.pr_state(facts(comments=[ask(body)], commit=PUSHED))
-        assert state == ("agk:approve", "owner"), body
-        assert route.decide(facts(draft=True, comments=[ask(body)])) == "agk:approve", body
+        unread = facts(comments=[ask(body)], commit=PUSHED, files=None)
+        assert route.pr_state(unread) == ("agk:approve", "owner"), body
     plain = ask("a size ruling on this pull request")
     assert route.decide(facts(comments=[plain], commit=PUSHED)) == "agk:question"
     stranger = ask("Maintainer answer: amendment 196 approved", login="stranger")
@@ -139,11 +155,17 @@ def test_1656_an_amendment_or_spec_approval_ask_gives_approve_a_plain_one_questi
 
 def test_1656_the_owner_answers_close_the_approval_ask_as_today():
     """REQ-039: brief #1656 answer 1 (`asks_owner` closes both forms)."""
-    asked = ask("post `Maintainer answer: amendment 196 approved`")
-    for line in ("Maintainer answer: amendment 196 approved", f"Approve: {HEAD[:7]} SPEC-0032"):
+    asked = ask("post:\n\n`Maintainer answer: amendment 196 approved`")
+    for line in ("Maintainer answer: amendment 196 approved", "Maintainer answer: yes, all"):
         answer = at(6, "maintainer", line, "2026-11-13T00:45:00Z")
         comments = [asked, covered_fix_list(), answer]
-        assert route.decide(facts(comments=comments, commit=PUSHED)) == "agk:merge-ready", line
+        f = facts(comments=comments, commit=PUSHED, files=CHANGES_0032)
+        assert route.decide(f) == "agk:merge-ready", line
+    other = at(6, "maintainer", f"Approve: {HEAD[:7]} SPEC-0032", "2026-11-13T00:45:00Z")
+    f = facts(comments=[asked, covered_fix_list(), other], commit=PUSHED, files=CHANGES_0032)
+    assert route.decide(f) == "agk:approve"  # brief #1735 answer 2: another approval, not this one
+    unread = facts(comments=[asked, covered_fix_list(), other], commit=PUSHED, files=None)
+    assert route.decide(unread) == "agk:merge-ready"  # Q-1735-1: unread files close as before
     parked = facts(comments=[asked], labels=["agk:parked"])
     assert route.decide(parked) == "agk:parked"
 
@@ -288,15 +310,17 @@ def test_1733_6ef_no_owner_ask_or_a_hold_that_is_not_the_owners_never_owner_merg
 def test_1733_6g_an_approval_ask_comes_before_the_merge_ask():
     """REQ-039: brief #1733 answers 1 and 6 (g): `agk:approve`, then `agk:owner-merge` once the
     approval is given; a later plain answer closes the merge ask (answer 5)."""
-    approval = at(41, "boss", "Owner needed: post `Approve: SPEC-0032`", "2026-11-22T09:33:00Z")
+    offered = "Owner needed: post:\n\n`Approve: SPEC-0032`"  # brief #1735: offered alone
+    approval = at(41, "boss", offered, "2026-11-22T09:33:00Z")
     both = [cleared_on(), merge_ask("release"), approval]
-    assert route.decide(merge_facts(*both)) == "agk:approve"
+    spec = {"files": CHANGES_0032}
+    assert route.decide(merge_facts(*both, **spec)) == "agk:approve"
     given = at(42, "maintainer", "Approve: SPEC-0032", "2026-11-22T09:40:00Z")
-    assert route.decide(merge_facts(*both, given)) == "agk:owner-merge"
+    assert route.decide(merge_facts(*both, given, **spec)) == "agk:owner-merge"
     done = at(43, "maintainer", "Maintainer answer: merged by hand", "2026-11-22T09:50:00Z")
-    assert route.decide(merge_facts(*both, given, done)) == "agk:merge-ready"
+    assert route.decide(merge_facts(*both, given, done, **spec)) == "agk:merge-ready"
     alone = at(42, "maintainer", "Approve: SPEC-0032", "2026-11-22T09:40:00Z")
-    assert route.decide(merge_facts(cleared_on(), merge_ask("release"), alone)) == (
+    assert route.decide(merge_facts(cleared_on(), merge_ask("release"), alone, **spec)) == (
         "agk:merge-ready"
     )
 
@@ -418,7 +442,7 @@ def pr_1723_comments(note: str = "Owner needed:") -> list[dict]:
         at(5, "boss", "Owner needed: this change is cleared. To merge it, use the Merge button "
            f"on this pull request (squash), or run on your computer:\n\n{command}\n\nWho: AGK",
            D + "10:34:19Z"),
-        at(6, "maintainer", "Maintainer answer: merge it now; I merge with merge_cleared.py",
+        at(6, "maintainer", "Maintainer answer: merge it now; I merge with the owner command",
            D + "11:12:54Z"),
         at(7, "maintainer", "Approve: SPEC-0050", D + "11:56:38Z"),
         at(8, "boss", f"{note} the line `Approve: SPEC-0050` just posted here belongs on #1726, "

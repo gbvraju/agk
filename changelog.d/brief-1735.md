@@ -1,0 +1,1 @@
+- An owner ask counts as a spec approval only when it offers the approval line alone for a spec or amendment the pull request changes, and an approval posted on the wrong pull request answers nothing there; the conductor names only the owner merge command and marks a misplaced line with `Note:` (brief #1735)

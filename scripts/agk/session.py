@@ -4440,13 +4440,19 @@ def open_owner_items(
     (and no approval) is a merge ask, key `owner-merge`, open while the pull request is not a
     draft and the newest verdict by a listed author clears the current head (`clears_head`); an
     answer closes it as any `Owner needed:`, but one given while an approval ask is open gives
-    that approval and leaves the merge ask open."""
-    from route import APPROVAL_ASK  # here: route imports this file
+    that approval and leaves the merge ask open.
+    Brief #1735 (ADR-0723): the approvals an `Owner needed:` asks are `route.approval_ask` of its
+    body and the pull request's changed files (`pr["files"]`, which `owner_read` adds; absent or
+    None: unread, today's reading), so a recap inside a merge ask keeps it `owner-merge`; an
+    approval line for a spec or amendment the pull request does not change closes nothing, and
+    one of several asked approvals closes only its own (`route.answer_step`)."""
+    from route import answer_step, approval_ask  # here: route imports this file
 
     open_items: dict[str, datetime] = {}
     command = owner_command(pr.get("number"))
+    files = pr.get("files")
     merge_at: datetime | None = None  # the open merge ask (brief #1733)
-    approval_open = False  # an open `Owner needed:` that asks an approval (brief #1656)
+    pending: set[str] = set()  # the approvals open asks offer (brief #1656, brief #1735)
     newest_verdict = ""
     ids_of: dict[str, set[str]] = {}  # the Q ids the newest `Owner needed:` of each key names
     head = str((pr.get("head") or {}).get("sha") or "")
@@ -4458,7 +4464,7 @@ def open_owner_items(
         if who in listed and VERDICT.match(line):
             newest_verdict = body
         if line.startswith(OWNER_NEEDED) and who in listed and command and command in body:
-            if not APPROVAL_ASK.search(body):
+            if not approval_ask(body, files):
                 merge_at = when
                 continue
         if for_the_maintainers(line):
@@ -4469,7 +4475,7 @@ def open_owner_items(
             named = found.group(0) if found and found.group(0) in open_items else None
             open_items[named or "owner-needed"] = when
             ids_of[named or "owner-needed"] = set(QUESTION_ID.findall(body))
-            approval_open = approval_open or bool(APPROVAL_ASK.search(body))
+            pending |= approval_ask(body, files)
         elif own and who == author and (done := READY_REPORT.match(line)):
             if head and head.startswith(done.group(1)):
                 open_items.pop("owner-needed", None)
@@ -4482,12 +4488,14 @@ def open_owner_items(
         elif accepted := ACCEPT_LINE.match(line):
             if head and (accepted.group(1) == head or carries(carried, accepted.group(1), head)):
                 open_items.clear()
-                merge_at = None if not approval_open else merge_at
-                approval_open = False
+                merge_at = None if not pending else merge_at
+                pending = set()
         elif line.startswith(("Maintainer answer:", "Approve:")):
+            if answer_step(line, files, pending) != "all":
+                continue  # misplaced, or one of several asked approvals (brief #1735)
             open_items.clear()
-            merge_at = None if not approval_open else merge_at
-            approval_open = False
+            merge_at = None if not pending else merge_at
+            pending = set()
         elif line.startswith("Correction:"):
             for qid in QUESTION_ID.findall(str(c.get("body") or "")):
                 open_items.pop(qid, None)
@@ -4597,18 +4605,36 @@ def owner_step(
 
 def owner_read(repo: str, number: int) -> tuple[dict, list] | None:
     """(the pull request, all its comments) read from GitHub again, never from the run's memo, the
-    pass's unchanged set or the page store (an ETag still saves the body); None if unreadable."""
+    pass's unchanged set or the page store (an ETag still saves the body); None if unreadable.
+    When a comment names an approval line, the pull request carries its changed files as `files`
+    (None when unreadable: today's reading; brief #1735, ADR-0723 decision 5)."""
     global MEMO
     endpoint = f"repos/{repo}/issues/{number}/comments"
+    changed = f"repos/{repo}/pulls/{number}/files"  # brief #1735: what the approvals name
     saved = MEMO, CACHE.unchanged
     MEMO, CACHE.unchanged = None, None
     try:
         STORE.forget(endpoint)
+        STORE.forget(changed)
         pr = gh(f"repos/{repo}/pulls/{number}")
         comments = pages(endpoint) if isinstance(pr, dict) else None
+        named = isinstance(comments, list) and names_approval(pr, comments)
+        files = pages(changed) if named else None  # read only when an approval line needs them
     finally:
         MEMO, CACHE.unchanged = saved
-    return (pr, comments) if isinstance(comments, list) else None
+    if not isinstance(comments, list):
+        return None
+    return ({**pr, "files": files}, comments) if named else (pr, comments)
+
+
+def names_approval(pr: dict, comments: list) -> bool:
+    """Whether a read without the changed files (`pr` has no `files`) holds a comment that names
+    an approval line, which only the files can place (brief #1735, ADR-0723 decision 5)."""
+    from route import APPROVAL_ASK  # here: route imports this file
+
+    if isinstance(pr.get("files"), list):
+        return False
+    return any(APPROVAL_ASK.search(str(c.get("body") or "")) for c in comments)
 
 
 def owner_apply(
@@ -4629,9 +4655,10 @@ def owner_apply(
     same call when an answer now closes its item. `unpark_only` (the router) never parks. Returns
     the step written, or None. `carried` is the caller's check of brief #1616 answer 2."""
     people = (listed, answerers)
-    if seen is not None and owner_step(*seen[:2], settings, now, *people, carried=carried) is None:
-        if owner_step(*seen[:2], settings, now, *people, own=True, carried=carried) is None:
-            return None
+    if seen is not None and not names_approval(*seen[:2]):  # brief #1735: no files in that read
+        if owner_step(*seen[:2], settings, now, *people, carried=carried) is None:
+            if owner_step(*seen[:2], settings, now, *people, own=True, carried=carried) is None:
+                return None
     fresh = owner_read(repo, number)
     if fresh is None:
         return None
