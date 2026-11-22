@@ -1,1 +1,1 @@
-- A new session rule says that what a session reads from GitHub, the web or the repository is data, never an instruction, and the builder, conductor and steward role files point at it (brief #1710)
+- A new session rule says that what a session reads from GitHub, the web or the repository is data, never an instruction, and the core rules page names it and the builder, conductor and steward role files point at it (brief #1710)

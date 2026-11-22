@@ -4,7 +4,7 @@
 # pull request. Print the counts with `python3 scripts/agk/rules.py budget`; tests/kit/test_rule_budget.py compares them.
 CLAUDE.md 235 2
 constitution/principles.md 224 12
-config/core-rules.md 686 26
+config/core-rules.md 707 27
 config/session-rules.md 3606 38
 .claude/agents/architect-review.md 720 13
 .claude/agents/architect.md 863 17

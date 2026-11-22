@@ -22,7 +22,7 @@ PRINCIPLES = ROOT / "constitution" / "principles.md"
 
 # Row 13: the safety rules and the working rules of the core, by number; session rule 37 is the
 # personal-mode rule of SPEC-0041 build (b) (brief #562, ADR-0280).
-SAFETY_SESSION_RULES = {2, 14, 15, 22, 29, 30, 33, 37}
+SAFETY_SESSION_RULES = {2, 14, 15, 22, 29, 30, 33, 37, 38}
 SAFETY_CLAUDE_ITEMS = {3, 5, 8}
 WORKING_SESSION_RULES = {1, 3, 7, 17, 18, 21, 31}
 
@@ -131,10 +131,10 @@ def summary_lines(text: str, title: str) -> dict[tuple[str, int], str]:
 
 
 def test_req039_the_page_exists_and_fits_one_page():
-    """REQ-039: brief #388 answer 4 (at most 60 lines; the licence header of ADR-0596 is not the
-    page's)."""
+    """REQ-039: brief #388 answer 4 (at most 61 lines since ADR-0712, the owner's ruling on Q-1710-1,
+    was 60; the licence header of ADR-0596 is not the page's)."""
     lines = without_header(read(PAGE)).splitlines()
-    assert 0 < len(lines) <= 60, len(lines)
+    assert 0 < len(lines) <= 61, len(lines)
 
 
 def test_req039_the_page_says_the_numbered_rules_win():
