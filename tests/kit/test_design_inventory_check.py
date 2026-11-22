@@ -338,3 +338,85 @@ def test_ac2_the_inventory_check_reads_files_only():
         "open(",
     ):
         assert word not in source, word
+
+
+# Brief #1756 (amendment 217 to SPEC-0037 rule 3, ADR-0734): an empty screen list is refused when
+# a discovery document says the work has screens; a milestone section of the idea path is checked.
+
+KIT_ONLY = """# Design inventory
+
+## Requirements
+
+### REQ-001 — A reader keeps a list of books
+
+- Specs: none
+- Screens: no screen: a rule of the kit
+
+### REQ-002 — A nightly job tidies the list
+
+- Specs: none
+- Screens: no screen: a rule of the kit
+
+## Screens
+"""
+
+EMPTY_LIST = "SPEC-0037 rule 3: docs/design/: the inventory lists no screen"
+
+
+def discovery(root: Path, name: str, screens: str) -> None:
+    folder = root / "docs" / "discovery"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{name}.md").write_text(
+        f"# Discovery: {name}\n\n- Problem: in session 2026-11-22\n- Screens: {screens}\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("screens", ["yes", "open"])
+def test_ac2_no_screen_with_discovery_screens_fails_naming_the_rule(tmp_path, screens):
+    """REQ-044 AC2: SPEC-0037 rule 3 as amendment 217 proposes (brief #1756 answer 2)."""
+    project(tmp_path, KIT_ONLY)
+    discovery(tmp_path, "nightly", "no")
+    discovery(tmp_path, "booking", screens)
+    assert any(p.startswith(EMPTY_LIST) for p in problems(tmp_path)), problems(tmp_path)
+    proc = check(tmp_path)
+    assert proc.returncode == 1, proc.stdout
+    assert f"FAIL design: {EMPTY_LIST}" in proc.stdout
+
+
+def test_ac2_no_screen_passes_when_discovery_says_no_or_is_absent(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1756 answer 2: `Screens: no`, or none, as today)."""
+    project(tmp_path, KIT_ONLY)
+    assert problems(tmp_path) == []
+    discovery(tmp_path, "nightly", "no")
+    assert problems(tmp_path) == []
+    assert check(tmp_path).returncode == 0
+
+
+def test_ac2_a_quoted_screens_line_is_not_read(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (a person's quoted words are never the discovery answer)."""
+    project(tmp_path, KIT_ONLY)
+    folder = tmp_path / "docs" / "discovery"
+    folder.mkdir(parents=True)
+    (folder / "nightly.md").write_text(
+        "# Discovery: nightly\n\n<!-- agk:problem sha256=" + "0" * 64 + " -->\n- Screens: yes\n"
+        "<!-- agk:problem-end -->\n- Screens: no\n",
+        encoding="utf-8",
+    )
+    assert problems(tmp_path) == []
+
+
+def test_ac2_a_filled_milestone_section_passes_and_an_empty_one_fails(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1756 answer 1: a milestone section's slots)."""
+    milestone = (
+        "### M1 — a reader keeps a list. exit: 3 books are kept\n\n"
+        "- Sources: docs/adr/0002-project-charter.md, docs/discovery/books.md\n"
+        "- Screens: books, book-detail\n\n"
+    )
+    text = INVENTORY_TEXT.replace("## Screens\n", milestone + "## Screens\n", 1)
+    project(tmp_path, text)
+    discovery(tmp_path, "books", "yes")
+    assert problems(tmp_path) == []
+    project_empty = text.replace("- Screens: books, book-detail\n", "- Screens:\n")
+    (tmp_path / INVENTORY).write_text(project_empty, encoding="utf-8")
+    assert f"{WHERE}: M1: the slot Screens is empty" in problems(tmp_path)
