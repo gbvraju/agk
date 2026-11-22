@@ -104,8 +104,9 @@ def test_the_base_holds_no_pack_and_the_other_playbooks_none_of_their_own() -> N
     base = (PLAYBOOKS / "default.toml").read_text(encoding="utf-8")
     assert "standards" not in tomllib.loads(base)
     for path in sorted(PLAYBOOKS.glob("*.toml")):
-        if path.stem not in WORK_TYPES:
-            assert check_playbooks.standard(path, KIT_ROOT)[1] == [], path.stem
+        if path.stem not in WORK_TYPES:  # brief #1764: a Node entry is the Node pack's own
+            found = check_playbooks.standard(path, KIT_ROOT)[1]
+            assert [e for e in found if e["stack"] in python_pack.STACKS] == [], path.stem
 
 
 def test_a_clean_python_service_passes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

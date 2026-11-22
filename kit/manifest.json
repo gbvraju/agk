@@ -119,6 +119,7 @@
     "scripts/agk/gates/layers.py",
     "scripts/agk/gates/licences.py",
     "scripts/agk/gates/mock_parity.py",
+    "scripts/agk/gates/node_pack.py",
     "scripts/agk/gates/pins.py",
     "scripts/agk/gates/python_pack.py",
     "scripts/agk/gates/rollback_order.py",

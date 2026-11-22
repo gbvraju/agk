@@ -1,0 +1,219 @@
+"""Tests of the Node standards pack (SPEC-0072 rules 6 and 8; REQ-079; brief #1764, ADR-0739).
+
+On a sample TypeScript web app with an Accepted stack record that chose Node, the pack's `floor`,
+`node-lint` and `node-format` steps run the product's own `node_modules/.bin/` tools over
+`project_lint_paths` (default: the layers' paths): a clean sample passes; a planted lint fault
+fails naming the rule and the path class and no value; an unformatted file fails; a configuration
+that turns a pinned rule off fails the floor naming the rule; a missing tool names `npm ci`; and
+the pack is off without a Node stack or a `package.json`. The tools are stand-in scripts written
+here (no network, no real install). Fixtures in `tmp_path` only: invented data (example.com).
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import sys
+from pathlib import Path
+
+import pytest
+
+KIT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+
+import check_playbooks  # noqa: E402
+import run_gates  # noqa: E402
+from gates import node_pack  # noqa: E402
+
+PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
+VALUES = ("greet.ts", "greeting", "hello", "example.com")
+CLEAN = 'export const greeting = (name: string): string => "hello " + name; // example.com\n'
+RECORD = """# ADR-0002: stack options
+
+- Status: Accepted
+
+1. **Options**
+   - Option A — one web app at example.com. Parts: node 22.11.0 MIT, examplelib 1.2.3 MIT.
+3. **Chosen**: Option A
+"""
+# The stand-in eslint: `--print-config` prints the rules of `eslint-rules.json`; a lint run
+# reports `no-debugger` for a line `debugger;` and the "File ignored" warning for a file the
+# config's `ignores` names, as ESLint's JSON format does.
+ESLINT = """
+import json, os, sys
+conf = json.load(open("eslint-rules.json"))
+args = sys.argv[1:]
+if args[0] == "--print-config":
+    print(json.dumps({"rules": conf["rules"]}))
+    sys.exit(0)
+out, bad = [], False
+for name in [a for a in args if not a.startswith("-") and a not in ("0", "json")]:
+    msgs = []
+    if name in conf.get("ignores", []):
+        msgs.append({"ruleId": None, "severity": 1, "message": "File ignored because of a pattern"})
+    elif "debugger;" in open(name).read():
+        msgs.append({"ruleId": "no-debugger", "severity": 2, "message": "Unexpected debugger"})
+        bad = True
+    out.append({"filePath": os.path.abspath(name), "messages": msgs})
+print(json.dumps(out))
+sys.exit(1 if bad or any(r["messages"] for r in out) else 0)
+"""
+# The stand-in prettier: a file holding a tab is not formatted.
+PRETTIER = """
+import sys
+bad = [a for a in sys.argv[2:] if "\\t" in open(a).read()]
+for name in bad:
+    print("[warn] " + name)
+sys.exit(1 if bad else 0)
+"""
+
+
+def floor_rules() -> dict[str, str]:
+    entry = next(e for e in node_entries("web-app") if e["stack"] == "node")
+    return {code: "error" for code in entry["rules"]["codes"]}
+
+
+def node_entries(work_type: str) -> list[dict]:
+    return check_playbooks.standard(PLAYBOOKS / f"{work_type}.toml", KIT_ROOT)[1]
+
+
+def sample(tmp: Path, code: str = CLEAN, rules: dict | None = None, **kw: object) -> Path:
+    shutil.copytree(PLAYBOOKS, tmp / "config" / "playbooks")
+    toml = kw.get("toml", "")
+    (tmp / "agk.toml").write_text(
+        f'mode = "init"\n{toml}\n[delivery]\nwork_type = "{kw.get("work_type", "web-app")}"\n',
+        encoding="utf-8",
+    )
+    if kw.get("package", True):
+        (tmp / "package.json").write_text('{"devDependencies": {}}\n', encoding="utf-8")
+    (tmp / "docs" / "adr").mkdir(parents=True)
+    record = RECORD.replace("node 22", f"{kw.get('runtime', 'node')} 22")
+    (tmp / "docs" / "adr" / "0002-stack-options.md").write_text(record, encoding="utf-8")
+    conf = {"rules": floor_rules() if rules is None else rules, "ignores": kw.get("ignores", [])}
+    (tmp / "eslint-rules.json").write_text(json.dumps(conf), encoding="utf-8")
+    bin_dir = tmp / "node_modules" / ".bin"
+    bin_dir.mkdir(parents=True)
+    for name, body in (("eslint", ESLINT), ("prettier", PRETTIER)):
+        if name in kw.get("missing", ()):
+            continue
+        tool = bin_dir / name
+        tool.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
+        tool.chmod(0o755)
+    (tmp / "frontend").mkdir()
+    (tmp / "frontend" / "greet.ts").write_text(code, encoding="utf-8")
+    (tmp / "node_modules" / "dep.js").write_text("debugger;\n", encoding="utf-8")  # never read
+    return tmp
+
+
+def gates(root: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    code = run_gates.main(["--root", str(root)])
+    out = capsys.readouterr()
+    return code, out.out + out.err
+
+
+def no_values(text: str) -> None:
+    for word in VALUES:
+        assert word not in text, word
+
+
+@pytest.mark.parametrize("work_type", ["web-app", "mobile"])
+def test_each_playbook_carries_the_node_entry(work_type: str) -> None:
+    """REQ-079: brief #1764 answer 5 (no version: the product's own pins hold it)."""
+    _, packs, problems = check_playbooks.standard(PLAYBOOKS / f"{work_type}.toml", KIT_ROOT)
+    assert problems == []
+    entry = {e["stack"]: e for e in packs}["node"]
+    assert (entry["lint"], entry["format"], entry["type"]) == node_pack.STEP_NAMES
+    assert entry["config"] == "package.json"
+    assert entry["rules"]["tool"] == "eslint" and "version" not in entry["rules"]
+    assert {"no-debugger", "no-unused-vars", "no-undef"} <= set(entry["rules"]["codes"])
+    assert "node_pack" in run_gates.PACKS
+
+
+@pytest.mark.parametrize("work_type", ["web-app", "mobile"])
+def test_a_clean_sample_passes(
+    work_type: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1764 answers 1 to 4 (the vendored file is never read)."""
+    code, out = gates(sample(tmp_path, work_type=work_type), capsys)
+    assert code == 0, out
+    assert "ok standards node" in out and "no pack for node" not in out
+
+
+def test_a_planted_lint_fault_fails_naming_the_rule_and_path_class(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: the brief's Measured line."""
+    code, out = gates(sample(tmp_path, "debugger;\n" + CLEAN), capsys)
+    assert code == 1
+    assert "FAIL gates: standards node lint: SPEC-0072 rule 6: lint rule no-debugger" in out
+    assert "(path class: frontend/**)" in out
+    no_values(out)
+
+
+def test_an_unformatted_file_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """REQ-079: brief #1764 answer 4."""
+    code, out = gates(sample(tmp_path, "\t" + CLEAN), capsys)
+    assert code == 1
+    assert "standards node format: SPEC-0072 rule 6: the file is not formatted, prettier" in out
+    assert "(path class: frontend/**)" in out
+    no_values(out)
+
+
+@pytest.mark.parametrize("severity", ["off", 0, ["off"]])
+def test_a_pinned_rule_turned_off_fails_the_floor(
+    severity: object, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1764 answer 3 (each missing rule named by its id; `warn` counts as on)."""
+    rules: dict[str, object] = dict(floor_rules(), **{"no-debugger": severity})
+    rules["no-undef"] = "warn"
+    del rules["no-empty"]
+    code, out = gates(sample(tmp_path, rules=rules), capsys)
+    assert code == 1
+    lines = [ln for ln in out.splitlines() if "standards node floor" in ln]
+    assert len(lines) == 2, out
+    for rule in ("no-debugger", "no-empty"):
+        assert any(f"pack's rule {rule} (setting: standards.config)" in ln for ln in lines)
+
+
+@pytest.mark.parametrize("tool", ["eslint", "prettier"])
+def test_a_missing_tool_names_npm_ci(
+    tool: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1764 answer 2 (never a download, never a version)."""
+    code, out = gates(sample(tmp_path, missing=(tool,)), capsys)
+    assert code == 1
+    assert f"the pack's tool {tool} is not installed" in out and "install: npm ci" in out
+
+
+@pytest.mark.parametrize("case", ["python", "no-package"])
+def test_the_pack_is_off_without_a_node_stack_or_package_json(case: str, tmp_path: Path) -> None:
+    """REQ-079: brief #1764 answers 1 and 7."""
+    kw = {"runtime": "python"} if case == "python" else {"package": False}
+    root = sample(tmp_path, **kw)
+    assert not node_pack.on(root)
+    assert not any("standards node" in line for _, line in run_gates.pack_results(
+        PLAYBOOKS / "web-app.toml", root))
+
+
+def test_an_ignored_file_is_not_counted(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """REQ-079: brief #1764 answer 7 (the config's `ignores`)."""
+    root = sample(tmp_path, ignores=["frontend/greet.ts"])
+    (root / "frontend" / "other.ts").write_text(CLEAN, encoding="utf-8")
+    code, out = gates(root, capsys)
+    assert code == 0, out
+
+
+def test_project_lint_paths_chooses_the_files_and_a_bad_form_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1764 answer 6 (the setting is read as for Python)."""
+    root = sample(tmp_path, "debugger;\n", toml='project_lint_paths = ["web/**"]')
+    (root / "web").mkdir()
+    (root / "web" / "main.mjs").write_text(CLEAN, encoding="utf-8")
+    assert node_pack.files(root, node_pack.patterns(root)) == [("web/main.mjs", "web/**")]
+    assert gates(root, capsys)[0] == 0
+    (root / "agk.toml").write_text(
+        'project_lint_paths = "web"\n[delivery]\nwork_type = "web-app"\n', encoding="utf-8"
+    )
+    code, out = gates(root, capsys)
+    assert code == 1 and "(setting: project_lint_paths)" in out
