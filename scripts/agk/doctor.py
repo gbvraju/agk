@@ -53,6 +53,9 @@ carries it as `work_type`.
 SPEC-0048 rule 12 (brief #691): after that line, one `skill: <name> present|absent` for each skill
 the declared work type's playbook names, by the lookup of `[engines]` (`SKILL.md` exists, nothing
 is read); the JSON report carries them as `skills`. An absent skill changes no exit code.
+Brief #1685 (ADR-0702): after them, when the chosen runtime has no standards pack yet, one line
+`warn standards: no pack for this stack yet (setting: stack record)`, also under `skills` in the
+JSON report; it changes no exit code.
 SPEC-0037 rule 15 (amendment 161 item 6, brief #1064): after those, one information line for each
 imported version `docs/design/imported/i<n>/`, `design import: i<n> manifest matches the files|<n>
 problems|cannot be read; map complete|<n> problems|absent|not checked (<n> pages)`, the counts of
@@ -2785,6 +2788,9 @@ def unmapped_lines(root: Path) -> list[str]:
     return lines + ([f"tests: unmapped: and {more} more"] if more > 0 else [])
 
 
+STANDARDS_LINE = "warn standards: no pack for this stack yet (setting: stack record)"
+
+
 def work_type_line(root: Path) -> tuple[str, bool]:
     """SPEC-0038 rule 5: the one work-type line and whether it fails; reads only agk.toml and the
     presence of the declared playbook."""
@@ -2794,6 +2800,18 @@ def work_type_line(root: Path) -> tuple[str, bool]:
     if value is None:
         return "work type: none (no playbook)", False
     return f"work type: {value} (playbook {playbook_format.FOLDER}/{value}.toml)", False
+
+
+def standards_lines(root: Path) -> list[str]:
+    """Brief #1685 (ADR-0702): one warn line when the chosen runtime has no standards pack yet,
+    by the gate runner's own reading; it changes no exit code."""
+    import run_gates  # noqa: PLC0415 - only this line needs the runner
+
+    try:
+        stack = run_gates.no_pack(root)
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return []
+    return [STANDARDS_LINE] if stack else []
 
 
 def _count(n: int) -> str:
@@ -3010,6 +3028,7 @@ def main(argv: list[str] | None = None) -> int:
         scan = secret_scan_line(local=read_config(root.resolve()).get("execution") == "local")
         work, work_failed = work_type_line(root.resolve())
         skills = skill_lines(root.resolve(), Path(options["kit"]) if options["kit"] else None)
+        skills += standards_lines(root.resolve())
         design = design_import_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")
