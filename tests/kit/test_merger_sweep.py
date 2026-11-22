@@ -304,3 +304,37 @@ def test_no_plain_run_value_holds_a_colon_and_a_space():
     plain = re.findall(r"^\s*(?:- )?run: (?![|>\"'])(.*)$", text(), re.M)
     assert plain, "the file has plain run values"
     assert [value for value in plain if ": " in value or value.endswith(":")] == []
+
+
+def test_a_strangers_verdict_runs_no_guarded_merge(tmp_path, monkeypatch, capsys):
+    """REQ-046: brief #1709 answer 1 (the sweep counts only a listed author's verdict)."""
+    theirs = [{**clearing(5)[0], "user": {"login": "stranger-four"}}]
+    world = World(monkeypatch, [a_pull(5)], {5: theirs})
+    lines = sweep(tmp_path, capsys)
+    assert world.ran == []
+    assert lines == [f"merge-cleared #5 {sha_of(5)[:12]}: not cleared: no verdict (rule 3)"]
+
+
+def test_no_listed_verdict_author_sweeps_nothing(tmp_path, monkeypatch, capsys):
+    """REQ-046: brief #1709 answer 1 (an empty list holds every head, naming the setting)."""
+    world = World(monkeypatch, [a_pull(5)], {5: clearing(5)})
+    root = repo(tmp_path, toml(ON), reviewers_yaml=None, origin="")
+    assert merge_cleared.main(["--sweep"], root) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert world.ran == [] and "verdict_authors" in lines[0]
+
+
+def test_the_late_sweep_report_counts_only_a_listed_authors_verdict(monkeypatch):
+    """REQ-046: brief #1709 answer 1 (`conductor.cleared_open` reads the trusted list)."""
+    import conductor
+
+    pull = {**a_pull(5), "head": {"sha": sha_of(5)}}
+    theirs = [{**clearing(5)[0], "user": {"login": "stranger-four"}}]
+    answers = {"pulls": [pull], "comments": theirs}
+    monkeypatch.setattr(
+        conductor, "read", lambda path, what: answers["pulls" if "/pulls" in path else "comments"]
+    )
+    assert conductor.cleared_open("example-owner/example-repo", ["owner-three"]) is False
+    answers["comments"] = clearing(5)
+    assert conductor.cleared_open("example-owner/example-repo", ["owner-three"]) is True
+    assert conductor.cleared_open("example-owner/example-repo", []) is False
