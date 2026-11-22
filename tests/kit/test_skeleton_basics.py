@@ -354,3 +354,59 @@ def test_req079_the_written_skeleton_passes_the_standards_pack(tmp_path, work_ty
     steps = python_pack.run(root, pack_entry())
     assert [s for s, _ in steps] == ["floor", "lint", "format", "type"]
     assert [line for _, lines in steps for line in lines] == []
+
+
+def with_pack(tmp: Path, lines: str = "") -> Path:
+    """An API service's written skeleton with the stack's `pyproject.toml`, committed, and LINES
+    at the top of its `agk.toml`."""
+    root = written(tmp, "api-service")
+    stack = KIT_ROOT / "kit" / "templates" / "stacks" / "python-pyproject" / "pyproject.toml"
+    text = stack.read_text(encoding="utf-8").replace("{{project}}", "sample")
+    (root / "pyproject.toml").write_text(text, encoding="utf-8")
+    toml = (root / "agk.toml").read_text(encoding="utf-8")
+    (root / "agk.toml").write_text(lines + toml, encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "-c", "user.name=a", "-c", "user.email=a@example.com", "commit", "-qm", "skeleton")
+    return root
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        'execution = "hosted"\n',
+        'execution = "local"\n',
+        'review_mode = "solo"\n',
+        'review_mode = "team"\n',
+        'pr_mode = "strict"\n',
+        'pr_mode = "flow"\n',
+    ],
+)
+def test_req079_the_skeleton_passes_the_pack_under_each_setting(tmp_path, capsys, lines):
+    """REQ-079 AC4: brief #1683 answer 3: `execution`, `review_mode` and `pr_mode` give the same
+    pack result, the gate runner's `ok standards python-pyproject`."""
+    import run_gates
+
+    root = with_pack(tmp_path, lines)
+    code = run_gates.main(["--root", str(root)])
+    out = capsys.readouterr()
+    assert code == 0, out.out + out.err
+    assert "ok standards python-pyproject" in out.out.splitlines()
+
+
+def test_req079_the_personal_sidecar_runs_the_same_pack_over_the_skeleton(tmp_path, monkeypatch):
+    """REQ-079 AC4: brief #1683 answer 3 (personal mode): the sidecar's floor runs the same pack
+    on the head tree, and the skeleton passes it."""
+    import personal
+    from gates import python_pack
+
+    runs: list[list] = []
+    real = python_pack.run
+    monkeypatch.setattr(python_pack, "run", lambda *a, **k: runs.append(real(*a, **k)) or runs[-1])
+    root = with_pack(tmp_path)
+    sidecar = tmp_path / "sidecar"
+    sidecar.mkdir()
+    head = git(root, "rev-parse", "HEAD").strip()
+    ok, line = personal.gates_step(root, sidecar, head)
+    assert ok, line
+    assert line.startswith("floor: gates ok")
+    assert len(runs) == 1 and [x for _, lines in runs[0] for x in lines] == []
