@@ -9,17 +9,17 @@
 Protected classes this pull request changes: `scripts/agk/` (the new `gates/node_pack.py`, `run_gates.py` and
 `playbook_format.py`), `config/` (`config/playbooks/web-app.toml`, `config/playbooks/mobile.toml`), `agk.toml` (the
 `[[testing.map]]` entries), `tests/kit/` (the new `test_node_pack.py`, `test_python_pack.py`, `test_product_deps.py`,
-`test_playbook_standard.py`) and `kit/` (`kit/manifest.json`, the new installed file). `kit/hashes.json` is not edited by
-hand.
+`test_playbook_standard.py`) and `kit/` (`kit/manifest.json`, the new installed file). `kit/hashes.json` is not edited
+by hand.
 
 ## Context
 
-On main at 7306a8b (2026-11-22; the brief read b4a865c9) `run_gates.py` holds `PACKS = ("python_pack",)`, so a project whose Accepted stack
-record chose Node prints `not run standards: no pack for node` (ADR-0702) and its code gets no check from the kit.
-`gates/pins.py` already knows the `node` stack and holds its `devDependencies` exact. ADR-0665's format requires a
-`version` in a pack's `rules` table; the Python pack's version pins ruff from `config/ci-tools.txt`, while a Node pack's
-tools are the product's own pinned copies, so the kit has no version of its own to name, and the `mobile` playbook's own
-test refuses any version number in that file.
+On main at 7306a8b (2026-11-22; the brief read b4a865c9) `run_gates.py` holds `PACKS = ("python_pack",)`, so a project
+whose Accepted stack record chose Node prints `not run standards: no pack for node` (ADR-0702) and its code gets no
+check from the kit. `gates/pins.py` already knows the `node` stack and holds its `devDependencies` exact. ADR-0665's
+format requires a `version` in a pack's `rules` table; the Python pack's version pins ruff from `config/ci-tools.txt`,
+while a Node pack's tools are the product's own pinned copies, so the kit has no version of its own to name, and the
+`mobile` playbook's own test refuses any version number in that file.
 
 ## Decision
 
