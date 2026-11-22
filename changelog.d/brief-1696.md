@@ -1,0 +1,1 @@
+- The standards pack's install hint for the plugin layout takes the plugin's root from the kit's one resolver; the printed line is unchanged (brief #1696)
