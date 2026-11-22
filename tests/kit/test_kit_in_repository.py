@@ -1,8 +1,9 @@
 """Tests of SPEC-0071 rule 7 (brief #1458, ADR-0616; REQ-078 AC5): `doctor.py` warns
 `kit-in-repository` for a kit manifest file in a clean project, naming the path class and never the
 content; `doctor.py --paused` warns at start after `[licence] valid_until` and stops nothing; the
-steward's guard refuses a write of a manifest path into the product and, by brief #1752 (ADR-0732),
-any write under a kit-only folder of the manifest's `snapshot`, a folder copy and an unpacked archive.
+steward's guard refuses a write of a manifest path into the product and, by brief #1752
+(ADR-0732), any write under a kit-only folder of the manifest's `snapshot`, a folder copy and an
+unpacked archive.
 A stub plugin root with its own `.claude-plugin/plugin.json` and `kit/manifest.json`; invented data
 only; no network.
 """
@@ -46,7 +47,10 @@ SNAPSHOT = [
     "skills/",
     "tests/kit/",
 ]
-TEMPLATES = {"config/example.txt": "kit/templates/example.txt", "agk.toml": "kit/templates/agk.toml"}
+TEMPLATES = {
+    "config/example.txt": "kit/templates/example.txt",
+    "agk.toml": "kit/templates/agk.toml",
+}
 
 
 def stub_plugin(tmp_path: Path) -> Path:
@@ -247,7 +251,7 @@ def test_req078_the_doctor_and_the_guard_keep_the_same_files():
     assert module.KEEPS_UNDER == doctor.CLEAN_KEEPS_UNDER
 
 
-# --- brief #1752: every kit folder, a folder copy and an unpacked archive (ADR-0732) ---------------
+# --- brief #1752: every kit folder, a folder copy and an unpacked archive (ADR-0732) -------------
 
 KIT_ONLY = ("scripts/agk/", ".claude/agents/", "skills/", "tests/kit/", "kit/")
 
@@ -288,7 +292,9 @@ def test_req078_the_guard_refuses_kit_code_the_test_report_found_allowed(tmp_pat
     assert found is not None and found.startswith("steward guard: SPEC-0071 rule 7 denies ")
     assert "(path class: " in found and CONTENT not in found
     named = found.split("(path class: ", 1)[1].rstrip(")").split(", ")
-    assert named and all(n in KIT_ONLY or n == ".claude/hooks/" or n == ".claude-plugin/" for n in named)
+    assert named and all(
+        n in KIT_ONLY or n == ".claude/hooks/" or n == ".claude-plugin/" for n in named
+    )
 
 
 @pytest.mark.parametrize(
