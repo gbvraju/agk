@@ -451,11 +451,11 @@ def testing_table(root: Path) -> dict | None:
     every = check_every_script(table.get(EVERY_SCRIPT, []), root)
     return {
         "profile": profile,
-        EVERY_SCRIPT: every,
         "always_full": list(always_full),
         "map": mapped,
         "budget_seconds": budget,
         **({"map_source": source} if "map_source" in table else {}),
+        **({EVERY_SCRIPT: every} if every else {}),
         **({"links": links} if links else {}),
     }
 
@@ -1095,8 +1095,9 @@ def select(root: Path, base: str, head: str) -> Impact:
                 if test not in changed:
                     chosen.setdefault(test, Selected(test, path, NAMED, []))
     stripped_copy(changed, tests, (dirs, patterns), chosen)
-    if profile == "balanced" and not hit and table[EVERY_SCRIPT]:
-        new_scripts(root, (base, head), table[EVERY_SCRIPT], (tests, dirs, patterns), chosen)
+    every = table.get(EVERY_SCRIPT, [])
+    if profile == "balanced" and not hit and every:
+        new_scripts(root, (base, head), every, (tests, dirs, patterns), chosen)
     counts: dict[str, tuple[int, int]] = {}
     if not hit and profile != "thorough":
         counts = add_importers(root, head, changed, entries, tests, chosen, (dirs, patterns))
