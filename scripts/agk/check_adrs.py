@@ -193,18 +193,39 @@ def pending(
     merge base with BASE (the records a merge of main brought in sit on the merge's second parent,
     brief #1370, ADR-0575) whose file still says Proposed; HEAD alone when no base resolves."""
     try:
-        recorded = verified_records(root, "HEAD", comments)
-        resolved = resolve_base(root, base)
-        if resolved is not None:
-            recorded |= verified_records(root, merge_base(root, resolved), comments)
+        listed = pending_paths(root, files, comments, base)
     except CheckError as err:
         print(f"FAIL {NAME}: {err}")
         return 1
-    for p in files:
-        m = FILE_RE.match(p.name)
-        if m and m.group(1) in recorded and status_of(p.read_text(encoding="utf-8")) == "Proposed":
-            print(p.relative_to(root).as_posix())
+    for p in listed:
+        print(p.relative_to(root).as_posix())
     return 0
+
+
+def pending_paths(
+    root: Path, files: list[Path], comments: list[dict] | None = None, base: str | None = None
+) -> list[Path]:
+    """The FILES that `pending` prints, in order; a CheckError as `verified_records` raises one.
+    The release script flips exactly these (`changelog_fragments.py accept`, brief #1706)."""
+    recorded = verified_records(root, "HEAD", comments)
+    resolved = resolve_base(root, base)
+    if resolved is not None:
+        recorded |= verified_records(root, merge_base(root, resolved), comments)
+    return [
+        p
+        for p in files
+        if (m := FILE_RE.match(p.name))
+        and m.group(1) in recorded
+        and status_of(p.read_text(encoding="utf-8")) == "Proposed"
+    ]
+
+
+def adr_files(root: Path) -> list[Path]:
+    """The decision files of docs/adr/, sorted, without the template."""
+    adr_dir = root / "docs" / "adr"
+    if not adr_dir.is_dir():
+        return []
+    return sorted(p for p in adr_dir.glob("*.md") if p.name != "TEMPLATE.md")
 
 
 def terminal_failures(root: Path, mb: str, args: list[str]) -> list[str]:
@@ -296,12 +317,7 @@ def validate(name: str, text: str, known: set[str]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     root = repo_root()
-    adr_dir = root / "docs" / "adr"
-    files = (
-        sorted(p for p in adr_dir.glob("*.md") if p.name != "TEMPLATE.md")
-        if adr_dir.is_dir()
-        else []
-    )
+    files = adr_files(root)
     known = {m.group(1) for p in files if (m := FILE_RE.match(p.name))}
     args = sys.argv[1:] if argv is None else argv
     if "--record-ids" in args:
