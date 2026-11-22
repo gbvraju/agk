@@ -131,8 +131,8 @@ def summary_lines(text: str, title: str) -> dict[tuple[str, int], str]:
 
 
 def test_req039_the_page_exists_and_fits_one_page():
-    """REQ-039: brief #388 answer 4 (at most 61 lines since ADR-0712, the owner's ruling on Q-1710-1,
-    was 60; the licence header of ADR-0596 is not the page's)."""
+    """REQ-039: brief #388 answer 4 (at most 61 lines since ADR-0712, the owner's ruling on
+    Q-1710-1, was 60; the licence header of ADR-0596 is not the page's)."""
     lines = without_header(read(PAGE)).splitlines()
     assert 0 < len(lines) <= 61, len(lines)
 
