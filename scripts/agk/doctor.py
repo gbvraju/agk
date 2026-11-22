@@ -2873,10 +2873,8 @@ def work_type_line(root: Path) -> tuple[str, bool]:
 def work_type_discovery_lines(root: Path) -> list[str]:
     """Brief #1757 (ADR-0735): one warning when discovery names a work type and `agk.toml`
     declares none, or one note when the declared one differs; never a value, no exit code."""
-    import engines  # noqa: PLC0415 - only this line reads the discovery documents
-
     value, problems = playbook_format.declaration(root)
-    found = engines.discovered_work_types(root) if not problems else {}
+    found = playbook_format.discovered_work_types(root) if not problems else {}
     if not found:
         return []
     if value is None:

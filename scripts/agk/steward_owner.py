@@ -1232,13 +1232,12 @@ DELIVERY = re.compile(r"^\[delivery\][ \t]*(?:#.*)?$", re.M)
 
 def work_type_state(root: Path) -> tuple[str | None, dict[str, list[str]]]:
     """(the declared work type, the work types discovery names); a bad declaration is refused."""
-    import engines
     import playbook_format
 
     value, problems = playbook_format.declaration(root)
     if problems:
         raise CheckError(problems[0])
-    return value, engines.discovered_work_types(root)
+    return value, playbook_format.discovered_work_types(root)
 
 
 def work_type_propose(root: Path, now: datetime) -> tuple[int, list[str]]:
@@ -1280,7 +1279,7 @@ def work_type_propose(root: Path, now: datetime) -> tuple[int, list[str]]:
 
 def git_out(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(  # nosec B603 B607 - fixed git argument lists, no shell
-        ["git", "-C", str(root), *args], capture_output=True, text=True, check=False
+        ["git", "-C", str(root), *args], capture_output=True, encoding="utf-8", check=False
     )
 
 

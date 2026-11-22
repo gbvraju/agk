@@ -38,7 +38,9 @@ business owner was a hand edit of a protected file plus a decision record.
    type, it writes as today.
 4. `doctor.py` prints one `warn work type: ... (setting: work_type)` line when discovery names an undeclared work type,
    and one `note work type: ...` line when the declared one differs; neither changes the exit code.
-5. Amendment 218 (`docs/runs/proposed-spec-amendments-218.md`) proposes the SPEC-0038 rule 5 text for items 2 and 3;
+5. The reader of the discovery documents is `playbook_format.discovered_work_types`, in an installed module, so the
+   installed `doctor.py` and `steward_owner.py` read it without the kit-only `engines.py`.
+6. Amendment 218 (`docs/runs/proposed-spec-amendments-218.md`) proposes the SPEC-0038 rule 5 text for items 2 and 3;
    the spec is unchanged until it is approved.
 
 ## Consequences

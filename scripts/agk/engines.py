@@ -107,7 +107,15 @@ from gates.pins import option_parts
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
-from playbook_format import BASE, WORK_TYPES, declaration, default_playbook, discovery, selected
+from playbook_format import (
+    BASE,
+    WORK_TYPES,
+    declaration,
+    default_playbook,
+    discovered_work_types,
+    discovery,
+    selected,
+)
 from playbook_format import FOLDER as PLAYBOOKS
 from playbook_format import path as playbook_path
 from playbook_format import problems as playbook_problems
@@ -380,25 +388,6 @@ def cmd_stack_ids(root: Path, opts: dict[str, str]) -> int:
     ids = next_free_ids(root, opts.get("ref") or f"origin/{branch}")
     print(json.dumps({"adr": ids["adr"], "slug": "stack-options", "branch": "stack/options"}))
     return 0
-
-
-DISCOVERY = "docs/discovery"
-DISCOVERED = re.compile(r"^- Work type: ([a-z-]+) \(proposed\)$", re.M)
-
-
-def discovered_work_types(root: Path) -> dict[str, list[str]]:
-    """Brief #1757 (ADR-0735): each work type other than `pilot` that a discovery document
-    names, with the documents that name it."""
-    found: dict[str, list[str]] = {}
-    for path in sorted((Path(root) / DISCOVERY).glob("*.md")):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for kind in DISCOVERED.findall(text):
-            if kind in WORK_TYPES and kind != "pilot":
-                found.setdefault(kind, []).append(f"{DISCOVERY}/{path.name}")
-    return found
 
 
 def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
