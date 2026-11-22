@@ -31,6 +31,8 @@ from test_session import (
 )
 from test_session_flow import DAY
 
+pytestmark = pytest.mark.usefixtures("clock")
+
 
 @pytest.fixture
 def stub(request):

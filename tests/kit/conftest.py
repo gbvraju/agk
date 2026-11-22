@@ -82,9 +82,10 @@ def repo(tmp_path: Path) -> Repo:
     return r
 
 
-# The clock a test sees (brief #1680). The session tests run session.py as a child process, so
-# the clock is pinned through a sitecustomize on its PYTHONPATH that reads AGK_TEST_NOW; the
-# script itself is unchanged. A test that crosses midnight UTC then agrees with the code under test.
+# The clock a test sees (brief #1680), opt-in: a module asks for it with
+# `pytestmark = pytest.mark.usefixtures("clock")`. The session tests run session.py as a child
+# process, so the clock is pinned through a sitecustomize on its PYTHONPATH that reads
+# AGK_TEST_NOW; the script itself is unchanged.
 _PIN = (
     "import datetime as _d, os\n"
     "_t = os.environ.get('AGK_TEST_NOW')\n"
@@ -103,7 +104,7 @@ class Clock:
         os.environ["AGK_TEST_NOW"] = instant.astimezone(UTC).isoformat()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def clock(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Clock:
     pin = tmp_path_factory.mktemp("pin")
     (pin / "sitecustomize.py").write_text(_PIN, encoding="utf-8")

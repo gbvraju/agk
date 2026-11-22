@@ -34,6 +34,9 @@ from test_session import (
 )
 from test_session_flow import DAY
 
+pytestmark = pytest.mark.usefixtures("clock")
+
+
 ROOT = Path(__file__).resolve().parents[2]
 BRIEF = f"{ISSUES}/5/comments"
 CONDUCTOR = ISSUES  # the stub ignores the query

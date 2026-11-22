@@ -13,6 +13,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from test_session import FREE, ISSUES, REPO, SHA, Stub, comment, iso, issue, listing, posts, session
 
+pytestmark = pytest.mark.usefixtures("clock")
+
+
 PULLS = f"repos/{REPO}/pulls"
 
 
