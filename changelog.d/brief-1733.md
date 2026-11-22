@@ -1,0 +1,1 @@
+- A cleared change that only the owner can merge now shows `agk:owner-merge` and is never parked; its builder hands over at once (brief #1733)

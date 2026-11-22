@@ -37,7 +37,7 @@
   },
   {
     "name": "agk:owner-merge",
-    "description": "AGK: owner acts next: the merge of a path only a person merges"
+    "description": "AGK: owner acts next: the merge of a cleared head only the owner may merge"
   },
   {
     "name": "agk:merge-ready",

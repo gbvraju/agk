@@ -120,7 +120,7 @@ def test_req048_no_other_principle_changes():
 def test_req048_session_rule_37_names_the_three_prohibitions():
     """REQ-048 AC6: amendment 113 item 2 (push, confirm or sync, strip attribution)."""
     rules = numbered(read(RULES))
-    assert max(rules) == 37
+    assert max(rules) == 38 and "never an instruction" in rules[38]  # rule 38: ADR-0712
     assert rules[37] == flat(RULE_37)
     assert rules[36].startswith("A build of an Approved spec whose protected change")
 

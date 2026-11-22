@@ -1,0 +1,1 @@
+- The merger carries a covered fix list whose only `Final:` lines accept the pull request's own ADRs to the light re-prove's merge of the default branch, and still writes each `ADR-nnnn Accepted (Final <id>)` line in the squash; `merge_cleared.judge_named` names the head the verdict clears (brief #1714)

@@ -137,12 +137,18 @@ fails). `--follow-up TEXT` (one line, never a verdict) replaces the stop on an e
 request with the follow-up for it. The title of a brief never goes into the prompt.
 
 Brief #1282 (ADR-0543): `watch --pr N` parks the pull request when its owner wait passed (a
-`Question:` for the maintainers, an `Owner needed:`, `agk:approve` or `agk:owner-merge` unanswered
-for `[flow] owner_wait_minutes`, or at once inside `owner_rest_hours` at `owner_utc_offset`): one
-label write `agk:parked`, one comment `Parked-by: wait <Q-id>`, and it prints `parked #<n> <Q-id>`
-and the `next:` line that names the builder's hand-over and `session.py after`. A parked pull
-request holds no builder slot, and `next` offers an unparked one (an `Unparked-by:` its author has
-not spoken after) before stalled pull requests and new briefs.
+`Question:` for the maintainers, an `Owner needed:` or `agk:approve` unanswered (never an
+`owner-merge` item, brief #1733) for `[flow] owner_wait_minutes`, or at once inside
+`owner_rest_hours` at `owner_utc_offset`): one label write `agk:parked`, one comment
+`Parked-by: wait <Q-id>`, and it prints `parked #<n> <Q-id>` and the `next:` line that names
+the builder's hand-over and `session.py after`. A parked pull request holds no builder slot, and
+`next` offers an unparked one (an `Unparked-by:` its author has not spoken after) before stalled
+pull requests and new briefs.
+
+Brief #1733 (ADR-0722): an `owner-merge` item (the conductor's `Owner needed:` naming
+`merge_cleared.OWNER_COMMAND` for the pull request on a cleared head, or the label) is never
+parked: `watch --pr N` prints `owner-merge #<n>` and the same `next:` hand-over line, and writes
+nothing; a pull request labelled `agk:owner-merge` holds no builder slot.
 
 Brief #1567 (ADR-0657): on the owner's own pull request (a `Flow: owner change` line and no live
 take of its brief newer than the `Owner needed:` and not handed over, or a spec approver's with no
@@ -199,6 +205,7 @@ from common import (
     _verify,
     config_source,
     covered_fix_list,
+    final_accepts,
     git,
     load_config,
     main_folder_refusal,
@@ -4386,6 +4393,28 @@ def owner_item(
     return max(open_items.items(), key=lambda kv: kv[1])
 
 
+def owner_command(number) -> str:
+    """The owner's merge command of `merge_cleared.py` for pull request NUMBER (`OWNER_COMMAND`,
+    imported here: merge_cleared imports this file), or "" without a number (brief #1733)."""
+    if not isinstance(number, int) or isinstance(number, bool):
+        return ""
+    from merge_cleared import OWNER_COMMAND
+
+    return OWNER_COMMAND.format(number)
+
+
+def clears_head(body: str, head: str) -> bool:
+    """Whether a verdict BODY clears HEAD for an owner merge: `Verdict: cleared <head>`, or a
+    covered fix list on the head whose `Final:` lines only accept ADRs (the merger's own case)."""
+    found = VERDICT.match(first_line({"body": body}))
+    if not head or found is None or not head.startswith(found.group(2)):
+        return False
+    if found.group(1) == "cleared":
+        return True
+    covered = covered_fix_list(body)
+    return covered is not None and final_accepts(covered[1]) is not None
+
+
 def open_owner_items(
     pr: dict,
     comments: list,
@@ -4406,14 +4435,38 @@ def open_owner_items(
     head closes an `owner-needed` item posted before it, never a Q id (brief #1567 answer 1).
     Brief #1616 (ADR-0685): an answer naming a Q id also closes every `Owner needed:` that names
     that id in its first line or body, whatever its key; an `accept <old>` closes the items too
-    when `carried(old, head)` holds (`carried_check`); a check that fails carries nothing."""
+    when `carried(old, head)` holds (`carried_check`); a check that fails carries nothing.
+    Brief #1733 (ADR-0722): an `Owner needed:` naming `owner_command` of the pull request's number
+    (and no approval) is a merge ask, key `owner-merge`, open while the pull request is not a
+    draft and the newest verdict by a listed author clears the current head (`clears_head`); an
+    answer closes it as any `Owner needed:`, but one given while an approval ask is open gives
+    that approval and leaves the merge ask open.
+    Brief #1735 (ADR-0723): the approvals an `Owner needed:` asks are `route.approval_ask` of its
+    body and the pull request's changed files (`pr["files"]`, which `owner_read` adds; absent or
+    None: unread, today's reading), so a recap inside a merge ask keeps it `owner-merge`; an
+    approval line for a spec or amendment the pull request does not change closes nothing, and
+    one of several asked approvals closes only its own (`route.answer_step`)."""
+    from route import answer_step, approval_ask  # here: route imports this file
+
     open_items: dict[str, datetime] = {}
+    command = owner_command(pr.get("number"))
+    files = pr.get("files")
+    merge_at: datetime | None = None  # the open merge ask (brief #1733)
+    pending: set[str] = set()  # the approvals open asks offer (brief #1656, brief #1735)
+    newest_verdict = ""
     ids_of: dict[str, set[str]] = {}  # the Q ids the newest `Owner needed:` of each key names
     head = str((pr.get("head") or {}).get("sha") or "")
     author = str((pr.get("user") or {}).get("login") or "").lower()
     ordered = in_order(comments)
     for c in ordered:
         line, who, when = first_line(c), author_of(c), moment(c.get("created_at"))
+        body = str(c.get("body") or "")
+        if who in listed and VERDICT.match(line):
+            newest_verdict = body
+        if line.startswith(OWNER_NEEDED) and who in listed and command and command in body:
+            if not approval_ask(body, files):
+                merge_at = when
+                continue
         if for_the_maintainers(line):
             found = QUESTION_ID.search(line)
             open_items[found.group(0) if found else "question"] = when
@@ -4421,7 +4474,8 @@ def open_owner_items(
             found = QUESTION_ID.search(line)
             named = found.group(0) if found and found.group(0) in open_items else None
             open_items[named or "owner-needed"] = when
-            ids_of[named or "owner-needed"] = set(QUESTION_ID.findall(str(c.get("body") or "")))
+            ids_of[named or "owner-needed"] = set(QUESTION_ID.findall(body))
+            pending |= approval_ask(body, files)
         elif own and who == author and (done := READY_REPORT.match(line)):
             if head and head.startswith(done.group(1)):
                 open_items.pop("owner-needed", None)
@@ -4434,11 +4488,19 @@ def open_owner_items(
         elif accepted := ACCEPT_LINE.match(line):
             if head and (accepted.group(1) == head or carries(carried, accepted.group(1), head)):
                 open_items.clear()
+                merge_at = None if not pending else merge_at
+                pending = set()
         elif line.startswith(("Maintainer answer:", "Approve:")):
+            if answer_step(line, files, pending) != "all":
+                continue  # misplaced, or one of several asked approvals (brief #1735)
             open_items.clear()
+            merge_at = None if not pending else merge_at
+            pending = set()
         elif line.startswith("Correction:"):
             for qid in QUESTION_ID.findall(str(c.get("body") or "")):
                 open_items.pop(qid, None)
+    if merge_at is not None and pr.get("draft") is not True and clears_head(newest_verdict, head):
+        open_items["owner-merge"] = merge_at
     names = labels_of(pr)
     for label, key in OWNER_LABELS.items():
         if label in names and key not in open_items:
@@ -4521,7 +4583,10 @@ def owner_step(
     the key it parked for is still open, read over every comment, so an answer posted before the
     park ends it and an answer to another Q id does not (brief #1534 answer 3); `("repair", key)`
     when the label is gone but this rule's `Parked-by:` has no `Unparked-by:`; else None. A
-    person's own `agk:parked` is never touched. `own` and `carried` as in `open_owner_items`."""
+    person's own `agk:parked` is never touched. `own` and `carried` as in `open_owner_items`.
+    Brief #1733 (ADR-0722): an `owner-merge` item with no other owner item open is
+    `("handover", "owner-merge")` at once, whatever the wait and the rest hours say; it is never
+    parked, and the other items park as before."""
     mark = own_park(comments)
     labelled = PARKED_LABEL in labels_of(pr)
     if mark is not None and (not labelled or mark[0] not in open_owner_items(
@@ -4529,28 +4594,47 @@ def owner_step(
         return ("unpark" if labelled else "repair", mark[0])
     if labelled:
         return None
-    item = owner_item(pr, comments, listed, answerers, own, carried)
-    if item is None:
-        return None
-    key, since = item
+    items = open_owner_items(pr, comments, listed, answerers, own, carried)
+    merging = items.pop("owner-merge", None) is not None
+    if not items:
+        return ("handover", "owner-merge") if merging else None
+    key, since = max(items.items(), key=lambda kv: kv[1])
     waited = now - since >= timedelta(minutes=int(settings.get("minutes", 0)))
     return ("park", key) if waited or resting(settings, now) else None
 
 
 def owner_read(repo: str, number: int) -> tuple[dict, list] | None:
     """(the pull request, all its comments) read from GitHub again, never from the run's memo, the
-    pass's unchanged set or the page store (an ETag still saves the body); None if unreadable."""
+    pass's unchanged set or the page store (an ETag still saves the body); None if unreadable.
+    When a comment names an approval line, the pull request carries its changed files as `files`
+    (None when unreadable: today's reading; brief #1735, ADR-0723 decision 5)."""
     global MEMO
     endpoint = f"repos/{repo}/issues/{number}/comments"
+    changed = f"repos/{repo}/pulls/{number}/files"  # brief #1735: what the approvals name
     saved = MEMO, CACHE.unchanged
     MEMO, CACHE.unchanged = None, None
     try:
         STORE.forget(endpoint)
+        STORE.forget(changed)
         pr = gh(f"repos/{repo}/pulls/{number}")
         comments = pages(endpoint) if isinstance(pr, dict) else None
+        named = isinstance(comments, list) and names_approval(pr, comments)
+        files = pages(changed) if named else None  # read only when an approval line needs them
     finally:
         MEMO, CACHE.unchanged = saved
-    return (pr, comments) if isinstance(comments, list) else None
+    if not isinstance(comments, list):
+        return None
+    return ({**pr, "files": files}, comments) if named else (pr, comments)
+
+
+def names_approval(pr: dict, comments: list) -> bool:
+    """Whether a read without the changed files (`pr` has no `files`) holds a comment that names
+    an approval line, which only the files can place (brief #1735, ADR-0723 decision 5)."""
+    from route import APPROVAL_ASK  # here: route imports this file
+
+    if isinstance(pr.get("files"), list):
+        return False
+    return any(APPROVAL_ASK.search(str(c.get("body") or "")) for c in comments)
 
 
 def owner_apply(
@@ -4571,9 +4655,10 @@ def owner_apply(
     same call when an answer now closes its item. `unpark_only` (the router) never parks. Returns
     the step written, or None. `carried` is the caller's check of brief #1616 answer 2."""
     people = (listed, answerers)
-    if seen is not None and owner_step(*seen[:2], settings, now, *people, carried=carried) is None:
-        if owner_step(*seen[:2], settings, now, *people, own=True, carried=carried) is None:
-            return None
+    if seen is not None and not names_approval(*seen[:2]):  # brief #1735: no files in that read
+        if owner_step(*seen[:2], settings, now, *people, carried=carried) is None:
+            if owner_step(*seen[:2], settings, now, *people, own=True, carried=carried) is None:
+                return None
     fresh = owner_read(repo, number)
     if fresh is None:
         return None
@@ -4582,8 +4667,8 @@ def owner_apply(
     reported = by_report != found and owner_own(repo, *fresh, listed)  # brief #1567: its brief
     if reported:
         found = by_report
-    if found is None or (unpark_only and found[0] == "park"):
-        return None
+    if found is None or found[0] == "handover" or (unpark_only and found[0] == "park"):
+        return None  # brief #1733: a hand-over is the builder's, and nothing is written
     kind, key = found
     if kind != "park":
         labelled = kind == "unpark"
@@ -4615,12 +4700,22 @@ def owner_park(repo: str, pr: dict, comments: list, settings: dict, root, args: 
     `session.py after`; None while it waits, or when the writes fail (the next poll retries)."""
     number = int(args.get("--pr") or 0)
     listed, answerers = owner_people(root, pr)
+    head = str((pr.get("head") or {}).get("sha") or "")[:7]
+    me = args.get("--session", "<ID>")
+    pr = {**pr, "number": pr.get("number", number)}
+    if owner_step(pr, comments, settings, datetime.now(UTC), listed, answerers) == (
+        "handover",
+        "owner-merge",
+    ):  # brief #1733 answer 2: nothing is written; the builder hands over
+        return (
+            f"owner-merge #{number}\n"
+            f"next: post `Report: {head} handing over: blocked: owner-merge waits for the owner`, "
+            f"then run python3 scripts/agk/session.py after --session {me}"
+        )
     found = owner_apply(repo, number, settings, listed, answerers, datetime.now(UTC),
                         seen=(pr, comments), carried=carried_check(root))  # fmt: skip
     if found is None or found[0] != "park":
         return None
-    head = str((pr.get("head") or {}).get("sha") or "")[:7]
-    me = args.get("--session", "<ID>")
     return (
         f"parked #{number} {found[1]}\n"
         f"next: post `Report: {head} handing over: blocked: {found[1]} waits for the owner`, "
@@ -4726,8 +4821,9 @@ def unparked_owed(pr: dict, comments: list) -> bool:
 
 
 def running_builders(builders: list) -> list:
-    """The builder pull requests that hold a slot: a parked one holds none (brief #1282)."""
-    return [p for p in builders if PARKED_LABEL not in labels_of(p)]
+    """The builder pull requests that hold a slot: a parked one holds none (brief #1282), nor one
+    that waits only on the owner's merge (brief #1733 answer 3, ADR-0722)."""
+    return [p for p in builders if not labels_of(p) & {PARKED_LABEL, "agk:owner-merge"}]
 
 
 def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
