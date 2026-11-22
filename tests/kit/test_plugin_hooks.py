@@ -334,3 +334,62 @@ def test_ac1_the_guards_see_the_top_level_as_the_project(tmp_path):
     (root / "src").mkdir()
     out = hook(script, root / "src", {"stop_hook_active": False}, "stop").stdout
     assert Path(json.loads(out)["reason"]).resolve() == root.resolve()
+
+
+# --- the PowerShell tool (brief #1763, ADR-0738): the five guarded roles refuse it --------------
+
+ROLES = ("agk:steward", "agk:conductor", "agk:shadow", "agk:architect", "agk:architect-review")
+PWSH = "Remove-Item -Recurse invented-folder"
+
+
+def powershell_refused(line: str | None) -> bool:
+    return bool(line) and line.endswith("denies the PowerShell tool; use Bash (tool: PowerShell)")
+
+
+@pytest.mark.parametrize("layout", ["clean", "installed"])
+def test_ac1_a_guarded_role_is_refused_the_powershell_tool_in_both_layouts(
+    tmp_path, plugin, layout
+):
+    """REQ-078 AC1: each of the five roles' PowerShell calls reaches its guard and is refused,
+    naming the tool and never the command; the main session keeps its PowerShell tool."""
+    root = project(tmp_path, layout, plugin)
+    for agent in ROLES:
+        for tool in ("PowerShell", "powershell"):  # compared without case
+            line = reason(plugin_pre(plugin, root, pre(root, tool, agent, command=PWSH)))
+            assert powershell_refused(line), (agent, tool, line)
+            assert PWSH not in line and "Remove-Item" not in line
+    assert reason(plugin_pre(plugin, root, pre(root, "PowerShell", None, command=PWSH))) is None
+
+
+@pytest.mark.parametrize(
+    "guard, args",
+    [
+        ("steward_guard.py", ()),
+        ("conductor_guard.py", ()),
+        ("conductor_guard.py", ("--shadow",)),
+        ("architect_guard.py", ()),
+        ("architect_guard.py", ("--review",)),
+    ],
+)
+def test_ac1_each_installed_role_guard_refuses_the_powershell_tool(tmp_path, plugin, guard, args):
+    """REQ-078 AC1: installed, the role file's own hook runs its guard, which refuses it."""
+    root = project(tmp_path, "installed", plugin)
+    for tool in ("PowerShell", "POWERSHELL"):
+        line = reason(
+            hook(root / ".claude/hooks" / guard, root, pre(root, tool, command=PWSH), *args)
+        )
+        assert powershell_refused(line), (guard, args, tool, line)
+        assert line.split(":", 1)[0] in ("steward guard", "conductor guard", "architect guard")
+
+
+def test_ac1_each_guarded_role_file_matches_the_powershell_tool():
+    """REQ-078 AC1: the five role files' PreToolUse matchers name PowerShell beside Bash."""
+    for name in ("steward", "conductor", "shadow", "architect", "architect-review"):
+        front = (ROOT / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+        front = front.split("\n---", 1)[0]
+        matchers = [
+            ln.split(":", 1)[1].strip().strip('"')
+            for ln in front.splitlines()
+            if ln.strip().startswith("- matcher:")
+        ]
+        assert matchers and all("PowerShell" in m.split("|") for m in matchers), name

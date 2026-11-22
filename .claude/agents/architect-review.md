@@ -4,7 +4,7 @@ description: The read-only review agent of the playbook. Reviews one pull reques
 tools: Read, Grep, Glob, Bash
 hooks:
   PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash"
+    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell"
       hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/architect_guard.py --review"

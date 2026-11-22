@@ -215,6 +215,7 @@ SHA = re.compile(r"[0-9a-f]{7,40}")
 SCRIPT = re.compile(r"(\w+)\.py")
 WRITE_RULE = "conductor guard rule 6: the conductor writes only in a scratch directory"
 BASH_RULE = "conductor guard rule 6: this command is not on the conductor's list"
+POWERSHELL_RULE = "conductor guard: rule 6 denies the PowerShell tool; use Bash (tool: PowerShell)"
 SHADOW_BODY = re.compile(
     r"body=Shadow: #\d+ [0-9a-f]{7,40} (?:cleared|fix list|rejected)(?:\s.*)?", re.S
 )
@@ -950,6 +951,8 @@ def decide(payload: dict, shadow: bool = False) -> str | None:
     tool = payload.get("tool_name")
     data = payload.get("tool_input")
     data = data if isinstance(data, dict) else {}
+    if str(tool or "").casefold() == "powershell":  # brief #1763: one reader per tool
+        return POWERSHELL_RULE
     if tool in WRITE_TOOLS:
         target = data.get("file_path")
         ok = tool == "Write" and isinstance(target, str) and scratch_dir(target) is not None

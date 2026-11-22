@@ -4,7 +4,7 @@ description: The architect role of the playbook. A full session that writes deci
 tools: Read, Grep, Glob, Edit, Write, Bash
 hooks:
   PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash"
+    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell"
       hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/architect_guard.py"

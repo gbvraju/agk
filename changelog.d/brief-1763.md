@@ -1,0 +1,1 @@
+- The steward, conductor, shadow, architect and review agent guards refuse the PowerShell tool with one line pointing to Bash, in both layouts, so no role rule can be stepped around on Windows (brief #1763)
