@@ -1,0 +1,1 @@
+- The steward's daily list counts an override only from the owner, once per steward answer: a role's own `Correction:` (its last `Who:` line names an AGK role) is never an override, and one answer overridden is posted as one `Override:` entry (brief #1716)
