@@ -397,7 +397,14 @@ def test_the_method_reader_is_shared_by_the_conductor_guard():
 
 # --- brief #1758 (ADR-0736): the resolver's governance command ------------------------------------
 
-from test_guard_plugin_forms import CLEAN, FULL, ROOT, VARIABLE, decision, make_project  # noqa: E402
+from test_guard_plugin_forms import (  # noqa: E402
+    CLEAN,
+    FULL,
+    ROOT,
+    VARIABLE,
+    decision,
+    make_project,
+)
 
 KIT_ROOT = f"{ROOT}/scripts/agk/kit_root.py"
 MODES = ([], ["--review"])
@@ -435,7 +442,8 @@ def test_req078_a_clean_project_runs_the_resolvers_governance(tmp_path, command,
     ],
 )
 def test_req078_an_installed_project_runs_the_same_command(tmp_path, command, flags):
-    """REQ-078: brief #1758 answer 3: one rule in both layouts; installed, `<kit>` is scripts/agk."""
+    """REQ-078: brief #1758 answer 3: one rule in both layouts; installed, `<kit>` is
+    scripts/agk."""
     assert guard_allows(make_project(tmp_path, "", installed=True), command, flags), command
 
 
@@ -457,7 +465,7 @@ def test_req078_every_neighbour_of_the_governance_command_stays_denied(tmp_path,
         f'python3 "{KIT_ROOT}" governance && rm -rf x',
         f'python3 "{KIT_ROOT}" governance > out.txt',
         f'python3 "{copy}" governance',
-        f"python3 {VARIABLE}kit_root.py\" governance",
+        f'python3 {VARIABLE}kit_root.py" governance',
         "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py governance",
         f'python3 "{KIT_ROOT}"',
         f'python3 "{KIT_ROOT}" governance --x',
@@ -470,7 +478,7 @@ def test_req078_every_neighbour_of_the_governance_command_stays_denied(tmp_path,
         f'AGK_BASE=a AGK_BASE=b python3 "{KIT_ROOT}" governance',
         f'PYTHONPATH=x python3 "{KIT_ROOT}" governance',
         f'env AGK_BASE=a python3 "{KIT_ROOT}" governance',
-        f'AGK_BASE=a python3 "{ROOT}/scripts/agk/session.py" plan --json',
+        f'AGK_BASE=a python3 "{ROOT}/scripts/agk/traceability.py"',
     ):
         assert not guard_allows(root, command, flags), command
 

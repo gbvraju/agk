@@ -418,6 +418,6 @@ def test_req078_every_neighbour_of_the_scratch_governance_stays_denied(tmp_path,
         (clean_env(s) + f'python3 "{KIT_ROOT}" --form', s),
         (clean_env(s) + f"AGK_BASE=origin/main {run}", s),
         (clean_env(s) + f'python3 -I -I "{KIT_ROOT}" governance', s),
-        (clean_env(s) + f'python3 "{ROOT}/scripts/agk/session.py" plan --json', s),
+        (clean_env(s) + f'python3 "{ROOT}/scripts/agk/traceability.py"', s),
     ):
         assert not conductor_allows(root, command, cwd, flags), (command, cwd)

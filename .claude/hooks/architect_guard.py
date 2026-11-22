@@ -38,7 +38,8 @@ no method (and no field or input flag); `gh api --method POST` to the comments o
 request of the repository named by this checkout's origin remote (read from `.git/config`), with
 `-f` fields only; `date -u`; `make governance`; the resolver's gate, exactly `python3
 <kit>/kit_root.py governance` in either form below, after at most one `AGK_BASE=<ref>` (brief #1758,
-ADR-0736); or a read-only script of `scripts/agk/` (READ_ONLY_SCRIPTS). Options of an allowed `git` command that run a program, write a file or reach a
+ADR-0736); or a read-only script of `scripts/agk/` (READ_ONLY_SCRIPTS). Options of an allowed
+`git` command that run a program, write a file or reach a
 config-driven command are denied (GIT_FORBIDDEN_LONG). Shell operators, substitutions, redirections
 and a `#` outside a quoted string (brief #351: bash and the lexer read it differently) are denied.
 The message names the rule, never the command or the path. Standard library only; no network.
@@ -154,7 +155,7 @@ REVIEW_SHA = re.compile(r"[0-9a-f]{7,40}")
 REVIEWER_NAME = re.compile(r"r[1-9]\d*")  # session.REVIEWER_NAME (brief #1013); a test pins it
 PR_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
 SESSION_WORD = re.compile(KIT_WORD + r"session\.py")
-# Brief #1758 (ADR-0736): the resolver's gate, in both layouts, with one optional AGK_BASE before it.
+# Brief #1758 (ADR-0736): the resolver's gate, in both layouts, after at most one AGK_BASE.
 KIT_ROOT_WORD = re.compile(KIT_WORD + r"kit_root\.py")
 BASE_WORD = re.compile(r"AGK_BASE=[A-Za-z0-9._/][A-Za-z0-9._/-]*")
 CONDUCTOR_WORD = re.compile(KIT_WORD + r"conductor\.py")
