@@ -465,13 +465,14 @@ def renew_lease(root) -> int:
     return code
 
 
-def cleared_open(repo: str) -> bool:
-    """True when an open, non-draft pull request's latest verdict clears its current head."""
+def cleared_open(repo: str, authors: list[str]) -> bool:
+    """True when an open, non-draft pull request's latest verdict by one of AUTHORS, the trusted
+    verdict authors (brief #1709), clears its current head; no author clears nothing."""
     for pull in read(f"repos/{repo}/pulls?state=open", "the open pull requests"):
         if pull.get("draft") is not False:
             continue
         comments = read(f"repos/{repo}/issues/{pull['number']}/comments", "the comments")
-        if merge_cleared.judge(comments, str(pull["head"]["sha"]), [])[0] == "cleared":
+        if merge_cleared.judge(comments, str(pull["head"]["sha"]), authors)[0] == "cleared":
             return True
     return False
 
@@ -491,7 +492,7 @@ def sweep_late(root, repo: str) -> list[str]:
         newest = max((t for t in ended if t), default=None)
         now = datetime.now(UTC)
         minutes = SWEEP_LATE if newest is None else int((now - newest).total_seconds() // 60)
-        if minutes < SWEEP_LATE or not cleared_open(repo):
+        if minutes < SWEEP_LATE or not cleared_open(repo, merge_cleared.trusted_at(root)):
             return []
     except (merge_cleared.Nothing, merge_cleared.Unreadable, CheckError, OSError):
         return []
