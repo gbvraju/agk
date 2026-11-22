@@ -505,3 +505,27 @@ def test_the_step_with_the_secret_merges_the_named_head(tmp_path):
     assert f"merge-cleared #7 {SHA12}: merged {MERGE12}" in proc.stdout, proc.stdout + proc.stderr
     assert len([c for c in made if "PUT" in c]) == 1
     assert [c[2] for c in tokens(tmp_path) if c[0] == "PUT"] == [MERGE_VALUE]
+
+
+# --- brief #1709: a stranger's comment starts nothing; `execution` is read strictly -------------
+
+
+def test_a_strangers_verdict_comment_starts_no_merge(tmp_path):
+    """REQ-046: brief #1709 answer 1 (the event job counts only a listed author's verdict)."""
+    theirs = comment(f"Verdict: cleared {HEAD}\n", "stranger-four", at=5)
+    payload = comment_event(f"Verdict: cleared {HEAD}")
+    proc, made = event(tmp_path, payload, "issue_comment", comments=[theirs])
+    assert proc.stdout == "" and "not cleared: no verdict (rule 3)" in proc.stderr
+    assert writes(made) == []
+
+
+@pytest.mark.parametrize("value", ['"Local"', '"github"'])
+def test_a_malformed_execution_does_nothing_naming_the_setting(tmp_path, value):
+    """REQ-046: brief #1709 answer 4 `execution` (never read as GitHub mode)."""
+    main = toml(ON).replace("[flow]\n", f"execution = {value}\n[flow]\n")
+    proc, made = event(
+        tmp_path, comment_event(f"Verdict: cleared {HEAD}"), "issue_comment", main,
+        comments=[cleared()],
+    )  # fmt: skip
+    assert proc.stdout == "" and "setting: execution" in proc.stderr
+    assert "Local" not in proc.stderr and made == []

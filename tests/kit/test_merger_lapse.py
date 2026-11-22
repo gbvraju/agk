@@ -297,3 +297,12 @@ def test_the_record_line_says_the_sweep_merged_after_a_lapse(monkeypatch):
     assert first.endswith(" merged by the sweep after a conductor lapse")
     assert first.startswith("body=Auto merge: #5 " + "c" * 40)
     assert "lapse" not in second
+
+
+def test_a_lapse_never_merges_on_a_strangers_verdict(tmp_path, monkeypatch, capsys):
+    """REQ-046: brief #1709 answer 1 (the lapse sweep counts only a listed author's verdict)."""
+    world = Sweep(monkeypatch, [marker("released", 31)])
+    theirs = [{**c, "user": {"login": "stranger-four"}} for c in clearing(5, 90)]
+    monkeypatch.setattr(merge_cleared, "read_comments", lambda r, n: theirs)
+    lines = run_sweep(tmp_path, capsys)
+    assert world.ran == [] and lines[0].endswith("not cleared: no verdict (rule 3)")

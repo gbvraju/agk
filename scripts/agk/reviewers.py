@@ -231,6 +231,21 @@ def conductors_of(data: dict) -> list[str]:
     return names
 
 
+def trusted_verdict_authors(data: dict, pull_author: str = "") -> list[str]:
+    """The logins whose `Verdict:` counts in a merge path (brief #1709, ADR-0711): the
+    `conductor_accounts` when set, else the listed verdict authors (`authors_of`) without the pull
+    request's own author PULL_AUTHOR when two or more are listed (SPEC-0025 rule 4). Empty means
+    nobody, never anyone; a bad `conductor_accounts` is refused as `conductors_of` refuses it."""
+    conductors = conductors_of(data)
+    if conductors:
+        return conductors
+    listed = authors_of(data)
+    me = pull_author.lstrip("@").lower()
+    if me and len(set(listed)) >= 2:
+        return [a for a in listed if a != me]
+    return listed
+
+
 def spec_approvers(root) -> list[str]:
     """The listed spec approvers of the repository at `root`; unreadable means nobody."""
     try:

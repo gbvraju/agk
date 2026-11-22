@@ -106,7 +106,7 @@ def test_a_missing_spec_approval_is_pending_naming_the_spec(tmp_path):
 
 def test_an_approval_that_is_in_gives_success(tmp_path):
     """REQ-046: brief #853 answer 1 (its `Approve:` lines are in)."""
-    people = f'version: 1\nspec_approvers: ["@{OWNER}"]\n'
+    people = f'version: 1\nverdict_authors: ["@{OWNER}"]\nspec_approvers: ["@{OWNER}"]\n'
     root = repo(tmp_path, toml(ON), reviewers_yaml=people)
     pull = {**world()["pull"], "body": "Approval: SPEC-0039\n"}
     approval = comment(f"Approve: {HEAD} SPEC-0039", at=6)
