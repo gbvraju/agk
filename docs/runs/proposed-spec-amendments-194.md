@@ -124,3 +124,12 @@ removed or loosened (principle 11).
   no `Asked` line. Reading: the `Asked` line is needed for an `Approve:` or `Confirmed:` only, and a
   `Maintainer answer:` is read by login as today, so no relayed answer stops counting. In a confirmation the two quote
   lines stand before `Shown:`, so `Shown:` stays fifth from the end and `confirmed by …` last of the kit's lines.
+
+## Applied by build (a) (brief #1690, ADR-0703, 2026-11-22)
+
+Items 1 to 4, 7 and 8 are applied word for word to
+`docs/specs/0062-in-solo-mode-the-steward-guides-the-person-and-asks-only-about-the-product.md`, with one wording
+change: the command of items 2, 3 and 7 is `steward_owner.py approve`, since `confirm` is now the standard's confirm of
+SPEC-0072 rule 8 (brief #1601, ADR-0681; Q-1690-1). Items 5, 6 and 9 wait for build (b). The `spec:<id>` and `q:<id>`
+targets of item 1 are refused by this build (Q-1690-3). The owner's `Approve: SPEC-0062` on the pull request approves
+the applied text.
