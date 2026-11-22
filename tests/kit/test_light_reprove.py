@@ -315,3 +315,143 @@ def test_the_new_test_file_is_mapped_to_the_three_scripts():
         "scripts/agk/session_plan.py",
         "scripts/agk/merge_cleared.py",
     } <= mapped
+
+
+# (f) brief #1714: a covered fix list whose only `Final:` lines accept the pull request's own ADRs
+# carries to the light merge as a plain clearing verdict does, and its ADRs are still accepted.
+
+ADR = "docs/adr/0999-example.md"
+ADR_TEXT = "# ADR-0999\n\n- Status: Proposed\n"
+
+
+def fix_list(sha: str, login: str = "conductor-example", cid: int = 7, extra: str = "") -> dict:
+    body = f"Verdict: fix list {sha}\n\n{extra}Final: {ADR} Proposed -> Accepted\n"
+    return {"id": cid, "created_at": "2026-11-22T10:00:00Z", "user": {"login": login},
+            "body": body}  # fmt: skip
+
+
+def adr_world(tmp_path: Path, main_toml: str = BOTTOM) -> tuple[Path, str, str, str]:
+    """A pull request that adds ADR and changes agk.toml, the default branch that changes
+    agk.toml, and the clean `update-branch` merge: (the checkout, old head, main, merge)."""
+    root, head, main = world(tmp_path, {"agk.toml": TOP, ADR: ADR_TEXT}, {"agk.toml": main_toml})
+    git(root, "update-ref", "refs/remotes/origin/main", main)
+    return root, head, main, update_branch(root, head, main)
+
+
+def test_a_covered_fix_list_on_the_old_head_carries_to_its_light_merge(tmp_path):
+    root, head, _, merged = adr_world(tmp_path)
+    shared = list(session_plan.SHARED_INDEXES)
+    comments = [fix_list(head)]
+    assert merge_cleared.judge(comments, head, ["conductor-example"]) == ("cleared", "")
+    assert merge_cleared.judge_carried(
+        root, comments, merged, ["conductor-example"], "main", shared
+    ) == ("cleared", "")
+    assert merge_cleared.carried_from(root, comments, merged, [], "main", shared) == head
+    assert merge_cleared.judge_named(root, 1, comments, merged, ["conductor-example"]) == (
+        "cleared",
+        "",
+        head,
+    )
+
+
+def test_the_carried_fix_list_still_accepts_its_adr_in_the_squash(tmp_path, monkeypatch):
+    root, head, _, merged = adr_world(tmp_path)
+    reads = []
+
+    def status(repo, sha, path, what=""):
+        reads.append((sha, path))
+        return "Proposed"
+
+    monkeypatch.setattr(merge_cleared, "adr_status", status)
+    lines = merge_cleared.acceptance_lines(REPO, merged, fix_list(head, cid=41), head)
+    assert lines == ["ADR-0999 Accepted (Final 41)", merge_cleared.MERGED_BY]
+    assert reads == [(merged, ADR)]  # the status is read at the new head
+    assert merge_cleared.acceptance_lines(REPO, merged, fix_list(head, cid=41)) == []
+
+
+def test_an_adr_already_accepted_at_the_new_head_holds(tmp_path, monkeypatch):
+    root, head, _, merged = adr_world(tmp_path)
+    monkeypatch.setattr(merge_cleared, "adr_status", lambda *a, **k: "Accepted")
+    with pytest.raises(merge_cleared.Held, match="not Proposed at the head"):
+        merge_cleared.acceptance_lines(REPO, merged, fix_list(head), head)
+
+
+@pytest.mark.parametrize(
+    "case", ["numbered", "requirement", "author", "own-file", "conflict", "twice", "later"]
+)
+def test_a_fix_list_that_is_not_only_adr_finals_or_not_light_never_carries(tmp_path, case):
+    head_files, main_files = {"agk.toml": TOP, ADR: ADR_TEXT}, {"agk.toml": BOTTOM}
+    if case == "own-file":
+        head_files, main_files = {**head_files, SCRIPT: TOP}, {**main_files, SCRIPT: BOTTOM}
+    if case == "conflict":
+        main_files = {"agk.toml": TOP.replace("the branch", "main")}
+    root, head, main = world(tmp_path, head_files, main_files)
+    shared = list(session_plan.SHARED_INDEXES)
+    if case == "conflict":
+        assert session_plan.light_merge(root, head, main, "main", shared) is False
+        comments = [fix_list(head)]
+        state = merge_cleared.judge_carried(root, comments, main, [], "main", shared)
+        assert state[0] == "held"
+        return
+    merged = update_branch(root, head, main)
+    comments = [fix_list(head)]
+    allowed: list[str] = []
+    if case == "numbered":
+        comments = [fix_list(head, extra="1. Fix the example.\n")]
+    elif case == "requirement":
+        body = f"Verdict: fix list {head}\n\nFinal: docs/requirements.md REQ-057 Draft -> Built\n"
+        comments = [{**fix_list(head), "body": body}]
+    elif case == "author":
+        allowed = ["someone-else"]
+    elif case == "twice":
+        git(root, "checkout", "-q", "main")
+        newer = commit(root, {"docs/example.md": "b\n"}, "main again")
+        merged = update_branch(root, merged, newer)
+    elif case == "later":
+        comments = [fix_list(head), {**fix_list(merged, cid=9), "created_at": "2026-11-22T11:00:00Z",
+                                     "body": f"Verdict: fix list {merged}\n\n1. Fix it.\n"}]  # fmt: skip
+    state, reason = merge_cleared.judge_carried(root, comments, merged, allowed, "main", shared)
+    assert state == "held"
+    assert reason
+    named = merge_cleared.carried_from(root, comments, merged, allowed, "main", shared)
+    assert named is None
+
+
+@pytest.mark.parametrize(
+    "indexes, carries",
+    [(None, True), ('["kit/manifest.json"]', False), ('["docs/"]', False), ('"agk.toml"', False)],
+)
+def test_the_carry_reads_flow_shared_indexes_of_the_default_branch(tmp_path, indexes, carries):
+    toml = BOTTOM if indexes is None else BOTTOM + f"\n[flow]\nshared_indexes = {indexes}\n"
+    root, head, _, merged = adr_world(tmp_path, toml)
+    state, reason, named = merge_cleared.judge_named(root, 1, [fix_list(head)], merged, [])
+    assert (state == "cleared") is carries
+    assert named == (head if carries else merged)
+    if not carries:
+        assert reason == "the latest verdict does not clear this head (rule 3)"
+
+
+def test_auto_merge_off_is_refused_before_any_carry_is_read(tmp_path):
+    toml = BOTTOM + "\n[flow]\nauto_merge = false\n"
+    root, *_ = adr_world(tmp_path, toml)
+    with pytest.raises(merge_cleared.Refused, match="setting: flow.auto_merge|auto_merge"):
+        merge_cleared.ruled(root)
+
+
+def test_a_carried_head_in_local_mode_still_needs_its_own_evidence(tmp_path):
+    root, head, _, merged = adr_world(tmp_path)
+    verdict_ = {**fix_list(head), "body": fix_list(head)["body"]
+                + f"Local evidence: {head[:12]} governance passed\n"}  # fmt: skip
+    assert merge_cleared.judge_named(root, 1, [verdict_], merged, [])[0] == "cleared"
+    with pytest.raises(merge_cleared.Held, match=r"no local evidence for this head \(rule 4\)"):
+        merge_cleared.local_evidence(verdict_, [verdict_], merged, [])
+
+
+def test_a_carried_head_behind_more_than_max_behind_merges_holds(tmp_path):
+    root, head, main, merged = adr_world(tmp_path)
+    git(root, "checkout", "-q", "main")
+    newer = commit(root, {"docs/example.md": "b\n"}, "main again")
+    newest = commit(root, {"docs/example.md": "c\n"}, "main once more")
+    assert newer != newest
+    with pytest.raises(merge_cleared.Held, match="max_behind_merges"):
+        merge_cleared.reprove_check(root, newest, merged, 1)
