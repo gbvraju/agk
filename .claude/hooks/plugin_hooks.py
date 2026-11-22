@@ -33,7 +33,7 @@ import tomllib
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent
-AGENT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"}  # the agents' matcher
+AGENT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Bash", "PowerShell"}  # the agents' matcher
 ROLE_GUARDS = {
     "architect": ("architect_guard.py",),
     "architect-review": ("architect_guard.py", "--review"),
@@ -92,7 +92,8 @@ def plan(event: str, payload: dict, root: Path) -> list[tuple[str, ...]]:
         return [] if project_runs_own(root, "stop_check.py") else [("stop_check.py",)]
     runs = [] if project_runs_own(root, "data_guard.py") else [("data_guard.py",)]
     agent = agent_guard(str(payload.get("agent_type") or ""), root)
-    if agent and payload.get("tool_name") in AGENT_TOOLS:
+    tool = str(payload.get("tool_name") or "")
+    if agent and (tool in AGENT_TOOLS or tool.casefold() == "powershell"):  # brief #1763
         runs.append(agent)
     return runs
 

@@ -4,7 +4,7 @@ description: The conductor role of the playbook. A full session that reviews eve
 tools: Read, Grep, Glob, Bash, Write, ScheduleWakeup
 hooks:
   PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash"
+    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell"
       hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/conductor_guard.py"

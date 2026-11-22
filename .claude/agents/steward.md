@@ -4,7 +4,7 @@ description: The steward role (SPEC-0059). One on-demand session beside the owne
 tools: Read, Grep, Glob, Bash, Write
 hooks:
   PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash"
+    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell"
       hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/steward_guard.py"
