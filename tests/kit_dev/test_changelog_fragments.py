@@ -13,6 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from conftest import KIT_ROOT, clean_env, git
 from test_changelog_flow import flow_kit
 from test_kit_hashes import kit_hashes
@@ -433,3 +434,233 @@ def test_ac5_the_release_check_reads_a_merge_commit_number_and_stops_when_neithe
     git(root, "merge", "-q", "--no-ff", "branch-31", "-m", "merged without a number")
     proc = gather(root)
     assert proc.returncode == 1 and FRAG in proc.stdout
+
+
+# --- the release flips the decisions their Final comments accepted (brief #1706, ADR-0710) -------
+# `changelog_fragments.py accept --comments FILE` sets to Accepted the one Status line of each ADR
+# that `check_adrs.pending` lists (verified Final records only), byte for byte otherwise, so no
+# session edits a Status line by hand (REQ-035). Fixtures: invented records and comments.
+
+ACCEPT_ADRS = {
+    "0009": "docs/adr/0009-an-invented-decision.md",
+    "0010": "docs/adr/0010-another-invented-decision.md",
+    "0011": "docs/adr/0011-a-third-invented-decision.md",
+    "0012": "docs/adr/0012-an-unverified-decision.md",
+    "0013": "docs/adr/0013-an-accepted-decision.md",
+}
+ACCEPT_RECORDS = {"0009": (7, 42), "0010": (8, 77), "0011": (9, 88), "0012": (10, 99), "0013": (11, 55)}
+VERIFIED = ("0009", "0010", "0011")
+ACCEPT_CLASSES = "config/\nscripts/agk/\nkit/\nagk.toml\n.claude-plugin/\ndocs/adr/\n"
+ACCEPT_TOML = 'version = "{v}"\npr_mode = "flow"\n'
+ACCEPT_CHANGES = "# Changelog\n\n## Unreleased\n\n- #5 an invented change\n"
+
+
+def decision(number: str, status: str, end: str = "\n") -> str:
+    text = (
+        f"# ADR-{number}: An invented decision\n\n- Status: {status}\n- Date: 2026-01-01\n"
+        "- Deciders: maintainers\n- Related: none\n- Requirements: REQ-035\n\n"
+        "## Context\n\nc\n\n## Decision\n\nd\n\n## Consequences\n\nq\n\n## Residual\n\nr\n"
+    )
+    return text.replace("\n", end)
+
+
+def final_of(number: str) -> dict:
+    """The Final comment of a record, as `gh api repos/{repo}/issues/comments/<id>` answers."""
+    pr, cid = ACCEPT_RECORDS[number]
+    return {
+        "id": cid,
+        "issue_url": f"https://api.example.com/repos/example-owner/example-repo/issues/{pr}",
+        "user": {"login": "reviewer"},
+        "body": f"Verdict: fix list a1b2c3d\n\nreviewed.\n\nFinal: {ACCEPT_ADRS[number]} "
+        "Proposed -> Accepted\n",
+    }
+
+
+def accept_world(tmp_path: Path, toml: str = ACCEPT_TOML, crlf: bool = False) -> tuple[Path, str]:
+    """A kit at 1.0.0 whose main records five Finals (0009 to 0013): three verified, one whose
+    comment is by an unlisted account (0012), one whose file already says Accepted (0013); and a
+    release branch that raises the version. Returns the root and the comments file."""
+    root = tmp_path / "acc"
+    root.mkdir()
+    for args in (
+        ("init", "-q", "-b", "main"),
+        ("config", "user.email", "t@example.invalid"),
+        ("config", "user.name", "t"),
+        ("config", "commit.gpgsign", "false"),
+    ):
+        git(root, *args)
+    put(root, "config/protected-paths.txt", "# c\n" + ACCEPT_CLASSES)
+    put(root, "config/reviewers.yaml", "version: 1\nverdict_authors: [reviewer]\n")
+    put(root, "CHANGELOG.md", ACCEPT_CHANGES)
+    put(root, "kit/hashes.json", "{}\n")
+    put(root, "scripts/agk/check_release.py", "# the check exists on the base\n")
+    for name, text in versions_of("1.0.0", toml).items():
+        put(root, name, text)
+    for number, path in ACCEPT_ADRS.items():
+        status = "Accepted" if number == "0013" else "Proposed"
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_bytes(decision(number, status, "\r\n" if crlf else "\n").encode())
+    commit_as(root, "base")
+    for number, (pr, cid) in sorted(ACCEPT_RECORDS.items()):
+        put(root, "README.md", f"{number}\n")
+        commit_as(
+            root, f"Example (#{pr})\n\nADR-{number} Accepted (Final {cid})\nMerged-by: merge_cleared.py\n"
+        )
+    git(root, "switch", "-q", "-c", "release")
+    for name, text in versions_of("1.1.0", toml).items():
+        put(root, name, text)
+    put(root, "kit/hashes.json", '{"new": 1}\n')
+    put(
+        root,
+        "CHANGELOG.md",
+        "# Changelog\n\n## Unreleased\n\n## 1.1.0 (2026-11-22)\n\n- #5 an invented change\n",
+    )
+    comments = [final_of(n) for n in VERIFIED + ("0013",)]
+    unlisted = final_of("0012")
+    unlisted["user"] = {"login": "someone-else"}
+    saved = tmp_path / "record-comments.json"
+    saved.write_text(json.dumps([*comments, unlisted]), encoding="utf-8")
+    return root, str(saved)
+
+
+def versions_of(version: str, toml: str = ACCEPT_TOML) -> dict[str, str]:
+    return {
+        "agk.toml": toml.format(v=version),
+        "kit/manifest.json": json.dumps({"kit_version": version}),
+        ".claude-plugin/plugin.json": json.dumps({"name": "agk", "version": version}),
+    }
+
+
+def accept(root: Path, *args: str):
+    return run(GATHER, root, "accept", *args)
+
+
+def changed(root: Path) -> list[str]:
+    return sorted(line[3:] for line in gitout(root, "status", "--porcelain").splitlines())
+
+
+def test_1706_accept_flips_exactly_the_verified_pending_decisions(tmp_path):
+    """REQ-035: brief #1706 answer 1 and Measured (3 verified, 1 unverified, 1 already Accepted)."""
+    root, saved = accept_world(tmp_path)
+    before = {n: (root / p).read_bytes() for n, p in ACCEPT_ADRS.items()}
+    proc = accept(root, "--comments", saved)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    flipped = [ACCEPT_ADRS[n] for n in VERIFIED]
+    assert proc.stdout.splitlines() == [*(f"accepted: {p}" for p in flipped), "accept: 3 decisions"]
+    for number, path in ACCEPT_ADRS.items():
+        after = (root / path).read_bytes()
+        if number in VERIFIED:
+            assert after == before[number].replace(b"- Status: Proposed", b"- Status: Accepted")
+        else:
+            assert after == before[number], number
+
+
+def test_1706_accept_changes_nothing_but_the_flipped_files(tmp_path):
+    """REQ-035: brief #1706 answer 1 (only the listed files are written)."""
+    root, saved = accept_world(tmp_path)
+    git(root, "add", "-A")
+    commit_as(root, "release: 1.1.0")
+    accept(root, "--comments", saved)
+    assert changed(root) == sorted(ACCEPT_ADRS[n] for n in VERIFIED)
+
+
+def test_1706_after_accept_pending_is_empty_and_the_release_check_passes(tmp_path):
+    """REQ-035: brief #1706 answers 2 and 5 (check_release.py, unchanged, checks the result)."""
+    root, saved = accept_world(tmp_path)
+    assert accept(root, "--comments", saved).returncode == 0
+    commit_as(root, "release: 1.1.0")
+    adrs = KIT_ROOT / "scripts" / "agk" / "check_adrs.py"
+    left = run(adrs, root, "--pending", "--comments", saved, base="main")
+    assert (left.returncode, left.stdout) == (0, "")
+    proc = run(RELEASE, root, "--comments", saved, base="main")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_1706_without_the_release_flips_the_release_check_fails(tmp_path):
+    """REQ-035: brief #1706 answer 2 (the check still refuses a release that left a flip out)."""
+    root, saved = accept_world(tmp_path)
+    commit_as(root, "release: 1.1.0")
+    proc = run(RELEASE, root, "--comments", saved, base="main")
+    assert proc.returncode == 1 and "rule 5" in proc.stdout
+
+
+def test_1706_a_second_run_flips_nothing(tmp_path):
+    """REQ-035: brief #1706 answer 5 (run twice)."""
+    root, saved = accept_world(tmp_path)
+    accept(root, "--comments", saved)
+    snapshot = {p: (root / p).read_bytes() for p in ACCEPT_ADRS.values()}
+    proc = accept(root, "--comments", saved)
+    assert (proc.returncode, proc.stdout) == (0, "accept: none pending\n")
+    assert snapshot == {p: (root / p).read_bytes() for p in ACCEPT_ADRS.values()}
+
+
+def test_1706_nothing_pending_prints_none_and_writes_nothing(tmp_path):
+    """REQ-035: brief #1706 answer 5 (no verified record: nothing pending)."""
+    root, _ = accept_world(tmp_path)
+    empty = tmp_path / "none.json"
+    empty.write_text("[]", encoding="utf-8")
+    proc = accept(root, "--comments", str(empty))
+    assert (proc.returncode, proc.stdout) == (0, "accept: none pending\n")
+    assert all(not line.startswith("docs/adr/") for line in changed(root))
+
+
+def test_1706_a_crlf_decision_keeps_its_line_ends(tmp_path):
+    """REQ-035: brief #1706 answer 5 (CRLF kept, byte for byte otherwise)."""
+    root, saved = accept_world(tmp_path, crlf=True)
+    path = root / ACCEPT_ADRS["0009"]
+    assert accept(root, "--comments", saved).returncode == 0
+    assert path.read_bytes() == decision("0009", "Accepted", "\r\n").encode()
+
+
+def test_1706_without_comments_while_a_record_exists_it_refuses_and_writes_nothing(tmp_path):
+    """REQ-035: brief #1706 answer 1 (fails closed as `--pending` does, naming the option)."""
+    root, _ = accept_world(tmp_path)
+    before = changed(root)
+    proc = accept(root)
+    assert proc.returncode == 1
+    assert "--comments" in proc.stdout and "rule 3a" in proc.stdout
+    assert changed(root) == before
+
+
+def test_1706_an_unreadable_decision_refuses_before_the_first_write(tmp_path):
+    """REQ-035: brief #1706 answer 1 (every file is checked before the first write)."""
+    root, saved = accept_world(tmp_path)
+    last = root / ACCEPT_ADRS["0011"]
+    last.write_bytes(b"\xff" + last.read_bytes())
+    proc = accept(root, "--comments", saved)
+    assert proc.returncode != 0
+    for number in ("0009", "0010"):
+        assert b"- Status: Proposed" in (root / ACCEPT_ADRS[number]).read_bytes(), number
+
+
+def test_1706_a_wrong_argument_prints_the_usage_naming_accept(tmp_path):
+    """REQ-035: brief #1706 answer 1 (the usage names both commands)."""
+    root, _ = accept_world(tmp_path)
+    proc = accept(root, "--comment", "x")
+    assert proc.returncode == 2 and "accept --comments FILE" in proc.stderr
+
+
+@pytest.mark.parametrize(
+    "toml",
+    [
+        'version = "{v}"\npr_mode = "flow"\n',
+        'version = "{v}"\npr_mode = "strict"\n',
+        'version = "{v}"\npr_mode = "flow"\nexecution = "hosted"\n',
+        'version = "{v}"\npr_mode = "flow"\nexecution = "local"\n',
+        'version = "{v}"\npr_mode = "flow"\nreview_mode = "solo"\n',
+        'version = "{v}"\npr_mode = "flow"\nreview_mode = "team"\n',
+    ],
+    ids=["flow", "strict", "hosted", "local", "solo", "team"],
+)
+def test_1706_every_setting_flips_the_same_set(tmp_path, toml):
+    """REQ-035: brief #1706 answer 4 (pr_mode, execution and review_mode change nothing)."""
+    root, saved = accept_world(tmp_path, toml)
+    proc = accept(root, "--comments", saved)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.splitlines()[-1] == "accept: 3 decisions"
+
+
+def test_1706_the_release_script_is_never_installed():
+    """REQ-035: brief #1706 answer 4 (personal mode and a project using AGK: not installed)."""
+    text = (KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8")
+    assert "changelog_fragments.py" not in text
