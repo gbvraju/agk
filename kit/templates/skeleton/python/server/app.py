@@ -1,7 +1,8 @@
 """The server's routes (brief #1594, ADR-0674).
 
 `/health` answers ok while the app and its database are up. Every request writes one log line with
-its id. An error shows the user a plain message with the request id; its detail goes only to the log.
+its id. An error shows the user a plain message with the request id; its detail goes only to the
+log.
 """
 
 from __future__ import annotations
