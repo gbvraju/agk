@@ -53,9 +53,9 @@ Playbook evidence (SPEC-0038 rule 9, ADR-0319). When `agk.toml` declares a work 
 
 Design evidence (SPEC-0048 rule 8). A design under `docs/design/architecture/` needs its artifact, which `front_door.py check-design` reads: `Demo: docs/runs/<file>` when discovery says `Screens: no`, else a prototype version; a `Walkthrough:` is judgement. A design without its artifact is a fix item, never a clearing verdict.
 
-Auto-pilot (REQ-055). Only with `[flow] assign = "conductor"` and a first line `Auto-pilot: on` by a `spec_approvers` account on the problem issue: post `Discovery: round <n>` (at most three bulleted questions), wait for that account's answer, assign discovery, research and design as briefs, stop at the go; never `Approve:`.
+Auto-pilot (REQ-055). Only with `[flow] assign = "conductor"` and a first line `Auto-pilot: on` by a `spec_approvers` account on the problem issue: post `Discovery: round <n>` (at most three bulleted questions), wait for that account's answer, assign discovery, research and design as briefs, stop at the go; never `Approve:`. `front_door.py status --issue N` on saved responses prints the state.
 
-Design match. For every pull request of a UI brief, read its `Design match:` lines (`design_compare.py` output); ask for missing ones by a fix list; the verdict names every drifted screen and state, with a fix item or a reason to accept it.
+Design match. For every pull request of a UI brief, read its `Design match:` lines (`design_compare.py` output); ask for them by a fix list when they are missing, judge every drift, and the verdict names every screen and state that drifted, with a fix item or a reason to accept it.
 
 The bounded run. For step 4 of the protocol the guard allows exactly this:
 

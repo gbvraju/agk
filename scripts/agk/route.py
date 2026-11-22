@@ -177,10 +177,10 @@ STATES = (  # (label, actor, what), amendment 150 item 1; pr_state's precedence 
     ("agk:approve", "owner", "a spec approval the head needs"),
     ("agk:owner-merge", "owner", "the merge of a cleared head only the owner may merge"),  # #1733
     ("agk:merge-ready", "merger", "the guarded merge"),
-    # brief #1740 (ADR-0725): not in the order; it replaces a cleared state, see `cleared_state`
-    ("agk:reprove", "builder", "merge the default branch and re-prove"),
     # amendment 162 (ADR-0453): not in the order; it replaces a builder's state, see `state_of`
     ("agk:handover", "launcher", "a new builder for a pull request whose builder stopped"),
+    # brief #1740 (ADR-0725): not in the order; it replaces a cleared state, see `cleared_state`
+    ("agk:reprove", "builder", "merge the default branch and re-prove"),
 )
 ACTOR = {label: actor for label, actor, _ in STATES}
 PARKED = "agk:parked"
