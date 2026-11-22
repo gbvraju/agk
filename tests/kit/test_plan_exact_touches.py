@@ -401,7 +401,8 @@ def timeline(stub, number: int, *pulls: tuple[int, int, str | None]) -> None:
 
 
 def added(stub, pull: int, *files: str, status: str = "added") -> None:
-    stub.serve(f"repos/{REPO}/pulls/{pull}/files", [{"filename": f, "status": status} for f in files])
+    listed = [{"filename": f, "status": status} for f in files]
+    stub.serve(f"repos/{REPO}/pulls/{pull}/files", listed)
 
 
 MERGED = "2026-11-20T10:00:00Z"
@@ -419,7 +420,7 @@ def malformed(proj, stub) -> list[str]:
 
 
 def test_1717_touch_problems_sets_aside_the_brief_s_own_added_files(tmp_path):
-    """REQ-041 (brief #1717 answer 1): an entry whose every match is the brief's own is not refused."""
+    """REQ-041 (brief #1717 answer 1): an entry whose every match is the brief's own passes."""
     tree(tmp_path, src=2)
     rules = session_plan.touch_rules(tmp_path)
     body = with_touches("x.py", "Adds: src/f0.py")
