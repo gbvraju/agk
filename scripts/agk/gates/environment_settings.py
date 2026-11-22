@@ -68,10 +68,11 @@ def project_code(root: Path, rel: str, tests: list[str]) -> bool:
 
 
 def _folder(value: object) -> str | None:
-    """A `test_dirs` entry with no leading `./` or trailing `/`, or None when it is no folder."""
+    """A `test_dirs` entry with back slashes read as forward slashes and no leading `./` or trailing
+    `/` (as the tests floor reads it), or None when it is no folder."""
     if not isinstance(value, str):
         return None
-    rel = value.strip("/")
+    rel = value.replace("\\", "/").strip("/")
     while rel.startswith("./"):
         rel = rel[2:].strip("/")
     return rel if _folder_ok(rel) else None
