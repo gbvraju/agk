@@ -380,6 +380,7 @@ class Hub:
         self.calls: list = []
         self.on: dict = {}
         self.missing_label = False
+        self.files: list | None = None  # brief #1735: the changed files, None unreadable
 
     def __call__(self, endpoint: str, *extra: str, method: str = "GET"):
         self.calls.append((method, endpoint, extra))
@@ -395,6 +396,8 @@ class Hub:
             }
         if method == "GET" and "/issues/7/comments" in endpoint:
             return list(self.comments)
+        if method == "GET" and "/pulls/7/files" in endpoint:
+            return None if self.files is None else list(self.files)
         if method == "POST" and endpoint.endswith("/labels"):
             self.labels.add(extra[1].split("=", 1)[1])
             return []
@@ -1064,3 +1067,103 @@ def test_1733_8_the_docstrings_name_the_rule():
     """REQ-050: brief #1733 answer 8 (the `session.py` docstring of brief #1282)."""
     assert "ADR-0722" in (session_mod.__doc__ or "")
     assert "handover" in (session_mod.owner_step.__doc__ or "")
+
+
+# --- brief #1735 (ADR-0723): a recap or a misplaced approval never relabels or closes an item -----
+
+SPEC_0059 = "docs/specs/0059-a-steward-answers-what-the-evidence-settles.md"
+SPEC_0050 = "docs/specs/0050-overlapping-work-never-runs-at-once.md"
+CHANGES_0059 = [{"filename": SPEC_0059}, {"filename": "docs/runs/proposed-spec-amendments-215.md"}]
+CHANGES_0050 = [{"filename": SPEC_0050}]
+
+
+def recap(minutes: float, number: int = 7) -> dict:
+    command = session_mod.owner_command(number)
+    body = f"Owner needed: thank you, your Approve: SPEC-0059 is in. To merge, run {command}"
+    return at(40, "boss", body, minutes)
+
+
+def items(pr: dict, comments: list) -> dict:
+    return session_mod.open_owner_items(pr, comments, LISTED, ANSWERERS)
+
+
+def test_1735_5c_a_merge_ask_that_recaps_an_approval_is_owner_merge_never_parked():
+    """REQ-050: brief #1735 `Measured:` and answer 5 (c): before `{'owner-needed': ...}`."""
+    pr = {**merge_pull(), "files": CHANGES_0059}
+    said = [cleared(50), recap(45)]
+    assert list(items(pr, said)) == ["owner-merge"]
+    assert step(pr, said) == ("handover", "owner-merge")
+    assert step(pr, said, {**NIGHTS, "minutes": 0}) == ("handover", "owner-merge")
+
+
+def test_1735_5d_a_real_approval_ask_beside_a_merge_ask_parks_first():
+    """REQ-050: brief #1735 answer 5 (d)."""
+    pr = {**merge_pull(), "files": CHANGES_0059}
+    ask = at(41, "boss", "Owner needed: the rule text.\n\nApprove: SPEC-0059\n", 44)
+    said = [cleared(50), recap(45), ask]
+    assert step(pr, said) == ("park", "owner-needed")
+    given = at(42, "owner", "Approve: SPEC-0059", 40)
+    assert step(pr, [*said, given]) == ("handover", "owner-merge")
+
+
+def open_q(misplaced: str = "Approve: SPEC-0050") -> list[dict]:
+    return [
+        at(1, "builder", "Question: Q-1723-9 for the maintainers: a or b?", 60),
+        at(2, "boss", "Owner needed: Q-1723-9 pick a or b", 59),
+        at(3, "owner", misplaced, 50),
+    ]
+
+
+def test_1735_5e_a_misplaced_approval_leaves_the_item_open():
+    """REQ-050: brief #1735 `Measured:` and answers 3, 5 (e): before `{}`."""
+    pr = {**pull(), "files": CHANGES_0059}
+    for line in ("Approve: SPEC-0050", "Maintainer answer: amendment 216 approved"):
+        assert list(items(pr, open_q(line))) == ["Q-1723-9"], line
+        assert step(pr, open_q(line)) == ("park", "Q-1723-9"), line
+
+
+def test_1735_5f_5j_on_its_own_pull_request_or_unread_files_it_closes_as_today():
+    """REQ-050: brief #1735 answers 3, 5 (f) and (j)."""
+    assert items({**pull(), "files": CHANGES_0050}, open_q()) == {}
+    assert items(pull(), open_q()) == {}  # no files read: today's reading
+    assert items({**pull(), "files": None}, open_q()) == {}
+
+
+def test_1735_5i_a_note_opens_no_item():
+    """REQ-050: brief #1735 answer 5 (i)."""
+    note = at(9, "boss", "Note: `Approve: SPEC-0050` belongs on #1726.", 10)
+    assert items({**pull(), "files": CHANGES_0059}, [note]) == {}
+    assert step({**pull(), "files": CHANGES_0059}, [note]) is None
+
+
+def test_1735_the_fresh_read_carries_the_files_and_decides(hub):
+    """REQ-050: brief #1735 answer 3 (ADR-0723 decision 5): the caller's read has no files, so a
+    comment naming an approval line never skips the fresh read; that read has the files."""
+    gh = hub(open_q())
+    gh.files = CHANGES_0059
+    assert step(pull(), open_q()) is None  # the caller's own read: today's reading
+    assert apply(seen=(pull(), open_q())) == ("park", "Q-1723-9")
+    assert any(e.endswith("/pulls/7/files") or "/pulls/7/files?" in e for _, e, _ in gh.calls)
+    gh = hub(open_q())  # files that cannot be read: today's reading, nothing parked
+    assert apply(seen=(pull(), open_q())) is None
+
+
+@pytest.mark.parametrize("mode", ["solo", "team"])
+def test_1735_6_the_stewards_recorded_line_counts_only_on_its_own_pull_request(mode):
+    """REQ-050: brief #1735 answer 6 (`review_mode`: the steward's `steward_owner.py approve` line
+    is read as any answerer's line, in either mode)."""
+    line = 'Maintainer answer: amendment 215 approved\nOwner said (x): "Yes"\nWho: ProductOwner'
+    ask = at(
+        2,
+        "boss",
+        "Owner needed: the rule change.\n\n`Maintainer answer: amendment 215 approved`",
+        59,
+    )
+    said = [ask, at(3, "owner", line, 50)]
+    assert items({**pull(), "files": CHANGES_0059}, said) == {}, mode
+    assert list(items({**pull(), "files": CHANGES_0050}, said)) == ["owner-needed"], mode
+
+
+def test_1735_the_docstring_names_the_rule():
+    """REQ-050: brief #1735 answer 7."""
+    assert "ADR-0723" in (session_mod.open_owner_items.__doc__ or "")
