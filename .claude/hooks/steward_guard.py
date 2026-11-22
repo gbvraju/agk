@@ -260,10 +260,11 @@ def body_edit_problem(project: Path) -> str | None:
     try:
         from config import steward_settings
 
-        if steward_settings(project)["fix_briefs"] is True:
-            return None
-    except Exception:  # noqa: BLE001, S110 - a refused or unreadable table fails closed
-        pass
+        allowed = steward_settings(project)["fix_briefs"] is True
+    except Exception:  # noqa: BLE001 - a refused or unreadable table fails closed
+        allowed = False
+    if allowed:
+        return None
     return f"steward guard: {RULE} denies a brief body edit (setting: steward.fix_briefs)"
 
 
