@@ -23,7 +23,9 @@ environment token nor the home directory's stored credentials reach the code) an
 `AGK_BASE=<sha>` right after it, as CI sets it,
 `make -C <scratch> test` or `governance`, `make -C <scratch> -f agk.mk agk-governance` or
 `agk-project-test` (the kit's own file, present in a project set up with init or adopt, brief
-#1264) and `python3 -I <scratch>/scripts/agk/<name>.py ...`.
+#1264) and `python3 -I <scratch>/scripts/agk/<name>.py ...`; and the resolver's gate `python3 [-I]
+<kit>/kit_root.py governance` (the architect's `governance_form`, brief #1758, ADR-0736) when it
+runs in that scratch: the hook's `cwd` is the scratch, or the command starts `cd <scratch> && `.
 A scratch directory is `agk-conductor-<name>` directly in the system temp directory and outside
 the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
@@ -164,6 +166,7 @@ from architect_guard import (
     gh_api_allowed,
     gh_api_methods,
     git_allowed,
+    governance_form,
     keep_refusal,
     origin_repo,
     plugin_script,
@@ -203,6 +206,7 @@ except ImportError:  # without it nothing merges
     AUTO_MERGE = None
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
+CD_PREFIX = re.compile(r"cd (\S+) && ")  # brief #1758: only before the resolver's gate in a scratch
 KIT_MAKEFILE = "agk.mk"  # the kit's make file, in every project (brief #1264)
 KIT_TARGETS = ("agk-governance", "agk-project-test")  # its two targets a scratch run may call
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
@@ -881,9 +885,19 @@ def body_path_not_absolute(command: object) -> bool:
     )
 
 
+def in_folder(where: object, home: str) -> bool:
+    """`where`, an absolute path, is the scratch folder `home` itself (brief #1758)."""
+    return isinstance(where, str) and os.path.isabs(where) and os.path.realpath(where) == home
+
+
 def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> bool:
     if not isinstance(command, str):
         return False
+    target = None
+    if found := CD_PREFIX.match(command):  # `cd <scratch> && ` before the clean run (ADR-0736)
+        target, command = found.group(1), command[found.end() :]
+        if not command.startswith(ENV_PREFIX):
+            return False
     clean = command.startswith(ENV_PREFIX)
     words = tokens_of(command[len(ENV_PREFIX) :] if clean else command)
     if not words:
@@ -894,7 +908,11 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
             if not SHA.fullmatch(rest[0][len(BASE_VAR) :]):
                 return False
             rest = rest[1:]
-        return bool(rest) and exact_scratch(home) and run_allowed(rest, home)
+        if not rest or not exact_scratch(home):
+            return False
+        if governance_form(rest, isolated=True):  # the resolver's gate, run in that scratch
+            return in_folder(cwd if target is None else target, home)
+        return target is None and run_allowed(rest, home)
     if words[0] == "git":
         return git_judged(words)
     if words[0] == "gh":

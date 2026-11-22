@@ -36,8 +36,9 @@ Denies `Edit`, `Write`, `MultiEdit` and `NotebookEdit` outside `docs/` and `cons
 and `Bash` unless the command is one of: a read-only `git` command; `gh api` with `--method GET` or
 no method (and no field or input flag); `gh api --method POST` to the comments of an issue or pull
 request of the repository named by this checkout's origin remote (read from `.git/config`), with
-`-f` fields only; `date -u`; `make governance`; or a read-only script of `scripts/agk/`
-(READ_ONLY_SCRIPTS). Options of an allowed `git` command that run a program, write a file or reach a
+`-f` fields only; `date -u`; `make governance`; the resolver's gate, exactly `python3
+<kit>/kit_root.py governance` in either form below, after at most one `AGK_BASE=<ref>` (brief #1758,
+ADR-0736); or a read-only script of `scripts/agk/` (READ_ONLY_SCRIPTS). Options of an allowed `git` command that run a program, write a file or reach a
 config-driven command are denied (GIT_FORBIDDEN_LONG). Shell operators, substitutions, redirections
 and a `#` outside a quoted string (brief #351: bash and the lexer read it differently) are denied.
 The message names the rule, never the command or the path. Standard library only; no network.
@@ -153,6 +154,9 @@ REVIEW_SHA = re.compile(r"[0-9a-f]{7,40}")
 REVIEWER_NAME = re.compile(r"r[1-9]\d*")  # session.REVIEWER_NAME (brief #1013); a test pins it
 PR_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
 SESSION_WORD = re.compile(KIT_WORD + r"session\.py")
+# Brief #1758 (ADR-0736): the resolver's gate, in both layouts, with one optional AGK_BASE before it.
+KIT_ROOT_WORD = re.compile(KIT_WORD + r"kit_root\.py")
+BASE_WORD = re.compile(r"AGK_BASE=[A-Za-z0-9._/][A-Za-z0-9._/-]*")
 CONDUCTOR_WORD = re.compile(KIT_WORD + r"conductor\.py")
 
 
@@ -272,6 +276,16 @@ def tokens_of(command: str) -> list[str] | None:
     if len(words) > 1 and words[0] == "python3":
         words[1] = plugin_marked(words[1])
     return words
+
+
+def governance_form(words: list[str], isolated: bool = False) -> bool:
+    """Exactly `python3 <kit>/kit_root.py governance`, <kit> one of the two forms (ADR-0631), and
+    with `isolated` (the conductor's clean run) an optional `-I` after `python3` (brief #1758)."""
+    if isolated and words[1:2] == ["-I"]:
+        words = [words[0], *words[2:]]
+    if len(words) != 3 or words[0] != "python3" or words[2] != "governance":
+        return False
+    return bool(KIT_ROOT_WORD.fullmatch(plugin_marked(words[1])))
 
 
 def git_option_denied(word: str) -> bool:
@@ -445,6 +459,10 @@ def bash_allowed(command: object, review: bool = False) -> bool:
         return all(w == "-u" or w.startswith("+") for w in words[1:])
     if head == "make":
         return words[1:] in (["governance"], ["-f", "agk.mk", "agk-governance"])
+    if BASE_WORD.fullmatch(head):
+        return governance_form(words[1:])
+    if governance_form(words):
+        return True
     if head == "python3" and len(words) > 1:
         match = re.fullmatch(KIT_WORD + r"(\w+)\.py", words[1])
         return bool(match) and match.group(1) in READ_ONLY_SCRIPTS and "--write" not in words
