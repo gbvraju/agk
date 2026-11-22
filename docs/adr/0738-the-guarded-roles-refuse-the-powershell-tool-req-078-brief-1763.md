@@ -6,7 +6,7 @@
 - Related: brief #1763, SPEC-0071 rule 4, SPEC-0059 rule 11, ADR-0612, plan #661
 - Requirements: REQ-078
 
-Protected classes: `.claude/`, `tests/kit/`
+Protected classes: `.claude/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
