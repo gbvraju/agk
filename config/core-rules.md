@@ -21,7 +21,7 @@ All of `constitution/principles.md`, principles 1 to 12, is core; it is short, s
 - `session rule 14`: the maintainers own the shared-mechanical list, and a build never edits `kit/hashes.json`.
 - `session rule 15`: a session resolves only a mechanical conflict and stops at any other.
 - `session rule 22`: a session pushes only the branch its runtime gives it.
-- `session rule 29`: a session never posts a `Confirmed:` comment, the person's own.
+- `session rule 29`: a session never posts a `Confirmed:` comment, the person's own (the solo steward's recorded yes aside, session rule 29).
 - `session rule 30`: with GitHub Actions blocked a session follows the local-mode guide and leaves workflows to a person.
 - `session rule 33`: a session checks the default branch for a pause at start and each wake, and stops when paused.
 - `session rule 37`: in personal mode a session never pushes to the customer, never confirms and never strips attribution.

@@ -968,6 +968,7 @@ tests = [
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
   "tests/kit/test_design_signoff.py", "tests/kit/test_check_plan_scope.py", "tests/kit/test_doctor_windows.py",
+  "tests/kit/test_who_line.py",
 ]
 [[testing.map]]
 code = "scripts/agk/route.py"

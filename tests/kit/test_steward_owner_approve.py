@@ -54,6 +54,7 @@ def root(tmp_path, monkeypatch):
     (tmp_path / "agk.toml").write_text(SOLO, encoding="utf-8")
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "state" / "memory.json"))
     monkeypatch.delenv("AGK_STEWARD_START", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)  # brief #1691: a cloud test runner
     monkeypatch.setenv("AGK_SESSION", "s1")
     monkeypatch.setattr(steward_owner.session, "repo_name", lambda root: REPO)
     records: list = []
@@ -414,3 +415,113 @@ def test_req069_the_other_settings_leave_the_approval_unchanged(
     ask(base, f"Approve: {HEAD} SPEC-0062")
     code, lines = approve(base)
     assert code == 0 and lines[0].startswith("paste on #7") and len(gh.bodies) == 3
+
+
+# --- brief #1691 (ADR-0661 build (b), ADR-0704): the solo post and its read-back --------------
+
+
+def one_person(base: Path, gh: GitHub, app: str | None = None) -> None:
+    """Solo mode with one person listed; the posted comment read back with or without an app."""
+    (base / "config").mkdir(exist_ok=True)
+    (base / "config" / "reviewers.yaml").write_text(
+        "version: 1\nverdict_authors: [boss]\nspec_approvers: [boss]\n", encoding="utf-8"
+    )
+    inner = gh.__class__.__call__
+
+    def call(self, endpoint: str, *extra: str, method: str = "GET"):
+        if method == "GET" and endpoint.endswith("/issues/comments/9"):
+            self.calls.append((method, endpoint, extra))
+            mark = {"performed_via_github_app": {"slug": app}} if app else {}
+            return {"id": 9, "body": self.bodies[-1], "user": {"login": "boss"}, **mark}
+        return inner(self, endpoint, *extra, method=method)
+
+    gh.__class__ = type("ReadBack", (GitHub,), {"__call__": call})
+
+
+CONFIRM = (
+    f"Confirmed: {HEAD}\nVerdict: cleared {HEAD}\nShown:\n1. x\n2. y\n3. z\n"
+    "confirmed by boss in a session at 2026-11-22T04:04:00Z"
+)
+
+
+@pytest.mark.parametrize("line", [f"Approve: {HEAD} SPEC-0062", f"Approve: plan {HEAD}", CONFIRM])
+def test_req069_solo_with_one_person_posts_the_approval_and_reads_it_back(root, line):
+    """REQ-069 AC7: brief #1691 answers 1 and 2, the body posted from a file with its three
+    closing lines, read back with one GET, no app mark: it counts."""
+    base, records, gh = root
+    one_person(base, gh)
+    ask(base, line)
+    code, lines = approve(base)
+    assert code == 0, lines
+    assert lines[0].startswith("posted on #7: " + line.splitlines()[0])
+    assert gh.calls[-2][2][1].startswith("body=@")
+    assert gh.calls[-1][:2] == ("GET", f"repos/{REPO}/issues/comments/9")
+    body = gh.bodies[-1].splitlines()
+    assert body[-1] == "Who: ProductOwner" and body[0] == line.splitlines()[0]
+    assert any(x.startswith("Owner said (") for x in body) and any(
+        x.startswith("Asked (") for x in body
+    )
+    if line == CONFIRM:
+        shown = body.index("Shown:")
+        assert body[shown - 2].startswith("Owner said") and body[shown - 1].startswith("Asked")
+    assert records[-1][0] == "Decision" and "does not count" not in records[-1][1]
+
+
+def test_req069_an_app_marked_post_is_printed_to_paste_and_recorded(root):
+    """REQ-069 AC7: answer 2, a post GitHub marks with an app of `agent_apps` does not count:
+    the line naming the setting, the exact body, a `Decision:`; nothing is deleted."""
+    base, records, gh = root
+    one_person(base, gh, app="claude")
+    ask(base, f"Approve: {HEAD} SPEC-0062")
+    code, lines = approve(base)
+    assert code == 1
+    assert lines[0] == (
+        "this approval does not count: it was posted through an agent app (setting: agent_apps)"
+    )
+    assert lines[1].startswith("paste on #7") and f"Approve: {HEAD} SPEC-0062" in lines
+    assert not any(c[0] == "DELETE" for c in gh.calls)
+    assert records[-1][0] == "Decision" and "does not count" in records[-1][1]
+
+
+def test_req069_an_empty_agent_apps_counts_a_marked_post(root):
+    """REQ-069 AC7: `agent_apps = []`: the project chose that a marked post counts."""
+    base, _, gh = root
+    (base / "agk.toml").write_text(SOLO + "agent_apps = []\n", encoding="utf-8")
+    one_person(base, gh, app="claude")
+    ask(base, f"Approve: {HEAD} SPEC-0062")
+    code, lines = approve(base)
+    assert code == 0 and lines[0].startswith("posted on #7")
+
+
+def test_req069_a_cloud_session_still_prints_and_posts_nothing(root, monkeypatch):
+    """REQ-069 AC7: Q-1691-3, `common.REMOTE_RUNTIME` set: rule 13's cloud sentence holds."""
+    base, _, gh = root
+    one_person(base, gh)
+    monkeypatch.setenv("CLAUDE_CODE_REMOTE", "true")
+    ask(base, f"Approve: {HEAD} SPEC-0062")
+    code, lines = approve(base)
+    assert code == 0 and lines[0].startswith("paste on #7") and len(gh.bodies) == 1
+
+
+def test_req069_team_mode_refuses_an_approve_naming_the_setting(root, monkeypatch):
+    """REQ-069 AC7: Q-1691-1, team mode refuses `Approve:` naming `review_mode`; nothing posted."""
+    base, _, gh = root
+    one_person(base, gh)
+    (base / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
+    monkeypatch.setattr("reviewers.spec_approvers", lambda r: ["lead"])
+    ask(base, f"Approve: {HEAD} SPEC-0062")
+    code, lines = approve(base, by="lead")
+    assert code == 2 and "setting: review_mode" in lines[0] and len(gh.bodies) == 1
+
+
+def test_req069_a_stored_ask_edited_to_another_form_is_refused_in_solo(root):
+    """REQ-069 AC7: session rule 29, with one person listed an ask state edited from an accept
+    to an `Approve:` is refused, never posted: the form at the yes must be the form asked."""
+    base, _, gh = root
+    one_person(base, gh)
+    ask(base, f"Maintainer answer: accept {HEAD}")
+    state = json.loads(steward_owner.asks_file(base).read_text(encoding="utf-8"))
+    state[-1]["line"] = f"Approve: {HEAD} SPEC-0062"
+    steward_owner.asks_file(base).write_text(json.dumps(state), encoding="utf-8")
+    code, lines = approve(base)
+    assert code == 2 and "setting: --line" in lines[0] and len(gh.bodies) == 1

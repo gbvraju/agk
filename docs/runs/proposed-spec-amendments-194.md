@@ -133,3 +133,10 @@ change: the command of items 2, 3 and 7 is `steward_owner.py approve`, since `co
 SPEC-0072 rule 8 (brief #1601, ADR-0681; Q-1690-1). Items 5, 6 and 9 wait for build (b). The `spec:<id>` and `q:<id>`
 targets of item 1 are refused by this build (Q-1690-3). The owner's `Approve: SPEC-0062` on the pull request approves
 the applied text.
+
+## Applied by build (b) (brief #1691, ADR-0704, 2026-11-22)
+
+Items 5, 6 and 9 are applied word for word to
+`docs/specs/0062-in-solo-mode-the-steward-guides-the-person-and-asks-only-about-the-product.md`, with the one wording
+change of build (a): the command of items 6 and 9 is `steward_owner.py approve` (Q-1690-1). The owner's
+`Approve: SPEC-0062` on the pull request approves the applied text.

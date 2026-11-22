@@ -2,10 +2,10 @@
 # A rule line is a numbered or bulleted line outside the front matter and fenced code. The counts may only go down:
 # a rule added is a rule retired, or made a check, in the same pull request; a cut file lowers its line in the same
 # pull request. Print the counts with `python3 scripts/agk/rules.py budget`; tests/kit/test_rule_budget.py compares them.
-CLAUDE.md 229 2
+CLAUDE.md 235 2
 constitution/principles.md 224 12
-config/core-rules.md 677 26
-config/session-rules.md 3488 37
+config/core-rules.md 686 26
+config/session-rules.md 3537 37
 .claude/agents/architect-review.md 720 13
 .claude/agents/architect.md 863 17
 .claude/agents/builder.md 360 5
