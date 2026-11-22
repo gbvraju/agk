@@ -46,3 +46,8 @@ hand-over never became `agk:handover`.
 A cleared head that a newer merge puts in re-prove goes back to a builder on the next push to the default branch,
 with no session needed to notice it, and the owner is never sent to a held merge. One more GET per cleared pull
 request at each routing.
+
+## Residual
+
+- 2026-11-22: the router's behind count is the compare's commit count, not `merge_cleared.py`'s first-parent count;
+  the two agree on a squash-only default branch (brief #1740 Q-2).
