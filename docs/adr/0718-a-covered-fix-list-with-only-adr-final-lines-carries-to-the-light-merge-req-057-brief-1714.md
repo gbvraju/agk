@@ -8,7 +8,7 @@
 
 Protected classes this pull request changes: `scripts/agk/` (`merge_cleared.py`) and `tests/kit/`
 (`test_light_reprove.py`). `kit/hashes.json` is not edited by hand. The amendment of SPEC-0050 rule 7a is proposed in
-`docs/runs/proposed-spec-amendments-215.md` and is applied only on the spec approvers' approval (principle 6).
+`docs/runs/proposed-spec-amendments-216.md` and is applied only on the spec approvers' approval (principle 6).
 
 ## Context
 
