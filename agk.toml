@@ -663,6 +663,7 @@ tests = ["tests/kit/test_local_mode.py", "tests/kit_dev/test_local_mode_guide.py
 [[testing.map]]
 code = "scripts/agk/lock.py"
 tests = [
+  "tests/kit/test_merge_cleared_clean.py",
   "tests/kit/test_autopilot_supervisor.py",
   "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_evidence.py", "tests/kit/test_lock.py", "tests/kit/test_lock_heartbeat.py",
@@ -675,6 +676,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_merge_cleared_clean.py",
   "tests/kit/test_merger_lapse.py",
   "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_guard_plugin_forms.py",
@@ -1062,7 +1064,7 @@ tests = [
   "tests/kit/test_session_plan_reads.py", "tests/kit/test_shared_main.py",
   "tests/kit/test_github_rate_wait.py", "tests/kit/test_kit_defect_report.py",
   "tests/kit/test_owner_answer_carries.py",
-  "tests/kit/test_owner_wait.py",
+  "tests/kit/test_owner_wait.py", "tests/kit/test_plan_names.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"

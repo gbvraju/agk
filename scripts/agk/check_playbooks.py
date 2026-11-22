@@ -85,10 +85,9 @@ def _weakened(new: dict[str, Any], held: dict[str, Any]) -> list[str]:
 
 def _layers(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """`default`, then each module, then the playbook; and the problem of a module with modules."""
-    folder = root / playbook_format.FOLDER
-    base = folder / f"{playbook_format.BASE}.toml"
-    layers = [_load(base)] if path.stem != playbook_format.BASE and base.is_file() else []
-    named = [_load(folder / f"{name}.toml") for name in playbook_format.modules(path, root)]
+    base = playbook_format.default_playbook(root)  # brief #1666: the project's, else the plugin's
+    layers = [_load(base)] if path.stem != playbook_format.BASE and base is not None else []
+    named = [_load(playbook_format.path(root, n)) for n in playbook_format.modules(path, root)]
     problems = []
     if any(module.get("modules") for module in named):
         rel = f"{playbook_format.FOLDER}/{path.name}"
@@ -185,6 +184,9 @@ def findings(root: Path, files: list[Path] | None = None) -> list[str]:
 
 def cmd_check(root: Path) -> int:
     files = playbook_format.playbooks(root)
+    chosen = playbook_format.selected(root)  # brief #1666: a clean project selects the plugin's
+    if chosen is not None and chosen not in files:
+        files.append(chosen)
     found = findings(root, files)
     for line in found:
         print(f"FAIL {NAME}: {line}")

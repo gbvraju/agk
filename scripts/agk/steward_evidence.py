@@ -269,16 +269,30 @@ def triage(item: dict, root: Path) -> dict:
     }
 
 
-def skills(root: Path) -> dict[str, str]:
+def agent_text(root: Path, env: dict | None = None) -> str:
+    """The role file: the project's own, else in a clean project the plugin's (brief #1667,
+    ADR-0694); neither is one refusal naming the path class; `kit_root.Refused` names a setting."""
+    import kit_root
+
+    places = [root / AGENT]
+    if kit_root.layout(root) == "plugin":
+        places.append(kit_root.plugin_root(root, env) / AGENT)
+    for place in places:
+        try:
+            return place.read_text("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+    raise CheckError("the steward's role file cannot be read (path class: .claude/agents/)")
+
+
+def skills(root: Path, env: dict | None = None) -> dict[str, str]:
     """Rule 19: the stage-to-skill table of the agent file, the one copy."""
-    rows = re.findall(
-        r"^\| ([^|`][^|]*?) \| (`[^|]+?) \|$", (root / AGENT).read_text("utf-8"), re.M
-    )
+    rows = re.findall(r"^\| ([^|`][^|]*?) \| (`[^|]+?) \|$", agent_text(root, env), re.M)
     return {step: skill for step, skill in rows}
 
 
-def skill_line(root: Path, step: str) -> str:
-    table = skills(root)
+def skill_line(root: Path, step: str, env: dict | None = None) -> str:
+    table = skills(root, env)
     found = table.get(step) or next((s for k, s in table.items() if step in k.split(" and ")), None)
     if found:
         return f"skill: {found}"
@@ -302,6 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("triage").add_argument("--finding", type=Path, required=True)
     sub.add_parser("skill").add_argument("--step", required=True)
     opts = parser.parse_args(argv)
+    from kit_root import Refused
     from steward import Unreadable, gh_api
 
     try:
@@ -340,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
     except Unreadable as exc:
         print(f"error: {exc} cannot be read", file=sys.stderr)
         return 4
-    except (CheckError, OSError, ValueError) as exc:
+    except (CheckError, OSError, ValueError, Refused) as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
 

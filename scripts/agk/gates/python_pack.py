@@ -73,9 +73,11 @@ def patterns(root: Path) -> list[str]:
     if own is not None:
         return own
     import check_playbooks
-    import playbook_format
+    import run_gates  # brief #1666: the one resolver of the gates' playbook
 
-    path = playbook_format.selected(root) or root / playbook_format.FOLDER / "default.toml"
+    path = run_gates.playbook(root)
+    if path is None or not path.is_file():
+        return []
     architecture = check_playbooks.standard(path, root)[0]
     return [p for layer in architecture.get("layers", []) for p in layer.get("paths", [])]
 

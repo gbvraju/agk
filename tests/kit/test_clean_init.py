@@ -29,7 +29,7 @@ import upgrade  # noqa: E402
 
 if not (ROOT / "kit" / "manifest.json").is_file():  # an install, or a copy of the kit's tests
     pytest.skip("reads the kit's own files (kit/ is kit-only)", allow_module_level=True)
-MANIFEST =json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+MANIFEST = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
 VERSION = str(MANIFEST["kit_version"])
 KIT_FILES = {*MANIFEST["verbatim"], *MANIFEST.get("experimental", [])}
 
@@ -158,3 +158,64 @@ def test_req078_ac1_init_keeps_the_same_files_as_the_migration():
     assert {r for r in init.CLEAN_KEPT if not r.endswith("/")} - {"agk.toml"} == set(
         doctor.CLEAN_KEEPS
     )
+
+
+# --- brief #1665 (ADR-0696): the printed ruleset of a clean project ---------------------------
+
+CLEAN_RULES_FILE = ROOT / "kit/templates/branch-rules-clean.txt"
+
+
+def clean_rules() -> str:
+    return CLEAN_RULES_FILE.read_text(encoding="utf-8")
+
+
+NOT_IN_A_CLEAN_PRINT = (
+    "required status check `governance`",
+    "phase 2",
+    "scripts/agk",
+    ".claude/hooks",
+    "drift-audit.yml",
+    "checks and CI work without the plugin",
+)
+
+
+@pytest.mark.parametrize("tool", [init, adopt])
+def test_req078_a_clean_project_is_printed_a_ruleset_it_can_report(tool, tmp_path, capsys):
+    """Brief #1665 answer 2 (Q-A-1 read as `agk/verdict`): init and adopt with `--layout plugin`
+    print the clean rules, whose required check is the verdict status, and none of the lines
+    about files or workflows a clean project never has."""
+    target = repo(tmp_path / "shop-example")
+    assert tool.main([str(target), "--unreleased", "--layout", "plugin", "--rehearsal"]) == 0
+    out = capsys.readouterr().out
+    assert clean_rules().rstrip() in out
+    assert "required status check `agk/verdict`" in out
+    for text in NOT_IN_A_CLEAN_PRINT:
+        assert text not in out, text
+
+
+def test_req078_the_clean_rules_differ_from_todays_only_in_the_check():
+    today = (ROOT / init.BRANCH_RULES).read_text(encoding="utf-8")
+    assert clean_rules() == today.replace("`governance`", "`agk/verdict`")
+
+
+@pytest.mark.parametrize("tool", ["init", "adopt"])
+def test_req078_the_installed_layout_prints_exactly_todays_text(tool, capsys):
+    init.print_branch_rules("main", tool)
+    installed = capsys.readouterr().out
+    init.print_branch_rules("main", tool, "installed")
+    assert capsys.readouterr().out == installed
+    expected = "\n".join(
+        [
+            f"Apply by hand on GitHub to the default branch `main` ({tool} configures nothing):",
+            (ROOT / init.BRANCH_RULES).read_text(encoding="utf-8").rstrip(),
+            init.RULESET_LINE,
+            "",
+            (ROOT / init.SCANNER_EXCLUDES).read_text(encoding="utf-8").rstrip(),
+            "",
+            init.plugin_settings(),
+            "",
+            init.ISSUES_NOTICE,
+            init.ISSUES_WARNING,
+        ]
+    )
+    assert installed == expected + "\n"

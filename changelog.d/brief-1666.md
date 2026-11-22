@@ -1,0 +1,1 @@
+- A clean-layout project reads its playbook from the plugin when it has none of its own, so its work type, standard and plan checks run instead of passing or failing for a missing file (brief #1666)

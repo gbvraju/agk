@@ -892,3 +892,123 @@ def test_the_conductor_passes_the_body():
     agent = (SCRIPTS.parents[1] / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     local = next(p for p in agent.split("\n\n") if p.startswith("Local mode."))
     assert "python3 scripts/agk/evidence.py check --head <sha> --body <file>" in local
+
+
+# --- brief #1650: governance gets the records' Final comments, as prepush gives them -------------
+
+RECORD_ADR = "docs/adr/0009-intake-of-an-invented-requirement.md"
+RECORD_ORIGIN = "https://github.com/example-owner/example-repo.git"
+RECORD_GET = ["api", "--method", "GET", "repos/example-owner/example-repo/issues/comments/42"]
+RECORD_BODY = "Advances: REQ-028\nCovered-by: ADR-0009\n"
+NO_COMMENTS = "the Final comments of the base's records cannot be read"
+
+
+def final_record_project(repo, outside: Path, execution: str = "", fail: bool = False) -> Path:
+    """A base whose ADR-0009 is Proposed in its file and Accepted only by its merge record (Final
+    42), an origin on GitHub, a head that changes `config/`, and a fake gh (GET only) that answers
+    the Final comment or fails. The folder of the fake gh."""
+    from test_rule3a_covered_and_label import CONFIG, RECORD, adr, final_comment
+
+    files = {
+        "agk.toml": toml(outside) + execution,
+        "agk.mk": REAL_GATE,
+        "Makefile": LINT_OK,
+        "config/protected-paths.txt": "# c\nconfig/\nscripts/agk/\n",
+        "config/reviewers.yaml": CONFIG,
+        "config/x.txt": "x\n",
+        RECORD_ADR: adr("Proposed"),
+    }
+    repo.commit(files, "base")
+    repo.commit({"README.md": "x\n"}, RECORD)
+    repo.git("remote", "add", "origin", RECORD_ORIGIN)
+    repo.branch("feature")
+    repo.commit({"config/x.txt": "y\n"}, "change")
+    tools = outside / "tools"
+    tools.mkdir()
+    log = outside / "gh-calls.jsonl"
+    answer = json.dumps(final_comment())
+    (tools / "gh").write_text(
+        f"#!{sys.executable}\nimport json, sys\n"
+        f"open({str(log)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        f"if {fail!r}:\n    sys.stderr.write('HTTP 502: Bad Gateway\\n'); sys.exit(1)\n"
+        f"print({answer!r})\n",
+        encoding="utf-8",
+    )
+    (tools / "gh").chmod(0o755)
+    return tools
+
+
+def gh_calls(outside: Path) -> list[list[str]]:
+    log = outside / "gh-calls.jsonl"
+    lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return [json.loads(x) for x in lines]
+
+
+def check_with(repo, outside: Path, tools: Path, *args: str, **env: str):
+    temp = outside / "tmp"
+    temp.mkdir(exist_ok=True)
+    return repo.run(
+        "evidence.py", "check", *args, PATH=path_with(tools), TMPDIR=str(temp), **env
+    )
+
+
+@pytest.mark.parametrize("execution", ["", 'execution = "local"\n'], ids=["github", "local"])
+def test_a_head_covered_by_a_final_accepted_adr_agrees(repo, outside, execution):
+    """REQ-039: brief #1650 answers 1 and 3 (the conductor's check reads the records' Final
+    comments, one GET each, into its temporary folder; GitHub and local execution alike)."""
+    tools = final_record_project(repo, outside, execution)
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, RECORD_BODY)
+    proc = check_with(repo, outside, tools, str(record), "--body", str(body))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert LINE.search(proc.stdout).group(1) == "agrees"
+    assert "governance ok" in proc.stdout
+    assert gh_calls(outside) == [RECORD_GET]
+    assert worktrees(repo) == 1 and left_over(outside) == []  # the comments file is removed
+
+
+def test_without_the_comments_the_same_head_differs(repo, outside):
+    """REQ-039: brief #1650 Measured (before: governance FAIL on rule 3a without the comments)."""
+    tools = final_record_project(repo, outside)
+    record = write(outside / "record.json", repo)
+    proc = check_with(repo, outside, tools, str(record))  # no body: no `Covered-by:`, no GET
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "governance FAIL" in proc.stdout and gh_calls(outside) == []
+
+
+def test_comments_that_cannot_be_read_fail_closed_with_prepushs_line(repo, outside):
+    """REQ-039: brief #1650 answer 2 (never a silent pass; the line names the option)."""
+    from prepush import NO_RECORD_COMMENTS
+
+    tools = final_record_project(repo, outside, fail=True)
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, RECORD_BODY)
+    proc = check_with(repo, outside, tools, str(record), "--body", str(body))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert LINE.search(proc.stdout).group(1) == "differs"
+    assert "governance FAIL" in proc.stdout and NO_RECORD_COMMENTS in proc.stdout
+    assert NO_COMMENTS in NO_RECORD_COMMENTS and "502" not in proc.stdout
+    assert left_over(outside) == []
+
+
+def test_a_body_without_covered_by_fetches_nothing_and_the_callers_file_never_reaches(
+    repo, outside
+):
+    """REQ-039: brief #1650 answer 4 (a head with no `Covered-by:` line runs as today; the
+    caller's own `AGK_RECORD_COMMENTS` never reaches governance)."""
+    tools = final_record_project(repo, outside)
+    record = write(outside / "record.json", repo)
+    body = body_file(outside, "Advances: REQ-028\n")
+    stale = outside / "stale-comments.json"
+    stale.write_text("[]", encoding="utf-8")
+    proc = check_with(
+        repo, outside, tools, str(record), "--body", str(body), AGK_RECORD_COMMENTS=str(stale)
+    )
+    assert proc.returncode == 1 and "governance FAIL" in proc.stdout, proc.stdout
+    assert gh_calls(outside) == []
+
+
+def test_the_fetch_is_prepushs_own_function():
+    """REQ-039: brief #1650 answer 1 and Q-1650-1 (one shared function, not a copy)."""
+    source = (SCRIPTS / "evidence.py").read_text(encoding="utf-8")
+    assert "fetch_record_comments" in source and "def fetch_record_comments" not in source

@@ -37,6 +37,7 @@ from ci_tools import LINE as CI_TOOL_LINE
 from ci_tools import PIN_FILE
 from common import CheckError, git, repo_root, utf8_output
 from gates import licences, pins
+from kit_root import LAYOUTS
 
 NAME = "bom"
 USAGE = (
@@ -312,9 +313,20 @@ def resolve(root: Path, ref: str) -> str:
     return commit
 
 
+def clean(config: dict) -> bool:
+    """`[kit] layout = "plugin"` at the commit (brief #1667, ADR-0694): the kit's CI tool pins and
+    kit files are the plugin's, so the bill lists the product's own components only."""
+    kit = config.get("kit", {})
+    value = kit.get("layout", "installed") if isinstance(kit, dict) else "installed"
+    if value not in LAYOUTS:
+        raise CheckError("[kit] layout is neither installed nor plugin (setting: layout)")
+    return value == "plugin"
+
+
 def build(root: Path, commit: str) -> dict:
     pyproject = read_toml(root, commit, PYPROJECT)
     config = read_toml(root, commit, AGK_TOML)
+    product_only = clean(config)
     version = config.get("version")
     project = pyproject.get("project")
     name = project.get("name") if isinstance(project, dict) else None
@@ -324,9 +336,9 @@ def build(root: Path, commit: str) -> dict:
         raise not_parsed(PYPROJECT)
     found = [
         *python_components(pyproject),
-        *ci_tool_components(read_text(root, commit, PIN_FILE)),
+        *([] if product_only else ci_tool_components(read_text(root, commit, PIN_FILE))),
         *workflow_components(root, commit),
-        *kit_file_components(root, commit),
+        *([] if product_only else kit_file_components(root, commit)),
     ]
     unique: dict[str, dict] = {}
     for item in found:
