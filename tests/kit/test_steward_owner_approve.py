@@ -8,6 +8,7 @@ only (example.com).
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -53,6 +54,7 @@ def root(tmp_path, monkeypatch):
     (tmp_path / "agk.toml").write_text(SOLO, encoding="utf-8")
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "state" / "memory.json"))
     monkeypatch.delenv("AGK_STEWARD_START", raising=False)
+    monkeypatch.setenv("AGK_SESSION", "s1")
     monkeypatch.setattr(steward_owner.session, "repo_name", lambda root: REPO)
     records: list = []
     monkeypatch.setattr(
@@ -314,3 +316,24 @@ def test_req069_the_cli_takes_target_and_approve(root, monkeypatch, capsys):
     assert steward_owner.main(["approve", "--ask", "Q-7-1", "--said", str(said), "--at", at]) == 0
     assert gh.bodies[-1].startswith(f"Maintainer answer: accept {HEAD}\n")
     assert steward_owner.main(["approve", "--ask", "Q-7-1", "--said", str(said), "--at", "x"]) == 2
+
+
+def test_req069_an_ask_ends_with_its_session(root, monkeypatch):
+    """REQ-069 AC7: rule 13, "an ask ends when the session ends": the ask keeps its session's id
+    (`AGK_SESSION`, else the memory's newest `Started: steward <id>`), and a yes in another
+    session, or after that session's `Ended:`, is refused; with no session the ask is refused."""
+    base, _, gh = root
+    ask(base, f"Maintainer answer: accept {HEAD}")
+    monkeypatch.setenv("AGK_SESSION", "s2")
+    code, lines = approve(base)
+    assert code == 2 and "another session" in lines[0] and len(gh.bodies) == 1
+    monkeypatch.delenv("AGK_SESSION")
+    cache = base / "state" / "memory.json"
+    started = {"body": "Started: steward s1 2026-11-22T03:00Z"}
+    cache.write_text(json.dumps({"comments": [started, {"body": "Ended: steward s1"}]}))
+    assert approve(base)[0] == 2 and len(gh.bodies) == 1
+    cache.write_text(json.dumps({"comments": [started]}))
+    assert approve(base)[0] == 0
+    cache.write_text("{}")
+    code, lines = ask(base, f"Maintainer answer: accept {HEAD}")
+    assert code == 2 and "AGK_SESSION" in lines[0] and len(gh.bodies) == 2

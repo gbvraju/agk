@@ -16,10 +16,11 @@ the standard's confirm of SPEC-0072 rule 8 (brief #1601, ADR-0681). Amendment 19
 
 1. `steward_owner.py ask --target pr:<n> --qid <Q> --file <question> --line <file>` reads the pull request with one
    GET, refuses a closed one and any line outside the forms below, records the `Owner question:` with the full head and
-   the link, keeps the ask in the session's own state beside the steward cache (never a tracked file) as its one open
+   the link and the asking session (`AGK_SESSION`, else the memory's newest `Started: steward <id>` with no `Ended:`
+   after it; no session is refused), keeps the ask in the session's own state beside the steward cache (never a tracked file) as its one open
    ask (a newer ask closes every older one) and posts today's `Question:` line and nothing else.
 2. The yes command is `steward_owner.py approve --ask <Q> --said <file> --at <time> [--by <login>]` (Q-1690-1). It
-   takes the person's reply only to the latest open ask and refuses, naming the rule or setting, a moved head, a closed
+   takes the person's reply only to the latest open ask of the same session and refuses, naming the rule or setting, a moved head, a closed
    target, an unreadable ask state, a reply older than the ask, an ask older than four times `[flow]
    owner_wait_minutes` (24 hours when the key is unset or 0; Q-1690-2), `AGK_STEWARD_START=conductor`, a data-guard
    match, and a question mark or a condition word (rule 14's backstop). `Not yet` records a `Decision:` and posts

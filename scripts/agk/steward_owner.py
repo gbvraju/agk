@@ -723,6 +723,22 @@ def pull_state(root: Path, number: int) -> tuple[str, str, str]:
     return str(pull.get("state")), str(pull["head"].get("sha")), link
 
 
+def steward_session(root: Path) -> str | None:
+    """The steward session asking now: `AGK_SESSION`, else the memory's newest
+    `Started: steward <id>` with no `Ended:` after it (rule 13: an ask ends with its session)."""
+    if found := os.environ.get("AGK_SESSION"):
+        return found
+    personal = personal_table(root) is not None
+    items = steward.personal_entries(root) if personal else steward.load_cache(root).get("comments")
+    for item in reversed(items if isinstance(items, list) else []):
+        body = str(item.get("body", "")) if isinstance(item, dict) else ""
+        if steward.ENDED.match(body):
+            return None
+        if started := steward.STARTED.match(body):
+            return started[1]
+    return None
+
+
 def ask_target(
     root: Path, qid: str, target: str, text: str, line_file: Path, now: datetime
 ) -> tuple[int, list[str]]:
@@ -746,6 +762,10 @@ def ask_target(
         return 2, [f"refused: not a line this command writes (setting: --line, {APPROVE_RULE})"]
     if form == "confirmed" and review_mode(root) == "team":
         return 2, ["refused: `Confirmed:` is never written in team mode (setting: review_mode)"]
+    if (sid := steward_session(root)) is None:
+        return 2, [
+            "refused: no steward session is read (setting: AGK_SESSION, or steward.py start)"
+        ]
     try:
         asks = load_asks(root)
     except CheckError as exc:
@@ -758,7 +778,7 @@ def ask_target(
         old["open"] = False
     asks.append({"id": qid, "target": target, "number": number,
                  "head": head, "link": link, "question": sentence, "line": line,
-                 "form": form, "at": steward.stamp(now), "open": True})  # fmt: skip
+                 "form": form, "at": steward.stamp(now), "open": True, "session": sid})  # fmt: skip
     save_asks(root, asks)
     asked = f"Question: {qid} for the maintainers: {sentence}"
     if personal or number is None:
@@ -815,6 +835,8 @@ def approve(
     if not open_asks or open_asks[-1].get("id") != qid:
         return 2, [f"refused: not the session's latest open ask; ask again ({APPROVE_RULE})"]
     ask = open_asks[-1]
+    if steward_session(root) != ask.get("session"):
+        return 2, [f"refused: the ask was made in another session; ask again ({APPROVE_RULE})"]
     asked = datetime.strptime(ask["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC)
     if at[:16] + "Z" < ask["at"]:
         return 2, [f"refused: the reply is older than the ask; ask again ({APPROVE_RULE})"]

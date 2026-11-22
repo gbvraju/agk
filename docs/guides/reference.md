@@ -356,9 +356,9 @@ calls the adapter once; a refused start prints `stuck: <role> <session> not star
 The one-yes approval (SPEC-0062 rules 13, 14 and 16, brief #1690, ADR-0703). `ask --target pr:<n> --line FILE`
 reads the pull request's full head with one GET, refuses a closed one and a line this command never writes (`Merge:`,
 `Verdict:`, `Final:`, `Correction:`, another head, another Q id; `Confirmed:` in team mode), records the ask with its
-head and link, keeps it as the session's one open ask (a newer ask closes the older) and posts today's `Question:`
-line. `approve --ask <Q> --said FILE --at TIME` takes the person's one-line reply to that latest open ask: it refuses a
-moved head, a closed target, an older ask, an ask older than four times `[flow] owner_wait_minutes` (24 hours when unset
+head, link and session (`AGK_SESSION`, else the memory's newest open `Started: steward <id>`), keeps it as the session's one open ask (a newer ask closes the older) and posts today's `Question:`
+line. `approve --ask <Q> --said FILE --at TIME` takes the person's one-line reply to that latest open ask: it refuses an ask of
+another or an ended session, a moved head, a closed target, an older ask, an ask older than four times `[flow] owner_wait_minutes` (24 hours when unset
 or 0), a supervisor-started steward, a data-guard match, a question mark or a condition word, and in team mode a `--by`
 outside `spec_approvers`; `Not yet` is recorded and posts nothing. On a yes it posts a `Maintainer answer:` form with
 `Owner said`, `Asked` and `Who: ProductOwner` lines by `-F body=@<file>` and records a `Decision:`, and prints an
