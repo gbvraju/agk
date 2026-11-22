@@ -18,7 +18,7 @@ SPEC-0072's residual of 2026-11-18 puts the packs after Python one per build, du
 When the one Accepted stack record chose a runtime that no module of `PACKS` serves, `run_gates.py` prints
 `not run standards: no pack for <stack>`, the stack class of `config/stack-signals.toml` (`unknown` outside it), never
 a version, and names `standards` in the `not run:` list of its last line. The exit code is unchanged: a not-run is
-neither a failure nor a pass. `doctor.py` prints one line `standards: no pack for this stack yet (setting: stack
+neither a failure nor a pass. `doctor.py` prints one line `warn standards: no pack for this stack yet (setting: stack
 record)` by the same reading, with no change to its exit code. With no work type, no Accepted record or a Python
 stack, nothing changes. No pack is built here.
 

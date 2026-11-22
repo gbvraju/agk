@@ -54,8 +54,8 @@ SPEC-0048 rule 12 (brief #691): after that line, one `skill: <name> present|abse
 the declared work type's playbook names, by the lookup of `[engines]` (`SKILL.md` exists, nothing
 is read); the JSON report carries them as `skills`. An absent skill changes no exit code.
 Brief #1685 (ADR-0702): after them, when the chosen runtime has no standards pack yet, one line
-`standards: no pack for this stack yet (setting: stack record)`, also under `skills` in the JSON
-report; it changes no exit code.
+`warn standards: no pack for this stack yet (setting: stack record)`, also under `skills` in the
+JSON report; it changes no exit code.
 SPEC-0037 rule 15 (amendment 161 item 6, brief #1064): after those, one information line for each
 imported version `docs/design/imported/i<n>/`, `design import: i<n> manifest matches the files|<n>
 problems|cannot be read; map complete|<n> problems|absent|not checked (<n> pages)`, the counts of
@@ -2788,7 +2788,7 @@ def unmapped_lines(root: Path) -> list[str]:
     return lines + ([f"tests: unmapped: and {more} more"] if more > 0 else [])
 
 
-STANDARDS_LINE = "standards: no pack for this stack yet (setting: stack record)"
+STANDARDS_LINE = "warn standards: no pack for this stack yet (setting: stack record)"
 
 
 def work_type_line(root: Path) -> tuple[str, bool]:

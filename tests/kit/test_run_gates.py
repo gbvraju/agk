@@ -226,3 +226,35 @@ def test_a_stack_outside_the_signal_table_prints_unknown(
     root = _project(tmp_path, "web-app")
     _record(root, "node")
     assert run_gates.no_pack(root) == "unknown"
+
+
+def _settings() -> list[str]:
+    from common import GOVERNANCE_LEVELS
+
+    rows = ['project_lint_paths = ["src/**"]']
+    rows += [f'governance = {{ level = "{level}" }}' for level in GOVERNANCE_LEVELS]
+    rows += [f'[kit]\nlayout = "{x}"' for x in ("plugin", "installed")]
+    rows += [f'execution = "{x}"' for x in ("hosted", "local")]
+    rows += [f'review_mode = "{x}"' for x in ("solo", "team")]
+    return [*rows, 'forge = "files"']  # personal mode (SPEC-0041)
+
+
+@pytest.mark.parametrize("setting", _settings())
+def test_each_setting_leaves_the_no_pack_line_and_the_exit_code(
+    setting: str, tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1685 answer 3 (each setting: the same line; the exit code unchanged)."""
+    root = _project(tmp_path, "web-app")
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    top, _, delivery = text.partition("\n[delivery]")
+    (root / "agk.toml").write_text(
+        f"{top}\n[delivery]{delivery}\n{setting}\n"
+        if setting.startswith("[")
+        else f"{top}\n{setting}\n\n[delivery]{delivery}",
+        encoding="utf-8",
+    )
+    before = run_gates.main(["--root", str(root)])
+    assert NO_PACK not in capsys.readouterr().out
+    _record(root, "node")
+    assert run_gates.main(["--root", str(root)]) == before
+    assert NO_PACK in capsys.readouterr().out

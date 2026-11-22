@@ -282,7 +282,7 @@ def test_ac2_the_templates_carry_the_commented_table_and_declare_nothing(rel):
 def test_doctor_warns_a_stack_with_no_pack(tmp_path):
     """REQ-079: brief #1685 answer 2 (one warn line naming the setting; exit code unchanged)."""
     dirs = doctor_target(tmp_path, '\n[delivery]\nwork_type = "web-app"\n', playbook=True)
-    line = "standards: no pack for this stack yet (setting: stack record)"
+    line = "warn standards: no pack for this stack yet (setting: stack record)"
     assert line not in run_doctor(dirs).stdout.splitlines()
     adr = dirs["tree"] / "docs" / "adr"
     adr.mkdir(parents=True, exist_ok=True)
@@ -294,3 +294,5 @@ def test_doctor_warns_a_stack_with_no_pack(tmp_path):
     proc = run_doctor(dirs)
     assert proc.returncode == 0, proc.stdout
     assert line in proc.stdout.splitlines()
+    data = json.loads(run_doctor(dirs, "--json").stdout)
+    assert line in data["skills"]
