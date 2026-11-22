@@ -63,7 +63,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" prototype
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"
 ```
 
-   then run `make governance`. Both must pass. `design: the theme is not approved yet` is information, not a failure.
+   then run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`). Both must pass. `design: the theme is not approved yet` is information, not a failure.
 5. Last, say what the checks cannot check: that the pages look right, that the brand values are the owner's, and that the
    colours suit the product. Sign-off is the person's: a comment on the pull request whose first line is
    `Approve: design <version> <full head ID>`, from an account listed in `spec_approvers`. A session never posts that
@@ -100,7 +100,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" import <folder>
 3. Draft `docs/design/imported/i<n>/map.md` for the person: one row for each page of the manifest,
    `<file> -> <screen>/<state>` with a screen and state of the inventory, or `<file> -> out: <reason>`. The map is the
    person's work; the check judges it. Check, and correct the map on a failure, at most three rounds, then stop and
-   report: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"`, then `make governance`.
+   report: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"`, then `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`).
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/doctor.py"` prints one `design import:` line per version with its manifest
    and map state, as information.
 4. Sign-off is the person's: `Approve: design i<n> <full head ID>` from an account listed in `spec_approvers`. A session

@@ -94,7 +94,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" stub --req REQ-nnn --title
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" check
 ```
 
-   then run `make governance`. Both must pass. A session that works beside other builders (SPEC-0034) first runs
+   then run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`). Both must pass. A session that works beside other builders (SPEC-0034) first runs
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/session.py" ids --exclude-pr <its own pull request, if it has one> > <scratch>/ids.json`
    and adds `--ids <scratch>/ids.json` to the check, so that the numbers skip those that other open pull requests hold.
 8. Last, print the next steps, and tell the person what the checks cannot check: that the criteria are the right ones, that

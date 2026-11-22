@@ -87,7 +87,9 @@ A builder runs the governance checks and its own proof on its head, on its own m
 instead of pasting output into the pull request body. Several sessions on one machine take turns through one lock, so two
 heavy runs never compete for the same memory and disk: each heavy step, governance included, runs under `python3 scripts/agk/lock.py run --name heavy --session <id> -- <command...>`, which waits
 its turn, runs the command without a shell and releases the lock when it ends, also when it fails or is interrupted. Each line
-stands alone, so the lines can be run one by one, as an agent runs them:
+stands alone, so the lines can be run one by one, as an agent runs them. In a
+clean project (`[kit] layout = "plugin"`) the governance line is `AGK_BASE="$base" python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`, which runs
+the same checks from the plugin; these are the lines of an installed project:
 
     base=$(git merge-base HEAD origin/main)
     python3 scripts/agk/lock.py run --name heavy --session <id> -- make governance AGK_BASE="$base"
@@ -116,7 +118,7 @@ before the conductor runs `evidence.py check <file> --head <sha>`, the two place
 tree: a record of a dirty tree is reported as such.
 
 In PowerShell write `$base = git merge-base HEAD origin/main` and `python` where `python3` is not on the path; the `lock.py`
-lines are the same (`make governance AGK_BASE=$base` gives the base to the checks as an environment variable on every platform). While another session holds the lock, `lock.py` prints one line at once and then one a
+lines are the same (in an installed project `make governance AGK_BASE=$base` gives the base to the checks as an environment variable on every platform). While another session holds the lock, `lock.py` prints one line at once and then one a
 minute, `lock heavy: waiting; held by <session> (pid <n>, host <name>) for <m> min`; `--timeout <seconds>` gives up with exit 3.
 The lock is a folder `agk-lock-heavy` in the user's temp folder (or `lock_dir` in `agk.toml`), outside every repository, so it is
 never committed and is shared by all of the machine's projects. A lock left by a session that died is cleared by the next run,
@@ -124,7 +126,7 @@ with a line saying so: when its process no longer runs on this machine. A holder
 its age and also after the machine slept; a lock of another host is cleared only when its heartbeat, written about once a minute,
 is older than `lock_stale_minutes` (120 by default, ADR-0295). `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` and changes nothing. `make test` runs the
 kit's checks and the project's own tests (`project_tests` in `agk.toml`); `body.md` is a copy of the pull request body. The
-secret scan of the governance workflow is not part of `make governance`: `prepush.py` runs the same scanner over the branch's
+secret scan of the governance workflow is not part of the governance gate (`make governance` in an installed project): `prepush.py` runs the same scanner over the branch's
 commits, and fails, naming the tool and the version the workflow pins, when the scanner is not installed (ADR-0306): install
 it first, since a scan is never skipped in any mode. `doctor.py` prints whether the scanner is installed and at which version.
 

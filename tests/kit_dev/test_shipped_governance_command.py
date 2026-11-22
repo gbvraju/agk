@@ -1,11 +1,12 @@
-"""Every shipped skill, role file, guide and template names a governance command that works in both
-layouts (brief #1759, ADR-0737; REQ-078).
+"""Every shipped skill, role file, guide and template names a governance command that works in
+both layouts (brief #1759, ADR-0737; REQ-078).
 
-A clean project (`[kit] layout = "plugin"`) has no `Makefile` and no `agk.mk`, so a shipped text that
-tells a session to run `make governance` or `make -f agk.mk agk-governance` names a step that fails
-there. Each such mention carries the installed-project clause (the words `installed project` close to
-it), or the whole text says that it describes an installed project (`INSTALLED_ONLY`). A shipped skill
-cites only guides the plugin ships. Each failure names the path class and the file, never the line.
+A clean project (`[kit] layout = "plugin"`) has no `Makefile` and no `agk.mk`, so a shipped text
+that tells a session to run `make governance` or `make -f agk.mk agk-governance` names a step that
+fails there. Each such mention carries the installed-project clause (the words `installed project`
+close to it), or the whole text says that it describes an installed project (`INSTALLED_ONLY`). A
+shipped skill cites only guides the plugin ships. Each failure names the path class and the file,
+never the line.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import subprocess
 
 from conftest import KIT_ROOT, manifest
 
-# The shipped texts of the brief: skills, role files, guides and the templates written into products.
+# The shipped texts of the brief: skills, role files, guides and the templates of products.
 CLASSES = ("skills/", ".claude/agents/", "docs/guides/", "kit/templates/")
 MAKE_FORM = re.compile(r"make governance|make -f agk\.mk agk-governance")
 CLAUSE = "installed project"
@@ -85,7 +86,9 @@ def test_req078_a_bare_make_form_is_caught_and_the_clause_clears_it():
     """REQ-078: the check of the check; a mention far from the clause still counts."""
     assert bare_mentions("then run `make governance`.") == 1
     assert bare_mentions("then run `make -f agk.mk agk-governance`.") == 1
-    assert bare_mentions("`kit_root.py governance` (in an installed project, `make governance`)") == 0
+    assert (
+        bare_mentions("`kit_root.py governance` (in an installed project, `make governance`)") == 0
+    )
     far = "in an installed project." + " x" * WINDOW + " then run `make governance`."
     assert bare_mentions(far) == 1
     assert bare_mentions(f"{INSTALLED_ONLY}.\n\n" + far) == 0
@@ -95,7 +98,10 @@ def test_req078_a_bare_make_form_is_caught_and_the_clause_clears_it():
 
 def test_req078_an_unshipped_guide_cited_by_a_skill_is_caught():
     """REQ-078: the check of the check for the guides a skill cites."""
-    texts = {"skills/x/SKILL.md": "see `docs/guides/a.md` and docs/guides/b.md", "kit/t.md": "docs/guides/c.md"}
+    texts = {
+        "skills/x/SKILL.md": "see `docs/guides/a.md` and docs/guides/b.md",
+        "kit/t.md": "docs/guides/c.md",
+    }
     assert uncovered_guides(texts, ["docs/guides/a.md"]) == ["docs/guides/b.md"]
     assert uncovered_guides(texts, ["docs/guides/"]) == []
 
@@ -111,8 +117,14 @@ def test_req078_every_guide_a_shipped_skill_cites_ships_with_the_plugin():
     """REQ-078 (brief #1759 answer 2): the next-step pointer names a file the session can read."""
     listed = manifest()["snapshot"]
     missing = uncovered_guides(shipped_texts(), listed)
-    assert missing == [], "docs/guides/: a cited guide is outside the plugin's list (setting: snapshot)"
-    for guide in ("docs/guides/planning.md", "docs/guides/testing.md", "docs/guides/getting-started.md"):
+    assert missing == [], (
+        "docs/guides/: a cited guide is outside the plugin's list (setting: snapshot)"
+    )
+    for guide in (
+        "docs/guides/planning.md",
+        "docs/guides/testing.md",
+        "docs/guides/getting-started.md",
+    ):
         assert guide in listed and (KIT_ROOT / guide).is_file(), guide
 
 

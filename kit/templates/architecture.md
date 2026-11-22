@@ -2,9 +2,9 @@
 
 The architecture record of this project (SPEC-0072 rule 5). The foundation build writes it once from the playbook
 `{{work_type}}`; it changes only by an ADR of the project (`docs/architecture.md` is a protected path). The `layers`
-step of `make governance` fails an import from one layer into another that the allowed directions below do not list.
+step of the governance gate (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`; `make governance` in an installed project) fails an import from one layer into another that the allowed directions below do not list.
 
-Its required parts (amendment 204, brief #1595): the `architecture-record` step of `make governance` fails a missing
+Its required parts (amendment 204, brief #1595): the `architecture-record` step of the same gate fails a missing
 section, an outside service missing from the diagram, and a `Needs` number other than the quoted needs answer. A
 front-door design under `docs/design/architecture/` is a slice of this record: it carries one line
 `Architecture: docs/architecture.md` and adds only what its problem changes; a change to a layer, a store or a service
