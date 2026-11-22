@@ -166,3 +166,99 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
         assert "run_gates" not in flow.read_text(encoding="utf-8"), flow.name
     config = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
     assert config.get("required_checks", ["proof", "governance"]) == ["proof", "governance"]
+
+
+# brief #1685 (ADR-0702): a chosen runtime that no standards pack serves is told so, never silent.
+NO_PACK = "not run standards: no pack for node\n"
+
+
+def _record(root: Path, runtime: str) -> None:
+    (root / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+    (root / "docs/adr/0003-stack-options.md").write_text(
+        "# ADR-0003: Stack options\n\n- Status: Accepted\n\n1. **Options**:\n"
+        f"   - Option A — Parts: {runtime} 22.11.0 MIT. Why: invented.\n3. **Chosen**: Option A\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("work_type", WORK_TYPES)
+def test_a_node_record_prints_no_pack_and_lists_standards(
+    work_type: str, tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1685 answers 1 and 3 (every work type; the exit code is unchanged)."""
+    root = _project(tmp_path, work_type)
+    _record(root, "node")
+    assert run_gates.main(["--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert NO_PACK in out and "ok standards" not in out
+    last = out.rstrip().splitlines()[-1]
+    assert last.startswith("ok gates (") and "standards" in last.split("not run:", 1)[1]
+
+
+@pytest.mark.parametrize("runtime", ["python", None])
+def test_a_python_record_or_none_prints_nothing_new(
+    runtime: str | None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REQ-079: brief #1685 answer 3 (a Python stack, or no stack chosen: unchanged)."""
+    root = _project(tmp_path, "web-app")
+    if runtime:
+        _record(root, runtime)
+    monkeypatch.setattr(run_gates, "pack_results", lambda *_a, **_k: [])
+    assert run_gates.no_pack(root) is None
+    assert not any("no pack" in line for _, line in run_gates.results(root))
+
+
+def test_no_work_type_prints_nothing_new(tmp_path: Path) -> None:
+    """REQ-079: brief #1685 answer 3 (no work type: nothing new)."""
+    root = _project(tmp_path, None)
+    _record(root, "node")
+    assert run_gates.no_pack(root) is None
+
+
+def test_a_stack_outside_the_signal_table_prints_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REQ-079: brief #1685 answer 4 (a name outside `config/stack-signals.toml`: `unknown`)."""
+    from gates import pins
+
+    row = ("zz-invented", *pins.STACKS["node"][1:])
+    monkeypatch.setitem(pins.STACKS, "node", row)
+    root = _project(tmp_path, "web-app")
+    _record(root, "node")
+    assert run_gates.no_pack(root) == "unknown"
+
+
+def _settings() -> list[str]:
+    from common import GOVERNANCE_LEVELS
+
+    rows = ['project_lint_paths = ["src/**"]']
+    rows += [f'governance = {{ level = "{level}" }}' for level in GOVERNANCE_LEVELS]
+    rows += [f'[kit]\nlayout = "{x}"' for x in ("plugin", "installed")]
+    rows += [f'execution = "{x}"' for x in ("hosted", "local")]
+    rows += [f'review_mode = "{x}"' for x in ("solo", "team")]
+    return [*rows, '[personal]\nforge = "files"']  # personal mode (SPEC-0041)
+
+
+@pytest.mark.parametrize("setting", _settings())
+def test_each_setting_leaves_the_no_pack_line_and_the_exit_code(
+    setting: str, tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1685 answer 3 (each setting: the same line; the exit code unchanged)."""
+    root = _project(tmp_path, "web-app")
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    top, _, delivery = text.partition("\n[delivery]")
+    (root / "agk.toml").write_text(
+        f"{top}\n[delivery]{delivery}\n{setting}\n"
+        if setting.startswith("[")
+        else f"{top}\n{setting}\n\n[delivery]{delivery}",
+        encoding="utf-8",
+    )
+    if setting.startswith("[personal]"):
+        from common import personal_table
+
+        assert personal_table(root) is not None  # personal mode, not team mode
+    before = run_gates.main(["--root", str(root)])
+    assert NO_PACK not in capsys.readouterr().out
+    _record(root, "node")
+    assert run_gates.main(["--root", str(root)]) == before
+    assert NO_PACK in capsys.readouterr().out

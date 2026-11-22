@@ -277,3 +277,22 @@ def test_ac2_the_templates_carry_the_commented_table_and_declare_nothing(rel):
     assert any(ln.startswith("# work_type = ") for ln in lines)
     assert "delivery" not in tomllib.loads(text)
     assert playbook_format.declaration(KIT_ROOT) == (None, [])
+
+
+def test_doctor_warns_a_stack_with_no_pack(tmp_path):
+    """REQ-079: brief #1685 answer 2 (one warn line naming the setting; exit code unchanged)."""
+    dirs = doctor_target(tmp_path, '\n[delivery]\nwork_type = "web-app"\n', playbook=True)
+    line = "warn standards: no pack for this stack yet (setting: stack record)"
+    assert line not in run_doctor(dirs).stdout.splitlines()
+    adr = dirs["tree"] / "docs" / "adr"
+    adr.mkdir(parents=True, exist_ok=True)
+    (adr / "0003-stack-options.md").write_text(
+        "# ADR-0003: Stack options\n\n- Status: Accepted\n\n1. **Options**:\n"
+        "   - Option A — Parts: node 22.11.0 MIT. Why: invented.\n3. **Chosen**: Option A\n",
+        encoding="utf-8",
+    )
+    proc = run_doctor(dirs)
+    assert proc.returncode == 0, proc.stdout
+    assert line in proc.stdout.splitlines()
+    data = json.loads(run_doctor(dirs, "--json").stdout)
+    assert line in data["skills"]
