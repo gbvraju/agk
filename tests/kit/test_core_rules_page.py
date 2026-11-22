@@ -43,7 +43,8 @@ OLD_CLAUDE_ITEMS = {
         "in flow mode (`pr_mode` in `agk.toml`); in strict mode, the default, a person "
         "has one open PR at a time. Push and stop; never poll CI; never merge; never "
         "enable auto-merge. Never post a comment whose first line is `Confirmed:`: in "
-        "solo mode you print its text and the person posts it (session rule 29)."
+        "solo mode you print its text and the person posts it (the solo steward's recorded "
+        "yes aside, session rule 29)."  # brief #1691 (ADR-0704, Q-1691-2)
     ),
     # Item 3 carries the clause of ADR-0271 (brief #545, owner ruling D1 on plan #542).
     3: (

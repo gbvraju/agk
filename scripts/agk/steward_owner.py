@@ -92,7 +92,9 @@ import session  # noqa: E402
 import steward  # noqa: E402
 from common import (  # noqa: E402
     OUTSIDE_PROJECT,
+    REMOTE_RUNTIME,
     CheckError,
+    agent_apps,
     personal_table,
     repo_root,
     review_mode,
@@ -872,10 +874,18 @@ def approve(
     if form is None or (form == "confirmed" and review_mode(root) == "team"):
         return 2, [f"refused: not a line this command writes (setting: --line, {APPROVE_RULE})"]
     body = approve_body(ask, words, at)
-    if form not in ("answer", "accept", "amendment") and not personal:
+    approval = form not in ("answer", "accept", "amendment") and not personal
+    if approval and review_mode(root) == "team":  # Q-1691-1: until the kept login is built
+        return 2, [
+            "refused: the steward posts no approval in team mode"
+            f" (setting: review_mode, {APPROVE_RULE})"
+        ]
+    if approval and not posts_approval(root):
         ask["open"] = False
         save_asks(root, asks)
         return 0, [f"paste on #{ask['number']} ({ask['link']}):", *body.splitlines()]
+    if approval and form != ask.get("form"):  # posted only as asked: an edited state is refused
+        return 2, [f"refused: not the line asked (setting: --line, {APPROVE_RULE})"]
     where = f"{ask['target']}" if personal else f"#{ask['number']} at {head} {ask['link']}"
     code, said = steward.record(  # first: a memory that cannot be written posts nothing
         root, "Decision", f'{qid}: yes on {where}, the person said "{words}" at {at}',
@@ -890,11 +900,39 @@ def approve(
             "run in your own terminal:",
             f"python3 scripts/agk/personal.py confirm {ask['target']}",
         ]
-    link = post_file(root, ask["number"], body)
+    found = post_file(root, ask["number"], body)
+    link = str(found.get("html_url", ""))
+    if approval and (problem := read_back(root, found)):  # brief #1691 answer 2
+        steward.record(root, "Decision", f"{qid}: {problem}; printed to paste", steward.gh_api)
+        return 1, [problem, f"paste on #{ask['number']} ({ask['link']}):", *body.splitlines()]
     return 0, [f"posted on #{ask['number']}: {body.splitlines()[0]}", link]
 
 
-def post_file(root: Path, number: int, body: str) -> str:
+def posts_approval(root: Path) -> bool:
+    """Brief #1691 answer 1 (ADR-0704): the steward posts an `Approve:` or `Confirmed:` itself only
+    in solo mode with one person listed, and not where the runtime posts through an agent app by
+    its own mark (`common.REMOTE_RUNTIME`, SPEC-0062 rule 13; Q-1691-3)."""
+    import reviewers
+
+    return reviewers.solo_person(root) is not None and os.environ.get(REMOTE_RUNTIME) != "true"
+
+
+def read_back(root: Path, posted: dict) -> str | None:
+    """Brief #1691 answer 2: the posted comment read with one GET; the line that says it does not
+    count when GitHub marks it with an app of `agent_apps` or it cannot be read; nothing deleted."""
+    import reviewers
+
+    found = session.gh(f"repos/{session.repo_name(root)}/issues/comments/{posted.get('id')}")
+    if not isinstance(found, dict):
+        return "this approval cannot be read back; it may not count (setting: agent_apps)"
+    if reviewers.via_agent(found, agent_apps(root)):
+        return (
+            "this approval does not count: it was posted through an agent app (setting: agent_apps)"
+        )
+    return None
+
+
+def post_file(root: Path, number: int, body: str) -> dict:
     """Post BODY with `-F body=@<file>` (UTF-8, LF), the file kept beside the ask state."""
     folder = asks_file(root).parent
     folder.mkdir(parents=True, exist_ok=True)
@@ -907,7 +945,7 @@ def post_file(root: Path, number: int, body: str) -> str:
         path.unlink(missing_ok=True)
     if found is None:
         raise CheckError(f"the comment on #{number} could not be posted")
-    return str(found.get("html_url", "")) if isinstance(found, dict) else ""
+    return found if isinstance(found, dict) else {}
 
 
 def main(argv: list[str] | None = None) -> int:
