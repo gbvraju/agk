@@ -1,0 +1,1 @@
+- A TypeScript or JavaScript product whose stack record chose Node gets the `node` standards pack: the product's own pinned `eslint` and `prettier` check the floor rules, lint and format (brief #1764)
