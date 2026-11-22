@@ -1105,14 +1105,14 @@ def named_yes(words: str, name: str) -> bool:
     )
 
 
-def flat(text: str) -> str:
+def flat(text: object) -> str:
     return " ".join(str(text or "").lower().split())
 
 
 def duplicate(root: Path, title: str, body: str) -> int | None:
     """Brief #1753 answer 3: the open brief with this title or body (no `Owner said` line)."""
 
-    def bare(text: str) -> str:
+    def bare(text: object) -> str:
         lines = str(text or "").replace("\r\n", "\n").splitlines()
         return "\n".join(x for x in lines if not x.startswith("Owner said (")).strip()
 
