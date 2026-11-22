@@ -119,7 +119,6 @@ def own_table(tmp_path: Path, source: Path = ROOT) -> Path:
         return script
     shutil.copytree(SCRIPTS, plugin / "scripts" / "agk",
                     ignore=shutil.ignore_patterns("__pycache__"))  # fmt: skip
-    shutil.copytree(ROOT / ".claude-plugin", plugin / ".claude-plugin")
     verbatim = {
         rel: [hashlib.sha256((source / rel).read_bytes()).hexdigest()]
         for rel in common.PERSONAL_PINNED
