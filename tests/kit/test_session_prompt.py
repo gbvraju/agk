@@ -89,15 +89,13 @@ def test_the_session_name_is_in_the_item_line_when_given(proj, stub):
     assert "Session name: b9. Item: brief #9. Reserved: ADR-0330." in text
 
 
+TAKE = "taken: b9 2026-11-06 reserves REQ-060, SPEC-0051, ADR-0330"
+
+
 def test_the_reserved_numbers_come_from_the_body_and_the_takes(proj, stub):
     stub.serve(
         f"repos/{REPO}/issues/9/comments",
-        [
-            {
-                **comment(1, "builder", "taken: b9 2026-11-06 reserves REQ-060, SPEC-0051, ADR-0330"),
-                "author_association": "OWNER",
-            }
-        ],
+        [{**comment(1, "builder", TAKE), "author_association": "OWNER"}],
     )
     text = prompt(proj, stub, "--brief", "9")
     assert "Reserved: REQ-060, SPEC-0051, ADR-0330." in text
@@ -118,7 +116,7 @@ def test_a_take_by_an_account_that_is_not_the_owner_adds_no_number(proj, stub):
 
 
 def test_a_brief_with_no_reserved_number_says_none(proj, stub):
-    stub.serve(f"repos/{REPO}/issues/9", {**BRIEF, "body": "Sentence: \"x\"\nAdvances: REQ-037\n"})
+    stub.serve(f"repos/{REPO}/issues/9", {**BRIEF, "body": 'Sentence: "x"\nAdvances: REQ-037\n'})
     assert "Item: brief #9. Reserved: none." in prompt(proj, stub, "--brief", "9")
 
 
