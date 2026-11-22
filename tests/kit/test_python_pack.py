@@ -331,7 +331,8 @@ def test_a_missing_tool_names_the_install_line_of_the_layout(
 )
 def test_the_install_line_comes_from_the_layout(tmp_path: Path, toml: str, layout: str) -> None:
     """REQ-079 AC4: brief #1696 answers 1 and 5: the plugin line is built from the resolver's
-    plugin root, the same text as before; an unreadable or unknown layout keeps the installed one."""
+    plugin root, the same text as before; an unreadable or unknown layout keeps the installed
+    one."""
     (tmp_path / "agk.toml").write_text(toml, encoding="utf-8")
     assert python_pack.install_line(tmp_path) == INSTALL[layout]
 
