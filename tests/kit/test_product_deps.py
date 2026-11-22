@@ -53,7 +53,7 @@ FILES = {
 
 @pytest.fixture
 def product(repo, monkeypatch):
-    # brief #1764: the Node standards pack has its own tests (test_node_pack.py); these hold the bill
+    # brief #1764: the Node pack has its own tests (test_node_pack.py); these hold the bill
     from gates import node_pack
 
     monkeypatch.setattr(node_pack, "on", lambda _root: False)
