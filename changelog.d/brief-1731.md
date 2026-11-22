@@ -1,0 +1,1 @@
+- A take comment adds its numbers to a builder prompt's `Reserved:` line only when the repository's owner posted it; a stranger's, a collaborator's or a member's take adds nothing (found-bug #1731, Q-1711-1, ADR-0729)

@@ -5132,14 +5132,21 @@ def reservations(body: str) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+# The comment authors whose take adds its `reserves` to a prompt's `Reserved:` (Q-1711-1, ADR-0729):
+# the owner only, as `merge_cleared.INSIDE_ASSOCIATIONS`; team mode reads the same until Q-1731-1.
+TAKE_ASSOCIATIONS = ("OWNER",)
+
+
 def reserved_numbers(body: str, comments: list) -> list[str]:
-    """The numbers the brief reserved: its `Reserved:` lines and the `reserves` of its takes, in
-    the order REQ, SPEC, ADR, each once."""
+    """The numbers the brief reserved: its `Reserved:` lines and the `reserves` of the takes whose
+    comment's `author_association` is in `TAKE_ASSOCIATIONS` (a missing one is not), in the order
+    REQ, SPEC, ADR, each once (ADR-0729)."""
     found: list[str] = []
     for line in body.splitlines():
         if match := RESERVED_LINE.fullmatch(line.strip()):
             found += NUMBER_RE.findall(match.group(1).split("(", 1)[0])
-    for take_row in all_takes(comments):
+    owned = [c for c in comments if c.get("author_association") in TAKE_ASSOCIATIONS]
+    for take_row in all_takes(owned):
         found += list(take_row[4])
     order = {"REQ": 0, "SPEC": 1, "ADR": 2}
     return sorted(set(found), key=lambda x: (order[x.split("-")[0]], x))

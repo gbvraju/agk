@@ -33,7 +33,6 @@ import steward_owner  # noqa: E402
 
 HOOKS = SCRIPTS.parents[1] / ".claude" / "hooks"
 ALL = "\n\n".join(text for key in fx.PLANTED for text in fx.forms(fx.PLANTED[key]).values())
-RESERVED_HOLE = 1731  # found-bug: a stranger's take adds to `Reserved:` (Q-1711-1)
 
 
 def hook(name: str):
@@ -101,12 +100,22 @@ def test_req037_the_launch_prompt_is_built_from_numbers_alone(key):
     assert not {m for m in fx.marks(fx.PLANTED[key]) if m in text}
 
 
-@pytest.mark.xfail(reason=f"found-bug #{RESERVED_HOLE}: a stranger's take (Q-1711-1)", strict=True)
 def test_req037_a_strangers_take_adds_no_number_to_reserved():
-    """REQ-037: Q-1711-1, a take comment by an account that holds no take of its own adds no
-    number to the prompt's `Reserved:` (the conservative reading: the session's own take only)."""
+    """REQ-037: Q-1711-1 (found-bug #1731), a take comment by an account that is not the
+    repository's owner adds no number to the prompt's `Reserved:`; the brief's own line stays."""
     planted = fx.comment(1, fx.STRANGER, "taken: x9 2026-11-22 reserves ADR-0999")
-    assert "ADR-0999" not in kit_session.reserved_numbers("Reserved: ADR-0721\n", [planted])
+    assert kit_session.reserved_numbers("Reserved: ADR-0721\n", [planted]) == ["ADR-0721"]
+
+
+@pytest.mark.parametrize("association", ["COLLABORATOR", "MEMBER", "CONTRIBUTOR", "NONE", None])
+def test_req037_only_an_owners_take_adds_its_reserves(association):
+    """REQ-037: Q-1711-1, a take adds its reserves only when its comment's `author_association`
+    is OWNER (solo mode; team mode reads the same until its rule is given)."""
+    take = "taken: x9 2026-11-22 reserves ADR-0999"
+    other = {**fx.comment(1, fx.STRANGER, take), "author_association": association}
+    owner = {**fx.comment(2, "owner-example", take), "author_association": "OWNER"}
+    assert kit_session.reserved_numbers("Reserved: ADR-0721\n", [other]) == ["ADR-0721"]
+    assert kit_session.reserved_numbers("", [other, owner]) == ["ADR-0999"]
 
 
 # --- answer 2: the guards -----------------------------------------------------------------------
