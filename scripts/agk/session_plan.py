@@ -149,6 +149,7 @@ import sys
 import time
 import tomllib
 from collections.abc import Callable
+from collections.abc import Set as AbstractSet
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -351,17 +352,41 @@ def broad_entries(body: str, rules: dict) -> list[str]:
     return broad
 
 
-def touch_problems(body: str, rules: dict) -> list[str]:
-    """Amendment 141 item 1, naming the rule, the setting and the entry, never a count."""
+ADDS_EXISTS = "names an existing file"  # the `Adds:` refusal of `touch_problems`
+
+
+def touch_problems(body: str, rules: dict, own: AbstractSet[str] = frozenset()) -> list[str]:
+    """Amendment 141 item 1, naming the rule, the setting and the entry, never a count. OWN holds
+    the files the brief's own merged pull requests added (brief #1717): an `Adds:` entry whose
+    every match is one of them is not refused."""
     problems = [
         f"rule 4: Touches entry {e} matches more than flow.max_touch_glob files"
         for e in broad_entries(body, rules)
     ]
     for entry in line_entries(body, ADDS):
         pattern = glob_regex(entries_of(rules["root"], [entry])[0])
-        if any(pattern.fullmatch(f) for f in rules["unshared"]):
-            problems.append(f"rule 4: Adds entry {entry} names an existing file")
+        found = [f for f in rules["unshared"] if pattern.fullmatch(f)]
+        if found and not all(f in own for f in found):
+            problems.append(f"rule 4: Adds entry {entry} {ADDS_EXISTS}")
     return problems
+
+
+def own_added(s: Survey, number: int) -> frozenset[str]:
+    """Brief #1717: the files that the merged pull requests naming `Brief: #NUMBER` added, from
+    the brief's timeline (one read) and each one's files; empty when either cannot be read, so
+    the brief is refused as before (fail closed)."""
+    events = pages(f"repos/{s.repo}/issues/{number}/timeline")
+    if events is None:
+        return frozenset()
+    found: set[str] = set()
+    for pr in timeline_pulls(events):
+        if pr.get("merged_at") and brief_number(pr) == number and isinstance(pr.get("number"), int):
+            try:
+                listed = pull_files(s, pr)
+            except CheckError:
+                return frozenset()
+            found |= {str(f.get("filename")) for f in listed if f.get("status") == "added"}
+    return frozenset(found)
 
 
 def added_numbers(s: Survey, pr: dict) -> set[str]:
@@ -1193,19 +1218,24 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
     return None, [], None
 
 
+def timeline_pulls(events: list) -> list[dict]:
+    """The pull requests a timeline names, each with its `merged_at`."""
+    out: list[dict] = []
+    for event in events:
+        source = event.get("source") if isinstance(event, dict) else None
+        found = source.get("issue") if isinstance(source, dict) else None
+        pull = found.get("pull_request") if isinstance(found, dict) else None
+        if isinstance(found, dict) and isinstance(pull, dict):
+            out.append({**found, "merged_at": pull.get("merged_at")})
+    return out
+
+
 def history_of(s: Survey, number: int) -> list[dict]:
     """The pull requests that name a brief, from its timeline (one read), each with its
     `merged_at`; when the timeline cannot be read, every closed pull request, read once."""
     events = pages(f"repos/{s.repo}/issues/{number}/timeline")
     if events is not None:
-        out: list[dict] = []
-        for event in events:
-            source = event.get("source") if isinstance(event, dict) else None
-            found = source.get("issue") if isinstance(source, dict) else None
-            pull = found.get("pull_request") if isinstance(found, dict) else None
-            if isinstance(found, dict) and isinstance(pull, dict):
-                out.append({**found, "merged_at": pull.get("merged_at")})
-        return out
+        return timeline_pulls(events)
     if s.closed is None:
         s.closed = pages(f"repos/{s.repo}/pulls?state=closed") or []
     return s.closed
