@@ -310,3 +310,114 @@ def test_the_guard_denies_the_owners_merge(tmp_path, command):
     found = merge_decision(root, command)
     assert found is not None and found["permissionDecision"] == "deny", command
     assert merge_decision(root, command, shadow=True)["permissionDecision"] == "deny"
+
+
+# --- brief #1758 (ADR-0736): the resolver's governance command in a scratch folder ---------------
+
+import subprocess  # noqa: E402  # nosec B404 - fixed argument lists only, no shell
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from test_guard_plugin_forms import CLEAN, FULL, ROOT, VARIABLE, make_project  # noqa: E402
+
+KIT_ROOT = f"{ROOT}/scripts/agk/kit_root.py"
+HOOK = ROOT / ".claude" / "hooks" / "conductor_guard.py"
+SHADOW_MODES = ([], ["--shadow"])
+
+
+def scratch_of(root: Path, name: str = "agk-conductor-r1") -> str:
+    folder = root.parent / "systmp" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    return str(folder.resolve())
+
+
+def conductor_allows(root: Path, command: str, cwd: str, flags: list[str]) -> bool:
+    temp = root.parent / "systmp"
+    temp.mkdir(exist_ok=True)
+    payload = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": cwd}
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(HOOK), *flags],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "CLAUDE_PROJECT_DIR": str(root),
+            "CLAUDE_PLUGIN_ROOT": str(ROOT),
+            "TMPDIR": str(temp),
+            "HOME": str(temp),
+        },
+        cwd=str(root),
+    )
+    assert proc.returncode == 0, proc.stderr
+    return not proc.stdout.strip()
+
+
+def clean_env(s: str) -> str:
+    return f'env -i PATH="$PATH" HOME={s} '
+
+
+@pytest.mark.parametrize("flags", SHADOW_MODES)
+def test_req078_the_conductor_runs_the_resolvers_governance_in_its_scratch(tmp_path, flags):
+    """REQ-078: brief #1758 answer 2: in a clean project the conductor and the shadow run
+    `python3 <plugin>/scripts/agk/kit_root.py governance` in the clean environment of a scratch
+    folder, named as the hook's cwd or by `cd <scratch> && `, with or without `-I` or AGK_BASE."""
+    root = make_project(tmp_path, CLEAN)
+    s = scratch_of(root)
+    for tail in (
+        f'python3 "{KIT_ROOT}" governance',
+        f"python3 {KIT_ROOT} governance",
+        f'python3 -I "{KIT_ROOT}" governance',
+        f'AGK_BASE={FULL} python3 "{KIT_ROOT}" governance',
+    ):
+        assert conductor_allows(root, clean_env(s) + tail, s, flags), tail
+        assert conductor_allows(root, f"cd {s} && " + clean_env(s) + tail, str(root), flags), tail
+    assert conductor_allows(root, clean_env(s) + f"make -C {s} -f agk.mk agk-governance", s, flags)
+
+
+@pytest.mark.parametrize("flags", SHADOW_MODES)
+def test_req078_an_installed_scratch_runs_its_own_resolver(tmp_path, flags):
+    """REQ-078: brief #1758 answer 3: one rule in both layouts; in an installed project `<kit>` is
+    the scratch's own scripts/agk, in the clean environment as every scratch run."""
+    root = make_project(tmp_path, "", installed=True)
+    s = scratch_of(root)
+    tail = "python3 scripts/agk/kit_root.py governance"
+    assert conductor_allows(root, clean_env(s) + tail, s, flags)
+    assert conductor_allows(root, f"cd {s} && " + clean_env(s) + tail, str(root), flags)
+    assert not conductor_allows(root, clean_env(s) + f'python3 "{KIT_ROOT}" governance', s, flags)
+
+
+@pytest.mark.parametrize("flags", SHADOW_MODES)
+def test_req078_every_neighbour_of_the_scratch_governance_stays_denied(tmp_path, flags):
+    """REQ-078: brief #1758 answer 6: outside the scratch, without the clean environment, another
+    scratch, a second segment, another folder, the variable or another argument is denied."""
+    root = make_project(tmp_path, CLEAN)
+    s, other = scratch_of(root), scratch_of(root, "agk-conductor-r2")
+    copy = tmp_path / "copy" / "scripts" / "agk"
+    copy.mkdir(parents=True)
+    (copy / "kit_root.py").write_text("print('x')\n", encoding="utf-8")
+    run = f'python3 "{KIT_ROOT}" governance'
+    for command, cwd in (
+        (clean_env(s) + run, str(root)),
+        (clean_env(s) + run, other),
+        (run, s),
+        (f"cd {s} && {run}", str(root)),
+        (f"cd {other} && " + clean_env(s) + run, str(root)),
+        (f"cd {root} && " + clean_env(s) + run, str(root)),
+        (f'cd "{s}" && ' + clean_env(s) + run, str(root)),
+        (f"cd {s} && " + clean_env(s) + run + "; rm -rf x", str(root)),
+        (f"cd {s} && " + clean_env(s) + run + " && rm -rf x", str(root)),
+        (f"cd {s} && cd {s} && " + clean_env(s) + run, str(root)),
+        (f"cd {s} && " + clean_env(s) + f"make -C {s} governance", str(root)),
+        (f"cd {s}; " + clean_env(s) + run, str(root)),
+        (clean_env(s) + run + "; rm -rf x", s),
+        (clean_env(s) + f'python3 "{copy}/kit_root.py" governance', s),
+        (clean_env(s) + f'python3 {VARIABLE}kit_root.py" governance', s),
+        (clean_env(s) + f'python3 "{KIT_ROOT}" governance --x', s),
+        (clean_env(s) + f'python3 "{KIT_ROOT}"', s),
+        (clean_env(s) + f'python3 "{KIT_ROOT}" --form', s),
+        (clean_env(s) + f"AGK_BASE=origin/main {run}", s),
+        (clean_env(s) + f'python3 -I -I "{KIT_ROOT}" governance', s),
+        (clean_env(s) + f'python3 "{ROOT}/scripts/agk/session.py" plan --json', s),
+    ):
+        assert not conductor_allows(root, command, cwd, flags), (command, cwd)
