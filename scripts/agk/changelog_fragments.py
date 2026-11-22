@@ -23,7 +23,9 @@ The release pull request also runs (brief #1706, ADR-0710)
 which sets to `Accepted` the one `- Status: Proposed` line of each ADR that `check_adrs.py
 --pending` lists (records verified by their Final comments in FILE only), byte for byte otherwise,
 so no session edits a Status line by hand. Every file is read before the first write; a refusal
-writes nothing.
+writes nothing. With `--pulls FILE` (brief #1738, ADR-0724), the merged pull requests as `GET
+pulls/<n>` returns them, it also flips the ADRs of a pull request merged by hand that `check_adrs.py
+--pending --pulls` lists; a FILE that is not such a list is refused naming the option.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ from common import STATUS_LINE, CheckError, base_arg, git, repo_root, run
 NAME = "changelog-fragments"
 USAGE = (
     "usage: changelog_fragments.py gather --version V [--date YYYY-MM-DD]\n"
-    "       changelog_fragments.py accept --comments FILE [--base REF]"
+    "       changelog_fragments.py accept --comments FILE [--base REF] [--pulls FILE]"
 )
 FRAG_DIR = "changelog.d/"
 CHANGELOG = "CHANGELOG.md"
@@ -143,11 +145,15 @@ def accepted_text(data: bytes) -> bytes:
     return "".join(lines).encode("utf-8")
 
 
-def accept(root: Path, comments_path: str | None, base: str | None) -> None:
+def accept(
+    root: Path, comments_path: str | None, base: str | None, pulls_path: str | None = None
+) -> None:
     """SPEC-0028 rule 4: flip each file `check_adrs.pending_paths` lists; nothing on a refusal."""
+    pulls = check_adrs.read_pulls(pulls_path)  # refused naming the option, before any read
     try:
         comments = check_adrs.read_comments(comments_path)
-        listed = check_adrs.pending_paths(root, check_adrs.adr_files(root), comments, base)
+        files = check_adrs.adr_files(root)
+        listed = check_adrs.pending_paths(root, files, comments, base, pulls)
         flips = [(p, accepted_text(p.read_bytes())) for p in listed]
     except (OSError, UnicodeDecodeError):
         raise CheckError("rule 4: a decision cannot be read (path class docs/adr/)") from None
@@ -162,11 +168,11 @@ def accept(root: Path, comments_path: str | None, base: str | None) -> None:
 
 def accept_main(rest: list[str]) -> int:
     names = rest[::2]
-    if len(rest) % 2 or any(name not in ("--comments", "--base") for name in names):
+    if len(rest) % 2 or any(name not in ("--comments", "--base", "--pulls") for name in names):
         print(USAGE, file=sys.stderr)
         return 2
     opts = dict(zip(rest[::2], rest[1::2], strict=True))
-    accept(repo_root(), opts.get("--comments"), base_arg(rest))
+    accept(repo_root(), opts.get("--comments"), base_arg(rest), opts.get("--pulls"))
     return 0
 
 
