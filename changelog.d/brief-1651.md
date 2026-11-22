@@ -1,0 +1,1 @@
+- A kit script that a pull request adds now also runs the tests that check every kit script (`[testing] every_script_tests`), so a new script that breaks isolated mode or the installed imports fails in its own proof (brief #1651)

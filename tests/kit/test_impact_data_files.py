@@ -273,6 +273,93 @@ def test_doctor_shortens_a_long_list(repo):
     assert len(lines) == 21 and lines[-1] == "tests: unmapped: and 8 more"
 
 
+EVERY = 'every_script_tests = ["tests/test_every.py"]\n'
+SCRIPTS = {
+    "scripts/agk/old.py": "# old\n",
+    "tests/test_every.py": "# reads each kit script by a glob\n",
+    "tests/test_old.py": 'P = "scripts/agk/old.py"\n',
+}
+NEW = {"scripts/agk/new.py": "# new\n", "tests/test_new.py": 'P = "scripts/agk/new.py"\n'}
+
+
+def test_an_added_script_selects_the_every_script_tests(repo):
+    """REQ-016: brief #1651 answer 1 (an added script also selects the every-script tests)."""
+    start(repo, extra=EVERY, files=SCRIPTS)
+    repo.commit(NEW, "add")
+    found = result(repo)
+    assert found.full is False and picked(found) == [
+        "tests/test_every.py",
+        "tests/test_new.py",
+        "tests/test_old.py",
+    ]
+    assert "  file: tests/test_every.py (new script) scripts/agk/new.py" in impact.text(found)
+
+
+def test_a_modified_script_does_not_select_them(repo):
+    """REQ-016: brief #1651 answer 3 (a modified script: its map entry and names rule)."""
+    start(repo, extra=EVERY, files=SCRIPTS)
+    assert picked(change(repo, "scripts/agk/old.py")) == ["tests/test_old.py"]
+
+
+def test_a_renamed_script_selects_them(repo):
+    """REQ-016: brief #1651 answer 3 (a renamed script is an added path)."""
+    start(repo, extra=EVERY, files=SCRIPTS)
+    repo.commit({"scripts/agk/old.py": None, **NEW}, "rename")
+    assert "tests/test_every.py" in picked(result(repo))
+
+
+def test_a_deleted_script_selects_nothing_new(repo):
+    """REQ-016: brief #1651 answer 3 (a deleted script adds no every-script test)."""
+    start(repo, extra=EVERY, files=SCRIPTS)
+    repo.commit({"scripts/agk/old.py": None}, "delete")
+    assert picked(result(repo)) == ["tests/test_old.py"]
+
+
+def test_an_added_document_or_other_file_selects_nothing_new(repo):
+    """REQ-016: brief #1651 answer 1 (only a script: not documentation, nor outside the folder)."""
+    start(repo, extra=EVERY, files=SCRIPTS)
+    repo.commit({"scripts/agk/notes.md": "# notes\n", **{"app/new.py": "# n\n"}}, "add")
+    assert "tests/test_every.py" not in picked(result(repo))
+
+
+def test_without_the_setting_nothing_changes(repo):
+    """REQ-016: brief #1651 answer 2 (a project using AGK: an empty list by default)."""
+    start(repo, files=SCRIPTS)
+    repo.commit(NEW, "add")
+    assert picked(result(repo)) == ["tests/test_new.py", "tests/test_old.py"]
+
+
+@pytest.mark.parametrize("profile", ["fast", "thorough"])
+def test_other_profiles_are_unchanged(repo, profile):
+    """REQ-016: brief #1651 answer 2 (`thorough` stays full; the rule is of `balanced`)."""
+    start(repo, profile, extra=EVERY, files=SCRIPTS)
+    repo.commit(NEW, "add")
+    found = result(repo)
+    assert "tests/test_every.py" not in picked(found)
+    assert found.full is (profile == "thorough")
+
+
+@pytest.mark.parametrize(
+    "value", ['"tests/test_every.py"', '["tests/test_gone.py"]', "[1]", '["tests/*.py"]']
+)
+def test_a_bad_setting_is_refused_by_name(repo, value):
+    """REQ-016: brief #1651 answer 2 (not a list of existing test files: refused by name)."""
+    start(repo, extra=f"every_script_tests = {value}\n", files=SCRIPTS)
+    with pytest.raises(impact.CheckError) as err:
+        impact.testing_table(repo.root)
+    assert "setting: testing.every_script_tests" in str(err.value)
+    assert "test_gone" not in str(err.value)
+
+
+def test_this_repository_names_the_three_contract_tests():
+    """REQ-016: brief #1651 answer 2 (the kit's default: the three every-script tests)."""
+    assert impact.testing_table(ROOT)["every_script_tests"] == [
+        "tests/kit/test_isolated_mode.py",
+        "tests/kit/test_installed_imports.py",
+        "tests/kit/test_core_contradictions.py",
+    ]
+
+
 DATA_FILES = (
     "kit/manifest.json",
     "kit/hashes.json",
