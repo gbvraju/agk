@@ -1129,6 +1129,27 @@ def test_req078_a_projects_own_gitattributes_lines_are_kept_in_adopt_mode(tmp_pa
     assert "scripts/agk/** text eol=lf" not in lines
 
 
+def test_req078_init_mode_rewrites_only_the_kit_lines_of_gitattributes(tmp_path):
+    """REQ-078: brief #1684 answer 4 and Q-1684-4 (an init install writes `.gitattributes` whole:
+    the template's lines are rewritten, the person's kept, one naming a removed path refuses)."""
+    plugin, target = released(tmp_path, "init")
+    attributes = target / ".gitattributes"
+    attributes.write_text(attributes.read_text(encoding="utf-8") + "*.png binary\n", "utf-8")
+    commit(target, "mine")
+    proc = clean_cli(plugin, target, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = attributes.read_text(encoding="utf-8").splitlines()
+    assert lines[-1] == "*.png binary" and "scripts/agk/** text eol=lf" not in lines
+    other, target = released(tmp_path / "other", "init")
+    attributes = target / ".gitattributes"
+    attributes.write_text(attributes.read_text(encoding="utf-8") + "agk.mk -diff\n", "utf-8")
+    commit(target, "mine")
+    proc = clean_cli(other, target)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    named = [ln for ln in proc.stdout.splitlines() if "names a" in ln]
+    assert len(named) == 1 and named[0].startswith("names a removed kit path: .gitattributes:")
+
+
 def test_req078_a_changed_kit_file_naming_a_removed_path_still_refuses(tmp_path):
     """REQ-078: brief #1684 answers 3 and Q-1684-1 (a changed file and a key the person set are
     listed and refused; nothing is written)."""

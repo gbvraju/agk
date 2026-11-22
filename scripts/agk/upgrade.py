@@ -1231,6 +1231,8 @@ def clean_rewrites(target: Path, kit_root: Path, manifest: dict, mode: str, name
             new = "".join([*lines[: begin + 1], inner, *lines[end:]])
         elif text.rstrip("\n") + "\n" == whole:
             new = clean_text(text, rel, names)
+        elif rel == ".gitattributes":  # independent patterns: the kit's lines alone (Q-1684-4)
+            new = clean_text(text, rel, names, set(body.splitlines()))
         else:
             continue
         if new != text:

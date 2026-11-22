@@ -28,6 +28,8 @@ maintainers' answer to Q-1684-3 (on pull request #1688) set the rule below.
    - a removed path leaves a one-line list value (`config/reviewers.yaml` `paths:`, `pyproject.toml` `pythonpath`), and
      a `key = []` left empty is dropped.
    A file with adopt's markers is compared and rewritten inside its block only, so the person's lines around it stay.
+   An init install's `.gitattributes` the person added lines to has only the template's own lines rewritten and every
+   other line kept; its lines are independent patterns (Q-1684-4).
 2. In `agk.toml` only the lines that are the kit's own (lines of the template) are rewritten that way; a line the person
    set is kept and the proof names it (Q-1684-1); the detail names each key dropped (`lint_paths` when every path in it
    is removed).
