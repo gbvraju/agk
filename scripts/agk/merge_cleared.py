@@ -737,9 +737,9 @@ def shared_of(data: dict) -> list[str] | None:
     value = (flow if isinstance(flow, dict) else {}).get(
         "shared_indexes", list(session_plan.SHARED_INDEXES)
     )
+    wild = session_plan.has_wildcard
     if not isinstance(value, list) or not all(
-        isinstance(v, str) and v.strip() and not session_plan.has_wildcard(v) and not v.endswith("/")
-        for v in value
+        isinstance(v, str) and v.strip() and not wild(v) and not v.endswith("/") for v in value
     ):
         return None
     return list(value)
