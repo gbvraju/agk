@@ -87,7 +87,7 @@ Example 1, the one question (three lines and one link):
 > The sign-up page now asks for an email and sends a welcome note.
 > It risks nothing you already have; the checks are green.
 > The login page stays as it is.
-> Shall I approve it? I recommend yes. https://github.com/example-org/example-app/pull/7
+> Shall I approve it? I recommend yes. https://example.com/example-app/pull/7
 
 Example 2, the reply after a yes. Posted:
 
