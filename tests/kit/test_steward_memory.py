@@ -682,3 +682,44 @@ def test_req066_brief_1741_the_agent_file_starts_again_at_each_resume():
     start = text.split("Start and end.", 1)[1].split("\n\n", 1)[0]
     assert "steward.py start --session <session>`, and at each resume" in start
     assert "Last, `steward.py end --session <session>" in start
+
+
+def test_req066_brief_1765_an_answered_owner_question_shows_as_answered():
+    """REQ-066 AC1: brief #1765 answers 1, 2 and 6, the start lists only the open owner questions,
+    newest first, and counts the answered ones; a relayed `Maintainer answer:` and a `not yet`
+    decision both answer."""
+    comments = [
+        {"id": 1, "body": "Owner question: Q-3-1 Ship on Friday?", "created_at": stamp(90)},
+        {"id": 2, "body": "Decision: Q-3-1: yes on #3 at 10:00Z", "created_at": stamp(80)},
+        {"id": 3, "body": "Owner question: Q-3-5 Keep two columns?", "created_at": stamp(70)},
+        {"id": 4, "body": "Owner question: Q-3-6 Mail example.com?", "created_at": stamp(60)},
+    ]
+    lines = steward.summary(steward.read_memory(comments))
+    asked = [line for line in lines if line.startswith("Owner question:")]
+    assert asked == [
+        "Owner question: Q-3-6 Mail example.com?",
+        "Owner question: Q-3-5 Keep two columns?",
+        "Owner question: 1 answered",
+    ]
+    comments += [
+        {"id": 5, "body": "Maintainer answer: Q-3-5 yes", "created_at": stamp(50)},
+        {"id": 6, "body": "Decision: Q-3-6: not yet, ask after the release", "created_at": stamp(40)},
+    ]
+    asked = [x for x in steward.summary(steward.read_memory(comments)) if "Owner question" in x]
+    assert asked == ["Owner question: 3 answered"]
+    assert steward.open_questions(comments) == []
+
+
+def test_req066_brief_1765_more_than_three_open_questions_are_counted():
+    """REQ-066 AC1: brief #1765 answer 1, at most three open questions, then `<n> more open`."""
+    comments = [
+        {"id": n, "body": f"Owner question: Q-9-{n} Ask {n}?", "created_at": stamp(100 - n)}
+        for n in range(1, 6)
+    ]
+    asked = [x for x in steward.summary(steward.read_memory(comments)) if "Owner question" in x]
+    assert asked == [
+        "Owner question: Q-9-5 Ask 5?",
+        "Owner question: Q-9-4 Ask 4?",
+        "Owner question: Q-9-3 Ask 3?",
+        "Owner question: 2 more open",
+    ]
