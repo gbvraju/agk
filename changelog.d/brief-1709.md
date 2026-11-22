@@ -1,0 +1,1 @@
+- Every merge path counts only a listed author's verdict: a `Verdict:` comment by any other account neither clears nor hides one, no listed author holds every head naming `verdict_authors`, a fork or non-collaborator pull request waits for the owner's `--owner` merge (`outside author`), and a malformed `execution` is refused (brief #1709)

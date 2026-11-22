@@ -49,7 +49,7 @@ import conductor  # noqa: E402
 import doctor as doctor_module  # noqa: E402
 import merge_cleared  # noqa: E402
 
-APPROVERS = f'version: 1\nspec_approvers: ["@{OWNER}"]\n'
+APPROVERS = f'version: 1\nverdict_authors: ["@{OWNER}"]\nspec_approvers: ["@{OWNER}"]\n'
 PROTECTED = [{"filename": "scripts/agk/ruleset.py", "status": "modified", "patch": "+x"}]
 RELEASE = [{"filename": "agk.toml", "status": "modified", "patch": '+version = "9.9.9"'}]
 HELD = f"merge-cleared #7 {SHA12}: held: "

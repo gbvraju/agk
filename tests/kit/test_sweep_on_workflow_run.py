@@ -47,7 +47,7 @@ def serve_runs(stub, *runs) -> None:  # noqa: F811
 def turn_on(proj) -> None:  # noqa: F811
     """`auto_merge` on, committed so that origin/main reads it."""
     proj.write("agk.toml", ON)
-    proj.git("add", "agk.toml")
+    proj.git("add", "agk.toml", "config/reviewers.yaml")  # its verdict authors (brief #1709)
     proj.git("commit", "-q", "-m", "auto merge on")
     proj.git("update-ref", "refs/remotes/origin/main", "HEAD")
 

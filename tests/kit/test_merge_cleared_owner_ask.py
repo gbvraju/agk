@@ -39,7 +39,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import merge_cleared  # noqa: E402
 
-APPROVERS = f'version: 1\nspec_approvers: ["@{OWNER}"]\n'
+APPROVERS = f'version: 1\nverdict_authors: ["@{OWNER}"]\nspec_approvers: ["@{OWNER}"]\n'
 MERGED = f"merge-cleared #7 {SHA12}: merged {MERGE12}"
 ADR = "docs/adr/0099-an-invented-decision.md"
 ADR_FILE = {"filename": ADR, "status": "added", "patch": "+x"}

@@ -53,7 +53,7 @@ import lock  # noqa: E402
 import merge_cleared  # noqa: E402
 
 PULL = world()["pull"]
-APPROVERS = f'version: 1\nspec_approvers: ["@{OWNER}"]\n'
+APPROVERS = f'version: 1\nverdict_authors: ["@{OWNER}"]\nspec_approvers: ["@{OWNER}"]\n'
 LOCAL = toml(ON, local=True)
 MERGED = f"merge-cleared #7 {SHA12}: merged {MERGE12}"
 

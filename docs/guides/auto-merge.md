@@ -43,7 +43,8 @@ later merge until it is closed.
 - It does not merge on its own. Nothing runs on a timer; there is no loop. A merge that could not run (the checks still
   pending, the kit paused, GitHub unreachable, the machine asleep) waits for the conductor's next review pass, where
   `session.py review-queue` lists it as `cleared, not merged` and the conductor runs the command again.
-- It does not trust a comment. A `Verdict:` comment alone merges nothing; trust rests on who can run the command.
+- It does not trust a comment from anyone. Only a `Verdict:` by a listed verdict author counts (`conductor_accounts` when
+  set, else `verdict_authors`, else the `maintainers` user handle); anyone else's neither clears nor hides one.
 - It never merges anything on the hold list: those wait for you, as before.
 - It never tags, approves a review, posts a verdict, changes a workflow or the ruleset, edits or commits a file, pushes or
   reverts, and never runs anything from a pull request's head except governance on its merge with the default branch.
@@ -72,6 +73,12 @@ A second account narrows that to one login:
    or an account that is also in `spec_approvers`.
 
 `config/reviewers.yaml` is protected and on the hold list, so this change lands with its own ADR and you merge it yourself.
+
+On a public repository anyone can comment and open a pull request from a fork. So every merge path (the conductor's run, the
+merger's comment event, its sweep, a lapse merge and the merge queue) reads the list above from the default branch and
+ignores a `Verdict:` by any other login, and with no listed author it holds every head (`held: no listed verdict author`,
+naming `verdict_authors`). A pull request from a fork, or by an author without write access, is held as `outside author`:
+read the change, then merge it yourself with `python3 scripts/agk/merge_cleared.py --pr <n> --owner` (brief #1709).
 
 ## Open the record issue
 

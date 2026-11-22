@@ -104,13 +104,14 @@ def remote(tmp_path: Path) -> str:
 
 
 LOCAL_REMOTE = "local bare remote"  # repo(): use remote() for origin
+LISTED = f'version: 1\nverdict_authors: ["@{OWNER}"]\n'  # brief #1709: OWNER's verdict counts
 
 
 def repo(
     tmp_path: Path,
     main: str,
     head: str | None = None,
-    reviewers_yaml: str | None = None,
+    reviewers_yaml: str | None = LISTED,
     origin: str = LOCAL_REMOTE,
 ) -> Path:
     """A checkout whose `origin/main` holds MAIN; with HEAD, the checkout is a pull request's head
@@ -182,7 +183,8 @@ def world(**saved: object) -> dict:
     base = {
         "pull": {
             "number": 7,
-            "head": {"sha": HEAD},
+            "head": {"sha": HEAD, "repo": {"full_name": REPO}},
+            "user": {"login": BUILDER},
             "state": "open",
             "draft": False,
             "labels": [],
@@ -257,6 +259,11 @@ elif parts[0] == 'commits' and parts[2:] == ['statuses']:  # the verdict status 
     out = paged(data.get('commit_statuses', []))
 elif parts[0] == 'commits' and parts[2:] == ['pulls']:  # the head of a status event (brief #853)
     out = data.get('head_pulls', [])
+elif parts[0] == 'collaborators' and parts[2:] == ['permission']:  # the author (brief #1709)
+    answer = data.get('permission', {'permission': 'write'})
+    if 'http' in answer:
+        fail(answer['http'])
+    out = answer
 elif parts[0] == 'pulls' and len(parts) == 2 and parts[1] == '7':
     out = data['pull']
 elif parts == ['pulls']:  # the open pull requests, as the merge queue lists them (brief #643)
@@ -328,6 +335,11 @@ def fake_gh(
         data["pull"] = {**data["pull"], "changed_files": len(data["files"])}
     if changed and isinstance(data["pull"], dict) and "commits" not in data["pull"]:
         data["pull"] = {**data["pull"], "commits": len(data["commits"])}
+    if isinstance(data["pull"], dict) and "user" not in data["pull"]:  # brief #1709: an author
+        data["pull"] = {**data["pull"], "user": {"login": BUILDER}}
+    head = data["pull"].get("head") if isinstance(data["pull"], dict) else None
+    if isinstance(head, dict) and "repo" not in head:  # brief #1709: a branch of the base repo
+        data["pull"] = {**data["pull"], "head": {**head, "repo": {"full_name": REPO}}}
     path.write_text(json.dumps(data), encoding="utf-8")
     script = bin_dir / "gh"
     script.write_text(
@@ -389,7 +401,7 @@ def merge_cleared_run(
     comments=None,
     head_toml=None,
     pull=None,
-    reviewers_yaml=None,
+    reviewers_yaml=LISTED,
     origin=LOCAL_REMOTE,
     **saved,
 ):
@@ -582,7 +594,9 @@ VERDICT_CASES = [
     ("upper case", [comment(f"Verdict: cleared {HEAD.upper()}", at=5)], "held"),
     ("a multi-line fix list", [FIX_LIST], "held"),
     ("hidden by a newer verdict", [cleared(at=5), REJECTED], "held"),
-    ("hidden by a builder's verdict", [cleared(at=5), comment("Verdict: hm", BUILDER, 7)], "held"),
+    # brief #1709 answer 1: an unlisted builder's `Verdict:` is not a verdict, so it no longer
+    # hides a listed one (test_the_merge_run_ignores_a_strangers_verdict)
+    ("only a builder's verdict", [comment(f"Verdict: cleared {HEAD}", BUILDER, 7)], "held"),
     ("no verdict at all", [comment("Report: ready", BUILDER, 3)], "held"),
     ("no comment at all", [], "held"),
 ]
@@ -674,20 +688,43 @@ def yaml(*extra: str) -> str:
     return "version: 1\n" + f'spec_approvers: ["@{OWNER}"]\n' + "".join(e + "\n" for e in extra)
 
 
-def test_without_conductor_accounts_a_cleared_verdict_by_any_author_clears(tmp_path):
-    """REQ-046 AC2: SPEC-0039 rule 3 (one account is the default)."""
-    for login, sub in ((BUILDER, "a"), (OWNER, "b")):
-        proc, _ = merge_cleared_run(
-            tmp_path / sub, toml(ON), [cleared(login=login)], reviewers_yaml=yaml()
-        )
-        assert one_line(proc).endswith(f": merged {MERGE12}")
+def listed_yaml(*extra: str) -> str:
+    """`yaml` with OWNER as the one listed verdict author (brief #1709)."""
+    return yaml(f'verdict_authors: ["@{OWNER}"]', *extra)
 
 
-def test_an_empty_conductor_accounts_list_is_the_one_account_default(tmp_path):
-    """REQ-046 AC2: brief #528 answer 2 (absent or empty)."""
+def test_without_conductor_accounts_only_a_listed_verdict_author_clears(tmp_path):
+    """REQ-046 AC2: brief #1709 answer 1 (one listed account is the default; a stranger's
+    verdict clears nothing)."""
     proc, _ = merge_cleared_run(
-        tmp_path, toml(ON), [cleared(login=BUILDER)], reviewers_yaml=yaml("conductor_accounts: []")
+        tmp_path / "a", toml(ON), [cleared(login=OWNER)], reviewers_yaml=listed_yaml()
     )
+    assert one_line(proc).endswith(f": merged {MERGE12}")
+    proc, made = merge_cleared_run(
+        tmp_path / "b", toml(ON), [cleared(login=BUILDER)], reviewers_yaml=listed_yaml()
+    )
+    line = one_line(proc)
+    assert ": held: " in line and BUILDER not in line and proc.returncode == 3
+    assert not any("merge" in a for a in made if "--method" in a)
+
+
+def test_no_listed_verdict_author_holds_every_head_naming_the_setting(tmp_path):
+    """REQ-046 AC2: brief #1709 answer 1 (an empty list is never "anyone")."""
+    for sub, people in (("a", yaml()), ("b", yaml("conductor_accounts: []")), ("c", None)):
+        proc, _ = merge_cleared_run(
+            tmp_path / sub, toml(ON), [cleared(login=OWNER)], reviewers_yaml=people
+        )
+        line = one_line(proc)
+        assert ": held: no listed verdict author" in line and "verdict_authors" in line
+        assert OWNER not in line and proc.returncode == 3
+
+
+def test_an_empty_conductor_accounts_list_is_the_listed_authors_default(tmp_path):
+    """REQ-046 AC2: brief #528 answer 2 (absent or empty), brief #1709 answer 1."""
+    proc, _ = merge_cleared_run(
+        tmp_path, toml(ON), [cleared(login=OWNER)],
+        reviewers_yaml=listed_yaml("conductor_accounts: []"),
+    )  # fmt: skip
     assert one_line(proc).endswith(f": merged {MERGE12}")
 
 
@@ -701,8 +738,8 @@ def test_with_conductor_accounts_only_a_listed_author_clears(tmp_path):
     proc, _ = merge_cleared_run(
         tmp_path / "b", toml(ON), [cleared(login=BUILDER)], reviewers_yaml=listed
     )
-    line = one_line(proc)
-    assert ": held: " in line and "conductor_accounts" in line and BUILDER not in line
+    line = one_line(proc)  # brief #1709: an unlisted author's verdict is not a verdict
+    assert ": held: no verdict (rule 3)" in line and BUILDER not in line
     assert proc.returncode == 3
 
 
@@ -785,6 +822,8 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
         ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/status?per_page=100&page=1", "-i"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1", "-i"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/commits?per_page=100&page=1", "-i"],
+        # brief #1709 answer 2: the author's permission, one GET
+        ["api", "--method", "GET", f"repos/{REPO}/collaborators/{BUILDER}/permission", "-i"],
         merge_call(),
         made[-2],
         ["api", "--method", "GET", f"repos/{REPO}/issues/500", "-i"],
@@ -979,3 +1018,163 @@ def test_a_conductor_fallback_cleared_verdict_clears_like_today():
     assert merge_cleared.judge(said, sha, ["boss"]) == ("cleared", "")
     said[0]["body"] = f"Verdict: cleared {sha} (someone else)\n"
     assert merge_cleared.judge(said, sha, ["boss"])[0] == "held"
+
+
+# --- brief #1709: only a listed author's verdict counts; an outside pull request waits ----------
+
+STRANGER = "stranger-four"
+
+
+def test_a_strangers_verdict_neither_clears_nor_hides_a_listed_one():
+    """REQ-046 AC2: brief #1709 answer 1 (an unlisted `Verdict:` is not a verdict)."""
+    sha = "d" * 40
+    theirs = comment(f"Verdict: cleared {sha}\n", STRANGER, at=1)
+    assert merge_cleared.judge([theirs], sha, [OWNER]) == ("held", "no verdict (rule 3)")
+    ours = comment(f"Verdict: cleared {sha}\n", OWNER, at=2)
+    hiding = comment(f"Verdict: rejected {sha}\n", STRANGER, at=3)
+    assert merge_cleared.judge([ours, hiding], sha, [OWNER]) == ("cleared", "")
+    assert merge_cleared.judge([ours, hiding], sha, ["@" + OWNER.upper()]) == ("cleared", "")
+    assert merge_cleared.latest_verdict(merge_cleared.trusted([ours, hiding], [OWNER])) == ours
+
+
+def test_a_strangers_covered_fix_list_clears_nothing():
+    """REQ-046 AC2: brief #1709 answer 1 (a covered fix list counts only by a listed author)."""
+    sha = "e" * 40
+    body = f"Verdict: fix list {sha}\n\nFinal: docs/adr/0999-example.md Proposed -> Accepted\n"
+    assert merge_cleared.accepted_adrs(comment(body), sha) == ["docs/adr/0999-example.md"]
+    assert merge_cleared.judge([comment(body, STRANGER)], sha, [OWNER])[0] == "held"
+    assert merge_cleared.judge([comment(body, OWNER)], sha, [OWNER]) == ("cleared", "")
+
+
+def test_an_empty_trusted_list_holds_naming_verdict_authors():
+    """REQ-046 AC2: brief #1709 answer 1 (never "anyone")."""
+    sha = "f" * 40
+    state, reason = merge_cleared.judge([comment(f"Verdict: cleared {sha}\n")], sha, [])
+    assert state == "held" and reason == merge_cleared.NO_AUTHOR
+    assert "setting: verdict_authors in config/reviewers.yaml" in reason
+
+
+def test_the_merge_run_ignores_a_strangers_verdict(tmp_path):
+    """REQ-046 AC2: brief #1709 answer 1 (the guarded command, the default listed author)."""
+    proc, _ = merge_cleared_run(tmp_path / "a", toml(ON), [cleared(login=STRANGER)])
+    assert ": held: no verdict (rule 3)" in one_line(proc) and proc.returncode == 3
+    later = comment(f"Verdict: rejected {HEAD}\n", STRANGER, at=9)
+    proc, _ = merge_cleared_run(tmp_path / "b", toml(ON), [cleared(), later])
+    assert one_line(proc).endswith(f": merged {MERGE12}")
+
+
+def test_a_pull_request_that_adds_its_author_to_the_list_does_not_count(tmp_path):
+    """REQ-046 AC2: brief #1709 answer 4 `default_branch` (the list of the default branch)."""
+    root = repo(tmp_path, toml(ON), head=toml(ON) + "# the head\n")
+    (root / "config" / "reviewers.yaml").write_text(
+        f'version: 1\nverdict_authors: ["@{OWNER}", "@{STRANGER}"]\n', encoding="utf-8"
+    )
+    bin_dir, _ = fake_gh(tmp_path, comments=[cleared(login=STRANGER)])
+    proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
+    assert ": held: no verdict (rule 3)" in one_line(proc) and proc.returncode == 3
+
+
+@pytest.mark.parametrize(
+    "people, author, expected",
+    [
+        (f'verdict_authors: ["@{OWNER}"]', OWNER, [OWNER]),  # solo: the one login counts
+        (f'verdict_authors: ["@{OWNER}", "@{CONDUCTOR}"]', OWNER, [CONDUCTOR]),  # team
+        (f'verdict_authors: ["@{OWNER}", "@{CONDUCTOR}"]', "", [OWNER, CONDUCTOR]),
+        (f'teams:\n  maintainers: {{github_team: "@{OWNER}"}}', BUILDER, [OWNER]),
+        ('teams:\n  maintainers: {github_team: "@example-org/maintainers"}', OWNER, []),
+        ('verdict_authors: ["@REPLACE-ME"]', OWNER, []),
+        ("verdict_authors: []", OWNER, []),
+        ("", OWNER, []),
+        (f'conductor_accounts: ["@{CONDUCTOR}"]\nverdict_authors: ["@{BUILDER}"]', BUILDER,
+         [CONDUCTOR]),
+    ],
+)  # fmt: skip
+def test_the_trusted_verdict_authors_for_each_setting(people, author, expected):
+    """REQ-046 AC2: brief #1709 answers 1 and 4 (`review_mode`, `verdict_authors`,
+    `conductor_accounts`, the `maintainers` handle)."""
+    data = reviewers.parse("version: 1\n" + (people + "\n" if people else ""))
+    assert reviewers.trusted_verdict_authors(data, author) == expected
+
+
+def test_a_bad_conductor_accounts_is_still_refused_by_the_trusted_list():
+    """REQ-046 AC2: brief #1709 answer 4 `conductor_accounts` (refused as today)."""
+    data = reviewers.parse('version: 1\nconductor_accounts: ["@REPLACE-ME"]\n')
+    with pytest.raises(CheckError, match="conductor_accounts"):
+        reviewers.trusted_verdict_authors(data, OWNER)
+
+
+@pytest.mark.parametrize(
+    "pull_change, permission",
+    [
+        ({"head": {"sha": HEAD, "repo": {"full_name": "someone-else/example-repo"}}}, None),
+        ({"head": {"sha": HEAD, "repo": None}}, None),  # a deleted fork
+        ({}, {"permission": "read"}),
+        ({}, {"permission": "triage"}),
+        ({}, {"http": 404}),  # the author left the repository
+        ({"user": None}, None),
+    ],
+)
+def test_an_outside_pull_request_is_held_for_the_owner(tmp_path, pull_change, permission):
+    """REQ-046: brief #1709 answer 2 (a fork, a deleted fork, a non-collaborator or an unreadable
+    permission waits for the owner's `--owner` merge)."""
+    pull = {**world()["pull"], **pull_change}
+    saved = {} if permission is None else {"permission": permission}
+    proc, made = merge_cleared_run(tmp_path, toml(ON), [cleared()], pull=pull, **saved)
+    line = one_line(proc)
+    assert ": held: outside author (rule 5)" in line and proc.returncode == 3
+    assert STRANGER not in line and "someone-else" not in line
+    assert merge_cleared.owner_only("outside author (rule 5)")
+
+
+@pytest.mark.parametrize("level", ["write", "maintain", "admin"])
+def test_a_collaborator_with_write_access_merges(tmp_path, level):
+    """REQ-046: brief #1709 answer 2 (write, maintain or admin; one GET)."""
+    proc, made = merge_cleared_run(
+        tmp_path, toml(ON), [cleared()], permission={"permission": level}
+    )
+    assert one_line(proc).endswith(f": merged {MERGE12}")
+    asked = [a for a in made if any("/collaborators/" in x for x in a)]
+    assert len(asked) == 1
+    assert any(x.endswith(f"/collaborators/{BUILDER}/permission") for x in asked[0])
+
+
+@pytest.mark.parametrize("value", ["Local", "github", 3])
+def test_a_malformed_execution_is_refused_and_never_read_as_github_mode(tmp_path, value):
+    """REQ-046: brief #1709 answer 4 `execution` (never moves merging to the workflow)."""
+    main = toml(ON).replace("[flow]\n", f"execution = {json.dumps(value)}\n[flow]\n")
+    proc, made = merge_cleared_run(tmp_path, main, [cleared()])
+    line = one_line(proc)
+    assert ": refused: " in line and "setting: execution" in line and "Local" not in line
+    assert made == []
+    with pytest.raises(merge_cleared.Nothing, match="execution"):
+        merge_cleared.github_mode(
+            {"flow": {"auto_merge": True, "auto_merge_method": "squash"}, "execution": value}
+        )
+
+
+@pytest.mark.parametrize("value", ["hosted", "hybrid", "pool"])
+def test_a_known_execution_keeps_github_mode(value):
+    """REQ-046: brief #1709 answer 4 `execution` (hosted, hybrid and pool unchanged)."""
+    data = {"flow": {"auto_merge": True, "auto_merge_method": "squash"}, "execution": value}
+    assert merge_cleared.github_mode(data) is None
+
+
+@pytest.mark.parametrize(
+    "main",
+    [
+        toml(ON, "strict"),
+        toml(ON, "flow"),
+        toml(ON, local=True),
+        toml(ON).replace("[flow]\n", 'review_mode = "solo"\n[flow]\n'),
+        toml(ON).replace("[flow]\n", 'review_mode = "team"\nexecution = "hybrid"\n[flow]\n'),
+        toml(ON + "merge_queue = true\n"),
+        toml(ON + "plan_issue = 661\nconductor_lapse_minutes = 30\n", local=True),
+    ],
+    ids=["strict", "flow", "local", "solo", "team-hybrid", "merge-queue", "lapse"],
+)
+def test_a_strangers_verdict_holds_the_same_under_every_mode(tmp_path, main):
+    """REQ-046: brief #1709 answer 4 (`pr_mode`, `review_mode`, `execution`, `merge_queue` and
+    `conductor_lapse_minutes` do not change who counts)."""
+    proc, made = merge_cleared_run(tmp_path, main, [cleared(login=STRANGER)])
+    assert one_line(proc).endswith(": held: no verdict (rule 3)") and proc.returncode == 3
+    assert not any(c[c.index("--method") + 1] != "GET" for c in made if "--method" in c)
