@@ -24,7 +24,7 @@ def _pairs(path: Path) -> list[tuple[str, str]]:
 
 
 def _set(value: str | None) -> bool:
-    return bool(value) and not (value.startswith("<") and value.endswith(">"))
+    return value is not None and value != "" and not (value.startswith("<") and value.endswith(">"))
 
 
 def load(root: Path = ROOT) -> dict[str, str]:

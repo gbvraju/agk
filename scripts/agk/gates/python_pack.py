@@ -18,7 +18,9 @@ hidden and environment folders and the kit's own `lint_paths`, it runs four step
 
 Each tool runs as `<this python> -m <tool>` with an argument list, never a shell, so it is the
 same on Windows, WSL and macOS, and writes no cache. A tool missing from this Python is a failure
-naming the tool and the setting, never a silent pass. A failure names the rule code and the path
+naming the tool, the setting and the install line of the layout (`INSTALL`, never a version; brief
+#1683, ADR-0700), never a silent pass; a tool found only as a command on PATH counts as missing, so
+the pinned module is the one that checks. A failure names the rule code and the path
 class (the glob the file fell under), never a file name or a value (principle 8).
 
 With a `tally` dict, `run` also fills `{step: {file: count}}` for `lint`, `format` and `type`, the
@@ -52,6 +54,11 @@ RULE = "SPEC-0072 rule 6"
 FLOOR = "SPEC-0072 rule 8"
 RUFF_DEFAULT = ["E4", "E7", "E9", "F"]  # ruff's own selection when a configuration sets none
 SKIP = {".venv", "venv", "node_modules", "__pycache__", "vendor", "third_party", "build", "dist"}
+# The install line of each layout (`[kit] layout`, kit_root.py): the pins of config/ci-tools.txt.
+INSTALL = {
+    "installed": "python3 -m pip install -r config/ci-tools.txt",
+    "plugin": 'python3 -m pip install -r "${CLAUDE_PLUGIN_ROOT}/config/ci-tools.txt"',
+}
 MYPY_FLAGS = ["--strict-optional", "--disallow-untyped-defs", "--disallow-incomplete-defs"]
 RUFF_CODE = re.compile(r"^[A-Z]{1,4}[0-9]{0,4}$")
 MYPY_LINE = re.compile(r"^(.+?):\d+(?::\d+)?: error: .*?(?:\[([a-z][a-z-]*)\])?$")
@@ -65,6 +72,16 @@ def on(root: Path) -> bool:
 
 def installed(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
+
+
+def install_line(root: Path) -> str:
+    """The install line for ROOT's layout; an unknown layout keeps the installed one."""
+    import kit_root
+
+    try:
+        return INSTALL[kit_root.layout(root)]
+    except kit_root.Refused:
+        return INSTALL["installed"]
 
 
 def patterns(root: Path) -> list[str]:
@@ -231,8 +248,12 @@ def run(
     per-file counts of the three steps when given."""
     root = Path(root)
     tools = (("ruff", "standards.rules"), ("mypy", "standards.type"))
-    missing = [f"{RULE}: the pack's tool {t} is not installed (setting: {s})" for t, s in tools]
-    gone = [m for (t, _), m in zip(tools, missing, strict=True) if not installed(t)]
+    gone = [
+        f"{RULE}: the pack's tool {t} is not installed (setting: {s}); install: "
+        + install_line(root)
+        for t, s in tools
+        if not installed(t)
+    ]
     if gone:
         return [("tools", gone)]
     try:
