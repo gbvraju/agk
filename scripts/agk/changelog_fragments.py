@@ -15,6 +15,15 @@ deletes the fragments. `<n>` is read on the first-parent history from the commit
 file: a subject ending `(#<n>)` (squash merge) or starting `Merge pull request #<n>` (merge commit).
 The lines already under `## Unreleased` move first, unchanged. A fragment whose number cannot be
 read stops the script before it writes anything. Git and files only: no network, no model.
+
+The release pull request also runs (brief #1706, ADR-0710)
+
+    python3 scripts/agk/changelog_fragments.py accept --comments FILE
+
+which sets to `Accepted` the one `- Status: Proposed` line of each ADR that `check_adrs.py
+--pending` lists (records verified by their Final comments in FILE only), byte for byte otherwise,
+so no session edits a Status line by hand. Every file is read before the first write; a refusal
+writes nothing.
 """
 
 from __future__ import annotations
@@ -26,10 +35,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git, repo_root, run
+import check_adrs
+from common import STATUS_LINE, CheckError, base_arg, git, repo_root, run
 
 NAME = "changelog-fragments"
-USAGE = "usage: changelog_fragments.py gather --version V [--date YYYY-MM-DD]"
+USAGE = (
+    "usage: changelog_fragments.py gather --version V [--date YYYY-MM-DD]\n"
+    "       changelog_fragments.py accept --comments FILE [--base REF]"
+)
 FRAG_DIR = "changelog.d/"
 CHANGELOG = "CHANGELOG.md"
 UNRELEASED = "## Unreleased"
@@ -119,9 +132,49 @@ def gather(root: Path, version: str, date: str) -> None:
     print(f"gathered {len(paths)} fragments")
 
 
+def accepted_text(data: bytes) -> bytes:
+    """DATA with its Status line (the first `STATUS_LINE`) set to Accepted, line end kept."""
+    lines = data.decode("utf-8").splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        body = line.rstrip("\r\n")
+        if STATUS_LINE.match(body):
+            lines[i] = "- Status: Accepted" + line[len(body) :]
+            break
+    return "".join(lines).encode("utf-8")
+
+
+def accept(root: Path, comments_path: str | None, base: str | None) -> None:
+    """SPEC-0028 rule 4: flip each file `check_adrs.pending_paths` lists; nothing on a refusal."""
+    try:
+        comments = check_adrs.read_comments(comments_path)
+        listed = check_adrs.pending_paths(root, check_adrs.adr_files(root), comments, base)
+        flips = [(p, accepted_text(p.read_bytes())) for p in listed]
+    except (OSError, UnicodeDecodeError):
+        raise CheckError("rule 4: a decision cannot be read (path class docs/adr/)") from None
+    if not flips:
+        print("accept: none pending")
+        return
+    for path, data in flips:
+        path.write_bytes(data)
+        print(f"accepted: {path.relative_to(root).as_posix()}")
+    print(f"accept: {len(flips)} decisions")
+
+
+def accept_main(rest: list[str]) -> int:
+    names = rest[::2]
+    if len(rest) % 2 or any(name not in ("--comments", "--base") for name in names):
+        print(USAGE, file=sys.stderr)
+        return 2
+    opts = dict(zip(rest[::2], rest[1::2], strict=True))
+    accept(repo_root(), opts.get("--comments"), base_arg(rest))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     opts: dict[str, str] = {}
+    if args and args[0] == "accept":
+        return accept_main(args[1:])
     if not args or args[0] != "gather":
         print(USAGE, file=sys.stderr)
         return 2
