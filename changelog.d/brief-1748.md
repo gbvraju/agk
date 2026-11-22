@@ -1,0 +1,1 @@
+- The environment-settings step reads a `test_dirs` entry written with back slashes, such as `.\tests\`, as the same folder, as the tests floor does; an entry that is no folder is still refused naming `test_dirs` (brief #1748, ADR-0730)

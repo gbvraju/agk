@@ -164,6 +164,17 @@ def test_a_list_of_folders_is_read_as_before(
     assert _run(_project(tmp_path, files), capsys)[0] == 0
 
 
+def test_a_back_slash_test_folder_reads_as_the_same_folder(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079 AC7: brief #1748: `.\\tests\\` is the folder `tests`, as the tests floor reads it."""
+    read = 'import os\nX = os.environ["AGK_EXAMPLE"]\n'
+    toml = "mode = \"init\"\ntest_dirs = ['.\\tests\\']\n"
+    root = _project(tmp_path, {"agk.toml": toml, "tests/test_x.py": read})
+    assert environment_settings.test_folders(root) == ["tests"]
+    assert _run(root, capsys)[0] == 0
+
+
 def test_adopt_mode_holds_the_findings(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """REQ-079 AC4: held until brief #1600's baseline, so nothing existing goes red."""
     files = {"config/key.py": f'TOKEN = "{FAKE}"\n', "app/main.py": APP}
