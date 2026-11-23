@@ -37,6 +37,25 @@ PAGE = """<!doctype html>
 """
 
 
+def sandboxless(browser: str, directory) -> tuple[str, object]:
+    """The browser behind a wrapper that adds `--no-sandbox` and keeps its stderr: a raw Chromium
+    on a CI runner whose kernel refuses unprivileged user namespaces cannot start its sandbox
+    (Ubuntu 26.04 runner image), and the sandbox does not change which requests are made."""
+    log = directory / "browser-stderr.txt"
+    wrapper = directory / "browser"
+    wrapper.write_text(f'#!/bin/sh\nexec "{browser}" --no-sandbox "$@" 2>>"{log}"\n', "utf-8")
+    wrapper.chmod(0o755)
+    return str(wrapper), log
+
+
+def shot(browser: str, log, url: str, size, target, port=None) -> None:
+    try:
+        design_compare.shoot_at(browser, url, size, target, port)
+    except design_compare.CheckError as exc:
+        text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+        raise AssertionError(f"{exc}; browser stderr: {text[-2000:]}") from None
+
+
 class Counter:
     """A loopback server that counts every request (a stand-in service or machine proxy)."""
 
@@ -81,14 +100,14 @@ def test_ac6_a_real_browser_opens_the_imported_page_through_the_server_and_nothi
         files = tmp_path / "files"
         files.mkdir()
         (files / "menu.html").write_text(PAGE.format(port=service.port), encoding="utf-8")
-        browser = design.find_browser()
+        browser, log = sandboxless(str(design.find_browser()), tmp_path)
         size = (640, 400)
         built, imported = tmp_path / "built.png", tmp_path / "imported.png"
-        design_compare.shoot_at(browser, (files / "menu.html").as_uri(), size, built)
+        shot(browser, log, (files / "menu.html").as_uri(), size, built)
         server = design_compare.FilesServer(files)
         with server as port:
             url = f"http://{design_compare.HOST}/menu.html"
-            design_compare.shoot_at(browser, url, size, imported, port)
+            shot(browser, log, url, size, imported, port)
         assert "/menu.html" in server.served
         share = design_render.pixel_share(built, imported)
         assert share <= design_compare.DEFAULT_TOLERANCE, share
