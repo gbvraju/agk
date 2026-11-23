@@ -230,7 +230,7 @@ def declared(root: Path, reader: str, build_file: str) -> list[tuple[str, str | 
     for rel, text in python_files(root):
         found = direct(reader, text) if rel == build_file else requirement_lines(text)[0]
         rows += [(n, v, rel) for n, v in found]
-    floats = {}
+    floats: dict[str, str] = {}
     for name, version, rel in rows:
         if version is None:
             floats.setdefault(name, rel)
