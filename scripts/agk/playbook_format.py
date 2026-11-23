@@ -611,8 +611,10 @@ def _architecture(rel: str, data: dict, root: Path) -> list[str]:
 
 
 def stacks(root: Path) -> list[str] | None:
-    """The `[[stack]]` names of `config/stack-signals.toml`, or None when the file is absent."""
-    path = Path(root) / STACKS
+    """The `[[stack]]` names of `config/stack-signals.toml`, or None when the file is absent; a
+    clean project's table is the plugin's (brief #1826, ADR-0759). Raises `kit_root.Refused`."""
+    found = Path(root)
+    path = found / STACKS if kit_root is None else kit_root.kit_file(found, STACKS)
     if not path.is_file():
         return None
     rows = load(path).get("stack")

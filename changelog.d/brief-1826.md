@@ -1,0 +1,1 @@
+- In a clean project the kit's scripts read the data guard, the templates, the principles and the stack table from the plugin, so `/agk:plan-intake`, `/agk:spec`, `/agk:brief` and `/agk:review` run there; an installed project is unchanged (brief #1826)

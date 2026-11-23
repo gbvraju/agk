@@ -20,6 +20,9 @@ another `layout` in a readable `[kit]` table, it refuses with one line naming th
 (exit 1). An `agk.toml` that cannot be read keeps the installed layout, as before. Standard
 library; no network.
 
+`kit_file(root, rel)` is the same resolver for any other kit file (brief #1826, ADR-0759): the
+project's path in the installed layout, the plugin's in a clean one.
+
 `pin_refusal(root, plugin)` is the start check of SPEC-0071 rule 6 (brief #1455, ADR-0613): in a
 clean project `[kit] plugin_version` must be set, equal `version` (Q-S0071-7) and equal the
 `version` in `plugin`'s `.claude-plugin/plugin.json`; else it returns one line naming
@@ -146,6 +149,16 @@ def kit_dir(root: Path, env: dict | None = None) -> Path:
     if layout(root) == "installed":
         return root / "scripts" / "agk"
     return plugin_root(root, env) / "scripts" / "agk"
+
+
+def kit_file(root: Path, rel: str, env: dict | None = None) -> Path:
+    """Where the kit's own file `rel` is read for `root` (brief #1826, ADR-0759): `root / rel` in
+    the installed layout, the plugin's copy in a clean one, never the project's own copy there
+    (that copy is `doctor.py`'s `kit-in-repository`). Refuses as `layout` and `plugin_root` do,
+    naming the setting; it never writes."""
+    if layout(root) == "installed":
+        return root / rel
+    return plugin_root(root, env) / rel
 
 
 def form(root: Path, env: dict | None = None) -> str:

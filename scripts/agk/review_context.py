@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import kit_root
 from common import (
     REQ_HEADER,
     REQ_ID,
@@ -374,7 +375,11 @@ def assemble(root: Path, cli_base: str | None, body: str) -> str:
     problems += doc_problems
     docs_lines, cut_docs = documents_section(root, docs, other)
 
-    principles = read_text(root, PRINCIPLES)
+    try:  # the kit's principles: the plugin's in a clean project (brief #1826, ADR-0759)
+        found = kit_root.kit_file(root, PRINCIPLES)
+    except kit_root.Refused as exc:
+        raise CheckError(str(exc)) from None
+    principles = read_text(found.parent, found.name)
     if principles is None:
         problems.append(f"{PRINCIPLES} is missing")
     principle_lines, cut_principles = text_section(principles, other)

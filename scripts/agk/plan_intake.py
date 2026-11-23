@@ -108,6 +108,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import check_plan
 import design_import
 import design_signoff
+import kit_root
 import playbook_format
 from common import (
     ESTIMATE_LINES,
@@ -128,6 +129,9 @@ USAGE = (
     " | openspec --slug SLUG --out FILE [--root DIR]"
 )
 GUARDS = ("scripts/agk/guard.py", ".claude/hooks/data_guard.py")
+# Brief #1826 (ADR-0759): in a clean project the plugin's guard runs, through the plugin's hook.
+PLUGIN_GUARDS = (*GUARDS, ".claude/hooks/plugin_hooks.py")
+LAYOUT_SETTING = "[kit] layout"
 # The pattern of `playbook.py check-start` (SPEC-0013 rule 5). playbook.py is kit-only, so it is
 # kept here and a test holds the two equal (ADR-0456 decision 4).
 MEASURABLE = re.compile(r"\d|\b(?:all|every|none|zero)\b", re.IGNORECASE)
@@ -186,7 +190,17 @@ WANT, SO_THAT = ", I want ", ", so that "
 
 
 def guard_missing(root: Path) -> str | None:
-    return next((rel for rel in GUARDS if not (root / rel).is_file()), None)
+    """The guard file that is not there, as the refusal names it, or None (SPEC-0043 rule 3:
+    whether it is installed, never a setting). A clean project's are the plugin's (brief #1826,
+    ADR-0759), named by the plugin root's form, never by an absolute path."""
+    if kit_root.layout(root) == "installed":
+        return next((rel for rel in GUARDS if not kit_root.kit_file(root, rel).is_file()), None)
+    missing = next(
+        (rel for rel in PLUGIN_GUARDS if not kit_root.kit_file(root, rel).is_file()), None
+    )
+    if missing is None:
+        return None
+    return f"{kit_root.PLUGIN_ROOT}/{missing} (setting: {LAYOUT_SETTING})"
 
 
 def _read(path: Path) -> str | None:
@@ -1066,7 +1080,7 @@ def cmd_render(root: Path, proposals: Path, again: bool = False) -> int:
         for rel in news
         if (root / rel).exists() or (root / rel).is_symlink()
     ]
-    if areas and _read(root / SPEC_TEMPLATE) is None:
+    if areas and _read(kit_root.kit_file(root, SPEC_TEMPLATE)) is None:
         problems.append(f"rule 7: {SPEC_TEMPLATE} cannot be read; nothing was written")
     if problems:
         print("\n".join(sorted(problems)))
@@ -1955,7 +1969,12 @@ def main(argv: list[str] | None = None) -> int:
 
 def dispatch(command: str, options: dict[str, str]) -> int:
     root = Path(options["--root"]) if "--root" in options else repo_root()
-    if (missing := guard_missing(root)) is not None:
+    try:
+        missing = guard_missing(root)
+    except kit_root.Refused as exc:  # another layout, or no plugin: the line names the setting
+        print(exc)
+        return 1
+    if missing is not None:
         print(f"data guard not installed: {missing}")
         return 2
     if command == "states":
