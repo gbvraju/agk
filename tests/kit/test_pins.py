@@ -333,3 +333,44 @@ def test_req079_an_adopted_sample_writes_its_baseline_then_fails_on_a_new_range(
     (root / "package.json").write_text(json.dumps(pkg), encoding="utf-8")
     rows = gate_rows(root)
     assert any(p is False and "SPEC-0072 rule 7" in line for p, line in rows), rows
+
+
+# REQ-079, brief #1778 (ADR-0744): a runtime written with a capital, as people write it, is read.
+
+
+def picked(parts: str) -> object:
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    from gates import pins  # noqa: PLC0415 - the step module itself
+
+    found = pins.pick([record(a_parts=parts, status="Accepted", chosen="Option A")])
+    return found[0] if found else None
+
+
+@pytest.mark.parametrize(
+    ("parts", "runtime"),
+    [
+        ("Parts: Node 22.11.0 MIT (verify), example-web 4.21.1 MIT (verify).", "node"),
+        ("Parts: Python 3.13.1 PSF-2.0, examplelib 1.2.3 MIT.", "python"),
+        ("Parts: PYTHON 3.13.1 PSF-2.0, examplelib 1.2.3 MIT.", "python"),
+    ],
+)
+def test_req079_a_capitalised_runtime_is_chosen_as_that_runtime(parts: str, runtime: str) -> None:
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    from gates import pins  # noqa: PLC0415 - the step module itself
+
+    assert picked(parts) == pins.STACKS[runtime]
+
+
+@pytest.mark.parametrize("name", ["Node.js", "nodejs"])
+def test_req079_a_runtime_spelled_otherwise_is_still_no_stack(name: str) -> None:
+    """Q-F3-1, conservative reading: only a difference of case of the exact key is read."""
+    assert picked(f"Parts: {name} 22.11.0 MIT, example-web 4.21.1 MIT.") is None
+
+
+def test_req079_a_capitalised_node_sample_runs_the_pins_step(tmp_path: Path) -> None:
+    root = node_project(tmp_path)
+    text = (root / STACK).read_text(encoding="utf-8")
+    (root / STACK).write_text(text.replace("Parts: node ", "Parts: Node "), encoding="utf-8")
+    result = check(root)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ok pins" in result.stdout and "not run" not in result.stdout

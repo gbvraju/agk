@@ -295,3 +295,40 @@ def test_ac4_an_unknown_command_is_still_a_usage_error(started):
     assert (
         proc.returncode == 2 and proc.stdout == "" and proc.stderr.startswith("usage: engines.py")
     )
+
+
+# --- brief #1778 (ADR-0744; REQ-079): an option naming no runtime the kit checks is noted ------
+
+NOTE_B = (
+    "note: option B names no runtime the kit checks (python, node); "
+    "its pins and standards pack will not run"
+)
+
+
+def declared(root, work_type=True):
+    import shutil  # noqa: PLC0415 - only these tests copy the playbooks
+
+    shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
+    toml = 'default_branch = "main"\n' + (
+        '[delivery]\nwork_type = "web-app"\n' if work_type else ""
+    )
+    (root / "agk.toml").write_text(toml, encoding="utf-8")
+    text = GOOD_STACK.replace(
+        "Parts: a 1.0 MIT. Practices: pinned actions, least",
+        "Parts: Node 22.11.0 MIT, a 1.0 MIT. Practices: pinned actions, least",
+    )
+    return stack_root(root, text)
+
+
+def test_req079_an_option_with_no_known_runtime_prints_a_note_not_a_failure(started):
+    """REQ-079: brief #1778 answer 2 (option A names `Node`, read as `node`; B names none)."""
+    proc = engines(declared(started), "stack-check")
+    assert proc.returncode == 0, proc.stdout
+    assert NOTE_B in proc.stdout.splitlines()
+    assert "option A names no runtime" not in proc.stdout
+
+
+def test_req079_no_work_type_prints_no_runtime_note(started):
+    """REQ-079: brief #1778 answer 3 (without `[delivery] work_type` nothing changes)."""
+    proc = engines(declared(started, work_type=False), "stack-check")
+    assert proc.returncode == 0 and "names no runtime" not in proc.stdout
