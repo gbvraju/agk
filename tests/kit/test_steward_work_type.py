@@ -12,6 +12,8 @@ Local git only, a recorded memory double, no network; invented data only (exampl
 
 from __future__ import annotations
 
+import os
+import re
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -28,6 +30,7 @@ import doctor  # noqa: E402
 import steward_owner  # noqa: E402
 
 ENGINES = KIT_ROOT / "scripts" / "agk" / "engines.py"
+CHECK_ADRS = KIT_ROOT / "scripts" / "agk" / "check_adrs.py"
 NOW = datetime(2026, 11, 22, 18, 40, tzinfo=UTC)
 AT = "2026-11-22T18:39Z"
 SOLO = 'default_branch = "main"\nreview_mode = "solo"\n'
@@ -54,8 +57,10 @@ def project(
 ) -> Path:
     root = tmp / "product"
     (root / "docs" / "adr").mkdir(parents=True)
-    (root / "docs" / "adr" / "0001-record-architecture-decisions.md").write_text(
-        "# ADR-0001: Record decisions\n\n- Status: Accepted\n", encoding="utf-8"
+    adr = (KIT_ROOT / "kit" / "templates" / "adr-0001.md").read_text(encoding="utf-8")
+    (root / "docs" / "adr" / "0001-adopt-agk.md").write_text(  # as init.py renders it
+        re.sub(r"\{\{([a-z_]+)\}\}", lambda m: "2026-11-22" if m[1] == "date" else "demo", adr),
+        encoding="utf-8",
     )
     (root / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
     shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
@@ -192,6 +197,28 @@ def test_req045_a_recorded_yes_in_solo_mode_writes_the_line_and_its_adr(env):
     assert not any(ln.startswith("git push") and "main" in ln.split()[-1] for ln in lines)
     assert records[-1][0] == "Decision" and "work-type" in records[-1][1]
     assert yes(tmp, root)[0] == 2  # the ask is answered: a second yes writes nothing
+
+
+def test_req045_the_written_record_passes_the_project_s_adr_check(env):
+    """REQ-045: brief #1827 answer 1, after the yes the project's own `check_adrs` passes the
+    branch: the record carries `- Requirements:` and `## Residual`."""
+    tmp, _ = env
+    root = project(tmp)
+    propose(root)
+    assert yes(tmp, root)[0] == 0
+    text = (root / "docs" / "adr" / "0002-work-type.md").read_text(encoding="utf-8")
+    assert "- Requirements: REQ-001" in text
+    assert re.search(
+        r"\n## Residual\n\n- \d{4}-\d{2}-\d{2}: none; the owner reviews the change before the "
+        r"merge\.\n*$", text
+    )
+    keep = {k: v for k, v in os.environ.items() if k not in ("AGK_BASE", "GITHUB_BASE_REF")}
+    done = subprocess.run(  # nosec B603 - the kit's own check, fixed argument list
+        [sys.executable, str(CHECK_ADRS), "--base", "main"], cwd=root,
+        capture_output=True, text=True, check=False, env={**keep, "CLAUDECODE": ""},
+    )  # fmt: skip
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout.splitlines()[-1] == "ok adrs (2 ADRs)"
 
 
 def test_req045_an_existing_delivery_table_takes_the_line(env):
