@@ -5,7 +5,7 @@
 """The `licences` step (brief #1596, ADR-0676; SPEC-0054 rule 4 as amendment 206 proposes;
 REQ-061, REQ-079).
 
-    python3 scripts/agk/gates/licences.py [--root DIR]
+    python3 scripts/agk/gates/licences.py [--root DIR] [--names]
 
 Each package of the chosen stack's committed lock (`pins.py` finds the stack, the lock and its
 reader) has a licence: the lock's own where it states one (`package-lock.json`'s `license`), else
@@ -20,7 +20,9 @@ refused naming the setting. With no stack chosen or no lock it prints `not run: 
 gives the findings per file (the lock's failing packages, the setting's form), so the runner's
 baseline holds an adopted project's existing ones, counted on every run (brief #1777, ADR-0743).
 Offline, files only; widening the list is a project ADR (principle 11). The runner calls it, as
-`layers`, where it `applies` (brief #1586's interface).
+`layers`, where it `applies` (brief #1586's interface). `--names` is for the person on their
+machine (brief #1838, ADR-0768): it prints each failing package with its class and licence id, and
+what the baseline holds; it writes nothing, and no workflow, gate run or prepush step calls it.
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ DEFAULT = frozenset(
     + ("blessing", "0BSD", "Unlicense", "Zlib", "BSL-1.0")
 )
 NOT_RUN = "not run: no lock"
-USAGE = "usage: python3 scripts/agk/gates/licences.py [--root DIR]"
+USAGE = "usage: python3 scripts/agk/gates/licences.py [--root DIR] [--names]"
 CLASSES = {"requirements": "python", "npm": "node"}
 
 
@@ -184,24 +186,60 @@ def problems(root: Path) -> list[tuple[str, str]] | None:
 
 def tally(root: Path) -> list[tuple[str, str, str]] | None:
     """(rule, class or setting, file) of each failing package or setting; None with no lock."""
+    found = failing(root)
+    return None if found is None else [(r, w, rel) for r, w, rel, _, _ in found]
+
+
+def failing(root: Path) -> list[tuple[str, str, str, str, str]] | None:
+    """`tally` with each failing package's name and licence ('' for the setting or an unreadable
+    lock); None with no lock. The names reach only `--names` (brief #1838 answer 3)."""
     found = lock_of(root)
     if found is None:
         return None
     allowed = allowed_list(root)
     if allowed is None:
-        return [(FORM, f"setting: {SETTING}", SETTING)]
+        return [(FORM, f"setting: {SETTING}", SETTING, "", "")]
     lock = pins.chosen(Path(root))[0][2]  # type: ignore[index]  # lock_of read it
     try:
         items = components(*found)
     except (AttributeError, ValueError):
-        return [(UNKNOWN, f"component class: {CLASSES[found[0]]}", lock)]
+        return [(UNKNOWN, f"component class: {CLASSES[found[0]]}", lock, "", "")]
     out = []
-    for cls, _, _, licence in items:
+    for cls, name, _, licence in items:
         if not licence:
-            out.append((UNKNOWN, f"component class: {cls}", lock))
+            out.append((UNKNOWN, f"component class: {cls}", lock, name, "unknown"))
         elif not passes(licence, allowed):
-            out.append((RULE, f"component class: {cls}", lock))
+            out.append((RULE, f"component class: {cls}", lock, name, licence))
     return out
+
+
+def names(root: Path) -> int:
+    """Brief #1838 answer 3: each failing package for the person, then what the baseline holds."""
+    from gates import baseline  # noqa: PLC0415 - only the person's listing reads the baseline
+
+    found = failing(root)
+    if found is None:
+        print(f"licences: {NOT_RUN}")
+        return 0
+    rows = sorted(
+        f"licence off the list: {w.removeprefix('component class: ')} {n} {lic} (path class: {f})"
+        for _, w, f, n, lic in found
+        if n
+    )
+    if not rows:
+        for rule, where, _, _, _ in found:
+            print(f"FAIL licences: {rule} ({where})")
+        if found:
+            return 1
+        print("ok licences (none to name)")
+        return 0
+    held = sum((baseline.read(Path(root), "licences") or {}).values())
+    for row in rows:
+        print(row)
+    print(
+        f"licences: {len(rows)} to name; the baseline holds {held} (path class: {baseline.CLASS})"
+    )
+    return 1
 
 
 def applies(root: Path) -> bool:
@@ -229,10 +267,15 @@ def counts(root: Path, playbook: dict[str, Any]) -> dict[str, int]:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
-    if args and not (len(args) == 2 and args[0] == "--root" and args[1]):
+    listing = args.count("--names") == 1
+    if listing:
+        args.remove("--names")
+    if args and not (len(args) == 2 and args[0] == "--root" and args[1]) or "--names" in args:
         print(USAGE, file=sys.stderr)
         return 2
     root = Path(args[1]) if args else Path.cwd()
+    if listing:
+        return names(root)
     if problems(root) is None:
         print(f"licences: {NOT_RUN}")
         return 0

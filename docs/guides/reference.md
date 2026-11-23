@@ -1009,10 +1009,13 @@ The `pins` step reads the chosen stack's build file and its lock (`requirements.
 and fails on a direct dependency not pinned exactly or not in the lock, on a missing lock and on a part of the Accepted
 stack record whose version differs from the lock's, each line naming the rule and the component class, never a name or a
 version. With no `[delivery] work_type` or no Accepted stack record it prints `pins: not run: no stack chosen`.
-It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
+With a Python stack it also reads the root `requirements.txt`, each file its `-r` lines name and the files of
+`[tool.setuptools.dynamic]` (brief #1838, ADR-0768); a range, a bare name, a wildcard, a URL reference or an `-e` line
+other than `-e .` there fails as not pinned exactly, held to that file, and an unreadable or outside `-r` file is the
+build file line, held to the file that names it. A `-c` file is not read. It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
 them), with the runner's interface.
 
-    python3 scripts/agk/gates/licences.py [--root DIR]
+    python3 scripts/agk/gates/licences.py [--root DIR] [--names]
 
 The product's own dependencies (brief #1596, ADR-0676, amendment 206): with a chosen stack, `sbom.py make` also lists each
 package of the committed lock (class `python` or `node`) with its version and its licence, from the lock where it states
@@ -1022,6 +1025,11 @@ licence it cannot read, as `unknown`, naming the rule and the component class on
 naming the setting. With no stack or no lock it prints `licences: not run: no lock`. `run_gates.py` runs it and the `bom`
 step (the bill of `HEAD`, made and checked in memory) where a stack is chosen and its lock is read; with
 `mode = "adopt"` the licence findings are held until the baseline. The list is a project policy, not legal advice.
+`--names`, for the person on their machine only (brief #1838, ADR-0768), prints `licence off the list: <class> <package>
+<licence id or unknown> (path class: <lock>)` for each failing package, then `licences: <n> to name; the baseline holds
+<m> (path class: config/agk-baseline/)`, or `ok licences (none to name)`; it exits 1 when it lists one and writes
+nothing. No workflow, gate run or prepush step calls it; `doctor.py` points to it with one `warn licences:` line while
+the licence baseline holds a line.
 
 ## Design check
 
