@@ -56,6 +56,13 @@ that counts no file (`the <step> tool did not run`) is never held and writes no 
 step of `NEEDS_CONFIG` is `not run` while that floor holds an unreadable configuration, and a pack
 with no product file in scope is `not run standards <stack>: no product file in scope`; a pack
 with a held or not-run step prints no `ok standards <stack>`.
+
+Touched files (brief #1844, ADR-0773, proposed amendment 221): with `touched_files = "meet"` the
+pack's `lint`, `format` and `type` read a baseline line of a file the change touches (from the merge
+base of `common.resolve_base` to the working tree, less deletions) as 0, so a finding left in it
+fails `standards <stack> <step>: SPEC-0072 rule 7: a file this change touches must meet the pack
+(setting: touched_files)`. With no base, or no `.git`, `not run standards touched: no base
+(setting: touched_files)` and no-rise holds. `hold`, the default, is rule 7 as before.
 """
 
 from __future__ import annotations
@@ -70,10 +77,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import check_playbooks
 import playbook_format
-from common import CheckError, repo_root, run, utf8_output
+from common import CheckError, changed_files, merge_base, repo_root, resolve_base, run, utf8_output
 from gates import baseline, pins, python_pack
 
-from config import PROJECT_LINT, project_lint_paths
+from config import PROJECT_LINT, TOUCHED_KEY, project_lint_paths, touched_files
 
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
@@ -93,6 +100,10 @@ MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts
 UNCOUNTED = "tool did not run"  # brief #1837: a failure that counts no file is never held
 FLOORS = {"floor": "setting: standards.config", "type-floor": "path class: tsconfig.json"}
 NO_FILE = "no product file in scope"
+TOUCHED = (
+    f"SPEC-0072 rule 7: a file this change touches must meet the pack (setting: {TOUCHED_KEY})"
+)
+NO_BASE = f"no base (setting: {TOUCHED_KEY})"
 
 
 def step_module(step: object) -> ModuleType | None:
@@ -148,7 +159,13 @@ HELD = "held"  # brief #1777: a step passing on its baseline that holds findings
 
 
 def ratchet(
-    root: Path, gate_id: str, found: dict[str, int], failed: list, write: bool, held: str = ""
+    root: Path,
+    gate_id: str,
+    found: dict[str, int],
+    failed: list,
+    write: bool,
+    held: str = "",
+    touched: frozenset[str] = frozenset(),
 ) -> list:
     """The rows of a step with per-file counts against its baseline (rule 7); with no baseline
     file, and none written, its own FAILED rows. HELD, where FAILED points (`path class: ...` or
@@ -169,6 +186,9 @@ def ratchet(
     over, under = baseline.compare(base, found)
     if over:
         return [*failed, (False, f"{gate_id}: {baseline.RULE} {where}"), *notes]
+    kept = {p: n for p, n in base.items() if p not in touched}
+    if had is not None and touched and baseline.compare(kept, found)[0]:  # brief #1844
+        return [*failed, (False, f"{gate_id}: {TOUCHED}"), *notes]
     if under:
         files = "file" if under == 1 else "files"
         notes.append((NOTE, f"baseline {gate_id}: a count fell in {under} {files} {where}"))
@@ -239,16 +259,39 @@ def no_pack_rows(root: Path) -> list[Row]:
     return [(None, f"standards: no pack for {stack}")] if stack else []
 
 
+def touched(root: Path) -> frozenset[str] | None:
+    """Brief #1844: the paths the change touches, less deletions; None with no base or no `.git`
+    (the personal floor's tree). In CI with no base, `resolve_base` raises its own line."""
+    if not (Path(root) / ".git").exists():
+        return None
+    base = resolve_base(root)
+    if base is None:
+        return None
+    paths = changed_files(root, merge_base(root, base))
+    return frozenset(p.replace("\\", "/") for p, s in paths.items() if s != "D")
+
+
 def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
     """(passed, line) for each standards pack that is on, once per pack module (rule 6)."""
     out: list[Row] = []  # main's row type; a pack row is never None
     done: set[str] = set()
+    meet = touched_files(root) == "meet"
+    changed: frozenset[str] = frozenset()
     for entry in check_playbooks.standard(path, root)[1]:
         stack = entry.get("stack")
         modules = [importlib.import_module(f"gates.{name}") for name in PACKS]
         module = next((m for m in modules if stack in m.STACKS), None)
         if module is None or module.__name__ in done or not module.on(root):
             continue
+        if meet and not done:  # brief #1844: read once, for the first pack that is on
+            try:
+                found = touched(root)
+            except CheckError as exc:
+                found, row = frozenset(), (False, f"standards touched: {exc}")
+            else:
+                row = (None, f"standards touched: {NO_BASE}") if found is None else None
+            changed = found or frozenset()
+            out += [row] if row else []
         done.add(module.__name__)
         if tuple(entry.get(k) for k in STEP_KEYS) != module.STEP_NAMES:
             out.append((False, f"standards {stack}: {NO_PACK_STEP}"))
@@ -269,7 +312,12 @@ def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
                 continue
             failed: list[Row] = [(False, f"{gid}: {ln}") for ln in lines]
             held = FLOORS.get(step, "")
-            got = ratchet(root, gid, tally[step], failed, write, held) if step in tally else failed
+            mine = changed if step in STEP_KEYS else frozenset()
+            got = (
+                ratchet(root, gid, tally[step], failed, write, held, mine)
+                if step in tally
+                else failed
+            )
             mark = getattr(module, "UNREADABLE", None)
             if step == "floor" and mark and got[:1] and got[0][0] == HELD:
                 unread = any(mark in ln for ln in lines)

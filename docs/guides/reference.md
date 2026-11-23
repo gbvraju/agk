@@ -637,6 +637,14 @@ from today's tree and passes; `mode = "init"` writes nothing. `--baseline` write
 raising one: the owner's yes on an upgrade and the next build's lowering commit. `check_protected_changes.py` lets a
 lowering pass with no ADR and refuses a rise, a new line, a new file or a deleted one unless an ADR names it.
 
+Touched files (brief #1844, ADR-0773, proposed amendment 221): the top-level `touched_files` of `agk.toml` is `"hold"`
+(absent: the default, rule 7's no-rise) or `"meet"`: then the pack's `lint`, `format` and `type` read the baseline line
+of a file the change touches (from the merge base of `--base`, `AGK_BASE`, `GITHUB_BASE_REF` or the default branch to the
+working tree, less deletions) as 0, so a finding left in it fails `standards <stack> <step>: SPEC-0072 rule 7: a file this
+change touches must meet the pack (setting: touched_files)`. With no base, or no `.git` (the personal floor), it prints
+`not run standards touched: no base (setting: touched_files)`; the floors and the gates of rules 3 and 5 keep no-rise.
+Another value is refused `not an accepted value (setting: touched_files)`.
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
