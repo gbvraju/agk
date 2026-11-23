@@ -24,7 +24,8 @@ sys.path.insert(0, str(AGK))
 import check_playbooks  # noqa: E402
 import run_gates  # noqa: E402
 from common import DEFAULT_CONFIG, CheckError  # noqa: E402
-from gates import python_pack  # noqa: E402
+from gates import bom, python_pack  # noqa: E402
+from test_pins import with_lock  # noqa: E402
 
 from config import project_lint_paths  # noqa: E402
 
@@ -57,6 +58,13 @@ def _pins(name: str) -> str:
     return next(ln.split("==")[1].strip() for ln in text.splitlines() if ln.startswith(name + "=="))
 
 
+@pytest.fixture(autouse=True)
+def _no_bill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Brief #1776: the sample's new lock would start the `bom` step, which these samples never
+    ran (they had no lock) and which needs a committed, installed project; it has its own tests."""
+    monkeypatch.setattr(bom, "applies", lambda _root: False)
+
+
 def sample(tmp: Path, code: str = CLEAN, toml: str = "", record: bool = True) -> Path:
     shutil.copytree(PLAYBOOKS, tmp / "config" / "playbooks")
     (tmp / "agk.toml").write_text(
@@ -71,6 +79,7 @@ def sample(tmp: Path, code: str = CLEAN, toml: str = "", record: bool = True) ->
         (tmp / "docs" / "adr" / "0002-stack-options.md").write_text(RECORD, encoding="utf-8")
     (tmp / "api").mkdir()
     (tmp / "api" / "app.py").write_text(code, encoding="utf-8")
+    with_lock(tmp)  # brief #1776: the pins step reads the lock
     return tmp
 
 

@@ -48,7 +48,8 @@ ACCEPTED = re.compile(r"(?m)^- Status: Accepted\s*$")
 PARTS_KEY = "Parts:"
 PARTS_ENDS = ("Why:", "External services:", "Practices:")
 VERIFY = "(verify)"
-NOT_RUN = "not run: no stack chosen"
+NO_STACK = "no stack chosen"
+NOT_RUN = f"not run: {NO_STACK}"
 USAGE = "usage: python3 scripts/agk/gates/pins.py [--root DIR]"
 PEP508 = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*?)\s*(;.*)?$")
 EXACT_PY = re.compile(r"^==\s*([0-9][0-9A-Za-z.+!-]*)$")
@@ -192,7 +193,7 @@ def applies(root: Path) -> bool:
 
 def skipped(root: Path) -> str | None:
     """Brief #1776 answer 2: with no stack chosen the runner prints a not-run row, never `ok`."""
-    return NOT_RUN if chosen(Path(root)) is None else None
+    return NO_STACK if chosen(Path(root)) is None else None
 
 
 def check(root: Path, playbook: dict[str, Any]) -> list[tuple[str, str]]:

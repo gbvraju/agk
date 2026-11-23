@@ -30,8 +30,8 @@ sys.path.insert(0, str(AGK))
 
 import basics  # noqa: E402
 import check_plan  # noqa: E402
-from gates import committed_secrets, environment_settings  # noqa: E402
-from test_pins import record  # noqa: E402
+from gates import bom, committed_secrets, environment_settings  # noqa: E402
+from test_pins import record, with_lock  # noqa: E402
 
 STACK = "docs/adr/0002-stack-options.md"
 LOCAL = "APP_ENV=local\nDATABASE_PATH=local.db\nPORT=8000\n"
@@ -356,6 +356,13 @@ def test_req079_the_written_skeleton_passes_the_standards_pack(tmp_path, work_ty
     assert [line for _, lines in steps for line in lines] == []
 
 
+@pytest.fixture(autouse=True)
+def _no_bill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Brief #1776: the skeleton's new lock would start the `bom` step, which it never ran (it had
+    no lock) and which needs an installed kit's files; the step has its own tests."""
+    monkeypatch.setattr(bom, "applies", lambda _root: False)
+
+
 def with_pack(tmp: Path, lines: str = "") -> Path:
     """An API service's written skeleton with the stack's `pyproject.toml`, committed, and LINES
     at the top of its `agk.toml`."""
@@ -363,6 +370,7 @@ def with_pack(tmp: Path, lines: str = "") -> Path:
     stack = KIT_ROOT / "kit" / "templates" / "stacks" / "python-pyproject" / "pyproject.toml"
     text = stack.read_text(encoding="utf-8").replace("{{project}}", "sample")
     (root / "pyproject.toml").write_text(text, encoding="utf-8")
+    with_lock(root)  # brief #1776: the pins step reads the lock
     toml = (root / "agk.toml").read_text(encoding="utf-8")
     (root / "agk.toml").write_text(lines + toml, encoding="utf-8")
     git(root, "add", "-A")

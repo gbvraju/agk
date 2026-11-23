@@ -140,11 +140,11 @@ def test_a_non_python_stack_is_not_run_never_ok(tmp_path: Path, capsys) -> None:
     (root / "docs/adr/0003-stack-options.md").write_text(STACK_RECORD, encoding="utf-8")
     (root / "data/store.py").write_text("from api import routes\n", encoding="utf-8")
     code, out = _gates(root, capsys)
-    assert code == 0
+    # brief #1776 (ADR-0742): with no `package.json` the pins step fails, and only it
+    assert code == 1
     assert "not run layers: no reader for node\n" in out and "ok layers" not in out
-    # the checks of briefs #1593 (ADR-0673), #1590 (ADR-0670) and contract-tests (ADR-0677)
-    idle = "tests-first, contract-tests, layers, standards"  # brief #1685: no pack for node
-    assert out.splitlines()[-1] == f"ok gates (6 check gates; not run: {idle})"
+    fails = [ln for ln in out.splitlines() if ln.startswith("FAIL")]
+    assert len(fails) == 1 and fails[0].startswith("FAIL gates: pins: SPEC-0072 rule 4"), fails
 
 
 def test_windows_line_ends_and_paths_compare_by_forward_slash(tmp_path: Path, capsys) -> None:

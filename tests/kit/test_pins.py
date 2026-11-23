@@ -118,6 +118,18 @@ def node_project(tmp: Path, spec: str = "4.21.1", locked: str = "4.21.1") -> Pat
     return root
 
 
+def with_lock(root: Path, runtime: str = "python") -> Path:
+    """Brief #1776: the chosen stack's lock with no dependency, so `pins` passes on a sample of
+    another step that had no lock before (its build file must exist)."""
+    name, text = (
+        ("package-lock.json", '{"lockfileVersion": 3}\n')
+        if runtime == "node"
+        else ("requirements.lock", "# no dependency yet\n")
+    )
+    (root / name).write_text(text, encoding="utf-8")
+    return root
+
+
 def no_values(text: str) -> None:
     for word in SECRET_WORDS:
         assert word not in text, word
@@ -298,7 +310,7 @@ def test_req079_the_runner_passes_a_pinned_and_locked_sample(tmp_path: Path) -> 
 
 
 def test_req079_no_stack_chosen_is_a_not_run_row(tmp_path: Path) -> None:
-    assert gate_rows(project(tmp_path, record())) == [(None, "pins: not run: no stack chosen")]
+    assert gate_rows(project(tmp_path, record())) == [(None, "pins: no stack chosen")]
 
 
 def test_req079_no_work_type_leaves_the_runner_unchanged(tmp_path: Path) -> None:
