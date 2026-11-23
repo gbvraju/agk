@@ -120,7 +120,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design_compare.py" --version v<n> --s
 It prints `<screen>/<state> match` or `<screen>/<state> drift: structure, tokens, pixels` (the kinds found), ending
 `; pixels: not run` without a headless browser, and exits 0 on drift: put each line in the pull request body as a
 `Design match:` line and leave the judgement to the conductor. A build that changes no screen named by a `Screens:` line
-runs none.
+runs none. The browser runs offline; an imported page is opened only through the script's own files server, and a line
+may end `; external: <n> not loaded (...)` (copy it whole). An exit 1 naming `did not open the imported page` means the
+browser showed an error page: report it, do not copy a `Design match:` line for it.
 
 ## /agk:design inventory
 

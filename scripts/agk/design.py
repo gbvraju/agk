@@ -95,6 +95,14 @@ BROWSERS = ("chromium", "chromium-browser", "google-chrome", "google-chrome-stab
 SHOTS = (("360", 800), ("1280", 800))
 # In Blink 0 is dark and 1 is light (measured on Chromium); both are passed so a shot never
 # depends on the machine's own setting.
+# The offline flags of every browser call that opens a `file:` page (brief #1828, ADR-0762): no
+# host resolved and no proxy used, so no request leaves the machine, whatever proxy the machine has.
+OFFLINE = (
+    "--headless",
+    "--disable-gpu",
+    "--host-resolver-rules=MAP * ~NOTFOUND",
+    "--no-proxy-server",
+)
 SCHEME = {
     "dark": "--blink-settings=preferredColorScheme=0",
     "light": "--blink-settings=preferredColorScheme=1",
@@ -151,8 +159,7 @@ def cmd_screenshots(root: Path, opts: dict[str, str]) -> int:
             target = out / f"{width}-{mode}.png"
             command = [
                 browser,
-                "--headless",
-                "--disable-gpu",
+                *OFFLINE,
                 f"--screenshot={target}",
                 f"--window-size={width},{height}",
                 SCHEME[mode],
