@@ -143,4 +143,76 @@ def test_ac2_new_spec_is_stdlib_only_and_has_no_network_or_git_call():
         if isinstance(node, (ast.Import, ast.ImportFrom))
         for alias in (node.names if isinstance(node, ast.Import) else [node])
     }
-    assert imported <= {"__future__", "re", "sys", "datetime", "pathlib"}
+    # brief #1826 (ADR-0759): `tomllib` reads `[kit] layout`; still standard library, no kit module
+    assert imported <= {"__future__", "re", "sys", "datetime", "pathlib", "tomllib"}
+
+
+# --- brief #1826 (ADR-0759): a clean project's templates are the plugin's ------------------------
+
+TEMPLATES = ("docs/specs/TEMPLATE.md", "docs/adr/TEMPLATE.md", "docs/briefs/TEMPLATE.md")
+
+
+@pytest.fixture
+def clean(tmp_path):
+    """A clean project made by the kit's `init.py --layout plugin --rehearsal`: no templates."""
+    root = tmp_path / "shop-example"
+    root.mkdir()
+    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed argv
+    made = subprocess.run(  # nosec B603 - the kit's own installer
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "init.py"), str(root)]
+        + ["--layout", "plugin", "--login-from-env", "--solo", "--unreleased", "--rehearsal"],
+        env=clean_env() | {"AGK_SETUP_LOGIN": "example-owner", "CLAUDE_PLUGIN_ROOT": str(KIT_ROOT)},
+        capture_output=True,
+        text=True,
+    )
+    assert made.returncode == 0, made.stdout + made.stderr
+    assert not any((root / rel).exists() for rel in TEMPLATES)
+    return root
+
+
+@pytest.mark.parametrize(
+    ("kind", "made"),
+    [("spec", "docs/specs/"), ("requirement", "docs/adr/"), ("brief", "docs/briefs/")],
+)
+def test_req078_a_clean_project_writes_from_the_plugins_templates(clean, kind, made):
+    """REQ-078: `spec`, `requirement` and `brief` in a clean project read the plugin's template."""
+    proc = run(clean, kind, "Example title")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.startswith(f"created {made}"), proc.stdout
+    assert not any((clean / rel).exists() for rel in TEMPLATES)  # never copied into the project
+
+
+def test_req078_a_clean_projects_own_template_copy_is_not_read(clean):
+    """REQ-078 (Q-1826-2): the plugin's copy wins; the project's copy is `kit-in-repository`."""
+    own = clean / "docs" / "briefs" / "TEMPLATE.md"
+    own.parent.mkdir(parents=True)
+    own.write_text("# Brief: Title\n\nOwn copy of example.com.\n", encoding="utf-8")
+    assert run(clean, "brief", "Example title").returncode == 0
+    text = (clean / "docs" / "briefs" / "example-title.md").read_text(encoding="utf-8")
+    assert "Own copy" not in text
+
+
+def test_req078_another_layout_is_refused_naming_the_setting(repo):
+    """REQ-078: another `[kit] layout` value is refused as `kit_root.layout` refuses it."""
+    (repo / "agk.toml").write_text('[kit]\nlayout = "sideways-example"\n', encoding="utf-8")
+    proc = run(repo, "brief", "Example title")
+    assert proc.returncode == 1 and "(setting: layout)" in proc.stdout
+    assert "sideways-example" not in proc.stdout + proc.stderr
+
+
+@pytest.mark.parametrize(
+    "toml",
+    ["", 'version = "0.1.0"\n', '[kit]\nlayout = "installed"\n', '[kit]\nlayout = "plugin"\n']
+    + ["[kit\nbroken = "],
+)
+def test_req078_the_template_path_equals_the_resolvers(tmp_path, toml):
+    """REQ-078 (ADR-0503 kept): new_spec reads the layout itself, and a test holds its template
+    path equal to `kit_root.kit_file`'s for both layouts and an unreadable `agk.toml`."""
+    import kit_root
+    import new_spec
+
+    root = tmp_path / "shop-example"
+    root.mkdir()
+    (root / "agk.toml").write_text(toml, encoding="utf-8")
+    for rel in TEMPLATES:
+        assert new_spec.template_path(root, rel) == kit_root.kit_file(root, rel, {})
