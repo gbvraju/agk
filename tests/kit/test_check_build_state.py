@@ -97,14 +97,19 @@ def assert_rejected(proc):
 @pytest.mark.parametrize(
     "text",
     [
-        pytest.param(HEAD + ROW1.replace("invented row", "rewritten row") + ROW2 + TAIL, id="rewrite"),
+        pytest.param(
+            HEAD + ROW1.replace("invented row", "rewritten row") + ROW2 + TAIL, id="rewrite"
+        ),
         pytest.param(HEAD + ROW1.replace("|\n", "| \n") + ROW2 + TAIL, id="trailing-space"),
         pytest.param(HEAD + ROW1.replace("\n", "\r\n") + ROW2 + TAIL, id="crlf-line"),
         pytest.param(HEAD + ROW2 + TAIL, id="removed"),
         pytest.param(HEAD + ROW2 + ROW1 + TAIL, id="swapped"),
         pytest.param(HEAD + ROW1 + ROW2 + TAIL.lstrip("\n"), id="blank-line-removed"),
         pytest.param("\ufeff" + BS, id="byte-order-mark"),
-        pytest.param(HEAD + ROW1 + ROW2 + "\n- invented decision (example.com)\n## Decisions\n", id="heading-moved"),
+        pytest.param(
+            HEAD + ROW1 + ROW2 + "\n- invented decision (example.com)\n## Decisions\n",
+            id="heading-moved",
+        ),
     ],
 )
 def test_docs_only_change_that_rewrites_a_row_fails(base, text):

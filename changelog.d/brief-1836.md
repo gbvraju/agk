@@ -1,0 +1,1 @@
+- The build-state check now fails a docs-only change that rewrites, reorders or removes an existing line of `docs/build-state.md` (spaces and line ends count); appending rows and creating the file still pass, and a wrong old row is corrected by a new row (brief #1836, ADR-0765)

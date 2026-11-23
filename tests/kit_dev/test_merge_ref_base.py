@@ -117,11 +117,12 @@ def test_ac2_build_state_counts_the_other_pull_request_with_a_stale_base(docs_re
 
 
 ROW = "| 2026-10-24 | invented row | REQ-001 |\n"
+REST = "\n## Decisions\n\n- one\n- two\n- three\n"
 
 
 @pytest.fixture
 def rows_repo(docs_repo):
-    put(docs_repo, "docs/build-state.md", "# State\n\n" + ROW)
+    put(docs_repo, "docs/build-state.md", "# State\n\n" + ROW + REST)
     put(docs_repo, "docs/x.md", "x\n")
     commit(docs_repo, "a row")
     return docs_repo
@@ -132,11 +133,11 @@ def docs_only(root: Path) -> None:
 
 
 def row_rewritten(root: Path) -> None:
-    put(root, "docs/build-state.md", "# State\n\n" + ROW.replace("invented", "rewritten"))
+    put(root, "docs/build-state.md", "# State\n\n" + ROW.replace("invented", "rewritten") + REST)
 
 
 def row_appended_meanwhile(root: Path) -> None:
-    put(root, "docs/build-state.md", "# State\n\n" + ROW + "| 2026-10-25 | REQ-002 | proposed |\n")
+    put(root, "docs/build-state.md", "# State\n\n" + ROW + REST + "- appended meanwhile\n")
 
 
 def test_ac2_an_append_merged_meanwhile_is_not_this_changes_with_either_base(rows_repo):
