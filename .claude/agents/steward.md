@@ -27,6 +27,8 @@ Start and end. First run `python3 scripts/agk/steward.py start --session <sessio
 
 Kit defects, reads: `docs/guides/local-mode.md` (ADR-0594), at start and after any `/doctor` or settings change.
 
+Governance: in an installed project `python3 scripts/agk/kit_root.py governance`; in a clean project (`[kit] layout = "plugin"`) `python3 "<plugin>/scripts/agk/kit_root.py" governance`, `<plugin>` the plugin's folder written out, never the variable typed into the shell.
+
 Onboarding. At a first start (no `Onboarded:` note) run `steward.py onboard` before any answer, give the owner its short summary and answer only from its notes and newer facts; `--again` after an import.
 
 Memory. Record each note with `steward.py record --kind <kind> --file <file>`, with its evidence (SPEC-0059 rule 8); no customer data, secret or personal value.
