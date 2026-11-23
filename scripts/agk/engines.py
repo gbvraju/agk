@@ -415,10 +415,52 @@ def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
     if playbook is not None:
         text = with_playbook(text, *playbook)
     text = with_names(text).replace(RECOMMENDED_SLOT, recommended_option(root))
+    line = screens_line(root)  # brief #1843 answer 1
+    text = text.replace("\n" + SCREENS_SLOT, "\n" + line if line else "")
     path = root / rel
     path.write_text(text, encoding="utf-8")
     print(f"wrote {rel}")
     return 0
+
+
+SCREENS_SLOT = "{{screens}}"
+
+
+def screens_line(root: Path) -> str:
+    """Brief #1843 answer 1: the inventory's screens, in file order, as `id` (pattern), and the
+    newest signed-off version (`v<n>` before `i<n>`); '' with no inventory or no screen. Names
+    ids and patterns only, never a page's text or an imported file (SPEC-0037 rule 13)."""
+    import design_inventory  # noqa: PLC0415 - read only beside an inventory
+    import design_signoff  # noqa: PLC0415
+
+    path = root / design_inventory.INVENTORY
+    if not path.is_file():
+        return ""
+    found = []
+    for heading, lines in design_inventory._parts(path.read_text(encoding="utf-8")).get(
+        "Screens", []
+    ):
+        fields = dict(
+            (m.group(1).strip(), m.group(2).strip())
+            for m in map(design_inventory.FIELD.match, reversed(lines))
+            if m
+        )
+        pattern = fields.get("Pattern", "")
+        found.append(f"`{heading}` ({pattern})" if pattern else f"`{heading}`")
+    if not found:
+        return ""
+    try:
+        rows = design_signoff.rows(root)
+    except CheckError:
+        rows = []
+    versions = {r["version"] for r in rows if r["kind"] == "design"}
+    signed = [v for v in versions if design_signoff.signed_off(root, v)]
+    newest = max(signed, key=lambda v: (v[0] == "v", int(v[1:])), default=None)
+    version = f"signed-off version {newest}" if newest else "no signed-off version yet"
+    return (
+        f"Screens to build ({design_inventory.INVENTORY}; {version}): {', '.join(found)}."
+        " Each option says, in its Build speed phrase, how it builds these screens."
+    )
 
 
 CLASSES_LINE = re.compile(r"(?m)^(?:- )?Protected classes: (.*)$")

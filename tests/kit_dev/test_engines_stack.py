@@ -622,8 +622,11 @@ def test_req079_the_skeleton_names_the_inventorys_screens(started):
     text = written(with_inventory(started))
     line = SCREENS_LINE.format(version="no signed-off version yet")
     assert f"the vision and the charter.\n{line}\n\n## Decision" in text
-    assert engines(started, "stack-check").returncode == 0
     assert "files/" not in text and "Menu" not in text
+    drafted = GOOD_STACK.replace("on a laptop.\n", f"on a laptop.\n{line}\n")
+    (started / "docs" / "adr" / "0002-stack-options.md").write_text(drafted, encoding="utf-8")
+    check = engines(started, "stack-check")
+    assert check.returncode == 0 and "ok engines-stack" in check.stdout, check.stdout
 
 
 def test_req079_the_skeleton_names_the_signed_off_version(started):
