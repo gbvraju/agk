@@ -41,7 +41,9 @@ HEAD = "0123456789abcdef0123456789abcdef01234567"
 WHERE = "in session 2026-11-23"
 IB08 = "Example Studio; sage green #6B8F71"
 SOURCE = f"source: docs/discovery/reading-list.md (brand, given: {WHERE})"
-PROPOSAL = "/* a shade of the brand primary for 4.5:1 (proposed; the person's sign-off confirms it) */"
+PROPOSAL = (
+    "/* a shade of the brand primary for 4.5:1 (proposed; the person's sign-off confirms it) */"
+)
 ASK = (
     "ask the person: The brand colour is too light to read as text on the page; the theme uses a "
     "shade of it that reads at 4.5:1. Keep that shade? Yes or not yet; I recommend yes."
@@ -123,7 +125,11 @@ def imported(root: Path, answer: str | None = IB08, name: str = "reading-list") 
     source = put(root.parent / f"{root.name}-customer", "index.html", PAGE).parent
     proc = run(str(SCRIPT), "import", str(source), "--root", str(root))
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    put(root, "docs/design/imported/i1/map.md", "# Screen map of i1\n\n- index.html -> books/default\n")
+    put(
+        root,
+        "docs/design/imported/i1/map.md",
+        "# Screen map of i1\n\n- index.html -> books/default\n",
+    )
     put(root, f"docs/discovery/{name}.md", discovery(answer))
     return root
 
@@ -231,9 +237,14 @@ def test_ac1_a_labelled_font_is_the_body_and_heading_stack(tmp_path):
     ("answer", "expected"),
     [
         (IB08, {"name": "Example Studio", "primary": "#6B8F71"}),
-        ("name: Example Studio; primary: #6B8F71; font: Example Sans",
-         {"name": "Example Studio", "primary": "#6B8F71", "font": "Example Sans"}),
-        ("name: Example Studio\r\nprimary: #6B8F71", {"name": "Example Studio", "primary": "#6B8F71"}),
+        (
+            "name: Example Studio; primary: #6B8F71; font: Example Sans",
+            {"name": "Example Studio", "primary": "#6B8F71", "font": "Example Sans"},
+        ),
+        (
+            "name: Example Studio\r\nprimary: #6B8F71",
+            {"name": "Example Studio", "primary": "#6B8F71"},
+        ),
         ("Example Studio; #abc", {"name": "Example Studio", "primary": "#aabbcc"}),
         ("Example Studio; #111111 and #222222", {"name": "Example Studio"}),
         ("name: Example Studio; primary: sage green", {"name": "Example Studio"}),
@@ -243,7 +254,7 @@ def test_ac1_a_labelled_font_is_the_body_and_heading_stack(tmp_path):
         ("sage green #6B8F71", {"primary": "#6B8F71"}),
         ("colours: sage green", {}),
         ("font: Example/Sans", {}),
-        ("font: Example\"Sans", {}),
+        ('font: Example"Sans', {}),
     ],
 )
 def test_ac1_each_reading_of_an_answer_fills_only_what_it_reads_without_guessing(
@@ -266,7 +277,10 @@ def test_ac1_no_discovery_an_open_answer_or_differing_answers_keep_the_template(
     assert design_brand.theme_text(tmp_path, evidence) == (expected, [NOTE])
     put(tmp_path, "docs/discovery/c.md", discovery(IB08, where="https://example.com/issues/1"))
     found, notes = design_brand.brand(tmp_path)
-    assert notes == [] and found["name"][1] == "docs/discovery/b.md (brand, given: in session 2026-11-23)"
+    assert (
+        notes == []
+        and found["name"][1] == "docs/discovery/b.md (brand, given: in session 2026-11-23)"
+    )
 
 
 # --- answer 3: the two writers --------------------------------------------------------------------
@@ -292,7 +306,10 @@ def test_ac1_design_theme_refuses_an_existing_theme_and_a_project_with_no_versio
     put(bare, "docs/discovery/reading-list.md", discovery(IB08))
     proc = theme(bare)
     assert proc.returncode == 1
-    assert "rule 7: no prototype or imported version for the evidence line (path class docs/design/)" in proc.stdout
+    assert (
+        "rule 7: no prototype or imported version for the evidence line (path class docs/design/)"
+        in proc.stdout
+    )
     assert not (bare / THEME).exists()
 
 
@@ -329,9 +346,13 @@ def test_ac3_design_prototype_on_an_agreed_inventory_fills_the_new_theme(tmp_pat
     root = tmp_path / "proj"
     put(root, "docs/requirements.md", REQUIREMENTS)
     put(root, "docs/design/inventory.md", INVENTORY)
-    put(root, "docs/design/signoffs.md", SIGNOFFS_TEMPLATE.read_text(encoding="utf-8")
+    put(
+        root,
+        "docs/design/signoffs.md",
+        SIGNOFFS_TEMPLATE.read_text(encoding="utf-8")
         + f"| inventory | - | {design_signoff.inventory_digest(root)} | {HEAD} | 2026-11-02 "
-        "| https://example.com/review/1 |\n")
+        "| https://example.com/review/1 |\n",
+    )
     put(root, "docs/discovery/reading-list.md", discovery(IB08))
     proc = run(str(SCRIPT), "prototype", "--root", str(root))
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -352,9 +373,13 @@ def test_ac3_an_existing_placeholder_theme_is_not_filled_by_the_prototype(tmp_pa
     root = tmp_path / "proj"
     put(root, "docs/requirements.md", REQUIREMENTS)
     put(root, "docs/design/inventory.md", INVENTORY)
-    put(root, "docs/design/signoffs.md", SIGNOFFS_TEMPLATE.read_text(encoding="utf-8")
+    put(
+        root,
+        "docs/design/signoffs.md",
+        SIGNOFFS_TEMPLATE.read_text(encoding="utf-8")
         + f"| inventory | - | {design_signoff.inventory_digest(root)} | {HEAD} | 2026-11-02 "
-        "| https://example.com/review/1 |\n")
+        "| https://example.com/review/1 |\n",
+    )
     placeholder = TEMPLATE.replace("{{evidence}}", "docs/design/prototype/v1/")
     put(root, THEME, placeholder)
     put(root, "docs/discovery/reading-list.md", discovery(IB08))
@@ -434,7 +459,10 @@ def theme_writes() -> set[str]:
 def test_ac1_only_the_two_writers_write_the_theme_and_both_fill_it_from_discovery():
     """REQ-044 AC1: brief #1840 answer 5 (a new theme writer cannot skip discovery)."""
     assert theme_writes() == {"design_prototype.write", "design.cmd_theme"}
-    for path, name in ((AGK / "design_prototype.py", "theme_for"), (AGK / "design.py", "cmd_theme")):
+    for path, name in (
+        (AGK / "design_prototype.py", "theme_for"),
+        (AGK / "design.py", "cmd_theme"),
+    ):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
         assert "design_brand." in ast.unparse(fn), f"{path.name}:{name} skips design_brand"

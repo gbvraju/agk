@@ -435,9 +435,17 @@ def imported_theme(tmp_path, accent="#1a56db", evidence="docs/design/imported/i1
         env=clean_env(),
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    put(root, "docs/design/imported/i1/map.md", "# Screen map of i1\n\n- index.html -> books/default\n")
+    put(
+        root,
+        "docs/design/imported/i1/map.md",
+        "# Screen map of i1\n\n- index.html -> books/default\n",
+    )
     theme = STANDARD_THEME.replace("{{evidence}}", evidence)
-    put(root, "docs/design/theme.md", theme.replace("--color-accent: #1a56db;", f"--color-accent: {accent};"))
+    put(
+        root,
+        "docs/design/theme.md",
+        theme.replace("--color-accent: #1a56db;", f"--color-accent: {accent};"),
+    )
     return root
 
 
@@ -469,7 +477,11 @@ def test_ac7_an_imported_evidence_line_reads_approved_with_a_design_row_of_its_d
 def test_ac6_an_imported_evidence_line_to_a_missing_version_fails_with_the_new_wording(tmp_path):
     """REQ-036 AC6: SPEC-0029 rule 7 (brief #1840 answer 4: the folder must exist)."""
     root = imported_theme(tmp_path, evidence="docs/design/imported/i2/")
-    failed(root, "rule 7: docs/design/theme.md: the evidence line points to no mockup, prototype or imported folder")
+    failed(
+        root,
+        "rule 7: docs/design/theme.md: the evidence line points to no mockup, prototype or "
+        "imported folder",
+    )
 
 
 def test_ac6_pb05_colour_still_fails_contrast_alone_with_an_imported_evidence_line(tmp_path):
@@ -478,5 +490,6 @@ def test_ac6_pb05_colour_still_fails_contrast_alone_with_an_imported_evidence_li
     assert proc.returncode == 1
     fails = [ln for ln in proc.stdout.splitlines() if ln.startswith("FAIL")]
     assert fails == [
-        "FAIL design: rule 7: docs/design/theme.md: contrast below 4.5:1 in light for accent on surface"
+        "FAIL design: rule 7: docs/design/theme.md: contrast below 4.5:1 in light for accent "
+        "on surface"
     ], proc.stdout
