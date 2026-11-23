@@ -50,7 +50,7 @@ step writes.
 7. The three kit_dev stack tests whose shared fixture has no protected path list (`test_engines_stack.py`,
    `test_stack_adr_testing.py`, `test_stack_playbook.py`) copy the init list into it, since decision 1 refuses
    without one; `tests/kit_dev/` is named for that test-only change (the conductor's Answer on #1855).
-8. The `[[testing.map]]` entry `scripts/agk/gates/*.py` of `agk.toml` lists `tests/kit/test_kit_step_governance.py`
+8. The `[[testing.map]]` entries `scripts/agk/gates/*.py` and `scripts/agk/run_gates.py` of `agk.toml` list `tests/kit/test_kit_step_governance.py`
    and `tests/kit/test_stack_choice.py`, which name the gate runner, as `tests/kit_dev/test_gate_runner_map.py`
    requires; no setting changes.
 
