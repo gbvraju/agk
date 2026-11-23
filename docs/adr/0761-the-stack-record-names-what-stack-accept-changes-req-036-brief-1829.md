@@ -6,7 +6,7 @@
 - Related: brief #1829, ADR-0228, ADR-0671, ADR-0680, ADR-0735, ADR-0760, SPEC-0029, SPEC-0072
 - Requirements: REQ-036, REQ-069
 
-Protected classes: `scripts/agk/`, `kit/`, `skills/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `kit/`, `skills/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -47,6 +47,9 @@ step writes.
    the project's whole governance (plugin and full copy). A census of `scripts/agk/` fails for a write to a literal
    path of `agk.toml`, `config/`, `pyproject.toml`, `docs/architecture.md` or `docs/requirements.md` by a function that
    neither the table nor its list of writers held elsewhere names.
+7. The three kit_dev stack tests whose shared fixture has no protected path list (`test_engines_stack.py`,
+   `test_stack_adr_testing.py`, `test_stack_playbook.py`) copy the init list into it, since decision 1 refuses
+   without one; `tests/kit_dev/` is named for that test-only change (the conductor's Answer on #1855).
 
 ## Consequences
 
