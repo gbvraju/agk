@@ -15,7 +15,8 @@ the kit's own `lint_paths`, it runs these steps:
   or `warn`, never `off` or absent, else it names each missing id;
 - `node-lint`: `eslint --max-warnings 0` (a "File ignored" notice of the config's own `ignores` is
   not counted);
-- `node-format`: `prettier --check`;
+- `node-format`: `prettier --check --end-of-line auto --config-precedence file-override`: each
+  file keeps its own line end unless the project's configuration sets one (brief #1839);
 - `type-floor` (rule 8, brief #1766): `tsconfig.json`, read as JSON with comments through its
   `extends` chain inside the product (a package base from `node_modules/` when installed, else
   skipped) and each config of its `references`, sets `strict` and leaves `noImplicitAny` and
@@ -73,6 +74,9 @@ OFF = ("off", 0)
 UNREADABLE = "the pack's configuration is unreadable"
 NEEDS_CONFIG = ("lint",)  # brief #1837: not run while the floor holds an unreadable configuration
 CONFIG_HELD = "the pack's configuration is held (setting: standards.config)"
+# Brief #1839, ADR-0769: each file keeps its own line end, as `ruff format`'s `auto` does, unless
+# the project's own prettier configuration or `.editorconfig` sets one.
+FORMAT_FLAGS = ("--check", "--end-of-line", "auto", "--config-precedence", "file-override")
 
 Tally = dict[str, int]
 
@@ -189,7 +193,7 @@ def lint(root: Path, found: list[tuple[str, str]], tally: Tally | None = None) -
 
 def format_check(root: Path, found: list[tuple[str, str]], tally: Tally | None = None) -> list[str]:
     """`prettier --check`: exit 1 lists the files that are not formatted; any other exit fails."""
-    proc = _run(root, "prettier", ["--check", *[r for r, _ in found]])
+    proc = _run(root, "prettier", [*FORMAT_FLAGS, *[r for r, _ in found]])
     if proc.returncode == 0:
         return []
     where, out = dict(found), set()

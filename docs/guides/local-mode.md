@@ -133,7 +133,10 @@ it first, since a scan is never skipped in any mode. `doctor.py` prints whether 
 On Windows with `core.autocrlf` set to `true`, git rewrites the project's own files to CRLF line endings on checkout and an
 edit commits them back changed; the kit keeps LF only for its own files. `doctor.py` then prints
 `line endings: this machine rewrites LF to CRLF; add "* text=auto eol=lf" to .gitattributes (setting: core.autocrlf)`.
-Add that line to the project's `.gitattributes` yourself, outside the kit's lines; the kit never changes it (brief #1360).
+Add that line to the project's `.gitattributes` yourself, outside the kit's lines; the kit never changes it (brief #1360). The Node and
+Python format steps judge content and keep each file's own line end unless the project sets one (prettier's `endOfLine`,
+`.editorconfig`'s `end_of_line`, ruff's `line-ending`), so a CRLF checkout gives the result CI gives; a `test_dirs` entry
+may be written with back slashes or `./` (`tests\`, `.\tests`) and is read as `tests` (brief #1839, ADR-0769).
 
 On Windows the check before a merge reads the committed bytes (brief #1540, ADR-0648): every temporary checkout the kit
 makes (the guarded merge's check, the heavy-queue jobs, proof, batch, the evidence check and the release checks) is added

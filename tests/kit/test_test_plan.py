@@ -356,3 +356,26 @@ def test_a_full_selection_is_unchanged(repo):
     files = {**KIT_FILES, "agk.toml": thorough}
     found = regression(repo, files, {"tests/kit/test_new.py": "# new\n"})
     assert found["full"] is True and found["reason"] == "profile thorough"
+
+
+ORDERS = {
+    "app/core/orders.py": "# orders\n",
+    "tests/test_orders.py": "# orders test\n",
+}
+
+
+@pytest.mark.parametrize(
+    "form", ["tests", "tests/", "./tests", "tests\\", ".\\tests", ".\\tests\\"]
+)
+def test_each_written_form_of_test_dirs_gives_a_one_file_selection(repo, form):
+    """REQ-079: brief #1839 answers 2 and 7 (the brief's `Measured:` project, each written form)."""
+    toml = (
+        f'default_branch = "main"\ntest_dirs = [\'{form}\']\ntest_patterns = ["test_*.py"]\n'
+        "project_tests = 'exit 0'\n[testing]\n"
+        'map = [{ code = "app/core/**", tests = ["tests/test_orders.py"] }]\n'
+    )
+    found = regression(repo, {"agk.toml": toml, **ORDERS}, {"app/core/orders.py": "# changed\n"})
+    assert found["full"] is False
+    assert chosen(found) == {"tests/test_orders.py": "app/core/**"}
+    out = plan(repo, "--base", "main").stdout
+    assert "regression: 1 test file selected\n" in out and "unmapped" not in out

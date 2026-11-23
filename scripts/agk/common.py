@@ -1078,13 +1078,28 @@ def governance_level(root: Path) -> str | None:
     return level
 
 
+def test_folder(value: object) -> object:
+    """A `test_dirs` entry as one folder (brief #1839, ADR-0769): `\\` read as `/`, leading `./`
+    parts and a trailing `/` dropped, `.` or an empty entry kept as `.`; a non-string as written."""
+    if not isinstance(value, str):
+        return value
+    rel = value.replace("\\", "/")
+    while rel.startswith("./"):
+        rel = rel[2:].lstrip("/")
+    rel = rel.rstrip("/") if rel.strip("/") else rel
+    return rel if rel not in ("", ".") else "."
+
+
 def load_config(root: Path) -> dict:
-    """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps."""
+    """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps.
+    Each string entry of a `test_dirs` list is read as one folder (`test_folder`)."""
     cfg = {k: list(v) if isinstance(v, list) else v for k, v in DEFAULT_CONFIG.items()}
     source = config_source(root)
     for key in DEFAULT_CONFIG:
         if key in source:
             cfg[key] = source[key]
+    if isinstance(cfg["test_dirs"], list):
+        cfg["test_dirs"] = [test_folder(d) for d in cfg["test_dirs"]]
     return cfg
 
 
@@ -1111,7 +1126,7 @@ def detect_default_branch(target: Path) -> str | None:
 
 def test_dirs(root: Path, cli_dirs: Sequence[str] | None = None) -> list[str]:
     if cli_dirs:
-        return list(cli_dirs)
+        return [str(test_folder(d)) for d in cli_dirs]
     return list(load_config(root)["test_dirs"])
 
 
