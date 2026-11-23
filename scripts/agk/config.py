@@ -568,6 +568,30 @@ def brief_code_paths(root: Path) -> dict[str, int]:
     return BRIEF_CODE_PATHS | value
 
 
+# --- the brief study's Prior warnings (brief #1819, ADR-0758, Maintainer answer Q-F11-1) -------
+
+BRIEF_PRIOR_WARNINGS = 10
+
+
+class BriefPriorSettingError(CheckError):
+    """`[flow] brief_prior_warnings` is refused, naming the setting and never the value."""
+
+
+def brief_prior_warnings(root: Path) -> int:
+    """The most strong Accepted ADRs the brief study warns for: a whole number, 10 when unset."""
+    refused = BriefPriorSettingError("the setting is refused (setting: flow.brief_prior_warnings)")
+    try:
+        flow = config_source(root).get("flow", {})
+    except (OSError, ValueError):
+        raise refused from None
+    value = (
+        flow.get("brief_prior_warnings", BRIEF_PRIOR_WARNINGS) if isinstance(flow, dict) else None
+    )
+    if type(value) is not int or value < 0:
+        raise refused
+    return value
+
+
 # --- the stop hook's mode (brief #1254, ADR-0531) -------------------------------------------------
 
 STOP_CHECK_MODES = ("changed", "full", "off")
@@ -803,6 +827,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "auto_merge_method",
             "auto_start",
             "brief_code_paths",
+            "brief_prior_warnings",
             "builder_memory_gb",
             "builder_slots",
             "builder_start",

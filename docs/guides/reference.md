@@ -1124,8 +1124,13 @@ writer must read: the ADRs and specs that name a code path of `Touches:` or a `W
 amendments under `docs/runs/` that name one and are not yet in their spec, and the open briefs of the plan's read cache
 (or the saved list) whose `Touches:` meet this one's. `check_brief.py --root` then reads the brief's `Impact:` block
 (`Speed:`, `Quality:`, `GitHub:`, `Cost:`, `Tests:`), `Wiring:`, `Prior:` and `Class:` lines and warns
-(`warning: study: ...`) for each one missing or wrong, and for each Accepted ADR or open brief the study finds that
-`Prior:` leaves out; the warnings become failures from the day `STUDY_FAILS_FROM` names (none set yet). Files only.
+(`warning: study: ...`) for each one missing or wrong, for each open brief the study finds that `Prior:` leaves out,
+and for the strong Accepted ADRs it leaves out (brief #1819, ADR-0758): a hit is `strong` when a full code path or a
+`Wiring:` `<module>.<function>` stands in the ADR's header or `## Decision` section, and only the first
+`[flow] brief_prior_warnings` of them (a whole number, 10 when unset; any other value is refused naming the setting),
+ranked by the strong terms they name and then the newer number, are warned, with one line counting the rest.
+`brief_study.py` still prints every candidate, each line ending `strong` or `weak`. The warnings become failures from
+the day `STUDY_FAILS_FROM` names (none set yet). Files only.
 Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
 publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
 writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.

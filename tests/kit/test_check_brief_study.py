@@ -246,3 +246,113 @@ def test_ac4_an_event_carries_the_study_warnings_in_the_roll_in(tmp_path):
     )
     found = json.loads(out.stdout)
     assert found["action"] == "pass" and len(found["warnings"]) == 4
+
+
+def accepted(root: Path, number: int, context: str = "", decision: str = "") -> None:
+    text = f"# ADR-{number:04d}: x\n\n- Status: Accepted\n\n## Context\n\n{context}\n"
+    text += f"\n## Decision\n\n{decision}\n\n## Consequences\n\nNone.\n"
+    (root / "docs" / "adr" / f"{number:04d}-x.md").write_text(text, "utf-8")
+
+
+def prior_lines(warned: list[str]) -> list[str]:
+    return [w for w in warned if w.startswith(("study: Prior leaves out", "study: Prior: "))]
+
+
+def test_ac4_at_most_ten_adrs_are_warned_and_one_line_counts_the_rest(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 2)"""
+    root = tree(tmp_path)
+    for number in range(100, 115):
+        accepted(root, number, decision="It decides `scripts/agk/tool.py`.")
+    _, warned = result(STUDIED, root)
+    left = [w for w in warned if w.startswith("study: Prior leaves out ADR-")]
+    assert len(left) == brief_study.PRIOR_WARNINGS == 10
+    assert left[0].startswith("study: Prior leaves out ADR-0114 ")  # the newer first
+    assert (
+        "study: Prior: 5 more candidates not warned; brief_study.py <file> --root . lists them"
+        in warned
+    )
+
+
+def test_ac4_a_cited_strong_adr_is_not_warned_and_leaves_room_under_the_cap(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 2)"""
+    root = tree(tmp_path)
+    for number in range(100, 111):
+        accepted(root, number, decision="It decides `scripts/agk/tool.py`.")
+    cited = STUDIED.replace(PRIOR, "Prior: ADR-0110 (Accepted, the same rule)\n")
+    _, warned = result(cited, root)
+    left = prior_lines(warned)
+    assert len(left) == 10 and not any("ADR-0110" in w for w in left), left
+
+
+def test_ac4_open_brief_warnings_are_all_kept(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 3)"""
+    root = tree(tmp_path)
+    briefs = [{"number": n, "body": "Touches: scripts/agk/tool.py"} for n in range(500, 512)]
+    _, warned = brief_study.study_result(STUDIED, root, today=AFTER, briefs=briefs)
+    assert len([w for w in warned if "Prior leaves out brief #" in w]) == 12
+
+
+def test_ac4_the_class_stays_closed_weak_mentions_never_warn(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 5): a widening of the search fails this guard."""
+    root = tree(tmp_path)
+    for number in range(200, 240):
+        accepted(root, number, context="It mentions `tool.py` and `scripts/agk/tool.py`.")
+    _, warned = result(STUDIED, root)
+    assert len(prior_lines(warned)) <= 1, warned
+    assert not any(w.startswith("study: Prior leaves out ADR-") for w in warned)
+
+
+def test_ac4_an_adr_whose_decision_names_the_wired_function_is_warned(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 5)"""
+    root = tree(tmp_path)
+    accepted(root, 300, decision="1. `tool.main` prints the line.")
+    _, warned = result(STUDIED, root)
+    assert any(w.startswith("study: Prior leaves out ADR-0300 (Accepted)") for w in warned)
+
+
+def test_ac4_a_prior_that_cites_a_weak_candidate_is_allowed(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 7)"""
+    root = tree(tmp_path)
+    accepted(root, 301, context="`scripts/agk/tool.py` in passing.")
+    body = STUDIED.replace(PRIOR, "Prior: ADR-0301 (Accepted, read)\n")
+    assert result(body, root) == ([], [])
+    assert result(STUDIED, root) == ([], [])
+
+
+def test_ac4_the_cap_is_the_flow_setting_brief_prior_warnings(tmp_path):
+    """REQ-037 AC4 (brief #1819, Maintainer answer Q-F11-1: a whole number, default 10)"""
+    import config
+
+    root = tree(tmp_path)
+    for number in range(100, 106):
+        accepted(root, number, decision="It decides `scripts/agk/tool.py`.")
+    assert (
+        config.brief_prior_warnings(root) == 10
+        and "brief_prior_warnings" in config.TABLE_KEYS["flow"]
+    )
+    (root / "agk.toml").write_text("[flow]\nbrief_prior_warnings = 3\n", "utf-8")
+    assert config.brief_prior_warnings(root) == 3
+    _, warned = result(STUDIED, root)
+    assert len([w for w in warned if w.startswith("study: Prior leaves out ADR-")]) == 3
+    assert any(w.startswith("study: Prior: 3 more candidates not warned") for w in warned)
+    (root / "agk.toml").write_text("[flow]\nbrief_prior_warnings = 0\n", "utf-8")
+    _, warned = result(STUDIED, root)
+    assert prior_lines(warned) == [
+        "study: Prior: 6 more candidates not warned; brief_study.py <file> --root . lists them"
+    ]
+
+
+@pytest.mark.parametrize("value", ["-1", '"10"', "2.5", "true", "[10]"])
+def test_ac4_a_brief_prior_warnings_outside_its_form_is_refused_naming_the_setting(tmp_path, value):
+    """REQ-037 AC4 (brief #1819, Maintainer answer Q-F11-1)"""
+    from common import CheckError
+
+    import config
+
+    root = tree(tmp_path)
+    (root / "agk.toml").write_text(f"[flow]\nbrief_prior_warnings = {value}\n", "utf-8")
+    with pytest.raises(CheckError) as caught:
+        result(STUDIED, root)
+    assert "flow.brief_prior_warnings" in str(caught.value) and value not in str(caught.value)
+    with pytest.raises(config.BriefPriorSettingError):
+        config.brief_prior_warnings(root)
