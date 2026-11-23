@@ -80,6 +80,12 @@ None.
 """
 
 
+# Brief #1785 answer 3: a Proposed record with no one profile per option cannot be accepted, and
+# `stack-check` says so for each option, as notes after `ok engines-stack`.
+NO_PROFILE = "rule 5: the test selection practice names no one profile for option"
+NO_PROFILE_NOTES = "".join(f"note: option {x} cannot be accepted: {NO_PROFILE} {x}\n" for x in "AB")
+
+
 def stack_root(root, text=GOOD_STACK, name="0002-stack-options.md"):
     (root / "docs" / "adr" / name).write_text(text, encoding="utf-8")
     return root
@@ -111,7 +117,7 @@ def test_ac4_stack_write_makes_a_proposed_skeleton_that_is_not_drafted_yet(start
 def test_ac4_two_or_three_options_with_practices_told_apart_pass(started):
     """REQ-036 AC4: SPEC-0029 rule 5 (checked practices and recorded judgement)."""
     stack_root(started)
-    assert engines(started, "stack-check").stdout == "ok engines-stack\n"
+    assert engines(started, "stack-check").stdout == "ok engines-stack\n" + NO_PROFILE_NOTES
     judged = GOOD_STACK.replace(
         "   - a host-boundary test: check (step: the boundary test of the adopting build)\n",
         "   - a host-boundary test: judgement\n",
@@ -332,3 +338,165 @@ def test_req079_no_work_type_prints_no_runtime_note(started):
     """REQ-079: brief #1778 answer 3 (without `[delivery] work_type` nothing changes)."""
     proc = engines(declared(started, work_type=False), "stack-check")
     assert proc.returncode == 0 and "names no runtime" not in proc.stdout
+
+
+# --- brief #1785 (ADR-0748; REQ-061): one licence reader, said at the choice, the accept's refusals
+
+OFF_LIST = (
+    "note: option A part 1 licence is not on the allowed list (setting: config/licences.toml); "
+    "choosing it needs a project ADR that widens the list (principle 11)"
+)
+NO_ID = "FAIL engines: rule 5: option A part 1 has no licence id"
+
+
+def with_part(root, licence, selection=""):
+    text = GOOD_STACK.replace(
+        "Parts: a 1.0 MIT. Practices: pinned actions, least",
+        f"Parts: SQLite 3.47.1 {licence} (verify). Practices: pinned actions, least",
+    )
+    if selection:
+        text = text.replace("2. **Practices**\n", f"2. **Practices**\n   - {selection}\n")
+    return stack_root(root, text)
+
+
+def test_req061_sqlite_blessing_passes_and_is_said_off_the_list(started):
+    """REQ-061: brief #1785 answers 1 and 2 (a lower-case SPDX id; a note, never a failure)."""
+    proc = engines(with_part(started, "blessing"), "stack-check")
+    assert proc.returncode == 0, proc.stdout
+    lines = proc.stdout.splitlines()
+    assert lines[0] == "ok engines-stack" and OFF_LIST in lines
+    assert "blessing" not in proc.stdout  # principle 8: the note names no id
+
+
+@pytest.mark.parametrize(
+    "licence",
+    [
+        "curl",
+        "GPL-2.0-or-later WITH Classpath-exception-2.0",
+        "(MIT OR Apache-2.0)",
+        "MIT+",
+        "DocumentRef-a:LicenseRef-b",
+        "bzip2-1.0.6",
+    ],
+)
+def test_req061_real_spdx_forms_pass_the_form(started, licence):
+    """REQ-061: brief #1785 answers 1 and 6 (the SPDX grammar, any case)."""
+    proc = engines(with_part(started, licence), "stack-check")
+    assert proc.returncode == 0 and "FAIL" not in proc.stdout, proc.stdout
+
+
+@pytest.mark.parametrize("licence", ["see LICENSE", "(MIT OR Apache-2.0", "MIT OR", ""])
+def test_req061_a_text_that_is_no_expression_still_fails(started, licence):
+    """REQ-061: brief #1785 answer 6 (no id, unbalanced parentheses, a dangling operator)."""
+    proc = engines(with_part(started, licence), "stack-check")
+    assert proc.returncode == 1 and NO_ID in proc.stdout.splitlines(), proc.stdout
+
+
+def test_req061_a_project_list_holding_the_id_prints_no_note(started):
+    """REQ-061: brief #1785 answer 5 (the project's list, compared case-folded)."""
+    (started / "config").mkdir(exist_ok=True)
+    (started / "config" / "licences.toml").write_text('allowed = ["MIT", "Blessing"]\n', "utf-8")
+    proc = engines(with_part(started, "blessing"), "stack-check")
+    assert proc.returncode == 0 and "not on the allowed list" not in proc.stdout, proc.stdout
+
+
+def test_req061_a_list_not_of_its_form_is_said_once(started):
+    """REQ-061: brief #1785 answer 5 (one note naming the setting, no per-part note)."""
+    (started / "config").mkdir(exist_ok=True)
+    (started / "config" / "licences.toml").write_text('allowed = "MIT"\n', "utf-8")
+    proc = engines(with_part(started, "blessing"), "stack-check")
+    form = "note: the allowed list is not of its form (setting: config/licences.toml)"
+    assert proc.returncode == 0 and proc.stdout.splitlines().count(form) == 1, proc.stdout
+    assert "not on the allowed list" not in proc.stdout
+
+
+TWO = "test selection: judgement (Option A: profile fast profile thorough; Option B: profile fast)"
+ONE = "test selection: judgement (Option A: profile fast; Option B: profile fast)"
+
+
+def accept_root(root, text_root):
+    git = ["git", "-C", str(root)]
+    subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-q", "-m", "record"], check=True, capture_output=True)
+    subprocess.run([*git, "switch", "-q", "-c", "stack/accept"], check=True, capture_output=True)
+    return text_root
+
+
+@pytest.mark.parametrize(
+    ("selection", "toml", "refusal"),
+    [
+        (TWO, None, "rule 5: the test selection practice names no one profile for option A"),
+        (ONE, "x = [\n", "rule 5: agk.toml cannot be read (setting: testing)"),
+    ],
+)
+def test_req061_the_check_names_the_refusal_the_accept_gives(started, selection, toml, refusal):
+    """REQ-061: brief #1785 answer 3 (the check says it first; the accept refuses with it)."""
+    root = with_part(started, "MIT", selection)
+    if toml is not None:
+        (root / "agk.toml").write_text(toml, encoding="utf-8")
+    check = engines(root, "stack-check")
+    assert check.returncode == 0, check.stdout
+    assert f"note: option A cannot be accepted: {refusal}" in check.stdout.splitlines()
+    if toml is None:  # option B names one profile; an unreadable agk.toml refuses both
+        assert "option B cannot be accepted" not in check.stdout
+    if toml is not None:  # an unreadable agk.toml stops the accept earlier, at its branch check
+        return
+    accept = engines(accept_root(root, root), "stack-accept", "--option", "A", "--reason", "r")
+    assert accept.returncode == 1 and refusal in accept.stdout + accept.stderr, accept.stdout
+
+
+def test_req061_a_chosen_line_the_accept_cannot_rewrite_is_named_first(started):
+    """REQ-061: brief #1785 answer 3 (a hand-written `Chosen` on its own line)."""
+    root = with_part(started, "MIT", ONE)
+    path = root / "docs" / "adr" / "0002-stack-options.md"
+    text = path.read_text("utf-8").replace("3. **Chosen**: none yet", "3. **Chosen**:\n   none yet")
+    path.write_text(text, encoding="utf-8")
+    refusal = "rule 5: the accepted stack ADR would fail stack-check"
+    check = engines(root, "stack-check")
+    assert check.returncode == 0, check.stdout
+    assert f"note: option A cannot be accepted: {refusal}" in check.stdout.splitlines()
+    accept = engines(accept_root(root, root), "stack-accept", "--option", "A", "--reason", "r")
+    assert accept.returncode == 1 and refusal in accept.stdout + accept.stderr
+
+
+# The accept's refusals that do not depend on the record: its arguments, the branch and the tree,
+# and a record the check itself fails. Every other refusal must come through `accept_problems`.
+NOT_RECORD = (
+    "the option to accept is A, B or C",
+    "the reason is one line",
+    "the work tree is not clean",
+    "there is not exactly one stack ADR",
+    "is not a Proposed record that passes stack-check",
+    "is not an option of the stack ADR",
+)
+
+
+def refusal_texts(tree, name):
+    import ast  # noqa: PLC0415 - only this test reads the source
+
+    func = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
+    out = []
+    for node in ast.walk(func):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "CheckError":
+            parts = [c.value for c in ast.walk(node) if isinstance(c, ast.Constant)]
+            out.append("".join(p for p in parts if isinstance(p, str)))
+    return func, out
+
+
+def test_req061_every_record_refusal_of_the_accept_is_named_by_the_check():
+    """REQ-061: brief #1785 answer 3 (a new refusal cannot be added to the accept alone)."""
+    import ast  # noqa: PLC0415 - only this test reads the source
+
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    checker, _ = refusal_texts(tree, "accept_problems")
+    source = ast.unparse(checker)
+    calls = {getattr(n.func, "id", "") for n in ast.walk(checker) if isinstance(n, ast.Call)}
+    assert "testing_copy" in calls  # each refusal of testing_copy reaches the check
+    _, texts = refusal_texts(tree, "cmd_stack_accept")
+    assert texts
+    for text in texts:
+        assert any(n in text for n in NOT_RECORD) or text in source, text
+    notes, _ = refusal_texts(tree, "accept_notes")
+    assert "accept_problems" in ast.unparse(notes)
+    stack_check, _ = refusal_texts(tree, "cmd_stack_check")
+    assert "accept_notes" in ast.unparse(stack_check)

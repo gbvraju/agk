@@ -14,6 +14,7 @@ import sys
 
 import pytest
 from conftest import KIT_ROOT, clean_env
+from test_engines_stack import NO_PROFILE_NOTES
 from test_playbook import started as playbook_started  # noqa: F401  (wrapped below)
 
 TEMPLATE = KIT_ROOT / "kit" / "templates" / "stack-adr.md"
@@ -105,7 +106,8 @@ def test_answer3_a_stack_drafted_from_the_template_with_both_lines_passes(starte
         lines.append(line)
     path.write_text("".join(lines), encoding="utf-8")
     proc = engines(started, "stack-check")
-    assert proc.stdout == "ok engines-stack\n", proc.stdout
+    # brief #1785 answer 3: the template's test selection names no profile until it is written
+    assert proc.stdout == "ok engines-stack\n" + NO_PROFILE_NOTES, proc.stdout
 
 
 def test_answer2_the_skill_names_the_copy_into_agk_toml_in_the_accepting_pull_request():
