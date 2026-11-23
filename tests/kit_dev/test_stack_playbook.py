@@ -19,6 +19,7 @@ import tomllib
 
 import pytest
 from conftest import KIT_ROOT, clean_env
+from test_engines_stack import with_list
 from test_playbook import started as playbook_started  # noqa: F401  (wrapped below)
 
 ENGINES = KIT_ROOT / "scripts" / "agk" / "engines.py"
@@ -50,7 +51,7 @@ EFFECTS = "Cost: low; Build speed: quick; Security: one sign-in; Uptime: short p
 
 @pytest.fixture
 def started(request):
-    return request.getfixturevalue("playbook_started")
+    return with_list(request.getfixturevalue("playbook_started"))
 
 
 def engines(root, *args):
@@ -93,6 +94,7 @@ def recommended(shape: str) -> str:
 def rendered_template(names: str = TEMPLATE_NAMES, shape: str = "default") -> str:
     text = TEMPLATE.read_text(encoding="utf-8").replace("{{adr}}", "0002")
     text = text.replace("{{recommended}}", recommended(shape))
+    text = text.replace("{{classes}}", "`agk.toml`")  # brief #1829: the init list's class
     return text.replace("{{date}}", DATE).replace("{{practices}}", names)
 
 

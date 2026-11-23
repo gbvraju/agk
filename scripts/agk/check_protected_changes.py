@@ -53,6 +53,7 @@ from common import (
     changed_lines,
     final_records,
     git,
+    load_config,
     matches,
     read_list,
     repo_root,
@@ -88,6 +89,55 @@ BASELINE_RULE = (
     "SPEC-0072 rule 7: a baseline line rose, was added or was removed without an ADR that names "
     f"it (path class: {baseline.CLASS})"
 )
+
+
+UNREADABLE_LIST = f"the protected path list cannot be read (path class {LIST_PATH.split('/')[0]}/)"
+
+
+def project_list(root, ref: str | None = None) -> list[str]:
+    """Brief #1829 answer 1: the project's own list, read from REF or the default branch, else
+    the working tree, as `main` reads it; a CheckError naming the class when none can be read."""
+    branch = load_config(root)["default_branch"]
+    for rev in [r for r in (ref, f"origin/{branch}", branch) if r]:
+        text = show(root, rev, LIST_PATH)
+        if text is not None:
+            return read_list(text)
+    try:
+        return read_list((root / LIST_PATH).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        raise CheckError(UNREADABLE_LIST) from None
+
+
+def classes_met(root, paths: list[str], ref: str | None = None) -> list[str]:
+    """Brief #1829: the classes a kit step's change of PATHS meets, as `main` counts them (the
+    first list entry each path matches) and, for a baseline file, rule 7's folder."""
+    entries, out = project_list(root, ref), []
+    for path in paths:
+        found = [e for e in entries if matches(path, e)][:1]
+        found += [baseline.CLASS] if path.startswith(baseline.CLASS) else []
+        out += [c for c in found if c not in out]
+    return out
+
+
+def step_classes(root, paths: list[str], ref: str | None = None) -> list[str]:
+    """`classes_met` of PATHS, with a baseline file in an adopted project (`mode = "adopt"`),
+    whose gates write one on the same branch (answer 1)."""
+    adopt = load_config(root)["mode"] == "adopt"
+    return classes_met(root, [*paths, *([baseline.CLASS] if adopt else [])], ref)
+
+
+def backticked(classes: list[str]) -> str:
+    return ", ".join(f"`{c}`" for c in classes) or "none"
+
+
+def protected_line(root, paths: list[str]) -> str:
+    """Brief #1829 answer 4: the line a kit step prints after writing PATHS, naming the classes
+    of the project's list they meet, never a value."""
+    try:
+        classes = classes_met(root, paths)
+    except CheckError as exc:
+        return f"protected: not known: {exc}"
+    return f"protected: {backticked(classes)} (name them in this change's ADR)"
 
 
 def baseline_change(root, mb, path: str, status: str) -> str | None:

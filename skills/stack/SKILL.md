@@ -79,16 +79,21 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
    verdict on that pull request is a plain `Verdict: cleared <sha>`. The build which accepts the stack also
    copies the chosen option's `[testing]` values, as the ADR's `test selection` practice gives them, into the `[testing]` table
    of `agk.toml` in the same pull request as the ADR, by a second ordinary commit that changes nothing else, so one ADR sets
-   them; the ADR names `agk.toml`, which covers that protected path; after the second commit, `stack-check` prints whether
-   the copy matches, in one information line that never fails it. Print the text below for the person, with the ADR number and
+   them; the record's `Protected classes:` line, which `stack-write` writes, names `agk.toml` (and, in an adopted project,
+   `config/` and `config/agk-baseline/`), so the accepting pull request passes `protected-changes`; after the second
+   commit, `stack-check` prints whether the copy matches, in one information line that never fails it. Print the text below for the person, with the ADR number and
    the file name filled in:
 
    The person accepts with one plain yes to the steward's question (in team mode, a spec approver's yes); they type no line.
    The accepting change is then made in one step by a builder's session from a mechanical brief:
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-accept --option <X> --reason "<one-line reason>"` on a fresh
    branch makes exactly the two commits above and nothing else, and refuses, writing nothing, an option the record does
-   not hold or a record that is not Proposed or does not pass `stack-check`. Where no builder runs, the prompt below does
-   the same by hand.
+   not hold or a record that is not Proposed or does not pass `stack-check`. A Proposed record written before its
+   `Protected classes:` line, or one missing a class, gets that one line in the first commit (`added:`). It then runs
+   `protected-changes` against the default branch and prints its line; in an adopted project it prints
+   `next: run_gates.py --root . writes config/agk-baseline/ for the new gates; commit it in this pull request`. A
+   hand-written ADR that supersedes the stack names its own classes. Where no builder runs, the prompt below does the
+   same by hand.
 
    The prompt for the accepting change:
 

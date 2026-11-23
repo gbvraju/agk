@@ -95,6 +95,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import check_protected_changes as protected
 from check_adrs import validate as validate_adr
 from check_playbooks import composed
 from common import (
@@ -405,16 +406,50 @@ def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
     branch = load_config(root)["default_branch"]
     adr = next_free_ids(root, opts.get("ref") or f"origin/{branch}")["adr"]
     today = opts.get("date") or datetime.now(UTC).date().isoformat()
+    rel = f"docs/adr/{adr}-stack-options.md"
+    classes = accept_classes(root, rel, opts.get("ref"))  # brief #1829 answer 1
     playbook = playbook_practices(root)
     text = (TEMPLATES / "stack-adr.md").read_text(encoding="utf-8")
     text = text.replace("{{adr}}", adr).replace("{{date}}", today)
+    text = text.replace("{{classes}}", protected.backticked(classes))
     if playbook is not None:
         text = with_playbook(text, *playbook)
     text = with_names(text).replace(RECOMMENDED_SLOT, recommended_option(root))
-    path = root / "docs" / "adr" / f"{adr}-stack-options.md"
+    path = root / rel
     path.write_text(text, encoding="utf-8")
-    print(f"wrote docs/adr/{path.name}")
+    print(f"wrote {rel}")
     return 0
+
+
+CLASSES_LINE = re.compile(r"(?m)^(?:- )?Protected classes: (.*)$")
+BASELINE_NEXT = (
+    "next: run_gates.py --root . writes config/agk-baseline/ for the new gates;"
+    " commit it in this pull request"
+)
+
+
+def accept_classes(root: Path, rel: str, ref: str | None = None) -> list[str]:
+    """Brief #1829 answer 1: the classes of the project's list the accepting change meets
+    (`agk.toml`, the record, in adopt mode the baselines the gates write); refused unreadable."""
+    try:
+        return protected.step_classes(root, ["agk.toml", rel], ref)
+    except CheckError as exc:
+        raise CheckError(f"rule 5: {exc}") from None
+
+
+def with_classes(text: str, classes: list[str]) -> tuple[str, int]:
+    """Answer 2: the record with its `Protected classes:` line naming every class, added after
+    `- Requirements:` when missing; the count it names when it changed, else 0."""
+    found = CLASSES_LINE.search(text)
+    named = re.findall(r"`([^`]+)`", found.group(1)) if found else []
+    if found and all(c in named for c in classes):
+        return text, 0
+    every = list(dict.fromkeys([*named, *classes]))
+    line = f"Protected classes: {protected.backticked(every)}"
+    if found:
+        return text[: found.start()] + line + text[found.end() :], len(every)
+    added = re.sub(r"(?m)^(- Requirements:.*)$", lambda m: f"{m.group(1)}\n\n{line}", text, count=1)
+    return added, len(every)
 
 
 def recommended_option(root: Path) -> str:
@@ -975,14 +1010,16 @@ def cmd_stack_accept(root: Path, opts: dict[str, str]) -> int:
         raise CheckError(f"rule 5: option {letter} is not an option of the stack ADR")
     for problem in accept_problems(root, text, letter, path.name):  # brief #1785: as stack-check
         raise CheckError(problem)
-    accepted = accepted_text(text, letter, reason)
+    adr, rel = f"ADR-{path.name[:4]}", path.relative_to(root).as_posix()
+    accepted, count = with_classes(accepted_text(text, letter, reason), accept_classes(root, rel))
     if stack_problems(path.name, accepted):
         raise CheckError(ACCEPTED_FAILS)
     toml = testing_copy(root, text, letter)
-    adr, rel = f"ADR-{path.name[:4]}", path.relative_to(root).as_posix()
     path.write_text(accepted, encoding="utf-8")
     git(root, "commit", "-q", "-m", f"stack: accept option {letter} of {adr}", "--", rel)
     print(f"committed: {adr} Accepted, option {letter} chosen")
+    if count:
+        print(f"added: Protected classes names {count} classes (setting: {protected.LIST_PATH})")
     if toml is not None:
         (root / "agk.toml").write_text(toml, encoding="utf-8")
         message = f"stack: copy the [testing] values of option {letter} of {adr}"
@@ -990,7 +1027,30 @@ def cmd_stack_accept(root: Path, opts: dict[str, str]) -> int:
         print(f"committed: the [testing] values of option {letter} in agk.toml")
     else:
         print(f"unchanged: [testing] already matches option {letter}")
-    return 0
+    if load_config(root)["mode"] == "adopt":
+        print(BASELINE_NEXT)
+    return governance_line(root)
+
+
+def governance_line(root: Path) -> int:
+    """Answer 2: the project's protected-changes check on the change, against the default
+    branch; its lines printed, a failure never committed over (rc 1)."""
+    branch = load_config(root)["default_branch"]
+    base = next((r for r in (f"origin/{branch}", branch) if git_ok(root, r)), branch)
+    proc = subprocess.run(  # nosec B603 - a fixed argument list, no shell
+        [sys.executable, "-I", str(Path(protected.__file__)), "--base", base],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    print((proc.stdout + proc.stderr).rstrip())
+    return 0 if proc.returncode == 0 else 1
+
+
+def git_ok(root: Path, ref: str) -> bool:
+    return bool(git(root, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}", check=False).strip())
 
 
 def cmd_stack_files(root: Path) -> int:
@@ -1007,7 +1067,8 @@ def cmd_stack_files(root: Path) -> int:
         return 0
     (folder, name, lock, _), _ = found
     listed = root / "config" / "licences.toml"  # brief #1596 answer 2: written once, never over
-    if not listed.exists():
+    wrote = [] if listed.exists() else [listed.relative_to(root).as_posix()]
+    if wrote:
         listed.parent.mkdir(parents=True, exist_ok=True)
         listed.write_bytes((TEMPLATES / "licences.toml").read_bytes())
         print("wrote config/licences.toml")
@@ -1019,10 +1080,17 @@ def cmd_stack_files(root: Path) -> int:
         )
         if not untouched or b'mode = "adopt"' in (root / "agk.toml").read_bytes():
             print(f"kept {name}")
-            return 0
+            return wrote_line(root, wrote)
     source = TEMPLATES / "stacks" / folder / name
     target.write_text(render(source.read_text(encoding="utf-8"), variables, name), "utf-8")
     print(f"wrote {name}; make {lock} with the stack's own tool and commit both")
+    return wrote_line(root, [*wrote, name])
+
+
+def wrote_line(root: Path, wrote: list[str]) -> int:
+    """Brief #1829 answer 4: after a write, the classes it met."""
+    if wrote:
+        print(protected.protected_line(root, wrote))
     return 0
 
 
