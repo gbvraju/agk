@@ -80,6 +80,12 @@ None.
 """
 
 
+# Brief #1785 answer 3: a Proposed record with no one profile per option cannot be accepted, and
+# `stack-check` says so for each option, as notes after `ok engines-stack`.
+NO_PROFILE = "rule 5: the test selection practice names no one profile for option"
+NO_PROFILE_NOTES = "".join(f"note: option {x} cannot be accepted: {NO_PROFILE} {x}\n" for x in "AB")
+
+
 def stack_root(root, text=GOOD_STACK, name="0002-stack-options.md"):
     (root / "docs" / "adr" / name).write_text(text, encoding="utf-8")
     return root
@@ -111,7 +117,7 @@ def test_ac4_stack_write_makes_a_proposed_skeleton_that_is_not_drafted_yet(start
 def test_ac4_two_or_three_options_with_practices_told_apart_pass(started):
     """REQ-036 AC4: SPEC-0029 rule 5 (checked practices and recorded judgement)."""
     stack_root(started)
-    assert engines(started, "stack-check").stdout == "ok engines-stack\n"
+    assert engines(started, "stack-check").stdout == "ok engines-stack\n" + NO_PROFILE_NOTES
     judged = GOOD_STACK.replace(
         "   - a host-boundary test: check (step: the boundary test of the adopting build)\n",
         "   - a host-boundary test: judgement\n",
@@ -431,7 +437,10 @@ def test_req061_the_check_names_the_refusal_the_accept_gives(started, selection,
     check = engines(root, "stack-check")
     assert check.returncode == 0, check.stdout
     assert f"note: option A cannot be accepted: {refusal}" in check.stdout.splitlines()
-    assert "option B cannot be accepted" not in check.stdout
+    if toml is None:  # option B names one profile; an unreadable agk.toml refuses both
+        assert "option B cannot be accepted" not in check.stdout
+    if toml is not None:  # an unreadable agk.toml stops the accept earlier, at its branch check
+        return
     accept = engines(accept_root(root, root), "stack-accept", "--option", "A", "--reason", "r")
     assert accept.returncode == 1 and refusal in accept.stdout + accept.stderr, accept.stdout
 
@@ -487,5 +496,7 @@ def test_req061_every_record_refusal_of_the_accept_is_named_by_the_check():
     assert texts
     for text in texts:
         assert any(n in text for n in NOT_RECORD) or text in source, text
+    notes, _ = refusal_texts(tree, "accept_notes")
+    assert "accept_problems" in ast.unparse(notes)
     stack_check, _ = refusal_texts(tree, "cmd_stack_check")
-    assert "accept_problems" in ast.unparse(stack_check)
+    assert "accept_notes" in ast.unparse(stack_check)

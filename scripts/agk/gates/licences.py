@@ -13,7 +13,8 @@ the Accepted stack record's `Parts:` entry of that name, else none. The step fai
 outside the project's allowed list, `allowed` of `config/licences.toml` (absent: `DEFAULT`, the
 list of `kit/templates/licences.toml`), and on a package with no licence it can read, as
 `unknown`, never clean. An SPDX expression passes when one `OR` side has every `AND` id on the
-list. Each line names the rule and the component class (`python`, `node`), never a name, a
+list, ids compared case-folded; `expression` and `ids` are the kit's one reader of a licence
+(brief #1785, ADR-0748), which `engines.py` uses for the stack record. Each line names the rule and the component class (`python`, `node`), never a name, a
 version or an id (principle 8); a list of another form is refused naming the setting. With no
 stack chosen or no lock it prints `not run: no lock`. `counts` gives the findings per file (the
 lock's failing packages, the setting's form), so the runner's baseline holds an adopted project's
@@ -25,6 +26,7 @@ list is a project ADR (principle 11). The runner calls it, as `layers`, where it
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -86,9 +88,88 @@ def allowed_from(text: str) -> frozenset[str] | None:
     return frozenset(i.strip() for i in items)
 
 
+# Brief #1785 (ADR-0748): the one reader of a licence, SPDX 2.3 Annex D's form (verify: against
+# the SPDX 2.3 text). An id is an `idstring` of any case with an optional `+`, or a `LicenseRef-`.
+LICENCE_ID = re.compile(
+    r"(?:DocumentRef-[0-9A-Za-z.-]+:)?LicenseRef-[0-9A-Za-z.-]+|[0-9A-Za-z.-]+\+?"
+)
+OPERATORS = ("AND", "OR", "WITH")
+
+
+def parse(text: str) -> Any:
+    """The expression as a tree: ('OR'|'AND', [terms]) or an id ('MIT', 'GPL-2.0 WITH x');
+    None when it is no expression (an empty text, two ids side by side, unbalanced brackets)."""
+    tokens = text.replace("(", " ( ").replace(")", " ) ").split()
+    at = 0
+
+    def term() -> Any:
+        nonlocal at
+        if at < len(tokens) and tokens[at] == "(":
+            at += 1
+            inner = joined("OR")
+            if inner is None or at >= len(tokens) or tokens[at] != ")":
+                return None
+            at += 1
+            return inner
+        if at >= len(tokens) or tokens[at] in OPERATORS or not LICENCE_ID.fullmatch(tokens[at]):
+            return None
+        name, at = tokens[at], at + 1
+        if at < len(tokens) and tokens[at] == "WITH":
+            if at + 1 >= len(tokens) or not re.fullmatch(r"[0-9A-Za-z.-]+", tokens[at + 1]):
+                return None
+            name, at = f"{name} WITH {tokens[at + 1]}", at + 2
+        return name
+
+    def joined(op: str) -> Any:
+        nonlocal at
+        lower = (lambda: joined("AND")) if op == "OR" else term
+        items = [lower()]
+        while items[-1] is not None and at < len(tokens) and tokens[at] == op:
+            at += 1
+            items.append(lower())
+        if any(i is None for i in items):
+            return None
+        return items[0] if len(items) == 1 else (op, items)
+
+    tree = joined("OR") if tokens else None
+    return tree if at == len(tokens) else None
+
+
+def expression(text: str) -> bool:
+    """Brief #1785 answer 1: the text is one SPDX licence expression."""
+    return parse(text) is not None
+
+
+def ids(text: str) -> list[str]:
+    """The ids of an expression, case-folded, in order (an exception stays with its id)."""
+
+    def walk(node: Any) -> list[str]:
+        return [node.casefold()] if isinstance(node, str) else [i for n in node[1] for i in walk(n)]
+
+    tree = parse(text)
+    return [] if tree is None else walk(tree)
+
+
 def passes(expression: str, allowed: frozenset[str]) -> bool:
-    text = " ".join(expression.replace("(", " ").replace(")", " ").split())
-    return any(all(i in allowed for i in side.split(" AND ")) for side in text.split(" OR "))
+    """`OR` needs one side, `AND` every side; ids are compared case-folded (brief #1785)."""
+    folded = {" ".join(a.split()).casefold() for a in allowed}
+
+    def ok(node: Any) -> bool:
+        if isinstance(node, str):
+            return node.casefold() in folded
+        return (any if node[0] == "OR" else all)(ok(n) for n in node[1])
+
+    tree = parse(expression)
+    return tree is not None and ok(tree)
+
+
+def allowed_list(root: Path) -> frozenset[str] | None:
+    """The project's list: `config/licences.toml`, else `DEFAULT`; None when not of its form."""
+    path = Path(root) / SETTING
+    try:
+        return allowed_from(path.read_text(encoding="utf-8")) if path.is_file() else DEFAULT
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def problems(root: Path) -> list[tuple[str, str]] | None:
@@ -102,11 +183,7 @@ def tally(root: Path) -> list[tuple[str, str, str]] | None:
     found = lock_of(root)
     if found is None:
         return None
-    path = Path(root) / SETTING
-    try:
-        allowed = allowed_from(path.read_text(encoding="utf-8")) if path.is_file() else DEFAULT
-    except (OSError, UnicodeDecodeError):
-        allowed = None
+    allowed = allowed_list(root)
     if allowed is None:
         return [(FORM, f"setting: {SETTING}", SETTING)]
     lock = pins.chosen(Path(root))[0][2]  # type: ignore[index]  # lock_of read it

@@ -7,7 +7,8 @@
 - Requirements: REQ-061
 
 Protected classes this pull request changes: `scripts/agk/` (`gates/licences.py`, `engines.py`), `skills/`
-(`stack/SKILL.md`), `tests/kit/` (`test_product_deps.py`) and `tests/kit_dev/` (`test_engines_stack.py`).
+(`stack/SKILL.md`), `tests/kit/` (`test_product_deps.py`) and `tests/kit_dev/` (`test_engines_stack.py`,
+`test_engines_local_profile.py`, `test_stack_adr_testing.py`).
 `kit/hashes.json` is not edited by hand.
 
 ## Context
