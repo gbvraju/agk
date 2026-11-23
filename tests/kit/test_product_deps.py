@@ -322,12 +322,24 @@ def test_an_added_permissive_id_passes_with_no_project_list(product, capsys, lic
 
 @pytest.mark.parametrize(
     "licence",
-    ["BUSL-1.1", "zlib-acknowledgement", "CC-BY-4.0", "CC0-1.0", "MPL-2.0", "LGPL-2.1-only",
-     "BlueOak-1.0.0", "Zlib+", "BSL-1.0 WITH x", "MIT AND CC0-1.0", "LicenseRef-Invented-3"],
+    [
+        "BUSL-1.1",
+        "zlib-acknowledgement",
+        "CC-BY-4.0",
+        "CC0-1.0",
+        "MPL-2.0",
+        "LGPL-2.1-only",
+        "BlueOak-1.0.0",
+        "Zlib+",
+        "BSL-1.0 WITH x",
+        "MIT AND CC0-1.0",
+        "LicenseRef-Invented-3",
+    ],
 )
 def test_ids_off_the_wider_default_still_fail(product, capsys, licence) -> None:
-    """REQ-061, REQ-079: brief #1811 answer 6 (no source-available, copyleft or patent-silent id)."""
-    product.commit({"package-lock.json": lock(**{"other": {"version": "1.0.0", "license": licence}})})
+    """REQ-061, REQ-079: brief #1811 answer 6 (no source-available, copyleft or patent-silent)."""
+    other = {"other": {"version": "1.0.0", "license": licence}}
+    product.commit({"package-lock.json": lock(**other)})
     assert licences.main(["--root", str(product.root)]) == 1
     assert capsys.readouterr().out == f"FAIL licences: {licences.RULE} (component class: node)\n"
 
@@ -342,7 +354,8 @@ def test_expressions_over_the_wider_default() -> None:
 
 def test_a_project_list_of_the_old_six_still_fails_blessing(product, capsys) -> None:
     """REQ-061, REQ-079: brief #1811 answer 2 (a project's own list decides; red stays red)."""
-    product.commit({"package-lock.json": lock(**{"db": {"version": "3.47.1", "license": "blessing"}})})
+    db = {"db": {"version": "3.47.1", "license": "blessing"}}
+    product.commit({"package-lock.json": lock(**db)})
     product.commit({"config/licences.toml": OLD_TEMPLATE})
     assert licences.main(["--root", str(product.root)]) == 1
     assert capsys.readouterr().out == f"FAIL licences: {licences.RULE} (component class: node)\n"

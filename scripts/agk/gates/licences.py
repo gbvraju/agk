@@ -42,7 +42,7 @@ RULE = "SPEC-0054 rule 4 (amendment 206): a dependency's licence is not on the a
 UNKNOWN = "SPEC-0054 rule 4 (amendment 206): a dependency's licence is unknown"
 FORM = "SPEC-0054 rule 4 (amendment 206): the allowed list is not of its form"
 SETTING = "config/licences.toml"
-# Q-1596-1's six and, by brief #1811 (ADR-0754), five permissive ids; `CC0-1.0` stays off (Q-1811-1).
+# Q-1596-1's six and, by brief #1811 (ADR-0754), five permissive ids; `CC0-1.0` is off (Q-1811-1).
 DEFAULT = frozenset(
     ("MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0")
     + ("blessing", "0BSD", "Unlicense", "Zlib", "BSL-1.0")
