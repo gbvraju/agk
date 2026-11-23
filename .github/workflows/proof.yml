@@ -37,7 +37,7 @@ permissions:
   checks: read
 
 concurrency:
-  group: proof-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.event.pull_request.draft && format('proof-{0}-draft', github.event.pull_request.number) || format('proof-{0}', github.event.pull_request.number || github.sha) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
