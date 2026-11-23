@@ -33,4 +33,15 @@ marked blocks, and refuses before any write when something conflicts.
 
 3. Show the printed branch rules, scanner exclusions and plugin settings entries as they are. Do not apply any of them.
 
-Do not commit, push or merge. Do not set a spec `Approved` or an ADR `Accepted`. Stop after reporting what was written.
+4. Draft the layers from the project's own folders (brief #1842):
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/gates/layers.py" --draft
+   ```
+
+   Show its output unchanged and take it to the steward's standard confirmation (`steward_owner.py standard`). Never
+   apply it without the person's yes: only after that yes is recorded does `steward_owner.py draft --slug SLUG
+   --layers FILE` write it, with FILE the saved output.
+
+Do not commit, push or merge. Do not set a spec `Approved` or an ADR `Accepted`. Stop after reporting what was written
+and the draft.

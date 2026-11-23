@@ -274,3 +274,106 @@ def test_req079_ac8_the_personal_floor_runs_the_gates_with_no_forge_call(tmp_pat
     passed, text = personal.floor(clone, sidecar, "HEAD", True)
     assert not passed and "floor: gates FAIL: secrets: x (path class: src)" in text
     assert not (sidecar / "forge").exists()
+
+
+# --- brief #1842 (ADR-0767): the person's yes carries the layers drafted from the tree --------
+
+TREE = {
+    "app/__init__.py": "",
+    "app/main.py": "from app.core import orders\n",
+    "app/core/orders.py": "from app.reports import totals\n",
+    "app/reports/totals.py": "",
+}
+
+
+def adopted(tmp_path: Path, review: str = "solo", mode: str = "adopt") -> Path:
+    root = project(tmp_path, review)
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    (root / "agk.toml").write_text(f'mode = "{mode}"\n{text}', encoding="utf-8")
+    for rel, body in TREE.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(body, encoding="utf-8")
+    return root
+
+
+def saved_draft(tmp_path: Path, root: Path) -> Path:
+    from gates import layers  # noqa: PLC0415
+
+    path = tmp_path / "draft.toml"
+    path.write_text("\n".join(layers.draft(root)[0]) + "\n", encoding="utf-8")
+    return path
+
+
+def test_req079_the_team_screen_shows_the_draft_beside_the_playbook(tmp_path):
+    """REQ-079 (brief #1842 answer 2): each drafted layer, its path and direction; the one yes."""
+    root = adopted(tmp_path, "team")
+    code, lines = steward_owner.standard_screen(root, None)
+    assert code == 0 and lines[-1] == steward_owner.YES_ASK
+    assert "Layer frontend: frontend/**" in lines  # the playbook's, as today
+    for line in (
+        "Drafted layer app: app/__init__.py, app/main.py",
+        "Drafted layer core: app/core/**",
+        "Drafted layer reports: app/reports/**",
+        "Drafted allowed: app -> core",
+        "Drafted allowed: core -> reports",
+    ):
+        assert line in lines, lines
+
+
+def test_req079_the_solo_screen_says_it_in_one_plain_line(tmp_path):
+    """REQ-079 (brief #1842 answer 2): no kit term, at most five bullets of 100 characters."""
+    root = adopted(tmp_path, "solo")
+    code, lines = steward_owner.standard_screen(root, None)
+    text = "\n".join(lines)
+    line = "- Your code is kept in 3 parts as it is today"
+    assert code == 0 and [x for x in lines if x.startswith(line)], lines
+    assert steward_owner.KIT_TERMS.search(text) is None, text
+    assert len([x for x in lines if x.startswith("- ")]) <= 5
+    assert all(len(x) <= 100 for x in lines)
+
+
+@pytest.mark.parametrize("mode", ["init", "other-example"])
+def test_req079_outside_adopt_no_draft_is_shown(tmp_path, mode):
+    root = adopted(tmp_path, "team", mode)
+    _, lines = steward_owner.standard_screen(root, None)
+    assert not [x for x in lines if x.startswith("Drafted")]
+
+
+def test_req079_the_draft_is_applied_only_after_the_yes(tmp_path):
+    """REQ-079 (brief #1842 answer 2, `Q-HE-1`): refused before the yes, nothing written; on the
+    yes the derived playbook carries the layers, `modules` names the work type, the ADR lists
+    them and `[delivery] work_type` stays the owner's."""
+    root = adopted(tmp_path)
+    (root / "docs" / "research").mkdir(parents=True)
+    (root / "docs" / "research" / "svc-example.md").write_text(RESEARCH, encoding="utf-8")
+    (root / "docs" / "adr").mkdir()
+    (root / "docs" / "adr" / "0001-adopt-agk.md").write_text("# ADR-0001: Adopt\n", "utf-8")
+    path = saved_draft(tmp_path, root)
+    before = (root / "agk.toml").read_text(encoding="utf-8")
+    code, lines = steward_owner.draft(root, "svc-example", path)
+    assert code == 2 and "standard" in lines[0], lines
+    assert not (root / "config/playbooks/svc-example.toml").exists()
+    assert sorted(p.name for p in (root / "docs/adr").iterdir()) == ["0001-adopt-agk.md"]
+    assert steward_owner.confirm(root, said(tmp_path, "yes"), AT, None, GitHub())[0] == 0
+    code, lines = steward_owner.draft(root, "svc-example", path)
+    assert code == 0, lines
+    playbook = root / "config/playbooks/svc-example.toml"
+    assert check_playbooks.findings(root, [playbook]) == []
+    arch, _, _ = check_playbooks.standard(playbook, root)
+    assert [x["name"] for x in arch["layers"]] == ["app", "core", "reports"]
+    assert {e["adr"] for e in arch["allow"]} == {"ADR-0002"}
+    assert 'modules = ["web-app"]' in playbook.read_text(encoding="utf-8")
+    adr = (root / "docs/adr/0002-the-project-s-work-type-svc-example.md").read_text("utf-8")
+    assert "- `core`: `app/core/**`" in adr and "- `core` may import `reports`" in adr
+    assert "- Status: Proposed" in adr
+    assert (root / "agk.toml").read_text(encoding="utf-8") == before
+
+
+def test_req079_a_refused_draft_leaves_no_adr(tmp_path):
+    root = adopted(tmp_path)
+    (root / "docs" / "adr").mkdir(parents=True)
+    assert steward_owner.confirm(root, said(tmp_path, "yes"), AT, None, GitHub())[0] == 0
+    path = saved_draft(tmp_path, root)
+    code, lines = steward_owner.draft(root, "svc-example", path)  # no research record
+    assert code == 2 and "research record" in lines[0]
+    assert list((root / "docs/adr").iterdir()) == []

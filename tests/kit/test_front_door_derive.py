@@ -434,3 +434,64 @@ def test_no_url_is_fetched(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = ["--root", str(root)]
     assert front_door.main(["derive-write", "--slug", SLUG, *base]) == 0
     assert front_door.main(["check-playbook", "--date", TODAY, *base]) == 0
+
+
+# --- brief #1842 (ADR-0767): the drafted layers carried into the derived playbook ---
+
+DRAFT = """draft layers: proposal only; a person confirms it
+[architecture]
+layers = [
+  { name = "app", paths = ["app/main.py"] },
+  { name = "core", paths = ["app/core/**"] },
+]
+allow = [
+  { from = "app", to = "core"{adr} },
+]
+
+[testing]
+map = [
+  {{ code = "app/main.py", tests = "tests/**" }},
+  {{ code = "app/core/**", tests = "tests/**" }},
+]
+"""
+
+
+def draft_file(root: Path, adr: str = ', adr = "ADR-0002"') -> Path:
+    text = DRAFT.replace("{adr}", adr).replace("{{", "{").replace("}}", "}")
+    return write(root, "saved/draft.toml", text)
+
+
+def test_req079_layers_writes_both_tables_and_passes_the_checks(root: Path) -> None:
+    """REQ-079 (brief #1842 answer 2): the draft's two tables replace `map = []`."""
+    write(root, "docs/adr/0002-the-project-s-layers.md", "# ADR-0002: Layers\n")
+    done = derive(root, "--layers", str(draft_file(root)), "--modules", "web-app")
+    assert done.returncode == 0, done.stdout + done.stderr
+    data = tomllib.loads((root / REL).read_text(encoding="utf-8"))
+    assert [x["name"] for x in data["architecture"]["layers"]] == ["app", "core"]
+    assert data["architecture"]["allow"] == [{"from": "app", "to": "core", "adr": "ADR-0002"}]
+    assert [e["code"] for e in data["testing"]["map"]] == ["app/main.py", "app/core/**"]
+    assert data["modules"] == ["web-app"]
+    assert check_playbooks.findings(root, [root / REL]) == []
+    arch, _, _ = check_playbooks.standard(root / REL, root)
+    assert [x["name"] for x in arch["layers"]] == ["app", "core"]  # its own, not web-app's
+
+
+def test_req079_a_draft_the_check_refuses_leaves_nothing(root: Path) -> None:
+    """REQ-079 (brief #1842 answer 2): an `allow` entry with no ADR of the project is refused."""
+    path = draft_file(root, adr="")
+    before = tree(root)
+    done = derive(root, "--layers", str(path))
+    assert done.returncode == 1 and "key: allow" in done.stdout
+    assert tree(root) == before
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["not toml = = 1\n", "[architecture]\nlayers = []\n", "[testing]\nmap = []\n"],
+)
+def test_req079_a_file_that_is_no_layers_draft_writes_nothing(root: Path, text: str) -> None:
+    path = write(root, "saved/draft.toml", text)
+    before = tree(root)
+    done = derive(root, "--layers", str(path))
+    assert done.returncode == 1 and "(key: architecture.layers)" in done.stdout
+    assert tree(root) == before
