@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import check_adrs  # noqa: E402
 import check_playbooks  # noqa: E402
 import personal  # noqa: E402
 import steward  # noqa: E402
@@ -221,6 +222,9 @@ def test_req079_ac6_the_drafted_playbook_keeps_every_default_gate_with_a_propose
     assert all(kinds.get(g["id"]) == g["kind"] for g in base)
     adr = (root / "docs" / "adr" / "0002-the-project-s-work-type-clinic-booking.md").read_text()
     assert "- Status: Proposed" in adr and "https://example.com/booking-guide" in adr
+    name = "0002-the-project-s-work-type-clinic-booking.md"  # brief #1827 answer 2
+    assert check_adrs.validate(name, adr, {"0001", "0002"}) == []
+    assert "## Sources" in adr and "- Requirements: REQ-001" in adr
     assert (root / "agk.toml").read_text(encoding="utf-8") == before
     assert steward_owner.draft(root, "clinic-booking")[0] == 2  # never overwritten
     assert steward_owner.draft(root, "web-app")[0] == 2  # a shipped playbook
