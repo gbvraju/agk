@@ -1,0 +1,1 @@
+- In a clean project the architect, review agent, conductor and shadow guards allow the resolver's governance command, `python3 <plugin>/scripts/agk/kit_root.py governance` (the conductor's in the clean environment of its scratch folder), so each role can run governance there (brief #1758)

@@ -67,7 +67,7 @@ ARCHITECTURE_STEPS = ("layers", "architecture-record")  # brief #1595 (ADR-0675)
 # brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way
 # only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
 PRODUCT_STEPS = ("bom", "licences")
-PACKS = ("python_pack",)  # pack modules of the registry, imported by name
+PACKS = ("python_pack", "node_pack")  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
 UNFOUND = "REQ-078: no playbook is found in the project or the plugin"  # brief #1666
@@ -215,6 +215,9 @@ def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
         tally: dict[str, dict[str, int]] = {}
         rows: list[Row] = []
         for step, lines in module.run(root, entry, tally):
+            if step == "note":  # brief #1766: information from the pack, never a failure
+                rows += [(NOTE, f"standards {stack}: {ln}") for ln in lines]
+                continue
             gid = f"standards {stack} {step}"
             failed: list[Row] = [(False, f"{gid}: {ln}") for ln in lines]
             rows += ratchet(root, gid, tally[step], failed, write) if step in tally else failed

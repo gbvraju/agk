@@ -49,7 +49,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" start-ids --statement "S
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" check-start
 ```
 
-   then run `make governance`. Both must pass.
+   then run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`). Both must pass.
 6. Last, print the next steps, and say what the checks cannot check: that the milestones are the right ones and that the vision says what
    the person meant. That is the person's review and merge.
    Add `--brief <n>` when the work answers a brief, or `--brief none` when the person says the repository has no open

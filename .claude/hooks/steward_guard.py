@@ -44,6 +44,7 @@ from functools import lru_cache
 from pathlib import Path
 
 RULE = "SPEC-0059 rule 11"
+POWERSHELL_RULE = f"steward guard: {RULE} denies the PowerShell tool; use Bash (tool: PowerShell)"
 RESERVED = ("Approve:", "Confirmed:", "Verdict:", "Final:", "Correction:", "Merge:")
 # Brief #1732 (ADR-0727): read as nothing before the first-line checks, as `session.ZERO_WIDTH`.
 ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")
@@ -593,6 +594,8 @@ def decide(payload: dict) -> str | None:
     data = payload.get("tool_input") or {}
     project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or ".")
     cwd = Path(payload.get("cwd") or project)
+    if str(tool or "").casefold() == "powershell":  # brief #1763: one reader per tool
+        return POWERSHELL_RULE
     if tool in WRITE_TOOLS:
         target = Path(str(data.get("file_path") or data.get("notebook_path") or ""))
         rel = os.path.relpath(target if target.is_absolute() else cwd / target, project)

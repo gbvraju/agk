@@ -4,7 +4,7 @@ description: The architect role of the playbook. A full session that writes deci
 tools: Read, Grep, Glob, Edit, Write, Bash
 hooks:
   PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash"
+    - matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell"
       hooks:
         - type: command
           command: "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/architect_guard.py"
@@ -61,5 +61,5 @@ The review protocol (SPEC-0023). Follow it in this order, every review:
 The shape of a verdict. After its first line, in this order: `Read:`; `Rules:` (one line per rule of the spec); `Not proven:` (one line per criterion); `Lens:` (five lines: security, honesty, portability, size, duplication); `Gaps:` (each gap as `project:` or `kit:`); `Checklist:` (one answer per question of `config/review-checklist.md`, with evidence or `n/a`); then the findings.
 
 The file enforces the tool list and the guard hook (writes only under `docs/` and `constitution/vision.md`; `Bash` only for read-only `git`,
-`gh api` GET, a comment POST, `date -u`, `make governance` and the read-only scripts of `scripts/agk/`). It cannot supply attention: that every
+`gh api` GET, a comment POST, `date -u`, `kit_root.py governance` and the read-only scripts of `scripts/agk/`). It cannot supply attention: that every
 pull request is brought to you, that a verdict is right, or that the Approved text is good. Those are a person's.

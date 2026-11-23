@@ -63,7 +63,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" prototype
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"
 ```
 
-   then run `make governance`. Both must pass. `design: the theme is not approved yet` is information, not a failure.
+   then run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`). Both must pass. `design: the theme is not approved yet` is information, not a failure.
 5. Last, say what the checks cannot check: that the pages look right, that the brand values are the owner's, and that the
    colours suit the product. Sign-off is the person's: a comment on the pull request whose first line is
    `Approve: design <version> <full head ID>`, from an account listed in `spec_approvers`. A session never posts that
@@ -100,7 +100,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" import <folder>
 3. Draft `docs/design/imported/i<n>/map.md` for the person: one row for each page of the manifest,
    `<file> -> <screen>/<state>` with a screen and state of the inventory, or `<file> -> out: <reason>`. The map is the
    person's work; the check judges it. Check, and correct the map on a failure, at most three rounds, then stop and
-   report: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"`, then `make governance`.
+   report: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"`, then `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`).
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/doctor.py"` prints one `design import:` line per version with its manifest
    and map state, as information.
 4. Sign-off is the person's: `Approve: design i<n> <full head ID>` from an account listed in `spec_approvers`. A session
@@ -130,13 +130,16 @@ runs none.
 1. Fetch the default branch, make sure the work tree is clean (stop and say so if it is not), create the branch from the
    default branch, and write the skeleton. The script reads `docs/requirements.md` and the `Requirements:` lines of
    `docs/specs/`, writes one section per requirement with its specs filled and every other slot empty, refuses when the
-   file exists, and never fills a slot:
+   file exists, and never fills a slot. On the path from an idea (no requirement from REQ-101 up yet, an Accepted
+   `docs/adr/<n>-project-charter.md`) it also writes one `M<n>` section per charter milestone, whose `- Sources:` line
+   names the charter and each discovery document with `Screens: yes` or `open` (amendment 217):
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" inventory
 ```
 
-2. Fill the slots from the requirements and the specs, and from nothing else; if `[engines]` in `agk.toml` has a `design`
+2. Fill the slots from the requirements and the specs (for an `M<n>` section, from the sources it names), and from
+   nothing else; if `[engines]` in `agk.toml` has a `design`
    key, its skill may draft them, and the session writes them into the file's shape. Each requirement gets its screens or
    `no screen: <reason>`; each screen gets its own section with its flow, its pattern (one of the kit's design standard),
    the screens it links to and a `State` line for `default`, the six required states and any state a spec names, each

@@ -12,8 +12,12 @@ screens nor a `no screen:` reason, a section for no requirement, a screen named 
 with no section, a screen id that is not a lower-case slug, a screen listed twice, a pattern that is
 not one of the standard's, a link to an unknown screen (a screen that links nowhere reads `none`),
 a screen without `default` or a required state, a state that is neither `yes` nor `n/a: <reason>`,
-a missing part and a line that is not a field of the inventory. It names the rule and the screen,
-never a value. Files only: no network, no model, nothing written.
+a missing part and a line that is not a field of the inventory. On the path from an idea an
+`### M<n> — <milestone>` section (`design.py inventory`, amendment 217) is checked like a
+requirement's, with `- Sources:` in place of `- Specs:`. An inventory with no screen fails, naming
+SPEC-0037 rule 3 and the path class `docs/design/`, when a discovery document of `docs/discovery/`
+says `- Screens: yes` or `open` outside its quoted blocks (brief #1756). It names the rule and the
+screen, never a value. Files only: no network, no model, nothing written.
 """
 
 from __future__ import annotations
@@ -36,6 +40,12 @@ FIELD = re.compile(r"^- ([A-Za-z][\w -]*?):(.*)$")
 NO_SCREEN = re.compile(r"^no screen:(.*)$")
 NOT_APPLICABLE = re.compile(r"^n/a:(.*)$")
 REQ_FIELDS = ("Specs", "Screens")
+MILESTONE_HEADING = re.compile(r"^(M\d+) — \S")
+MILESTONE_FIELDS = ("Sources", "Screens")
+DISCOVERY = "docs/discovery"
+DISCOVERY_SCREENS = re.compile(r"^- Screens: (yes|no|open)$")
+QUOTE_START = re.compile(r"^<!-- agk:(?:problem|answer) sha256=[0-9a-f]{64} -->$")
+QUOTE_END = ("<!-- agk:problem-end -->", "<!-- agk:answer-end -->")
 SCREEN_FIELDS = ("Flow", "Pattern", "Links to")
 
 
@@ -80,7 +90,7 @@ def _requirement_problems(
 ) -> None:
     seen: set[str] = set()
     for heading, lines in sections:
-        match = REQ_HEADING.match(heading)
+        match = REQ_HEADING.match(heading) or MILESTONE_HEADING.match(heading)
         if not match:
             out.append("a requirement section is not headed by its id")
             continue
@@ -89,15 +99,17 @@ def _requirement_problems(
             out.append(f"{req}: the requirement has more than one section")
             continue
         seen.add(req)
-        if req not in known:
+        milestone = req.startswith("M")
+        if not milestone and req not in known:
             out.append(f"{req}: the section names no requirement")
             continue
         found = _fields(req, lines, out)
+        allowed = MILESTONE_FIELDS if milestone else REQ_FIELDS
         for name in found:
-            if name not in REQ_FIELDS:
+            if name not in allowed:
                 out.append(f"{req}: a line is not a field of the inventory")
-        if "Specs" not in found:
-            out.append(f"{req}: the field Specs is missing")
+        if allowed[0] not in found:
+            out.append(f"{req}: the field {allowed[0]} is missing")
         text = found.get("Screens", "")
         reason = NO_SCREEN.match(text)
         if reason:
@@ -168,6 +180,30 @@ def sectioned_requirements(text: str) -> set[str] | None:
     return {m.group(1) for heading, _ in parts["Requirements"] if (m := REQ_HEADING.match(heading))}
 
 
+def discovery_screens(root: Path) -> list[tuple[str, str]]:
+    """(path, `- Screens:` value) of each discovery document that has the line, outside its quoted
+    blocks and before its first `## ` part, in file name order."""
+    found: list[tuple[str, str]] = []
+    folder = root / DISCOVERY
+    for path in sorted(folder.glob("*.md")) if folder.is_dir() else []:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        quoted = False
+        for line in lines:
+            if QUOTE_START.match(line):
+                quoted = True
+            elif line in QUOTE_END:
+                quoted = False
+            elif line.startswith("## "):
+                break
+            elif not quoted and (match := DISCOVERY_SCREENS.match(line)):
+                found.append((f"{DISCOVERY}/{path.name}", match.group(1)))
+                break
+    return found
+
+
 def inventory_problems(root: Path) -> list[str]:
     """The rule 3 problems of `docs/design/inventory.md`; an empty list when it passes."""
     text = (root / INVENTORY).read_text(encoding="utf-8")
@@ -182,4 +218,10 @@ def inventory_problems(root: Path) -> list[str]:
     screens = parts.get("Screens", [])
     _requirement_problems(parts.get("Requirements", []), known, {h for h, _ in screens}, out)
     _screen_problems(screens, out)
-    return [f"rule 3: {INVENTORY}: {problem}" for problem in out]
+    found = [f"rule 3: {INVENTORY}: {problem}" for problem in out]
+    if not screens and {"yes", "open"} & {value for _, value in discovery_screens(root)}:
+        found.append(
+            "SPEC-0037 rule 3: docs/design/: the inventory lists no screen while a discovery"
+            " document says the work has screens (`Screens: yes` or `open`)"
+        )
+    return found
