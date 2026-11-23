@@ -786,3 +786,33 @@ def test_req051_an_adopted_project_keeps_its_stamped_values(tmp_path):
     assert (root / "agk.toml").read_bytes() == before
     cfg = tomllib.loads(before.decode("utf-8"))
     assert cfg["test_dirs"] == ["pkg/tests"] and cfg["test_patterns"] == ["*_test.py"]
+
+
+# --- The one whole-history secret scan (brief #1835, ADR-0764) ---------------------------------
+
+HISTORY_NEXT = "next: scan the whole history once for secrets: python3 {kit}/history_scan.py run --write"
+
+
+@pytest.mark.parametrize(
+    "extra, kit",
+    [
+        ((), "scripts/agk"),
+        (("--layout", "plugin", "--rehearsal"), '"${CLAUDE_PLUGIN_ROOT}/scripts/agk"'),
+    ],
+)
+def test_req063_adopt_names_the_history_scan_last_and_runs_no_git(tmp_path, extra, kit):
+    """REQ-063: brief #1835 answer 3: after a write, one last line names the scan; adopt runs it
+    not (SPEC-0002 rule 1 kept: the import test above holds)."""
+    root = make_existing(tmp_path / "proj", branch="main")
+    proc = adopt(root, *extra)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.rstrip().splitlines()[-1] == HISTORY_NEXT.format(kit=kit)
+    assert not (root / "config" / "agk-baseline" / "history-scan.json").exists()
+
+
+def test_req063_adopt_dry_run_says_the_history_scan_did_not_run(existing):
+    """REQ-063: brief #1835 answer 3: `--dry-run` runs nothing and says so."""
+    proc = adopt(existing, "--dry-run")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.rstrip().splitlines()[-1] == "history scan: not run (dry run)"
+    assert "next: scan the whole history" not in proc.stdout
