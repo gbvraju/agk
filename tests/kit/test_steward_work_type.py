@@ -210,7 +210,8 @@ def test_req045_the_written_record_passes_the_project_s_adr_check(env):
     assert "- Requirements: REQ-001" in text
     assert re.search(
         r"\n## Residual\n\n- \d{4}-\d{2}-\d{2}: none; the owner reviews the change before the "
-        r"merge\.\n*$", text
+        r"merge\.\n*$",
+        text,
     )
     keep = {k: v for k, v in os.environ.items() if k not in ("AGK_BASE", "GITHUB_BASE_REF")}
     done = subprocess.run(  # nosec B603 - the kit's own check, fixed argument list

@@ -243,7 +243,7 @@ def test_req045_the_census_lists_no_row_it_cannot_find():
 
 
 def test_req045_an_invented_writer_is_named_by_file_and_line(tmp_path):
-    """REQ-045: answer 3, a new writer in a copy of the census input fails naming `<file>:<line>`."""
+    """REQ-045: answer 3, a new writer in a copy of the census input is named `<file>:<line>`."""
     copy = tmp_path / "kit"
     shutil.copytree(KIT_ROOT / "scripts" / "agk", copy / "scripts" / "agk")
     shutil.copytree(KIT_ROOT / "kit" / "templates", copy / "kit" / "templates")
@@ -261,4 +261,3 @@ def test_req045_a_field_check_adrs_requires_is_in_every_built_text(tmp_path):
         assert re.search(rf"(?m)^- {field}: \S", text), field
     for section in check_adrs.SECTIONS:
         assert f"\n## {section}\n" in text, section
-
