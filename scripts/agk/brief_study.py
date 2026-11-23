@@ -27,8 +27,9 @@ searched>`; and one `Class: <kind>; seen <n> ...` line, where `seen` above 0 nee
 headed `**The class stays closed.**`. Until `STUDY_FAILS_FROM` (none set: Q-1800-1) they are
 warnings, from it failures; a `Priority: 0` brief is held only to `Class:` and `Prior:`, and the
 router's own red-branch brief to none. An open brief the study finds and `Prior:` leaves out is
-always a warning, and so are the first `PRIOR_WARNINGS` strong Accepted ADRs it leaves out, with
-one line counting the rest. Reads files and the cache only: no network, no model.
+always a warning, and so are the first `[flow] brief_prior_warnings` (10 when unset) strong
+Accepted ADRs it leaves out, with one line counting the rest. Reads files and the cache only: no
+network, no model.
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import plan_names
 from common import CheckError, run, utf8_output
 from session import ROUTER_PAIR, touches_of
+
+from config import BRIEF_PRIOR_WARNINGS, brief_prior_warnings
 
 NAME = "brief-study"
 USAGE = "usage: brief_study.py FILE --root DIR [--open-briefs FILE]"
@@ -70,8 +73,9 @@ REFS = (
 STATUS = re.compile(r"^- Status:\s*(\w+)", re.M)
 AMENDMENT = re.compile(r"proposed-spec-amendments-(\d+)\.md")
 SPEC_OF = re.compile(r"\bSPEC-(\d{4})\b")
-# Brief #1819 answer 2: the Accepted ADRs warned at most, strongest first (one constant, Q-F11-1).
-PRIOR_WARNINGS = 10
+# Brief #1819 answer 2: the Accepted ADRs warned at most, strongest first; `[flow]
+# brief_prior_warnings` sets it (Maintainer answer Q-F11-1), this is its default.
+PRIOR_WARNINGS = BRIEF_PRIOR_WARNINGS
 SECTION = re.compile(r"^## ", re.M)
 DECISION = re.compile(r"^## Decision\b.*$", re.M)
 
@@ -317,14 +321,15 @@ def study_result(
         if not re.search(rf"{re.escape(ref)}(?!\d)", prior)
     ]
     adrs = [x for x in out if x[0] == "adr"]
-    kept = adrs[:PRIOR_WARNINGS] + [x for x in out if x[0] == "brief"]
+    cap = brief_prior_warnings(root)
+    kept = adrs[:cap] + [x for x in out if x[0] == "brief"]
     left = [
         f"study: Prior leaves out {ref} ({status}), which names {why}"
         for _, ref, status, why in kept
     ]
-    if len(adrs) > PRIOR_WARNINGS:
+    if len(adrs) > cap:
         left.append(
-            f"study: Prior: {len(adrs) - PRIOR_WARNINGS} more candidates not warned;"
+            f"study: Prior: {len(adrs) - cap} more candidates not warned;"
             " brief_study.py <file> --root . lists them"
         )
     if enforced(today):

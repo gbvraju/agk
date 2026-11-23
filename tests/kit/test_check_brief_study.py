@@ -345,8 +345,9 @@ def test_ac4_the_cap_is_the_flow_setting_brief_prior_warnings(tmp_path):
 @pytest.mark.parametrize("value", ["-1", '"10"', "2.5", "true", "[10]"])
 def test_ac4_a_brief_prior_warnings_outside_its_form_is_refused_naming_the_setting(tmp_path, value):
     """REQ-037 AC4 (brief #1819, Maintainer answer Q-F11-1)"""
-    import config
     from common import CheckError
+
+    import config
 
     root = tree(tmp_path)
     (root / "agk.toml").write_text(f"[flow]\nbrief_prior_warnings = {value}\n", "utf-8")

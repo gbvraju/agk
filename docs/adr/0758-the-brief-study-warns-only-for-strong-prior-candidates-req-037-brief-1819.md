@@ -22,8 +22,9 @@ brief trimming the Prior warnings".
    stands in the record's header (every line before the first `## `) or its `## Decision` section; a record with no
    `## Decision` heading is read whole. A hit only by a bare file name, or only in other sections, is `weak`.
 2. `check_brief.py --root` warns for the strong Accepted ADRs that `Prior:` leaves out, ranked by the distinct strong
-   terms they name, then the newer number, at most `brief_study.PRIOR_WARNINGS` (10, one constant, not a setting:
-   Q-F11-1), followed by one line `study: Prior: <n> more candidates not warned; brief_study.py <file> --root . lists
+   terms they name, then the newer number, at most `[flow] brief_prior_warnings` (`config.brief_prior_warnings`: a
+   whole number, 10 when unset; a value outside that form is refused naming the setting, never the value; Maintainer
+   answer Q-F11-1), followed by one line `study: Prior: <n> more candidates not warned; brief_study.py <file> --root . lists
    them` when more remain. Weak ADRs are never warned; a `Prior:` may cite one. Open briefs that meet `Touches:` stay
    warned, all of them; amendments stay printed, not warned (ADR-0752 decision 4). A warning stays a warning on any
    day, as ADR-0752 decided.
@@ -31,9 +32,10 @@ brief trimming the Prior warnings".
    records ranked first, then the open briefs, then the weak records.
 4. The brief skill and `docs/briefs/TEMPLATE.md` say that `Prior:` names the records of the same kind, with why, and
    never lists records read and found unrelated.
-5. Path classes changed: `scripts/agk/` (`brief_study.py`), `skills/` (the brief skill) and `tests/kit/` (the two
-   study tests, with the guard that 40 weak mentions give no ADR warning). No setting is added; `review_mode`,
-   `pr_mode`, `execution` and personal mode read the same warnings from the same function.
+5. Path classes changed: `scripts/agk/` (`brief_study.py`, `config.py` with the setting and its `[flow]` key),
+   `skills/` (the brief skill) and `tests/kit/` (the two study tests, with the guard that 40 weak mentions give no ADR
+   warning). The one new setting is `[flow] brief_prior_warnings`; `review_mode`, `pr_mode`, `execution` and personal
+   mode read the same warnings from the same function.
 
 ## Consequences
 
@@ -43,4 +45,4 @@ is no longer warned, only printed as `weak`; the writer still reads the full lis
 
 ## Residual
 
-The briefs filed with long `Prior:` lines (#1813, #1814, #1815) are left as they are (Q-F11-2, conservative reading).
+The briefs filed with long `Prior:` lines (#1813, #1814, #1815) stay as filed (Maintainer answer Q-F11-2).
