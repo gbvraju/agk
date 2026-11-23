@@ -7,7 +7,8 @@
 - Requirements: REQ-079, REQ-062
 
 Protected classes this pull request changes: `scripts/agk/` (`common.py`, `gates/node_pack.py`) and `tests/kit/`
-(`test_node_pack.py`, `test_impact.py`, `test_test_plan.py`, `test_agk_config.py`, the new `test_windows_forms.py`).
+(`test_node_pack.py`, `test_impact.py`, `test_test_plan.py`, `test_agk_config.py`, `test_gate_injection_set.py`, the new
+`test_windows_forms.py`).
 `kit/hashes.json` is not edited by hand.
 
 ## Context
@@ -37,7 +38,9 @@ and `./tests` held no test file for `impact.in_test_dirs` (a full regression run
    through `load_config` (`impact`, the marker readers of `common`, `check_requirements.py`, `check_plan.py`,
    `check_kit_tests.py`, `drift_audit.py`, `facts.py`, `proof.py`, `doctor.py`, `tests_floor`, `environment_settings`,
    `injection_set`) therefore sees `tests` for each written form, on Linux and on Windows. A Linux folder whose name holds
-   a back slash cannot be named (`Q-1839-2`, the brief's `Q-HG-2`); `[testing]` map globs keep refusing `\`.
+   a back slash cannot be named (`Q-1839-2`, the brief's `Q-HG-2`); `[testing]` map globs keep refusing `\`. The
+   `injection-set` step, which refused a back-slash entry (brief #1712), now reads it as its folder, as the tests floor
+   does; it still refuses a non-list, an empty, a non-string and a `..` entry (`Q-1839-4`).
 3. `tests/kit/test_windows_forms.py` keeps the class closed: each pack gives an LF file and its CRLF twin the same format
    result, every reader above reads one folder for each form, and a scan of `scripts/agk/` fails a file that reads
    `test_dirs` from the raw settings (`config_source(...)` or a TOML read) past `load_config`, naming the file.

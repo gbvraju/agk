@@ -177,7 +177,18 @@ def test_a_set_under_any_test_dirs_entry_passes(tmp_path: Path, capsys) -> None:
     assert _lines(root, capsys) == [f"ok {GATE}"]
 
 
-@pytest.mark.parametrize("value", ['"tests"', "[1]", '[""]', '["../up"]', '["a\\\\b"]'])
+@pytest.mark.parametrize("form", ["checks\\\\", ".\\\\checks", "./checks/"])
+def test_a_back_slash_or_dot_slash_test_dirs_entry_is_read_as_its_folder(
+    form: str, tmp_path: Path, capsys
+) -> None:
+    """REQ-079: brief #1839 answer 2, ADR-0769 (was refused by brief #1712: `a\\b` is now `a/b`)."""
+    tail = '[[testing.map]]\ncode = "server/**"\ntests = ["checks/injection/*.py"]\n'
+    dirs = f'test_dirs = ["tests", "{form}"]'
+    root = _project(tmp_path, {"checks/injection/test_a.py": TEST}, tail=tail, top=dirs)
+    assert _lines(root, capsys) == [f"ok {GATE}"]
+
+
+@pytest.mark.parametrize("value", ['"tests"', "[1]", '[""]', '["../up"]'])
 def test_a_malformed_test_dirs_is_refused_naming_it(value: str, tmp_path: Path, capsys) -> None:
     """REQ-079: brief #1712 answer 4 (the step validates `test_dirs` itself)."""
     root = _project(tmp_path, SET, top=f"test_dirs = {value}")
