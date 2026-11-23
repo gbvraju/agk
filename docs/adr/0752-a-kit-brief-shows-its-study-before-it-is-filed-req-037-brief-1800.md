@@ -7,7 +7,7 @@
   SPEC-0059 rule 6, plan #661
 - Requirements: REQ-037
 
-Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`, `kit/`
 
 ## Context
 
@@ -42,7 +42,8 @@ gate".
    `Prior:` leaves out. An amendment is printed but not warned: its approval is not readable from its file.
 5. The brief skill runs `brief_study.py` before `check_brief.py`; `docs/briefs/TEMPLATE.md` shows the lines.
 6. Path classes changed: `scripts/agk/` (`brief_study.py`, `check_brief.py`), `skills/` (the brief skill), `tests/kit/`
-   (the new tests and the study lines in the passing `--root` fixtures) and `agk.toml` (the `[[testing.map]]` entry).
+   (the new tests and the study lines in the passing `--root` fixtures), `tests/kit_dev/` (the same lines in the
+   screens fixture), `agk.toml` (the `[[testing.map]]` entry) and `kit/` (`kit/manifest.json` installs the script).
    No setting is added; `review_mode`, `pr_mode`, `execution` and personal mode read the same lines.
 
 ## Consequences

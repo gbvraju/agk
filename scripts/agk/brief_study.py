@@ -219,7 +219,7 @@ def candidates(body: str, root: Path, briefs: list[dict] | None, number: int | N
         text = _read(path)
         term = _names(text, terms) if match and terms else None
         spec = SPEC_OF.search(text.split("\n", 1)[0]) if term else None
-        if not term or spec is None:
+        if match is None or not term or spec is None:
             continue
         spec_text = "".join(_read(p) for p in specs.glob(f"{spec.group(1)}-*.md"))
         if not re.search(rf"\b[Aa]mendments? {match.group(1)}\b", spec_text):

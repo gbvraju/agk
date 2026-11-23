@@ -151,7 +151,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "upgrade": {"upgrade", "kit_root"},  # the resolver's gate, brief #1759
         "uninstall": {"uninstall"},
         "spec": {"new_spec", "intake"},
-        "brief": {"new_spec", "playbook", "plan_names", "check_brief"},
+        "brief": {"new_spec", "playbook", "plan_names", "brief_study", "check_brief"},  # brief #1800
         "review": {"review_context", "check_review_report"},
         "issue": set(),
         "ruleset": {"ruleset"},
