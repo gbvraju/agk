@@ -4670,7 +4670,8 @@ def own_patch(root, sha: str, ref: str) -> str | None:
     if not diff:
         return None
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "patch-id", "--stable"], cwd=root, input=diff, capture_output=True, text=True
+        ["git", "patch-id", "--stable"], cwd=root, input=diff, capture_output=True, text=True,
+        encoding="utf-8",
     )  # fmt: skip
     return proc.stdout.split()[0] if proc.returncode == 0 and proc.stdout.split() else None
 
