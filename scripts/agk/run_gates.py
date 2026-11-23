@@ -284,12 +284,13 @@ def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
         if module is None or module.__name__ in done or not module.on(root):
             continue
         if meet and not done:  # brief #1844: read once, for the first pack that is on
+            row: Row | None = None
             try:
                 found = touched(root)
             except CheckError as exc:
                 found, row = frozenset(), (False, f"standards touched: {exc}")
-            else:
-                row = (None, f"standards touched: {NO_BASE}") if found is None else None
+            if found is None:
+                row = (None, f"standards touched: {NO_BASE}")
             changed = found or frozenset()
             out += [row] if row else []
         done.add(module.__name__)
