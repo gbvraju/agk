@@ -1058,6 +1058,14 @@ pixels at each breakpoint and mode. It prints `<screen>/<state> match` or `<scre
 exits 1 only on a usage error, an unset or failing `render`, a bad `pixel_tolerance`, a version without a `design` row in
 `docs/design/signoffs.md` or a screen the version lacks, naming the setting or the rule.
 
+Every browser call of these commands, and of `design.py screenshots --folder`, runs offline: no host is resolved and no
+proxy is used (`--no-proxy-server`), whatever proxy the machine has. The one exception is the shot of an imported page
+(`--version i<n>`), which goes through the comparison's own files server on 127.0.0.1, the only address the offline rule
+lets through; a shot of a page that server never served is refused, `rule 11: the headless browser did not open the
+imported page through the files server`, whatever `pixel_tolerance`. A page whose external references `external.txt`
+lists ends its line `; external: <n> not loaded (docs/design/imported/i<n>/external.txt)`; no URL is printed (brief
+#1828, ADR-0762).
+
 The `[design]` table of `agk.toml` (off when absent): `ui_paths`, the globs of the project's UI files (a brief whose
 `Touches:` meets one needs a `Screens:` line); `render`, the project's command that writes the built
 page of a screen and state into `AGK_DESIGN_OUT`; and `pixel_tolerance`, the share of a screenshot's pixels that may differ

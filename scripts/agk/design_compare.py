@@ -41,8 +41,12 @@ kinds found) or, for a picture page without a browser, `<screen>/<state> pixels:
 `match` for pixels it did not compare. The imported page is opened only here, through `FilesServer`:
 a loopback server that the browser sends every request to (`--proxy-server`, the loopback
 included) and that serves only the files under `docs/design/imported/i<n>/files/`, refusing every
-other request, so a page with an external reference renders without it. No check and no workflow
-runs this script.
+other request, so a page with an external reference renders without it. Only that call escapes
+the offline rule, for 127.0.0.1 alone (`design_render.proxied`); every other call runs with
+`design.OFFLINE`, no proxy. A shot of a page the server never served is refused (exit 1, rule 11,
+whatever `pixel_tolerance`), and a page whose references `external.txt` lists ends its line
+`; external: <n> not loaded (<path of external.txt>)` (brief #1828, ADR-0762). No check and no
+workflow runs this script.
 """
 
 from __future__ import annotations
@@ -67,6 +71,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import check_brief
 import design
+import design_import
 import design_render
 import design_signoff
 from common import CheckError, config_source
@@ -96,6 +101,8 @@ IMPORTED_WIDTH = 1440
 PAGE_FILES = (".html", ".htm")
 PDF_PAGE = re.compile(r"^(?P<file>.+\.pdf)#page=(?P<page>[1-9]\d*)$", re.IGNORECASE)
 HIDDEN = {"head", "script", "style", "template", "noscript"}
+NOT_SERVED = "rule 11: the headless browser did not open the imported page through the files server"
+GONE = (BrokenPipeError, ConnectionResetError)  # the browser left before the answer: nothing to say
 
 
 class UsageError(Exception):
@@ -345,13 +352,23 @@ def served(files: Path, target: str) -> Path | None:
     return found
 
 
+class _Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address) -> None:
+        if not isinstance(sys.exc_info()[1], GONE):
+            super().handle_error(request, client_address)
+
+
 class FilesServer:
     """A loopback server, used as the browser's proxy, that serves the files of one imported
     version under `http://<HOST>/` and refuses every other request with 403. As a context
-    manager it yields its port."""
+    manager it yields its port. `served` holds each path it answered with 200, `refused` counts
+    the rest (brief #1828)."""
 
     def __init__(self, files: Path) -> None:
         root = files
+        self.served: set[str] = set()
+        self.refused = 0
+        owner = self
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args) -> None:  # the comparison prints its own lines only
@@ -359,22 +376,27 @@ class FilesServer:
 
             def _answer(self) -> None:
                 found = served(root, self.path) if self.command in ("GET", "HEAD") else None
-                if found is None:
-                    self.send_error(403)
-                    return
-                data = found.read_bytes()
-                kind = mimetypes.guess_type(found.name)[0] or "application/octet-stream"
-                self.send_response(200)
-                self.send_header("Content-Type", kind)
-                self.send_header("Content-Length", str(len(data)))
-                self.end_headers()
-                if self.command == "GET":
-                    self.wfile.write(data)
+                try:
+                    if found is None:
+                        owner.refused += 1
+                        self.send_error(403)
+                        return
+                    data = found.read_bytes()
+                    kind = mimetypes.guess_type(found.name)[0] or "application/octet-stream"
+                    self.send_response(200)
+                    self.send_header("Content-Type", kind)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    if self.command == "GET":
+                        self.wfile.write(data)
+                    owner.served.add(urllib.parse.unquote(urllib.parse.urlsplit(self.path).path))
+                except GONE:
+                    self.close_connection = True
 
             do_GET = do_HEAD = do_POST = do_PUT = do_DELETE = do_OPTIONS = do_PATCH = _answer
             do_CONNECT = _answer
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server = _Server(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def __enter__(self) -> int:
@@ -414,15 +436,10 @@ def image_size(path: Path) -> tuple[int, int] | None:
 
 def shoot_at(browser: str, url: str, size: tuple[int, int], target: Path, port=None) -> None:
     """One screenshot of URL at SIZE in light mode; through the files server when PORT is set."""
-    via = (
-        [f"--proxy-server=http://127.0.0.1:{port}", "--proxy-bypass-list=<-loopback>"]
-        if port is not None
-        else []
-    )
+    flags = design_render.OFFLINE if port is None else design_render.proxied(port)
     command = [
         browser,
-        *design_render.OFFLINE,
-        *via,
+        *flags,
         f"--screenshot={target}",
         f"--window-size={size[0]},{size[1]}",
         design.SCHEME["light"],
@@ -445,6 +462,19 @@ def pdf_page(renderer: str, pdf: Path, page: int, target: Path) -> Path | None:
     return target if proc.returncode == 0 and target.is_file() else None
 
 
+def not_loaded(folder: Path, files: Path, name: str) -> int:
+    """The references `external.txt` lists for page NAME and the stylesheets it links."""
+    try:
+        listed = (folder / design_import.EXTERNAL).read_text(encoding="utf-8").splitlines()
+        text = (files / name).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0
+    names = {p.relative_to(files).as_posix() for p in files.rglob("*") if p.is_file()}
+    linked = design_import._references(name, text, names)
+    own = {name} | {n for n in linked if n.lower().endswith(design_import.STYLESHEETS)}
+    return sum(line.split(" ", 1)[0] in own for line in listed)
+
+
 def compare_imported(root: Path, version: str, screens: str) -> int:
     """`--version i<n>`: each built screen against the file its version's map names."""
     command, tolerance = settings(root)
@@ -461,6 +491,7 @@ def compare_imported(root: Path, version: str, screens: str) -> int:
     renderer = shutil.which("pdftoppm")
     for screen, state in named:
         name = mapped[(screen, state)]
+        extra = ""
         pdf = PDF_PAGE.match(name)
         page = not pdf and name.lower().endswith(PAGE_FILES)
         with tempfile.TemporaryDirectory(prefix="agk-compare-") as scratch:
@@ -491,8 +522,14 @@ def compare_imported(root: Path, version: str, screens: str) -> int:
                 first, second = work / "built.png", work / "imported.png"
                 shoot_at(cast(str, browser), built.resolve().as_uri(), size, first)
                 url = f"http://{HOST}/" + urllib.parse.quote(name)
-                with FilesServer(files) as port:
+                server = FilesServer(files)
+                with server as port:
                     shoot_at(cast(str, browser), url, size, second, port)
+                if f"/{name}" not in server.served:
+                    raise CheckError(NOT_SERVED)
+                if page and (count := not_loaded(files.parent, files, name)):
+                    where = f"{IMPORTED_DIR}/{version}/{design_import.EXTERNAL}"
+                    extra = f"; external: {count} not loaded ({where})"
                 if design_render.pixel_share(first, second) > tolerance:
                     kinds.append("pixels")
             if page:
@@ -504,7 +541,7 @@ def compare_imported(root: Path, version: str, screens: str) -> int:
             print(f"{screen}/{state} pixels: not run")
             continue
         line = f"{screen}/{state} " + (f"drift: {', '.join(kinds)}" if kinds else "match")
-        print(line + ("" if ran else "; pixels: not run"))
+        print(line + ("" if ran else "; pixels: not run") + extra)
     return 0
 
 

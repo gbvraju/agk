@@ -18,8 +18,9 @@ share of pixels that differ (1.0 when the sizes differ). `reflow(root, version)`
 "result"}]}` with `result` one of `ok`, `sideways` or `not run`, as `design_prototype_check.py`
 reads it; without a browser every entry reads `not run`.
 `screenshots/` is written only by `design.py screenshots`, never by hand. The browser runs with
-`--host-resolver-rules=MAP * ~NOTFOUND`, so no request leaves the machine. Messages name the
-rule, never a value.
+`design.OFFLINE` (`--host-resolver-rules=MAP * ~NOTFOUND` and `--no-proxy-server`), so no request
+leaves the machine; `proxied(port)` is the flags of the one call through `design_compare.py`'s files
+server (ADR-0762). Messages name the rule, never a value.
 """
 
 from __future__ import annotations
@@ -44,8 +45,8 @@ from design_standard import BREAKPOINTS
 HEIGHT = 800
 MODES = ("light", "dark")
 # Measured on Chromium (2026-11-08): with these flags a file page is opened, its iframe read and no
-# host resolved.
-OFFLINE = ("--headless", "--disable-gpu", "--host-resolver-rules=MAP * ~NOTFOUND")
+# host resolved; `--no-proxy-server` keeps a machine proxy out (brief #1828). One definition.
+OFFLINE = design.OFFLINE
 MARK = re.compile(r'id="agk-reflow">(ok|sideways)<')
 PAGE = re.compile(r"^[a-z0-9][a-z0-9-]*--[a-z0-9][a-z0-9-]*\.html$")
 REFLOW = "reflow.json"
@@ -63,6 +64,19 @@ NOT_PNG = "rule 11: a screenshot is not a PNG the comparison reads"
 
 def find_browser() -> str | None:
     return design.find_browser()
+
+
+def proxied(port: int) -> tuple[str, ...]:
+    """The flags of the one call through the comparison's files server on 127.0.0.1:PORT: only that
+    address escapes the resolver rule (measured on Chrome 153: without it the proxy is unreachable),
+    and every request, the loopback names included, goes to the server (ADR-0762)."""
+    return (
+        "--headless",
+        "--disable-gpu",
+        "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
+        f"--proxy-server=http://127.0.0.1:{port}",
+        "--proxy-bypass-list=<-loopback>",
+    )
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess:
