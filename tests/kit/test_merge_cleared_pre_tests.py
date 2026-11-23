@@ -417,9 +417,7 @@ def test_a_whole_test_that_passes_on_the_merge_merges(tmp_path):
 def test_both_keys_hold_on_the_whole_test(tmp_path):
     """REQ-062 REQ-046: brief #1797 answer 1 (both keys: the union in one run; the failing
     whole test is named the same way)."""
-    setting = (
-        f'[testing]\npre_merge_tests = ["{BUDGET_TEST}"]\nwhole_tests = ["{BUDGET_TEST}"]\n'
-    )
+    setting = f'[testing]\npre_merge_tests = ["{BUDGET_TEST}"]\nwhole_tests = ["{BUDGET_TEST}"]\n'
     proc, made, _, _, head = budget_run(tmp_path, LOWER, WIDER, setting)
     assert one_line(proc) == f"merge-cleared #7 {head[:12]}: {TESTS_FAIL} ({BUDGET_ID})"
     assert proc.returncode == 3 and merges(made) == []
