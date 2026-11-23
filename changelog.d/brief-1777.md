@@ -1,0 +1,1 @@
+- In an adopted project an existing committed secret or disallowed licence is held in the baseline and shown as held with its count on every run, never as ok, the doctor warns with the leaked-secret steps, and a new one fails (brief #1777)
