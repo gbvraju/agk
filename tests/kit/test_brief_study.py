@@ -120,3 +120,58 @@ def test_ac4_a_usage_error_exits_2(tmp_path):
         text=True,
     )
     assert out.returncode == 2 and out.stdout.startswith("usage:")
+
+
+def adr(root: Path, number: int, header: str = "", context: str = "", decision: str = "") -> None:
+    text = f"# ADR-{number:04d}: x\n\n- Status: Accepted\n{header}\n## Context\n\n{context}\n"
+    text += f"\n## Decision\n\n{decision}\n\n## Consequences\n\nNone.\n"
+    (root / "docs" / "adr" / f"{number:04d}-x.md").write_text(text, "utf-8")
+
+
+def marks(out) -> dict[str, str]:
+    return {
+        x.split(" ", 1)[0]: x.rsplit("; ", 1)[-1]
+        for x in out.stdout.splitlines()
+        if x.startswith("ADR-")
+    }
+
+
+def test_ac4_a_hit_is_strong_in_the_header_or_decision_and_weak_elsewhere_or_by_name(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 1)"""
+    root = tree(tmp_path)
+    adr(root, 20, header="- Related: `scripts/agk/tool.py`\n")
+    adr(root, 21, decision="1. `scripts/agk/tool.py` decides it.")
+    adr(root, 22, decision="1. `tool.main` decides it.")
+    adr(root, 23, context="It once named `scripts/agk/tool.py`.")
+    adr(root, 24, decision="1. Only `tool.py` by its name.")
+    adr(root, 25, context="x", decision="y\n\n## Residual\n\n`scripts/agk/tool.py` later.")
+    got = marks(study(tmp_path, root))
+    assert got == {
+        "ADR-0020": "strong",
+        "ADR-0021": "strong",
+        "ADR-0022": "strong",
+        "ADR-0023": "weak",
+        "ADR-0024": "weak",
+        "ADR-0025": "weak",
+    }, got
+
+
+def test_ac4_an_adr_without_a_decision_heading_is_searched_whole_as_strong(tmp_path):
+    """REQ-037 AC4 (brief #1819 answer 7)"""
+    root = tree(tmp_path)
+    (root / "docs" / "adr" / "0030-old.md").write_text(
+        "# ADR-0030: old\n\n- Status: Accepted\n\n## Background\n\n`scripts/agk/tool.py`.\n", "utf-8"
+    )
+    assert marks(study(tmp_path, root)) == {"ADR-0030": "strong"}
+
+
+def test_ac4_strong_hits_come_first_ranked_by_terms_then_the_newer_number(tmp_path):
+    """REQ-037 AC4 (brief #1819 answers 2 and 3)"""
+    root = tree(tmp_path)
+    adr(root, 40, context="`scripts/agk/tool.py` in passing.")
+    adr(root, 41, decision="`scripts/agk/tool.py`")
+    adr(root, 42, decision="`scripts/agk/tool.py` and `tool.main`")
+    adr(root, 43, decision="`scripts/agk/tool.py`")
+    out = study(tmp_path, root)
+    order = [x.split(" ", 1)[0] for x in out.stdout.splitlines() if x.startswith("ADR-")]
+    assert order == ["ADR-0042", "ADR-0043", "ADR-0041", "ADR-0040"], out.stdout
