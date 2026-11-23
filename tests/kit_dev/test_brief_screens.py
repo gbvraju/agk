@@ -83,9 +83,16 @@ def project(tmp_path: Path, ui_paths: list[str] | None = ("web/**",), signed=("v
     return root
 
 
+STUDY = (
+    "Impact:\nSpeed: none: a test brief\nQuality: none: a test brief\nGitHub: none: a test brief\n"
+    "Cost: none: a test brief\nTests: none: a test brief\nWiring: none: a test brief\n"
+    "Prior: none: a test brief\nClass: a test brief; seen 0 (searched nothing)\n"
+)
+
+
 def run_check(root: Path, body: str):
     path = root.parent / "brief.md"
-    path.write_text(body, encoding="utf-8")
+    path.write_text(body + STUDY, encoding="utf-8")  # brief #1800: the study lines (ADR-0752)
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(CHECK), str(path), "--root", str(root)],
         capture_output=True,

@@ -17,6 +17,16 @@ A test never pins its own ADR's status: a test of an ADR that the same pull requ
 - Size: S|M|L
 - Reserved: ADR-nnnn and amendment number <n> (for each spec amendment the item adds), both reserved in the brief's field note
 - Expected: <low>-<high> hours
+- Impact: (each `<name>: <effect, with a figure and its source>` or `<name>: none: <reason>`, in this order)
+  - Speed: e.g. about 10 minutes more per brief for its writer (measured on the next five briefs)
+  - Quality: e.g. a missed earlier decision fails on the brief, not after the build
+  - GitHub: e.g. none: no workflow, check, label or API call changes
+  - Cost: e.g. none for Actions: the check is file-only in the existing job
+  - Tests: e.g. one new test file; no change to the selection or the full run
+- Wiring: e.g. scripts/agk/check_brief.py:main called by skills/brief/SKILL.md (or `none: <reason>`)
+- Prior: e.g. ADR-0650 (Accepted), amendment 186 (or `none: <what was searched>`; `brief_study.py` lists the candidates)
+- Class: e.g. a check broken by a script that prints before utf8_output; seen 2 times (#1581, #1627); seen above 0
+  needs an Answers item headed **The class stays closed.** naming its guard
 
 ## Report format
 
