@@ -1,0 +1,1 @@
+- Gates and test selection: on Windows the Node format step keeps each file's own line end as the Python one does (a project's own line-end setting still wins), and `test_dirs` written `tests\`, `.\tests` or `./tests` is the folder `tests` for every reader, so a Windows checkout gives the result CI gives (brief #1839, ADR-0769)
