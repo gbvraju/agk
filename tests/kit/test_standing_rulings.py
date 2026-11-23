@@ -180,7 +180,7 @@ def test_req037_rules_size_on_1762_is_accepted_by_the_standing_ruling(tmp_path):
 
 def test_req037_rules_size_over_three_times_or_with_a_finding_asks(tmp_path):
     """REQ-037: 301 of 100, or one finding in the newest verdict, prints the ask line."""
-    rows = [*FILES_1762, ("scripts/agk/session.py", "modified", 24, 0)]
+    rows = [*FILES_1762, ("docs/guides/example.md", "modified", 24, 0)]
     code, out = run_size(
         "--pr", "1762", "--root", str(ROOT), "--api-dir", api_dir(tmp_path, rows=rows)
     )
