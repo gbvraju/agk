@@ -44,13 +44,17 @@ product requirement, REQ-101 up, and an Accepted `docs/adr/<n>-project-charter.m
 also holds one `### M<n> — <milestone>` section for each milestone of the newest Accepted charter,
 its `- Sources:` naming the charter and each discovery document whose `Screens` is `yes` or `open`
 and its Screens slot empty; a charter with no Milestones item is refused naming `docs/adr/`
-(amendment 217, brief #1756). Messages name the rule, never a
+(amendment 217, brief #1756). On the path from a customer's prototype (no product requirement and
+an imported version) a new skeleton also holds, in its Screens part, one `### <page slug>` section
+per page of the newest imported version's `manifest.json`, its `- Sources:` naming the page's file
+and every other slot empty (amendment 219, brief #1779). Messages name the rule, never a
 value. No network and no model; `check_design.py` checks what `prototype` and `inventory` made. A
 version's `screenshots/` folder is written only by `design.py screenshots`, never by hand.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess  # nosec B404 - a fixed argument list, no shell
@@ -62,6 +66,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import design_import
 import design_inventory
 import design_prototype
+import design_standard
 from common import PROJECT_FIRST_REQ, CheckError, parse_requirements
 from intake import section
 from playbook import charter_items
@@ -250,6 +255,45 @@ def milestone_sections(root: Path, reqs: list[dict]) -> str:
     return "".join(out)
 
 
+def page_slug(page: str, taken: set[str]) -> str:
+    """The screen id of an imported page (amendment 219): its file name without the extension (a
+    PDF page adds `-page-<n>`), lower case, each run of other characters one `-`, made unique."""
+    name, _, number = page.rpartition("/")[2].partition("#page=")
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    words = f"{stem}-page-{number}" if number else stem
+    base = re.sub(r"[^a-z0-9]+", "-", words.lower()).strip("-") or "page"
+    slug, n = base, 1
+    while slug in taken:
+        n += 1
+        slug = f"{base}-{n}"
+    taken.add(slug)
+    return slug
+
+
+def page_sections(root: Path, reqs: list[dict]) -> str:
+    """The prototype path's screen sections (amendment 219): one per page of the newest imported
+    version when no product requirement is present; empty otherwise."""
+    found = design_import.versions(root)
+    if not found or any(int(r["id"][4:]) >= PROJECT_FIRST_REQ for r in reqs):
+        return ""
+    rel = f"{design_import.IMPORTED}/{found[-1]}"
+    try:
+        record = json.loads((root / rel / design_import.MANIFEST).read_text(encoding="utf-8"))
+        listed = [str(p) for p in record["pages"]]
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError):
+        raise CheckError(
+            "rule 15: the newest manifest cannot be read (docs/design/imported/)"
+        ) from None
+    slots = ["Flow", "Pattern", "Links to"] + [f"State {s}" for s in design_standard.STATES]
+    taken: set[str] = set()
+    out = []
+    for page in listed:
+        lines = "".join(f"- {slot}:\n" for slot in slots)
+        source = f"- Sources: {rel}/{design_import.FILES}/{page}\n"
+        out.append(f"### {page_slug(page, taken)}\n\n{source}{lines}\n")
+    return "".join(out)
+
+
 def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
     if set(opts) - {"root"}:
         raise UsageError("inventory takes only --root")
@@ -263,6 +307,9 @@ def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
         return update_inventory(target, reqs, specs)
     sections = [requirement_section(req, specs) for req in reqs] + [milestone_sections(root, reqs)]
     text = template("design-inventory.md").replace("{{requirements}}\n", "".join(sections))
+    pages = page_sections(root, reqs)
+    if pages:
+        text = text.rstrip("\n") + "\n\n" + pages.rstrip("\n") + "\n"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     print(f"wrote {INVENTORY}")

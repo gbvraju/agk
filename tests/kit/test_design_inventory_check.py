@@ -420,3 +420,61 @@ def test_ac2_a_filled_milestone_section_passes_and_an_empty_one_fails(tmp_path):
     project_empty = text.replace("- Screens: books, book-detail\n", "- Screens:\n")
     (tmp_path / INVENTORY).write_text(project_empty, encoding="utf-8")
     assert f"{WHERE}: M1: the slot Screens is empty" in problems(tmp_path)
+
+
+# Brief #1779 (amendment 219 to SPEC-0037 rule 15, ADR-0745): a map that marks every page of an
+# imported version `out` while the inventory has no screen is refused.
+
+
+def imported_all_out(root: Path, pages=("home.html", "about.html")) -> None:
+    import design_import
+
+    files = root / "docs" / "design" / "imported" / "i1" / "files"
+    files.mkdir(parents=True)
+    for page in pages:
+        (files / page).write_text(f"<html><body><p>{page} on example.com</p></body></html>")
+    folder = files.parent
+    (folder / "manifest.json").write_text(json.dumps(design_import.manifest(files)))
+    (folder / "external.txt").write_text(design_import.external(design_import._files(files)))
+    (folder / "map.md").write_text("".join(f"{p} -> out: not a screen\n" for p in pages))
+
+
+NO_SCREEN_INVENTORY = """# Design inventory
+
+## Requirements
+
+### REQ-001 — A reader keeps a list of books
+
+- Specs: SPEC-0001
+- Screens: no screen: the kit's own rule
+
+### REQ-002 — A nightly job tidies the list
+
+- Specs: SPEC-0002
+- Screens: no screen: the job runs without a person and shows nothing
+
+## Screens
+"""
+
+
+@pytest.mark.parametrize("inventory", [True, False])
+def test_ac2_an_all_out_map_with_no_screen_fails_naming_rule_15(tmp_path, inventory):
+    """REQ-044 AC2: SPEC-0037 rule 15 as amendment 219 proposes (brief #1779 answer 2)."""
+    if inventory:
+        project(tmp_path, NO_SCREEN_INVENTORY)
+    imported_all_out(tmp_path)
+    proc = check(tmp_path)
+    assert proc.returncode == 1, proc.stdout
+    line = (
+        "FAIL design: SPEC-0037 rule 15: docs/design/imported/: every page of i1 is mapped out"
+        " while the inventory lists no screen"
+    )
+    assert line in proc.stdout.splitlines()
+
+
+def test_ac2_an_all_out_map_in_a_project_with_screens_passes(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 15 (brief #1779 answer 6: with screens, out rows may stand)."""
+    project(tmp_path)
+    imported_all_out(tmp_path)
+    proc = check(tmp_path)
+    assert "every page of i1 is mapped out" not in proc.stdout, proc.stdout

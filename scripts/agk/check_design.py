@@ -35,6 +35,8 @@ rule 15 as amendment 161 items 2 and 3 propose): its files against `manifest.jso
 `external.txt`, its `map.md` against the manifest and the inventory, and every `yes` state of the
 inventory must be covered by a row of an imported version or a page of a kit version. Rules 5 to 7
 do not apply to an imported version, whose pages are read as text and never opened.
+A map whose rows are all `out:` while the inventory lists no screen fails, naming rule 15 and
+`docs/design/imported/` (`design_inventory.all_out_problems`, amendment 219, brief #1779).
 Files only: no network, no model, nothing written.
 """
 
@@ -311,6 +313,7 @@ def cmd_check(root: Path) -> int:
                 f"{versions[-1]} is the version checked for coverage"
             )
     problems += design_import.imported_problems(root)  # rule 15: rules 5 to 7 do not apply
+    problems += design_inventory.all_out_problems(root)  # rule 15: amendment 219
     problems += design_signoff.frozen_problems(root)  # rule 9: a signed-off version is frozen
     for line in notes if not problems else []:
         print(line)
