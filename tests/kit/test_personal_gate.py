@@ -452,3 +452,18 @@ def test_req_048_the_gate_writes_nothing_in_the_clone_or_its_git_folder(tmp_path
     assert snapshot(clone) == before
     assert git(clone, "status", "--porcelain") == ""
     assert git(clone, "worktree", "list").count("\n") == 0
+
+
+def test_req_079_a_held_floor_row_is_no_personal_floor_failure(tmp_path, monkeypatch):
+    """REQ-079: brief #1837 (the head tree's committed floor baseline; nothing posted)."""
+    import personal  # noqa: PLC0415
+    import run_gates  # noqa: PLC0415
+
+    held = "standards node floor (baseline): 1 held (setting: standards.config)"
+    idle = "standards node: no product file in scope (setting: project_lint_paths)"
+    rows = [(run_gates.HELD, held), (None, idle), (True, "secrets")]
+    monkeypatch.setattr(personal, "write_tree", lambda *_a, **_k: tmp_path)
+    monkeypatch.setattr(run_gates, "results", lambda _root: rows)
+    ok, line = personal.gates_step(tmp_path, tmp_path, "0" * 40)
+    assert ok, line
+    assert line == "floor: gates ok (3 check gates)"

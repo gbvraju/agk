@@ -390,3 +390,25 @@ def test_a_ruff_command_on_path_without_the_module_names_the_install_line(tmp_pa
     assert lines[0] == "True", done.stderr
     ruff = [ln for ln in lines if "the pack's tool ruff is not installed" in ln]
     assert len(ruff) == 1 and ruff[0].endswith(f"; install: {INSTALL['installed']}")
+
+
+def test_the_floor_fills_the_tally(tmp_path: Path) -> None:
+    """REQ-079: brief #1837 answer 1 (the configuration's path, counting its floor lines)."""
+    root = sample(tmp_path)
+    path = root / "pyproject.toml"
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text.replace('"E", "F", "I", ', '"F", '), encoding="utf-8")
+    entries = check_playbooks.standard(PLAYBOOKS / "api-service.toml", KIT_ROOT)[1]
+    entry = next(e for e in entries if e["stack"] == "python-pyproject")
+    tally: dict[str, dict[str, int]] = {}
+    python_pack.run(root, entry, tally)
+    assert tally["floor"] == {"pyproject.toml": 2}
+
+
+def test_no_file_in_scope_runs_no_step_not_even_the_floor(tmp_path: Path) -> None:
+    """REQ-079: brief #1837 answer 3 (Q-1837-2)."""
+    root = sample(tmp_path, toml='project_lint_paths = ["web/**"]')
+    (root / "pyproject.toml").unlink()  # the floor would fail: it is not run
+    entries = check_playbooks.standard(PLAYBOOKS / "api-service.toml", KIT_ROOT)[1]
+    entry = next(e for e in entries if e["stack"] == "python-pyproject")
+    assert python_pack.run(root, entry, {}) == [(python_pack.NO_FILE, [])]
