@@ -64,7 +64,7 @@ def rendered(root: Path) -> list[str]:
 
 
 def readers(path: Path) -> list[str]:
-    """Each read of a part of `check_brief.py`: `check_brief.<part>` or `from check_brief import`."""
+    """Each read of a part of `check_brief.py`: `check_brief.<part>` or `from check_brief`."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     found = []
     for node in ast.walk(tree):
@@ -82,7 +82,7 @@ def readers(path: Path) -> list[str]:
 
 
 def test_ac4_no_writer_reads_a_brief_with_a_part_of_the_check():
-    """REQ-037 AC4: brief #1813 answer 7 (a new writer cannot check the shape and skip the study)."""
+    """REQ-037 AC4: brief #1813 answer 7 (no new writer checks the shape and skips the study)."""
     files = sorted((KIT_ROOT / "scripts" / "agk").glob("*.py"))
     files += sorted((KIT_ROOT / ".claude" / "hooks").glob("*.py"))
     found = [r for f in files if f.name != "check_brief.py" for r in readers(f)]

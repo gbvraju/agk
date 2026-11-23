@@ -132,6 +132,7 @@ GUARDS = ("scripts/agk/guard.py", ".claude/hooks/data_guard.py")
 # kept here and a test holds the two equal (ADR-0456 decision 4).
 MEASURABLE = re.compile(r"\d|\b(?:all|every|none|zero)\b", re.IGNORECASE)
 VERIFY = "(verify)"
+TO_STATE = f"{VERIFY} for the person to state"  # brief_study.PLACEHOLDER (brief #1813 answer 3)
 SCOPE = ("in", "out", "assumptions", "constraints", "open_questions")
 TOP = ("schema", "scope", "personas", "milestones", "requirements", "areas", "briefs", "conflicts")
 COMPONENTS = "components"  # build (r): optional, an empty list when absent (`Q-1092-1`)
@@ -872,6 +873,18 @@ def requirements_text(data: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+def study_lines() -> list[str]:
+    """Brief #1813 answer 2: the study lines of `brief_study.py`, each with the placeholder the
+    check reads as a line left to fill (a warning, never a failure)."""
+    from brief_study import IMPACT_NAMES  # noqa: PLC0415 - only render needs it
+
+    out = ["Impact:", *(f"{name}: {TO_STATE}" for name in IMPACT_NAMES)]
+    out.append(f"Wiring: none: {TO_STATE}")
+    out.append(f"Prior: none: {TO_STATE}; brief_study.py lists the candidates")
+    out.append(f"Class: {TO_STATE}; seen 0 {VERIFY}")
+    return out
+
+
 def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
     """SPEC-0034 rule 2 and SPEC-0030 rule 4, with keys on `Advances:` and `Depends-on:`."""
     from check_specs import CONTEXTS  # noqa: PLC0415 - only render needs it
@@ -894,7 +907,8 @@ def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
         out.append(f"Kind: {playbook_format.FOUNDATION}")
     if b.get("slice") is True:  # brief #1594 (ADR-0674): the first slice `check_plan.py` reads
         out.append("Kind: slice")
-    out.append("Contexts: " + "; ".join(f"{c}: {VERIFY} for the person to state" for c in CONTEXTS))
+    out.append("Contexts: " + "; ".join(f"{c}: {TO_STATE}" for c in CONTEXTS))
+    out += study_lines()  # brief #1813 answer 2 (ADR-0756)
     sources = list(b["sources"])
     if b.get("component"):  # Q-1217-1: the component's brief carries its key and its sources
         part: dict = next((c for c in data.get(COMPONENTS, []) if c["key"] == b["component"]), {})
@@ -1271,9 +1285,12 @@ def brief_persona(root: Path, body: str) -> str | None:
     return ", ".join(found) or None
 
 
-def brief_check(root: Path, briefs: list[dict], numbers: dict[str, int]) -> list[str]:
+def brief_check(
+    root: Path, briefs: list[dict], numbers: dict[str, int], warned: list[str] | None = None
+) -> list[str]:
     """Rule 25: every brief not yet published passes `check_brief.py --root .` once numbered, on
-    the whole issue body (amendment 169), and holds no `-->` that would end its hidden block."""
+    the whole issue body (amendment 169), and holds no `-->` that would end its hidden block.
+    Brief #1813: the full check, its study included; each warning goes into WARNED."""
     import check_brief  # noqa: PLC0415 - only publish needs it
 
     out: list[str] = []
@@ -1286,9 +1303,11 @@ def brief_check(root: Path, briefs: list[dict], numbers: dict[str, int]) -> list
                 " its hidden block (amendment 169)"
             )
             continue
-        problems = check_brief.body_problems(issue_body(b, numbers), root, None)
+        problems, warnings = check_brief.brief_result(issue_body(b, numbers), root)
         if problems:
             out.append(f"rule 25: briefs {b['key']}: check_brief.py fails: " + "; ".join(problems))
+        if warned is not None:
+            warned += [f"briefs {b['key']}: warning: {w}" for w in warnings]
     return out
 
 
@@ -1400,7 +1419,10 @@ def cmd_publish(root: Path, comments: Path, head: str, numbers_path: Path | None
         for b in briefs:
             b["persona"] = brief_persona(root, b["body"])
             b["blocked_by"] = [q["key"] for q in questions if b["key"] in q["blocks"]]
-        problems = brief_check(root, briefs, numbers)
+        warned: list[str] = []
+        problems = brief_check(root, briefs, numbers, warned)
+        if not problems and warned:
+            print("\n".join(warned))
     if problems:
         print("\n".join(problems))
         print("nothing was printed to run and nothing was created")

@@ -119,7 +119,9 @@ def test_req066_nothing_goes_to_the_kit_from_a_customer_project_before_build_e(p
     """REQ-066: rule 17 (e), a kit brief from a customer project is a draft for the owner."""
     found = ev.triage(finding("kit brief"), project)
     assert found["action"] == "draft" and "draft" in found["lines"][0]
-    assert ev.triage(finding("kit brief"), ROOT)["action"] == "file"
+    (project / "kit").mkdir()  # the kit itself: brief #1813 reads its tree for the full check
+    (project / "kit" / "manifest.json").write_text("{}\n", encoding="utf-8")
+    assert ev.triage(finding("kit brief"), project)["action"] == "file"
 
 
 # --- rule 19: skills first ----------------------------------------------------------------------
@@ -148,3 +150,47 @@ def test_req066_the_agent_file_names_the_evidence_commands():
     text = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
     for command in ("stage", "settle", "answer", "triage", "skill"):
         assert f"steward_evidence.py {command}" in text
+
+
+# --- brief #1813 (ADR-0756): triage runs the whole brief check, its study included ---------------
+
+STUDY = (
+    "Impact:\nSpeed: none: one report\nQuality: the export is checked\nGitHub: none: no change\n"
+    "Cost: none: no Actions\nTests: one test file\nWiring: none: a new file\n"
+    "Prior: none: searched docs/adr for export.py\nClass: a missing export; seen 0 (searched)\n"
+)
+
+
+def kit_tree(project):
+    (project / "kit").mkdir()
+    (project / "kit" / "manifest.json").write_text("{}\n", encoding="utf-8")
+    return project
+
+
+@pytest.mark.parametrize("choice", ["project brief", "kit brief"])
+def test_req037_triage_refuses_a_brief_without_class_once_the_day_is_past(
+    project, monkeypatch, choice
+):
+    """REQ-037 AC4: brief #1813 answers 1 and 8 (a project brief, and a kit brief in the kit)."""
+    import brief_study  # noqa: PLC0415
+
+    root = kit_tree(project) if choice == "kit brief" else project
+    whole = BRIEF.format(priority=0) + STUDY
+    no_class = "\n".join(x for x in whole.splitlines() if not x.startswith("Class:")) + "\n"
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    found = ev.triage(finding(choice, text=no_class), root)
+    assert found["action"] == "file", found
+    assert any(x.startswith("warning: study: exactly one line Class:") for x in found["lines"])
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    found = ev.triage(finding(choice, text=no_class), root)
+    assert found["action"] == "refused" and "Class:" in found["lines"][0], found
+    assert ev.triage(finding(choice, text=whole), root)["action"] == "file"
+
+
+def test_req037_a_kit_brief_in_a_project_stays_shape_only(project, monkeypatch):
+    """REQ-037 AC4: brief #1813 answer 1 and Q-1813-1 (no kit tree to judge the study against)."""
+    import brief_study  # noqa: PLC0415
+
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    found = ev.triage(finding("kit brief"), project)
+    assert found["action"] == "draft" and not any("study" in x for x in found["lines"]), found
