@@ -3,14 +3,15 @@
 
 Every role file under `.claude/agents/` whose tools include Bash (a file with no `tools:` line has
 every tool) holds one line starting `Governance:` with two forms in code spans: the installed one
-first, then the clean one (`[kit] layout = "plugin"`), `<plugin>` standing for the plugin's folder
-written out, since no shipped file names the plugin variable (ADR-0630). In a stub installed project the installed
-form runs through the role's guard as its frontmatter hook runs it (the builder has none: the data
-guard of `.claude/settings.json`); in a stub clean project made by `init.py --layout plugin
---rehearsal`, the clean form, `<plugin>` the stub plugin's folder, runs through `plugin_hooks.py pre` with `agent_type`
-`agk:<role>`. Each must be allowed; the clean form with the variable typed in stays denied for the
-four reviewing roles (ADR-0736 decision 4). Failures name the path class and the file, never the
-line. Temporary folders and the kit checkout only; no network; invented data only (example.com).
+first, then the clean one (`[kit] layout = "plugin"`), `<plugin>` standing for the plugin's
+folder written out, since no shipped file names the plugin variable (ADR-0630). In a stub
+installed project the installed form runs through the role's guard as its frontmatter hook runs it
+(the builder has none: the data guard of `.claude/settings.json`); in a stub clean project made by
+`init.py --layout plugin --rehearsal`, the clean form, `<plugin>` the stub plugin's folder, runs
+through `plugin_hooks.py pre` with `agent_type` `agk:<role>`. Each must be allowed; the clean form
+with the variable typed in stays denied for the four reviewing roles (ADR-0736 decision 4).
+Failures name the path class and the file, never the line. Temporary folders and the kit checkout
+only; no network; invented data only (example.com).
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from conftest import KIT_ROOT
 
 AGENTS = KIT_ROOT / ".claude" / "agents"
 CLASS = ".claude/agents/"
-PLUGIN = "<plugin>"  # the plugin's folder written out (ADR-0630: no shipped file names the variable)
+PLUGIN = "<plugin>"  # the plugin's folder written out (ADR-0630: no file names the variable)
 VARIABLE = "${CLAUDE_PLUGIN_ROOT}"
 SCRATCH = "<scratch>"
 SPAN = re.compile(r"`([^`]*kit_root\.py[^`]*)`")
