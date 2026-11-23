@@ -532,3 +532,157 @@ def test_the_replay_of_the_upgrade_skill_change_selects_its_test():
         pytest.skip("the replayed commits are not in this clone")
     found = impact.select(root, base, head)
     assert found.full or "tests/kit/test_upgrade_adr.py" in [s.test for s in found.selected]
+
+
+# Brief #1796 (amendment 186 build (k), ADR-0650): `[testing] whole_tests`, the tests that read
+# every file of a kind, added to every change that is not documentation only.
+WHOLE = 'whole_tests = ["tests/test_smoke.py", "tests/auth/test_login.py"]\n'
+WHOLE_LINES = "whole: tests/auth/test_login.py\nwhole: tests/test_smoke.py\n"
+
+
+def whole_of(found: impact.Impact) -> list[str]:
+    return [s.test for s in found.selected if s.code == impact.WHOLE]
+
+
+def test_without_whole_tests_the_selection_is_todays(repo):
+    """REQ-062: brief #1796 answer 6 (the key absent: no `whole:` line, no added test)."""
+    start(repo, table_text())
+    change(repo, "app/billing/pay.py")
+    found = result(repo)
+    assert [s.test for s in found.selected] == ["tests/billing/test_pay.py"]
+    assert found.whole == [] and "whole" not in found.data()
+    assert "whole:" not in plan(repo).stdout
+
+
+@pytest.mark.parametrize("profile", ["fast", "balanced"])
+def test_the_listed_tests_are_added_with_a_whole_line_under_each_profile(repo, profile):
+    """REQ-062: brief #1796 answers 1 and 2 (added after the other steps, `whole:` lines last)."""
+    start(repo, table_text(profile=profile) + WHOLE)
+    change(repo, "app/billing/pay.py")
+    found = result(repo)
+    assert found.full is False
+    assert [s.test for s in found.selected] == [
+        "tests/auth/test_login.py",
+        "tests/billing/test_pay.py",
+        "tests/test_smoke.py",
+    ]
+    assert whole_of(found) == ["tests/auth/test_login.py", "tests/test_smoke.py"]
+    assert found.whole == ["tests/auth/test_login.py", "tests/test_smoke.py"]
+    assert found.unmapped == []  # the list covers no changed file
+    out = plan(repo).stdout
+    assert "regression: 3 test files selected\n" in out
+    assert out.endswith(WHOLE_LINES), out
+    assert "  file: tests/test_smoke.py" not in out
+    assert regression(repo)["whole"] == ["tests/auth/test_login.py", "tests/test_smoke.py"]
+
+
+def test_thorough_with_whole_tests_stays_full(repo):
+    """REQ-062: brief #1796 answer 6 (`thorough` is full anyway)."""
+    start(repo, table_text(profile="thorough") + WHOLE)
+    change(repo, "app/billing/pay.py")
+    found = result(repo)
+    assert found.full is True and found.reason == "profile thorough"
+
+
+def test_a_listed_test_also_selected_by_the_map_runs_once_with_its_map_reason(repo):
+    """REQ-062: brief #1796 answer 2 (a file both listed and selected runs once)."""
+    start(repo, table_text() + WHOLE)
+    change(repo, "app/shop/cart.py")
+    found = result(repo)
+    tests = [s.test for s in found.selected]
+    assert tests == sorted(set(tests))
+    smoke = next(s for s in found.selected if s.test == "tests/test_smoke.py")
+    assert smoke.code == "app/shop/*.py"
+    assert whole_of(found) == ["tests/auth/test_login.py"]
+    assert found.whole == ["tests/auth/test_login.py", "tests/test_smoke.py"]
+
+
+def test_an_unmapped_file_stays_unmapped_beside_the_list(repo):
+    """REQ-062: brief #1796 answer 2 (the list never covers a file; rule 6's fallback holds)."""
+    start(repo, table_text() + WHOLE)
+    change(repo, "app/other.py")
+    found = result(repo)
+    assert found.unmapped == ["app/other.py"]
+    assert found.full is True and found.reason == "profile balanced: 1 unmapped file"
+
+
+def test_a_docs_only_change_adds_no_whole_test(repo):
+    """REQ-062: brief #1796 answers 2 and 3 (a change only under docs/ selects nothing)."""
+    start(repo, table_text() + WHOLE)
+    change(repo, "docs/guide.md", "README.md")
+    found = result(repo)
+    assert found.docs_only is True and found.selected == [] and found.whole == []
+
+
+@pytest.mark.parametrize("path", ["skills/x/SKILL.md", "agents/a.md"])
+def test_an_installed_or_protected_markdown_change_adds_the_list(repo, path):
+    """REQ-062: brief #1796 answer 3 (an installed or protected `*.md` is not documentation)."""
+    manifest = json.dumps({"verbatim": ["agents/a.md"], "templates": {}})
+    toml = BASE_TOML + "project_tests = 'exit 0'\n" + table_text(profile="fast") + WHOLE
+    files = {"agk.toml": toml, **BASE_FILES, **JOIN_FILES, "agents/a.md": "# agent\n"}
+    repo.commit({**files, "kit/manifest.json": manifest}, "base")
+    repo.branch("feature")
+    change(repo, path)
+    found = result(repo)
+    assert found.docs_only is False
+    assert set(whole_of(found)) == {"tests/auth/test_login.py", "tests/test_smoke.py"}
+
+
+def test_an_installed_markdown_file_is_not_documentation(repo):
+    """REQ-062: brief #1796 answer 3 (a path of the manifest's install lists is code)."""
+    manifest = json.dumps({"verbatim": ["agents/a.md"], "templates": {"t/b.md": "b.md"}})
+    repo.commit({**BASE_FILES, "kit/manifest.json": manifest, "agk.toml": BASE_TOML}, "base")
+    doc = impact.doc_reader(repo.root, "HEAD")
+    assert doc("agents/a.md") is False and doc("t/b.md") is False
+    assert doc("agents/other.md") is True and doc("docs/guide.md") is True
+
+
+WHOLE_BAD = [
+    "whole_tests = []\n",
+    'whole_tests = "tests/test_smoke.py"\n',
+    'whole_tests = ["tests/missing_test.py"]\n',
+    'whole_tests = ["tests/test_*.py"]\n',
+    'whole_tests = ["/tests/test_smoke.py"]\n',
+    'whole_tests = ["tests/../tests/test_smoke.py"]\n',
+    'whole_tests = ["tests\\\\test_smoke.py"]\n',
+    "whole_tests = [3]\n",
+]
+
+
+@pytest.mark.parametrize("line", WHOLE_BAD)
+def test_a_bad_whole_tests_is_refused_naming_the_setting(repo, line):
+    """REQ-062: brief #1796 answer 1 (each refused entry names the setting, never the value)."""
+    start(repo, table_text() + line)
+    change(repo, "app/billing/pay.py")
+    with pytest.raises(CheckError) as caught:
+        result(repo)
+    message = str(caught.value)
+    assert "(setting: testing.whole_tests)" in message
+    assert "test_smoke" not in message and "missing_test" not in message
+    proc = plan(repo)
+    assert proc.returncode == 2 and "(setting: testing.whole_tests)" in proc.stdout
+
+
+@pytest.mark.parametrize(
+    ("base", "head", "files"),
+    [
+        ("6f7288da~1", "6f7288da", ["tests/kit_dev/test_distribution.py"]),
+        ("0d4ba3a3~1", "0d4ba3a3", ["tests/kit/test_installed_imports.py"]),
+    ],
+)
+def test_the_replays_select_the_whole_tests(monkeypatch, base, head, files):
+    """REQ-062: brief #1796 answer 8 (the replays of #1516 and #1527 with a list set)."""
+    root = Path(__file__).resolve().parents[2]
+    if impact.git(root, "cat-file", "-t", head, check=False).strip() != "commit":
+        pytest.skip("the replayed commits are not in this clone")
+    listed = [
+        "tests/kit_dev/test_distribution.py",
+        "tests/kit_dev/test_playbook.py",
+        "tests/kit/test_installed_imports.py",
+    ]
+    real = impact.testing_table
+    monkeypatch.setattr(impact, "testing_table", lambda r: {**real(r), impact.WHOLE_KEY: listed})
+    found = impact.select(root, base, head)
+    picked = [s.test for s in found.selected]
+    assert found.full or all(f in picked for f in files)
+    assert found.full or all(f in found.whole for f in files)

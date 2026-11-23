@@ -388,3 +388,138 @@ def test_a_crlf_persons_guarded_merge_runs_the_pre_merge_tests_on_committed_byte
     proc = run(root, bin_dir, "--pr", "7", "--sha", head)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert one_line(proc).endswith(f"merged {MERGE[:12]}")
+
+
+# --- brief #1797 (ADR-0650, amendment 187 item 1): the whole tests run on the would-be merge ------
+
+
+WHOLE_ONLY = f'[testing]\nwhole_tests = ["{BUDGET_TEST}"]\n'
+OTHER_TEST = "tests/kit/test_other.py"
+
+
+def test_a_whole_test_that_passes_on_the_head_and_fails_on_the_merge_is_held(tmp_path):
+    """REQ-062 REQ-046: brief #1797 answers 1 and 4 (only `whole_tests`: green on the head, red
+    beside the newer default branch: held naming file and test, exit 3, nothing merged)."""
+    proc, made, ran, root, head = budget_run(tmp_path, LOWER, WIDER, WHOLE_ONLY)
+    assert one_line(proc) == f"merge-cleared #7 {head[:12]}: {TESTS_FAIL} ({BUDGET_ID})"
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert merges(made) == [] and writes(made) == []
+    assert len(ran) == 1 and worktrees(root) == [str(root)]
+
+
+def test_a_whole_test_that_passes_on_the_merge_merges(tmp_path):
+    """REQ-062 REQ-046: brief #1797 answer 4 (only `whole_tests`, green together: merged)."""
+    proc, made, _, _, _ = budget_run(tmp_path, {"budget.txt": "6\n"}, WIDER, WHOLE_ONLY)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert len(merges(made)) == 1
+
+
+def test_both_keys_hold_on_the_whole_test(tmp_path):
+    """REQ-062 REQ-046: brief #1797 answer 1 (both keys: the union in one run; the failing
+    whole test is named the same way)."""
+    setting = f'[testing]\npre_merge_tests = ["{BUDGET_TEST}"]\nwhole_tests = ["{BUDGET_TEST}"]\n'
+    proc, made, _, _, head = budget_run(tmp_path, LOWER, WIDER, setting)
+    assert one_line(proc) == f"merge-cleared #7 {head[:12]}: {TESTS_FAIL} ({BUDGET_ID})"
+    assert proc.returncode == 3 and merges(made) == []
+
+
+@pytest.mark.parametrize("value", ["'tests/kit/test_budget.py'", "[]", "[3]", '["../x.py"]',
+                                   '["/abs/test_x.py"]', '["tests/*.py"]'])  # fmt: skip
+def test_a_malformed_whole_list_is_refused_before_the_worktree(tmp_path, value):
+    """REQ-062 REQ-046: brief #1797 answers 1 and 4 (build (k)'s checker; refused naming the
+    setting, never the value, before anything runs)."""
+    setting = f"[testing]\nwhole_tests = {value}\n"
+    proc, made, ran, root, _ = budget_run(tmp_path, LOWER, WIDER, setting)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "refused:" in one_line(proc) and "setting: testing.whole_tests" in one_line(proc)
+    assert "/abs" not in one_line(proc) and "../" not in one_line(proc), "never the value"
+    assert merges(made) == [] and ran == [] and worktrees(root) == [str(root)]
+
+
+def test_a_whole_test_that_is_not_a_file_of_the_merge_holds_naming_the_setting(tmp_path):
+    """REQ-062 REQ-046: brief #1797 answers 1 and 4 (a missing name holds, naming the setting)."""
+    setting = '[testing]\nwhole_tests = ["tests/kit/test_gone.py"]\n'
+    proc, made, _, _, head = budget_run(tmp_path, {"budget.txt": "6\n"}, WIDER, setting)
+    assert one_line(proc) == (
+        f"merge-cleared #7 {head[:12]}: {TESTS_FAIL} (setting: testing.whole_tests)"
+    )
+    assert proc.returncode == 3 and merges(made) == []
+
+
+def test_without_either_key_no_test_runs_and_the_red_merge_merges(tmp_path):
+    """REQ-062 REQ-046: brief #1797 answer 2 (neither key: none, as today; the Measured line's
+    "with the list removed it merges")."""
+    proc, made, _, _, _ = budget_run(tmp_path, LOWER, WIDER, setting="[testing]\n")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert len(merges(made)) == 1
+
+
+def tree_with(tmp_path: Path, *names: str) -> Path:
+    for name in names:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("# test\n", encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("table", "names"),
+    [
+        (None, []),
+        ({}, []),
+        ({"pre_merge_tests": [BUDGET_TEST]}, [BUDGET_TEST]),
+        ({"whole_tests": [OTHER_TEST]}, [OTHER_TEST]),
+        (
+            {
+                "pre_merge_tests": [OTHER_TEST],
+                "whole_tests": [BUDGET_TEST, OTHER_TEST, BUDGET_TEST],
+            },
+            [OTHER_TEST, BUDGET_TEST],
+        ),
+    ],
+)
+def test_the_run_takes_the_union_pre_merge_tests_first_each_file_once(tmp_path, table, names):
+    """REQ-062 REQ-046: brief #1797 answers 1 and 2 and edge case 1 (neither: none; either
+    alone: that list; both: one list, `pre_merge_tests` first, a file in both once)."""
+    tree = tree_with(tmp_path, BUDGET_TEST, OTHER_TEST)
+    assert merge_cleared.merge_test_names(table, tree) == names
+
+
+def test_the_union_is_one_pytest_call(tmp_path, monkeypatch):
+    """REQ-062 REQ-046: brief #1797 answer 1 (the union in the one existing pytest call)."""
+    tree = tree_with(tmp_path / "tree", BUDGET_TEST, OTHER_TEST)
+    seen: list[list[str]] = []
+    monkeypatch.setattr(merge_cleared, "run_governance", lambda *a: None)
+    monkeypatch.setattr(merge_cleared, "run_tests", lambda r, t, h, names, w: seen.append(names))
+    monkeypatch.setattr(merge_cleared, "git_out", fake_worktree(tree))
+    table = {"pre_merge_tests": [BUDGET_TEST], "whole_tests": [OTHER_TEST, BUDGET_TEST]}
+    commit, base = "c" * 40, "b" * 40
+    assert merge_cleared.in_worktree(tmp_path, commit, base, 1.0, "", "agk-x-", pre=table) is None
+    assert seen == [[BUDGET_TEST, OTHER_TEST]]
+
+
+def fake_worktree(tree: Path):
+    """A `git_out` whose `worktree add` copies nothing: the tests read the prepared TREE."""
+
+    def git_out(root, *args):
+        if "worktree" in args and "add" in args:
+            made = Path(args[args.index("-q") + 1])
+            made.mkdir(parents=True)
+            for path in tree.rglob("*"):
+                if path.is_file():
+                    target = made / path.relative_to(tree)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(path.read_bytes())
+        return 0, ""
+
+    return git_out
+
+
+def test_a_changed_whole_list_is_judged_again():
+    """REQ-062 REQ-046: brief #1797 edge case 2 (the once-per-head result is keyed by the whole
+    `[testing]` table, ADR-0570 decision 4)."""
+    sha, base = "a" * 40, "b" * 40
+    one = {"pre_merge_tests": [BUDGET_TEST]}
+    two = {**one, "whole_tests": [OTHER_TEST]}
+    assert merge_cleared.checked_key(sha, base, "x", one, None) != merge_cleared.checked_key(
+        sha, base, "x", two, None
+    )

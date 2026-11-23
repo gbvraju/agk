@@ -70,6 +70,11 @@ them); a range, no version or no licence id is refused naming the option and the
 `stack-files` (amendment 201) writes the chosen stack's build file from `kit/templates/stacks/`,
 never over a project's own; `scripts/agk/gates/pins.py` checks it against the lock.
 
+One licence reader (brief #1785, ADR-0748): a part's licence is read by the `licences` step's
+`expression` (any SPDX id, any case). On a record that passes, `stack-check` prints a note for each
+part whose licence is off the project's list and, for a Proposed record, each refusal `stack-accept`
+would give (`accept_problems`, which the accept runs first); notes never fail the check.
+
 The discovery questions (SPEC-0048 rule 4; brief #686): `questions` prints the ten common topics,
 then the `[[discovery]]` questions of `config/playbooks/<kind>.toml`, each once: the kind is
 `--work-type`, else the declared work type; with neither the output is the ten, as before. An
@@ -103,6 +108,7 @@ from common import (
     parse_requirements,
     resolve_base,
 )
+from gates import licences
 from gates.pins import STACKS, option_parts
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
@@ -243,9 +249,6 @@ PARTS_KEY = "Parts:"  # brief #1592 (amendment 200): `<name> <exact version> <li
 ENDS = ("Why:", PARTS_KEY, SERVICES_KEY, "Practices:")
 # An exact version: two or more numeric fields and at most a pre-release or build tag, no range.
 EXACT = re.compile(r"\d+(?:\.\d+)+(?:[-+]?[A-Za-z][0-9A-Za-z.]*)?")
-# An SPDX licence id or expression (`MIT`, `Apache-2.0`, `MIT OR Apache-2.0`, `LicenseRef-x`).
-SPDX_ID = r"(?:LicenseRef-[0-9A-Za-z.-]+|[0-9A-Z][0-9A-Za-z.+-]*)"
-SPDX = re.compile(rf"{SPDX_ID}(?: (?:AND|OR|WITH) {SPDX_ID})*")
 SELECTION_LINE = re.compile(r"^(\s*-\s+test selection:\s+(?:check|judgement))\s+\(.*\)\s*$")
 
 
@@ -649,9 +652,9 @@ def parts_problems(options: list[re.Match]) -> list[str]:
         for n, (_, version, licence) in enumerate(parts, 1):
             if not EXACT.fullmatch(version):
                 out.append(f"rule 5: option {letter} part {n} has a range or no exact version")
-                if SPDX.fullmatch(version):  # the licence in the version's place
+                if licences.expression(version):  # the licence in the version's place
                     continue
-            if not SPDX.fullmatch(licence):
+            if not licences.expression(licence):  # brief #1785: the gate's one reader
                 out.append(f"rule 5: option {letter} part {n} has no licence id")
     return out
 
@@ -859,6 +862,63 @@ def runtime_notes(text: str) -> list[str]:
     ]
 
 
+def licence_notes(root: Path, text: str) -> list[str]:
+    """Brief #1785 answer 2: one note per part whose licence is off the project's list; the
+    setting is named, never the id; a list not of its form is said once by the caller."""
+    allowed = licences.allowed_list(root)
+    if allowed is None:
+        return []
+    return [
+        f"note: option {m.group(1)} part {n} licence is not on the allowed list (setting: "
+        f"{licences.SETTING}); choosing it needs a project ADR that widens the list (principle 11)"
+        for ln in text.splitlines()
+        if (m := OPTION.match(ln))
+        for n, (_, _, licence) in enumerate(option_parts(m.group(2)) or [], 1)
+        if licences.expression(licence) and not licences.passes(licence, allowed)
+    ]
+
+
+def accept_problems(root: Path, text: str, letter: str, name: str) -> list[str]:
+    """Brief #1785 answer 3: the refusals of `stack-accept` for option `letter` of the record
+    `name` that depend on the record and `agk.toml`; the accept refuses with the first, the check
+    prints each."""
+    out = []
+    if stack_problems(name, accepted_text(text, letter, "a reason")):
+        out.append(ACCEPTED_FAILS)
+    try:
+        testing_copy(root, text, letter)
+    except CheckError as exc:
+        out.append(str(exc))
+    return out
+
+
+def accepted_text(text: str, letter: str, reason: str) -> str:
+    """The record with Status Accepted and Chosen set to the option, as the accept writes it."""
+    accepted = STATUS.sub("- Status: Accepted", text, count=1)
+    return re.sub(
+        r"(?m)^(\s*3\.\s+\*\*Chosen\*\*:) none yet$",
+        lambda m: f"{m.group(1)} Option {letter} — {reason}",
+        accepted,
+        count=1,
+    )
+
+
+ACCEPTED_FAILS = "rule 5: the accepted stack ADR would fail stack-check"
+
+
+def accept_notes(root: Path, text: str, name: str) -> list[str]:
+    """Brief #1785 answer 3: for a Proposed record, each refusal the accept would give."""
+    status = STATUS.search(text)
+    if not status or status.group(1) != "Proposed":
+        return []
+    letters = [m.group(1) for m in map(OPTION.match, text.splitlines()) if m]
+    return [
+        f"note: option {x} cannot be accepted: {p}"
+        for x in letters
+        for p in accept_problems(root, text, x, name)
+    ]
+
+
 def cmd_stack_check(root: Path) -> int:
     files = sorted(
         p for p in root.glob("docs/adr/*.md") if STACK_NAME.match(p.relative_to(root).as_posix())
@@ -873,10 +933,16 @@ def cmd_stack_check(root: Path) -> int:
         print(f"FAIL engines: {problem}")
     if not problems:
         print("ok engines-stack")
+        texts = {path.name: path.read_text(encoding="utf-8") for path in files}
         if declaration(root)[0] is not None:
-            for path in files:
-                for note in runtime_notes(path.read_text(encoding="utf-8")):
+            for text in texts.values():
+                for note in runtime_notes(text):
                     print(note)
+        if licences.allowed_list(root) is None:
+            print(f"note: the allowed list is not of its form (setting: {licences.SETTING})")
+        for name, text in texts.items():
+            for note in licence_notes(root, text) + accept_notes(root, text, name):
+                print(note)
         stack = accepted_stack(root)
         if stack is not None:
             print(f"info engines: [testing] {testing_match(root, stack[1], stack[2])}")
@@ -907,15 +973,11 @@ def cmd_stack_accept(root: Path, opts: dict[str, str]) -> int:
         raise CheckError("rule 5: the stack ADR is not a Proposed record that passes stack-check")
     if letter not in [m.group(1) for m in map(OPTION.match, text.splitlines()) if m]:
         raise CheckError(f"rule 5: option {letter} is not an option of the stack ADR")
-    accepted = STATUS.sub("- Status: Accepted", text, count=1)
-    accepted = re.sub(
-        r"(?m)^(\s*3\.\s+\*\*Chosen\*\*:) none yet$",
-        lambda m: f"{m.group(1)} Option {letter} — {reason}",
-        accepted,
-        count=1,
-    )
+    for problem in accept_problems(root, text, letter, path.name):  # brief #1785: as stack-check
+        raise CheckError(problem)
+    accepted = accepted_text(text, letter, reason)
     if stack_problems(path.name, accepted):
-        raise CheckError("rule 5: the accepted stack ADR would fail stack-check")
+        raise CheckError(ACCEPTED_FAILS)
     toml = testing_copy(root, text, letter)
     adr, rel = f"ADR-{path.name[:4]}", path.relative_to(root).as_posix()
     path.write_text(accepted, encoding="utf-8")
@@ -979,10 +1041,10 @@ def testing_copy(root: Path, text: str, letter: str) -> str | None:
     paths = [
         p for p in BACKTICKED.findall(part or "") if p not in NOT_A_PATH and MAP_ARROW not in p
     ]
-    source = (root / "agk.toml").read_text(encoding="utf-8")
     try:
+        source = (root / "agk.toml").read_text(encoding="utf-8")
         old = tomllib.loads(source).get("testing", {})
-    except tomllib.TOMLDecodeError:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         raise CheckError("rule 5: agk.toml cannot be read (setting: testing)") from None
     always = list(dict.fromkeys([*old.get("always_full", []), *paths]))
     new = [f'profile = "{profile}"\n', f"always_full = {json.dumps(always)}\n"]

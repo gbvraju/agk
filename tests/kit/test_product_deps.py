@@ -273,3 +273,26 @@ def test_the_foundation_writes_the_list_once(product, capsys) -> None:
     path.write_text('allowed = ["MIT"]\n', encoding="utf-8")
     engines.cmd_stack_files(product.root)
     assert path.read_text(encoding="utf-8") == 'allowed = ["MIT"]\n'
+
+
+def test_ids_are_compared_case_folded_by_one_reader() -> None:
+    """REQ-061: brief #1785 answers 1 and 6 (one reader of an SPDX expression)."""
+    assert licences.passes("mit", frozenset({"MIT"}))
+    assert licences.passes("(LicenseRef-x OR mit)", frozenset({"MIT"}))
+    assert not licences.passes("MIT+", frozenset({"MIT"}))
+    assert not licences.passes("MIT AND blessing", frozenset({"MIT"}))
+    assert not licences.passes("see LICENSE", frozenset({"see", "LICENSE"}))
+    assert licences.ids("(MIT OR Apache-2.0) AND blessing") == ["mit", "apache-2.0", "blessing"]
+    for good in ("blessing", "curl", "MIT+", "DocumentRef-a:LicenseRef-b", "(MIT OR Apache-2.0)"):
+        assert licences.expression(good), good
+    for bad in ("", "see LICENSE", "(MIT", "MIT OR", "AND", "MIT ()"):
+        assert not licences.expression(bad), bad
+
+
+def test_a_list_holding_blessing_passes_a_record_part_blessing(product, capsys) -> None:
+    """REQ-061: brief #1785 answer 7 (the gate reads the record's real lower-case id)."""
+    record = RECORD.replace("tiny-util 2.1.0 ISC", "tiny-util 2.1.0 blessing")
+    product.commit({"docs/adr/0003-stack-options.md": record})
+    assert licences.main(["--root", str(product.root)]) == 1
+    product.commit({"config/licences.toml": 'allowed = ["MIT", "blessing"]\n'})
+    assert licences.main(["--root", str(product.root)]) == 0

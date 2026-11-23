@@ -54,6 +54,10 @@ that a selected file in no area causes, and under `full` after the full command:
 need not be part of it. A linked level whose environment is absent is a failing run that names
 `testing.links`.
 
+A `[testing] whole_tests` file that the selection adds but no `[proof]` area holds fails the step
+with one line naming `setting: testing.whole_tests` (brief #1796 answer 7), where any other
+selected file in no area makes the run full.
+
 Under `map_source = "generated"` a pull request's selection, and its links under `full`, first
 rebuild the test map when it is missing or of another tree (SPEC-0055 rule 5, brief #833).
 
@@ -113,6 +117,8 @@ NOTICE = "agk: no project_tests configured; the project runs its own tests"
 EVENT = "pull_request"
 USAGE = "usage: project_tests.py [--rerun-alone | --no-rerun-alone]"
 MAX_RERUNS = 10
+OUTSIDE = "tests: not run (in no [proof] area): "
+WHOLE_OUTSIDE = "a whole test is in no [proof] area (setting: testing.whole_tests)"
 KEPT_OPTIONS = ("-c", "-p", "-o", "--rootdir", "--confcutdir")
 NO_SETTING = "project tests: --rerun-alone needs rerun_alone = true (setting: testing.rerun_alone)"
 
@@ -296,7 +302,11 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
     areas = proof_areas(root)
     sets, notes = regression_sets(root, found, areas)
     lines = [*head, *text(found), *[n for n in notes if n not in found.map_notes]]
-    if any(n.startswith("tests: not run (in no [proof] area)") for n in notes):
+    outside = {n.rsplit(": ", 1)[-1] for n in notes if n.startswith(OUTSIDE)}
+    if outside and outside & set(found.whole):  # brief #1796 answer 7: fails, as a link does
+        failing = f"echo {shlex.quote(WHOLE_OUTSIDE)}; exit 1"
+        return [("whole", failing, ".", WHOLE_OUTSIDE)], [*lines, f"project tests: {WHOLE_OUTSIDE}"]
+    if outside:
         why = "a selected file is in no [proof] area"
         added = [s for s in sets if s[3].startswith(LINK_REASON)]  # a link only adds (rule 7)
         return [("full", project, ".", why), *added], [*lines, f"project tests: full ({why})"]

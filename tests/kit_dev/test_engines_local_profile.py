@@ -14,7 +14,14 @@ import sys
 
 import pytest
 from conftest import KIT_ROOT, clean_env, git
-from test_engines_stack import GOOD_STACK, OPTION_A, OPTION_B, engines, stack_root
+from test_engines_stack import (
+    GOOD_STACK,
+    NO_PROFILE_NOTES,
+    OPTION_A,
+    OPTION_B,
+    engines,
+    stack_root,
+)
 from test_playbook import ADR1, GOOD_CHARTER, GOOD_VISION
 from test_playbook import run as playbook_run
 from test_playbook import started as playbook_started  # noqa: F401  (the fixture of test_playbook)
@@ -164,7 +171,8 @@ def test_ac4_a_proposed_stack_gets_no_information_line(started):
     """REQ-036 AC4: brief 267 answer 2 (nothing is offered before an option is accepted)."""
     stack_root(started, GOOD_STACK.replace(OPTION_B, WITH_SERVICES))
     proc = engines(started, "stack-check")
-    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n"), proc.stdout
+    expected = "ok engines-stack\n" + NO_PROFILE_NOTES  # brief #1785: no test selection here
+    assert (proc.returncode, proc.stdout) == (0, expected), proc.stdout
 
 
 def test_ac4_a_declined_local_profile_is_decided(started):
@@ -222,7 +230,7 @@ def test_ac4_external_services_are_one_list_before_the_practices(started, option
 def test_ac4_an_option_with_external_services_before_the_practices_passes(started):
     """REQ-036 AC4: brief 267 answer 3 (the services segment is optional and checked)."""
     stack_root(started, GOOD_STACK.replace(OPTION_B, WITH_SERVICES))
-    assert engines(started, "stack-check").stdout == "ok engines-stack\n"
+    assert engines(started, "stack-check").stdout == "ok engines-stack\n" + NO_PROFILE_NOTES
 
 
 # --- answer 1: the playbook's next steps --------------------------------------------------------
@@ -318,7 +326,7 @@ def test_ac4_a_stack_drafted_from_the_template_keeps_the_practice_and_passes(sta
         "in with the stand-in identity)\n3. **Chosen**",
     )
     stack_root(started, text)
-    assert engines(started, "stack-check").stdout == "ok engines-stack\n"
+    assert engines(started, "stack-check").stdout == "ok engines-stack\n" + NO_PROFILE_NOTES
 
 
 def test_ac4_the_skill_tells_of_the_offer_and_the_decline():

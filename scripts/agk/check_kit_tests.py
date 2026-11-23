@@ -26,6 +26,11 @@ named, as a whole path, by a test file; the folder counts for the selection only
 Brief #878 (ADR-0393, SPEC-0055 rule 6 as amendment 153 proposes): an `always_full` entry that is
 not test infrastructure needs an adjacent `# full: <reason>` comment
 (`impact.always_full_problems`).
+
+Brief #1798 (ADR-0650, amendment 186 build (m)): the kit repository itself (`kit/agk-kit.mk`, the
+file governance reads to tell the kit from a project) sets a non-empty `[testing] whole_tests`; an
+absent key or table fails naming the setting, and an empty or malformed list is refused by
+`impact.testing_table` naming it. A project sets its own list or none.
 """
 
 from __future__ import annotations
@@ -61,6 +66,8 @@ PROPOSED = re.compile(r"Status:\s*Proposed\b")
 BARE_PROPOSED = re.compile(r"\s*Proposed\s*")
 ACCEPTED = re.compile(r"\bAccepted\b")
 MAP_ROOTS = ("config/", "kit/", "skills/", ".claude/")
+KIT_MAKE = "kit/agk-kit.mk"  # only the kit repository has it (governance's `Project tests` step)
+NO_WHOLE = "the kit sets no whole tests (setting: testing.whole_tests)"
 
 
 def references(source: str, stem: str) -> bool:
@@ -220,6 +227,14 @@ def map_problems(root: Path, argv: list[str] | None) -> list[str]:
     ]
 
 
+def whole_problems(root: Path) -> list[str]:
+    """Brief #1798 answer 2: the kit's own `whole_tests` is set and not empty."""
+    if not (root / KIT_MAKE).is_file():
+        return []
+    table = selection.testing_table(root)  # an empty or bad list is refused naming the setting
+    return [] if table and table.get(selection.WHOLE_KEY) else [NO_WHOLE]
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     root = repo_root()
@@ -255,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     problems += own_adr_problems(root, argv)
     problems += map_problems(root, argv)
     problems += selection.always_full_problems(root)
+    problems += whole_problems(root)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     if not problems:
