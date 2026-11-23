@@ -68,8 +68,12 @@ folders that no entry covers. Under `balanced` a file that no entry covers selec
 of the head that name its path or its folder, and the selection is full only when no test names
 it (SPEC-0055 rule 6, brief #773, ADR-0359; `unmapped: <path> -> <k> tests that name it`); a
 covered file whose entries select no existing test stays full. Under `fast` an unmapped file is
-only listed. A change of only `*.md` files and files under
-`docs/` selects nothing under every profile, and such a file is never unmapped. Without the table
+only listed. A change of only documentation selects nothing under every profile, and such a file
+is never unmapped: a file under `docs/`, or a `*.md` file that no map entry covers and no class of
+`config/protected-paths.txt` holds (brief #1792; a shipped skill or agent file is code). A test
+names a file also by a join of quoted literals, `ROOT / "a" / "b.md"`, or a `Path`,
+`PurePosixPath`, `PurePath` or `os.path.join` call of literals; a `*`, `?` or `{` part ends the
+path at its folder. Without the table
 the selection is full ("no [testing] table"), which is what governance runs today. `test_plan.py`
 shows the selection; `prepush.py` runs the selected regression tests (brief #417), and `proof.py`
 runs them on the head only with `proof_regression = true` (brief #442, off by default).
@@ -121,6 +125,8 @@ from common import (
     git,
     load_config,
     proof_areas,
+    read_list,
+    show,
 )
 
 PROFILES = ("fast", "balanced", "thorough")
@@ -206,6 +212,15 @@ PRE_MERGE_BAD = (
 PRE_MERGE_MISSING = "a pre-merge test is not a file (setting: testing.pre_merge_tests)"
 UNKNOWN_TIMING = {"source": "unknown", "total_seconds": None, "files": []}
 NAME_WORD = re.compile(r"[\w./-]+")  # a path-like word of a test file (SPEC-0055 rule 6)
+# Brief #1792: a path built in parts names a file too, as a join of quoted literals or a call of
+# `Path`, `PurePosixPath`, `PurePath` or `os.path.join` whose arguments are all quoted literals.
+_LITERAL = r"""[rRbBuUfF]{0,2}(?:"[^"\\\n]*"|'[^'\\\n]*')"""
+LITERAL = re.compile(r"""[rRbBuUfF]{0,2}(?:"([^"\\\n]*)"|'([^'\\\n]*)')""")
+JOIN = re.compile(rf"{_LITERAL}(?:\s*/\s*{_LITERAL})+")
+CALL = re.compile(
+    rf"\b(?:os\.path\.join|PurePosixPath|PurePath|Path)\(\s*({_LITERAL}(?:\s*,\s*{_LITERAL})*)\s*,?\s*\)"
+)
+PROTECTED = "config/protected-paths.txt"  # its classes hold no documentation (brief #1792)
 NAMED = "(names it)"  # the `code` of a test selected because it names the changed file
 IMPORTER = "(imports it)"  # the `code` of a test selected through a file that imports the change
 CONFIG = "agk.toml"
@@ -886,6 +901,39 @@ def is_doc(path: str) -> bool:
     return path.endswith(".md") or path.startswith("docs/")
 
 
+def doc_reader(root: Path, head: str):
+    """Brief #1792 answer 2: a `*.md` file outside `docs/` is documentation only when no map entry
+    covers it and no class of the protected-path list at HEAD holds it."""
+    table = testing_table(root)
+    globs = [e["code"] for e in map_entries(root, head, table)[0]] if table else []
+    classes = read_list(show(root, head, PROTECTED) or "")
+
+    def doc(path: str) -> bool:
+        held = any(path.startswith(c) if c.endswith("/") else path == c for c in classes)
+        code = held or any(matches(path, g) for g in globs)
+        return path.startswith("docs/") or (path.endswith(".md") and not code)
+
+    return doc
+
+
+def _joined(parts: list[str]) -> str | None:
+    """The path of a join's parts; a part with `*`, `?` or `{` ends it at the folder before it."""
+    kept: list[str] = []
+    for part in parts:
+        if any(c in part for c in "*?{"):
+            return "/".join(kept) + "/" if kept else None
+        kept += [x for x in part.split("/") if x not in ("", ".")]
+    return "/".join(kept) or None
+
+
+def joined_paths(source: str) -> set[str]:
+    """The paths a source names in parts (brief #1792 answer 1): a run of two or more quoted
+    literals joined by `/`, and a path call whose arguments are all quoted literals."""
+    runs = [m.group(0) for m in JOIN.finditer(source)] + [m.group(1) for m in CALL.finditer(source)]
+    found = (_joined([a or b for a, b in LITERAL.findall(run)]) for run in runs)
+    return {p for p in found if p}
+
+
 def in_test_dirs(path: str, dirs: list[str]) -> bool:
     return any(d.strip("/") in ("", ".") or path.startswith(d.strip("/") + "/") for d in dirs)
 
@@ -934,7 +982,7 @@ def name_index(root: Path, head: str, tests: list[str]) -> dict[str, set[str]]:
     with the test files that hold it."""
     index: dict[str, set[str]] = {}
     for test, source in _blobs(root, head, tests):
-        for word in set(NAME_WORD.findall(source)):
+        for word in set(NAME_WORD.findall(source)) | joined_paths(source):
             word = word.removeprefix("./").rstrip(".")
             index.setdefault(word, set()).add(test)
             parts = word.split("/")
@@ -966,6 +1014,7 @@ def uncovered(root: Path, head: str = "HEAD") -> list[str]:
     files = head_files(root, head)
     index = name_index(root, head, [p for p in files if is_test_file(p, dirs, patterns)])
     globs = [e["code"] for e in map_entries(root, head, table)[0]] + table["always_full"]
+    is_doc = doc_reader(root, head)
     return [
         p
         for p in files
@@ -1051,6 +1100,7 @@ def select(root: Path, base: str, head: str) -> Impact:
     profile = table["profile"]
     changed = changed_files(root, base, head)
     hit = next(((g, p) for p in changed for g in table["always_full"] if matches(p, g)), None)
+    is_doc = doc_reader(root, head)
     if changed and not hit and all(is_doc(p) for p in changed):
         return Impact(True, profile, False, None, docs_only=True)
     cfg = load_config(root)

@@ -13,6 +13,7 @@ files under `docs/` selects nothing under every profile. `test_plan.py` prints t
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import impact
 import pytest
@@ -449,3 +450,85 @@ def test_an_agk_toml_that_does_not_parse_keeps_todays_rule(repo, end):
     found = result(repo)
     assert [(s.test, s.code) for s in found.selected] == [("tests/test_config.py", impact.NAMED)]
     assert found.named == {"agk.toml": 1}
+
+
+# Brief #1792: a path built in parts is a name, and a shipped Markdown file is not documentation.
+JOIN_TEST = (
+    "from pathlib import Path\n"
+    "ROOT = Path(__file__).resolve().parents[1]\n"
+    'SKILL = ROOT / "skills" / "x" / "SKILL.md"\n'
+    'RATES = ROOT / "app" / "data" / "rates.json"\n'
+)
+JOIN_FILES = {
+    "guides/x.md": "# guide\n",
+    "skills/x/SKILL.md": "# skill\n",
+    "app/data/rates.json": "{}\n",
+    "tests/test_join.py": JOIN_TEST,
+    "config/protected-paths.txt": "# classes\nskills/\ndocs/requirements.md\n",
+    "docs/requirements.md": "# requirements\n",
+}
+
+
+def start_joins(repo, body: str = MAP) -> None:
+    toml = BASE_TOML + "project_tests = 'exit 0'\n" + table_text(body=body)
+    repo.commit({"agk.toml": toml, **BASE_FILES, **JOIN_FILES}, "base")
+    repo.branch("feature")
+
+
+@pytest.mark.parametrize("path", ["skills/x/SKILL.md", "app/data/rates.json"])
+def test_a_test_that_reads_a_file_by_a_literal_join_is_selected_by_its_change(repo, path):
+    """REQ-062: brief #1792 answers 1 and 2 (a join of quoted literals names the file)."""
+    start_joins(repo)
+    change(repo, path)
+    found = result(repo)
+    assert found.docs_only is False and found.full is False
+    assert [(s.test, s.code) for s in found.selected] == [("tests/test_join.py", impact.NAMED)]
+    assert found.named == {path: 1}
+
+
+def test_a_mapped_markdown_file_is_code_and_selects_its_entry(repo):
+    """REQ-062: brief #1792 answer 2 (a mapped `*.md` outside docs/ is not documentation)."""
+    guides = '  { code = "guides/**", tests = ["tests/test_smoke.py"] },\n'
+    body = MAP.replace("map = [\n", "map = [\n" + guides)
+    start_joins(repo, body)
+    change(repo, "guides/x.md")
+    found = result(repo)
+    assert found.docs_only is False and found.full is False
+    assert [s.test for s in found.selected] == ["tests/test_smoke.py"]
+
+
+@pytest.mark.parametrize("path", ["docs/guide.md", "docs/requirements.md", "README.md"])
+def test_documentation_stays_documentation(repo, path):
+    """REQ-062: brief #1792 answers 2 and 5 (docs/ and an unmapped, unprotected `*.md`)."""
+    start_joins(repo)
+    change(repo, path)
+    found = result(repo)
+    assert found.docs_only is True and found.selected == [] and found.full is False
+
+
+@pytest.mark.parametrize(
+    ("source", "paths"),
+    [
+        ('os.path.join("a", "b.md")', {"a/b.md"}),
+        ("Path('a', 'b.md')", {"a/b.md"}),
+        ('PurePosixPath("a/b", "c.txt")', {"a/b/c.txt"}),
+        ('ROOT / "kit" / "skills" / "*" / "SKILL.md"', {"kit/skills/"}),
+        ('ROOT / "a" / name / "SKILL.md"', set()),  # one literal before the variable: no join
+        ('ROOT / "a" / "b" / name / "c.md"', {"a/b"}),
+        ('os.path.join(ROOT, "a", "b.md")', set()),  # an argument that is not a literal
+        ('x = "a" + "b"', set()),
+    ],
+)
+def test_the_paths_a_join_names(source, paths):
+    """REQ-062: brief #1792 answers 1 and 5 (joins, calls, globs and variable parts)."""
+    assert impact.joined_paths(source) == paths
+
+
+def test_the_replay_of_the_upgrade_skill_change_selects_its_test():
+    """REQ-062: brief #1792 answer 6 (the replay of #1773 on the kit's own history)."""
+    root = Path(__file__).resolve().parents[2]
+    base, head = "ee47218b", "11255059"
+    if impact.git(root, "cat-file", "-t", head, check=False).strip() != "commit":
+        pytest.skip("the replayed commits are not in this clone")
+    found = impact.select(root, base, head)
+    assert found.full or "tests/kit/test_upgrade_adr.py" in [s.test for s in found.selected]
