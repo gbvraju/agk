@@ -41,7 +41,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_names.py" batch FILE
 
 Before the brief is checked, study it (brief #1800, ADR-0752). Print the earlier record its `Touches:` and `Wiring:`
 lines meet (ADRs, specs, unapplied amendments and overlapping open briefs), read each one, and fill the brief's
-`Impact:` block (`Speed:`, `Quality:`, `GitHub:`, `Cost:`, `Tests:`), `Wiring:`, `Prior:` and `Class:` lines:
+`Impact:` block (`Speed:`, `Quality:`, `GitHub:`, `Cost:`, `Tests:`), `Wiring:`, `Prior:` and `Class:` lines.
+Each candidate ends `strong` or `weak`, the strong ones first (brief #1819); `Prior:` names the records of the same kind,
+each with why, and never lists records read and found unrelated. The check warns for at most ten strong ones:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/brief_study.py" BRIEF --root .

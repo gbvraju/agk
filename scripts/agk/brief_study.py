@@ -11,7 +11,10 @@ text names a code path of `Touches:` (a `.py` file also by its file name), a `Wi
 `Wiring:` function as `<module>.<function>`; each proposed amendment under `DIR/docs/runs/` that
 names one and that its spec does not yet name (`amendment <n>`); and each open brief of the
 plan's read cache, or of the saved list `--open-briefs FILE`, whose code paths in `Touches:` meet
-this one's.
+this one's. Each line ends `strong` or `weak` (brief #1819): a hit is strong when a full code path
+or a `Wiring:` `<module>.<function>` stands in the record's header (every line before the first
+`## `) or its `## Decision` section (the whole record when it has none); strong records come first,
+ranked by the distinct strong terms they name, then the newer number.
 `agk.toml` and `kit/hashes.json`, which nearly every change touches, are no search term. Without
 the cache the open-brief part prints `briefs: not read (no plan cache)`.
 
@@ -23,8 +26,9 @@ functions (a `def`, a `class` or a top-level name) exist under the root, or `Wir
 searched>`; and one `Class: <kind>; seen <n> ...` line, where `seen` above 0 needs an answer item
 headed `**The class stays closed.**`. Until `STUDY_FAILS_FROM` (none set: Q-1800-1) they are
 warnings, from it failures; a `Priority: 0` brief is held only to `Class:` and `Prior:`, and the
-router's own red-branch brief to none. An Accepted ADR or an open brief the study finds and
-`Prior:` leaves out is always a warning. Reads files and the cache only: no network, no model.
+router's own red-branch brief to none. An open brief the study finds and `Prior:` leaves out is
+always a warning, and so are the first `PRIOR_WARNINGS` strong Accepted ADRs it leaves out, with
+one line counting the rest. Reads files and the cache only: no network, no model.
 """
 
 from __future__ import annotations
@@ -66,6 +70,10 @@ REFS = (
 STATUS = re.compile(r"^- Status:\s*(\w+)", re.M)
 AMENDMENT = re.compile(r"proposed-spec-amendments-(\d+)\.md")
 SPEC_OF = re.compile(r"\bSPEC-(\d{4})\b")
+# Brief #1819 answer 2: the Accepted ADRs warned at most, strongest first (one constant, Q-F11-1).
+PRIOR_WARNINGS = 10
+SECTION = re.compile(r"^## ", re.M)
+DECISION = re.compile(r"^## Decision\b.*$", re.M)
 
 
 def enforced(today: str | None) -> bool:
@@ -171,11 +179,34 @@ def code_terms(body: str) -> list[str]:
     return list(dict.fromkeys(terms))
 
 
+def _named(text: str, terms: list[str]) -> list[str]:
+    return [t for t in terms if re.search(rf"(?<![\w/.-]){re.escape(t)}(?![\w-])", text)]
+
+
 def _names(text: str, terms: list[str]) -> str | None:
-    for term in terms:
-        if re.search(rf"(?<![\w/.-]){re.escape(term)}(?![\w-])", text):
-            return term
-    return None
+    found = _named(text, terms)
+    return found[0] if found else None
+
+
+def strong_terms(body: str) -> list[str]:
+    """The terms whose hit is strong (brief #1819 answer 1): full code paths and the `Wiring:`
+    `<module>.<function>` names; a bare file name is weak."""
+    terms = code_terms(body)
+    return [t for t in terms if "/" in t or not t.endswith(".py")]
+
+
+def strong_text(text: str) -> str:
+    """The places a strong hit is read: the header (every line before the first `## `) and the
+    `## Decision` section; a record with no `## Decision` heading is read whole (answer 7)."""
+    decision = DECISION.search(text)
+    if decision is None:
+        return text
+    first = SECTION.search(text)
+    end = SECTION.search(text, decision.end())
+    return (
+        text[: first.start() if first else 0]
+        + text[decision.start() : end.start() if end else None]
+    )
 
 
 def _code(path: str) -> bool:
@@ -202,37 +233,55 @@ def _read(path: Path) -> str:
 
 
 def candidates(body: str, root: Path, briefs: list[dict] | None, number: int | None = None):
-    """(kind, ref, status, why) of each record to read; briefs None means no cache was read."""
-    terms = code_terms(body)
-    found: list[tuple[str, str, str, str]] = []
+    """(kind, ref, status, why, strength) of each record to read, strong records first ranked by
+    the distinct strong terms they name, then the newer number, then the open briefs, then the
+    weak records; briefs None means no cache was read."""
+    terms, strong = code_terms(body), strong_terms(body)
+    ranked: list[tuple[int, int, tuple[str, str, str, str, str]]] = []
+    weak: list[tuple[str, str, str, str, str]] = []
+
+    def add(kind: str, ref: str, status: str, text: str, hits: list[str], num: int) -> None:
+        sure = _named(strong_text(text), [t for t in hits if t in strong])
+        if sure:
+            ranked.append((-len(sure), -num, (kind, ref, status, sure[0], "strong")))
+        else:
+            weak.append((kind, ref, status, hits[0], "weak"))
+
     for kind, folder, label in (("adr", "docs/adr", "ADR-{}"), ("spec", "docs/specs", "SPEC-{}")):
         for path in sorted((root / folder).glob("[0-9][0-9][0-9][0-9]-*.md")):
             text = _read(path)
-            term = _names(text, terms) if terms else None
-            if term:
+            hits = _named(text, terms) if terms else []
+            if hits:
                 status = STATUS.search(text)
                 ref = label.format(path.name[:4])
-                found.append((kind, ref, status.group(1) if status else "unknown", term))
+                add(
+                    kind,
+                    ref,
+                    status.group(1) if status else "unknown",
+                    text,
+                    hits,
+                    int(path.name[:4]),
+                )
     specs = root / "docs" / "specs"
     for path in sorted((root / "docs" / "runs").glob("proposed-spec-amendments-*.md")):
         match = AMENDMENT.fullmatch(path.name)
         text = _read(path)
-        term = _names(text, terms) if match and terms else None
-        spec = SPEC_OF.search(text.split("\n", 1)[0]) if term else None
-        if match is None or not term or spec is None:
+        hits = _named(text, terms) if match and terms else []
+        spec = SPEC_OF.search(text.split("\n", 1)[0]) if hits else None
+        if match is None or not hits or spec is None:
             continue
         spec_text = "".join(_read(p) for p in specs.glob(f"{spec.group(1)}-*.md"))
         if not re.search(rf"\b[Aa]mendments? {match.group(1)}\b", spec_text):
-            found.append(
-                ("amendment", f"amendment {match.group(1)}", f"SPEC-{spec.group(1)}", term)
-            )
+            ref = f"amendment {match.group(1)}"
+            add("amendment", ref, f"SPEC-{spec.group(1)}", text, hits, int(match.group(1)))
+    found = [entry for _, _, entry in sorted(ranked, key=lambda r: (r[0], r[1]))]
     mine = [t.strip() for t in touches_of(body) if _code(t.strip())]
     for issue in briefs or []:
         other = [t.strip() for t in touches_of(str(issue.get("body") or "")) if _code(t.strip())]
         hit = next((t for t in mine for o in other if _meet(t, o)), None)
         if hit and issue.get("number") != number:
-            found.append(("brief", f"brief #{issue.get('number')}", "open", hit))
-    return found
+            found.append(("brief", f"brief #{issue.get('number')}", "open", hit, "strong"))
+    return found + weak
 
 
 def held(body: str) -> tuple[bool, bool]:
@@ -260,12 +309,24 @@ def study_result(
     prior = _one(lines, "Prior:") or ""
     if briefs is None:
         briefs = plan_names.cached_issues(root)
-    left = [
-        f"study: Prior leaves out {ref} ({status}), which names {why}"
-        for kind, ref, status, why in candidates(body, root, briefs, number)
-        if (kind == "adr" and status == "Accepted") or kind == "brief"
+    found = candidates(body, root, briefs, number)
+    out = [
+        (kind, ref, status, why)
+        for kind, ref, status, why, strength in found
+        if (kind == "adr" and status == "Accepted" and strength == "strong") or kind == "brief"
         if not re.search(rf"{re.escape(ref)}(?!\d)", prior)
     ]
+    adrs = [x for x in out if x[0] == "adr"]
+    kept = adrs[:PRIOR_WARNINGS] + [x for x in out if x[0] == "brief"]
+    left = [
+        f"study: Prior leaves out {ref} ({status}), which names {why}"
+        for _, ref, status, why in kept
+    ]
+    if len(adrs) > PRIOR_WARNINGS:
+        left.append(
+            f"study: Prior: {len(adrs) - PRIOR_WARNINGS} more candidates not warned;"
+            " brief_study.py <file> --root . lists them"
+        )
     if enforced(today):
         return problems, left
     return [], problems + left
@@ -305,9 +366,9 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, UnicodeDecodeError) as exc:
             raise CheckError("the brief file cannot be read") from exc
         briefs = open_briefs(saved, root)
-        for kind, ref, status, why in candidates(body, root, briefs):
+        for kind, ref, status, why, strength in candidates(body, root, briefs):
             detail = f"{status}, not in the spec" if kind == "amendment" else status
-            print(f"{ref} ({detail}): names {why}")
+            print(f"{ref} ({detail}): names {why}; {strength}")
         if briefs is None:
             print("briefs: not read (no plan cache)")
         return 0

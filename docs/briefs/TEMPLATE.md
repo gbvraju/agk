@@ -24,7 +24,8 @@ A test never pins its own ADR's status: a test of an ADR that the same pull requ
   - Cost: e.g. none for Actions: the check is file-only in the existing job
   - Tests: e.g. one new test file; no change to the selection or the full run
 - Wiring: e.g. scripts/agk/check_brief.py:main called by skills/brief/SKILL.md (or `none: <reason>`)
-- Prior: e.g. ADR-0650 (Accepted), amendment 186 (or `none: <what was searched>`; `brief_study.py` lists the candidates)
+- Prior: e.g. ADR-0650 (Accepted, the same rule), amendment 186 (or `none: <what was searched>`; `brief_study.py` lists
+  the candidates, strong first); only the records of the same kind, with why, never the ones read and found unrelated
 - Class: e.g. a check broken by a script that prints before utf8_output; seen 2 times (#1581, #1627); seen above 0
   needs an Answers item headed **The class stays closed.** naming its guard
 
