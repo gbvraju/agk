@@ -254,5 +254,7 @@ def test_req037_an_owner_size_ask_the_ruling_accepts_is_refused(monkeypatch):
         "refused: the size is accepted by the standing ruling (ADR-0583); post no owner "
         "question (setting: Size:)"
     )
-    other = "Owner needed: amendment 218 needs your yes.\n"
+    other = (
+        "Owner needed: amendment 218 needs your yes.\n\nMaintainer answer: amendment 218 approved\n"
+    )
     assert conductor.full_problem("o/r", 1762, other) is None

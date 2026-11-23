@@ -2086,7 +2086,9 @@ def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
     `check-verdict --pr` and the guard run before a post, the reviewer's gate last (ADR-0528). A
     read that fails is a CheckError."""
     if body.strip().startswith("Owner needed:"):
-        return size_ask_problem(repo, number, body, root)
+        return size_ask_problem(repo, number, body, root) or closing_problem(
+            repo, number, body, root
+        )
     problem = line_problem(body)
     if problem or not body.strip().startswith("Verdict:"):
         return problem
@@ -2152,6 +2154,27 @@ def size_ask_problem(repo: str, number: int, body: str, root) -> str | None:
     ]
     accepted = size_of(repo, number, pull, said[-1] if said else None, root)[2]
     return f"{rules.SIZE_ASK} {SIZE_SETTING}" if accepted else None
+
+
+CLOSING_REFUSED = "refused: an Owner needed: names no line that closes it (setting: Owner needed:)"
+
+
+def closing_problem(repo: str, number: int, body: str, root) -> str | None:
+    """Brief #1784 answer 2 (ADR-0747): an `Owner needed:` holding no line that closes an item it
+    opens (`session.closing_line`, read by `open_owner_items`), or an approval line of its own."""
+    from route import APPROVAL_LINE  # route imports merge_cleared, which this module imports
+
+    lines = {line.strip() for line in body.splitlines()[1:]}
+    if any(APPROVAL_LINE.fullmatch(line) for line in lines):
+        return None
+    pull = {**read_one(f"repos/{repo}/pulls/{number}", "the pull request"), "number": number}
+    notes = list(read(f"repos/{repo}/issues/{number}/comments", "the comments of the pull request"))
+    people = session.owner_people(root if root is not None else repo_root(), pull)
+    ask = {"id": 1 << 62, "user": {"login": min(people[0], default="")}, "body": body,
+           "created_at": datetime.now(UTC).strftime(TIME)}  # fmt: skip
+    found = session.open_owner_items(pull, [*notes, ask], *people)
+    wanted = {session.closing_line(key, pull, [*notes, ask]) for key in found}
+    return None if not found or lines & wanted else CLOSING_REFUSED
 
 
 RENAME = re.compile(r"\brename\s+`?([^\s`]+?)`?\s+to\s+`?([^\s`]+?)`?(?=[\s,;:)]|\.(?:\s|$)|$)")
