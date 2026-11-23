@@ -8,7 +8,9 @@
 
 Protected classes this pull request changes: `scripts/agk/` (`run_gates.py`, `gates/node_pack.py`,
 `gates/python_pack.py`, `doctor.py`) and `tests/kit/` (`test_adopt_first_run.py`, `test_gate_baseline.py`,
-`test_node_pack.py`, `test_python_pack.py`, `test_personal_gate.py`). `kit/hashes.json` is not edited by hand.
+`test_node_pack.py`, `test_python_pack.py`, `test_personal_gate.py`) and `agk.toml` (the new test file in the
+`[[testing.map]]` entries of `scripts/agk/gates/*.py`, `run_gates.py` and both packs). `kit/hashes.json` is not edited by
+hand.
 
 ## Context
 
