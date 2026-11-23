@@ -65,6 +65,9 @@ def project(
     (root / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
     shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
     (root / "config" / "reviewers.yaml").write_text(people, encoding="utf-8")
+    shutil.copy(  # brief #1829: stack-write reads the project's own list
+        KIT_ROOT / "kit" / "templates" / "protected-paths.txt", root / "config" / "protected-paths.txt"
+    )
     (root / "agk.toml").write_text(toml, encoding="utf-8")
     for n, kind in enumerate(kinds, 1):
         path = root / "docs" / "discovery" / f"idea-{n}.md"
@@ -303,3 +306,24 @@ def test_req045_stack_write_is_unchanged_otherwise(env, toml, kinds):
     proc = stack_write(root)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert list((root / "docs" / "adr").glob("*-stack-options.md"))
+
+
+@pytest.mark.parametrize(
+    ("mode", "listing", "line"),
+    [
+        ("init", "protected-paths.txt", "`agk.toml`"),
+        ("adopt", "protected-paths.adopt.txt", "`agk.toml`, `config/`, `config/agk-baseline/`"),
+    ],
+)
+def test_req036_the_record_names_the_classes_its_change_meets(env, mode, listing, line):
+    """REQ-036: brief #1829 answer 3, in an adopted project also the folders its new gates'
+    baselines are written to, from the project's own list."""
+    tmp, _ = env
+    root = project(tmp, SOLO.replace("\n", f'\nmode = "{mode}"\n', 1))
+    shutil.copy(KIT_ROOT / "kit" / "templates" / listing, root / "config" / "protected-paths.txt")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--allow-empty", "-m", "the list")
+    propose(root)
+    assert yes(tmp, root)[0] == 0
+    text = (root / "docs" / "adr" / "0002-work-type.md").read_text(encoding="utf-8")
+    assert f"\nProtected classes: {line}\n" in text

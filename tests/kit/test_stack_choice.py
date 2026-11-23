@@ -105,13 +105,16 @@ def project(
     (tmp / "agk.toml").write_text(head + toml, encoding="utf-8")
     if text is not None:
         (tmp / STACK).write_text(text, encoding="utf-8")
-    if commit:
-        git(tmp, "init", "-q", "-b", "main")
-        git(tmp, "config", "user.email", "builder@example.com")
-        git(tmp, "config", "user.name", "Builder")
-        git(tmp, "add", "-A")
-        git(tmp, "commit", "-q", "-m", "start")
-        git(tmp, "checkout", "-q", "-b", "stack/accept")
+    return start(tmp) if commit else tmp
+
+
+def start(tmp: Path) -> Path:
+    git(tmp, "init", "-q", "-b", "main")
+    git(tmp, "config", "user.email", "builder@example.com")
+    git(tmp, "config", "user.name", "Builder")
+    git(tmp, "add", "-A")
+    git(tmp, "commit", "-q", "-m", "start")
+    git(tmp, "checkout", "-q", "-b", "stack/accept")
     return tmp
 
 
@@ -295,16 +298,14 @@ def test_stack_write_names_the_classes_of_the_project_list(tmp_path, mode, listi
     root = project(tmp_path, None, mode=mode, listing=listing or "protected-paths.txt")
     path = root / "config" / "protected-paths.txt"
     path.write_text(("" if listing is None else path.read_text("utf-8")) + extra, "utf-8")
-    git(root, "init", "-q", "-b", "main")
-    proc = engines(root, "stack-write", "--ref", "main", "--date", "2026-11-23")
+    proc = engines(start(root), "stack-write", "--ref", "main", "--date", "2026-11-23")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert classes_line(root) == f"Protected classes: {line}"
 
 
 def test_stack_write_refuses_an_unreadable_list_and_writes_nothing(tmp_path):
     """REQ-036: brief #1829 answer 1, the refusal names the class, never a value."""
-    root = project(tmp_path, None, listing=None)
-    git(root, "init", "-q", "-b", "main")
+    root = start(project(tmp_path, None, listing=None))
     proc = engines(root, "stack-write", "--ref", "main", "--date", "2026-11-23")
     assert proc.returncode == 1
     assert "rule 5: the protected path list cannot be read (path class config/)" in proc.stdout
