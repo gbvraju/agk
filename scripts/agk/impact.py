@@ -95,7 +95,9 @@ merge (brief #1648). A project without that test selects nothing by this rule.
 Under `balanced`, a file added under `scripts/agk/` (a renamed one is added at its new path; not
 documentation, not a test file) also selects the tests of `every_script_tests`, a list of existing
 test files, empty without the key, printed `(new script) <path>` (brief #1651, ADR-0698): the tests
-that read every kit script by a glob, which no map entry of a new script names yet.
+that read every kit script by a glob, which no map entry of a new script names yet. The key is
+retired (brief #1812, ADR-0755): it still selects as before for one release and
+`run_folder_deprecation` gives its line; the kit lists such tests in `whole_tests`.
 
 `whole_tests` (brief #1796, ADR-0650, amendment 186 rule 6a) is an optional, non-empty list of test
 files, each a file of the tree (relative, forward slashes, no glob character); a bad one is refused
@@ -178,6 +180,10 @@ DEFAULT_SHARE = 0.5  # brief #980
 DEFAULT_KEEP_RUNS = 20
 RUN_FOLDER_KEYS = ("results_dir", "keep_passed", "keep_runs")  # retired (SPEC-0046 rule 11)
 RUN_FOLDER_DEPRECATED = "deprecated: testing.results_dir (ADR-0303)"
+EVERY_SCRIPT_DEPRECATED = (  # retired (brief #1812, ADR-0755); the next release refuses it
+    "deprecated: testing.every_script_tests (ADR-0755): list its files in testing.whole_tests, "
+    "or remove it; the next release refuses it"
+)
 PR_TESTS = ("full", "selected")
 LOCAL_FULL = ("local", "ci")  # `[testing] local_full` (brief #1031, ADR-0440)
 SMOKE_KINDS = ("frontend", "contract")  # SPEC-0044 rule 8
@@ -802,13 +808,16 @@ def rerun_alone(root: Path) -> bool:
 
 
 def run_folder_deprecation(root: Path) -> str | None:
-    """SPEC-0046 rule 11: the deprecation line when `[testing]` sets one of the retired run-folder
-    keys, None otherwise. The whole table is checked first, so a malformed key is still refused
-    (CheckError) naming the setting."""
+    """SPEC-0046 rule 11 and ADR-0755: the deprecation line when `[testing]` sets one of the retired
+    run-folder keys or `every_script_tests` (an empty list too), the two parts joined by `; `,
+    run-folder first; None otherwise. The whole table is checked first, so a malformed key is
+    still refused (CheckError) naming the setting."""
     if testing_table(root) is None:
         return None
     table = config_source(root)["testing"]
-    return RUN_FOLDER_DEPRECATED if any(k in table for k in RUN_FOLDER_KEYS) else None
+    parts = [RUN_FOLDER_DEPRECATED] if any(k in table for k in RUN_FOLDER_KEYS) else []
+    parts += [EVERY_SCRIPT_DEPRECATED] if EVERY_SCRIPT in table else []
+    return "; ".join(parts) or None
 
 
 def durations_sums(output: str) -> dict[str, float] | None:

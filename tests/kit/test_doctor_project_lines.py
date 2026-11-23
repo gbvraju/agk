@@ -149,3 +149,22 @@ def test_doctor_prints_the_count_in_its_report(tmp_path):
     (root / "agk.toml").write_text(toml, encoding="utf-8")
     proc = doctor("--api-dir", str(dirs["api"]), "--kit-root", str(dirs["kit"]), str(root))
     assert "tests: whole tests 1" in proc.stdout, proc.stdout
+
+
+# Brief #1812 (ADR-0755): doctor prints the retired key's line in its report.
+RETIRED = "deprecated: testing.every_script_tests (ADR-0755)"
+
+
+def test_doctor_prints_the_retired_key_line_in_its_report(tmp_path):
+    """REQ-062: brief #1812 answer 3 (doctor's line when the key is set, none without)."""
+    dirs = init_target(tmp_path, BLOCK)
+    root = dirs["root"]
+    (root / "tests").mkdir(exist_ok=True)
+    (root / "tests" / "test_w.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    args = ("--api-dir", str(dirs["api"]), "--kit-root", str(dirs["kit"]), str(root))
+    toml = 'mode = "init"\nversion = "9.9.9"\n[testing]\n'
+    every = 'every_script_tests = ["tests/test_w.py"]\n'
+    (root / "agk.toml").write_text(toml + every, encoding="utf-8")
+    assert doctor(*args).stdout.count(RETIRED) == 1
+    (root / "agk.toml").write_text(toml + 'profile = "fast"\n', encoding="utf-8")
+    assert RETIRED not in doctor(*args).stdout

@@ -134,8 +134,6 @@ workers = "auto"
 full_when_share = 0.5
 # The owner's direction of 2026-11-11 ("file it"): a full run only for an always_full file runs the mapped tests here and leaves the full suite to CI: in the kit governance's `Tests of the checks` step, in a project its `Project tests` step (brief #1031, ADR-0440; brief #1798). Where no CI proof job runs, the full suite runs here (SPEC-0055 rule 6b).
 local_full = "ci"
-# An added kit script also runs the tests that read every kit script by a glob (brief #1651, ADR-0698).
-every_script_tests = ["tests/kit/test_isolated_mode.py", "tests/kit/test_installed_imports.py", "tests/kit/test_core_contradictions.py"]
 # The whole tests (brief #1798, ADR-0650, SPEC-0055 rule 6a): each reads every file of a class and asserts one rule over
 # all of them, so every pull request that is not documentation only runs them. A new whole test joins this list in the
 # pull request that adds it; each line names the class it reads after `# whole:`.

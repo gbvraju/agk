@@ -239,3 +239,28 @@ def test_the_kits_own_list_is_set_each_file_exists_with_a_whole_reason():
         entry, _, reason = line.partition("# whole:")
         assert entry.strip().strip(",").strip('"') in listed, line
         assert reason.strip(), line
+
+
+# Brief #1812 (ADR-0755): the kit never sets the retired `every_script_tests` again.
+RETIRED_KEY = f'every_script_tests = ["{WHOLE}"]\n'
+
+
+def test_the_kit_that_sets_the_retired_key_fails_naming_the_setting(repo):
+    """REQ-062: brief #1812 answers 1 and 7 (the kit, `[]` too)."""
+    for value in (RETIRED_KEY, "every_script_tests = []\n"):
+        the_kit(repo, f'whole_tests = ["{WHOLE}"]\n' + value)
+        proc = repo.run("check_kit_tests.py")
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert (
+            "FAIL kit-tests: the kit sets a retired key (setting: testing.every_script_tests)"
+            in proc.stdout
+        )
+
+
+def test_a_project_that_sets_the_retired_key_passes(repo):
+    """REQ-062: brief #1812 answer 2 (a project keeps the key for one release)."""
+    kit(repo, 'repo.run("check_new.py")\n')
+    toml = 'default_branch = "main"\n[testing]\n' + RETIRED_KEY
+    repo.commit({"agk.toml": toml, WHOLE: "def test_w():\n    assert True\n"})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
