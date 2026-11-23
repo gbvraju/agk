@@ -98,9 +98,10 @@ list it in `[testing] whole_tests` (SPEC-0055 rule 6a): every change that is not
 kit's 16 files take about 50 s on two workers), so list only tests that read a whole class. The list never covers a
 changed file and never makes a run full. The kit never fills a project's list: it stays empty until the project sets one,
 and `python3 scripts/agk/doctor.py` prints `tests: whole tests <n>` once it does.
-The older `[testing] every_script_tests` is retired (ADR-0755): it still runs its files when a change adds a kit
-script, and doctor, prepush and the `Project tests` step print `deprecated: testing.every_script_tests`; move its files
-into `whole_tests` and remove the key before the next release, which refuses it.
+The older `[testing] every_script_tests` is retired (ADR-0755) and refused: prepush, the `Project tests` step and the
+test plan stop naming `(setting: testing.every_script_tests)`, whatever its value, an empty list too. Move its files
+into `whole_tests` and delete the key. An upgrade names the key first (`retired-key agk.toml
+testing.every_script_tests`) and never moves the files for you.
 
 ## A map per module
 
