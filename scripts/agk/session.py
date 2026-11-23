@@ -4412,13 +4412,15 @@ AGREED = re.compile(r"does not block|not blocking", re.IGNORECASE)
 
 def agreed_not_blocking(qid: str, verdict: str, head: str, carried=None) -> bool:
     """Brief #1784 answer 4: whether the newest verdict VERDICT, on HEAD (or on a head whose
-    change `carried` holds to HEAD), names QID with `does not block` or `not blocking`."""
+    change `carried` holds to HEAD), names QID with `does not block` or `not blocking` on its
+    `Answers:` line; no other line counts."""
     found = VERDICT.match(first_line({"body": verdict}))
     if found is None or not head:
         return False
     if not head.startswith(found.group(2)) and not carries(carried, found.group(2), head):
         return False
-    return any(qid in line and AGREED.search(line) for line in verdict.splitlines()[1:])
+    answers = [x.strip() for x in verdict.splitlines()[1:] if x.strip().startswith("Answers:")]
+    return any(qid in line and AGREED.search(line) for line in answers)
 
 
 def closing_line(key: str, pr: dict, comments: Sequence[dict] = ()) -> str:

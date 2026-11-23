@@ -32,7 +32,8 @@ data): "Yes, brief the size-accept and non-blocking-park fix".
    with the `ask-lines` line, verbatim, on its own line.
 3. A non-blocking question has one form, `Question: Q-<id> for the maintainers (not blocking): <text>`, named in the
    builder's role file. `open_owner_items` keys it `nb:<Q-id>` only while the newest verdict by a listed author on
-   the current head names that Q id with `does not block` or `not blocking` on its `Answers:` line; otherwise it is
+   the current head (or on an older head whose change `carried` holds to it, decision 5; `Q-1784-2`) names that Q id
+   with `does not block` or `not blocking` on its `Answers:` line, no other line; otherwise it is
    an ordinary question keyed by its Q id and parks as today. A builder alone never exempts its own question.
 4. `owner_step` never parks for an `nb:` item and never hands over for one; it stays listed by `ask-lines` and by
    every reader of `open_owner_items` until answered. A park this rule wrote for a question that is now `nb:` is

@@ -1244,8 +1244,8 @@ def at_time(cid: int, when: str, body: str) -> dict:
 
 def test_1784_replay_1773_parks_nothing():
     """REQ-037: brief #1784 Measured: #1773's question (in the not-blocking form), both verdicts'
-    agreement, and the merge of main that moved the head: no park at 20:05Z, nor after the third
-    verdict, which says it on its `Passed:` line."""
+    agreement, and the merge of main that moved the head: no park at 20:05Z, nor after a third
+    verdict that says it on its `Answers:` line; on a `Passed:` line the same words park."""
     pr = {**pull(), "head": {"sha": H1773}}
     said = [
         at_time(1, "2026-11-22T19:26:44Z", "Question: Q-1759-1 for the maintainers (not blocking): "
@@ -1264,9 +1264,13 @@ def test_1784_replay_1773_parks_nothing():
         return session_mod.owner_step(pr, comments, PLAIN, now, LISTED, ANSWERERS, carried=carried)
 
     assert owner(said, park_at) is None
-    third = at_time(4, "2026-11-22T20:10:51Z", f"Verdict: fix list {H1773}\nPassed: 7 rules; "
-                    "Q-1759-1 stays with the maintainers and does not block.")  # fmt: skip
+    third = at_time(4, "2026-11-22T20:10:51Z", f"Verdict: fix list {H1773}\nPassed: 7 rules\n"
+                    "Answers: Q-1759-1 stays with the maintainers and does not block.")  # fmt: skip
     assert owner([*said, third], park_at + timedelta(minutes=10)) is None
+    passed = at_time(4, "2026-11-22T20:10:51Z", f"Verdict: fix list {H1773}\nPassed: 7 rules; "
+                     "Q-1759-1 stays with the maintainers and does not block.")  # fmt: skip
+    later = park_at + timedelta(minutes=10)  # the same words on a `Passed:` line exempt nothing
+    assert owner([*said, passed], later) == ("park", "Q-1759-1")
     plain = session_mod.owner_step(pr, said, PLAIN, park_at, LISTED, ANSWERERS)
     assert plain == ("park", "Q-1759-1")  # without the carry the old head's verdict is not read
 
