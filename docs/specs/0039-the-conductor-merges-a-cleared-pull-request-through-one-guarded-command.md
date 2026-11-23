@@ -61,6 +61,14 @@ REQ-046 AC1: *auto-merge is off unless the owner turns it on, and it means the s
 - 2026-11-03: in local mode the evidence the command reads is the conductor's `Evidence check:` line; it does not re-run the evidence check itself, so it is as good as the conductor's run (due 2026-12-31).
 - 2026-11-03: a merge cleared while the conductor is not running waits until its next review pass; with no pass, nothing merges (the safe side) (due 2026-12-31).
 
+## Contexts
+
+- kit (`merge_cleared.py`, installed in every project, runs `[testing] pre_merge_tests` and `whole_tests` on the would-be merge, each file once (amendment 187))
+- github (no workflow, ruleset or required-check change; the merge check runs only on the guarded path with `[flow] auto_merge` on, and a forge-button merge skips it and the list, as it skips `pre_merge_tests` (`Q-1548-7`) (amendment 187))
+- local (the run is the project's last before its default branch: no CI push run in local mode (amendment 187))
+- personal (not applicable: `forge = "files"` has no merge check; the floor runs the whole `test_command` (amendment 187))
+- stacks (the entries are a project's own test file paths, posix paths for any stack (amendment 187))
+
 ## Open questions
 
 Each is a point the brief or the ruling leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules.

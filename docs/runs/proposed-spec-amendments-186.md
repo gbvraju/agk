@@ -171,3 +171,7 @@ once it is Accepted, and a Settings section:
 - Q-1548-9 (new, this writer's): the brief names its builds (a) to (c); SPEC-0055 rule 15 already uses (a) to (j), so
   this proposal letters them (k) to (m) and keeps the brief's letters beside them. The reading: the maintainers may keep
   either; the build briefs cite both.
+
+## Applied
+
+2026-11-23 (from `date -u`), brief #1798 (amendment 186 build (m)): items 1 to 8 (item 1 to rule 2, item 2 as rule 6a, item 3 as rule 6b, item 4 as builds (k) to (m) of rule 15, items 5 to 7 to its Tests, Proof and Residual sections, item 8 as its new `## Contexts` section); item 9's table is the trace of the settings and adds no text, applied to `docs/specs/0055-the-right-tests-for-each-stack-run-at-the-right-time-by-a-map-that-learns.md` word for word, each line marked `(amendment 186)`, on the maintainer's answer on #1549 (comment 7016265488, 2026-11-19).

@@ -77,3 +77,7 @@ table (`checked_key`), so a changed list is judged again.
 
 The questions are those of amendment 186 (`Q-1548-1` to `Q-1548-10`); this amendment relies on `Q-1548-4` (both lists
 stay, each file once) and `Q-1548-7` (a button merge skips the list, unchanged here).
+
+## Applied
+
+2026-11-23 (from `date -u`), brief #1798 (amendment 186 build (m)): items 1 (to rule 6, after its `(amendment 132)` sentence), 3 (rule 11), 4 (build (l) under rule 12), 5 (Tests) and 6 (Proof); items 2 and 7 change nothing and add no text, and the `## Contexts` section amendment 142 asks of an amended Approved spec is written from item 7's table, applied to `docs/specs/0039-the-conductor-merges-a-cleared-pull-request-through-one-guarded-command.md` word for word, each line marked `(amendment 187)`, on the maintainer's answer on #1549 (comment 7016270397, 2026-11-19).

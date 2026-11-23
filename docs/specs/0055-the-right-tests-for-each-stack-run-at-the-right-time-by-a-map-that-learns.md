@@ -133,11 +133,11 @@ REQ-062 AC1: *nothing changes for a repository that sets nothing but the one nar
 
 ## Contexts
 
-- `kit`: `[testing] whole_tests` in `impact.py`, read by `prepush.py`, `project_tests.py`, `test_plan.py`, `doctor.py` and the merge check, all installed in every project, and the kit's own list in `agk.toml` (amendment 186)
-- `github`: no workflow, ruleset or required-check change: `Tests of the checks` and `Project tests` already run the plan; the list adds files to it; no new GitHub API call (amendment 186)
-- `local`: prepush and the merge check run the list in the builder's and the conductor's checkouts, LF and CRLF alike; rule 6b closes the gap of `local_full = "ci"` where no CI proof job runs (amendment 186)
-- `personal`: unchanged: the floor runs the whole test command (amendment 186)
-- `stacks`: the list holds a project's own test file paths, for any stack, run through its `[proof]` areas (amendment 186)
+- kit (`[testing] whole_tests` in `impact.py`, read by `prepush.py`, `project_tests.py`, `test_plan.py`, `doctor.py` and the merge check, all installed in every project, and the kit's own list in `agk.toml` (amendment 186))
+- github (no workflow, ruleset or required-check change: `Tests of the checks` and `Project tests` already run the plan; the list adds files to it; no new GitHub API call (amendment 186))
+- local (prepush and the merge check run the list in the builder's and the conductor's checkouts, LF and CRLF alike; rule 6b closes the gap of `local_full = "ci"` where no CI proof job runs (amendment 186))
+- personal (unchanged: the floor runs the whole test command (amendment 186))
+- stacks (the list holds a project's own test file paths, for any stack, run through its `[proof]` areas (amendment 186))
 
 ## Open questions
 
