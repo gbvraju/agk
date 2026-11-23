@@ -58,3 +58,5 @@ changes the pull request's own diff expects none.
 
 - 2026-11-23: in personal mode (`forge = "files"`) no park or label exists; `ask-lines` reads GitHub only, and its
   reading of the sidecar's records is asked as `Q-1784-1`.
+- 2026-11-23: `steward.py refresh` and the conductor's hourly report do not read `open_owner_items`, so an `nb:` item
+  is listed by `ask-lines` (and stays in the pull request's `Questions:`) but not there yet; a later brief may add it.
