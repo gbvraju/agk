@@ -90,6 +90,9 @@ reviews_in_flight = 9
 # A brief's size limits its code paths (amendment 168 of SPEC-0030 rule 4, brief #1121, ADR-0479): `Size: S` names at most S
 # and `Size: M` at most M `Touches:` entries outside tests/, docs/, changelog.d/ and kit/hashes.json; the kit defaults. A change needs an ADR.
 brief_code_paths = { S = 3, M = 6 }
+# The day a brief filed without its study lines is refused (brief #1815, ADR-0757, Q-B2-1): the later of 14 days after
+# brief #1813 merged and 7 days after its pull request, never before 2026-12-14; unset, they only warn. A change needs an ADR.
+brief_study_fails_from = "2026-12-14"
 # The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; merge-queue refuses while another holds it (ADR-0353).
 plan_issue = 661
 # The conductor lapse (brief #1615, amendment 212 of SPEC-0039, ADR-0684): in local mode the merger's sweep merges a cleared head, with

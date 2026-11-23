@@ -197,10 +197,13 @@ def test_ac4_a_red_branch_brief_is_held_only_to_class_and_prior(tmp_path):
     assert len(failed) == 2
 
 
-def test_ac4_the_routers_own_red_brief_is_not_held(tmp_path):
-    """REQ-037 AC4"""
+def test_ac4_the_routers_pair_is_held_to_class_and_prior(tmp_path):
+    """REQ-037 AC4 (brief #1815 answer 5: held as any `Priority: 0` brief)"""
     body = SHAPE.replace("Advances: new", "Advances: none").replace("Priority: 1", "Priority: 0")
-    assert result(body, tree(tmp_path)) == ([], [])
+    root = tree(tmp_path)
+    failed, _ = result(body, root)
+    assert len(failed) == 2 and "Prior:" in failed[0] and "Class:" in failed[1], failed
+    assert result(body + PRIOR + CLASS, root) == ([], [])
 
 
 def test_ac4_without_root_the_study_is_not_read(tmp_path):

@@ -1422,6 +1422,9 @@ def red_body(name: str, sha: str, url: str) -> str:
         f"Runbook: {RED_RUNBOOK}\n"
         "Priority: 0\nAdvances: none\nTouches: **\nSize: S\n"
         "Broad: a red default branch can start in any file\n"
+        "Prior: none: the router writes this brief from the failing check; the fix's own brief"
+        " searches the record\n"
+        "Class: a red default branch; seen 0 (counted by the fix's own brief, not by the router)\n"
     )
 
 

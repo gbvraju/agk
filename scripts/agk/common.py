@@ -14,7 +14,7 @@ import sys
 import tempfile
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # brief #1449: imports reviewers
@@ -946,6 +946,12 @@ DEFAULT_CONFIG = {
     "review_mode": "team",
     "minutes_warn": 80,
 }
+
+
+def utc_day() -> str:
+    """Today's UTC date as `YYYY-MM-DD`: the clock a check's caller passes on as `today` (brief
+    #1815, ADR-0757), so the check itself never reads it."""
+    return datetime.now(UTC).date().isoformat()
 
 
 def config_source(root: Path) -> dict:
