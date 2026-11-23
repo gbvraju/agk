@@ -192,15 +192,18 @@ def test_ac1_the_shade_is_the_first_step_that_passes_in_each_mode():
     assert not design_brand.passes(design_brand.mix("#b5562b", "dark", 16), "dark")
 
 
-def test_ac1_a_colour_that_passes_is_written_as_given_with_no_proposal(tmp_path):
-    """REQ-044 AC1: SPEC-0037 rule 2 (a shade only when the colour fails)."""
+def test_ac1_a_colour_that_passes_a_mode_is_written_as_given_there_with_no_proposal(tmp_path):
+    """REQ-044 AC1: SPEC-0037 rule 2 (a shade only in the mode where the colour fails)."""
     root = imported(tmp_path / "proj", answer="name: Example Studio; primary: #1a56db")
     proc = theme(root)
     assert proc.returncode == 0, proc.stdout
-    assert proc.stdout.splitlines() == [f"wrote {THEME}"]
-    light, _ = block(text(root))
-    assert light["--color-accent"] == "#1a56db"
-    assert PROPOSAL not in text(root)
+    assert proc.stdout.splitlines() == [f"wrote {THEME}", ASK.replace("too light", "too dark")]
+    written = text(root)
+    light, dark = block(written)
+    assert (light["--color-accent"], light["--color-on-accent"]) == ("#1a56db", "#ffffff")
+    assert dark["--color-accent"] != "#1a56db"
+    assert written.count(PROPOSAL) == 1
+    assert written.index(PROPOSAL) > written.index("@media")
 
 
 def test_ac1_a_colour_no_shade_can_pass_is_written_and_the_check_still_fails(
@@ -470,7 +473,7 @@ def test_ac1_only_the_two_writers_write_the_theme_and_both_fill_it_from_discover
 
 def test_ac1_every_kind_of_signed_off_version_is_accepted_as_evidence():
     """REQ-044 AC1: brief #1840 answer 5 (`EVIDENCE` and `folder_of` know the same kinds)."""
-    accepted = set(re.findall(r"(\w+)/\(", check_design.EVIDENCE.pattern)) - {"mockups"}
+    accepted = set(re.findall(r"(\w+)/\((?!\?)", check_design.EVIDENCE.pattern)) - {"mockups"}
     kinds = {design_signoff.folder_of(v).split("/")[-2] for v in ("v1", "i1")}
     assert accepted == kinds
     for version in ("v1", "i1"):
