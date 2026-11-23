@@ -164,12 +164,14 @@ def test_req079_ac2_no_contract_yet_is_not_run_never_ok(tmp_path, capsys):
 def test_req055_an_adopted_contract_in_another_format_is_green(tmp_path, capsys):
     """REQ-055: `mode = "adopt"` keeps a contract in another format; nothing existing is red."""
     root = _project(tmp_path, mode="adopt")
+    _write(root, "backend/routes.py", "import json\n")  # brief #1842: the code is in a layer
     (root / "contracts" / "openapi.json").unlink()
     _write(root, "contracts/openapi.yaml", "openapi: 3.0.0\ninfo:\n  title: Studio bookings\n")
     code, out = _gates(root, capsys)
     assert code == 0, out
     assert "not run contract-tests" in out and "not run mock-parity" in out
     root = _project(tmp_path / "old", mode="adopt")
+    _write(root, "backend/routes.py", "import json\n")
     _write(root, "contracts/openapi.json", json.dumps(_contract("3.0.3")))
     code, out = _gates(root, capsys)
     assert code == 0 and "not run contract-tests: a contract in another format" in out, out

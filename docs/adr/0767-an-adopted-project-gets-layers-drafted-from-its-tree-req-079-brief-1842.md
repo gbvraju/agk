@@ -8,7 +8,8 @@
 
 Protected classes this pull request changes: `scripts/agk/` (`gates/layers.py`, `run_gates.py`, `front_door.py`,
 `steward_owner.py`), `skills/` (`adopt/SKILL.md`) and `tests/kit/` (`test_layers_draft.py`, `test_layers_step.py`,
-`test_architecture_record.py`, `test_front_door_derive.py`, `test_standard_confirm.py`). The repository's own
+`test_architecture_record.py`, `test_front_door_derive.py`, `test_standard_confirm.py`, and the adopted fixture of
+`test_contracts.py`, which now holds one file in a layer). The repository's own
 `agk.toml` gains three `[testing] map` entries for the new test file (ruled on #1846). `kit/hashes.json` is not edited
 by hand.
 

@@ -127,10 +127,10 @@ def test_req079_the_draft_writes_nothing(tmp_path, capsys) -> None:
     """REQ-079: `git status` is clean after the draft."""
     root = project(tmp_path)
     git = ["git", "-C", str(root)]
-    subprocess.run([*git, "init", "-q"], check=True)  # nosec B603 B607 - fixed list
+    subprocess.run([*git, "init", "-q"], check=True)  # nosec B603 - fixed list
 
     def status() -> str:
-        return subprocess.run(  # nosec B603 B607 - fixed list
+        return subprocess.run(  # nosec B603 - fixed list
             [*git, "status", "--porcelain", "--untracked-files=all"],
             capture_output=True,
             text=True,
