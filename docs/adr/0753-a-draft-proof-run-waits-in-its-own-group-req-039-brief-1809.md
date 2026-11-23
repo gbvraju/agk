@@ -38,3 +38,8 @@ request is turned back into a draft and pushed, the draft run no longer cancels 
 head; that run ends on its own head, which the router's latest-head reading supersedes: one extra run's minutes at
 most. The installed `proof.yml` changes its group line; its hash in `kit/hashes.json` changes by the maintainers'
 shared-mechanical step (session rule 14), never by this build.
+
+## Residual
+
+- 2026-11-23: the guard reads the job-level `if:` and the top-level `concurrency:` only; a workflow that skips a draft
+  in a step, or sets `concurrency:` on a job, is not read by it (none does today).

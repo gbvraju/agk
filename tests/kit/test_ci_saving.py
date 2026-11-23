@@ -299,7 +299,8 @@ def holds(condition: str, github: dict, variables: dict | None = None) -> bool:
     """A job-level `if:` of these workflows, evaluated on one event (a test reading, not GitHub);
     VARIABLES are the repository variables `vars.<NAME>` reads (brief #1554), none by default, and
     `cancelled()` is false (the run was not cancelled)."""
-    return bool(evaluate(condition.strip().removeprefix("${{").removesuffix("}}"), github, variables))
+    expression = condition.strip().removeprefix("${{").removesuffix("}}")
+    return bool(evaluate(expression, github, variables))
 
 
 def evaluate(expression: str, github: dict, variables: dict | None = None):
@@ -591,7 +592,9 @@ def test_a_merge_queue_run_keeps_its_own_group_and_is_never_cancelled():
 def test_the_draft_skip_of_proof_is_unchanged():
     """REQ-039: brief #1809 answer 2 (a draft still starts no proof job, brief #369)."""
     (condition,) = job_conditions(workflow("proof.yml"))
-    assert condition == "${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}"
+    assert condition == (
+        "${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}"
+    )
 
 
 INVENTED = """name: example
