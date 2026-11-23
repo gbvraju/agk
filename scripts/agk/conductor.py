@@ -2085,6 +2085,8 @@ def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
     """`line_problem`, then for a verdict the reads of pull request NUMBER: the check that
     `check-verdict --pr` and the guard run before a post, the reviewer's gate last (ADR-0528). A
     read that fails is a CheckError."""
+    if body.strip().startswith("Owner needed:"):
+        return size_ask_problem(repo, number, body, root)
     problem = line_problem(body)
     if problem or not body.strip().startswith("Verdict:"):
         return problem
@@ -2095,7 +2097,61 @@ def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
     named = session.VERDICT.fullmatch(body.strip().splitlines()[0].strip())
     if named is None or not head.startswith(named.group(2)):
         return OTHER_HEAD
-    return head_problem(repo, number, body, head) or gate_problem(root, repo, number, head, body)
+    return (
+        head_problem(repo, number, body, head)
+        or size_problem(repo, number, pull, body, root)
+        or gate_problem(root, repo, number, head, body)
+    )
+
+
+SIZE_LENS = re.compile(r"(?m)^\s*(?:-\s*)?Size:\s*(.*)$")
+SIZE_SETTING = "(setting: Size:)"
+
+
+def size_of(repo: str, number: int, pull: dict, verdict: str | None, root):
+    """(line, counted, accepted) of `rules.py size` for pull request NUMBER (brief #1788)."""
+    import rules  # noqa: PLC0415 - read only for a size line or a size ask
+
+    files = read(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
+    found = re.search(r"(?m)^Brief: #(\d+)", str(pull.get("body") or ""))
+    brief = read_one(f"repos/{repo}/issues/{found.group(1)}", "the brief") if found else {}
+    base = Path(root) if root is not None else repo_root()
+    return rules.size_line(pull, files, str(brief.get("body") or ""), verdict, base)
+
+
+def size_problem(repo: str, number: int, pull: dict, body: str, root) -> str | None:
+    """Brief #1788 answer 4: a `Size:` lens line that states another count than `rules.py size`,
+    or says `accepted by standing ruling` when the ruling does not accept."""
+    lens = SIZE_LENS.search(body)
+    if lens is None:
+        return None
+    line, counted, accepted = size_of(repo, number, pull, body, root)
+    stated = re.search(r"\d+", lens.group(1))
+    if counted is not None and (stated is None or int(stated.group(0)) != counted):
+        return (
+            f"brief #1788 answer 4: state the size as `rules.py size` does: {line} {SIZE_SETTING}"
+        )
+    if "accepted by standing ruling" in lens.group(1) and not accepted:
+        return f"brief #1788 answer 4: the standing ruling does not accept: {line} {SIZE_SETTING}"
+    return None
+
+
+def size_ask_problem(repo: str, number: int, body: str, root) -> str | None:
+    """Brief #1788 answer 4: an `Owner needed:` that asks about a size the ruling accepts."""
+    import rules  # noqa: PLC0415 - read only for an owner ask
+
+    if not re.search(r"\bsize\b", body, re.I):
+        return None
+    pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
+    notes = read(f"repos/{repo}/issues/{number}/comments", "the comments of the pull request")
+    allowed = listed(root if root is not None else repo_root()) if notes else set()
+    said = [
+        str(c.get("body") or "")
+        for c in notes
+        if session.VERDICT.fullmatch(session.first_line(c)) and session.author_of(c) in allowed
+    ]
+    accepted = size_of(repo, number, pull, said[-1] if said else None, root)[2]
+    return f"{rules.SIZE_ASK} {SIZE_SETTING}" if accepted else None
 
 
 RENAME = re.compile(r"\brename\s+`?([^\s`]+?)`?\s+to\s+`?([^\s`]+?)`?(?=[\s,;:)]|\.(?:\s|$)|$)")

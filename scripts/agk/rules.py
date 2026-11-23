@@ -9,6 +9,7 @@ ADR-0404). Installed in projects.
     python3 rules.py dropped --since YYYY-MM-DD [--root DIR] [--repo OWNER/REPO] [--api-dir DIR]
     python3 rules.py consolidate --plan [--root DIR] [--since DATE] [--repo O/R] [--api-dir DIR]
     python3 rules.py consolidate --apply --hash HASH [--root DIR]
+    python3 rules.py size --pr N [--root DIR] [--repo OWNER/REPO] [--api-dir DIR]
 
 The instruction files are `[rules] files` in `agk.toml` (paths or globs, in order); without it, the
 four core files, every file under `.claude/agents/` and `config/review-checklist.md`.
@@ -17,6 +18,8 @@ four core files, every file under `.claude/agents/` and `config/review-checklist
 numbered or bulleted line outside the front matter and fenced code. With `--check` it compares the
 counts with `config/rule-budget.txt` and exits 1 on any difference, naming the file. `size_ruling`
 and `budget_ruling` state the owner's two standing rulings (ADR-0583) for the conductor's verdicts.
+`size --pr N` (GET only) prints the one size line of ruling 1 from `size_count` (changed lines, the
+records a brief requires left out, ADR-0749) and `size_guide`, and `records: <n> lines not counted`.
 
 `dropped` reads, with `gh api` GET only or from recorded responses (`--api-dir`: `pulls.json` and
 `comments-<n>.json`), the open and merged pull requests updated since DATE, and counts the numbered
@@ -85,7 +88,8 @@ USAGE = (
     "usage: rules.py budget [--root DIR] [--check] | "
     "rules.py dropped --since YYYY-MM-DD [--root DIR] [--repo OWNER/REPO] [--api-dir DIR] | "
     "rules.py consolidate --plan [--root DIR] [--since YYYY-MM-DD] [--repo O/R] [--api-dir DIR] | "
-    "rules.py consolidate --apply --hash HASH [--root DIR]"
+    "rules.py consolidate --apply --hash HASH [--root DIR] | "
+    "rules.py size --pr N [--root DIR] [--repo OWNER/REPO] [--api-dir DIR]"
 )
 
 
@@ -204,12 +208,130 @@ def size_ruling(changed: int, guide: int | None, findings: int) -> str | None:
     return f"Size: {changed} of {guide}, accepted by standing ruling ({STANDING})"
 
 
+# The records a brief requires, left out of the size count (brief #1788, ADR-0749).
+RECORDS = re.compile(
+    r"tests/.+|docs/adr/[^/]+\.md|docs/runs/proposed-spec-amendments-[^/]+\.md|changelog\.d/.+"
+)
+SIZE_GUIDE = re.compile(r"\babout (\d+) changed lines\b")
+FILES_LIMIT = 3000  # GitHub lists at most this many files of a pull request
+NOT_FINDING = re.compile(
+    r"\bmerge (?:of )?(?:origin/)?main\b|\bre-?prove\b|\bevidence record\b", re.I
+)
+SIZE_ASK = "refused: the size is accepted by the standing ruling (ADR-0583); post no owner question"
+
+
+def size_count(files: list) -> tuple[int, int]:
+    """(counted, records): the changed lines of each file; a file with no line counts 0."""
+    counted = records = 0
+    for f in files:
+        n = int(f.get("additions") or 0) + int(f.get("deletions") or 0)
+        if RECORDS.fullmatch(str(f.get("filename") or "")):
+            records += n
+        else:
+            counted += n
+    return counted, records
+
+
+def size_guide(brief_body: str | None) -> int | None:
+    """The `about <n> changed lines` of the brief's `Plan:` line, else None (the ruling's 300)."""
+    for line in (brief_body or "").splitlines():
+        if line.startswith("Plan:"):
+            found = SIZE_GUIDE.search(line)
+            return int(found.group(1)) if found else None
+    return None
+
+
+def size_findings(verdict: str | None) -> int:
+    """The verdict's numbered items that ask for more than a merge of main, a re-prove or an
+    evidence record (Q-F4-1); a rejected verdict is one finding."""
+    text = (verdict or "").strip()
+    if text.startswith("Verdict: rejected"):
+        return 1
+    return sum(
+        1
+        for item in fix_items(text)
+        if item_tag(item) != "config/session-rules.md 30" and not NOT_FINDING.search(item)
+    )
+
+
+def size_withdrawn(root: Path) -> bool:
+    """Whether ADR-0583 is withdrawn: its file is not Accepted, or an Accepted ADR withdraws it."""
+    for path in sorted((root / "docs" / "adr").glob("[0-9]*.md")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        accepted = "- Status: Accepted" in lines
+        if path.name.startswith("0583-") and not accepted:
+            return True
+        if accepted and f"- Withdraws: {STANDING}" in lines:
+            return True
+    return False
+
+
+def size_line(pull: dict, files: list | None, brief: str | None, verdict: str | None, root: Path):
+    """(line, counted or None, accepted): the one size line of pull request PULL."""
+    guide = size_guide(brief) or 300
+    if (
+        files is None
+        or len(files) >= FILES_LIMIT
+        or len(files) < int(pull.get("changed_files") or 0)
+    ):
+        return f"Size: unknown of {guide} ({FILES_LIMIT} files or more): ask the owner", None, False
+    counted = size_count(files)[0]
+    if size_withdrawn(root):
+        ask = ": ask the owner" if counted > guide else ""
+        return f"Size: {counted} of {guide}, no standing ruling{ask}", counted, False
+    line = size_ruling(counted, guide, size_findings(verdict))
+    if line:
+        return line, counted, True
+    return (
+        f"Size: {counted} of {guide}, over the standing ruling ({STANDING}): ask the owner",
+        counted,
+        False,
+    )
+
+
 def budget_ruling(rel: str, old: int, new: int, old_rules: int, new_rules: int) -> str | None:
     """Ruling 2: words up to ten percent over the baseline with no new rule line need no ruling;
     None means the owner is asked as before."""
     if new_rules > old_rules or new * 10 > old * 11:
         return None
     return f"Rule budget: {rel} {old} to {new} words, standing ruling ({STANDING})"
+
+
+def size(root: Path, number: int, repo: str | None, api: str | None) -> int:
+    """`rules.py size --pr N` (GET only): the size line and the records not counted."""
+    if isinstance(config_source(root).get("personal"), dict):
+        print("not run: personal mode")
+        return 0
+    src = ApiDir(Path(api)) if api else Gh(repo or origin_repo())
+    pull = src.get(f"pull-{number}", f"repos/{{repo}}/pulls/{number}")
+    notes = src.get(f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
+    if not isinstance(pull, dict) or not isinstance(notes, list):
+        print(f"size: unknown (pull request #{number} cannot be read)")
+        return 1
+    files = src.get(f"files-{number}", f"repos/{{repo}}/pulls/{number}/files")
+    found = re.search(r"(?m)^Brief: #(\d+)", str(pull.get("body") or ""))
+    brief = (
+        src.get(f"brief-{found.group(1)}", f"repos/{{repo}}/issues/{found.group(1)}")
+        if found
+        else None
+    )
+    authors = {a.lstrip("@").lower() for a in verdict_authors(root) or []}
+    said = [
+        str(c.get("body") or "")
+        for c in notes
+        if author_of(c) in authors and str(c.get("body") or "").startswith("Verdict:")
+    ]
+    line, _, _ = size_line(
+        pull,
+        files if isinstance(files, list) else None,
+        str((brief or {}).get("body") or "") if isinstance(brief, dict) else None,
+        said[-1] if said else None,
+        root,
+    )
+    print(line)
+    if isinstance(files, list):
+        print(f"records: {size_count(files)[1]} lines not counted")
+    return 0
 
 
 def budget(root: Path, check: bool) -> int:
@@ -564,7 +686,7 @@ def consolidate_apply(root: Path, wanted: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = sys.argv[1:] if argv is None else argv
-    if not args or args[0] not in ("budget", "dropped", "consolidate"):
+    if not args or args[0] not in ("budget", "dropped", "consolidate", "size"):
         print(USAGE)
         return 2
     command, rest = args[0], args[1:]
@@ -572,11 +694,13 @@ def main(argv: list[str] | None = None) -> int:
         "budget": {"--check"},
         "dropped": set(),
         "consolidate": {"--plan", "--apply"},
+        "size": set(),
     }[command]
     valued = {"--root"} | {
         "budget": set(),
         "dropped": {"--since", "--repo", "--api-dir"},
         "consolidate": {"--since", "--repo", "--api-dir", "--hash"},
+        "size": {"--pr", "--repo", "--api-dir"},
     }[command]
     opts: dict[str, str] = {}
     i = 0
@@ -596,6 +720,11 @@ def main(argv: list[str] | None = None) -> int:
             return budget(root, "--check" in opts)
         if command == "consolidate":
             return consolidate(root, opts)
+        if command == "size":
+            if not opts.get("--pr", "").isdigit():
+                print(USAGE)
+                return 2
+            return size(root, int(opts["--pr"]), opts.get("--repo"), opts.get("--api-dir"))
         if not DATE.fullmatch(opts.get("--since", "")):
             print(USAGE)
             return 2
