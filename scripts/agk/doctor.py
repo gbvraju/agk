@@ -2950,6 +2950,33 @@ def held_secret_lines(root: Path) -> list[str]:
     return [HELD_SECRETS.format(n=len(held), files="file" if len(held) == 1 else "files")]
 
 
+HELD_FLOOR = (
+    "warn standards: the project's own {stack} configuration leaves {n} of the pack's rules or"
+    " compiler options off; turn them on, or keep one off with an ADR, then lower it with"
+    " run_gates.py --baseline (setting: standards.config)"
+)
+IDLE_PACK = "warn standards: the {stack} pack reads no file (setting: project_lint_paths)"
+
+
+def held_floor_lines(root: Path) -> list[str]:
+    """Brief #1837 (ADR-0766): one warn line per floor baseline file that holds a line, and one
+    per pack that is on and reads no file; never a file, a rule or a value; no exit code."""
+    import run_gates  # noqa: PLC0415 - only these lines need the runner
+    from gates import baseline  # noqa: PLC0415
+
+    out = []
+    try:
+        for file in sorted((root / baseline.FOLDER).glob("standards-*-floor.txt")):
+            n = sum(baseline.parse(file.read_text(encoding="utf-8")).values())
+            stack = file.stem.removeprefix("standards-").removesuffix("-floor")
+            if n:
+                out.append(HELD_FLOOR.format(stack=stack.removesuffix("-type"), n=n))
+        out += [IDLE_PACK.format(stack=s) for s in run_gates.idle_packs(root)]
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return out
+    return out
+
+
 def _count(n: int) -> str:
     return f"{n} problem" if n == 1 else f"{n} problems"
 
@@ -3175,6 +3202,7 @@ def main(argv: list[str] | None = None) -> int:
         skills += work_type_discovery_lines(root.resolve())
         skills += standards_lines(root.resolve())
         skills += held_secret_lines(root.resolve())
+        skills += held_floor_lines(root.resolve())
         design = design_import_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")

@@ -457,8 +457,8 @@ def test_req_048_the_gate_writes_nothing_in_the_clone_or_its_git_folder(tmp_path
 def test_req_079_a_held_floor_row_is_no_personal_floor_failure(tmp_path, monkeypatch):
     """REQ-079: brief #1837 (the head tree's committed floor baseline; nothing posted)."""
     import personal  # noqa: PLC0415
-    import run_gates  # noqa: PLC0415
 
+    run_gates = personal.run_gates  # the runner's rows are stood in: it does not run here
     held = "standards node floor (baseline): 1 held (setting: standards.config)"
     idle = "standards node: no product file in scope (setting: project_lint_paths)"
     rows = [(run_gates.HELD, held), (None, idle), (True, "secrets")]

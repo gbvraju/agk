@@ -28,7 +28,11 @@ Each tool is the product's own pinned copy in `node_modules/.bin/` (its exact `d
 which the pins gate holds), run with an argument list and never a shell, `npx` or a download. A
 tool that is missing fails naming the tool, the setting and `npm ci`, never a version. A failure
 names the rule id (or the format) and the path class, never a file name or a value (principle 8).
-With a `tally` dict, `run` fills `{step: {file: count}}` for `lint`, `format` and `type` (rule 7).
+With a `tally` dict, `run` fills `{step: {file: count}}` for `lint`, `format` and `type` (rule 7),
+and for `floor` and `type-floor` the count of their lines per configuration read (the entry's
+`config`; each compiler config), an unreadable one counting 1 (brief #1837, ADR-0766). While that
+floor is held for an unreadable configuration the runner does not run `NEEDS_CONFIG` (`lint`).
+With no product file in scope no step runs: `run` returns `(NO_FILE, [])`.
 """
 
 from __future__ import annotations
@@ -48,7 +52,7 @@ from common import CheckError, load_config  # noqa: E402
 from config import PROJECT_LINT  # noqa: E402
 
 from . import pins  # noqa: E402
-from .python_pack import patterns  # noqa: E402,F401 - the one reading of the product's globs
+from .python_pack import NO_FILE, patterns  # noqa: E402,F401 - the one reading of the globs
 
 STACKS = ("node",)
 STEP_NAMES = ("node-lint", "node-format", "node-type")
@@ -66,6 +70,9 @@ SKIPPED = "the type step is skipped: no TypeScript file"
 RULE_ID = re.compile(r"^(?:@?[a-z0-9-]+/)?[a-z][a-z0-9-]*$")
 IGNORED = "File ignored"
 OFF = ("off", 0)
+UNREADABLE = "the pack's configuration is unreadable"
+NEEDS_CONFIG = ("lint",)  # brief #1837: not run while the floor holds an unreadable configuration
+CONFIG_HELD = "the pack's configuration is held (setting: standards.config)"
 
 Tally = dict[str, int]
 
@@ -129,7 +136,7 @@ def floor(root: Path, entry: dict[str, Any], found: list[tuple[str, str]]) -> li
             rules = data["rules"]
             break
     if rules is None:
-        return [f"{FLOOR}: the pack's configuration is unreadable (setting: standards.config)"]
+        return [f"{FLOOR}: {UNREADABLE} (setting: standards.config)"]
     out = []
     for code in entry.get("rules", {}).get("codes", []):
         if not _on(rules.get(code, "off")):
@@ -260,19 +267,26 @@ def configs(root: Path) -> list[tuple[Path, str]]:
     return out
 
 
-def type_floor(root: Path) -> list[str]:
-    """Rule 8: each compiler option of each config that is not at strict, named, never a value."""
+def type_floor(root: Path, tally: Tally | None = None) -> list[str]:
+    """Rule 8: each compiler option of each config that is not at strict, named, never a value;
+    TALLY gets the count per config (brief #1837)."""
+    tally = {} if tally is None else tally
     if not (root / TSCONFIG).is_file():
+        tally[TSCONFIG] = 1
         return [f"{FLOOR}: the compiler configuration is missing (path class: {TSCONFIG})"]
     out = []
     for path, cls in configs(root):
         opts = options(root, path)
+        rel = path.relative_to(root).as_posix()
         if opts is None:
+            tally[rel] = 1
             out.append(f"{FLOOR}: the compiler configuration is unreadable (path class: {cls})")
             continue
         weak = ([] if opts.get("strict") is True else ["strict"]) + [
             o for o in STRICT_OFF if opts.get(o) is False
         ]
+        if weak:
+            tally[rel] = len(weak)
         out += [
             f"{FLOOR}: the configuration weakens the compiler option {o} (path class: {cls})"
             for o in weak
@@ -326,17 +340,22 @@ def run(
     if gone:
         return [("tools", gone)]
     if not found:
-        return []
-    own: dict[str, Tally] = {"lint": {}, "format": {}, "type": {}}
+        return [(NO_FILE, [])]
+    lines = floor(root, entry, found)
+    own: dict[str, Tally] = {"floor": {str(entry.get("config")): len(lines)} if lines else {}}
+    own.update(lint={}, format={}, type={}, **{"type-floor": {}})
     steps = [
-        ("floor", floor(root, entry, found)),
+        ("floor", lines),
         ("lint", lint(root, found, own["lint"])),
         ("format", format_check(root, found, own["format"])),
     ]
     if typed:
-        steps += [("type-floor", type_floor(root)), ("type", type_check(root, found, own["type"]))]
+        steps += [
+            ("type-floor", type_floor(root, own["type-floor"])),
+            ("type", type_check(root, found, own["type"])),
+        ]
     else:
-        del own["type"]
+        del own["type"], own["type-floor"]
         steps.append(("note", [SKIPPED]))
     if tally is not None:
         tally.update(own)

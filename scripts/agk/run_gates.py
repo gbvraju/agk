@@ -48,6 +48,14 @@ tree and the step passes; in `mode = "init"` nothing is written. A step module w
 `--baseline` writes the missing files and lowers lines, never raising one (the owner's yes on an
 upgrade, `Q-S0072-5`, and the next build's lowering commit). Output names counts and path
 classes, never a file.
+
+The floors (SPEC-0072 rule 8; brief #1837, ADR-0766): a pack's `floor` and `type-floor` are
+tallied too, so an adopted first run holds the project's own configuration and prints
+`standards <stack> floor (baseline): <n> held (setting: standards.config)`, never `ok`. A failure
+that counts no file (`the <step> tool did not run`) is never held and writes no baseline. A pack
+step of `NEEDS_CONFIG` is `not run` while that floor holds an unreadable configuration, and a pack
+with no product file in scope is `not run standards <stack>: no product file in scope`; a pack
+with a held or not-run step prints no `ok standards <stack>`.
 """
 
 from __future__ import annotations
@@ -62,8 +70,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import check_playbooks
 import playbook_format
-from common import repo_root, run, utf8_output
-from gates import baseline, pins
+from common import CheckError, repo_root, run, utf8_output
+from gates import baseline, pins, python_pack
+
+from config import PROJECT_LINT, project_lint_paths
 
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
@@ -80,6 +90,9 @@ STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
 UNFOUND = "REQ-078: no playbook is found in the project or the plugin"  # brief #1666
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
+UNCOUNTED = "tool did not run"  # brief #1837: a failure that counts no file is never held
+FLOORS = {"floor": "setting: standards.config", "type-floor": "path class: tsconfig.json"}
+NO_FILE = "no product file in scope"
 
 
 def step_module(step: object) -> ModuleType | None:
@@ -138,8 +151,11 @@ def ratchet(
     root: Path, gate_id: str, found: dict[str, int], failed: list, write: bool, held: str = ""
 ) -> list:
     """The rows of a step with per-file counts against its baseline (rule 7); with no baseline
-    file, and none written, its own FAILED rows. HELD, the path classes of FAILED, makes a pass
-    on findings one `held` row with today's count (brief #1777)."""
+    file, and none written, its own FAILED rows. HELD, where FAILED points (`path class: ...` or
+    `setting: ...`), makes a pass on findings one `held` row with today's count (brief #1777). A
+    FAILED line that counts no file fails as it is and writes nothing (brief #1837)."""
+    if any(UNCOUNTED in str(line) for _, line in failed):
+        return failed
     where = f"(path class: {baseline.CLASS})"
     notes: list[Row] = []
     had = baseline.read(root, gate_id)
@@ -158,7 +174,7 @@ def ratchet(
         notes.append((NOTE, f"baseline {gate_id}: a count fell in {under} {files} {where}"))
     if failed and held:
         n = sum(found.values())
-        return [(HELD, f"{gate_id} (baseline): {n} held (path class: {held})"), *notes]
+        return [(HELD, f"{gate_id} (baseline): {n} held ({held})"), *notes]
     return [(True, f"{gate_id} (baseline)" if failed else gate_id), *notes]
 
 
@@ -191,9 +207,8 @@ def results(root: Path, write: bool = False) -> list[Row]:
         failed = [x if isinstance(x, tuple) else (module.RULE, x) for x in module.check(root, data)]
         rows: list[Row] = [(False, f"{gate['id']}: {r} (path class: {c})") for r, c in failed]
         if hasattr(module, "counts"):
-            held = (
-                ", ".join(dict.fromkeys(c for _, c in failed)) if getattr(module, "HELD", 0) else ""
-            )
+            classes = ", ".join(dict.fromkeys(c for _, c in failed))
+            held = f"path class: {classes}" if getattr(module, "HELD", 0) else ""
             rows = ratchet(root, gate["id"], module.counts(root, data), rows, write, held)
         out += rows or [(True, gate["id"])]
     return out + pack_results(path, root, write) + no_pack_rows(root)
@@ -232,16 +247,58 @@ def pack_results(path: Path, root: Path, write: bool = False) -> list[Row]:
             continue
         tally: dict[str, dict[str, int]] = {}
         rows: list[Row] = []
+        unread = False  # brief #1837: the floor holds an unreadable configuration
         for step, lines in module.run(root, entry, tally):
             if step == "note":  # brief #1766: information from the pack, never a failure
                 rows += [(NOTE, f"standards {stack}: {ln}") for ln in lines]
                 continue
+            if step == python_pack.NO_FILE:
+                rows.append((None, f"standards {stack}: {NO_FILE} ({scope(root)})"))
+                continue
             gid = f"standards {stack} {step}"
+            if unread and step in getattr(module, "NEEDS_CONFIG", ()):
+                rows.append((None, f"{gid}: {module.CONFIG_HELD}"))
+                continue
             failed: list[Row] = [(False, f"{gid}: {ln}") for ln in lines]
-            rows += ratchet(root, gid, tally[step], failed, write) if step in tally else failed
+            held = FLOORS.get(step, "")
+            got = ratchet(root, gid, tally[step], failed, write, held) if step in tally else failed
+            mark = getattr(module, "UNREADABLE", None)
+            if step == "floor" and mark and got[:1] and got[0][0] == HELD:
+                unread = any(mark in ln for ln in lines)
+            rows += got
         out += [r for r in rows if r[0] is not True]
-        if not any(r[0] is False for r in rows):
+        if all(r[0] in (True, NOTE) for r in rows):
             out.append((True, f"standards {stack}"))
+    return out
+
+
+def scope(root: Path) -> str:
+    """Where a pack's product files come from: `project_lint_paths`, else the layers' paths."""
+    own = project_lint_paths(root) is not None
+    return f"setting: {PROJECT_LINT}" if own else "key: architecture.layers"
+
+
+def idle_packs(root: Path) -> list[str]:
+    """Brief #1837: the stack of each pack that is on and reads no product file, for `doctor.py`;
+    no tool runs."""
+    try:
+        path = playbook(root)
+    except playbook_format.Refused:
+        return []
+    if path is None or not path.is_file():
+        return []
+    out: list[str] = []
+    for entry in check_playbooks.standard(path, root)[1]:
+        modules = [importlib.import_module(f"gates.{name}") for name in PACKS]
+        module = next((m for m in modules if entry.get("stack") in m.STACKS), None)
+        if module is None or not module.on(root) or any(s in out for s in module.STACKS):
+            continue
+        try:
+            found = module.files(root, python_pack.patterns(root))
+        except CheckError:
+            continue
+        if not found:
+            out.append(str(entry.get("stack")))
     return out
 
 
