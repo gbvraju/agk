@@ -1,0 +1,1 @@
+- Every wait on the owner now names the one line that ends it (`session.py ask-lines --pr N`), a question both its builder and the conductor call not blocking no longer parks a cleared change, and the owner's accept survives a merge of main that leaves the change the same (brief #1784)

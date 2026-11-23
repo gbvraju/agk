@@ -281,12 +281,14 @@ def test_1616_two_merges_of_main_in_a_row_carry_step_by_step(tmp_path):
     assert carries(root, head, second) and carries(root, first, second)
 
 
-@pytest.mark.parametrize("case", ["own-file", "conflict", "unreadable", "not-ancestor"])
+@pytest.mark.parametrize("case", ["own-diff", "conflict", "unreadable", "not-ancestor"])
 def test_1616_no_carry_when_the_merge_adds_anything_or_cannot_be_read(tmp_path, case):
-    """REQ-066: edges 1 and 2, and answer 2's failed read."""
+    """REQ-066: edges 1 and 2, and answer 2's failed read. Brief #1784 answer 6 (ADR-0747): a
+    shared file alone no longer ends the carry; a merge that changes the pull request's own diff
+    (main's line inside the context of its change) does."""
     head_files, main_files = {"agk.toml": edit(1, "branch")}, {"agk.toml": edit(5, "main")}
-    if case == "own-file":
-        head_files[SCRIPT], main_files[SCRIPT] = edit(1, "branch"), edit(5, "main")
+    if case == "own-diff":
+        head_files[SCRIPT], main_files[SCRIPT] = edit(1, "branch"), edit(3, "main")
     if case == "conflict":
         main_files = {"agk.toml": edit(1, "main")}
     root, head = tree(tmp_path, head_files, main_files)
@@ -305,3 +307,23 @@ def test_1616_no_carry_when_the_merge_adds_anything_or_cannot_be_read(tmp_path, 
         old = git(root, "rev-parse", "main")
     assert not carries(root, old, merged)
     assert not carries(tmp_path / "nowhere", head, merged)
+
+
+def test_1784_replay_1762_an_accept_carries_across_a_merge_that_leaves_the_change_the_same(
+    tmp_path,
+):
+    """REQ-037: brief #1784 answer 6: #1762's merge of main (56db4b4b) touched a file the pull
+    request also changes, so it is not a light merge, but the pull request's own diff, read by
+    `git patch-id --stable` against each merge base, is the same: the accept of 4a3ef237 carries."""
+    head_files = {"agk.toml": edit(1, "branch"), SCRIPT: edit(1, "branch")}
+    root, head = tree(tmp_path, head_files, {"agk.toml": edit(5, "main"), SCRIPT: edit(5, "main")})
+    merged = merge_main(root, head)
+    assert carries(root, head, merged)
+    said = [
+        at(1, "conductor-example", "Owner needed: the size is above the standing ruling", 90),
+        at(2, "owner-example", f"Maintainer answer: accept {head}", 60),
+    ]
+    assert items(said, head=merged, carried=session.carried_check(root)) == {}
+    commit(root, {SCRIPT: edit(4, "own", edit(5, "main"))}, "main changes the context")
+    again = merge_main(root, merged)
+    assert not carries(root, head, again)  # main's line now sits inside the change's context

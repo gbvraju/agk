@@ -714,6 +714,7 @@ tests = [
   "tests/kit/test_route_local.py",
   "tests/kit/test_kit_repo_local_mode.py",
   "tests/kit/test_owner_answer_carries.py",
+  "tests/kit/test_owner_ask_lines.py",
 ]
 [[testing.map]]
 code = "scripts/agk/measures.py"
@@ -1009,6 +1010,7 @@ tests = [
   "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_merger_trigger.py", "tests/kit_dev/test_uninstall.py",
   "tests/kit/test_route_local.py", "tests/kit/test_conductor_guard.py",
   "tests/kit/test_owner_answer_carries.py",
+  "tests/kit/test_owner_ask_lines.py",
 ]
 [[testing.map]]
 code = "scripts/agk/rules.py"
@@ -1076,6 +1078,7 @@ tests = [
   "tests/kit_dev/test_review_pass_skill.py", "tests/kit_dev/test_session_rules_found_bug.py",
   "tests/kit_dev/test_uninstall.py",
   "tests/kit/test_owner_answer_carries.py",
+  "tests/kit/test_owner_ask_lines.py",
 ]
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
@@ -1092,6 +1095,7 @@ tests = [
   "tests/kit/test_session_plan_reads.py", "tests/kit/test_shared_main.py",
   "tests/kit/test_github_rate_wait.py", "tests/kit/test_kit_defect_report.py",
   "tests/kit/test_owner_answer_carries.py",
+  "tests/kit/test_owner_ask_lines.py",
   "tests/kit/test_owner_wait.py", "tests/kit/test_plan_names.py",
 ]
 [[testing.map]]

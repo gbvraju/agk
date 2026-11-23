@@ -1186,3 +1186,100 @@ def test_1740_7h_no_owner_merge_item_while_labelled_reprove():
     assert list(session_mod.open_owner_items(reproving, question, LISTED, ANSWERERS)) == [
         "owner-needed"
     ]
+
+
+# --- brief #1784 (ADR-0747): a question both sides call not blocking never parks ----------------
+
+NB_QUESTION = "Question: Q-7-1 for the maintainers (not blocking): which runtime later?"
+AT_ONCE = {"minutes": 0, "rest": None, "offset": 0}
+
+
+def agree(head: str = SHA, minutes: float = 10, answers: str = "Q-7-1 does not block it.") -> dict:
+    return at(20, "boss", f"Verdict: fix list {head}\nRead: 3 files\nAnswers: {answers}\n", minutes)
+
+
+def test_1784_a_not_blocking_question_the_verdict_agrees_with_never_parks():
+    """REQ-037: answers 3, 4 and 7: keyed `nb:<Q-id>`, listed, never parked, even at 0 minutes
+    or inside rest hours."""
+    said = [at(10, "builder", NB_QUESTION, 90), agree()]
+    assert set(session_mod.open_owner_items(pull(), said, LISTED, ANSWERERS)) == {"nb:Q-7-1"}
+    assert step(pull(), said, AT_ONCE) is None
+    assert step(pull(), said, NIGHTS, NOW.replace(hour=16)) is None
+    assert step(pull(), [*said, agree(answers="Q-7-1 is not blocking")], AT_ONCE) is None
+
+
+@pytest.mark.parametrize("case", ["no-verdict", "other-head", "dropped", "builder", "no-marker"])
+def test_1784_without_both_sides_agreeing_the_question_parks(case):
+    """REQ-037: answer 4: the builder alone never exempts its own question; a verdict on another
+    head, or a newer verdict that drops the Q id, leaves an ordinary question."""
+    said = [at(10, "builder", NB_QUESTION, 90)]
+    if case == "other-head":
+        said.append(agree(head="f" * 40))
+    if case == "dropped":
+        said += [agree(minutes=20), at(21, "boss", f"Verdict: fix list {SHA}\nAnswers: none\n", 5)]
+    if case == "builder":
+        said.append(at(22, "builder", f"Verdict: fix list {SHA}\nAnswers: Q-7-1 does not block", 5))
+    if case == "no-marker":
+        said = [asked(90), agree()]
+    assert step(pull(), said, AT_ONCE) == ("park", "Q-7-1")
+
+
+def test_1784_a_question_posted_again_without_the_marker_waits_again():
+    """REQ-037: edge case 8: the newest first line for the Q id wins."""
+    said = [
+        at(10, "builder", NB_QUESTION, 90),
+        agree(minutes=60),
+        at(11, "builder", "Question: Q-7-1 for the maintainers: it blocks after all", 30),
+    ]
+    assert step(pull(), said, AT_ONCE) == ("park", "Q-7-1")
+
+
+H1773_OLD = "595e24515301505327ac832da40599c77bf8f093"
+H1773 = "8ac96a4897410736d7b9258f4bc95b1ac09cf3db"
+
+
+def at_time(cid: int, when: str, body: str) -> dict:
+    return {"id": cid, "user": {"login": "boss"}, "body": body, "created_at": when}
+
+
+def test_1784_replay_1773_parks_nothing():
+    """REQ-037: brief #1784 Measured: #1773's question (in the not-blocking form), both verdicts'
+    agreement, and the merge of main that moved the head: no park at 20:05Z, nor after the third
+    verdict, which says it on its `Passed:` line."""
+    pr = {**pull(), "head": {"sha": H1773}}
+    said = [
+        at_time(1, "2026-11-22T19:26:44Z", "Question: Q-1759-1 for the maintainers (not blocking): "
+                "should session rule 4 name the resolver's governance command?"),
+        at_time(2, "2026-11-22T19:48:22Z", f"Verdict: fix list {H1773_OLD}\nAnswers: Q-1759-1 is "
+                "the maintainers' own; it does not block this pull request.\n1. evidence"),
+        at_time(3, "2026-11-22T19:53:43Z", f"Verdict: fix list {H1773_OLD}\nAnswers: Q-1759-1 "
+                "stays with the maintainers; not blocking.\n1. evidence"),
+    ]  # fmt: skip
+    park_at = datetime(2026, 11, 22, 20, 5, 2, tzinfo=UTC)
+
+    def carried(old, head):
+        return (old, head) == (H1773_OLD, H1773)  # the merge of main left the change the same
+
+    def owner(comments, now):
+        return session_mod.owner_step(pr, comments, PLAIN, now, LISTED, ANSWERERS, carried=carried)
+
+    assert owner(said, park_at) is None
+    third = at_time(4, "2026-11-22T20:10:51Z", f"Verdict: fix list {H1773}\nPassed: 7 rules; "
+                    "Q-1759-1 stays with the maintainers and does not block.")  # fmt: skip
+    assert owner([*said, third], park_at + timedelta(minutes=10)) is None
+    plain = session_mod.owner_step(pr, said, PLAIN, park_at, LISTED, ANSWERERS)
+    assert plain == ("park", "Q-1759-1")  # without the carry the old head's verdict is not read
+
+
+def test_1784_a_park_for_a_question_now_not_blocking_is_lifted_once(hub):
+    """REQ-037: answer 5: one `Unparked-by: not-blocking Q-<id>`, not owed to a builder; a second
+    pass writes nothing; a person's own park is never removed."""
+    said = [at(10, "builder", NB_QUESTION, 90), at(12, "boss", PARKED_BY, 40), agree(minutes=5)]
+    gh = hub(said, labels=("agk:parked",))
+    assert apply() == ("unpark", "Q-7-1")
+    assert gh.labels == set() and gh.posted() == ["Unparked-by: not-blocking Q-7-1"]
+    assert session_mod.UNPARKED_BY.match("Unparked-by: not-blocking Q-7-1")
+    assert not session_mod.unparked_owed(pull(), gh.comments)
+    assert apply() is None and len(gh.posted()) == 1
+    own = hub([at(10, "builder", NB_QUESTION, 90), agree(minutes=5)], labels=("agk:parked",))
+    assert apply() is None and own.labels == {"agk:parked"} and own.posted() == []

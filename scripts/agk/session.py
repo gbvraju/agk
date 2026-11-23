@@ -156,6 +156,12 @@ take of its brief newer than the `Owner needed:` and not handed over, or a spec 
 take ever), the author's ready `Report:` on the current head ends an `owner-needed` park, with one
 `Unparked-by: report <sha12>`; never a Q id.
 
+Brief #1784 (ADR-0747): `ask-lines --pr N` (GET only) prints `<key>: <line>`, the one line
+(`closing_line`) that closes each open owner item, or `none`. A `Question: Q-<id> for the
+maintainers (not blocking): ...` that the newest verdict on the head also calls not blocking is
+item `nb:<Q-id>`: listed, never parked; a park written for it is lifted with one
+`Unparked-by: not-blocking Q-<id>`.
+
 Brief #1310 (ADR-0554): `watch --pr N` and `watch --assign ID` take `--until-event`: they return
 only on an event, printing every event line of one read, or after `[flow] wake_minutes` (110 by
 default) with `renew: no event` (exit 0); a slot's lease is renewed by the wait every 240 s, so
@@ -189,7 +195,7 @@ import sys
 import tempfile
 import time
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -263,7 +269,8 @@ USAGE = (
     "       session.py route --brief N\n"
     "       session.py prompt --brief N [--session ID] [--follow-up TEXT]\n"
     "       session.py tidy [--apply] [--json]\n"
-    "       session.py fallback --kind KIND [--after LABEL]"
+    "       session.py fallback --kind KIND [--after LABEL]\n"
+    "       session.py ask-lines --pr N"
 )
 COMMANDS = (
     "watch",
@@ -288,6 +295,7 @@ COMMANDS = (
     "prompt",
     "tidy",
     "fallback",
+    "ask-lines",
 )
 PAGE = 100
 PAUSED_EXIT = 5
@@ -4355,7 +4363,7 @@ def parked(root, repo: str, pr: dict, comments: list | None) -> bool:
 # --- the owner's waits (brief #1282, ADR-0543) --------------------------------------------------
 
 PARKED_BY = re.compile(r"Parked-by: wait (\S+)")
-UNPARKED_BY = re.compile(r"Unparked-by: (?:answer|report) (\S+)")
+UNPARKED_BY = re.compile(r"Unparked-by: (?:answer|report|not-blocking) (\S+)")  # ADR-0747
 ANSWER_UNPARK = re.compile(r"Unparked-by: answer (\S+)")  # owed to a builder; a report's is not
 OWNER_CHANGE = re.compile(r"^Flow: owner change\b", re.MULTILINE)  # brief #1567: a hand change
 OWNER_NEEDED = "Owner needed:"
@@ -4390,6 +4398,52 @@ def for_the_maintainers(line: str) -> bool:
 
 
 ACCEPT_LINE = re.compile(r"Maintainer answer: accept ([0-9a-f]{40})\b")
+NOT_BLOCKING = "for the maintainers (not blocking):"  # brief #1784 answer 3: the one form
+AGREED = re.compile(r"does not block|not blocking", re.IGNORECASE)
+
+
+def agreed_not_blocking(qid: str, verdict: str, head: str, carried=None) -> bool:
+    """Brief #1784 answer 4: whether the newest verdict VERDICT, on HEAD (or on a head whose
+    change `carried` holds to HEAD), names QID with `does not block` or `not blocking`."""
+    found = VERDICT.match(first_line({"body": verdict}))
+    if found is None or not head:
+        return False
+    if not head.startswith(found.group(2)) and not carries(carried, found.group(2), head):
+        return False
+    return any(qid in line and AGREED.search(line) for line in verdict.splitlines()[1:])
+
+
+def closing_line(key: str, pr: dict, comments: Sequence[dict] = ()) -> str:
+    """Brief #1784 answer 1 (ADR-0747): the one line that closes owner item KEY of PR: a Q id
+    (or `nb:<Q-id>`) its answer, `owner-merge` the owner's merge command (run, not posted),
+    `approve` the newest offered approval line, anything else the accept of the full head."""
+    from route import APPROVAL_ASK  # here: route imports this file
+
+    qid = key.removeprefix("nb:")
+    if QUESTION_ID.fullmatch(qid):
+        return f"Maintainer answer: {qid} <your answer>"
+    if key == "owner-merge":
+        return owner_command(pr.get("number"))
+    if key == "approve":
+        offered = [m.group(0) for c in in_order(list(comments))
+                   for m in APPROVAL_ASK.finditer(str(c.get("body") or ""))]  # fmt: skip
+        return offered[-1] if offered else "Approve: SPEC-<nnnn>"
+    return f"Maintainer answer: accept {(pr.get('head') or {}).get('sha') or '<head sha>'}"
+
+
+def ask_lines(root, number: int) -> int:
+    """`session.py ask-lines --pr N` (GET only): `<key>: <line>` per open owner item, or `none`."""
+    fresh = owner_read(repo_name(root), number)
+    if fresh is None:
+        raise CheckError(f"the pull request #{number} cannot be read")
+    pr, comments = fresh
+    pr = {**pr, "number": pr.get("number", number)}
+    found = open_owner_items(pr, comments, *owner_people(root, pr), carried=carried_check(root))
+    for key, _ in sorted(found.items(), key=lambda kv: kv[1]):
+        print(f"{key}: {closing_line(key, pr, comments)}")
+    if not found:
+        print("none")
+    return 0
 
 
 def owner_item(
@@ -4456,7 +4510,9 @@ def open_owner_items(
     approval line for a spec or amendment the pull request does not change closes nothing, and
     one of several asked approvals closes only its own (`route.answer_step`).
     Brief #1740 (ADR-0725): no `owner-merge` item while the pull request is labelled `agk:reprove`:
-    the merge it asks for is held until the builder re-proves the head."""
+    the merge it asks for is held until the builder re-proves the head.
+    Brief #1784 (ADR-0747): a question in the `NOT_BLOCKING` form is keyed `nb:<Q-id>` while the
+    newest listed verdict agrees (`agreed_not_blocking`); its newest first line decides the form."""
     from route import answer_step, approval_ask  # here: route imports this file
 
     open_items: dict[str, datetime] = {}
@@ -4469,6 +4525,7 @@ def open_owner_items(
     head = str((pr.get("head") or {}).get("sha") or "")
     author = str((pr.get("user") or {}).get("login") or "").lower()
     ordered = in_order(comments)
+    marked: set[str] = set()  # the Q ids whose newest question is in the not-blocking form
     for c in ordered:
         line, who, when = first_line(c), author_of(c), moment(c.get("created_at"))
         body = str(c.get("body") or "")
@@ -4481,6 +4538,8 @@ def open_owner_items(
         if for_the_maintainers(line):
             found = QUESTION_ID.search(line)
             open_items[found.group(0) if found else "question"] = when
+            if found:  # brief #1784 answer 3: the newest first line for the id decides
+                (marked.add if NOT_BLOCKING in line else marked.discard)(found.group(0))
         elif line.startswith(OWNER_NEEDED) and who in listed:
             found = QUESTION_ID.search(line)
             named = found.group(0) if found and found.group(0) in open_items else None
@@ -4510,6 +4569,9 @@ def open_owner_items(
         elif line.startswith("Correction:"):
             for qid in QUESTION_ID.findall(str(c.get("body") or "")):
                 open_items.pop(qid, None)
+    for qid in sorted(marked & set(open_items)):
+        if agreed_not_blocking(qid, newest_verdict, head, carried):
+            open_items[f"nb:{qid}"] = open_items.pop(qid)
     names = labels_of(pr)
     reproving = REPROVE_LABEL in names  # brief #1740: the merge ask waits for the re-prove
     if merge_at is not None and pr.get("draft") is not True and clears_head(newest_verdict, head):
@@ -4554,17 +4616,37 @@ def carried_check(root, default: str | None = None, shared: list[str] | None = N
         except (CheckError, OSError, ValueError):
             return False
         ref = default or f"origin/{branch}"
-        step = head
+        step, light = head, True
         for _ in range(CARRY_STEPS):
             parents = (_git(root, "rev-list", "--parents", "-n", "1", step) or "").split()[1:]
-            if len(parents) != 2 or not light_merge(root, parents[0], step, ref, indexes):
+            if (
+                len(parents) != 2
+                or _git(root, "merge-base", "--is-ancestor", parents[1], ref) is None
+            ):
                 return False
+            light = light and light_merge(root, parents[0], step, ref, indexes)
             step = parents[0]
-            if step == old:
-                return True
+            if step == old:  # brief #1784 answer 6: or the pull request's own diff is the same
+                mine = own_patch(root, old, ref)
+                return light or (mine is not None and mine == own_patch(root, head, ref))
         return False
 
     return carried
+
+
+def own_patch(root, sha: str, ref: str) -> str | None:
+    """Brief #1784 answer 6: `git patch-id --stable` of SHA's own diff against its merge base with
+    REF; None when git fails or the diff is empty."""
+    from session_plan import _git  # the plan builds on this module
+
+    base = (_git(root, "merge-base", sha, ref) or "").strip()
+    diff = _git(root, "diff", "--binary", base, sha) if base else None
+    if not diff:
+        return None
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "patch-id", "--stable"], cwd=root, input=diff, capture_output=True, text=True
+    )  # fmt: skip
+    return proc.stdout.split()[0] if proc.returncode == 0 and proc.stdout.split() else None
 
 
 def own_park(comments: list) -> tuple[str, dict] | None:
@@ -4599,7 +4681,8 @@ def owner_step(
     person's own `agk:parked` is never touched. `own` and `carried` as in `open_owner_items`.
     Brief #1733 (ADR-0722): an `owner-merge` item with no other owner item open is
     `("handover", "owner-merge")` at once, whatever the wait and the rest hours say; it is never
-    parked, and the other items park as before."""
+    parked, and the other items park as before. Brief #1784 (ADR-0747): an `nb:` item never parks
+    and never hands over; a park for a question now `nb:` is unparked."""
     mark = own_park(comments)
     labelled = PARKED_LABEL in labels_of(pr)
     if mark is not None and (not labelled or mark[0] not in open_owner_items(
@@ -4608,6 +4691,7 @@ def owner_step(
     if labelled:
         return None
     items = open_owner_items(pr, comments, listed, answerers, own, carried)
+    items = {k: v for k, v in items.items() if not k.startswith("nb:")}  # brief #1784 answer 4
     merging = items.pop("owner-merge", None) is not None
     if not items:
         return ("handover", "owner-merge") if merging else None
@@ -4688,6 +4772,8 @@ def owner_apply(
         if reported:  # brief #1567 answer 2: one `Unparked-by: report <sha12>`
             sha = str((fresh[0].get("head") or {}).get("sha") or "")[:12]
             done = unpark_pull(repo, number, key, labelled, why=f"report {sha}")
+        elif f"nb:{key}" in open_owner_items(*fresh, *people, carried=carried):  # brief #1784
+            done = unpark_pull(repo, number, key, labelled, why=f"not-blocking {key}")
         else:
             done = unpark_pull(repo, number, key, labelled=labelled)
         return found if done else None
@@ -5354,6 +5440,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompt": {"--brief", "--session", "--follow-up"},
         "fallback": {"--kind", "--after"},
         "summary": {"--pr", "--file"},
+        "ask-lines": {"--pr"},
     }
     if not set(opts) <= allowed[cmd] or len(opts) != pairs:
         print(USAGE)
@@ -5380,7 +5467,7 @@ def main(argv: list[str] | None = None) -> int:
         ok = opts.get("--role") in ROLES and (
             "--author" not in opts or bool(SESSION_ID.fullmatch(opts["--author"].lstrip("@")))
         )
-    elif cmd == "resume":
+    elif cmd in ("resume", "ask-lines"):
         ok = number_of(opts.get("--pr"))
     elif cmd == "summary":
         ok = number_of(opts.get("--pr")) and "--file" in opts
@@ -5433,6 +5520,8 @@ def main(argv: list[str] | None = None) -> int:
             return after(root, opts["--session"])
         if cmd == "resume":
             return resume(root, int(opts["--pr"]))
+        if cmd == "ask-lines":
+            return ask_lines(root, int(opts["--pr"]))
         if cmd == "summary":
             return summary(root, int(opts["--pr"]), Path(opts["--file"]))
         if cmd == "ids":
