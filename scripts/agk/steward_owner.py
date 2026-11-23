@@ -513,12 +513,14 @@ def drafted_lines(layers_file: Path | None) -> list[str]:
         text = layers_file.read_text(encoding="utf-8")
         data = tomllib.loads("\n".join(x for x in text.splitlines() if not x.startswith("draft ")))
         arch = data["architecture"]
-        out = [f"- `{x['name']}`: {', '.join(f'`{g}`' for g in x['paths'])}" for x in arch["layers"]]
+        out = [
+            f"- `{x['name']}`: {', '.join(f'`{g}`' for g in x['paths'])}" for x in arch["layers"]
+        ]
         out += [f"- `{e['from']}` may import `{e['to']}`" for e in arch.get("allow", [])]
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, KeyError, TypeError):
         return []  # derive-write refuses it, naming the key
-    return ["", "The layers drafted from the project's own folders, with the directions used today:",
-            "", *out]  # fmt: skip
+    head = "The layers drafted from the project's own folders, with the directions used today:"
+    return ["", head, "", *out]
 
 
 def draft(root: Path, slug: str, layers_file: Path | None = None) -> tuple[int, list[str]]:

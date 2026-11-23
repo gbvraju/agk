@@ -1244,7 +1244,9 @@ def drafted_layers(path: str, adr: str | None) -> list[str]:
     bad = Refusal(["rule 22: `--layers` is not a layers draft (key: architecture.layers)"])
     try:
         text = Path(path).read_text(encoding="utf-8")
-        data = tomllib.loads("\n".join(ln for ln in text.splitlines() if not ln.startswith("draft ")))
+        data = tomllib.loads(
+            "\n".join(ln for ln in text.splitlines() if not ln.startswith("draft "))
+        )
         arch, mapped = data["architecture"], data["testing"]["map"]
         found = [(x["name"], list(x["paths"])) for x in arch["layers"]]
         allow = [(e["from"], e["to"], e.get("adr")) for e in arch.get("allow", [])]

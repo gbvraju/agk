@@ -268,7 +268,10 @@ def _elsewhere(tmp_path: Path, mode: str | None) -> Path:
     shutil.copytree(PLAYBOOKS, root / "config" / "playbooks")
     text = f'mode = "{mode}"\n' if mode else ""
     (root / "agk.toml").write_text(text + '\n[delivery]\nwork_type = "api-service"\n', "utf-8")
-    for rel, body in {"app/main.py": "from app.core import orders\n", "app/core/orders.py": ""}.items():
+    for rel, body in {
+        "app/main.py": "from app.core import orders\n",
+        "app/core/orders.py": "",
+    }.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(body, encoding="utf-8")
     return root

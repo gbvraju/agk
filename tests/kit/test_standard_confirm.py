@@ -276,7 +276,7 @@ def test_req079_ac8_the_personal_floor_runs_the_gates_with_no_forge_call(tmp_pat
     assert not (sidecar / "forge").exists()
 
 
-# --- brief #1842 (ADR-0767): the person's yes carries the layers drafted from the tree -------------
+# --- brief #1842 (ADR-0767): the person's yes carries the layers drafted from the tree --------
 
 TREE = {
     "app/__init__.py": "",
@@ -362,7 +362,7 @@ def test_req079_the_draft_is_applied_only_after_the_yes(tmp_path):
     arch, _, _ = check_playbooks.standard(playbook, root)
     assert [x["name"] for x in arch["layers"]] == ["app", "core", "reports"]
     assert {e["adr"] for e in arch["allow"]} == {"ADR-0002"}
-    assert "modules = [\"web-app\"]" in playbook.read_text(encoding="utf-8")
+    assert 'modules = ["web-app"]' in playbook.read_text(encoding="utf-8")
     adr = (root / "docs/adr/0002-the-project-s-work-type-svc-example.md").read_text("utf-8")
     assert "- `core`: `app/core/**`" in adr and "- `core` may import `reports`" in adr
     assert "- Status: Proposed" in adr

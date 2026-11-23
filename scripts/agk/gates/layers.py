@@ -259,7 +259,9 @@ def write_record(root: Path) -> int:
 
 
 def slug(word: str) -> str:
-    out = "-".join(x for x in "".join(c if c.isalnum() else "-" for c in word.lower()).split("-") if x)
+    out = "-".join(
+        x for x in "".join(c if c.isalnum() else "-" for c in word.lower()).split("-") if x
+    )
     out = "".join(c for c in out if c.isascii())
     return out if playbook_format.SLUG.match(out) else f"layer-{out}".rstrip("-")
 
@@ -280,7 +282,9 @@ def product_files(root: Path, suffixes: set[str]) -> list[str]:
                 continue
             keep.append(d)
         dirs[:] = keep
-        out += [f if rel == "." else f"{rel}/{f}" for f in sorted(files) if Path(f).suffix in suffixes]
+        out += [
+            f if rel == "." else f"{rel}/{f}" for f in sorted(files) if Path(f).suffix in suffixes
+        ]
     return out
 
 
@@ -333,7 +337,9 @@ def toml_text(drafted: list, allow: list, tests: str) -> list[str]:
     entry (from, to[, adr]) names its ADR when it has one."""
     q = '"{}"'.format
     lines = ["[architecture]", "layers = ["]
-    lines += [f"  {{ name = {q(n)}, paths = [{', '.join(q(p) for p in ps)}] }}," for n, ps in drafted]
+    lines += [
+        f"  {{ name = {q(n)}, paths = [{', '.join(q(p) for p in ps)}] }}," for n, ps in drafted
+    ]
     lines += ["]", "allow = ["]
     for a, b, *adr in allow:
         tail = f", adr = {q(adr[0])}" if adr and adr[0] else ""
