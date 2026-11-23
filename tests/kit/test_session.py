@@ -58,7 +58,12 @@ SHA = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 
 
 def iso(delta: timedelta = timedelta(0)) -> str:
-    return (datetime.now(UTC) + delta).strftime("%Y-%m-%dT%H:%M:%SZ")
+    """A time `delta` from the pinned clock the code reads (`AGK_TEST_NOW`, brief #1791) or now."""
+    try:
+        now = datetime.fromisoformat(os.environ.get("AGK_TEST_NOW") or "-").astimezone(UTC)
+    except ValueError:
+        now = datetime.now(UTC)
+    return (now + delta).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Stub:
@@ -306,7 +311,7 @@ def claim_posts(stub: Stub) -> list[list]:
     return [c for c in posts(stub) if "labels[]=agk:taken" not in c[2]]
 
 
-def test_ac3_next_takes_the_first_free_brief_with_the_one_post(proj, stub):
+def test_ac3_next_takes_the_first_free_brief_with_the_one_post(proj, stub, clock):
     """REQ-037 AC3"""
     listing(stub, [issue(9), issue(5)])
     state(stub, 3, "closed")
@@ -319,7 +324,7 @@ def test_ac3_next_takes_the_first_free_brief_with_the_one_post(proj, stub):
     assert out.stdout.startswith("brief #5\n")
     assert "t5" in out.stdout and f"https://github.com/{REPO}/issues/5" in out.stdout
     assert 'Sentence: "A thing works."' in out.stdout
-    day = datetime.now(UTC).strftime("%Y-%m-%d")
+    day = os.environ["AGK_TEST_NOW"][:10]  # the pinned day the post read (brief #1791)
     assert posts(stub) == [
         ["POST", f"{ISSUES}/5/comments", ["-f", f"body=taken: s-me {day}\n\nWho: AGK"]]
     ]
