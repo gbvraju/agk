@@ -790,25 +790,24 @@ def test_req051_an_adopted_project_keeps_its_stamped_values(tmp_path):
 
 # --- The one whole-history secret scan (brief #1835, ADR-0764) ---------------------------------
 
-HISTORY_NEXT = (
-    "next: scan the whole history once for secrets: python3 {kit}/history_scan.py run --write"
+HISTORY_NEXT = "next: scan the whole history once for secrets: "
+INSTALLED_NEXT = HISTORY_NEXT + "python3 scripts/agk/history_scan.py run --write"
+CLEAN_NEXT = (
+    HISTORY_NEXT + "history_scan.py run --write (step 4 of /agk:adopt runs it from the plugin)"
 )
 
 
 @pytest.mark.parametrize(
-    "extra, kit",
-    [
-        ((), "scripts/agk"),
-        (("--layout", "plugin", "--rehearsal"), '"${CLAUDE_PLUGIN_ROOT}/scripts/agk"'),
-    ],
+    "extra, line",
+    [((), INSTALLED_NEXT), (("--layout", "plugin", "--rehearsal"), CLEAN_NEXT)],
 )
-def test_req063_adopt_names_the_history_scan_last_and_runs_no_git(tmp_path, extra, kit):
+def test_req063_adopt_names_the_history_scan_last_and_runs_no_git(tmp_path, extra, line):
     """REQ-063: brief #1835 answer 3: after a write, one last line names the scan; adopt runs it
     not (SPEC-0002 rule 1 kept: the import test above holds)."""
     root = make_existing(tmp_path / "proj", branch="main")
     proc = adopt(root, *extra)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert proc.stdout.rstrip().splitlines()[-1] == HISTORY_NEXT.format(kit=kit)
+    assert proc.stdout.rstrip().splitlines()[-1] == line
     assert not (root / "config" / "agk-baseline" / "history-scan.json").exists()
 
 
