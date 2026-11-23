@@ -181,17 +181,21 @@ def test_req037_a_stated_whole_test_fails_from_the_day_naming_the_line(tmp_path)
     """REQ-037: answer 2 (a body line naming the test with whole_tests)."""
     text = body("tests/kit/test_new_all.py", answer="Whole test: test_new_all.py joins the list.")
     assert result(root_of(tmp_path), text, AFTER)[0] == [M2.format(stated(text))]
-    assert four_c(result(root_of(tmp_path / "b"), text)[1]) == [M2.format(stated(text))]
+    joins = M3.format("tests/kit/")  # the stub also touches a mapped script (answer 3)
+    assert four_c(result(root_of(tmp_path / "b"), text)[1]) == [M2.format(stated(text)), joins]
     unset = KIT_TESTING.replace('whole_tests = ["tests/kit/test_whole.py"]\n', "")
     without = root_of(tmp_path / "c", unset)
-    assert four_c(result(without, text, AFTER)[1]) == []
+    assert four_c(result(without, text, AFTER)[1]) == [joins]
 
 
 def test_req037_an_adds_test_beside_a_closed_class_answer_warns(tmp_path):
     """REQ-037: answer 2 (beside `**The class stays closed.**`: a warning, never a failure)."""
     text = body("tests/kit/test_new_all.py", answer="**The class stays closed.** Every later one.")
     failures, warnings = result(root_of(tmp_path), text, AFTER)
-    assert failures == [] and four_c(warnings) == [M2C.format("tests/kit/")]
+    assert failures == [] and four_c(warnings) == [
+        M2C.format("tests/kit/"),
+        M3.format("tests/kit/"),
+    ]
 
 
 # --- answer 3: a test that joins a map entry ------------------------------------------------------
@@ -284,7 +288,12 @@ def test_req037_every_writer_refuses_or_warns_alike(tmp_path):
     refusal = steward_owner.brief_refusal(root_of(tmp_path / "late", day="2000-01-01"), text, 9)
     assert refusal is not None and M1 in refusal
     published: list[str] = []
-    assert plan_intake.brief_check(early, [{"key": "b1", "body": text}], {}, published) == []
+    assert (
+        plan_intake.brief_check(
+            early, [{"key": "b1", "body": text, "milestone": "Wave 4"}], {}, published
+        )
+        == []
+    )
     assert f"briefs b1: warning: {M1}" in published
 
 
