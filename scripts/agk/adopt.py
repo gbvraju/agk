@@ -351,7 +351,24 @@ def main(argv: list[str] | None = None) -> int:
     if PLACEHOLDER in text:
         print(f"notice: config/reviewers.yaml maps `maintainers` to the placeholder {PLACEHOLDER}")
     print_branch_rules(branch, "adopt", "plugin" if clean else "installed")
+    print(history_line(clean, dry_run))
     return 0
+
+
+def history_line(clean: bool, dry_run: bool) -> str:
+    """Brief #1835 (ADR-0764): adopt stays git-free (SPEC-0002 rules 1 and 7, Q-HB-1); it names
+    the one whole-history secret scan, which the adopt skill runs next."""
+    if dry_run:
+        return "history scan: not run (dry run)"
+    if clean:  # a clean print names no `scripts/agk` path (brief #1665); the skill's step 5 does
+        return (
+            "next: scan the whole history once for secrets: history_scan.py run --write "
+            "(step 5 of /agk:adopt runs it from the plugin)"
+        )
+    return (
+        "next: scan the whole history once for secrets: "
+        "python3 scripts/agk/history_scan.py run --write"
+    )
 
 
 if __name__ == "__main__":

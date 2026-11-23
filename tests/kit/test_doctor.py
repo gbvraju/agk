@@ -1101,3 +1101,67 @@ def test_ac6_the_guides_and_the_skill_say_when_to_import_and_when_to_draw(rel):
     assert "the customer's prototype is the design" in text
     assert "no prototype yet" in text and "/agk:design prototype" in text
     assert "before the import" in text
+
+
+# --- Brief #1835 (ADR-0764): the one whole-history secret scan's record ----------------------
+
+
+def _adopted(root: Path, mode: str | None = "adopt") -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "agk.toml").write_text(f'mode = "{mode}"\n' if mode else "", encoding="utf-8")
+    return root
+
+
+def _record(root: Path, **data) -> None:
+    path = root / "config" / "agk-baseline" / "history-scan.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_req063_doctor_reports_the_history_scan_record_in_each_state(tmp_path):
+    """REQ-063: brief #1835 answer 5: the five lines; the record is read, gitleaks never run."""
+    import doctor  # noqa: PLC0415
+
+    root = _adopted(tmp_path / "svc")
+    assert doctor.history_scan_lines(root) == [
+        "warn history-scan: the whole history was never scanned for secrets; run "
+        "history_scan.py run --write (path class: config/agk-baseline/)"
+    ]
+    base = {"scanned": "2026-11-23", "commits": 7, "reason": "", "findings": []}
+    _record(root, **base, outcome="clean")
+    assert doctor.history_scan_lines(root) == [
+        "ok history-scan: scanned 2026-11-23, 7 commits, no finding"
+    ]
+    _record(root, **{**base, "reason": "not finished within 600 s"}, outcome="incomplete")
+    assert doctor.history_scan_lines(root) == [
+        "warn history-scan: incomplete (not finished within 600 s); run it again"
+    ]
+    found = [{"rule": "aws-access-token", "class": "config/", "count": 1}]
+    _record(root, **{**base, "findings": found}, outcome="findings")
+    assert doctor.history_scan_lines(root) == [
+        "warn history-scan: 1 findings in history (aws-access-token; path classes config/); "
+        "follow docs/runbooks/leaked-secret.md, revoke each at its provider; a revoked value "
+        "in history is harmless"
+    ]
+    (root / "config" / "agk-baseline" / "history-scan.json").write_text("[", encoding="utf-8")
+    assert doctor.history_scan_lines(root) == [
+        "warn history-scan: the record cannot be read (path class: config/agk-baseline/)"
+    ]
+
+
+@pytest.mark.parametrize("mode", ["init", None])
+def test_req063_doctor_prints_no_history_line_outside_an_adopted_project(tmp_path, mode):
+    """REQ-063: brief #1835 answer 7: `mode` `init` or absent prints none."""
+    import doctor  # noqa: PLC0415
+
+    assert doctor.history_scan_lines(_adopted(tmp_path / "svc", mode)) == []
+
+
+def test_req063_doctor_json_names_the_history_line_and_the_exit_code_is_unchanged():
+    """REQ-063: brief #1835 answer 5: `history_scan` in `--json`; a warn line is no exit code."""
+    import doctor  # noqa: PLC0415
+
+    line = "warn history-scan: incomplete (x); run it again"
+    data = json.loads(doctor.render_json([], "0", skills=["ok standards: x", line]))
+    assert data["history_scan"] == [line] and line in data["skills"]
+    assert "history_scan" not in json.loads(doctor.render_json([], "0", skills=["ok x: y"]))

@@ -130,6 +130,7 @@
     "scripts/agk/guard_logs.py",
     "scripts/agk/guard_rules.json",
     "scripts/agk/heavy_queue.py",
+    "scripts/agk/history_scan.py",
     "scripts/agk/impact.py",
     "scripts/agk/kit_root.py",
     "scripts/agk/launch.py",
