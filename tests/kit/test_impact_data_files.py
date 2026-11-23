@@ -283,75 +283,6 @@ SCRIPTS = {
 NEW = {"scripts/agk/new.py": "# new\n", "tests/test_new.py": 'P = "scripts/agk/new.py"\n'}
 
 
-def test_an_added_script_selects_the_every_script_tests(repo):
-    """REQ-016: brief #1651 answer 1 (an added script also selects the every-script tests)."""
-    start(repo, extra=EVERY, files=SCRIPTS)
-    repo.commit(NEW, "add")
-    found = result(repo)
-    assert found.full is False and picked(found) == [
-        "tests/test_every.py",
-        "tests/test_new.py",
-        "tests/test_old.py",
-    ]
-    assert "  file: tests/test_every.py (new script) scripts/agk/new.py" in impact.text(found)
-
-
-def test_a_modified_script_does_not_select_them(repo):
-    """REQ-016: brief #1651 answer 3 (a modified script: its map entry and names rule)."""
-    start(repo, extra=EVERY, files=SCRIPTS)
-    assert picked(change(repo, "scripts/agk/old.py")) == ["tests/test_old.py"]
-
-
-def test_a_renamed_script_selects_them(repo):
-    """REQ-016: brief #1651 answer 3 (a renamed script is an added path)."""
-    start(repo, extra=EVERY, files=SCRIPTS)
-    repo.commit({"scripts/agk/old.py": None, **NEW}, "rename")
-    assert "tests/test_every.py" in picked(result(repo))
-
-
-def test_a_deleted_script_selects_nothing_new(repo):
-    """REQ-016: brief #1651 answer 3 (a deleted script adds no every-script test)."""
-    start(repo, extra=EVERY, files=SCRIPTS)
-    repo.commit({"scripts/agk/old.py": None}, "delete")
-    assert picked(result(repo)) == ["tests/test_old.py"]
-
-
-def test_an_added_document_or_other_file_selects_nothing_new(repo):
-    """REQ-016: brief #1651 answer 1 (only a script: not documentation, nor outside the folder)."""
-    start(repo, extra=EVERY, files=SCRIPTS)
-    repo.commit({"scripts/agk/notes.md": "# notes\n", **{"app/new.py": "# n\n"}}, "add")
-    assert "tests/test_every.py" not in picked(result(repo))
-
-
-def test_without_the_setting_nothing_changes(repo):
-    """REQ-016: brief #1651 answer 2 (a project using AGK: an empty list by default)."""
-    start(repo, files=SCRIPTS)
-    repo.commit(NEW, "add")
-    assert picked(result(repo)) == ["tests/test_new.py", "tests/test_old.py"]
-
-
-@pytest.mark.parametrize("profile", ["fast", "thorough"])
-def test_other_profiles_are_unchanged(repo, profile):
-    """REQ-016: brief #1651 answer 2 (`thorough` stays full; the rule is of `balanced`)."""
-    start(repo, profile, extra=EVERY, files=SCRIPTS)
-    repo.commit(NEW, "add")
-    found = result(repo)
-    assert "tests/test_every.py" not in picked(found)
-    assert found.full is (profile == "thorough")
-
-
-@pytest.mark.parametrize(
-    "value", ['"tests/test_every.py"', '["tests/test_gone.py"]', "[1]", '["tests/*.py"]']
-)
-def test_a_bad_setting_is_refused_by_name(repo, value):
-    """REQ-016: brief #1651 answer 2 (not a list of existing test files: refused by name)."""
-    start(repo, extra=f"every_script_tests = {value}\n", files=SCRIPTS)
-    with pytest.raises(impact.CheckError) as err:
-        impact.testing_table(repo.root)
-    assert "setting: testing.every_script_tests" in str(err.value)
-    assert "test_gone" not in str(err.value)
-
-
 def test_the_kit_sets_no_every_script_tests_and_each_of_the_three_is_a_whole_test():
     """REQ-062: brief #1812 answer 1 (the kit drops the retired key; its files stay whole tests)."""
     table = impact.testing_table(ROOT)
@@ -360,54 +291,86 @@ def test_the_kit_sets_no_every_script_tests_and_each_of_the_three_is_a_whole_tes
         assert f"tests/kit/test_{name}.py" in table["whole_tests"]
 
 
-# Brief #1812 (ADR-0755): a project that still sets the retired key is told, once, where it reads.
-RETIRED = (
-    "deprecated: testing.every_script_tests (ADR-0755): list its files in testing.whole_tests, "
-    "or remove it; the next release refuses it"
+# Brief #1814 (ADR-0755 decision 4): the release after the warning refuses the retired key.
+REFUSED = (
+    "every_script_tests is retired: list its files in testing.whole_tests "
+    "(setting: testing.every_script_tests)"
 )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        '["tests/test_every.py"]',
+        "[]",
+        '["tests/test_gone.py"]',
+        '"tests/test_every.py"',
+        "[1]",
+        '["tests/*.py"]',
+    ],
+)
+def test_the_retired_key_is_refused_naming_the_setting_and_no_value(repo, value):
+    """REQ-062: brief #1814 answers 1 and 5 (any value, `[]` too: refused naming the setting)."""
+    start(repo, extra=f"every_script_tests = {value}\n", files=SCRIPTS)
+    with pytest.raises(impact.CheckError) as err:
+        impact.testing_table(repo.root)
+    assert str(err.value) == REFUSED
+    assert "test_every" not in str(err.value) and "test_gone" not in str(err.value)
+    with pytest.raises(impact.CheckError):
+        impact.run_folder_deprecation(repo.root)
+
+
+def test_the_retired_key_beside_whole_tests_naming_the_same_file_is_refused(repo):
+    """REQ-062: brief #1814 answer 6 (both name the same files: refused all the same)."""
+    whole = 'whole_tests = ["tests/test_every.py"]\n'
+    start(repo, extra=EVERY + whole, files=SCRIPTS)
+    with pytest.raises(impact.CheckError) as err:
+        impact.testing_table(repo.root)
+    assert str(err.value) == REFUSED
+
+
+def test_the_retired_key_in_a_pyproject_is_refused_the_same(repo):
+    """REQ-062: brief #1814 answer 1 (`[tool.agk.testing]` of a `pyproject.toml`)."""
+    text = "[tool.agk]\ndefault_branch = 'main'\n[tool.agk.testing]\n" + EVERY
+    repo.commit({"pyproject.toml": text, **SCRIPTS}, "base")
+    with pytest.raises(impact.CheckError) as err:
+        impact.testing_table(repo.root)
+    assert str(err.value) == REFUSED
+
+
+def test_the_retired_key_gives_no_deprecation_line(repo):
+    """REQ-062: brief #1814 answer 2 (refused, so no line; doctor's own check names it)."""
+    start(repo, extra=EVERY, files=SCRIPTS)
+    assert doctor.deprecation_lines(repo.root) == []
+
+
 RUN_FOLDER = "deprecated: testing.results_dir (ADR-0303)"
 
 
 @pytest.mark.parametrize(
     ("extra", "expected"),
-    [
-        (EVERY, RETIRED),
-        ("every_script_tests = []\n", RETIRED),
-        ("", None),
-        ('results_dir = ".agk-runs"\n', RUN_FOLDER),
-        ('results_dir = ".agk-runs"\n' + EVERY, f"{RUN_FOLDER}; {RETIRED}"),
-    ],
+    [("", None), ('results_dir = ".agk-runs"\n', RUN_FOLDER)],
 )
-def test_the_retired_key_gives_the_deprecation_line(repo, extra, expected):
-    """REQ-062: brief #1812 answers 3 and 6 (set, `[]`, none without, one joined line)."""
+def test_only_the_run_folder_part_of_the_deprecation_line_stays(repo, extra, expected):
+    """REQ-062: brief #1814 answer 2 (the first brief's part goes; the run-folder part stays)."""
     start(repo, extra=extra, files=SCRIPTS)
     assert impact.run_folder_deprecation(repo.root) == expected
     assert doctor.deprecation_lines(repo.root) == ([expected] if expected else [])
 
 
-def test_a_malformed_retired_key_gives_no_line_and_is_refused_by_name(repo):
-    """REQ-062: brief #1812 answer 5 (malformed: refused naming the setting, no line)."""
-    start(repo, extra='every_script_tests = ["tests/test_gone.py"]\n', files=SCRIPTS)
-    assert doctor.deprecation_lines(repo.root) == []
-    with pytest.raises(impact.CheckError) as err:
-        impact.run_folder_deprecation(repo.root)
-    assert "setting: testing.every_script_tests" in str(err.value)
-
-
-def test_the_retired_key_in_a_pyproject_is_warned_the_same(repo):
-    """REQ-062: brief #1812 answer 6 (`[tool.agk.testing]` of a `pyproject.toml`)."""
-    text = "[tool.agk]\ndefault_branch = 'main'\n[tool.agk.testing]\n" + EVERY
-    repo.commit({"pyproject.toml": text, **SCRIPTS}, "base")
-    assert impact.run_folder_deprecation(repo.root) == RETIRED
-
-
-def test_a_project_with_the_retired_key_keeps_its_selection(repo):
-    """REQ-062: brief #1812 answer 2 (today's trigger and `(new script)` reason, one release)."""
-    start(repo, extra=EVERY, files=SCRIPTS)
+def test_an_added_script_selects_no_new_script_reason(repo):
+    """REQ-062: brief #1814 answer 2 (the `(new script)` step is gone)."""
+    start(repo, files=SCRIPTS)
     repo.commit(NEW, "add")
     found = result(repo)
-    assert "tests/test_every.py" in picked(found) and found.whole == []
-    assert "  file: tests/test_every.py (new script) scripts/agk/new.py" in impact.text(found)
+    assert picked(found) == ["tests/test_new.py", "tests/test_old.py"]
+    assert not [line for line in impact.text(found) if "(new script)" in line]
+
+
+def test_the_new_script_step_is_removed_from_the_selection():
+    """REQ-062: brief #1814 Measured (`new_scripts` and its reason are gone)."""
+    for name in ("new_scripts", "check_every_script", "NEW_SCRIPT", "EVERY_SCRIPT_BAD"):
+        assert not hasattr(impact, name), name
 
 
 def test_the_replay_of_a_script_adding_merge_gives_whole_lines_and_no_new_script_line():

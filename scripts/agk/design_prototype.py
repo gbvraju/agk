@@ -20,8 +20,9 @@ It refuses, naming the rule and never a value: an inventory that does not exist 
 check; an inventory whose digest has no `inventory` row in `docs/design/signoffs.md` (rule 3); a
 theme on the standard that does not pass the standard's theme check, or an old-format theme with a
 token the standard has no role for (rule 2). With no theme it writes one from
-`kit/templates/design-theme.md` with the evidence line set to the version; an old-format theme
-(SPEC-0029) is moved to the standard by its `Standard:` line, its five tokens mapped by
+`kit/templates/design-theme.md` with the evidence line set to the version, its brand record and
+accent filled from the discovery brand answer by `design_brand.py` (brief #1840); an old-format
+theme (SPEC-0029) is moved to the standard by its `Standard:` line, its five tokens mapped by
 `design_standard.OLD_TOKENS` to their roles unchanged in value in light and dark, and its brand
 record, source lines and evidence line carried over unchanged (rule 12). Nothing is written before
 every refusal has been checked, and a folder is never overwritten. Files only: no network, no model,
@@ -38,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_brand
 import design_inventory
 import design_signoff
 import design_standard
@@ -287,9 +289,9 @@ def template_theme() -> str:
 def theme_for(root: Path, version: str) -> tuple[str, str | None, str]:
     """(the theme text the version uses, the text to write or None, what to print)."""
     path = root / THEME
-    if not path.is_file():
-        text = template_theme().replace("{{evidence}}", f"{PROTOTYPE}/{version}/")
-        return text, text, f"wrote {THEME}"
+    if not path.is_file():  # filled from the discovery brand answer (brief #1840)
+        text, notes = design_brand.theme_text(root, f"{PROTOTYPE}/{version}/")
+        return text, text, "\n".join([f"wrote {THEME}", *notes])
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):

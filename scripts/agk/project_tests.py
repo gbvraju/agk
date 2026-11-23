@@ -281,8 +281,9 @@ def version_at(root: Path, ref: str) -> str | None:
 
 
 def retired_lines(root: Path) -> list[str]:
-    """ADR-0755: the deprecation line of a retired `[testing]` key, or none; a malformed table
-    gives none here, since the selection refuses it naming the setting."""
+    """SPEC-0046 rule 11: the deprecation line of the retired run-folder keys, or none; a malformed
+    table, or the refused `every_script_tests` (brief #1814), gives none here, since the selection
+    refuses it naming the setting."""
     try:
         line = run_folder_deprecation(root)
     except CheckError:

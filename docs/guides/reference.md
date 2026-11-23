@@ -1031,9 +1031,19 @@ An installed check, a step of `make governance` and of the governance workflow (
 rule and the path and never a value, on: a script or an event handler, an external request or a loaded resource, a colour that is not a token
 (every colour of a mockup is a `var(--token)`), tokens that are not one block with a light and a dark set, a contrast under 4.5:1 (computed from
 the hex tokens in both modes, for the pairs the theme lists under `## Contrast`), a brand value with no `source:`, and an evidence line that
-points to no mockup folder. Two things it prints without failing: `design: the theme is not approved yet` when the evidence folder's `README.md`
+points to no mockup, prototype or imported folder (`Evidence: docs/design/imported/i<n>/` names an imported version, approved by its `design` row, ADR-0770). Two things it prints without failing: `design: the theme is not approved yet` when the evidence folder's `README.md`
 has no line `Approved by <name> on <YYYY-MM-DD>`, and `at risk design: placeholder brand` when a brand value is still a `[bracketed]` placeholder
 (SPEC-0029 rule 7). The files it reads are written by `/agk:design` (the theme from the engine named by `design` in `[engines]` or from the kit's template, a mockup folder with `Approved: not yet` in its `README.md`, and four screenshots, 360 and 1280 px wide, light and dark, when a headless browser is found) or by hand. The approval line is the owner's: the session never writes `Approved by`. With no `docs/design/` it prints `ok design (no design record)`.
+
+## Design theme
+
+    python3 scripts/agk/design.py theme [--root DIR]
+
+A kit-only command (brief #1840, ADR-0770). It writes `docs/design/theme.md` from the kit's template, its brand record (`name`, `primary`,
+`font`) filled from the discovery brand answer with a `source: docs/discovery/<file>.md (brand, given: <where>)` line, and its evidence line
+naming the newest kit version, else the newest imported version. A brand colour that reads below 4.5:1 in a mode is written as the first shade
+that passes, with a proposal comment and an `ask the person:` line. It refuses an existing theme (rule 2) and a project with no version (rule 7),
+writing nothing; `design.py prototype` fills a new theme the same way.
 
 ## Design screenshots and comparison
 

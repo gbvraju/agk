@@ -68,7 +68,6 @@ ACCEPTED = re.compile(r"\bAccepted\b")
 MAP_ROOTS = ("config/", "kit/", "skills/", ".claude/")
 KIT_MAKE = "kit/agk-kit.mk"  # only the kit repository has it (governance's `Project tests` step)
 NO_WHOLE = "the kit sets no whole tests (setting: testing.whole_tests)"
-RETIRED = "the kit sets a retired key (setting: testing.every_script_tests)"  # ADR-0755
 
 
 def references(source: str, stem: str) -> bool:
@@ -229,14 +228,13 @@ def map_problems(root: Path, argv: list[str] | None) -> list[str]:
 
 
 def whole_problems(root: Path) -> list[str]:
-    """Brief #1798 answer 2: the kit's own `whole_tests` is set and not empty; brief #1812 answer
-    1: the kit sets no retired `every_script_tests`, an empty list neither."""
+    """Brief #1798 answer 2: the kit's own `whole_tests` is set and not empty. The retired
+    `every_script_tests`, an empty list too, is refused by `impact.testing_table` naming the
+    setting, in the kit as in a project (brief #1814)."""
     if not (root / KIT_MAKE).is_file():
         return []
     table = selection.testing_table(root)  # an empty or bad list is refused naming the setting
-    problems = [] if table and table.get(selection.WHOLE_KEY) else [NO_WHOLE]
-    raw = selection.config_source(root).get("testing") if table is not None else None
-    return problems + ([RETIRED] if raw and selection.EVERY_SCRIPT in raw else [])
+    return [] if table and table.get(selection.WHOLE_KEY) else [NO_WHOLE]
 
 
 def main(argv: list[str] | None = None) -> int:
