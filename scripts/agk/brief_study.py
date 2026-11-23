@@ -165,8 +165,12 @@ def prior_problems(lines: list[str], root: Path) -> list[str]:
     if not text:
         return ["study: exactly one line Prior: naming the earlier record, or Prior: none: <what>"]
     for pattern, folder, glob, label in REFS:
-        for number in pattern.findall(text):
-            if not any((root / folder).glob(glob.format(number))):
+        numbers = pattern.findall(text)
+        found = [p.name for p in (root / folder).glob(glob.format("*"))] if numbers else []
+        # one listing per folder (brief #1815: the plan reads this per open brief)
+        known = {n.split("-", 1)[0] for n in found} if glob.startswith("{}-") else set(found)
+        for number in numbers:
+            if (number if glob.startswith("{}-") else glob.format(number)) not in known:
                 return [f"study: the Prior line names {label.format(number)}, not in {folder}/"]
     return []
 
