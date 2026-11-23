@@ -176,7 +176,7 @@ def test_a_back_slash_test_folder_reads_as_the_same_folder(
 
 
 HELD = "secrets (baseline): 1 held (path class: tracked files (a secret shape))"
-BASE = "config/agk-baseline/secrets.txt"
+BASE = "config/agk-baseline/committed-secrets.txt"  # `secrets.txt` is a secret file name
 
 
 def test_adopt_mode_holds_the_findings(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -188,6 +188,7 @@ def test_adopt_mode_holds_the_findings(tmp_path: Path, capsys: pytest.CaptureFix
     assert HELD + "\n" in out and "ok secrets" not in out, out
     assert (root / BASE).read_text(encoding="utf-8") == "config/key.py 1\n"
     assert FAKE not in out and "config/key.py" not in out
+    subprocess.run([*GIT, "-C", str(root), "add", "-A"], check=True)  # nosec B603 - fixed
     code, out = _run(root, capsys)  # named and counted on every run
     assert code == 0 and HELD + "\n" in out, out
 

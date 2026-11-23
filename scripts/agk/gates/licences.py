@@ -15,8 +15,9 @@ list of `kit/templates/licences.toml`), and on a package with no licence it can 
 `unknown`, never clean. An SPDX expression passes when one `OR` side has every `AND` id on the
 list. Each line names the rule and the component class (`python`, `node`), never a name, a
 version or an id (principle 8); a list of another form is refused naming the setting. With no
-stack chosen or no lock it prints `not run: no lock`. With `mode = "adopt"` the findings are held
-until brief #1600's baseline. Offline, files only; widening the list is a project ADR
+stack chosen or no lock it prints `not run: no lock`. `counts` gives the findings per file (the
+lock's failing packages, the setting's form), so the runner's baseline holds an adopted project's
+existing ones, counted on every run (brief #1777, ADR-0743). Offline, files only; widening the list is a project ADR
 (principle 11). The runner calls it, as `layers`, where it `applies` (brief #1586's interface).
 """
 
@@ -30,7 +31,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
-from common import load_config, utf8_output  # noqa: E402
+from common import utf8_output  # noqa: E402
 
 from gates import pins  # noqa: E402
 
@@ -91,6 +92,12 @@ def passes(expression: str, allowed: frozenset[str]) -> bool:
 
 def problems(root: Path) -> list[tuple[str, str]] | None:
     """(rule, class or setting) of each failure, sorted; None when no lock is read."""
+    found = tally(root)
+    return None if found is None else sorted({(r, w) for r, w, _ in found})
+
+
+def tally(root: Path) -> list[tuple[str, str, str]] | None:
+    """(rule, class or setting, file) of each failing package or setting; None with no lock."""
     found = lock_of(root)
     if found is None:
         return None
@@ -100,18 +107,19 @@ def problems(root: Path) -> list[tuple[str, str]] | None:
     except (OSError, UnicodeDecodeError):
         allowed = None
     if allowed is None:
-        return [(FORM, f"setting: {SETTING}")]
+        return [(FORM, f"setting: {SETTING}", SETTING)]
+    lock = pins.chosen(Path(root))[0][2]  # type: ignore[index]  # lock_of read it
     try:
         items = components(*found)
     except (AttributeError, ValueError):
-        return [(UNKNOWN, f"component class: {CLASSES[found[0]]}")]
-    out = set()
+        return [(UNKNOWN, f"component class: {CLASSES[found[0]]}", lock)]
+    out = []
     for cls, _, _, licence in items:
         if not licence:
-            out.add((UNKNOWN, f"component class: {cls}"))
+            out.append((UNKNOWN, f"component class: {cls}", lock))
         elif not passes(licence, allowed):
-            out.add((RULE, f"component class: {cls}"))
-    return sorted(out)
+            out.append((RULE, f"component class: {cls}", lock))
+    return out
 
 
 def applies(root: Path) -> bool:
@@ -119,13 +127,24 @@ def applies(root: Path) -> bool:
     return lock_of(root) is not None
 
 
+HELD = True  # brief #1777: a pass on a baseline that holds findings prints `held`, never `ok`
+
+
 def check(root: Path, playbook: dict[str, Any]) -> list[tuple[str, str]]:
-    """The runner's interface; held in `mode = "adopt"` until brief #1600's baseline."""
-    found = problems(root) or []
-    if load_config(root)["mode"] == "adopt":
-        return []
-    lock = pins.chosen(Path(root))[0][2]  # type: ignore[index]  # problems read it
-    return [(f"{r} ({w})", SETTING if w.startswith("setting") else lock) for r, w in found]
+    """The runner's interface: (rule, path class) of each failure."""
+    lock = (pins.chosen(Path(root)) or ((None, None, None),))[0][2]
+    return [
+        (f"{r} ({w})", SETTING if w.startswith("setting") else lock)
+        for r, w in problems(root) or []
+    ]
+
+
+def counts(root: Path, playbook: dict[str, Any]) -> dict[str, int]:
+    """The runner's baseline interface (SPEC-0072 rule 7): the findings per file."""
+    out: dict[str, int] = {}
+    for _, _, rel in tally(root) or []:
+        out[rel] = out.get(rel, 0) + 1
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -138,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     if problems(root) is None:
         print(f"licences: {NOT_RUN}")
         return 0
-    found = [] if load_config(root)["mode"] == "adopt" else problems(root) or []
+    found = problems(root) or []
     for rule, where in found:
         print(f"FAIL licences: {rule} ({where})")
     if found:
