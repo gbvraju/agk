@@ -303,7 +303,7 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
     sets, notes = regression_sets(root, found, areas)
     lines = [*head, *text(found), *[n for n in notes if n not in found.map_notes]]
     outside = {n.rsplit(": ", 1)[-1] for n in notes if n.startswith(OUTSIDE)}
-    if outside & set(found.whole):  # brief #1796 answer 7: fails, as a linked level does
+    if outside and outside & set(found.whole):  # brief #1796 answer 7: fails, as a linked level does
         failing = f"echo {shlex.quote(WHOLE_OUTSIDE)}; exit 1"
         return [("whole", failing, ".", WHOLE_OUTSIDE)], [*lines, f"project tests: {WHOLE_OUTSIDE}"]
     if outside:

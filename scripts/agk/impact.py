@@ -247,8 +247,7 @@ KIT_SCRIPTS = "/".join(("scripts", "agk", ""))
 NEW_SCRIPT = "(new script)"
 EVERY_SCRIPT = "every_script_tests"
 EVERY_SCRIPT_BAD = (
-    "every_script_tests must be a list of existing test files "
-    "(setting: testing.every_script_tests)"
+    "every_script_tests must be a list of existing test files (setting: testing.every_script_tests)"
 )
 # The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
 # lean install names no kit test path, so its folder is not written here.
