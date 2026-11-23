@@ -317,3 +317,41 @@ def test_ac4_a_prior_that_cites_a_weak_candidate_is_allowed(tmp_path):
     body = STUDIED.replace(PRIOR, "Prior: ADR-0301 (Accepted, read)\n")
     assert result(body, root) == ([], [])
     assert result(STUDIED, root) == ([], [])
+
+
+def test_ac4_the_cap_is_the_flow_setting_brief_prior_warnings(tmp_path):
+    """REQ-037 AC4 (brief #1819, Maintainer answer Q-F11-1: a whole number, default 10)"""
+    import config
+
+    root = tree(tmp_path)
+    for number in range(100, 106):
+        accepted(root, number, decision="It decides `scripts/agk/tool.py`.")
+    assert (
+        config.brief_prior_warnings(root) == 10
+        and "brief_prior_warnings" in config.TABLE_KEYS["flow"]
+    )
+    (root / "agk.toml").write_text("[flow]\nbrief_prior_warnings = 3\n", "utf-8")
+    assert config.brief_prior_warnings(root) == 3
+    _, warned = result(STUDIED, root)
+    assert len([w for w in warned if w.startswith("study: Prior leaves out ADR-")]) == 3
+    assert any(w.startswith("study: Prior: 3 more candidates not warned") for w in warned)
+    (root / "agk.toml").write_text("[flow]\nbrief_prior_warnings = 0\n", "utf-8")
+    _, warned = result(STUDIED, root)
+    assert prior_lines(warned) == [
+        "study: Prior: 6 more candidates not warned; brief_study.py <file> --root . lists them"
+    ]
+
+
+@pytest.mark.parametrize("value", ["-1", '"10"', "2.5", "true", "[10]"])
+def test_ac4_a_brief_prior_warnings_outside_its_form_is_refused_naming_the_setting(tmp_path, value):
+    """REQ-037 AC4 (brief #1819, Maintainer answer Q-F11-1)"""
+    import config
+    from common import CheckError
+
+    root = tree(tmp_path)
+    (root / "agk.toml").write_text(f"[flow]\nbrief_prior_warnings = {value}\n", "utf-8")
+    with pytest.raises(CheckError) as caught:
+        result(STUDIED, root)
+    assert "flow.brief_prior_warnings" in str(caught.value) and value not in str(caught.value)
+    with pytest.raises(config.BriefPriorSettingError):
+        config.brief_prior_warnings(root)
