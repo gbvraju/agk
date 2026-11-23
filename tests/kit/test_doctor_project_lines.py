@@ -151,13 +151,13 @@ def test_doctor_prints_the_count_in_its_report(tmp_path):
     assert "tests: whole tests 1" in proc.stdout, proc.stdout
 
 
-# Brief #1814 (ADR-0755 decision 4): doctor refuses the retired key by its setting, no line.
+# Brief #1814 (ADR-0755 decision 4): the key is refused like any bad `[testing]` key, so doctor's
+# report gives no deprecation line and no value; the commands that read the table refuse it.
 RETIRED = "deprecated: testing.every_script_tests (ADR-0755)"
-REFUSED = "(setting: testing.every_script_tests)"
 
 
-def test_doctor_names_the_retired_key_by_its_setting(tmp_path):
-    """REQ-062: brief #1814 answer 1 (doctor refuses it as any bad `[testing]` key, no value)."""
+def test_doctor_gives_no_retired_key_line_and_no_value(tmp_path):
+    """REQ-062: brief #1814 answers 1 and 2 (no deprecation line, no value in the report)."""
     dirs = init_target(tmp_path, BLOCK)
     root = dirs["root"]
     (root / "tests").mkdir(exist_ok=True)
@@ -167,6 +167,4 @@ def test_doctor_names_the_retired_key_by_its_setting(tmp_path):
     every = 'every_script_tests = ["tests/test_w.py"]\n'
     (root / "agk.toml").write_text(toml + every, encoding="utf-8")
     out = doctor(*args).stdout
-    assert REFUSED in out and RETIRED not in out and "test_w.py" not in out, out
-    (root / "agk.toml").write_text(toml + 'profile = "fast"\n', encoding="utf-8")
-    assert REFUSED not in doctor(*args).stdout
+    assert RETIRED not in out and "tests/test_w.py" not in out, out

@@ -92,12 +92,8 @@ that folder's `test_agk_mk.py` when the head has it, which collects the folder i
 only the kit's scripts and that folder, so a kit test that reads a file at import is caught before
 merge (brief #1648). A project without that test selects nothing by this rule.
 
-Under `balanced`, a file added under `scripts/agk/` (a renamed one is added at its new path; not
-documentation, not a test file) also selects the tests of `every_script_tests`, a list of existing
-test files, empty without the key, printed `(new script) <path>` (brief #1651, ADR-0698): the tests
-that read every kit script by a glob, which no map entry of a new script names yet. The key is
-retired (brief #1812, ADR-0755): it still selects as before for one release and
-`run_folder_deprecation` gives its line; the kit lists such tests in `whole_tests`.
+The retired `every_script_tests` (brief #1651, ADR-0698; retired by ADR-0755) is refused naming
+the setting, any value, before anything runs (brief #1814): its files go in `whole_tests`.
 
 `whole_tests` (brief #1796, ADR-0650, amendment 186 rule 6a) is an optional, non-empty list of test
 files, each a file of the tree (relative, forward slashes, no glob character); a bad one is refused
@@ -161,7 +157,6 @@ KEYS = {
     "results_dir",
     "keep_passed",
     "keep_runs",
-    "every_script_tests",
     "whole_tests",
     "pre_merge_tests",
     "rerun_alone",
@@ -180,10 +175,6 @@ DEFAULT_SHARE = 0.5  # brief #980
 DEFAULT_KEEP_RUNS = 20
 RUN_FOLDER_KEYS = ("results_dir", "keep_passed", "keep_runs")  # retired (SPEC-0046 rule 11)
 RUN_FOLDER_DEPRECATED = "deprecated: testing.results_dir (ADR-0303)"
-EVERY_SCRIPT_DEPRECATED = (  # retired (brief #1812, ADR-0755); the next release refuses it
-    "deprecated: testing.every_script_tests (ADR-0755): list its files in testing.whole_tests, "
-    "or remove it; the next release refuses it"
-)
 PR_TESTS = ("full", "selected")
 LOCAL_FULL = ("local", "ci")  # `[testing] local_full` (brief #1031, ADR-0440)
 SMOKE_KINDS = ("frontend", "contract")  # SPEC-0044 rule 8
@@ -248,12 +239,12 @@ MAP_ONLY = "agk.toml (testing map only)"  # the `code` of a test that a map-only
 KIT_TESTS = "/".join(("tests", "kit", ""))
 STRIPPED_TEST = KIT_TESTS + "test_agk_mk.py"
 STRIPPED = "a kit test file changed (collection in a stripped copy)"
-# Brief #1651, ADR-0698: an added kit script selects the tests that read every kit script.
-KIT_SCRIPTS = "/".join(("scripts", "agk", ""))
-NEW_SCRIPT = "(new script)"
+# Brief #1814, ADR-0755: the retired key is refused by name, any value (`check_kit_tests.py` reads
+# the name too).
 EVERY_SCRIPT = "every_script_tests"
-EVERY_SCRIPT_BAD = (
-    "every_script_tests must be a list of existing test files (setting: testing.every_script_tests)"
+EVERY_SCRIPT_RETIRED = (
+    "every_script_tests is retired: list its files in testing.whole_tests "
+    "(setting: testing.every_script_tests)"
 )
 # The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
 # lean install names no kit test path, so its folder is not written here.
@@ -403,6 +394,8 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError("agk.toml cannot be read (setting: testing)") from None
     if table is None:
         return None
+    if isinstance(table, dict) and EVERY_SCRIPT in table:
+        raise CheckError(EVERY_SCRIPT_RETIRED)
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
@@ -488,7 +481,6 @@ def testing_table(root: Path) -> dict | None:
     source = table.get("map_source", MAP_SOURCES[0])
     if not isinstance(source, str) or source not in MAP_SOURCES:
         raise CheckError("map_source is curated or generated (setting: testing.map_source)")
-    every = check_every_script(table.get(EVERY_SCRIPT, []), root)
     whole = check_whole_tests(table[WHOLE_KEY], root) if WHOLE_KEY in table else []
     return {
         "profile": profile,
@@ -496,7 +488,6 @@ def testing_table(root: Path) -> dict | None:
         "map": mapped,
         "budget_seconds": budget,
         **({"map_source": source} if "map_source" in table else {}),
-        **({EVERY_SCRIPT: every} if every else {}),
         **({WHOLE_KEY: whole} if whole else {}),
         **({"links": links} if links else {}),
     }
@@ -590,20 +581,6 @@ def check_links(value: object, root: Path) -> list[dict]:
             )
         checked.append({"code": list(entry["code"]), "run": list(run)})
     return checked
-
-
-def check_every_script(value: object, root: Path) -> list[str]:
-    """`[testing] every_script_tests` (brief #1651): a list of relative test file paths, no globs,
-    each a file of ROOT; a bad one is refused (CheckError) naming the setting, never its value."""
-    if not isinstance(value, list) or not all(
-        isinstance(name, str)
-        and _glob_ok(name)
-        and not any(c in name for c in "*?[]")
-        and (root / name).is_file()
-        for name in value
-    ):
-        raise CheckError(EVERY_SCRIPT_BAD)
-    return list(value)
 
 
 def check_whole_tests(value: object, root: Path) -> list[str]:
@@ -808,16 +785,13 @@ def rerun_alone(root: Path) -> bool:
 
 
 def run_folder_deprecation(root: Path) -> str | None:
-    """SPEC-0046 rule 11 and ADR-0755: the deprecation line when `[testing]` sets one of the retired
-    run-folder keys or `every_script_tests` (an empty list too), the two parts joined by `; `,
-    run-folder first; None otherwise. The whole table is checked first, so a malformed key is
-    still refused (CheckError) naming the setting."""
+    """SPEC-0046 rule 11: the deprecation line when `[testing]` sets one of the retired run-folder
+    keys; None otherwise. The whole table is checked first, so a malformed key, or the retired
+    `every_script_tests` (brief #1814), is still refused (CheckError) naming the setting."""
     if testing_table(root) is None:
         return None
     table = config_source(root)["testing"]
-    parts = [RUN_FOLDER_DEPRECATED] if any(k in table for k in RUN_FOLDER_KEYS) else []
-    parts += [EVERY_SCRIPT_DEPRECATED] if EVERY_SCRIPT in table else []
-    return "; ".join(parts) or None
+    return RUN_FOLDER_DEPRECATED if any(k in table for k in RUN_FOLDER_KEYS) else None
 
 
 def durations_sums(output: str) -> dict[str, float] | None:
@@ -1217,9 +1191,6 @@ def select(root: Path, base: str, head: str) -> Impact:
                 if test not in changed:
                     chosen.setdefault(test, Selected(test, path, NAMED, []))
     stripped_copy(changed, tests, (dirs, patterns), chosen)
-    every = table.get(EVERY_SCRIPT, [])
-    if profile == "balanced" and not hit and every:
-        new_scripts(root, (base, head), every, (tests, dirs, patterns), chosen)
     counts: dict[str, tuple[int, int]] = {}
     if not hit and profile != "thorough":
         counts = add_importers(root, head, changed, entries, tests, chosen, (dirs, patterns))
@@ -1252,28 +1223,6 @@ def stripped_copy(
     hit = next((p for p in changed if p.startswith(KIT_TESTS) and is_test_file(p, *where)), None)
     if hit is not None:
         chosen.setdefault(STRIPPED_TEST, Selected(STRIPPED_TEST, hit, STRIPPED, []))
-
-
-def new_scripts(
-    root: Path,
-    span: tuple[str, str],
-    every: list[str],
-    where: tuple[list[str], list[str], list[str]],
-    chosen: dict,
-) -> None:
-    """Add the EVERY tests of the head to CHOSEN when a file of SPAN added under `KIT_SCRIPTS` (a
-    rename is an added path) is neither documentation nor a test file (brief #1651). Only adds."""
-    tests, dirs, patterns = where
-    out = git(root, "diff", "-z", "--name-only", "--no-renames", "--diff-filter=A", *span)
-    added = sorted(
-        p
-        for p in out.split("\0")
-        if p.startswith(KIT_SCRIPTS) and not is_doc(p) and not is_test_file(p, dirs, patterns)
-    )
-    if added:
-        for test in every:
-            if test in tests:
-                chosen.setdefault(test, Selected(test, added[0], NEW_SCRIPT, []))
 
 
 def _map_split(text: str | None) -> tuple[dict, set[tuple[str, str]]] | None:
@@ -1460,8 +1409,6 @@ def file_line(s: Selected) -> str:
         return f"  file: {s.test} (names {s.changed})"
     if s.code == MAP_ONLY:
         return f"  file: {s.test} ({MAP_ONLY})"
-    if s.code == NEW_SCRIPT:
-        return f"  file: {s.test} {NEW_SCRIPT} {s.changed}"
     if s.code == STRIPPED:
         return f"  file: {s.test} ({STRIPPED}: {s.changed})"
     if s.code == IMPORTER:
