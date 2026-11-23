@@ -1,0 +1,1 @@
+- A stack record that writes its runtime with a capital, like `Node 22.11.0` or `Python 3.13.1`, is now read as that runtime, so its dependency checks run; the stack check notes an option whose runtime the kit does not check (brief #1778)
