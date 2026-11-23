@@ -255,3 +255,77 @@ def test_the_written_record_says_its_protected_class(tmp_path: Path, capsys) -> 
         "ok layers: wrote docs/architecture.md",
         "protected: `docs/architecture.md` (name them in this change's ADR)",
     ]
+
+
+# --- brief #1842 (ADR-0767): a layer set that holds no file of the product ---------------------
+
+EMPTY = "SPEC-0072 rule 5: no source file is in any layer (key: architecture.layers)"
+
+
+def _elsewhere(tmp_path: Path, mode: str | None) -> Path:
+    """The api-service layers and a tree in none of them (`app/`), with a crossing import."""
+    root = tmp_path
+    shutil.copytree(PLAYBOOKS, root / "config" / "playbooks")
+    text = f'mode = "{mode}"\n' if mode else ""
+    (root / "agk.toml").write_text(text + '\n[delivery]\nwork_type = "api-service"\n', "utf-8")
+    for rel, body in {"app/main.py": "from app.core import orders\n", "app/core/orders.py": ""}.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(body, encoding="utf-8")
+    return root
+
+
+def test_req079_no_file_in_any_layer_fails_in_adopt(tmp_path: Path, capsys) -> None:
+    """REQ-079 (brief #1842 answer 3): exit 1 from both commands; no baseline is written from it."""
+    root = _elsewhere(tmp_path, "adopt")
+    assert layers.main(["--root", str(root)]) == 1
+    assert capsys.readouterr().out == f"FAIL layers: {EMPTY}\n"
+    code, out = _gates(root, capsys)
+    assert code == 1 and f"FAIL gates: layers: {EMPTY}\n" in out
+    assert "ok layers" not in out and "baseline layers" not in out
+    assert not (root / "config/agk-baseline/layers.txt").exists()
+
+
+def test_req079_an_empty_baseline_does_not_hold_it(tmp_path: Path, capsys) -> None:
+    """REQ-079 (brief #1842 answer 8): a baseline written from no file counts no file."""
+    root = _elsewhere(tmp_path, "adopt")
+    (root / "config/agk-baseline").mkdir(parents=True)
+    (root / "config/agk-baseline/layers.txt").write_text("", encoding="utf-8")
+    code, out = _gates(root, capsys)
+    assert code == 1 and f"FAIL gates: layers: {EMPTY}\n" in out
+
+
+@pytest.mark.parametrize("mode", ["init", None, "other-example"])
+def test_req079_no_file_in_any_layer_is_not_run_outside_adopt(mode, tmp_path: Path, capsys):
+    """REQ-079 (brief #1842 answer 3): `not run`, never `ok`."""
+    root = _elsewhere(tmp_path, mode)
+    assert layers.main(["--root", str(root)]) == 0
+    assert capsys.readouterr().out == "layers: not run: no source file in any layer yet\n"
+    code, out = _gates(root, capsys)
+    assert "not run layers: no source file in any layer yet\n" in out and "ok layers" not in out
+
+
+def test_req079_some_layers_empty_still_pass(tmp_path: Path, capsys) -> None:
+    """REQ-079: a set where one layer holds a file passes as today."""
+    root = _elsewhere(tmp_path, "adopt")
+    (root / "api").mkdir()
+    (root / "api/routes.py").write_text("import json\n", encoding="utf-8")
+    assert layers.main(["--root", str(root)]) == 0
+    assert capsys.readouterr().out == "ok layers\n"
+
+
+def test_req079_write_record_refuses_layers_that_hold_no_code_in_adopt(tmp_path: Path, capsys):
+    """REQ-079 (brief #1842 answer 3): exit 1, the next command named, nothing written."""
+    root = _elsewhere(tmp_path, "adopt")
+    assert layers.main(["--root", str(root), "--write-record"]) == 1
+    assert capsys.readouterr().out == (
+        "FAIL layers: SPEC-0072 rule 5: the record needs layers that hold the code"
+        " (key: architecture.layers); next: layers.py --draft\n"
+    )
+    assert not (root / "docs/architecture.md").exists()
+
+
+def test_req079_write_record_in_init_writes_as_today(tmp_path: Path, capsys) -> None:
+    """REQ-079: the foundation writes the skeleton folders after the record."""
+    root = _elsewhere(tmp_path, "init")
+    assert layers.main(["--root", str(root), "--write-record"]) == 0
+    assert (root / "docs/architecture.md").is_file()
