@@ -8,6 +8,7 @@ itself, and the same rule in a project's run.
 from __future__ import annotations
 
 import fnmatch
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
 
 import doctor
@@ -351,13 +352,74 @@ def test_a_bad_setting_is_refused_by_name(repo, value):
     assert "test_gone" not in str(err.value)
 
 
-def test_this_repository_names_the_three_contract_tests():
-    """REQ-016: brief #1651 answer 2 (the kit's default: the three every-script tests)."""
-    assert impact.testing_table(ROOT)["every_script_tests"] == [
-        "tests/kit/test_isolated_mode.py",
-        "tests/kit/test_installed_imports.py",
-        "tests/kit/test_core_contradictions.py",
-    ]
+def test_the_kit_sets_no_every_script_tests_and_each_of_the_three_is_a_whole_test():
+    """REQ-062: brief #1812 answer 1 (the kit drops the retired key; its files stay whole tests)."""
+    table = impact.testing_table(ROOT)
+    assert "every_script_tests" not in impact.config_source(ROOT)["testing"]
+    for name in ("isolated_mode", "installed_imports", "core_contradictions"):
+        assert f"tests/kit/test_{name}.py" in table["whole_tests"]
+
+
+# Brief #1812 (ADR-0755): a project that still sets the retired key is told, once, where it reads.
+RETIRED = (
+    "deprecated: testing.every_script_tests (ADR-0755): list its files in testing.whole_tests, "
+    "or remove it; the next release refuses it"
+)
+RUN_FOLDER = "deprecated: testing.results_dir (ADR-0303)"
+
+
+@pytest.mark.parametrize(
+    ("extra", "expected"),
+    [
+        (EVERY, RETIRED),
+        ("every_script_tests = []\n", RETIRED),
+        ("", None),
+        ('results_dir = ".agk-runs"\n', RUN_FOLDER),
+        ('results_dir = ".agk-runs"\n' + EVERY, f"{RUN_FOLDER}; {RETIRED}"),
+    ],
+)
+def test_the_retired_key_gives_the_deprecation_line(repo, extra, expected):
+    """REQ-062: brief #1812 answers 3 and 6 (set, `[]`, none without, one joined line)."""
+    start(repo, extra=extra, files=SCRIPTS)
+    assert impact.run_folder_deprecation(repo.root) == expected
+    assert doctor.deprecation_lines(repo.root) == ([expected] if expected else [])
+
+
+def test_a_malformed_retired_key_gives_no_line_and_is_refused_by_name(repo):
+    """REQ-062: brief #1812 answer 5 (malformed: refused naming the setting, no line)."""
+    start(repo, extra='every_script_tests = ["tests/test_gone.py"]\n', files=SCRIPTS)
+    assert doctor.deprecation_lines(repo.root) == []
+    with pytest.raises(impact.CheckError) as err:
+        impact.run_folder_deprecation(repo.root)
+    assert "setting: testing.every_script_tests" in str(err.value)
+
+
+def test_the_retired_key_in_a_pyproject_is_warned_the_same(repo):
+    """REQ-062: brief #1812 answer 6 (`[tool.agk.testing]` of a `pyproject.toml`)."""
+    text = "[tool.agk]\ndefault_branch = 'main'\n[tool.agk.testing]\n" + EVERY
+    repo.commit({"pyproject.toml": text, **SCRIPTS}, "base")
+    assert impact.run_folder_deprecation(repo.root) == RETIRED
+
+
+def test_a_project_with_the_retired_key_keeps_its_selection(repo):
+    """REQ-062: brief #1812 answer 2 (today's trigger and `(new script)` reason, one release)."""
+    start(repo, extra=EVERY, files=SCRIPTS)
+    repo.commit(NEW, "add")
+    found = result(repo)
+    assert "tests/test_every.py" in picked(found) and found.whole == []
+    assert "  file: tests/test_every.py (new script) scripts/agk/new.py" in impact.text(found)
+
+
+def test_the_replay_of_a_script_adding_merge_gives_whole_lines_and_no_new_script_line():
+    """REQ-062: brief #1812 Measured (24c7b1c8: the whole lines, no `(new script)` line)."""
+    known = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "cat-file", "-e", "24c7b1c8~1^{commit}"], cwd=ROOT, capture_output=True
+    )
+    if known.returncode != 0:
+        pytest.skip("the replay commits are not in this clone")
+    lines = impact.text(impact.impact(ROOT, "24c7b1c8~1", "24c7b1c8"))
+    assert not [line for line in lines if "(new script)" in line]
+    assert "whole: tests/kit/test_core_contradictions.py" in lines
 
 
 DATA_FILES = (

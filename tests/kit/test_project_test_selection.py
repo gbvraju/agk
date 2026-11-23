@@ -337,3 +337,32 @@ def test_a_whole_test_in_no_proof_area_fails_the_step_naming_the_setting(tmp_pat
     proc = run(root, outside, "pull_request")
     assert proc.returncode != 0
     assert "(setting: testing.whole_tests)" in proc.stdout
+
+
+# Brief #1812 (ADR-0755): the plan prints the retired key's line; the old key's files keep today's run.
+RETIRED = "deprecated: testing.every_script_tests (ADR-0755)"
+
+
+def test_the_plan_prints_the_retired_key_line(tmp_path, outside):
+    """REQ-062: brief #1812 answer 3 (the CI `Project tests` step shows it)."""
+    every = 'every_script_tests = ["tests/test_other.py"]\n'
+    root = project(tmp_path, toml(outside, SELECTED + every))
+    proc = run(root, outside, "pull_request")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.count(RETIRED) == 1
+    assert ran(outside) == ["kit tests/billing/test_pay.py"]
+    plain = project(tmp_path / "plain", toml(outside, SELECTED))
+    assert RETIRED not in run(plain, outside, "push").stdout
+
+
+def test_an_old_key_file_in_no_area_stays_a_full_run(tmp_path, outside):
+    """REQ-062: brief #1812 answer 5 (a file in no `[proof]` area: today's full run, not a fail)."""
+    testing = 'profile = "balanced"\npr_tests = "selected"\nfull_when_share = 0.9\n' + MAP
+    testing += 'every_script_tests = ["tests/test_other.py"]\n'
+    text = toml(outside, testing).replace('dirs = ["tests"], pat', 'dirs = ["tests/billing"], pat')
+    added = {"scripts/agk/new_tool.py": "# new\n", "src/billing/pay.py": "change\n"}
+    root = project(tmp_path, text, added)
+    proc = run(root, outside, "pull_request")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "full" in ran(outside)
+    assert RETIRED in proc.stdout
