@@ -360,10 +360,10 @@ def history_line(clean: bool, dry_run: bool) -> str:
     the one whole-history secret scan, which the adopt skill runs next."""
     if dry_run:
         return "history scan: not run (dry run)"
-    if clean:  # a clean print names no `scripts/agk` path (brief #1665); the skill's step 4 does
+    if clean:  # a clean print names no `scripts/agk` path (brief #1665); the skill's step 5 does
         return (
             "next: scan the whole history once for secrets: history_scan.py run --write "
-            "(step 4 of /agk:adopt runs it from the plugin)"
+            "(step 5 of /agk:adopt runs it from the plugin)"
         )
     return (
         "next: scan the whole history once for secrets: "

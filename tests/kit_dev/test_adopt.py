@@ -793,7 +793,7 @@ def test_req051_an_adopted_project_keeps_its_stamped_values(tmp_path):
 HISTORY_NEXT = "next: scan the whole history once for secrets: "
 INSTALLED_NEXT = HISTORY_NEXT + "python3 scripts/agk/history_scan.py run --write"
 CLEAN_NEXT = (
-    HISTORY_NEXT + "history_scan.py run --write (step 4 of /agk:adopt runs it from the plugin)"
+    HISTORY_NEXT + "history_scan.py run --write (step 5 of /agk:adopt runs it from the plugin)"
 )
 
 

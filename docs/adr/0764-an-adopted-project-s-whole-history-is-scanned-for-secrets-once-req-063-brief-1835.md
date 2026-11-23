@@ -28,9 +28,9 @@ later scan is green. The leaked-secret page and SPEC-0056 rule 10 name the gap; 
    `clean` or `findings` record is never rewritten and nothing scans again; an `incomplete` one is replaced by a later
    complete scan; a scan that could not run writes nothing. A symbolic link at the record or its folder is refused.
 3. **Adopt stays git-free.** `adopt.py` prints, as its last line after a write, the command that runs the scan
-   (`python3 scripts/agk/history_scan.py run --write` installed; in the clean layout the script's name and step 4 of
+   (`python3 scripts/agk/history_scan.py run --write` installed; in the clean layout the script's name and step 5 of
    `/agk:adopt`, since a clean print names no `scripts/agk` path, brief #1665) and `history scan: not run (dry run)` on a
-   dry run; `skills/adopt/SKILL.md` step 4 runs it (SPEC-0002 rules 1 and 7 kept, Q-HB-1).
+   dry run; `skills/adopt/SKILL.md` step 5 runs it (SPEC-0002 rules 1 and 7 kept, Q-HB-1).
 4. **Never a silent pass.** gitleaks missing or failing, a shallow clone, the 600 s bound (a constant, Q-HB-2) and no
    commit each print one line with the exit code of brief #1835 answer 4.
 5. **Doctor reads the record.** In `mode = "adopt"` only, doctor prints one `history-scan` line (never scanned,
