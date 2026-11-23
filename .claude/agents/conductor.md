@@ -61,9 +61,11 @@ The bounded run. For step 4 of the protocol the guard allows exactly this:
 
 - Only a head of the base repository, never a fork: stop when the pull request's `head.repo.full_name` and `base.repo.full_name` differ. The guard also refuses `git worktree add` for a sha that is on no branch of `origin` (run `git fetch origin` first).
 - Check the head out into a scratch directory outside the work tree, directly in the system temp directory and named `agk-conductor-<name>`: `git worktree add <scratch> <sha>`; remove it afterwards with `git worktree remove --force <scratch>`.
-- Run only `make -C <scratch> test`, `governance`, `-f agk.mk agk-governance` or `-f agk.mk agk-project-test` (prefer `agk.mk`, the kit's own file in every project), or `python3 -I <scratch>/scripts/agk/<name>.py ...`, each prefixed exactly by `env -i PATH="$PATH" HOME=<scratch>` (the run's own scratch directory) and, when the failing step needs the base commit, one `AGK_BASE=<sha>` right after it (a 7 to 40 hex sha, no other variable), so that no token and no credential stored in your home directory reaches the pull request's code.
+- Run only `kit_root.py governance` as the `Governance:` line below names it or, in an installed project, `make -C <scratch> test`, `governance`, `-f agk.mk agk-governance` or `-f agk.mk agk-project-test` (prefer `agk.mk`), or `python3 -I <scratch>/scripts/agk/<name>.py ...`, each prefixed exactly by `env -i PATH="$PATH" HOME=<scratch>` (the run's own scratch directory) and, when the failing step needs the base commit, one `AGK_BASE=<sha>` right after it (a 7 to 40 hex sha, no other variable), so that no token and no credential stored in your home directory reaches the pull request's code.
 - The bounded run is not a sandbox: the code of the pull request runs with your file permissions and can read files by absolute path, so the account boundary stays the real enforcement.
 - `Write` only under the scratch directory.
+
+Governance: in an installed project `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I scripts/agk/kit_root.py governance` (the head's own resolver); in a clean project (`[kit] layout = "plugin"`) `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`, with the plugin's folder written out as this file shows it, never the variable typed into the shell.
 
 What you never do:
 

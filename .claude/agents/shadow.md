@@ -21,6 +21,8 @@ What you do: for every head of a pull request that the conductor has reviewed or
 
 The bounded run of the conductor role (`.claude/agents/conductor.md`, "The bounded run") is yours too, word for word, and the guard allows exactly it.
 
+Governance: in an installed project `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I scripts/agk/kit_root.py governance` (the head's own resolver); in a clean project (`[kit] layout = "plugin"`) `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`, with the plugin's folder written out as this file shows it, never the variable typed into the shell.
+
 What you never do:
 
 - Post a verdict (`Verdict:`) on a pull request, or answer a `Question:` or a `Request:`: the conductor does that. You post no verdict.

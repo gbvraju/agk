@@ -58,9 +58,7 @@ def has_bash(text: str) -> bool:
 
 
 def bash_roles() -> list[str]:
-    return sorted(
-        p.stem for p in AGENTS.glob("*.md") if has_bash(p.read_text(encoding="utf-8"))
-    )
+    return sorted(p.stem for p in AGENTS.glob("*.md") if has_bash(p.read_text(encoding="utf-8")))
 
 
 def governance_forms(text: str) -> tuple[str, str] | None:
@@ -187,19 +185,18 @@ def clean_allows(role, clean, systmp, plugin, command) -> bool:
 
 def test_req078_a_bash_role_without_the_line_is_caught():
     """REQ-078: the check of the check; a file with no `tools:` line has every tool."""
-    two = 'Governance: `python3 scripts/agk/kit_root.py governance`; `python3 "x/kit_root.py" governance`.'
+    one = "Governance: `python3 scripts/agk/kit_root.py governance`"
+    two = one + '; `python3 "x/kit_root.py" governance`.'
     texts = {
         "a": "---\nname: a\ntools: Read, Bash\n---\nno line",
         "b": "---\nname: b\n---\nno line",
         "c": "---\nname: c\ntools: Read, Grep\n---\nno line",
         "d": f"---\nname: d\ntools: Bash\n---\n{two}",
-        "e": "---\nname: e\ntools: Bash\n---\nGovernance: `python3 scripts/agk/kit_root.py governance`.",
+        "e": f"---\nname: e\ntools: Bash\n---\n{one}.",
         "f": f"---\nname: f\ntools: Bash\n---\n{two}\n{two}",
     }
     found = missing_lines(texts)
-    assert [line.split()[1] for line in found] == [
-        f"{CLASS}{r}.md" for r in ("a", "b", "e", "f")
-    ]
+    assert [line.split()[1] for line in found] == [f"{CLASS}{r}.md" for r in ("a", "b", "e", "f")]
     assert all(line.startswith(CLASS) and "`" not in line for line in found)
 
 
@@ -266,3 +263,57 @@ def test_req078_the_conductors_make_form_cannot_run_in_a_clean_project(clean):
     assert "installed project" in run and "the kit's own file in every project" not in run
     shadow = (AGENTS / "shadow.md").read_text(encoding="utf-8")
     assert "word for word" in shadow
+
+
+# --- the settings of answer 4 ---------------------------------------------------------------------
+
+
+def gate(root: Path, kit: Path, plugin_env: str) -> subprocess.CompletedProcess:
+    """`python3 <kit>/kit_root.py governance` in `root`, for a refusal only (never a full gate)."""
+    env = {**os.environ, "CLAUDE_PLUGIN_ROOT": plugin_env}
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(kit / "kit_root.py"), "governance"],
+        capture_output=True, text=True, env=env, cwd=str(root), timeout=60,
+    )  # fmt: skip
+
+
+def with_toml(clean: Path, tmp_path: Path, old: str, new: str) -> Path:
+    root = tmp_path / "shop-example"
+    shutil.copytree(clean, root)
+    path = root / "agk.toml"
+    text = path.read_text(encoding="utf-8")
+    assert re.search(old, text, re.M), old
+    path.write_text(re.sub(old, new, text, count=1, flags=re.M), encoding="utf-8")
+    return root
+
+
+def test_req078_another_layout_is_refused_before_any_gate(clean, tmp_path, plugin):
+    """REQ-078: brief #1841 answer 4: `[kit] layout` neither value: refused naming `layout`."""
+    root = with_toml(clean, tmp_path, r'^layout = "plugin"$', 'layout = "other"')
+    proc = gate(root, plugin / "scripts" / "agk", str(plugin))
+    assert proc.returncode == 1 and "(setting: layout)" in proc.stdout + proc.stderr
+    assert '"other"' not in proc.stdout + proc.stderr
+
+
+def test_req078_a_pin_not_the_plugins_stops_the_gate_and_the_guard_still_allows(
+    clean, tmp_path, systmp, plugin
+):
+    """REQ-078: brief #1841 answer 4: `[kit] plugin_version` not the running plugin's: the gate
+    refuses naming `plugin_version`; the guards still allow the named form."""
+    root = with_toml(clean, tmp_path, r"^plugin_version = .*$", 'plugin_version = "0.0.1"')
+    proc = gate(root, plugin / "scripts" / "agk", str(plugin))
+    assert proc.returncode == 1 and "(setting: plugin_version)" in proc.stdout + proc.stderr
+    for role in VARIABLE_DENIED:
+        command = filled(role_forms(role)[1], role, systmp, plugin)
+        assert clean_allows(role, root, systmp, plugin, command), f"{CLASS}{role}.md"
+
+
+def test_req078_a_plugin_root_naming_no_plugin_is_refused(clean, tmp_path):
+    """REQ-078: brief #1841 answer 4: `CLAUDE_PLUGIN_ROOT` naming no plugin, and the folder the
+    script sits in no plugin either: refused, exit 1, naming the setting (the code names
+    `plugin_version`, the pin it cannot check; Decisions taken)."""
+    kit = tmp_path / "not-a-plugin" / "scripts" / "agk"
+    shutil.copytree(KIT_ROOT / "scripts" / "agk", kit, ignore=shutil.ignore_patterns("__pycache__"))
+    proc = gate(clean, kit, str(tmp_path / "none"))
+    assert proc.returncode == 1 and "(setting: plugin_version)" in proc.stdout + proc.stderr
+    assert str(tmp_path) not in proc.stdout + proc.stderr
