@@ -17,8 +17,10 @@ machine, never here; the build file comes from `kit/templates/stacks/<folder>/` 
 `engines.py stack-files`. The runner's interface (`RULE`, `check(root, playbook)`) is that of
 `scripts/agk/gates/` (brief #1586); `run_gates.py` runs it where a work type is declared
 (`applies`), prints `not run pins: no stack chosen` without a stack (`skipped`), and holds its
-per-file `counts` to the baseline (brief #1776, ADR-0742). Installed; it imports only installed
-modules.
+per-file `counts` to the baseline (brief #1776, ADR-0742). With a Python runtime the dependency
+files are `python_files` (brief #1838, ADR-0768): `pyproject.toml`, the root requirements file, the
+files of `[tool.setuptools.dynamic]` and each file a `-r` line names, each read once; a finding is
+held to the file it is in. Installed; it imports only installed modules.
 """
 
 from __future__ import annotations
@@ -58,6 +60,18 @@ LOCKED_PY = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([^\s;\\]
 UNPINNED = "a direct dependency is not pinned exactly"
 STALE = "a direct dependency differs from the lock"
 NPM_GROUPS = ("dependencies", "devDependencies", "optionalDependencies")
+REQUIREMENTS = "requirements.txt"  # brief #1838: the one name of the root requirements file
+INCLUDES = ("--requirement", "-r")
+EDITABLE = ("-e", "--editable")
+COMMENT = re.compile(r"(^|\s)#.*$")
+
+
+class Unreadable(Exception):
+    """A Python dependency file that cannot be read, held to the file that names it."""
+
+    def __init__(self, held: str) -> None:
+        super().__init__(held)
+        self.held = held
 
 
 def norm(name: str) -> str:
@@ -122,14 +136,107 @@ def direct(reader: str, text: str) -> list[tuple[str, str | None]]:
     specs = list(project.get("dependencies", []))
     for group in (project.get("optional-dependencies") or {}).values():
         specs += list(group)
-    for spec in specs:
-        m = PEP508.match(spec)
-        if m:
-            pin = EXACT_PY.match(m.group(3))
-            out.append(
-                (norm(m.group(1)), pin.group(1) if pin and "*" not in pin.group(1) else None)
-            )
+    return [r for spec in specs if (r := requirement(spec)) is not None]
+
+
+def requirement(spec: str) -> tuple[str, str | None] | None:
+    """(name, exact version or None) of one PEP 508 requirement; None when it has no name."""
+    m = PEP508.match(spec)
+    if not m:
+        return None
+    pin = EXACT_PY.match(m.group(3))
+    return norm(m.group(1)), pin.group(1) if pin and "*" not in pin.group(1) else None
+
+
+def requirement_lines(text: str) -> tuple[list[tuple[str, str | None]], list[str]]:
+    """Brief #1838 answer 1: (the requirements, the `-r` files) of a requirements file. Options,
+    `-c` files, comments and `--hash=` are not dependencies; `-e .` is the project itself."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\\\n", " ")
+    reqs: list[tuple[str, str | None]] = []
+    includes: list[str] = []
+    for raw in text.split("\n"):
+        words = COMMENT.sub("", raw).split()
+        if not words:
+            continue
+        first = words[0]
+        flag = next((f for f in INCLUDES if first.startswith(f)), "")
+        if flag and (first == flag or flag == "-r" or first[len(flag)] == "="):
+            includes.append(first[len(flag) :].lstrip("=") or " ".join(words[1:2]))
+        elif first in EDITABLE:
+            if words[1:2] != ["."]:
+                reqs.append((" ".join(words[1:2]), None))
+        elif not first.startswith("-"):
+            spec = " ".join(words).split(" --")[0]
+            reqs.append(requirement(spec) or (spec, None))
+    return reqs, includes
+
+
+def dynamic_files(data: dict[str, Any]) -> list[str]:
+    """The `file` entries of `[tool.setuptools.dynamic]` dependencies and optional groups."""
+    table = ((data.get("tool") or {}).get("setuptools") or {}).get("dynamic") or {}
+    entries = [table.get("dependencies")]
+    entries += list((table.get("optional-dependencies") or {}).values())
+    out: list[str] = []
+    for entry in entries:
+        files = entry.get("file") if isinstance(entry, dict) else None
+        out += [files] if isinstance(files, str) else [f for f in files or [] if isinstance(f, str)]
     return out
+
+
+def python_files(root: Path) -> list[tuple[str, str]]:
+    """Brief #1838 answer 4: (path from the root, text) of each Python dependency file, the build
+    file first, each once; raises `Unreadable` with the file that names one it cannot read."""
+    root = Path(root).resolve()
+    build = STACKS["python"][1]
+    try:
+        text = (root / build).read_text(encoding="utf-8")
+        named = dynamic_files(tomllib.loads(text))
+    except (OSError, UnicodeDecodeError, ValueError, AttributeError) as exc:
+        raise Unreadable(build) from exc
+    out = [(build, text)]
+    queue = [(root / f, build) for f in named]
+    if (root / REQUIREMENTS).is_file():
+        queue.insert(0, (root / REQUIREMENTS, build))
+    seen = {(root / build).resolve()}
+    while queue:
+        path, held = queue.pop(0)
+        path = Path(path).resolve()
+        if path in seen:
+            continue
+        if not path.is_relative_to(root) or not path.is_file():
+            raise Unreadable(held)
+        rel = path.relative_to(root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise Unreadable(held) from exc
+        seen.add(path)
+        out.append((rel, text))
+        for name in requirement_lines(text)[1]:
+            if not name:
+                raise Unreadable(rel)
+            queue.append((path.parent / name, rel))
+    return out
+
+
+def declared(root: Path, reader: str, build_file: str) -> list[tuple[str, str | None, str]]:
+    """(name, exact version or None, the file it is in) of each direct dependency: a name floating
+    in any file is one row, held to the first such file (brief #1838 answer 6); else one row per
+    distinct version."""
+    if reader == "npm":
+        text = (Path(root) / build_file).read_text(encoding="utf-8")
+        return [(n, v, build_file) for n, v in direct(reader, text)]
+    rows: list[tuple[str, str | None, str]] = []
+    for rel, text in python_files(root):
+        found = direct(reader, text) if rel == build_file else requirement_lines(text)[0]
+        rows += [(n, v, rel) for n, v in found]
+    floats: dict[str, str] = {}
+    for name, version, rel in rows:
+        if version is None:
+            floats.setdefault(name, rel)
+    out = [(n, None, rel) for n, rel in floats.items()]
+    pinned = {(n, v): rel for n, v, rel in reversed(rows) if n not in floats}
+    return out + [(n, v, rel) for (n, v), rel in pinned.items()]
 
 
 def locked(reader: str, text: str) -> dict[str, str]:
@@ -156,9 +263,11 @@ def findings(root: Path) -> list[tuple[str, str, str]] | None:
     if found is None:
         return None
     (_, build_file, lock_file, reader), parts = found
-    build, lock = Path(root) / build_file, Path(root) / lock_file
+    lock = Path(root) / lock_file
     try:
-        deps = direct(reader, build.read_text(encoding="utf-8"))
+        deps = declared(Path(root), reader, build_file)
+    except Unreadable as exc:
+        return [(f"{RULE}: the build file is missing or unreadable", "build file", exc.held)]
     except (OSError, UnicodeDecodeError, ValueError, AttributeError):
         return [(f"{RULE}: the build file is missing or unreadable", "build file", build_file)]
     try:
@@ -168,9 +277,9 @@ def findings(root: Path) -> list[tuple[str, str, str]] | None:
     except (OSError, UnicodeDecodeError, ValueError, AttributeError):
         return [(f"{RULE}: the lock file is unreadable", "lock file", lock_file)]
     out: list[tuple[str, str, str]] = []
-    for name, version in deps:
+    for name, version, held in deps:
         if version is None:
-            out.append((f"{RULE}: {UNPINNED}", "dependency", build_file))
+            out.append((f"{RULE}: {UNPINNED}", "dependency", held))
         elif name not in have:
             out.append((f"{RULE}: a direct dependency is not in the lock", "dependency", lock_file))
         elif have[name] != version:

@@ -168,3 +168,69 @@ def test_doctor_gives_no_retired_key_line_and_no_value(tmp_path):
     (root / "agk.toml").write_text(toml + every, encoding="utf-8")
     out = doctor(*args).stdout
     assert RETIRED not in out and "tests/test_w.py" not in out, out
+
+
+# Brief #1838 answer 3 (ADR-0768): one doctor line while the licences baseline holds a line.
+
+
+def held_licences(tmp_path: Path, layout: str | None, held: str | None) -> Path:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
+    root = tmp_path / "proj"
+    root.mkdir(parents=True)
+    kit = f'\n[kit]\nlayout = "{layout}"\n' if layout else ""
+    (root / "agk.toml").write_text('mode = "adopt"\n' + kit, encoding="utf-8")
+    if held is not None:
+        (root / "config" / "agk-baseline").mkdir(parents=True)
+        (root / "config" / "agk-baseline" / "licences.txt").write_text(held, encoding="utf-8")
+    return root
+
+
+def test_doctor_names_the_command_while_the_licence_baseline_holds_a_line(tmp_path):
+    """REQ-079, REQ-061: brief #1838 answer 3, the installed layout."""
+    import doctor
+
+    root = held_licences(tmp_path, None, "package-lock.json 2\n")
+    assert doctor.held_licence_lines(root) == [
+        "warn licences: the baseline holds 2 packages whose licence is not on the allowed list;"
+        " name them with python3 scripts/agk/gates/licences.py --names, then replace, remove or"
+        " allow each by a project ADR (path class: config/agk-baseline/)"
+    ]
+    one = held_licences(tmp_path / "one", "installed", "requirements.lock 1\n")
+    assert "holds 1 package whose" in doctor.held_licence_lines(one)[0]
+
+
+def test_doctor_licence_line_in_the_plugin_layout(tmp_path, monkeypatch):
+    """REQ-079, REQ-061: brief #1838 answer 3: `<kit>` as `kit_root.form` gives it."""
+    import doctor
+    import kit_root
+
+    plugin = Path(__file__).resolve().parents[2]
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin))
+    monkeypatch.setattr(kit_root, "plugin_root", lambda _root, _env=None: plugin.resolve())
+    root = held_licences(tmp_path, "plugin", "package-lock.json 1\n")
+    lines = doctor.held_licence_lines(root)
+    assert (
+        lines
+        and 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk"/gates/licences.py --names' in lines[0]
+    )
+
+
+def test_doctor_has_no_licence_line_without_a_held_line(tmp_path):
+    """REQ-079, REQ-061: brief #1838 answer 3."""
+    import doctor
+
+    assert doctor.held_licence_lines(held_licences(tmp_path, None, None)) == []
+    assert doctor.held_licence_lines(held_licences(tmp_path / "z", None, "")) == []
+
+
+def test_doctor_refuses_another_layout_naming_it(tmp_path):
+    """REQ-079, REQ-061: brief #1838 answer 5."""
+    import doctor
+    import pytest
+
+    root = held_licences(tmp_path, "elsewhere", "package-lock.json 1\n")
+    with pytest.raises(doctor.Refusal) as info:
+        doctor.held_licence_lines(root)
+    assert "layout" in str(info.value) and "elsewhere" not in str(info.value)

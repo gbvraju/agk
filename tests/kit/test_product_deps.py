@@ -359,3 +359,122 @@ def test_a_project_list_of_the_old_six_still_fails_blessing(product, capsys) -> 
     product.commit({"config/licences.toml": OLD_TEMPLATE})
     assert licences.main(["--root", str(product.root)]) == 1
     assert capsys.readouterr().out == f"FAIL licences: {licences.RULE} (component class: node)\n"
+
+
+# Brief #1838 answer 3 (ADR-0768): the person names each failing licence; the gate's lines keep
+# the class only.
+
+
+def names(root: Path, capsys, *extra: str) -> tuple[int, str]:
+    capsys.readouterr()
+    code = licences.main(["--root", str(root), "--names", *extra])
+    return code, capsys.readouterr().out
+
+
+def tree(root: Path) -> set[str]:
+    return {p.relative_to(root).as_posix() for p in root.rglob("*") if ".git" not in p.parts}
+
+
+def test_names_lists_each_failing_package_for_the_person(product, capsys) -> None:
+    """REQ-061, REQ-079: brief #1838 answer 3; it writes nothing and exits 1 as the check does."""
+    odd = {
+        "odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"},
+        "no-licence": {"version": "0.0.2"},
+    }
+    product.commit({"package-lock.json": lock(**odd)})
+    before = tree(product.root)
+    code, out = names(product.root, capsys)
+    assert code == 1
+    assert out.splitlines() == [
+        "licence off the list: node no-licence unknown (path class: package-lock.json)",
+        "licence off the list: node odd-pkg LicenseRef-Invented-1 (path class: package-lock.json)",
+        "licences: 2 to name; the baseline holds 0 (path class: config/agk-baseline/)",
+    ]
+    assert tree(product.root) == before
+    capsys.readouterr()
+    assert licences.main(["--root", str(product.root)]) == 1
+    plain = capsys.readouterr().out
+    assert "odd-pkg" not in plain and "LicenseRef-Invented-1" not in plain
+
+
+def test_names_with_none_to_name_and_in_any_order(product, capsys) -> None:
+    """REQ-061, REQ-079: brief #1838 answer 3."""
+    code, out = names(product.root, capsys)
+    assert (code, out) == (0, "ok licences (none to name)\n")
+    capsys.readouterr()
+    assert licences.main(["--names", "--root", str(product.root)]) == 0
+    assert capsys.readouterr().out == "ok licences (none to name)\n"
+
+
+def test_names_counts_what_the_baseline_holds(product, capsys) -> None:
+    """REQ-061, REQ-079: brief #1838 answers 3 and 6; the gate's held row is unchanged."""
+    toml = FILES["agk.toml"].replace('mode = "init"', 'mode = "adopt"')
+    odd = {"odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"}}
+    product.commit({"agk.toml": toml, "package-lock.json": lock(**odd)})
+    code, out = gates(product.root, capsys)
+    assert "licences (baseline): 1 held (path class: package-lock.json)\n" in out
+    assert "odd-pkg" not in out
+    swapped = {"odd-new": {"version": "0.0.3", "license": "LicenseRef-Invented-4"}}
+    product.commit({"package-lock.json": lock(**swapped)})
+    code, out = names(product.root, capsys)
+    assert code == 1 and "node odd-new LicenseRef-Invented-4" in out and "odd-pkg" not in out
+    assert out.endswith(
+        "licences: 1 to name; the baseline holds 1 (path class: config/agk-baseline/)\n"
+    )
+
+
+def test_names_takes_a_python_licence_from_the_record(product, capsys) -> None:
+    """REQ-061, REQ-079: brief #1838 answer 6."""
+    record = PY_RECORD.replace("tiny-util 2.1.0 ISC", "example-qt 5.15.10 GPL-3.0")
+    lock_text = "example-qt==5.15.10 \\\n    --hash=sha256:" + "ab" * 32 + "\n"
+    files = {
+        "package.json": None,
+        "package-lock.json": None,
+        "docs/adr/0003-stack-options.md": record,
+        "requirements.lock": lock_text,
+    }
+    product.commit(files)
+    code, out = names(product.root, capsys)
+    assert code == 1
+    assert out.splitlines()[0] == (
+        "licence off the list: python example-qt GPL-3.0 (path class: requirements.lock)"
+    )
+
+
+def test_names_refuses_a_list_not_of_its_form_and_names_no_package(product, capsys) -> None:
+    """REQ-061, REQ-079: brief #1838 answer 5."""
+    odd = {"odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"}}
+    product.commit({"package-lock.json": lock(**odd), "config/licences.toml": "x = [\n"})
+    code, out = names(product.root, capsys)
+    assert code == 1
+    assert out == f"FAIL licences: {licences.FORM} (setting: config/licences.toml)\n"
+
+
+def test_names_with_no_lock_or_no_work_type_is_not_run(product, capsys) -> None:
+    """REQ-061, REQ-079: brief #1838 answer 5."""
+    product.commit({"package-lock.json": None})
+    assert names(product.root, capsys) == (0, "licences: not run: no lock\n")
+    product.commit({"agk.toml": 'version = "0.1.0"\n'})
+    assert names(product.root, capsys) == (0, "licences: not run: no lock\n")
+
+
+@pytest.mark.parametrize("args", [["--names", "--names"], ["--names", "x"], ["--root"]])
+def test_names_a_malformed_command_line_prints_usage(args: list[str], capsys) -> None:
+    """REQ-061, REQ-079."""
+    assert licences.main(args) == 2
+    assert capsys.readouterr().err.startswith("usage: python3 scripts/agk/gates/licences.py")
+
+
+def test_no_workflow_or_prepush_step_calls_names() -> None:
+    """REQ-061, REQ-079: brief #1838 answer 3: the names never reach a CI log."""
+    paths = [
+        *(KIT_ROOT / ".github" / "workflows").glob("*.y*ml"),
+        KIT_ROOT / "scripts" / "agk" / "prepush.py",
+    ]
+    paths += [
+        KIT_ROOT / "scripts" / "agk" / "run_gates.py",
+        KIT_ROOT / "scripts" / "agk" / "governance_map.py",
+    ]
+    for path in paths:
+        if path.is_file():
+            assert "--names" not in path.read_text(encoding="utf-8"), path

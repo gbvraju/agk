@@ -2950,6 +2950,33 @@ def held_secret_lines(root: Path) -> list[str]:
     return [HELD_SECRETS.format(n=len(held), files="file" if len(held) == 1 else "files")]
 
 
+HELD_LICENCES = (
+    "warn licences: the baseline holds {n} {packages} whose licence is not on the allowed list;"
+    " name them with python3 {kit}/gates/licences.py --names, then replace, remove or allow each"
+    " by a project ADR (path class: config/agk-baseline/)"
+)
+
+
+def held_licence_lines(root: Path) -> list[str]:
+    """Brief #1838 (ADR-0768): one warn line while the `licences` baseline holds a line, naming
+    the count and the person's `--names` command, never a package; it changes no exit code."""
+    import kit_root  # noqa: PLC0415 - only this line needs the `<kit>` form
+    from gates import baseline  # noqa: PLC0415 - only this line needs the baseline
+
+    try:
+        n = sum((baseline.read(root, "licences") or {}).values())
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    if not n:
+        return []
+    try:
+        kit = kit_root.form(root)
+    except kit_root.Refused as exc:
+        raise Refusal(str(exc)) from exc
+    packages = "package" if n == 1 else "packages"
+    return [HELD_LICENCES.format(n=n, packages=packages, kit=kit)]
+
+
 def _count(n: int) -> str:
     return f"{n} problem" if n == 1 else f"{n} problems"
 
@@ -3175,6 +3202,7 @@ def main(argv: list[str] | None = None) -> int:
         skills += work_type_discovery_lines(root.resolve())
         skills += standards_lines(root.resolve())
         skills += held_secret_lines(root.resolve())
+        skills += held_licence_lines(root.resolve())
         design = design_import_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")
