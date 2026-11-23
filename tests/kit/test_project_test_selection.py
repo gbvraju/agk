@@ -339,7 +339,7 @@ def test_a_whole_test_in_no_proof_area_fails_the_step_naming_the_setting(tmp_pat
     assert "(setting: testing.whole_tests)" in proc.stdout
 
 
-# Brief #1812 (ADR-0755): the plan prints the retired key's line; the old key's files keep today's run.
+# Brief #1812 (ADR-0755): the plan prints the retired key's line; its files keep today's run.
 RETIRED = "deprecated: testing.every_script_tests (ADR-0755)"
 
 
