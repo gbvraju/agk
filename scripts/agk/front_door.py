@@ -1265,6 +1265,9 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
         target.unlink()
         raise Refusal(found)
     print(f"ok {NAME}: wrote {rel}")
+    import check_protected_changes  # brief #1829 answer 4: the classes the playbook meets
+
+    print(check_protected_changes.protected_line(root, [rel]))
     return 0
 
 

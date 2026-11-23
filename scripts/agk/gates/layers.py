@@ -208,6 +208,9 @@ def write_record(root: Path) -> int:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     print(f"ok layers: wrote {RECORD}")
+    import check_protected_changes  # brief #1829 answer 4: the classes the record meets
+
+    print(check_protected_changes.protected_line(root, [RECORD]))
     return 0
 
 
