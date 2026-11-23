@@ -60,6 +60,10 @@ for the declared work type (else `default`) as Option A, recommended, or, when t
 already holds one other stack, that stack, kept. `stack-accept` makes the two ordinary commits of
 the accepting change: Status and Chosen, then the option's `[testing]` copy into `agk.toml`.
 
+The work type before the stack (brief #1757, ADR-0735, amendment 218): `stack-write` refuses,
+naming `delivery.work_type`, when a discovery document under `docs/discovery/` names a work type
+other than `pilot` and `agk.toml` declares none, so the stack is never drafted generic by omission.
+
 Pinned parts (brief #1592, ADR-0672, amendment 200): in a Proposed record each option names its
 `Parts:`, each `<name> <exact version> <licence id>` (SPDX form, `(verify)` until the build installs
 them); a range, no version or no licence id is refused naming the option and the part's place.
@@ -103,7 +107,15 @@ from gates.pins import option_parts
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
-from playbook_format import BASE, WORK_TYPES, declaration, default_playbook, discovery, selected
+from playbook_format import (
+    BASE,
+    WORK_TYPES,
+    declaration,
+    default_playbook,
+    discovered_work_types,
+    discovery,
+    selected,
+)
 from playbook_format import FOLDER as PLAYBOOKS
 from playbook_format import path as playbook_path
 from playbook_format import problems as playbook_problems
@@ -381,6 +393,12 @@ def cmd_stack_ids(root: Path, opts: dict[str, str]) -> int:
 def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
     if any(STACK_NAME.match(p.relative_to(root).as_posix()) for p in root.glob("docs/adr/*.md")):
         raise CheckError("rule 5: a stack ADR already exists; it is never overwritten")
+    declared, problems = declaration(root)
+    if declared is None and not problems and discovered_work_types(root):  # brief #1757 answer 3
+        raise CheckError(
+            "rule 5: discovery names a work type that is not declared; the owner chooses it"
+            " first (setting: delivery.work_type)"
+        )
     branch = load_config(root)["default_branch"]
     adr = next_free_ids(root, opts.get("ref") or f"origin/{branch}")["adr"]
     today = opts.get("date") or datetime.now(UTC).date().isoformat()
