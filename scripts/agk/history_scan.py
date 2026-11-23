@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import guard  # noqa: E402
-from common import GITLEAKS_INSTALL, matches, read_list  # noqa: E402
+from common import GITLEAKS_INSTALL, matches, read_list, utf8_output  # noqa: E402
 
 TIMEOUT = 600  # seconds; a constant, never a setting (Q-HB-2)
 RECORD = "config/agk-baseline/history-scan.json"
@@ -54,7 +54,12 @@ USAGE = "usage: history_scan.py run [--root DIR] [--write] [--sidecar DIR]"
 
 def git(root: Path, *args: str) -> tuple[int, str]:
     done = subprocess.run(  # nosec B603 B607 - fixed read-only git argument list, no shell
-        ["git", "-C", str(root), *args], capture_output=True, text=True, check=False
+        ["git", "-C", str(root), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
     return done.returncode, done.stdout.strip()
 
@@ -71,7 +76,13 @@ def path_class(rel: str, entries: list[str]) -> str:
 def version(tool: str) -> str:
     try:
         done = subprocess.run(  # nosec B603 - fixed argument list, no shell
-            [tool, "version"], capture_output=True, text=True, timeout=30, check=False
+            [tool, "version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
         )
         out = done.stdout.strip().splitlines() if done.returncode == 0 else []
     except (OSError, subprocess.SubprocessError):
@@ -214,6 +225,7 @@ def state(path: Path) -> tuple[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     if args[:1] != ["run"]:
         print(USAGE, file=sys.stderr)
