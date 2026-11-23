@@ -2950,6 +2950,18 @@ def held_secret_lines(root: Path) -> list[str]:
     return [HELD_SECRETS.format(n=len(held), files="file" if len(held) == 1 else "files")]
 
 
+def history_scan_lines(root: Path) -> list[str]:
+    """Brief #1835 (ADR-0764): in an adopted project only, the state of the one whole-history
+    secret scan read from its record (never running gitleaks); a warn line changes no exit code."""
+    import history_scan  # noqa: PLC0415 - only this line needs the record's reader
+    from gates import baseline  # noqa: PLC0415
+
+    if not baseline.adopted(root):
+        return []
+    level, text = history_scan.state(root / history_scan.RECORD)
+    return [f"{level} history-scan: {text}"]
+
+
 HELD_LICENCES = (
     "warn licences: the baseline holds {n} {packages} whose licence is not on the allowed list;"
     " name them with python3 {kit}/gates/licences.py --names, then replace, remove or allow each"
@@ -3123,6 +3135,9 @@ def render_json(
         data["work_type"] = work
     if skills:
         data["skills"] = skills
+        history = [s for s in skills if s.split(" ", 2)[1:2] == ["history-scan:"]]
+        if history:  # brief #1835: the same text under its own key
+            data["history_scan"] = history
     if design:
         data["design_import"] = design
     if tidy:
@@ -3229,6 +3244,7 @@ def main(argv: list[str] | None = None) -> int:
         skills += work_type_discovery_lines(root.resolve())
         skills += standards_lines(root.resolve())
         skills += held_secret_lines(root.resolve())
+        skills += history_scan_lines(root.resolve())
         skills += held_licence_lines(root.resolve())
         skills += held_floor_lines(root.resolve())
         design = design_import_lines(root.resolve())

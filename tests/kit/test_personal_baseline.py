@@ -696,3 +696,54 @@ def test_report_writes_nothing_and_runs_no_test(tmp_path):
     assert done.returncode == 0
     assert snapshot(clone) == before
     assert snapshot(sidecar) == side_before
+
+
+# Brief #1835 answer 8 (ADR-0764): the one whole-history secret scan, recorded in the sidecar.
+
+
+def _stub_gitleaks(tmp_path: Path) -> dict[str, str]:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    exe = bin_dir / "gitleaks"
+    exe.write_text(
+        f"#!{sys.executable}\nimport sys\n"
+        "if sys.argv[1:2] == ['version']:\n    print('8.30.1'); sys.exit(0)\n"
+        "path = sys.argv[sys.argv.index('--report-path') + 1]\n"
+        "open(path, 'w').write('[]')\n",
+        encoding="utf-8",
+    )
+    exe.chmod(0o755)
+    return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+
+
+def test_req063_baseline_approve_scans_history_once_into_the_sidecar(tmp_path, monkeypatch):
+    """REQ-063: brief #1835 answer 8: the record in `records/`, nothing in the clone."""
+    clone = make_clone(tmp_path / "clone")
+    sidecar = make_sidecar(tmp_path / "side", command_of("green_stub.py", junit=False))
+    monkeypatch.setenv("PATH", _stub_gitleaks(tmp_path)["PATH"])
+    before = snapshot(clone)
+    done = baseline(clone, sidecar, "--approve")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "history scan: clean (1 commits, gitleaks 8.30.1)" in done.stdout
+    saved = json.loads((sidecar / "records" / "history-scan.json").read_text(encoding="utf-8"))
+    assert saved["outcome"] == "clean"
+    assert snapshot(clone) == before
+    cmd = [sys.executable, str(SCRIPTS / "personal.py"), "status", "--sidecar", str(sidecar)]
+    shown = subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603 - fixed argv
+    assert "ok history-scan: scanned " in shown.stdout, shown.stdout + shown.stderr
+
+
+def test_req063_baseline_without_approve_names_the_scan_it_would_run(tmp_path, monkeypatch):
+    """REQ-063: brief #1835 answer 8: the would-run line; no record."""
+    clone = make_clone(tmp_path / "clone")
+    sidecar = make_sidecar(tmp_path / "side", command_of("green_stub.py", junit=False))
+    monkeypatch.setenv("PATH", _stub_gitleaks(tmp_path)["PATH"])
+    done = baseline(clone, sidecar)
+    assert "history scan: would run once (gitleaks 8.30.1)" in done.stdout
+    assert not (sidecar / "records" / "history-scan.json").exists()
+    only_git = tmp_path / "only-git"
+    only_git.mkdir()
+    (only_git / "git").symlink_to(shutil.which("git"))
+    monkeypatch.setenv("PATH", str(only_git))
+    done = baseline(clone, sidecar)
+    assert "history scan: would run once (not installed)" in done.stdout

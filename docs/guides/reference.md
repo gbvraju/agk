@@ -856,6 +856,17 @@ It runs every proving test file once, so a whole report is a heavy step. `apply`
 fails, 4 on an unknown proof. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0321.
 
+## Scanning the whole history once
+
+    python3 scripts/agk/history_scan.py run [--root DIR] [--write] [--sidecar DIR]
+
+The one whole-history secret scan of an adopted project (brief #1835, ADR-0764): gitleaks over every local and
+remote-tracking ref, offline, each finding printed as its rule id, count and path class, never a path, value, commit or
+message, then the leaked-secret page. `--write` records the run in `config/agk-baseline/history-scan.json` (with
+`--sidecar`, the sidecar's `records/`); a `clean` or `findings` record is never rewritten. Adopt prints the command as its
+last line, the adopt skill runs it, and doctor's `history-scan` line reports the record. Exit 0 clean or nothing to scan,
+1 otherwise (findings, incomplete, gitleaks missing or failed).
+
 ## Reading a log
 
     python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-|--refusals

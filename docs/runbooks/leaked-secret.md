@@ -7,7 +7,7 @@ AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository na
 
 ## When this applies
 
-A secret scan reports a finding, in the `Secret scan` step of the governance workflow or the `secret-scan` step of `prepush.py`, or a person sees a credential in a commit.
+A secret scan reports a finding, in the `Secret scan` step of the governance workflow, the `secret-scan` step of `prepush.py` or the one history scan at adoption (`history_scan.py run --write`, and doctor's `history-scan` line after it), or a person sees a credential in a commit.
 
 ## Who acts
 
@@ -27,7 +27,7 @@ A person, always. A session that sees a finding stops, reports only that the sca
 
 ## Over when
 
-The credential is revoked and replaced, the access record is read, and the record issue is closed. A later green scan says nothing about the old commit, because a scan on a push reads only the pushed range.
+The credential is revoked and replaced, the access record is read, and the record issue is closed. A later green scan says nothing about the old commit, because a scan on a push reads only the pushed range; the one history scan at adoption is the scan that sees old commits.
 
 ## By mode
 
