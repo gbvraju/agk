@@ -10,17 +10,17 @@ REQ-061, REQ-079).
 Each package of the chosen stack's committed lock (`pins.py` finds the stack, the lock and its
 reader) has a licence: the lock's own where it states one (`package-lock.json`'s `license`), else
 the Accepted stack record's `Parts:` entry of that name, else none. The step fails on a licence
-outside the project's allowed list, `allowed` of `config/licences.toml` (absent: `DEFAULT`, the
-list of `kit/templates/licences.toml`), and on a package with no licence it can read, as
-`unknown`, never clean. An SPDX expression passes when one `OR` side has every `AND` id on the
-list, ids compared case-folded; `expression` and `ids` are the kit's one reader of a licence
-(brief #1785, ADR-0748), which `engines.py` uses for the stack record. Each line names the rule and the component class (`python`, `node`), never a name, a
-version or an id (principle 8); a list of another form is refused naming the setting. With no
-stack chosen or no lock it prints `not run: no lock`. `counts` gives the findings per file (the
-lock's failing packages, the setting's form), so the runner's baseline holds an adopted project's
-existing ones, counted on every run (brief #1777, ADR-0743). Offline, files only; widening the
-list is a project ADR (principle 11). The runner calls it, as `layers`, where it `applies`
-(brief #1586's interface).
+outside the project's allowed list, `allowed` of `config/licences.toml` (absent: `DEFAULT`, the list
+of `kit/templates/licences.toml`), and on a package with no licence it can read, as `unknown`, never
+clean. An SPDX expression passes when one `OR` side has every `AND` id on the list, ids compared
+case-folded; `expression` and `ids` are the kit's one reader of a licence (brief #1785, ADR-0748),
+which `engines.py` uses for the stack record. Each line names the rule and the component class
+(`python`, `node`), never a name, a version or an id (principle 8); a list of another form is
+refused naming the setting. With no stack chosen or no lock it prints `not run: no lock`. `counts`
+gives the findings per file (the lock's failing packages, the setting's form), so the runner's
+baseline holds an adopted project's existing ones, counted on every run (brief #1777, ADR-0743).
+Offline, files only; widening the list is a project ADR (principle 11). The runner calls it, as
+`layers`, where it `applies` (brief #1586's interface).
 """
 
 from __future__ import annotations
