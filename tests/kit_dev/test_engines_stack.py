@@ -359,13 +359,22 @@ def with_part(root, licence, selection=""):
     return stack_root(root, text)
 
 
-def test_req061_sqlite_blessing_passes_and_is_said_off_the_list(started):
-    """REQ-061: brief #1785 answers 1 and 2 (a lower-case SPDX id; a note, never a failure)."""
-    proc = engines(with_part(started, "blessing"), "stack-check")
+def test_req061_a_part_off_the_list_passes_and_is_said_off_the_list(started):
+    """REQ-061: brief #1785 answers 1 and 2 (a note, never a failure); brief #1811 answer 7
+    moves it from `blessing`, now on the default list, to `BUSL-1.1`, still off it."""
+    proc = engines(with_part(started, "BUSL-1.1"), "stack-check")
     assert proc.returncode == 0, proc.stdout
     lines = proc.stdout.splitlines()
     assert lines[0] == "ok engines-stack" and OFF_LIST in lines
-    assert "blessing" not in proc.stdout  # principle 8: the note names no id
+    assert "BUSL" not in proc.stdout  # principle 8: the note names no id
+
+
+@pytest.mark.parametrize("licence", ["blessing", "Zlib", "BSL-1.0", "0BSD", "Unlicense"])
+def test_req061_an_added_permissive_id_prints_no_note(started, licence):
+    """REQ-061: brief #1811 answer 4 (no project list: the wider default, no off-list note)."""
+    assert not (started / "config" / "licences.toml").exists()
+    proc = engines(with_part(started, licence), "stack-check")
+    assert proc.returncode == 0 and "not on the allowed list" not in proc.stdout, proc.stdout
 
 
 @pytest.mark.parametrize(
@@ -395,8 +404,8 @@ def test_req061_a_text_that_is_no_expression_still_fails(started, licence):
 def test_req061_a_project_list_holding_the_id_prints_no_note(started):
     """REQ-061: brief #1785 answer 5 (the project's list, compared case-folded)."""
     (started / "config").mkdir(exist_ok=True)
-    (started / "config" / "licences.toml").write_text('allowed = ["MIT", "Blessing"]\n', "utf-8")
-    proc = engines(with_part(started, "blessing"), "stack-check")
+    (started / "config" / "licences.toml").write_text('allowed = ["MIT", "busl-1.1"]\n', "utf-8")
+    proc = engines(with_part(started, "BUSL-1.1"), "stack-check")
     assert proc.returncode == 0 and "not on the allowed list" not in proc.stdout, proc.stdout
 
 
@@ -500,3 +509,12 @@ def test_req061_every_record_refusal_of_the_accept_is_named_by_the_check():
     assert "accept_problems" in ast.unparse(notes)
     stack_check, _ = refusal_texts(tree, "cmd_stack_check")
     assert "accept_notes" in ast.unparse(stack_check)
+
+
+def test_req061_a_project_list_of_the_old_six_still_notes_blessing(started):
+    """REQ-061: brief #1811 answer 2 (a project's own list decides the note, unchanged)."""
+    (started / "config").mkdir(exist_ok=True)
+    six = '"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0"'
+    (started / "config" / "licences.toml").write_text(f"allowed = [{six}]\n", "utf-8")
+    proc = engines(with_part(started, "blessing"), "stack-check")
+    assert proc.returncode == 0 and OFF_LIST in proc.stdout.splitlines(), proc.stdout
