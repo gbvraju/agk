@@ -28,6 +28,9 @@ RECORD = (
     " Why: invented.\n3. **Chosen**: Option A\n"
 )
 PY_RECORD = RECORD.replace("node 22.11.0 MIT", "python 3.12.7 PSF-2.0")
+OLD_SIX = ("MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0")
+ADDED = ("blessing", "0BSD", "Unlicense", "Zlib", "BSL-1.0")  # brief #1811, ADR-0754
+OLD_TEMPLATE = "allowed = [" + ", ".join(f'"{i}"' for i in OLD_SIX) + "]\n"
 
 
 def lock(**extra: dict) -> str:
@@ -167,12 +170,14 @@ def test_the_project_list_widens_and_an_unknown_form_is_refused(product, capsys)
 def test_the_template_is_the_built_in_list() -> None:
     """REQ-061, REQ-079.
 
-    Q-1596-1: permissive licences only, until the maintainers accept the list.
+    Brief #1811 answer 1 (ADR-0754): the six of Q-1596-1 and five permissive ids, eleven;
+    `CC0-1.0` stays off (Q-1811-1, the conservative reading).
     """
     text = (KIT_ROOT / "kit" / "templates" / "licences.toml").read_text(encoding="utf-8")
     assert licences.allowed_from(text) == licences.DEFAULT
-    want = ("MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "PSF-2.0")
-    assert licences.DEFAULT == frozenset(want)
+    want = (*OLD_SIX, *ADDED)
+    assert licences.DEFAULT == frozenset(want) and len(licences.DEFAULT) == 11
+    assert "CC0-1.0" not in licences.DEFAULT
 
 
 def test_a_python_lock_takes_its_licences_from_the_record(product, monkeypatch, capsys) -> None:
@@ -273,6 +278,11 @@ def test_the_foundation_writes_the_list_once(product, capsys) -> None:
     path.write_text('allowed = ["MIT"]\n', encoding="utf-8")
     engines.cmd_stack_files(product.root)
     assert path.read_text(encoding="utf-8") == 'allowed = ["MIT"]\n'
+    old = "# the template a foundation wrote before brief #1811\n" + OLD_TEMPLATE
+    path.write_text(old, encoding="utf-8")
+    engines.cmd_stack_files(product.root)  # brief #1811 answer 2: an old copy is kept
+    assert path.read_text(encoding="utf-8") == old
+    assert licences.allowed_list(product.root) == frozenset(OLD_SIX)
 
 
 def test_ids_are_compared_case_folded_by_one_reader() -> None:
@@ -293,6 +303,46 @@ def test_a_list_holding_blessing_passes_a_record_part_blessing(product, capsys) 
     """REQ-061: brief #1785 answer 7 (the gate reads the record's real lower-case id)."""
     record = RECORD.replace("tiny-util 2.1.0 ISC", "tiny-util 2.1.0 blessing")
     product.commit({"docs/adr/0003-stack-options.md": record})
+    product.commit({"config/licences.toml": OLD_TEMPLATE})  # brief #1811: the six-id list
     assert licences.main(["--root", str(product.root)]) == 1
     product.commit({"config/licences.toml": 'allowed = ["MIT", "blessing"]\n'})
     assert licences.main(["--root", str(product.root)]) == 0
+
+
+@pytest.mark.parametrize("licence", [*ADDED, *(i.casefold() for i in ADDED), "ZLIB", "Blessing"])
+def test_an_added_permissive_id_passes_with_no_project_list(product, capsys, licence) -> None:
+    """REQ-061, REQ-079: brief #1811 answers 1 and 4 (each added id, SPDX case and folded)."""
+    part = {"permissive": {"version": "1.0.0", "license": licence}}
+    product.commit({"package-lock.json": lock(**part)})
+    assert not (product.root / "config" / "licences.toml").exists()
+    assert licences.main(["--root", str(product.root)]) == 0
+    code, out = gates(product.root, capsys)
+    assert code == 0 and "ok licences\n" in out, out
+
+
+@pytest.mark.parametrize(
+    "licence",
+    ["BUSL-1.1", "zlib-acknowledgement", "CC-BY-4.0", "CC0-1.0", "MPL-2.0", "LGPL-2.1-only",
+     "BlueOak-1.0.0", "Zlib+", "BSL-1.0 WITH x", "MIT AND CC0-1.0", "LicenseRef-Invented-3"],
+)
+def test_ids_off_the_wider_default_still_fail(product, capsys, licence) -> None:
+    """REQ-061, REQ-079: brief #1811 answer 6 (no source-available, copyleft or patent-silent id)."""
+    product.commit({"package-lock.json": lock(**{"other": {"version": "1.0.0", "license": licence}})})
+    assert licences.main(["--root", str(product.root)]) == 1
+    assert capsys.readouterr().out == f"FAIL licences: {licences.RULE} (component class: node)\n"
+
+
+def test_expressions_over_the_wider_default() -> None:
+    """REQ-061: brief #1811 answer 6 (`AND` and `OR` over the eleven ids)."""
+    assert licences.passes("MIT AND blessing", licences.DEFAULT)
+    assert licences.passes("(MIT OR CC0-1.0)", licences.DEFAULT)
+    assert not licences.passes("MIT AND CC0-1.0", licences.DEFAULT)
+    assert not licences.passes("BUSL-1.1", licences.DEFAULT)
+
+
+def test_a_project_list_of_the_old_six_still_fails_blessing(product, capsys) -> None:
+    """REQ-061, REQ-079: brief #1811 answer 2 (a project's own list decides; red stays red)."""
+    product.commit({"package-lock.json": lock(**{"db": {"version": "3.47.1", "license": "blessing"}})})
+    product.commit({"config/licences.toml": OLD_TEMPLATE})
+    assert licences.main(["--root", str(product.root)]) == 1
+    assert capsys.readouterr().out == f"FAIL licences: {licences.RULE} (component class: node)\n"
