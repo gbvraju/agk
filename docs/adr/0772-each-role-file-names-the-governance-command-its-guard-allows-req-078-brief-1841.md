@@ -6,7 +6,7 @@
 - Related: brief #1841, brief #1758, brief #1759, ADR-0612, ADR-0631, ADR-0736, ADR-0737, SPEC-0071, plan #661
 - Requirements: REQ-078
 
-Protected classes: `.claude/`, `tests/kit_dev/`, `config/`
+Protected classes: `.claude/`, `tests/kit_dev/`, `config/`, `tests/kit/`
 
 ## Context
 
@@ -45,7 +45,8 @@ with Bash named `kit_root.py governance` without the form their guard allows. Th
 A conductor or a shadow in a clean project runs the head's governance on the first try; every Bash role names a gate
 its guard allows, and the test fails when a role file and its guard drift apart. No guard, setting or check logic
 changes. The six added lines raise the word counts of `config/rule-budget.txt` for those six files, each within ten
-percent and with no rule line added, under the owner's standing ruling (ADR-0583, Q-1841-1 answered on #1853).
+percent and with no rule line added, under the owner's standing ruling (ADR-0583, Q-1841-1 answered on #1853); the conductor's fixed word cap in
+`tests/kit/test_conductor_playbook_evidence.py` rises from 4663 to 4717 under the same ruling (Q-1841-2).
 
 ## Residual
 
