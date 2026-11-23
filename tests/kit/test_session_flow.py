@@ -620,3 +620,23 @@ def test_brief1026_a_take_keeps_its_whole_body_reading():
 def test_brief1026_a_reasoned_release_with_windows_line_ends_frees_the_take():
     """REQ-041; brief #1026 answer 2, verdict on 45aa5ad: a `\\r` ending the first line matches."""
     assert freed(TAKEN, "released: s4\r\n\r\nThe brief needs a ruling first.") == [True]
+
+
+def test_brief1791_iso_builds_its_time_from_the_pinned_clock(clock, monkeypatch):
+    """REQ-053: `iso` reads the instant the code reads, so an age it builds is exact on a slow runner."""
+    import test_session
+
+    pin = datetime(2026, 11, 23, 2, 18, 0, 750000, tzinfo=UTC)
+    clock.set(pin)
+
+    class Later(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return pin.replace(microsecond=0) + timedelta(seconds=1)
+
+    monkeypatch.setattr(test_session, "datetime", Later)  # the live clock moved one second on
+    assert iso(-timedelta(hours=30)) == "2026-11-21T20:18:00Z"
+    clock.set(pin + timedelta(days=1))  # `Clock.set` moves the pin, and `iso` follows it
+    assert iso() == "2026-11-24T02:18:00Z"
+    monkeypatch.setenv("AGK_TEST_NOW", "not a time")  # malformed: the live clock, as today
+    assert iso() == "2026-11-23T02:18:01Z"
