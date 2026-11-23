@@ -65,9 +65,8 @@ def project(
     (root / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
     shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
     (root / "config" / "reviewers.yaml").write_text(people, encoding="utf-8")
-    shutil.copy(  # brief #1829: stack-write reads the project's own list
-        KIT_ROOT / "kit" / "templates" / "protected-paths.txt", root / "config" / "protected-paths.txt"
-    )
+    listed = KIT_ROOT / "kit" / "templates" / "protected-paths.txt"  # brief #1829: stack-write
+    shutil.copy(listed, root / "config" / "protected-paths.txt")  # reads the project's own list
     (root / "agk.toml").write_text(toml, encoding="utf-8")
     for n, kind in enumerate(kinds, 1):
         path = root / "docs" / "discovery" / f"idea-{n}.md"

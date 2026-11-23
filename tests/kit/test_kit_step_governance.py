@@ -64,7 +64,7 @@ def setting(text: str, key: str, value: str) -> str:
     found = re.search(rf"(?m)^{key} = .*$", text)
     if found:
         return text[: found.start()] + line + text[found.end() :]
-    return re.sub(r"(?m)^(default_branch = .*)$", lambda m: f"{m.group(1)}\n{line}", text, 1)
+    return re.sub(r"(?m)^(default_branch = .*)$", lambda m: f"{m.group(1)}\n{line}", text, count=1)
 
 
 def scratch(
@@ -93,7 +93,8 @@ def scratch(
     toml = root / "agk.toml"
     text = setting(toml.read_text(encoding="utf-8"), "default_branch", f'"{branch}"')
     for key, value in (settings or {}).items():
-        text = setting(text, key, value) if not key.startswith("[") else text + f"\n{key}\n{value}\n"
+        table = key.startswith("[")
+        text = text + f"\n{key}\n{value}\n" if table else setting(text, key, value)
     toml.write_text(text, encoding="utf-8")
     if listing is not None:
         path = root / "config" / "protected-paths.txt"
@@ -182,7 +183,8 @@ def stack_accept(root: Path) -> str:
     stack_write(root)
     merged(root)
     on(root, "stack/accept")
-    out = kit(root, "engines.py", "stack-accept", "--option", "A", "--reason", "small", "--root", ".")
+    args = ("stack-accept", "--option", "A", "--reason", "small", "--root", ".")
+    out = kit(root, "engines.py", *args)
     if "next: run_gates.py --root . writes config/agk-baseline/" in out:
         kit(root, "run_gates.py", "--root", ".", ok=False)  # the output's own next step
     return out
@@ -293,7 +295,11 @@ STEPS = {
     "stack-accept adopted": ("scripts/agk/engines.py::cmd_stack_accept", stack_accept, ADOPTED),
     "stack-files": ("scripts/agk/engines.py::cmd_stack_files", stack_files, WEB_APP),
     "layers --write-record": ("scripts/agk/gates/layers.py::write_record", write_record, WEB_APP),
-    "work-type yes adopted": ("scripts/agk/steward_owner.py::work_type_yes", work_type_yes, ADOPTED),
+    "work-type yes adopted": (
+        "scripts/agk/steward_owner.py::work_type_yes",
+        work_type_yes,
+        ADOPTED,
+    ),
     "adopt baseline write": ("scripts/agk/run_gates.py::ratchet", baseline_write, ADOPTED),
     "design inventory": ("scripts/agk/design.py::inventory", inventory, {}),
     "sign-off row": ("docs/design/signoffs.md", signoff_row, {}),
@@ -306,7 +312,6 @@ STEPS = {
 # Writers of a protected path that are no step of this table, each with where it is held.
 ELSEWHERE = {
     "scripts/agk/personal.py::upgrade": "the sidecar's own schema, never a product repository",
-    "scripts/agk/reviewers.py::write_codeowners": "CODEOWNERS always takes its own ADR (rule 36)",
     "scripts/agk/req_status.py::edit": "a Status-only edit of the requirements file is exempt",
     "scripts/agk/setup.py::write_settings": "writes its own ADR naming `agk.toml` (rule 9)",
     "scripts/agk/uninstall.py::pause": "the pause needs the person's own ADR (ADR-0196)",
@@ -364,8 +369,8 @@ def test_req036_the_project_s_whole_governance_passes_the_accept(tmp_path, layou
     if layout == "plugin":
         args = [sys.executable, "-I", str(SCRIPTS / "kit_root.py"), "governance"]
     else:
-        args = ["make", "-f", "agk.mk", "agk-governance"]
-    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        args = [shutil.which("make") or "make", "-f", "agk.mk", "agk-governance"]
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         args, cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=300, env=CLEAN_ENV
     )
     assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-2000:]
@@ -374,18 +379,16 @@ def test_req036_the_project_s_whole_governance_passes_the_accept(tmp_path, layou
 
 # --- the census --------------------------------------------------------------------------------
 
+# The classes of either project list a kit step writes by a literal path (brief #1829 answer 6).
+CLASSES = ("agk.toml", "config/", "pyproject.toml", "docs/architecture.md", "docs/requirements.md")
 LISTS = ("kit/templates/protected-paths.txt", "kit/templates/protected-paths.adopt.txt")
 WRITES = {"write_text", "write_bytes"}
 
 
-def protected_entries() -> list[str]:
-    out: list[str] = []
-    for rel in LISTS:
-        for line in (KIT_ROOT / rel).read_text(encoding="utf-8").splitlines():
-            entry = line.strip()
-            if entry and not entry.startswith("#") and entry not in out:
-                out.append(entry)
-    return out
+def test_req036_the_census_classes_are_in_both_project_lists():
+    """REQ-036: each class the census looks for is a class of a project list."""
+    for cls in CLASSES:
+        assert any(cls in (KIT_ROOT / rel).read_text("utf-8").split() for rel in LISTS), cls
 
 
 def literal(node, consts: dict, local: dict) -> str | None:
@@ -404,7 +407,7 @@ def literal(node, consts: dict, local: dict) -> str | None:
 
 def census() -> dict[str, str]:
     """`file::function` -> the literal protected path it writes, for every write in scripts/agk/."""
-    entries, found = protected_entries(), {}
+    entries, found = CLASSES, {}
     for path in sorted(SCRIPTS.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         consts = {
@@ -427,7 +430,9 @@ def census() -> dict[str, str]:
             for call in ast.walk(fn):
                 if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
                     continue
-                target = literal(call.func.value, consts, local) if call.func.attr in WRITES else None
+                if call.func.attr not in WRITES:
+                    continue
+                target = literal(call.func.value, consts, local)
                 if target and any(
                     target == e or (e.endswith("/") and target.startswith(e)) for e in entries
                 ):

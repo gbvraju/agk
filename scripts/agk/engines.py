@@ -448,9 +448,8 @@ def with_classes(text: str, classes: list[str]) -> tuple[str, int]:
     line = f"Protected classes: {protected.backticked(every)}"
     if found:
         return text[: found.start()] + line + text[found.end() :], len(every)
-    return re.sub(r"(?m)^(- Requirements:.*)$", lambda m: f"{m.group(1)}\n\n{line}", text, 1), len(
-        every
-    )
+    added = re.sub(r"(?m)^(- Requirements:.*)$", lambda m: f"{m.group(1)}\n\n{line}", text, count=1)
+    return added, len(every)
 
 
 def recommended_option(root: Path) -> str:
