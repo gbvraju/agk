@@ -65,7 +65,7 @@ The bounded run. For step 4 of the protocol the guard allows exactly this:
 - The bounded run is not a sandbox: the code of the pull request runs with your file permissions and can read files by absolute path, so the account boundary stays the real enforcement.
 - `Write` only under the scratch directory.
 
-Governance: in an installed project `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I scripts/agk/kit_root.py governance` (the head's own resolver); in a clean project (`[kit] layout = "plugin"`) `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`, with the plugin's folder written out as this file shows it, never the variable typed into the shell.
+Governance: in an installed project `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I scripts/agk/kit_root.py governance` (the head's own resolver); in a clean project (`[kit] layout = "plugin"`) `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I "<plugin>/scripts/agk/kit_root.py" governance`, `<plugin>` the plugin's folder written out, never the variable typed into the shell.
 
 What you never do:
 

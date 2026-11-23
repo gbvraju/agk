@@ -24,17 +24,18 @@ with Bash named `kit_root.py governance` without the form their guard allows. Th
 1. **One line per role.** Each file under `.claude/agents/` whose tools include Bash (a file with no `tools:` line has
    every tool) holds one line starting `Governance:` that names, in code spans, the installed form first and then the
    clean form, each the one form its guard allows: `python3 scripts/agk/kit_root.py governance` and
-   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` for the steward, the builder, the architect and
+   `python3 "<plugin>/scripts/agk/kit_root.py" governance` for the steward, the builder, the architect and
    the review agent; `cd <scratch> && env -i PATH="$PATH" HOME=<scratch> python3 -I scripts/agk/kit_root.py governance`
-   and the same with the plugin's path for the conductor and the shadow. The clean form is read with the plugin's folder
-   written out as the file shows it, never with the variable typed into the shell `(verify: Q-HJ-1)`.
+   and the same with the plugin's path for the conductor and the shadow. `<plugin>` is the plugin's folder written out,
+   never the variable typed into the shell: no shipped file but the resolver names the variable (ADR-0630), as for the
+   installed texts of ADR-0737 decision 1.
 2. **The conductor's scratch list.** The bounded run names the `kit_root.py governance` form first and keeps the
    `make -C <scratch>` forms for an installed project only; the words "the kit's own file in every project" go. No
    other rule of the bounded run changes; the shadow keeps the run "word for word" and gains its own line.
 3. **Kept true.** `tests/kit_dev/test_agent_governance_form.py` fails when a role file with Bash has no such line, and
    runs each named form through that role's guard: the installed form in a stub installed project as the frontmatter
-   hook runs it, the clean form in a stub clean project made by `init.py --layout plugin --rehearsal` through
-   `plugin_hooks.py pre` with `agent_type` `agk:<role>`. Each must be allowed, and the variable left in must stay denied
+   hook runs it, the clean form, `<plugin>` the stub plugin's folder, in a stub clean project made by `init.py --layout plugin --rehearsal` through
+   `plugin_hooks.py pre` with `agent_type` `agk:<role>`. Each must be allowed, and the variable typed in its place must stay denied
    for the architect, the review agent, the conductor and the shadow. `MAKE_FORM` of
    `test_shipped_governance_command.py` also matches `make -C <...>` followed in the same sentence by a separate
    `-f agk.mk` span. Each failure names the path class and the file, never the line.

@@ -21,7 +21,7 @@ definition `(verify: the flag and the frontmatter hooks; a project agent's hooks
 
 The working rule of a session is in `config/session-rules.md`; it holds for this role too.
 
-Governance: in an installed project `python3 scripts/agk/kit_root.py governance`; in a clean project (`[kit] layout = "plugin"`) `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance`, with the plugin's folder written out as this file shows it, never the variable typed into the shell.
+Governance: in an installed project `python3 scripts/agk/kit_root.py governance`; in a clean project (`[kit] layout = "plugin"`) `python3 "<plugin>/scripts/agk/kit_root.py" governance`, `<plugin>` the plugin's folder written out, never the variable typed into the shell.
 
 What you do:
 

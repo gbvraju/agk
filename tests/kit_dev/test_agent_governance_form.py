@@ -3,12 +3,12 @@
 
 Every role file under `.claude/agents/` whose tools include Bash (a file with no `tools:` line has
 every tool) holds one line starting `Governance:` with two forms in code spans: the installed one
-first, then the clean one (`[kit] layout = "plugin"`). In a stub installed project the installed
+first, then the clean one (`[kit] layout = "plugin"`), `<plugin>` standing for the plugin's folder
+written out, since no shipped file names the plugin variable (ADR-0630). In a stub installed project the installed
 form runs through the role's guard as its frontmatter hook runs it (the builder has none: the data
 guard of `.claude/settings.json`); in a stub clean project made by `init.py --layout plugin
---rehearsal`, the clean form, with `${CLAUDE_PLUGIN_ROOT}` replaced by the stub plugin's folder as
-the runtime writes it out `(verify: Q-HJ-1)`, runs through `plugin_hooks.py pre` with `agent_type`
-`agk:<role>`. Each must be allowed; the clean form with the variable left in stays denied for the
+--rehearsal`, the clean form, `<plugin>` the stub plugin's folder, runs through `plugin_hooks.py pre` with `agent_type`
+`agk:<role>`. Each must be allowed; the clean form with the variable typed in stays denied for the
 four reviewing roles (ADR-0736 decision 4). Failures name the path class and the file, never the
 line. Temporary folders and the kit checkout only; no network; invented data only (example.com).
 """
@@ -28,6 +28,7 @@ from conftest import KIT_ROOT
 
 AGENTS = KIT_ROOT / ".claude" / "agents"
 CLASS = ".claude/agents/"
+PLUGIN = "<plugin>"  # the plugin's folder written out (ADR-0630: no shipped file names the variable)
 VARIABLE = "${CLAUDE_PLUGIN_ROOT}"
 SCRATCH = "<scratch>"
 SPAN = re.compile(r"`([^`]*kit_root\.py[^`]*)`")
@@ -159,8 +160,10 @@ def allowed(script: Path, args: tuple[str, ...], root: Path, systmp: Path, plugi
 
 
 def filled(form: str, role: str, systmp: Path, plugin: Path | None) -> str:
+    """The named form as run: `<scratch>` the run's folder, `<plugin>` the plugin's folder, or,
+    without `plugin`, the variable typed into the shell in its place."""
     text = form.replace(SCRATCH, scratch(systmp, role))
-    return text.replace(VARIABLE, str(plugin)) if plugin else text
+    return text.replace(PLUGIN, str(plugin) if plugin else VARIABLE)
 
 
 def role_forms(role: str) -> tuple[str, str]:
@@ -211,7 +214,8 @@ def test_req078_every_role_with_bash_names_both_forms():
     assert missing_lines(texts) == []
     for role in bash_roles():
         installed_form, clean_form = role_forms(role)
-        assert VARIABLE not in installed_form and VARIABLE in clean_form, f"{CLASS}{role}.md"
+        assert PLUGIN not in installed_form and PLUGIN in clean_form, f"{CLASS}{role}.md"
+        assert "CLAUDE_PLUGIN" not in installed_form + clean_form, f"{CLASS}{role}.md"
         assert (SCRATCH in clean_form) == (role in SCRATCH_ROLES), f"{CLASS}{role}.md"
 
 
