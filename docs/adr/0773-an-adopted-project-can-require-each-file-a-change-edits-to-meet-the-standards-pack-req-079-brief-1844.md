@@ -6,7 +6,7 @@
 - Related: brief #1844, brief #1837, brief #1771, ADR-0666, ADR-0669, ADR-0680, ADR-0681, ADR-0702, ADR-0743, ADR-0766, ADR-0111, SPEC-0072, plan #661
 - Requirements: REQ-079
 
-Protected classes: `scripts/agk/`, `kit/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `kit/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -40,7 +40,9 @@ its baselined findings for ever (AD-09 on #1771: `src/pages/home.ts` was edited 
 
 No project's result changes until it sets `"meet"`; one that does holds every file it edits to the full pack, so the
 code people work in improves build by build. One `git diff` per run with `"meet"`. `kit/templates/agk.toml` names
-the key in a comment; `docs/guides/reference.md` describes it.
+the key in a comment; `docs/guides/reference.md` describes it. The new runner test is named in the `[[testing.map]]`
+entries of `scripts/agk/gates/*.py` and `scripts/agk/run_gates.py` in `agk.toml` (`tests/kit_dev/test_gate_runner_map.py`),
+as for brief #1837.
 
 ## Residual
 
