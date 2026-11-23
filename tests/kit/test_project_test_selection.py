@@ -308,3 +308,23 @@ def test_the_version_reading_equals_check_release(text):
     import project_tests
 
     assert project_tests.toml_version(text) == check_release.toml_version(text)
+
+
+def test_a_pull_request_runs_the_whole_tests_with_the_selection(tmp_path, outside):
+    """REQ-062: brief #1796 answer 2 (CI's selected run adds `whole_tests`, each file once)."""
+    testing = SELECTED + 'whole_tests = ["tests/test_other.py", "tests/billing/test_pay.py"]\n'
+    root = project(tmp_path, toml(outside, testing))
+    proc = run(root, outside, "pull_request")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["kit tests/billing/test_pay.py tests/test_other.py"]
+    assert "whole: tests/test_other.py" in proc.stdout
+
+
+def test_a_whole_test_in_no_proof_area_fails_the_step_naming_the_setting(tmp_path, outside):
+    """REQ-062: brief #1796 answer 7 (a listed file in no [proof] area fails CI's test step)."""
+    testing = SELECTED + 'whole_tests = ["tests/test_other.py"]\n'
+    text = toml(outside, testing).replace('kit = { dirs = ["tests"]', 'kit = { dirs = ["tests/billing"]')
+    root = project(tmp_path, text)
+    proc = run(root, outside, "pull_request")
+    assert proc.returncode != 0
+    assert "(setting: testing.whole_tests)" in proc.stdout
