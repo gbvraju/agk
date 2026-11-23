@@ -83,8 +83,11 @@ For a change, the selection is worked out from git and files only, with no netwo
   unmapped; a helper such as `tests/conftest.py` is. Under `balanced` a file that no entry covers selects the test files that name
   its path or its folder, printed as `unmapped: <path> -> <k> tests that name it` (SPEC-0055 rule 6), and it makes the selection
   full only when no test names it; a covered file whose entries select no existing test stays full.
-- **Documentation.** A change of only `*.md` files and files under `docs/` selects nothing, under every profile, unless one of
-  them matches `always_full`. Such a file is never unmapped.
+- **Documentation.** A change of only documentation selects nothing, under every profile, unless one of its files matches
+  `always_full`. Documentation is a file under `docs/`, or a `*.md` file that no map entry covers and no class of
+  `config/protected-paths.txt` holds; a mapped or protected `*.md` file, such as a skill or an agent, is code (brief #1792).
+  Such a file is never unmapped. A test names a file also when it builds the path in parts from quoted literals
+  (`ROOT / "skills" / "upgrade" / "SKILL.md"`, `Path("a", "b.md")`, `os.path.join("a", "b.md")`).
 - **No table.** Without a `[testing]` table the selection is the full suite, which is what governance runs today.
 
 ## A map per module
