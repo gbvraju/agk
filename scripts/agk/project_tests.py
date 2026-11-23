@@ -305,8 +305,7 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
     outside = {n.rsplit(": ", 1)[-1] for n in notes if n.startswith(OUTSIDE)}
     if outside and outside & set(found.whole):  # brief #1796 answer 7: fails, as a link does
         failing = f"echo {shlex.quote(WHOLE_OUTSIDE)}; exit 1"
-        said = f"project tests: {WHOLE_OUTSIDE}"
-        return [("whole", failing, ".", WHOLE_OUTSIDE)], [*lines, said]
+        return [("whole", failing, ".", WHOLE_OUTSIDE)], [*lines, f"project tests: {WHOLE_OUTSIDE}"]
     if outside:
         why = "a selected file is in no [proof] area"
         added = [s for s in sets if s[3].startswith(LINK_REASON)]  # a link only adds (rule 7)

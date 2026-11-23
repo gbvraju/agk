@@ -529,7 +529,20 @@ def test_local_mode_alone_still_leaves_the_full_suite_to_ci(repo, outside):
         'default_branch = "main"\n', 'default_branch = "main"\nexecution = "local"\n', 1
     )
     wide_project(repo, text)
-    proc = prepush(repo, outside)
+    # Local mode refuses the main folder of a clone that sessions share (brief #1301), so the run
+    # is made from a worktree of its own, as a session's is.
+    tree = outside / "own-tree"
+    repo.git("checkout", "-q", "main")
+    repo.git("worktree", "add", "-q", str(tree), "feature")
+    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
+    env["PATH"] = path_with(scanner(outside / "bin", 0))
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPTS / "prepush.py")],
+        cwd=tree,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert LEFT_LINE.format(n=1) in proc.stdout and RUNS_HERE not in proc.stdout
 
