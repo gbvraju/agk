@@ -33,4 +33,13 @@ marked blocks, and refuses before any write when something conflicts.
 
 3. Show the printed branch rules, scanner exclusions and plugin settings entries as they are. Do not apply any of them.
 
+4. Scan the whole history once for secrets, with the command adopt printed on its last line:
+
+   ```
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/history_scan.py" run --write
+   ```
+
+   Show its lines as they are. On a finding, stop and point to `docs/runbooks/leaked-secret.md`: never read, print or
+   move a value. A finding does not undo the adoption.
+
 Do not commit, push or merge. Do not set a spec `Approved` or an ADR `Accepted`. Stop after reporting what was written.

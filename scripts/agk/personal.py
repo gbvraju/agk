@@ -116,6 +116,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import history_scan  # noqa: E402  # brief #1835: the one whole-history secret scan
 import run_gates  # noqa: E402  # SPEC-0072 rule 11 (brief #1601): the floor runs the gates
 from common import (  # noqa: E402
     STATUS_LINE,
@@ -278,13 +279,24 @@ def run_once(command: str, tree: Path, sidecar: Path, report_name: str = REPORT)
 def baseline(clone: Path, sidecar: Path, approve: bool) -> str:
     command = test_command(sidecar)
     if not approve:
-        return f"baseline: would run: {command}\nbaseline: nothing ran; run again with --approve"
+        return (
+            f"baseline: would run: {command}\nbaseline: nothing ran; run again with --approve\n"
+            + history_would()
+        )
     head = head_of(clone)
     result = run_once(command, write_tree(clone, head, sidecar), sidecar)
     record = {"head": head, "command": command, **{k: v for k, v in result.items() if k != "cases"}}
     write_private(sidecar / BASELINE, json.dumps(record, indent=1, sort_keys=True) + "\n")
     count = "the whole run" if result["failing"] is None else f"{len(result['failing'])} failing"
-    return f"baseline: recorded {count} ({result['run']}) at {head[:12]} in {BASELINE}"
+    done = f"baseline: recorded {count} ({result['run']}) at {head[:12]} in {BASELINE}"
+    return done + "\n" + "\n".join(history_scan.run(clone, sidecar, write=True)[1])
+
+
+def history_would() -> str:
+    """Brief #1835 answer 8: what `--approve` would run, the gitleaks version or its absence."""
+    tool = shutil.which("gitleaks")
+    found = f"gitleaks {history_scan.version(tool)}" if tool else "not installed"
+    return f"history scan: would run once ({found})"
 
 
 def merge_base(clone: Path, ref: str | None) -> str:
@@ -751,8 +763,10 @@ def status(sidecar: Path) -> str:
     table = personal_table(sidecar)
     if table is None:
         raise CheckError("not a sidecar: it has no personal table (setting: personal)")
+    level, text = history_scan.state(sidecar / history_scan.PRIVATE)  # brief #1835 answer 8
     return (f"personal mode: forge {table['forge']}, level {table['level']}, "
-            f"disclosure {table['ai_disclosure']}\n{disclosure_in_force(table)}")  # fmt: skip
+            f"disclosure {table['ai_disclosure']}\n{disclosure_in_force(table)}\n"
+            f"{level} history-scan: {text}")  # fmt: skip
 
 
 def summary_lines(record: dict) -> list[str]:
