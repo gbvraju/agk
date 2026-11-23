@@ -470,6 +470,17 @@ def research(root: Path, words_file: Path, at: str, text: str, gh, search) -> tu
     return 0, [*lines, f"search: {text.strip()}"]
 
 
+# Brief #1827 (ADR-0760): the two records carry what the project's `check_adrs` requires; the
+# requirement and its reason are `wsl.REQUIREMENT`'s (protected paths change only with an ADR).
+ADR_REQUIREMENT = "REQ-001"
+
+
+def residual() -> list[str]:
+    return ["## Residual", "",
+            f"- {datetime.now(UTC):%Y-%m-%d}: none; the owner reviews the change before the merge.",
+            ""]  # fmt: skip
+
+
 def next_adr(root: Path) -> int:
     numbers = [int(p.name[:4]) for p in (root / "docs" / "adr").glob("[0-9][0-9][0-9][0-9]-*.md")]
     return max(numbers, default=0) + 1
@@ -490,7 +501,8 @@ def draft(root: Path, slug: str) -> tuple[int, list[str]]:
     text = "\n".join([
         f"# ADR-{number:04d}: The project's work type {slug}, drafted on the default playbook", "",
         "- Status: Proposed", f"- Date: {datetime.now(UTC):%Y-%m-%d}", "- Deciders: maintainers",
-        f"- Related: config/playbooks/{slug}.toml, {front_door.RESEARCH}/{slug}.md", "",
+        f"- Related: config/playbooks/{slug}.toml, {front_door.RESEARCH}/{slug}.md",
+        f"- Requirements: {ADR_REQUIREMENT}", "",
         "## Context", "",
         "No shipped playbook fits the requirements the steward gathered (SPEC-0072 rule 8).", "",
         "## Decision", "",
@@ -499,6 +511,7 @@ def draft(root: Path, slug: str) -> tuple[int, list[str]]:
         " the owner names it in `[delivery] work_type` after the person's yes.", "",
         "## Sources", "", *(sources or ["- the project's requirements only"]), "",
         "## Consequences", "", "Accepted by the project's maintainers, never by an agent.", "",
+        *residual(),
     ])  # fmt: skip
     (root / rel).parent.mkdir(parents=True, exist_ok=True)
     (root / rel).write_text(text, encoding="utf-8")
@@ -1307,7 +1320,8 @@ def work_type_adr(root: Path, ask: dict, words: str, at: str) -> str:
     text = "\n".join([
         f"# ADR-{number:04d}: The project's work type is {kind}", "",
         "- Status: Proposed", f"- Date: {datetime.now(UTC):%Y-%m-%d}", "- Deciders: the owner",
-        f"- Related: agk.toml, {', '.join(ask.get('discovery') or [])}", "",
+        f"- Related: agk.toml, {', '.join(ask.get('discovery') or [])}",
+        f"- Requirements: {ADR_REQUIREMENT}", "",
         "Protected classes: `agk.toml`", "",
         "## Context", "",
         f"The discovery document names the work type {kind}, and `agk.toml` declared none"
@@ -1318,6 +1332,7 @@ def work_type_adr(root: Path, ask: dict, words: str, at: str) -> str:
         f'Asked ({ask["at"]}): "{ask["question"]}"', f'Owner said ({at}): "{words}"', "",
         "## Consequences", "",
         "The owner's merge of this pull request approves it; no agent merges it.", "",
+        *residual(),
     ])  # fmt: skip
     (root / rel).parent.mkdir(parents=True, exist_ok=True)
     (root / rel).write_text(text, encoding="utf-8")

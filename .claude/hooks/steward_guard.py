@@ -10,27 +10,28 @@ a denial prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissi
 "permissionDecisionReason": ...}} and exits 0; an allow prints nothing.
 
 Denies: a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:`,
-`Correction:` or `Merge:`, zero-width characters read as nothing (brief #1732, ADR-0727),
-except, in solo mode with one person listed, an `Approve:` or
-`Confirmed:` body read from a file that closes with the `Owner said`, `Asked` and `Who:
-ProductOwner` lines of `steward_owner.py approve` (SPEC-0062 rule 13, brief #1691, ADR-0704; never
-with `AGK_STEWARD_START=conductor`); a `Maintainer answer:` whose second line is not `Owner said
-(<UTC time>): "…"`; a merge, `merge_cleared.py`, auto-merge, a push to the default branch, a force
-push, a tag; a change to a file under `.github/`, the ruleset, a required check or a secret; an
-issue creation whose `Priority:` is above `[steward] auto_file` with no `Owner said` line; any label
-write other than `agk:parked` and `agk-steward`, and `agk-kit-defect` on a new issue (brief #1411,
-ADR-0594), so `agk-brief` only through `steward_owner.py file-brief`; an issue body edit unless
-`[steward] fix_briefs = true` (brief #1715, ADR-0714); a comment or issue body it cannot read
-(fail closed); a GraphQL call (`CLAUDE.md item 10`); a post to the kit repository from another
-project whose title or body the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6,
-ADR-0561) matches or cannot check; in a clean project
-(`[kit] layout = "plugin"`), a write of a path the plugin's kit manifest lists into the product, by
-a write tool or a Bash command that is not a read (SPEC-0071 rule 7, brief #1458, ADR-0616), any
-write under a kit-only folder of its `snapshot`, and a recursive copy or an unpack into a folder
-that is, lies under or holds one (brief #1752, ADR-0732; a manifest that cannot be read or has no
-`snapshot` denies the write tools and a recursive copy into the project). Each denial names the rule
-and the setting or path class, never the value. It reads the command, the files a body names,
-`agk.toml` and the plugin's kit manifest; no network, nothing stored.
+`Correction:` or `Merge:`, zero-width characters read as nothing (brief #1732, ADR-0727), except, in
+solo mode with one person listed, an `Approve:` or `Confirmed:` body read from a file that closes
+with the `Owner said`, `Asked` and `Who: ProductOwner` lines of `steward_owner.py approve`
+(SPEC-0062 rule 13, brief #1691, ADR-0704; never with `AGK_STEWARD_START=conductor`); a `Maintainer
+answer:` whose second line is not `Owner said (<UTC time>): "…"`; a merge, `merge_cleared.py`,
+auto-merge, a push to the default branch, a force push, a tag (any refspec form, `--follow-tags`, a
+push setting, a `git config` or `-c` that writes one, an alias and `update-ref`, read with the local
+`for-each-ref` and `config`; a push it cannot judge fails closed; brief #1834, ADR-0763); a change
+to a file under `.github/`, the ruleset, a required check or a secret; an issue creation whose
+`Priority:` is above `[steward] auto_file` with no `Owner said` line; any label write other than
+`agk:parked` and `agk-steward`, and `agk-kit-defect` on a new issue (brief #1411, ADR-0594), so
+`agk-brief` only through `steward_owner.py file-brief`; an issue body edit unless `[steward]
+fix_briefs = true` (brief #1715, ADR-0714); a comment or issue body it cannot read (fail closed); a
+GraphQL call (`CLAUDE.md item 10`); a post to the kit repository from another project whose title or
+body the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6, ADR-0561) matches or cannot
+check; in a clean project (`[kit] layout = "plugin"`), a write of a path the plugin's kit manifest
+lists into the product, by a write tool or a Bash command that is not a read (SPEC-0071 rule 7,
+brief #1458, ADR-0616), any write under a kit-only folder of its `snapshot`, and a recursive copy or
+an unpack into a folder that is, lies under or holds one (brief #1752, ADR-0732; a manifest that
+cannot be read or has no `snapshot` denies the write tools and a recursive copy into the project).
+Each denial names the rule and the setting or path class, never the value. It reads the command, the
+files a body names, `agk.toml` and the plugin's kit manifest; no network, nothing stored.
 """
 
 from __future__ import annotations
@@ -82,7 +83,7 @@ INTERPRETER = re.compile(r"^(?:python[0-9.]*|node|nodejs|perl|ruby|deno|bun|php)
 RUNS = re.compile(r"\b(?:gh|git|merge_cleared)\b|api\.github\.com")
 BODY_FLAGS = frozenset({"-b", "--body"})
 FORCE = re.compile(
-    r"^(?:-f|--force(?:-with-lease|-if-includes)?(?:=.*)?|--mirror|--tags|--delete|-d)$"
+    r"^(?:-f|--force(?:-with-lease|-if-includes)?(?:=.*)?|--mirror|--tags|--delete|-d|--follow-tags)$"
 )
 API_DENIED = (
     (re.compile(r"/pulls/\d+/merge$|/merges$"), "a merge"),
@@ -546,17 +547,189 @@ def api_problem(words: list[str], cwd: Path, project: Path) -> str | None:
     return None
 
 
-def git_problem(words: list[str], project: Path) -> str | None:
-    i = 1
+# Brief #1834 (ADR-0763): a push, a setting, an alias or `update-ref` is read as git reads it.
+GIT_VALUED = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
+GIT_WHERE = ("-C", "--git-dir", "--work-tree")  # passed on to the guard's own git reads
+PUSH_VALUED = frozenset({"-o", "--push-option", "--receive-pack", "--exec", "--repo"})
+RISKY_KEY = re.compile(r"^(?:push\.followtags|remote\..+\.(?:push|mirror|tagopt)|alias\..+)$", re.I)
+CONFIG_READS = frozenset(
+    {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "-l", "--list", "get", "list"}
+)
+CONFIG_WRITES = frozenset({"--add", "--replace-all", "--unset", "--unset-all", "set", "unset"})
+TRUE = frozenset({"true", "yes", "on", "1"})
+GIT_BUILTINS = frozenset(
+    "add am apply archive bisect blame branch bundle cat-file check-ignore checkout cherry "
+    "cherry-pick clean clone commit config describe diff fetch for-each-ref format-patch fsck "
+    "gc grep hash-object help init log ls-files ls-remote ls-tree maintenance merge merge-base "
+    "mktag mv notes pull push range-diff rebase reflog remote replace reset restore rev-list "
+    "rev-parse revert rm shortlog show show-ref sparse-checkout stash status submodule switch "
+    "symbolic-ref tag update-index update-ref var version worktree write-tree".split()
+)
+GIT_SECONDS = 1.0  # each read; three fit the hook's 4-second budget
+
+
+def git_read(where: list[str], cwd: Path, *args: str) -> tuple[int, str] | None:
+    """One local read (`for-each-ref`, `config`); None when git cannot be run or passes its time."""
+    import subprocess  # nosec B404 - fixed argument lists only, no shell
+
+    env = {**os.environ, "LC_ALL": "C", "GIT_TERMINAL_PROMPT": "0"}
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell, no network
+            ["git", *where, *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=GIT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.returncode, proc.stdout + ("\0" + proc.stderr if proc.returncode else "")
+
+
+def git_config(where: list[str], cwd: Path, pattern: str) -> list[tuple[str, str]] | None:
+    """The `key value` pairs of `git config --get-regexp`, keys lower-cased; None if unreadable."""
+    found = git_read(where, cwd, "config", "--get-regexp", pattern)
+    if found is None or found[0] not in (0, 1):
+        return None
+    lines = found[1].split("\0", 1)[0].splitlines() if found[0] == 0 else []
+    return [(k.lower(), v) for k, _, v in (line.partition(" ") for line in lines)]
+
+
+def local_tags(where: list[str], cwd: Path) -> set[str] | None:
+    """The short names of the local tags; empty outside a repository, where git refuses a push."""
+    found = git_read(where, cwd, "for-each-ref", "--format=%(refname)", "refs/tags/")
+    if found is None:
+        return None
+    if found[0] != 0:
+        return set() if "not a git repository" in found[1] else None
+    return {line.removeprefix("refs/tags/") for line in found[1].splitlines() if line}
+
+
+def names_tag(ref: str, tags: set[str]) -> bool:
+    """A refspec side that is or as a pattern meets `refs/tags/`, or a local tag's short name."""
+    if "*" in ref:
+        prefix = ref.split("*", 1)[0]
+        return "refs/tags/".startswith(prefix) or prefix.startswith("refs/tags/")
+    bare = ref.split("^", 1)[0].split("~", 1)[0]
+    return bare.startswith(("refs/tags/", "tags/")) or bare in tags
+
+
+def config_problem(args: list[str]) -> str | None:
+    """A `git config` that writes a push setting or an alias (brief #1834)."""
+    if "-e" in args or "--edit" in args or "edit" in args[:1]:
+        return reason("a push setting or an alias", "git config")
+    if "--rename-section" in args or "rename-section" in args[:1]:
+        sections = [a for a in args if not a.startswith("-")]
+        if any(a.lower() in ("alias", "push") or a.lower().startswith("remote.") for a in sections):
+            return reason("a push setting or an alias", "git config")
+        return None
+    at = next(
+        (k for k, a in enumerate(args) if not a.startswith("-") and a not in ("set", "unset")), None
+    )
+    if at is None or not RISKY_KEY.match(args[at]) or any(a in CONFIG_READS for a in args):
+        return None
+    if at + 1 < len(args) or any(
+        a in CONFIG_WRITES for a in args
+    ):  # a value after the key, or a write
+        return reason("a push setting or an alias", "git config")
+    return None
+
+
+def push_problem(args: list[str], where: list[str], cwd: Path) -> str | None:
+    """Rule 11 (brief #1834): a refspec, a `tag <name>` or a setting that sends a tag denies."""
+    words, i, repo_flag = [], 0, False
+    while i < len(args):
+        word = args[i]
+        if word in PUSH_VALUED:
+            repo_flag |= word == "--repo"
+            i += 2
+            continue
+        repo_flag |= word.startswith("--repo=")
+        if not word.startswith("-"):
+            words.append(word)
+        i += 1
+    remote = words[0] if words and not repo_flag else ""
+    refs = words if repo_flag else words[1:]
+    tags = local_tags(where, cwd)
+    found = git_config(where, cwd, r"^(push\.followtags|remote\..*\.(push|mirror))$")
+    if tags is None or found is None:
+        return f"steward guard: {RULE} cannot judge a push (path class: git push)"
+    deny = reason("a tag", "git push")
+    j = 0
+    while j < len(refs):
+        if refs[j] == "tag" and j + 1 < len(refs):
+            return deny
+        src, colon, dst = refs[j].removeprefix("+").rpartition(":")
+        src, dst = (src, dst) if colon else (dst, dst)
+        if (colon and not src) or names_tag(src, tags) or names_tag(dst, tags):
+            return deny
+        j += 1
+    for key, value in found:
+        if key == "push.followtags" and value.lower() in TRUE:
+            return f"steward guard: {RULE} denies a tag (setting: push.followTags)"
+        if remote and key == f"remote.{remote.lower()}.mirror" and value.lower() in TRUE:
+            return f"steward guard: {RULE} denies a tag (setting: remote.<name>.mirror)"
+        if remote and key == f"remote.{remote.lower()}.push":
+            src, _, dst = value.removeprefix("+").rpartition(":")
+            if names_tag(src or dst, tags) or names_tag(dst, tags):
+                return f"steward guard: {RULE} denies a tag (setting: remote.<name>.push)"
+    return None
+
+
+def git_problem(
+    words: list[str], project: Path, cwd: Path | None = None, alias: bool = True
+) -> str | None:
+    cwd = cwd or project
+    i, where, given = 1, [], []
     while i < len(words) and words[i].startswith("-"):
-        i += 2 if words[i] in ("-C", "-c") else 1
+        flag, _, inline = words[i].partition("=")
+        value = inline if inline else (words[i + 1] if i + 1 < len(words) else "")
+        if flag in ("-c", "--config-env"):
+            given.append(value.partition("=")[0])
+        if flag in GIT_WHERE:
+            where += [flag, value]
+        i += 1 if inline or flag not in GIT_VALUED else 2
+    if any(RISKY_KEY.match(key) for key in given):
+        return reason("a push setting or an alias", "git config")
     sub, args = (words[i], words[i + 1 :]) if i < len(words) else ("", [])
     if any(".github/" in a for a in args) and sub not in READ_GIT:
         return reason("a change to a workflow file", "`.github/`")
+    if sub and sub not in GIT_BUILTINS and not sub.startswith("-"):
+        found = git_config(where, cwd, r"^alias\.")
+        expansion = dict(found or []).get(f"alias.{sub.lower()}")
+        if found is None or (expansion is not None and (not alias or expansion.startswith("!"))):
+            return reason("an alias it cannot judge", "git alias")
+        if expansion is not None:
+            try:
+                expanded = shlex.split(expansion)
+            except ValueError:
+                return reason("an alias it cannot judge", "git alias")
+            return git_problem([*words[:i], *expanded, *args], project, cwd, alias=False)
     if sub == "merge":
         return reason("a merge", "git merge")
     if sub == "tag" and any(a not in ("-l", "--list") and not a.startswith("--sort") for a in args):
         return reason("a tag", "git tag")
+    if sub == "config":
+        return config_problem(args)
+    if sub == "update-ref":
+        names = [a for a in args if not a.startswith("-")]
+        tags = local_tags(where, cwd) if names else set()
+        if "--stdin" in args or tags is None or any(names_tag(a, tags) for a in names):
+            return reason("a tag", "git update-ref")
+        return None
+    if sub == "fetch":
+        refs = [a for a in args if not a.startswith("-")][1:]
+        if (
+            "--tags" in args
+            or "-t" in args
+            or any(names_tag(r.rpartition(":")[2], set()) for r in refs if ":" in r)
+        ):
+            return reason("a tag", "git fetch")
+        return None
     if sub != "push":
         return None
     if any(FORCE.match(a) or a.startswith("+") for a in args):
@@ -569,7 +742,7 @@ def git_problem(words: list[str], project: Path) -> str | None:
         target = ref.rsplit(":", 1)[-1].removeprefix("refs/heads/")
         if target in (branch, "HEAD") or target.startswith("refs/tags/"):
             return reason("a push to the default branch or a tag", "default branch")
-    return None
+    return push_problem(args, where, cwd)
 
 
 def segments(command: str) -> list[list[str]] | None:
@@ -674,8 +847,8 @@ def command_problem(words: list[str], cwd: Path, project: Path, depth: int) -> s
     if name in SHELLS:
         inner = words[words.index("-c") + 1] if "-c" in words[:-1] else " ".join(words[1:])
         return bash_problem(inner, cwd, project, depth + 1)
-    if name == "git":
-        return git_problem(words, project)
+    if name in ("git", "git.exe"):
+        return git_problem(words, project, cwd)
     if name == "gh":
         return gh_problem(words, cwd, project)
     return None
