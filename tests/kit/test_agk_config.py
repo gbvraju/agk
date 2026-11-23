@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import common
+import pytest
 
 DEFAULTS = {
     "default_branch": "main",
@@ -183,3 +184,42 @@ def test_req066_steward_fix_briefs_is_false_by_default_and_a_non_boolean_refused
         with pytest.raises(StewardSettingError) as caught:
             steward_settings(tmp_path)
         assert str(caught.value) == "the [steward] table is refused (setting: steward.fix_briefs)"
+
+
+FORMS = ["tests", "tests/", "./tests", "tests\\", ".\\tests", ".\\tests\\", "././tests//"]
+
+
+def test_req079_load_config_reads_each_written_form_of_test_dirs_as_one_folder(tmp_path):
+    """REQ-079: brief #1839 answer 2 (back slashes, `./` and a trailing `/`; a nested folder)."""
+    entries = ", ".join(f"'{f}'" for f in [*FORMS, "tests\\unit", "web\\e2e", ".", "./", ""])
+    (tmp_path / "agk.toml").write_text(f"test_dirs = [{entries}]\n", encoding="utf-8")
+    got = common.load_config(tmp_path)["test_dirs"]
+    assert got == ["tests"] * len(FORMS) + ["tests/unit", "web/e2e", ".", ".", "."]
+    assert common.test_dirs(tmp_path, [".\\tests\\"]) == ["tests"]
+
+
+def test_req079_a_non_string_or_non_list_test_dirs_is_left_for_its_reader_to_refuse(tmp_path):
+    """REQ-079: brief #1839 answer 2 (environment_settings still refuses `[1]` naming test_dirs)."""
+    (tmp_path / "agk.toml").write_text("test_dirs = [1, 'tests\\']\n", encoding="utf-8")
+    assert common.load_config(tmp_path)["test_dirs"] == [1, "tests"]
+    (tmp_path / "agk.toml").write_text("test_dirs = 'tests'\n", encoding="utf-8")
+    assert common.load_config(tmp_path)["test_dirs"] == "tests"
+    (tmp_path / "agk.toml").write_text("test_dirs = []\n", encoding="utf-8")
+    assert common.load_config(tmp_path)["test_dirs"] == []
+
+
+@pytest.mark.parametrize("form", FORMS)
+def test_req079_the_markers_are_found_for_each_written_form(repo, form):
+    """REQ-079: brief #1839 answers 2 and 7 (the REQ markers on Linux as on Windows)."""
+    repo.commit(
+        {
+            "docs/requirements.md": "### REQ-001 — t\n\n- Status: done\n",
+            "tests/test_t.py": "# REQ-001\n",
+            "agk.toml": f"test_dirs = ['{form}']\n",
+        }
+    )
+    found = common.find_ac_markers(
+        repo.root, common.load_config(repo.root)["test_dirs"], ["test_*.py"], []
+    )
+    assert found, form
+    assert repo.run("check_requirements.py").returncode == 0

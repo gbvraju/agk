@@ -556,6 +556,8 @@ type` (the kit's own repository), `no foundation yet` or `no reader for <stack>`
 when no `test_dirs` entry holds an `injection/` folder, when the folder holds no file but a README, or when no `[testing] map`
 entry of `agk.toml` names a file of it; it prints `not run prompt-injection-set: no foundation yet` until `docs/architecture.md`
 exists, and refuses a `test_dirs` that is not a list of folders naming the setting.
+Every reader of `test_dirs` reads each entry as one folder (brief #1839, ADR-0769): `tests\`, `.\tests`, `./tests`
+and `tests/` are all `tests`, a back slash is read as `/`, and `.` or an empty entry is the repository root.
 It prints `ok <gate id>` per gate that passes and `FAIL gates: <gate id>: <rule> (path class: <class>)` per failure, never a
 value; a step with no module is refused naming the gate id. It ends `ok gates (<n> check gates)` or `ok gates (no check gate)`.
 A step that cannot read the project prints `not run <gate id>: <reason>`, never `ok`, and the last line adds
@@ -620,7 +622,10 @@ of `[[standards]]` in the `web-app` and `mobile` playbooks, only when the Accept
 product has a `package.json`. Over its `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` files of the same
 `project_lint_paths` (less `node_modules/` and build folders) it runs the product's own pinned `node_modules/.bin/eslint`
 and `prettier`, never `npx`, a shell or a download: the `floor` (`eslint --print-config` shows every rule id of
-`rules.codes` at `error` or `warn`), `eslint --max-warnings 0` and `prettier --check`. A missing tool names the tool,
+`rules.codes` at `error` or `warn`), `eslint --max-warnings 0` and `prettier --check --end-of-line auto
+--config-precedence file-override`: like `ruff format`, it judges a file's content and keeps each file's own line end, so a
+CRLF checkout passes as CI's LF one does, unless the project's prettier configuration or `.editorconfig` sets a line end
+(brief #1839, ADR-0769). A missing tool names the tool,
 the setting and `npm ci`; a finding names the rule id and the path class. The type step is a later build.
 
 The baseline of an adopted project (SPEC-0072 rule 7, ADR-0680; brief #1600): `scripts/agk/gates/baseline.py` keeps
