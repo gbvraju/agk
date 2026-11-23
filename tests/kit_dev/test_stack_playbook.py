@@ -252,7 +252,9 @@ def test_ac3_the_skeleton_with_the_playbook_practices_passes_the_check_once_draf
             )
         lines.append(line)
     path.write_text("".join(lines), encoding="utf-8")
-    assert engines(started, "stack-check").stdout == "ok engines-stack\n"
+    out = engines(started, "stack-check").stdout.splitlines()
+    assert out[0] == "ok engines-stack"  # brief #1778: then a note per option with no runtime
+    assert all(ln.startswith("note: option ") for ln in out[1:]) and len(out) == 3
     accepted = "".join(lines).replace("- Status: Proposed", "- Status: Accepted")
     path.write_text(
         accepted.replace("**Chosen**: none yet", "**Chosen**: Option A"), encoding="utf-8"
