@@ -61,6 +61,11 @@ same lock, after one line `tests: full suite left to CI's proof job (always_full
 <n> mapped test files` (`0` when nothing is mapped, and nothing runs). The record names each such
 run's set `selected (full left to CI)`, so the evidence check and the verdict see that the full
 suite did not run here. CI's runs are not changed: `project_tests.py` never calls `left_to_ci`.
+Brief #1796 answer 5 (amendment 186 rule 6b): only where no CI proof job runs on the pull request,
+`local_full = "ci"` keeps the full run, after one line `RUNS_HERE`: when the repository has no
+`.github/workflows/proof.yml`, or when the one local-mode record issue is open (one `gh api` GET of
+the open issues, oldest first, made only for a GitHub origin; an answer that cannot be read leaves
+the full suite to CI as before). `execution = "local"` alone changes nothing.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file, a base that does not resolve, or a run from the main
@@ -179,6 +184,7 @@ from common import (
 from guard import scan_text
 from impact import (
     NAMED,
+    WHOLE,
     Impact,
     Selected,
     full_when_share,
@@ -228,6 +234,9 @@ LEFT_LINE = (
     "tests: full suite left to CI's proof job (always_full {glob}); ran the {n} mapped test files"
 )
 ALWAYS_FULL = re.compile(r"^always_full (\S+) matches ")
+RUNS_HERE = "tests: full suite runs here (setting: testing.local_full; no CI proof job)"
+PROOF_WORKFLOW = ".github/workflows/proof.yml"
+RECORD_TITLE = "Local mode since"  # the one local-mode record issue (docs/guides/local-mode.md)
 LOCK = "heavy"
 OWN = "the pull request's own test files (the proof plan)"
 NO_XDIST = (
@@ -738,6 +747,8 @@ def take_lock(root: Path) -> tuple[Path, str] | None:
 def rule(item: Selected) -> str:
     if item.code == NAMED:
         return f"a test names {item.changed}"
+    if item.code == WHOLE:
+        return "listed in testing.whole_tests"
     return f"{item.changed} matches code {item.code}, tests {', '.join(item.tests)}"
 
 
@@ -988,7 +999,44 @@ def left_to_ci(root: Path, found: Impact, areas: list[dict] | None) -> tuple[Imp
     chosen, total = len({s.test for s in found.selected}), suite_test_files(root, areas)
     if total and chosen / total >= full_when_share(root):
         return found, None
+    if no_ci_proof(root):  # brief #1796 answer 5, amendment 186 rule 6b
+        return found, RUNS_HERE
     return replace(found, full=False, reason=None), LEFT_LINE.format(glob=hit.group(1), n=chosen)
+
+
+def no_ci_proof(root: Path) -> bool:
+    """True when no CI proof job runs on the pull request (amendment 186 rule 6b): the repository
+    has no proof workflow, or the one local-mode record issue is open."""
+    return not (root / PROOF_WORKFLOW).is_file() or record_issue_open(root)
+
+
+def record_issue_open(root: Path) -> bool:
+    """True when an open issue (not a pull request) of the GitHub origin is titled
+    `Local mode since ...`, read with one `gh api` GET; False without a GitHub origin or `gh`, or
+    when the answer cannot be read (the full suite is then left to CI, as before)."""
+    code, url = run(["git", "remote", "get-url", "origin"], root)
+    match = ORIGIN.search(url.strip()) if code == 0 else None
+    if match is None or shutil.which("gh") is None:
+        return False
+    endpoint = f"repos/{match.group(1)}/issues?state=open&sort=created&direction=asc&per_page=100"
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["gh", "api", "--method", "GET", endpoint],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        issues = json.loads(proc.stdout) if proc.returncode == 0 else None
+    except (OSError, ValueError):
+        return False
+    return isinstance(issues, list) and any(
+        isinstance(i, dict)
+        and "pull_request" not in i
+        and str(i.get("title") or "").startswith(RECORD_TITLE)
+        for i in issues
+    )
 
 
 def full_suite_warning(seconds: float, limit: int) -> str | None:
@@ -1020,6 +1068,7 @@ def gate(
     made: list[dict] = []
     warnings: list[str] = []
     found, left = left_to_ci(root, found, areas)
+    left_run = left is not None and left != RUNS_HERE  # only a selection is left to CI
     sets, notes = regression_sets(root, found, areas)
     sets, single = selected_workers(root, sets)
     notes = [*([left] if left else []), *workers_notes(root, sets), *notes, *single, *own_notes]
@@ -1042,7 +1091,7 @@ def gate(
         made.append(
             {
                 "name": name,
-                "set": LEFT_TO_CI if left and kind == "regression" else kind,
+                "set": LEFT_TO_CI if left_run and kind == "regression" else kind,
                 "reason": reason,
                 "command": safe_command(command, root),
                 "cwd": safe_cwd(folder, root),

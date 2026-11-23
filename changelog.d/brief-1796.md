@@ -1,0 +1,1 @@
+- A change now also runs the tests a project lists as checking every file of a kind (`[testing] whole_tests`), so such a break fails on its pull request; where no CI proof job runs, `local_full = "ci"` keeps the full run on the machine (brief #1796)

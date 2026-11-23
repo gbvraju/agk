@@ -97,6 +97,15 @@ documentation, not a test file) also selects the tests of `every_script_tests`, 
 test files, empty without the key, printed `(new script) <path>` (brief #1651, ADR-0698): the tests
 that read every kit script by a glob, which no map entry of a new script names yet.
 
+`whole_tests` (brief #1796, ADR-0650, amendment 186 rule 6a) is an optional, non-empty list of test
+files, each a file of the tree (relative, forward slashes, no glob character); a bad one is refused
+naming `setting: testing.whole_tests`. Under every profile, a change that is not documentation only
+adds the listed files of the head after every other step, each printed `whole: <file>` last; a file
+already selected keeps its reason and runs once. The list never covers a changed file, so the
+unmapped fallback and `always_full` read the selection as before. A `*.md` file outside `docs/` is
+code when a map entry covers it, a protected-path class holds it or it is an installed file (a
+path of the install lists of `kit/manifest.json` at the head).
+
 A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and `dir/` is
 `dir/**`. A bad setting is refused (CheckError), naming the setting.
 """
@@ -104,6 +113,7 @@ A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and
 from __future__ import annotations
 
 import fnmatch
+import json
 import math
 import os
 import re
@@ -150,6 +160,7 @@ KEYS = {
     "keep_passed",
     "keep_runs",
     "every_script_tests",
+    "whole_tests",
     "pre_merge_tests",
     "rerun_alone",
     "map_source",
@@ -236,11 +247,17 @@ KIT_SCRIPTS = "/".join(("scripts", "agk", ""))
 NEW_SCRIPT = "(new script)"
 EVERY_SCRIPT = "every_script_tests"
 EVERY_SCRIPT_BAD = (
-    "every_script_tests must be a list of existing test files "
-    "(setting: testing.every_script_tests)"
+    "every_script_tests must be a list of existing test files (setting: testing.every_script_tests)"
 )
 # The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
 # lean install names no kit test path, so its folder is not written here.
+WHOLE_KEY = "whole_tests"  # amendment 186 rule 6a (brief #1796)
+WHOLE = "(whole test)"  # the `code` of a test that `whole_tests` added
+WHOLE_BAD = (
+    "whole_tests must be a non-empty list of test files inside the repository, with forward "
+    "slashes and no glob character (setting: testing.whole_tests)"
+)
+MANIFEST = "kit/manifest.json"  # its install lists hold no documentation (brief #1796 answer 3)
 MAP_INFRA = "test_always_full_infra.py"
 FULL_REASON = re.compile(r"#\s*full:\s*\S")  # what an always_full entry that is not infra needs
 FULL_KEY = re.compile(r"\s*always_full\s*=")
@@ -309,6 +326,7 @@ class Impact:
     map_notes: list[str] = field(default_factory=list)  # the generated map could not be used
     tracked: list[str] = field(default_factory=list)  # the head's files, read only for a link
     counts: dict[str, tuple[int, int]] = field(default_factory=dict)  # file -> tests, by importers
+    whole: list[str] = field(default_factory=list)  # the `whole_tests` files added (brief #1796)
 
     def data(self) -> dict:
         source = {} if self.map_source is None else {"map_source": self.map_source}
@@ -326,6 +344,7 @@ class Impact:
                 for s in self.selected
             ],
             "unmapped": list(self.unmapped),
+            **({"whole": list(self.whole)} if self.whole else {}),
         }
 
 
@@ -383,7 +402,7 @@ def testing_table(root: Path) -> dict | None:
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, worker_memory_mb, parallel_command, "
             "tools_file, slow_suite_seconds, full_when_share, local_full, results_dir, keep_passed,"
-            " keep_runs, rerun_alone, map_source and smoke (setting: testing)"
+            " keep_runs, rerun_alone, map_source, whole_tests and smoke (setting: testing)"
         )
     links = check_links(table.get("links", []), root)
     check_smoke(table.get("smoke", []))
@@ -464,6 +483,7 @@ def testing_table(root: Path) -> dict | None:
     if not isinstance(source, str) or source not in MAP_SOURCES:
         raise CheckError("map_source is curated or generated (setting: testing.map_source)")
     every = check_every_script(table.get(EVERY_SCRIPT, []), root)
+    whole = check_whole_tests(table[WHOLE_KEY], root) if WHOLE_KEY in table else []
     return {
         "profile": profile,
         "always_full": list(always_full),
@@ -471,6 +491,7 @@ def testing_table(root: Path) -> dict | None:
         "budget_seconds": budget,
         **({"map_source": source} if "map_source" in table else {}),
         **({EVERY_SCRIPT: every} if every else {}),
+        **({WHOLE_KEY: whole} if whole else {}),
         **({"links": links} if links else {}),
     }
 
@@ -577,6 +598,20 @@ def check_every_script(value: object, root: Path) -> list[str]:
     ):
         raise CheckError(EVERY_SCRIPT_BAD)
     return list(value)
+
+
+def check_whole_tests(value: object, root: Path) -> list[str]:
+    """`[testing] whole_tests` (brief #1796 answer 1): a non-empty list of relative test file paths
+    with `/`, no glob character, each a file of ROOT; else refused naming the setting, never a
+    value."""
+    if not isinstance(value, list) or not value:
+        raise CheckError(WHOLE_BAD)
+    for name in value:
+        if not isinstance(name, str) or not _glob_ok(name) or any(c in name for c in "*?[]"):
+            raise CheckError(WHOLE_BAD)
+        if not (root / name).is_file():
+            raise CheckError(WHOLE_BAD)
+    return list(dict.fromkeys(value))
 
 
 def check_pre_merge_tests(value: object) -> list[str]:
@@ -907,13 +942,34 @@ def doc_reader(root: Path, head: str):
     table = testing_table(root)
     globs = [e["code"] for e in map_entries(root, head, table)[0]] if table else []
     classes = read_list(show(root, head, PROTECTED) or "")
+    installed = installed_paths(show(root, head, MANIFEST))
 
     def doc(path: str) -> bool:
-        held = any(path.startswith(c) if c.endswith("/") else path == c for c in classes)
+        held = path in installed or any(
+            path.startswith(c) if c.endswith("/") else path == c for c in classes
+        )
         code = held or any(matches(path, g) for g in globs)
         return path.startswith("docs/") or (path.endswith(".md") and not code)
 
     return doc
+
+
+def installed_paths(text: str | None) -> set[str]:
+    """The paths of the install lists of a `kit/manifest.json` TEXT (as `parity.installed_paths`
+    reads them), none when it is absent or does not parse (brief #1796 answer 3)."""
+    try:
+        data = json.loads(text) if text else {}
+    except ValueError:
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    paths: set[str] = set()
+    for key in ("verbatim", "experimental", "rendered"):
+        found = data.get(key) or []
+        paths |= {p for p in found if isinstance(p, str)} if isinstance(found, list) else set()
+    for found in (data.get("templates"), (data.get("adopt") or {}).get("templates")):
+        paths |= {p for p in found if isinstance(p, str)} if isinstance(found, dict) else set()
+    return paths
 
 
 def _joined(parts: list[str]) -> str | None:
@@ -1151,6 +1207,9 @@ def select(root: Path, base: str, head: str) -> Impact:
     counts: dict[str, tuple[int, int]] = {}
     if not hit and profile != "thorough":
         counts = add_importers(root, head, changed, entries, tests, chosen, (dirs, patterns))
+    whole = [t for t in table.get(WHOLE_KEY, []) if t in tests] if changed else []
+    for test in whole:  # brief #1796 answer 2: after every other step; only adds
+        chosen.setdefault(test, Selected(test, changed[0], WHOLE, []))
     selected = [chosen[t] for t in sorted(chosen)]
     reason = None
     if hit:
@@ -1161,6 +1220,7 @@ def select(root: Path, base: str, head: str) -> Impact:
         count = sum(1 for p in unmapped if not named.get(p))
         reason = f"profile balanced: {count} unmapped {'file' if count == 1 else 'files'}"
     found = Impact(True, profile, reason is not None, reason, selected, unmapped, named=named)
+    found.whole = sorted(whole)
     found.map_notes = map_notes
     found.counts = counts
     return found
@@ -1367,14 +1427,15 @@ def text(found: Impact) -> list[str]:
         count = len(found.selected)
         noun = "test file" if count == 1 else "test files"
         lines = [f"regression: {count} {noun} selected"]
-        lines.extend(file_line(s) for s in found.selected)
+        lines.extend(file_line(s) for s in found.selected if s.code != WHOLE)
         lines.extend(
             f"selected: {path} -> {k} tests ({j} by importers)"
             for path, (k, j) in sorted(found.counts.items())
             if k
         )
     links = [f"link: {k.run} ({k.changed} matches code {k.code})" for k in found.linked]
-    return map_lines(found) + lines + links + unmapped_lines(found)
+    whole = [] if found.full else [f"whole: {t}" for t in found.whole]
+    return map_lines(found) + lines + links + unmapped_lines(found) + whole
 
 
 def file_line(s: Selected) -> str:

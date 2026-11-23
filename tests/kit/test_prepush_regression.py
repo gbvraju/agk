@@ -321,8 +321,14 @@ LEFT_LINE = (
 )
 
 
-def wide_project(repo, text: str, change: dict[str, str] | None = None) -> None:
-    """The fixture of `project` with two more test files, so one mapped file is below the share."""
+PROOF_WORKFLOW = ".github/workflows/proof.yml"
+
+
+def wide_project(
+    repo, text: str, change: dict[str, str] | None = None, workflow: bool = True
+) -> None:
+    """The fixture of `project` with two more test files, so one mapped file is below the share,
+    and a proof workflow (a CI proof job runs; brief #1796 answer 5)."""
     repo.commit(
         {
             "agk.toml": text,
@@ -333,6 +339,7 @@ def wide_project(repo, text: str, change: dict[str, str] | None = None) -> None:
             "tests/billing/test_pay.py": "# guards pay\n",
             "tests/test_a.py": "# a\n",
             "tests/test_b.py": "# b\n",
+            **({PROOF_WORKFLOW: "name: proof\n"} if workflow else {}),
         },
         "base",
     )
@@ -455,3 +462,96 @@ def test_evidence_check_says_a_left_to_ci_record_differs(repo, outside):
     assert proc.returncode == 1, proc.stdout + proc.stderr
     line = "evidence: not what prepush runs: tests/selected (full left to CI)/kit (field: name)"
     assert re.search(f"^{re.escape(line)}$", proc.stdout, re.M), proc.stdout
+
+
+# Brief #1796 answer 5 (amendment 186 rule 6b): only where no CI proof job runs on the pull
+# request, `local_full = "ci"` keeps the full run here. The record issue is read with one GET
+# through a stand-in `gh` on PATH; a tree without a GitHub origin makes no call.
+RUNS_HERE = "tests: full suite runs here (setting: testing.local_full; no CI proof job)"
+
+
+def stand_in_gh(outside: Path, issues: list[dict]) -> Path:
+    folder = outside / "bin"
+    folder.mkdir(parents=True, exist_ok=True)
+    answer = outside / "issues.json"
+    answer.write_text(json.dumps(issues), encoding="utf-8")
+    tool = folder / "gh"
+    tool.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{outside}/gh.log"\ncat "{answer}"\n',
+        encoding="utf-8",
+    )
+    tool.chmod(0o755)
+    return folder
+
+
+def test_local_full_ci_without_a_proof_workflow_runs_the_full_suite_here(repo, outside):
+    """REQ-062: brief #1796 answer 5 (no `.github/workflows/proof.yml`: no CI proof job)."""
+    wide_project(repo, toml(outside, testing=CI + SHARED), workflow=False)
+    record = outside / "record.json"
+    proc = prepush(repo, outside, "--record", str(record))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["full"]
+    assert RUNS_HERE in proc.stdout and "left to CI" not in proc.stdout
+    data = json.loads(record.read_text(encoding="utf-8"))
+    entry = next(s for s in data["steps"] if s["name"] == "tests")
+    assert [r["set"] for r in entry["runs"]] == ["regression"]
+
+
+@pytest.mark.parametrize(
+    ("issues", "full"),
+    [
+        ([{"number": 7, "title": "Local mode since 2026-11-20"}], True),
+        ([{"number": 8, "title": "Local mode since 2026-11-20", "pull_request": {}}], False),
+        ([{"number": 9, "title": "Another issue"}], False),
+    ],
+)
+def test_local_full_ci_with_an_open_record_issue_runs_the_full_suite_here(
+    repo, outside, issues, full
+):
+    """REQ-062: brief #1796 answer 5 (the open local-mode record issue: no CI proof job)."""
+    wide_project(repo, toml(outside, testing=CI + SHARED))
+    repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
+    stand_in_gh(outside, issues)
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    calls = (outside / "gh.log").read_text(encoding="utf-8")
+    assert "api --method GET repos/example/demo/issues" in calls
+    if full:
+        assert ran(outside) == ["full"] and RUNS_HERE in proc.stdout
+    else:
+        assert ran(outside) == ["kit tests/billing/test_pay.py"]
+        assert LEFT_LINE.format(n=1) in proc.stdout and RUNS_HERE not in proc.stdout
+
+
+def test_local_mode_alone_still_leaves_the_full_suite_to_ci(repo, outside):
+    """REQ-062: brief #1796 answer 5 (`execution = "local"` alone does not turn rule 6b on)."""
+    text = toml(outside, testing=CI + SHARED).replace(
+        'default_branch = "main"\n', 'default_branch = "main"\nexecution = "local"\n', 1
+    )
+    wide_project(repo, text)
+    # Local mode refuses the main folder of a clone that sessions share (brief #1301), so the run
+    # is made from a worktree of its own, as a session's is.
+    tree = outside / "own-tree"
+    repo.git("checkout", "-q", "main")
+    repo.git("worktree", "add", "-q", str(tree), "feature")
+    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
+    env["PATH"] = path_with(scanner(outside / "bin", 0))
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPTS / "prepush.py")],
+        cwd=tree,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert LEFT_LINE.format(n=1) in proc.stdout and RUNS_HERE not in proc.stdout
+
+
+def test_prepush_runs_the_whole_tests_through_their_area(repo, outside):
+    """REQ-062: brief #1796 answers 2 and 6 (the list runs locally beside the mapped tests)."""
+    testing = 'profile = "fast"\nwhole_tests = ["tests/test_a.py"]\n' + MAP
+    wide_project(repo, toml(outside, testing=testing))
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["kit tests/billing/test_pay.py tests/test_a.py"]
+    assert "listed in testing.whole_tests" in proc.stdout

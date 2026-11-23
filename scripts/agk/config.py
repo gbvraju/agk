@@ -859,6 +859,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "slow_suite_seconds",
             "smoke",
             "tools_file",
+            "whole_tests",
             "worker_memory_mb",
             "workers",
         }
