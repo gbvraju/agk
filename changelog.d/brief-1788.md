@@ -1,0 +1,1 @@
+- The conductor states a pull request's size the same way every time, from its own code and guides, and no longer asks the owner about a size the standing ruling accepts (brief #1788)
