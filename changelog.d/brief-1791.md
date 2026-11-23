@@ -1,0 +1,1 @@
+- The kit's session tests build their comment times from the same pinned clock the code reads, so a slow runner or a run across midnight no longer flakes them (brief #1791)
