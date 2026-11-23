@@ -102,7 +102,10 @@ def test_ac1_without_the_variable_the_resolver_reads_its_own_plugin(tmp_path):
     env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
     out = subprocess.run(  # nosec B603 - the kit's resolver, no shell
         [sys.executable, str(plug / "scripts" / "agk" / "kit_root.py")],
-        cwd=root, env=env, capture_output=True, text=True,
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     assert out.returncode == 0, out.stderr
     assert Path(out.stdout.strip()) == (plug / "scripts" / "agk").resolve()
@@ -221,7 +224,10 @@ def test_ac1_without_the_variable_the_form_is_the_found_folder(tmp_path):
     env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
     out = subprocess.run(  # nosec B603 - the kit's resolver, no shell
         [sys.executable, str(plug / "scripts" / "agk" / "kit_root.py"), "--form"],
-        cwd=root, env=env, capture_output=True, text=True,
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == f'"{plug.resolve() / "scripts" / "agk"}"'
@@ -254,3 +260,77 @@ def test_ac1_the_prompts_carry_no_installed_path_text_twice(name):
     """REQ-078 AC1: answer 5: the repeated `scripts/agk/` text is gone from the command forms."""
     body = (RUNTIME / name).read_text(encoding="utf-8")
     assert body.count("scripts/agk/") <= 2, name
+
+
+# --- brief #1826 (ADR-0759): one resolver for every kit file, not only the scripts ----------------
+
+
+@pytest.mark.parametrize(
+    "toml", [INSTALLED, "", 'version = "0.0.1"\n\n[kit]\nlayout = "installed"\n']
+)
+def test_req078_kit_file_is_the_projects_path_in_the_installed_layout(tmp_path, toml):
+    """REQ-078: `[kit] layout` absent or `installed`: the project's own path, as today."""
+    root, plug = project(tmp_path, toml), plugin(tmp_path)
+    env = {"CLAUDE_PLUGIN_ROOT": str(plug)}
+    assert kit_root.kit_file(root, "docs/specs/TEMPLATE.md", env) == root / "docs/specs/TEMPLATE.md"
+    assert kit_root.kit_file(ROOT, "scripts/agk/guard.py", {}) == ROOT / "scripts/agk/guard.py"
+
+
+def test_req078_kit_file_is_the_plugins_path_in_a_clean_project(tmp_path):
+    """REQ-078: `layout = "plugin"`: the plugin's copy, never the project's own copy."""
+    root, plug = project(tmp_path, CLEAN), plugin(tmp_path)
+    (root / "docs" / "specs").mkdir(parents=True)
+    (root / "docs" / "specs" / "TEMPLATE.md").write_text("# own copy\n", encoding="utf-8")
+    env = {"CLAUDE_PLUGIN_ROOT": str(plug)}
+    found = kit_root.kit_file(root, "docs/specs/TEMPLATE.md", env)
+    assert found == plug.resolve() / "docs/specs/TEMPLATE.md"
+
+
+def test_req078_kit_file_without_the_variable_reads_the_plugin_it_sits_in(tmp_path):
+    """REQ-078: `CLAUDE_PLUGIN_ROOT` unset: the plugin this resolver sits in (the kit tree)."""
+    root = project(tmp_path, CLEAN)
+    assert kit_root.kit_file(root, "scripts/agk/guard.py", {}) == ROOT / "scripts/agk/guard.py"
+
+
+def test_req078_kit_file_skips_a_variable_that_names_no_plugin(tmp_path):
+    """REQ-078: a variable naming a folder that is not a plugin: the next candidate."""
+    root = project(tmp_path, CLEAN)
+    stray = tmp_path / "not-a-plugin-example"
+    stray.mkdir()
+    env = {"CLAUDE_PLUGIN_ROOT": str(stray)}
+    assert kit_root.kit_file(root, "scripts/agk/guard.py", env) == ROOT / "scripts/agk/guard.py"
+
+
+def test_req078_kit_file_refuses_another_layout_naming_the_setting(tmp_path):
+    """REQ-078: another `[kit] layout` value is refused by `layout`, naming `layout` only."""
+    root = project(tmp_path, '[kit]\nlayout = "sideways-example"\n')
+    with pytest.raises(kit_root.Refused) as found:
+        kit_root.kit_file(root, "scripts/agk/guard.py", {})
+    assert "(setting: layout)" in str(found.value) and "sideways-example" not in str(found.value)
+
+
+@pytest.mark.parametrize("toml", ["[kit\nlayout = ", b"\xff\xfe".decode("latin-1")])
+def test_req078_kit_file_with_an_unreadable_agk_toml_is_installed(tmp_path, toml):
+    """REQ-078: an `agk.toml` that cannot be read keeps the installed path, as `layout` decides."""
+    root = project(tmp_path, toml)
+    assert kit_root.kit_file(root, "constitution/principles.md", {}) == (
+        root / "constitution/principles.md"
+    )
+
+
+def test_req078_kit_file_with_no_plugin_is_refused_naming_the_variable(tmp_path, monkeypatch):
+    """REQ-078: a clean project with no plugin root: `plugin_root`'s refusal, unchanged."""
+    root = project(tmp_path, CLEAN)
+    monkeypatch.setattr(kit_root, "HERE", tmp_path / "nowhere-example" / "scripts" / "agk")
+    with pytest.raises(kit_root.Refused) as found:
+        kit_root.kit_file(root, "scripts/agk/guard.py", {})
+    assert "(setting: CLAUDE_PLUGIN_ROOT)" in str(found.value)
+    assert str(tmp_path) not in str(found.value)
+
+
+def test_req078_kit_file_writes_nothing(tmp_path):
+    """REQ-078: the resolver only names a path; it never writes into the project or the plugin."""
+    root, plug = project(tmp_path, CLEAN), plugin(tmp_path)
+    before = sorted(p for p in tmp_path.rglob("*") if ".git" not in p.parts)
+    kit_root.kit_file(root, "docs/adr/TEMPLATE.md", {"CLAUDE_PLUGIN_ROOT": str(plug)})
+    assert sorted(p for p in tmp_path.rglob("*") if ".git" not in p.parts) == before

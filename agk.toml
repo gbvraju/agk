@@ -157,6 +157,7 @@ whole_tests = [
   "tests/kit/test_rule_budget.py",  # whole: every rule file against the rule budget
   "tests/kit_dev/test_intelligent_testing.py",  # whole: every test file and map entry of the kit
   "tests/kit/test_core_contradictions.py",  # whole: every core rule file of the kit (Q-F7-1)
+  "tests/kit_dev/test_kit_paths_resolved.py",  # whole: every kit script and hook's kit-file lookups
 ]
 # Install the pinned CI test tools once when xdist is missing, so builders run the tests in workers
 # as CI does; the full run takes parallel_command, since project_tests is compound (brief #1021, ADR-0436).
@@ -1074,6 +1075,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit_dev/test_kit_paths_resolved.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
   "tests/kit/test_injection_set.py",

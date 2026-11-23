@@ -11,6 +11,8 @@ Usage:
 
 Installed in projects (ADR-0503) so that the project's own `plan_intake.py render` imports it from
 beside itself; the plugin also runs its own copy against the repository in `--root` (default `.`).
+In a clean project (`[kit] layout = "plugin"`) it reads the templates from the kit tree it sits in,
+the plugin (brief #1826, ADR-0759).
 Standard library only. No network, no git or gh calls. It writes new files only and refuses to
 overwrite: `docs/specs/NNNN-slug.md` (Status: Draft), `docs/adr/NNNN-slug.md` (Status:
 Proposed, carrying the proposed requirement text; `docs/requirements.md` is protected and never
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import re
 import sys
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -38,6 +41,10 @@ PROJECT_FIRST_REQ = 101
 PROJECT_MODE = re.compile(r'(?m)^mode\s*=\s*"(?:init|adopt)"')
 NUM_FILE = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Brief #1826 (ADR-0759): `kit_root.kit_file`'s rule, restated because this script imports no kit
+# module (ADR-0503); a test holds the two equal. A clean project's templates are the kit tree's.
+LAYOUTS = ("installed", "plugin")
+KIT_TREE = Path(__file__).resolve().parents[2]
 
 
 class Refusal(Exception):
@@ -65,8 +72,27 @@ def quote(text: str, issue: int) -> str:
     )
 
 
+def layout(root: Path) -> str:
+    """`[kit] layout` of `root`'s `agk.toml`, as `kit_root.layout` reads it: an unreadable file is
+    the installed layout, another value is refused naming the setting."""
+    try:
+        data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return "installed"
+    kit = data.get("kit", {})
+    value = kit.get("layout", "installed") if isinstance(kit, dict) else "installed"
+    if value not in LAYOUTS:
+        raise Refusal("[kit] layout is neither installed nor plugin (setting: layout)")
+    return value
+
+
+def template_path(root: Path, rel: str) -> Path:
+    """The project's template in the installed layout, the kit tree's in a clean one."""
+    return root / rel if layout(root) == "installed" else KIT_TREE / rel
+
+
 def read_template(root: Path, rel: str) -> str:
-    path = root / rel
+    path = template_path(root, rel)
     try:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:

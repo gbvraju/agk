@@ -242,7 +242,8 @@ def test_ac1_script_has_no_network_or_write_calls():
             writes.append(node.attr)
     forbidden = {"subprocess", "socket", "urllib", "http", "ftplib", "smtplib", "requests", "ssl"}
     assert not names & forbidden
-    assert names <= set(sys.stdlib_module_names) | {"common"}
+    # brief #1826 (ADR-0759): `kit_root`, standard library only, names the plugin's principles
+    assert names <= set(sys.stdlib_module_names) | {"common", "kit_root"}
     assert not writes
 
 
