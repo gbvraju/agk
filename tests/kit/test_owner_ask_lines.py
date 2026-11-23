@@ -202,3 +202,32 @@ def test_1784_the_builder_role_file_names_the_not_blocking_form():
     """REQ-037: answer 3: the one form of a question that does not block."""
     text = (Path(__file__).resolve().parents[2] / ".claude/agents/builder.md").read_text()
     assert "Question: Q-<id> for the maintainers (not blocking): <text>" in text
+
+
+# --- answer 7, personal mode (Q-1784-1, answered by the steward) --------------------------------
+
+
+def test_1784_personal_mode_reads_the_sidecars_records_and_posts_nothing(
+    monkeypatch, capsys, tmp_path
+):
+    """REQ-037: Q-1784-1: in a sidecar, `ask-lines` reads `forge/pulls/<n>.json` and
+    `forge/comments-<n>.json` and prints the same lines; a plain answer line in a sidecar closes
+    nothing (only what `reviewers.derived_only` derives answers); nothing is read from GitHub."""
+    import json
+
+    forge = tmp_path / "forge"
+    forge.mkdir()
+    (forge / "pulls").mkdir()
+    (forge / "pulls" / "3.json").write_text(json.dumps(pull(number=3)), encoding="utf-8")
+    said = [SIZE_ASK_1762, at(2, "owner-example", ACCEPT_1762, 5)]
+    (forge / "comments-3.json").write_text(json.dumps(said), encoding="utf-8")
+    monkeypatch.setattr(session, "personal_table", lambda root: {"forge": "files"})
+    monkeypatch.setattr(session, "owner_people", lambda root, pr: (LISTED, ANSWERERS))
+    monkeypatch.setattr(session, "agent_apps", lambda root: [])
+    monkeypatch.setattr(session, "solo_person", lambda root: None)
+    monkeypatch.setattr(session, "gh", lambda *a, **k: pytest.fail("no GitHub read"))
+    assert session.ask_lines(tmp_path, 3) == 0
+    assert capsys.readouterr().out.splitlines() == [f"owner-needed: {ACCEPT_1762}"]
+    (forge / "comments-3.json").unlink()
+    session.ask_lines(tmp_path, 3)
+    assert capsys.readouterr().out.strip() == "none"

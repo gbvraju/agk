@@ -46,6 +46,9 @@ data): "Yes, brief the size-accept and non-blocking-park fix".
 6. A plain `Size accepted` stays text and closes nothing (`Q-F1-1`, the conservative reading); the steward relays it
    as the `ask-lines` line. `[flow] owner_wait_minutes`, `owner_rest_hours`, `auto_merge`, `review_mode` and
    `pr_mode` keep their readings; none of them parks an `nb:` item.
+7. In personal mode (`forge = "files"`, `Q-1784-1`, the steward's answer) no park or label exists; `ask-lines` reads
+   the sidecar's `forge/pulls/<n>.json` and `forge/comments-<n>.json`, posts nothing, and counts an answer line only
+   as `reviewers.derived_only` derives it, so a plain comment in a sidecar answers nothing.
 
 ## Consequences
 
@@ -56,7 +59,5 @@ changes the pull request's own diff expects none.
 
 ## Residual
 
-- 2026-11-23: in personal mode (`forge = "files"`) no park or label exists; `ask-lines` reads GitHub only, and its
-  reading of the sidecar's records is asked as `Q-1784-1`.
 - 2026-11-23: `steward.py refresh` and the conductor's hourly report do not read `open_owner_items`, so an `nb:` item
   is listed by `ask-lines` (and stays in the pull request's `Questions:`) but not there yet; a later brief may add it.

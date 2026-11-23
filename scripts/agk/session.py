@@ -210,6 +210,7 @@ from common import (
     PAUSED_LINE,
     CheckError,
     _verify,
+    agent_apps,
     config_source,
     covered_fix_list,
     final_accepts,
@@ -218,6 +219,7 @@ from common import (
     main_folder_refusal,
     next_free_ids,
     paused,
+    personal_table,
     repo_root,
     required_checks,
     root_hint,
@@ -229,7 +231,13 @@ from common import (
 )
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
-from reviewers import APPROVE, spec_approvers, verdict_authors
+from reviewers import (  # Q-1784-1: the sidecar answer reader
+    APPROVE,
+    derived_only,
+    solo_person,
+    spec_approvers,
+    verdict_authors,
+)
 
 from config import (
     BRIEF_CODE_PATHS,
@@ -4431,9 +4439,27 @@ def closing_line(key: str, pr: dict, comments: Sequence[dict] = ()) -> str:
     return f"Maintainer answer: accept {(pr.get('head') or {}).get('sha') or '<head sha>'}"
 
 
+def sidecar_read(root, number: int) -> tuple[dict, list]:
+    """Q-1784-1 (the steward's answer): in personal mode the sidecar's `forge/pulls/<n>.json` and
+    `forge/comments-<n>.json`; an answer line counts only as `reviewers.derived_only` derives it
+    (a plain comment in a sidecar answers nothing). An unreadable file reads as empty."""
+
+    def load(name: str, empty):
+        try:
+            found = json.loads((Path(root) / "forge" / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return empty
+        return found if isinstance(found, type(empty)) else empty
+
+    pr, said = load(f"pulls/{number}.json", {}), load(f"comments-{number}.json", [])
+    asks = [c for c in said if isinstance(c, dict) and not first_line(c).startswith(OWNER_ANSWERS)]
+    return {"number": number, **pr}, asks + derived_only(said, agent_apps(root), solo_person(root))
+
+
 def ask_lines(root, number: int) -> int:
     """`session.py ask-lines --pr N` (GET only): `<key>: <line>` per open owner item, or `none`."""
-    fresh = owner_read(repo_name(root), number)
+    fresh = sidecar_read(root, number) if personal_table(root) is not None else None
+    fresh = fresh or owner_read(repo_name(root), number)
     if fresh is None:
         raise CheckError(f"the pull request #{number} cannot be read")
     pr, comments = fresh
