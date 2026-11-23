@@ -1129,8 +1129,13 @@ and for the strong Accepted ADRs it leaves out (brief #1819, ADR-0758): a hit is
 `Wiring:` `<module>.<function>` stands in the ADR's header or `## Decision` section, and only the first
 `[flow] brief_prior_warnings` of them (a whole number, 10 when unset; any other value is refused naming the setting),
 ranked by the strong terms they name and then the newer number, are warned, with one line counting the rest.
-`brief_study.py` still prints every candidate, each line ending `strong` or `weak`. The warnings become failures from
-the day `STUDY_FAILS_FROM` names (none set yet). Files only.
+`brief_study.py` still prints every candidate, each line ending `strong` or `weak`. The study lines' warnings become
+failures for a brief filed on or after `[flow] brief_study_fails_from` (brief #1815, ADR-0757): a TOML date or a
+`"YYYY-MM-DD"` string, UTC; unset, they only warn; any other value is refused naming the setting. A brief is judged by
+its issue's `created_at`, else by today's UTC date, so a brief filed before the day stays warned. From the day
+`session.py plan` lists such a brief `MALFORMED` and `session.py next` skips it. A `Priority: 0` brief, the router's
+red-branch brief among them, is held to `Class:` and `Prior:` only. The kit sets its own day; no project template sets
+one. Files only.
 Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
 publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
 writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.

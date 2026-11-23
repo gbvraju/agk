@@ -137,7 +137,7 @@ def test_ac4_the_cli_takes_today_from_the_pinned_clock(tmp_path, clock):
                "--root", str(root)]  # fmt: skip
     for at, code in ((BEFORE, 0), (DAY, 1)):
         clock.set(datetime.fromisoformat(f"{at}T12:00:00+00:00").astimezone(UTC))
-        out = subprocess.run(command, capture_output=True, text=True, check=False)  # nosec B603
+        out = subprocess.run(command, capture_output=True, text=True, check=False)  # nosec B603 - fixed argument list, no shell
         assert out.returncode == code, out.stdout + out.stderr
         assert ("FAIL brief: study: " in out.stdout) == bool(code), out.stdout
 
