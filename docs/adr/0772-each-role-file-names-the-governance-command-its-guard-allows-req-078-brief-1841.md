@@ -6,7 +6,7 @@
 - Related: brief #1841, brief #1758, brief #1759, ADR-0612, ADR-0631, ADR-0736, ADR-0737, SPEC-0071, plan #661
 - Requirements: REQ-078
 
-Protected classes: `.claude/`, `tests/kit_dev/`
+Protected classes: `.claude/`, `tests/kit_dev/`, `config/`
 
 ## Context
 
@@ -43,8 +43,8 @@ with Bash named `kit_root.py governance` without the form their guard allows. Th
 
 A conductor or a shadow in a clean project runs the head's governance on the first try; every Bash role names a gate
 its guard allows, and the test fails when a role file and its guard drift apart. No guard, setting or check logic
-changes. The six added lines raise the word counts of `config/rule-budget.txt`, a `config/` file outside this ADR's
-classes and the brief's `Touches:` (Q-1841-1).
+changes. The six added lines raise the word counts of `config/rule-budget.txt` for those six files, each within ten
+percent and with no rule line added, under the owner's standing ruling (ADR-0583, Q-1841-1 answered on #1853).
 
 ## Residual
 
