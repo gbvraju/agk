@@ -218,6 +218,8 @@ def test_req079_the_markers_are_found_for_each_written_form(repo, form):
             "agk.toml": f"test_dirs = ['{form}']\n",
         }
     )
-    found = common.find_ac_markers(repo.root, common.load_config(repo.root)["test_dirs"], ["test_*.py"], [])
+    found = common.find_ac_markers(
+        repo.root, common.load_config(repo.root)["test_dirs"], ["test_*.py"], []
+    )
     assert found, form
     assert repo.run("check_requirements.py").returncode == 0

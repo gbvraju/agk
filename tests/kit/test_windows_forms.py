@@ -77,7 +77,7 @@ def write(root: Path, form: str) -> Path:
 
 @pytest.mark.parametrize("form", FORMS)
 def test_every_reader_of_test_dirs_reads_one_folder(form: str, tmp_path: Path) -> None:
-    """REQ-079: brief #1839 answers 2 and 4 (load_config, impact, the markers, the floors, doctor)."""
+    """REQ-079: brief #1839 answers 2 and 4 (load_config, impact, markers, floors, doctor)."""
     root = write(tmp_path, form)
     dirs = common.load_config(root)["test_dirs"]
     assert dirs == ["tests"]
@@ -90,6 +90,25 @@ def test_every_reader_of_test_dirs_reads_one_folder(form: str, tmp_path: Path) -
     assert doctor.outside_test_dirs_lines(root) == []
 
 
+def _is_raw(node: ast.AST, raw: set[str]) -> bool:
+    """A call that reads the raw settings, or a name bound to one."""
+    if isinstance(node, ast.Call):
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        return name in RAW
+    return isinstance(node, ast.Name) and node.id in raw
+
+
+def _key(node: ast.AST, raw: set[str]) -> object:
+    """The constant key a raw read takes (`raw[...]` or `raw.get(...)`), or None."""
+    if isinstance(node, ast.Subscript) and _is_raw(node.value, raw):
+        return getattr(node.slice, "value", None)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.args:
+        if node.func.attr == "get" and _is_raw(node.func.value, raw):
+            return getattr(node.args[0], "value", None)
+    return None
+
+
 def readers_past_load_config(folder: Path) -> list[str]:
     """The files under `folder` that read `test_dirs` from the raw settings (`config_source(...)`
     or a TOML read), not from `common.load_config`."""
@@ -97,32 +116,11 @@ def readers_past_load_config(folder: Path) -> list[str]:
     for path in sorted(folder.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         raw: set[str] = set()
-
-        def is_raw(node: ast.AST) -> bool:
-            if isinstance(node, ast.Call):
-                func = node.func
-                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-                return name in RAW
-            return isinstance(node, ast.Name) and node.id in raw
-
         for node in ast.walk(tree):
-            if isinstance(node, ast.Assign) and is_raw(node.value):
+            if isinstance(node, ast.Assign) and _is_raw(node.value, raw):
                 raw.update(t.id for t in node.targets if isinstance(t, ast.Name))
-        for node in ast.walk(tree):
-            key = None
-            if isinstance(node, ast.Subscript) and is_raw(node.value):
-                key = node.slice
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "get"
-                and is_raw(node.func.value)
-                and node.args
-            ):
-                key = node.args[0]
-            if isinstance(key, ast.Constant) and key.value == "test_dirs":
-                out.append(path.relative_to(folder).as_posix())
-                break
+        if any(_key(node, raw) == "test_dirs" for node in ast.walk(tree)):
+            out.append(path.relative_to(folder).as_posix())
     return out
 
 

@@ -695,8 +695,8 @@ FORMS = ["tests", "tests/", "./tests", "tests\\", ".\\tests", ".\\tests\\"]
 
 @pytest.mark.parametrize("form", FORMS)
 def test_each_written_form_of_test_dirs_selects_the_mapped_tests(repo, form):
-    """REQ-079: brief #1839 answers 2 and 7 (red on main for `tests\\`, `.\\tests` and `./tests`)."""
-    toml = f"default_branch = \"main\"\ntest_dirs = ['{form}']\ntest_patterns = [\"test_*.py\"]\n"
+    """REQ-079: brief #1839 answers 2 and 7 (red on main for the back-slash and `./` forms)."""
+    toml = f'default_branch = "main"\ntest_dirs = [\'{form}\']\ntest_patterns = ["test_*.py"]\n'
     repo.commit({"agk.toml": toml + table_text(), **BASE_FILES}, "base")
     repo.branch("feature")
     change(repo, "app/shop/cart.py")

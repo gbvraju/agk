@@ -364,11 +364,13 @@ ORDERS = {
 }
 
 
-@pytest.mark.parametrize("form", ["tests", "tests/", "./tests", "tests\\", ".\\tests", ".\\tests\\"])
+@pytest.mark.parametrize(
+    "form", ["tests", "tests/", "./tests", "tests\\", ".\\tests", ".\\tests\\"]
+)
 def test_each_written_form_of_test_dirs_gives_a_one_file_selection(repo, form):
     """REQ-079: brief #1839 answers 2 and 7 (the brief's `Measured:` project, each written form)."""
     toml = (
-        f"default_branch = \"main\"\ntest_dirs = ['{form}']\ntest_patterns = [\"test_*.py\"]\n"
+        f'default_branch = "main"\ntest_dirs = [\'{form}\']\ntest_patterns = ["test_*.py"]\n'
         "project_tests = 'exit 0'\n[testing]\n"
         'map = [{ code = "app/core/**", tests = ["tests/test_orders.py"] }]\n'
     )

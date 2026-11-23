@@ -66,7 +66,8 @@ sys.exit(1 if bad or any(r["messages"] for r in out) else 0)
 """
 # The stand-in prettier: a file holding a tab is not formatted; it records its arguments, and judges
 # line ends as prettier does: `endOfLine` is `lf` unless `--end-of-line` says otherwise, and with
-# `--config-precedence file-override` a `.prettierrc` or `.editorconfig` line end wins (brief #1839).
+# `--config-precedence file-override` a `.prettierrc` or `.editorconfig` line end wins
+# (brief #1839).
 PRETTIER = """
 import json, os, sys
 args = sys.argv[1:]
