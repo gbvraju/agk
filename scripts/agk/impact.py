@@ -604,12 +604,19 @@ def check_whole_tests(value: object, root: Path) -> list[str]:
     """`[testing] whole_tests` (brief #1796 answer 1): a non-empty list of relative test file paths
     with `/`, no glob character, each a file of ROOT; else refused naming the setting, never a
     value."""
+    names = whole_test_names(value)
+    if not all((root / name).is_file() for name in names):
+        raise CheckError(WHOLE_BAD)
+    return names
+
+
+def whole_test_names(value: object) -> list[str]:
+    """The shape half of `check_whole_tests`, each name once: what the merge check refuses before
+    its worktree exists (brief #1797 answer 1)."""
     if not isinstance(value, list) or not value:
         raise CheckError(WHOLE_BAD)
     for name in value:
         if not isinstance(name, str) or not _glob_ok(name) or any(c in name for c in "*?[]"):
-            raise CheckError(WHOLE_BAD)
-        if not (root / name).is_file():
             raise CheckError(WHOLE_BAD)
     return list(dict.fromkeys(value))
 

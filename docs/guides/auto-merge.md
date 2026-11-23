@@ -28,8 +28,9 @@ again, at the moment it runs, everything a person would check before merging:
   carries `Local evidence:` and `Evidence check: agrees` for that head;
 - the hold list: a release, a spec approval still missing, a change to `constitution/`, `config/reviewers.yaml`, the ruleset files
   or `.github/workflows/`, the `agk:hold` label, a draft, an unmerged `Depends-on`, a conflict, and a red default branch;
-- that the merge of the head with the default branch passes `make governance` (and the `[testing] pre_merge_tests`, if set)
-  before anything is merged.
+- that the merge of the head with the default branch passes `make governance` (and the test files of `[testing]
+  pre_merge_tests` and `whole_tests`, if set: one run, each file once) before anything is merged. A merge made with the
+  forge's own button skips these tests, as it skips the whole check.
 
 Then it merges by one squash merge pinned to the sha, so a head that moved is refused by GitHub. After the merge it posts one
 record line, runs governance on the merged default branch, and, if that is red, opens the red-branch issue, which holds every

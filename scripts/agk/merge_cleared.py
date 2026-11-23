@@ -103,7 +103,10 @@ branch; without the key, none) under the heavy lock: `lock.py run --name heavy .
 PATH=<PATH> --only-env HOME=<scratch> --only-env AGK_KIT_TESTS=1 --only-env
 PYTHONDONTWRITEBYTECODE=1 -- <python> -m pytest -q
 --rootdir <worktree> ... <worktree>/<file>...`; pytest reads the configuration file it finds
-above the listed files. A failure, or a listed name that is not a file of the merge, holds with
+above the listed files. Brief #1797 (ADR-0650, amendment 187 item 1) adds `[testing] whole_tests`
+to the run: the union, `pre_merge_tests` first, each file once, in the one pytest call; a bad
+`whole_tests` is refused as build (k) refuses it, and a missing file holds naming that setting.
+A failure, or a listed name that is not a file of the merge, holds with
 
     merge-cleared #<n> <sha12>: held: the merge with the default branch fails pre-merge tests
         (<file>::<test>)                                          (one line)
@@ -1675,12 +1678,31 @@ def pre_merge_setting(data: dict) -> dict | None:
         return None
     if not isinstance(table, dict):
         raise Refused("[testing] must be a table (setting: testing)")
-    if impact.PRE_MERGE in table:
-        try:
+    try:
+        if impact.PRE_MERGE in table:
             impact.check_pre_merge_tests(table[impact.PRE_MERGE])
-        except CheckError as err:
-            raise Refused(str(err)) from None
+        if impact.WHOLE_KEY in table:  # brief #1797: build (k)'s rules, the files read later
+            impact.whole_test_names(table[impact.WHOLE_KEY])
+    except CheckError as err:
+        raise Refused(str(err)) from None
     return table
+
+
+def merge_test_names(table: dict | None, tree: Path) -> list[str]:
+    """The test files of the would-be merge TREE (brief #1797 answer 1): `pre_merge_tests`, then
+    `whole_tests`, each file once; a listed name that is not a file of TREE holds, naming its
+    setting."""
+    try:
+        names = impact.pre_merge_names(table, tree)
+    except CheckError:
+        raise Held(f"{TESTS_FAIL} (setting: testing.{impact.PRE_MERGE})") from None
+    if table is None or impact.WHOLE_KEY not in table:
+        return names
+    try:
+        whole = impact.check_whole_tests(table[impact.WHOLE_KEY], tree)
+    except CheckError:
+        raise Held(f"{TESTS_FAIL} (setting: testing.{impact.WHOLE_KEY})") from None
+    return list(dict.fromkeys([*names, *whole]))
 
 
 def run_governance(
@@ -1788,10 +1810,7 @@ def in_worktree(
         step = run_governance(root, tree, home, body, base, wait)
         if step is not None or pre is False:
             return step
-        try:
-            names = impact.pre_merge_names(pre if isinstance(pre, dict) else None, tree)
-        except CheckError:
-            raise Held(f"{TESTS_FAIL} (setting: testing.{impact.PRE_MERGE})") from None
+        names = merge_test_names(pre if isinstance(pre, dict) else None, tree)
         failed = run_tests(root, tree, home, names, wait) if names else None
         if failed is not None:
             raise Held(f"{TESTS_FAIL} ({failed})")
