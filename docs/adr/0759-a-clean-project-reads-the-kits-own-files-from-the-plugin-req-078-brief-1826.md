@@ -6,7 +6,7 @@
 - Related: brief #1826, ADR-0456, ADR-0503, ADR-0611, ADR-0612, briefs #1665, #1666, #1667, plan #661
 - Requirements: REQ-078, REQ-050
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`
 
 ## Context
 
@@ -42,7 +42,8 @@ blockers".
    `session.body_lines` stay as rows marked `open` for their own brief (Q-1826-4).
 5. Path classes changed: `scripts/agk/` (`kit_root.py`, `plan_intake.py`, `new_spec.py`, `review_context.py`,
    `playbook_format.py`), `tests/kit/` (`test_kit_root.py`, the new `test_plan_intake_clean.py`) and `tests/kit_dev/`
-   (`test_new_spec.py`, the new `test_kit_paths_resolved.py`). No setting is added; `execution`, `review_mode`,
+   (`test_new_spec.py`, the new `test_kit_paths_resolved.py`) and `agk.toml` (the new test joins `[testing]
+   whole_tests` and the `scripts/agk/session.py` map entry, Q-1826-5). No setting is added; `execution`, `review_mode`,
    `pr_mode`, `[guard]` and personal mode read the same lookup, and a clean project is `local` and never personal.
 
 ## Consequences
