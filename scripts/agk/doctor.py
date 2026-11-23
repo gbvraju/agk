@@ -2856,6 +2856,33 @@ def unmapped_lines(root: Path) -> list[str]:
     return lines + ([f"tests: unmapped: and {more} more"] if more > 0 else [])
 
 
+WHOLE_REFUSED = "tests: whole tests refused: {what} (setting: testing.whole_tests)"
+
+
+def whole_lines(root: Path) -> list[str]:
+    """Brief #1798 answer 2: `tests: whole tests <n>` for a set `[testing] whole_tests`, or one
+    refusal naming the first bad entry by its place, never its value; nothing without the key."""
+    try:
+        table = impact.config_source(root).get("testing")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    if not isinstance(table, dict) or impact.WHOLE_KEY not in table:
+        return []
+    value = table[impact.WHOLE_KEY]
+    if not isinstance(value, list) or not value:
+        return [WHOLE_REFUSED.format(what="not a non-empty list")]
+    for place, name in enumerate(value, start=1):
+        if (
+            not isinstance(name, str)
+            or not impact._glob_ok(name)
+            or any(c in name for c in "*?[]")
+            or not (root / name).is_file()
+        ):
+            what = f"entry {place} is not a test file of the repository"
+            return [WHOLE_REFUSED.format(what=what)]
+    return [f"tests: whole tests {len(dict.fromkeys(value))}"]
+
+
 STANDARDS_LINE = "warn standards: no pack for this stack yet (setting: stack record)"
 
 
@@ -3132,6 +3159,7 @@ def main(argv: list[str] | None = None) -> int:
             + frontend_lines(root.resolve())
             + outside_test_dirs_lines(root.resolve())
             + unmapped_lines(root.resolve())
+            + whole_lines(root.resolve())
             + main_folder_lines(root.resolve())
             + line_ending_lines(root.resolve())
             + machine_wsl_lines(root.resolve())

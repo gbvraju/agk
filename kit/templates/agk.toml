@@ -113,6 +113,9 @@ governance = { level = "light" }
 # budget_seconds = 300
 # excluded = ["e2e: needs a browser the runner lacks"]
 # pr_tests = "full"
+# whole_tests: the project's own tests that each read every file of a kind (an architecture, contract, licence or layering
+# test) and assert one rule over all of them; every change that is not documentation only runs them (SPEC-0055 rule 6a).
+# whole_tests = ["tests/test_architecture.py"]
 # Optional: the instruction files an agent reads, as paths or globs in order, for `python3 scripts/agk/rules.py budget`,
 # `dropped` and `consolidate`; without it the four core files, `.claude/agents/*.md` and `config/review-checklist.md`.
 # [rules]

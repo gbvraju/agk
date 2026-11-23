@@ -86,3 +86,66 @@ def test_init_without_the_extendable_key_compares_the_whole_file(tmp_path):
     assert report["vendored-differs"]["status"] == "fail"
     report = report_of(init_target(tmp_path / "same", BLOCK, extendable=False))
     assert report["vendored-differs"]["status"] == "ok"
+
+
+# Brief #1798 answer 2 (amendment 186 build (m)): the whole-tests count, a bad entry by its place.
+import doctor as doctor_script  # noqa: E402
+
+
+def whole_tree(tmp_path: Path, value: str) -> Path:
+    root = tmp_path / "w"
+    (root / "tests").mkdir(parents=True)
+    for name in ("test_a.py", "test_b.py"):
+        (root / "tests" / name).write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    (root / "agk.toml").write_text(f"[testing]\nwhole_tests = {value}\n", encoding="utf-8")
+    return root
+
+
+def test_doctor_counts_the_whole_tests(tmp_path):
+    """REQ-062: brief #1798 answer 2."""
+    root = whole_tree(tmp_path, '["tests/test_a.py", "tests/test_b.py"]')
+    assert doctor_script.whole_lines(root) == ["tests: whole tests 2"]
+
+
+def test_doctor_refuses_a_bad_whole_test_by_its_place_never_its_value(tmp_path):
+    """REQ-062: brief #1798 answer 2 (each refused shape of amendment 186 rule 6a)."""
+    for i, bad in enumerate(
+        ["tests/nope_9.py", "tests/*.py", "/tests/abs_9.py", "../up_9.py", "tests\\\\bs_9.py", "7"]
+    ):
+        value = f'["tests/test_a.py", "{bad}"]' if bad != "7" else '["tests/test_a.py", 7]'
+        lines = doctor_script.whole_lines(whole_tree(tmp_path / str(i), value))
+        assert lines == [
+            "tests: whole tests refused: entry 2 is not a test file of the repository"
+            " (setting: testing.whole_tests)"
+        ], bad
+        assert "9" not in lines[0], bad
+
+
+def test_doctor_refuses_a_whole_tests_that_is_not_a_list(tmp_path):
+    """REQ-062: brief #1798 answer 2 (not a list, or empty)."""
+    for i, value in enumerate(['"tests/test_a.py"', "[]"]):
+        assert doctor_script.whole_lines(whole_tree(tmp_path / str(i), value)) == [
+            "tests: whole tests refused: not a non-empty list (setting: testing.whole_tests)"
+        ]
+
+
+def test_doctor_prints_nothing_without_a_list(tmp_path):
+    """REQ-062: brief #1798 answer 7 (a project with no list)."""
+    root = tmp_path / "none"
+    root.mkdir()
+    (root / "agk.toml").write_text('[testing]\nprofile = "fast"\n', encoding="utf-8")
+    assert doctor_script.whole_lines(root) == []
+    (root / "agk.toml").write_text('mode = "init"\n', encoding="utf-8")
+    assert doctor_script.whole_lines(root) == []
+
+
+def test_doctor_prints_the_count_in_its_report(tmp_path):
+    """REQ-062: brief #1798 answer 2 (the line is wired into the text report)."""
+    dirs = init_target(tmp_path, BLOCK)
+    root = dirs["root"]
+    (root / "tests").mkdir(exist_ok=True)
+    (root / "tests" / "test_w.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    toml = 'mode = "init"\nversion = "9.9.9"\n[testing]\nwhole_tests = ["tests/test_w.py"]\n'
+    (root / "agk.toml").write_text(toml, encoding="utf-8")
+    proc = doctor("--api-dir", str(dirs["api"]), "--kit-root", str(dirs["kit"]), str(root))
+    assert "tests: whole tests 1" in proc.stdout, proc.stdout

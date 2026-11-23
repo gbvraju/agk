@@ -57,8 +57,10 @@ Brief #1031 (ADR-0440): with `[testing] local_full = "ci"`, a selection that `im
 because a changed file matches `always_full` (not under `profile = "thorough"`, not with
 `pr_tests = "full"`, and below `full_when_share` of the `[proof]` areas' test files) runs as a
 selection (`left_to_ci`): the mapped test files through their areas, with the same workers and the
-same lock, after one line `tests: full suite left to CI's proof job (always_full <glob>); ran the
-<n> mapped test files` (`0` when nothing is mapped, and nothing runs). The record names each such
+same lock, after one line `tests: full suite left to CI's governance job (always_full <glob>); ran
+the <n> mapped test files` (brief #1798: in the kit the job's `Tests of the checks` step, in a
+project its `Project tests` step; `proof.yml` runs only the pull request's own tests) (`0`
+when nothing is mapped, and nothing runs). The record names each such
 run's set `selected (full left to CI)`, so the evidence check and the verdict see that the full
 suite did not run here. CI's runs are not changed: `project_tests.py` never calls `left_to_ci`.
 Brief #1796 answer 5 (amendment 186 rule 6b): only where no CI proof job runs on the pull request,
@@ -231,7 +233,8 @@ OUTSIDE_LINE = (
 )  # brief #1329 (ADR-0564)
 LEFT_TO_CI = "selected (full left to CI)"  # the record's set of such a run (brief #1031 answer 3)
 LEFT_LINE = (
-    "tests: full suite left to CI's proof job (always_full {glob}); ran the {n} mapped test files"
+    "tests: full suite left to CI's governance job (always_full {glob}); ran the {n} mapped test"
+    " files"
 )
 ALWAYS_FULL = re.compile(r"^always_full (\S+) matches ")
 RUNS_HERE = "tests: full suite runs here (setting: testing.local_full; no CI proof job)"

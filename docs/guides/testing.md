@@ -90,6 +90,15 @@ For a change, the selection is worked out from git and files only, with no netwo
   (`ROOT / "skills" / "upgrade" / "SKILL.md"`, `Path("a", "b.md")`, `os.path.join("a", "b.md")`).
 - **No table.** Without a `[testing]` table the selection is the full suite, which is what governance runs today.
 
+**Whole tests.** A whole test reads every file of a kind (installed, tracked, kit, or a manifest of them) and asserts one
+rule over all of them: an architecture, contract, licence or layering test. Its map can never name every file it reads, so
+list it in `[testing] whole_tests` (SPEC-0055 rule 6a): every change that is not documentation only, and a change of only
+`*.md` files when one of them is installed or protected, runs the listed files beside its selection, each printed
+`whole: <file>`. List a test there in the pull request that adds it. The cost is the list's time on every such run (the
+kit's 16 files take about 50 s on two workers), so list only tests that read a whole class. The list never covers a
+changed file and never makes a run full. The kit never fills a project's list: it stays empty until the project sets one,
+and `python3 scripts/agk/doctor.py` prints `tests: whole tests <n>` once it does.
+
 ## A map per module
 
 Give each module of the project its own map entry, naming only that module's tests. An invented project with a back end of

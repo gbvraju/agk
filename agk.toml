@@ -132,10 +132,31 @@ pr_tests = "selected"
 workers = "auto"
 # A selection of at least this share of the test files runs the full suite in workers (brief #980, ADR-0422).
 full_when_share = 0.5
-# The owner's direction of 2026-11-11 ("file it"): a full run only for an always_full file runs the mapped tests here and leaves the full suite to CI's proof job (brief #1031, ADR-0440).
+# The owner's direction of 2026-11-11 ("file it"): a full run only for an always_full file runs the mapped tests here and leaves the full suite to CI: in the kit governance's `Tests of the checks` step, in a project its `Project tests` step (brief #1031, ADR-0440; brief #1798). Where no CI proof job runs, the full suite runs here (SPEC-0055 rule 6b).
 local_full = "ci"
 # An added kit script also runs the tests that read every kit script by a glob (brief #1651, ADR-0698).
 every_script_tests = ["tests/kit/test_isolated_mode.py", "tests/kit/test_installed_imports.py", "tests/kit/test_core_contradictions.py"]
+# The whole tests (brief #1798, ADR-0650, SPEC-0055 rule 6a): each reads every file of a class and asserts one rule over
+# all of them, so every pull request that is not documentation only runs them. A new whole test joins this list in the
+# pull request that adds it; each line names the class it reads after `# whole:`.
+whole_tests = [
+  "tests/kit/test_installed_imports.py",  # whole: every installed script's imports
+  "tests/kit_dev/test_distribution.py",  # whole: every plugin, marketplace and law file
+  "tests/kit_dev/test_playbook.py",  # whole: every role file, template and skill of the playbook
+  "tests/kit_dev/test_kit_manifest.py",  # whole: every path of kit/manifest.json and kit/templates/
+  "tests/kit_dev/test_kit_hashes.py",  # whole: every installed file against kit/hashes.json
+  "tests/kit_dev/test_kit_hashes_rows.py",  # whole: every release row of kit/hashes.json
+  "tests/kit/test_licence_headers.py",  # whole: every tracked file's licence header
+  "tests/kit_dev/test_licence_notice.py",  # whole: every place that names the licence
+  "tests/kit/test_check_neutrality.py",  # whole: every tracked file against the neutrality list
+  "tests/kit/test_plugin_snapshot.py",  # whole: every file of the plugin snapshot
+  "tests/kit/test_isolated_mode.py",  # whole: every kit script under python3 -I
+  "tests/kit/test_output_encoding.py",  # whole: every installed check's output encoding
+  "tests/kit/test_windows_install.py",  # whole: every installed file on a Windows install
+  "tests/kit/test_rule_budget.py",  # whole: every rule file against the rule budget
+  "tests/kit_dev/test_intelligent_testing.py",  # whole: every test file and map entry of the kit
+  "tests/kit/test_core_contradictions.py",  # whole: every core rule file of the kit (Q-F7-1)
+]
 # Install the pinned CI test tools once when xdist is missing, so builders run the tests in workers
 # as CI does; the full run takes parallel_command, since project_tests is compound (brief #1021, ADR-0436).
 tools_file = "config/ci-tools.txt"

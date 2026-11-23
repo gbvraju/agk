@@ -316,7 +316,7 @@ def test_the_testing_guide_has_a_section_on_the_pre_push_gate():
 SHARED = 'always_full = ["src/billing/**"]\n' + MAP
 CI = 'local_full = "ci"\npr_tests = "selected"\n'  # pr_tests is "full" without the key
 LEFT_LINE = (
-    "tests: full suite left to CI's proof job (always_full src/billing/**); "
+    "tests: full suite left to CI's governance job (always_full src/billing/**); "
     "ran the {n} mapped test files"
 )
 
@@ -370,7 +370,7 @@ def test_local_full_ci_with_nothing_mapped_runs_nothing_and_says_0(repo, outside
     proc = prepush(repo, outside)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert ran(outside) == []
-    line = "tests: full suite left to CI's proof job (always_full src/other.py); ran the 0 mapped"
+    line = "tests: full suite left to CI's governance job (always_full src/other.py); ran the 0"
     assert line in proc.stdout
     assert RUN_LINE.findall(proc.stdout) == []
 
