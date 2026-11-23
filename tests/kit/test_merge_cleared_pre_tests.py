@@ -430,7 +430,8 @@ def test_both_keys_hold_on_the_whole_test(tmp_path):
 def test_a_malformed_whole_list_is_refused_before_the_worktree(tmp_path, value):
     """REQ-062 REQ-046: brief #1797 answers 1 and 4 (build (k)'s checker; refused naming the
     setting, never the value, before anything runs)."""
-    proc, made, ran, root, _ = budget_run(tmp_path, LOWER, WIDER, f"[testing]\nwhole_tests = {value}\n")
+    setting = f"[testing]\nwhole_tests = {value}\n"
+    proc, made, ran, root, _ = budget_run(tmp_path, LOWER, WIDER, setting)
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert "refused:" in one_line(proc) and "setting: testing.whole_tests" in one_line(proc)
     assert "/abs" not in one_line(proc) and "../" not in one_line(proc), "never the value"
@@ -470,7 +471,10 @@ def tree_with(tmp_path: Path, *names: str) -> Path:
         ({"pre_merge_tests": [BUDGET_TEST]}, [BUDGET_TEST]),
         ({"whole_tests": [OTHER_TEST]}, [OTHER_TEST]),
         (
-            {"pre_merge_tests": [OTHER_TEST], "whole_tests": [BUDGET_TEST, OTHER_TEST, BUDGET_TEST]},
+            {
+                "pre_merge_tests": [OTHER_TEST],
+                "whole_tests": [BUDGET_TEST, OTHER_TEST, BUDGET_TEST],
+            },
             [OTHER_TEST, BUDGET_TEST],
         ),
     ],
@@ -490,7 +494,8 @@ def test_the_union_is_one_pytest_call(tmp_path, monkeypatch):
     monkeypatch.setattr(merge_cleared, "run_tests", lambda r, t, h, names, w: seen.append(names))
     monkeypatch.setattr(merge_cleared, "git_out", fake_worktree(tree))
     table = {"pre_merge_tests": [BUDGET_TEST], "whole_tests": [OTHER_TEST, BUDGET_TEST]}
-    assert merge_cleared.in_worktree(tmp_path, "c" * 40, "b" * 40, 1.0, "", "agk-x-", pre=table) is None
+    commit, base = "c" * 40, "b" * 40
+    assert merge_cleared.in_worktree(tmp_path, commit, base, 1.0, "", "agk-x-", pre=table) is None
     assert seen == [[BUDGET_TEST, OTHER_TEST]]
 
 
