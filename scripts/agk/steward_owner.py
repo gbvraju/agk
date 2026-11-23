@@ -22,6 +22,8 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
        python3 scripts/agk/steward_owner.py fix-brief --brief N --file FILE --seen UPDATED_AT
        python3 scripts/agk/steward_owner.py file-brief --file FILE --title TEXT
                                            [--said FILE --at TIME [--by LOGIN] [--name NAME]]
+       python3 scripts/agk/steward_owner.py work-type --propose
+       python3 scripts/agk/steward_owner.py work-type --yes --said FILE --at TIME [--by LOGIN]
 
 `ask` takes one plain business sentence (FILE): one line, a question with its choices and `I
 recommend`, and no kit term (a file name, label, rule number, id or command); it records it as an
@@ -86,6 +88,16 @@ explicit yes (`--said`, `--at`; in team mode `--by` a spec approver), no older t
 `Yes, file the <NAME> brief` (brief #1753). It files nothing when an open brief has the same title
 or body. In personal mode both print and write nothing; a steward the supervisor started runs
 neither (exit 2).
+
+Brief #1757 (ADR-0735, amendment 218 to SPEC-0038 rule 5): with no `[delivery] work_type` and one
+work type other than `pilot` named by the discovery documents, `work-type --propose` records one
+plain owner question as the session's open ask; two named types give a question naming both and
+no proposal. `work-type --yes` takes the person's plain yes to that ask by the `approve` rules (no
+condition, not older than the ask, no older than four times `[flow] owner_wait_minutes`) and, in
+solo mode with one person listed, writes on a new branch from the default branch the `[delivery]`
+line and a Proposed ADR quoting the words, then prints the commit and push commands: it never
+commits or pushes, and the owner's merge approves it. In team mode, in personal mode or for one
+listed person short it prints the change only; `not yet` is recorded and writes nothing.
 """
 
 from __future__ import annotations
@@ -1205,6 +1217,193 @@ def file_brief(
     return code, [f"brief filed: #{made['number']} ({session.LABEL})", *lines]
 
 
+# --- brief #1757 (ADR-0735, amendment 218): the work type named in discovery, on the owner's yes
+
+WORK_TYPE_RULE = "SPEC-0038 rule 5"
+WORK_TYPE_BRANCH = "steward/work-type"
+PLAIN_KIND = {
+    "web-app": "a web app", "mobile": "a mobile app", "cloud-migration": "a move to the cloud",
+    "rag-app": "an app that answers from your documents", "mcp-server": "a tool server for AI",
+    "multi-agent": "a team of AI helpers", "voice-agent": "a voice assistant",
+    "data-pipeline": "a data pipeline",
+}  # fmt: skip
+DELIVERY = re.compile(r"^\[delivery\][ \t]*(?:#.*)?$", re.M)
+
+
+def work_type_state(root: Path) -> tuple[str | None, dict[str, list[str]]]:
+    """(the declared work type, the work types discovery names); a bad declaration is refused."""
+    import playbook_format
+
+    value, problems = playbook_format.declaration(root)
+    if problems:
+        raise CheckError(problems[0])
+    return value, playbook_format.discovered_work_types(root)
+
+
+def work_type_propose(root: Path, now: datetime) -> tuple[int, list[str]]:
+    """Answer 1: one owner question when discovery names one work type and none is declared."""
+    value, found = work_type_state(root)
+    if value is not None:
+        if found and value not in found:
+            return 0, ["work type: declared; it differs from discovery and the declared one is"
+                       " kept (setting: work_type)"]  # fmt: skip
+        return 0, ["work type: declared; nothing to propose"]
+    if not found:
+        return 0, ["work type: discovery names none; nothing to propose"]
+    kinds = sorted(found)
+    if len(kinds) > 1:  # answer 7: no proposal, the owner chooses between them
+        named = ", ".join(PLAIN_KIND[k] for k in kinds[:-1]) + f" and {PLAIN_KIND[kinds[-1]]}"
+        return 0, [f"ask the person: Your discovery names both {named}. Which one is it?"
+                   " I recommend you choose one before the tools are picked."]  # fmt: skip
+    kind = kinds[0]
+    sentence = (
+        f"Your discovery says this is {PLAIN_KIND[kind]}. Shall I set that up, so the {kind}"
+        " checks run? Yes or not yet; I recommend yes."
+    )
+    if problem := question_problem(sentence):
+        return 2, [problem]
+    if (sid := steward_session(root)) is None:
+        return 2, [
+            "refused: no steward session is read (setting: AGK_SESSION, or steward.py start)"
+        ]
+    asks = load_asks(root)
+    for old in asks:  # one open ask stands
+        old["open"] = False
+    asks.append({"id": "work-type", "form": "work-type", "work_type": kind, "target": "agk.toml",
+                 "number": None, "head": None, "link": None, "line": "", "question": sentence,
+                 "discovery": found[kind], "at": steward.stamp(now), "open": True,
+                 "session": sid})  # fmt: skip
+    save_asks(root, asks)
+    return 0, [f"ask the person: {sentence}"]
+
+
+def git_out(root: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(  # nosec B603 B607 - fixed git argument lists, no shell
+        ["git", "-C", str(root), *args], capture_output=True, encoding="utf-8", check=False
+    )
+
+
+def with_work_type(text: str, kind: str) -> str:
+    line = f'work_type = "{kind}"'
+    if "delivery" in tomllib.loads(text) and (found := DELIVERY.search(text)):
+        return f"{text[: found.end()]}\n{line}{text[found.end() :]}"
+    return f"{text.rstrip(chr(10))}\n\n[delivery]\n{line}\n"
+
+
+def work_type_adr(root: Path, ask: dict, words: str, at: str) -> str:
+    number = next_adr(root)
+    kind = ask["work_type"]
+    rel = f"docs/adr/{number:04d}-work-type.md"
+    text = "\n".join([
+        f"# ADR-{number:04d}: The project's work type is {kind}", "",
+        "- Status: Proposed", f"- Date: {datetime.now(UTC):%Y-%m-%d}", "- Deciders: the owner",
+        f"- Related: agk.toml, {', '.join(ask.get('discovery') or [])}", "",
+        "Protected classes: `agk.toml`", "",
+        "## Context", "",
+        f"The discovery document names the work type {kind}, and `agk.toml` declared none"
+        f" ({WORK_TYPE_RULE}, amendment 218).", "",
+        "## Decision", "",
+        f'`agk.toml` declares `[delivery] work_type = "{kind}"`, so the {kind} playbook\'s'
+        " checks run before the stack is chosen.", "",
+        f'Asked ({ask["at"]}): "{ask["question"]}"', f'Owner said ({at}): "{words}"', "",
+        "## Consequences", "",
+        "The owner's merge of this pull request approves it; no agent merges it.", "",
+    ])  # fmt: skip
+    (root / rel).parent.mkdir(parents=True, exist_ok=True)
+    (root / rel).write_text(text, encoding="utf-8")
+    return rel
+
+
+def work_type_yes(
+    root: Path, words_file: Path, at: str, by: str | None, now: datetime
+) -> tuple[int, list[str]]:
+    """Answer 2: on the person's recorded plain yes, in solo mode with one person, the line and
+    its Proposed ADR on a new branch; printed only otherwise. Never commits or pushes."""
+    import reviewers
+    import steward_voice
+    from guard import scan_text
+
+    from config import guard_patterns, load_config
+
+    if not TIME.fullmatch(at):
+        return 2, [
+            f"refused: the reply time is UTC, YYYY-MM-DDTHH:MMZ (setting: --at, {APPROVE_RULE})"
+        ]
+    code, refusal, words = yes_of(root, words_file, by, team=False)
+    if refusal:
+        return code, [refusal]
+    asks = load_asks(root)
+    open_asks = [x for x in asks if x.get("open")]
+    if not open_asks or open_asks[-1].get("form") != "work-type":
+        return 2, [
+            f"refused: no work-type proposal is the latest open ask; propose again ({APPROVE_RULE})"
+        ]
+    ask = open_asks[-1]
+    if steward_session(root) != ask.get("session"):
+        return 2, [f"refused: the ask was made in another session; ask again ({APPROVE_RULE})"]
+    asked = datetime.strptime(ask["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC)
+    if at[:16] + "Z" < ask["at"] or at[:16] + "Z" > steward.stamp(now):
+        return 2, ["refused: the reply is older than the ask or in the future (setting: --at)"]
+    if now - asked > age_limit(root):
+        return 2, ["refused: the ask is too old; ask again (setting: [flow] owner_wait_minutes)"]
+    if len(words.splitlines()) != 1 or scan_text(words, guard_patterns(root)):
+        return 2, ["refused: the words are one line the data guard passes (setting: [guard])"]
+    if NOT_YET.fullmatch(words):
+        ask["open"] = False
+        save_asks(root, asks)
+        code, said = steward.record(
+            root,
+            "Decision",
+            f'work-type: not yet, the person said "{words}" at {at}',
+            steward.gh_api,
+        )
+        return code or 1, said if code else ["not yet: recorded, nothing written"]
+    if BACKSTOP.search(words):
+        return 2, ["refused: a question or a condition is not a yes (SPEC-0062 rule 14)"]
+    if not steward_voice.is_yes(words):
+        return 1, ["not a yes: nothing written; ask again in other words (SPEC-0062 rule 14)"]
+    kind = ask["work_type"]
+    if work_type_state(root) != (None, {kind: ask.get("discovery")}):
+        return 2, [
+            f"refused: the work type changed since the ask; propose again ({WORK_TYPE_RULE})"
+        ]
+    change = ["the one change in agk.toml:", "[delivery]", f'work_type = "{kind}"']
+    personal = personal_table(root) is not None
+    if personal or review_mode(root) != "solo" or reviewers.solo_person(root) is None:
+        why = "your own change" if personal else "a team chooses by its own pull request"
+        return 0, [f"printed only ({why}; setting: review_mode):", *change,
+                   "with an ADR in the same pull request that names agk.toml"]  # fmt: skip
+    branch = load_config(root)["default_branch"]
+    base = f"origin/{branch}"
+    if git_out(root, "rev-parse", "--verify", "--quiet", base).returncode:
+        base = branch
+    if git_out(root, "status", "--porcelain").stdout.strip():
+        return 2, [
+            "refused: the work tree has changes; nothing written (path class: the work tree)"
+        ]
+    if git_out(root, "rev-parse", "--verify", "--quiet", WORK_TYPE_BRANCH).returncode == 0:
+        return 2, [f"refused: the branch {WORK_TYPE_BRANCH} already exists; nothing written"]
+    code, said = steward.record(  # first: a memory that cannot be written writes nothing
+        root, "Decision", f'work-type: yes, the person said "{words}" at {at}', steward.gh_api
+    )
+    if code:
+        return code, said
+    ask["open"] = False
+    save_asks(root, asks)
+    if git_out(root, "switch", "-q", "-c", WORK_TYPE_BRANCH, base).returncode:
+        return 2, [f"refused: the branch {WORK_TYPE_BRANCH} cannot be made; nothing written"]
+    toml = root / "agk.toml"
+    toml.write_text(with_work_type(toml.read_text(encoding="utf-8"), kind), encoding="utf-8")
+    rel = work_type_adr(root, ask, words, at)
+    return 0, [
+        f"wrote agk.toml and {rel} (Proposed) on {WORK_TYPE_BRANCH}; nothing committed or pushed",
+        "run, then open the pull request; your merge is the approval:",
+        f"git add agk.toml {rel}",
+        f'git commit -m "The project\'s work type is {kind} (ADR-{rel[9:13]})"',
+        f"git push -u origin {WORK_TYPE_BRANCH}",
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     parser = argparse.ArgumentParser(prog="steward_owner.py", description=__doc__.split("\n")[0])
@@ -1259,6 +1458,12 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--at")
     b.add_argument("--by")
     b.add_argument("--name")  # brief #1753: the short name the steward offered for this draft
+    t = sub.add_parser("work-type")  # brief #1757 (ADR-0735)
+    t.add_argument("--propose", action="store_true")
+    t.add_argument("--yes", action="store_true")
+    t.add_argument("--said", type=Path)
+    t.add_argument("--at")
+    t.add_argument("--by")
     w = sub.add_parser("reads")
     w.add_argument("--session")
     w.add_argument("--refused", action="store_true")
@@ -1311,6 +1516,15 @@ def main(argv: list[str] | None = None) -> int:
                 datetime.now(UTC),
                 name=opts.name,
             )
+        elif opts.command == "work-type" and opts.propose != opts.yes:
+            if opts.propose:
+                code, lines = work_type_propose(root, datetime.now(UTC))
+            elif opts.said is None or opts.at is None:
+                code, lines = 2, ["refused: --yes takes --said and --at (setting: --said)"]
+            else:
+                code, lines = work_type_yes(root, opts.said, opts.at, opts.by, datetime.now(UTC))
+        elif opts.command == "work-type":
+            code, lines = 2, ["refused: one of --propose or --yes (setting: work-type)"]
         elif opts.command == "reads":
             code, lines = reads(root, opts.session, opts.refused)
         else:

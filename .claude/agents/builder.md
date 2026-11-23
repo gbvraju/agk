@@ -18,7 +18,8 @@ its own: the rules live there and in the builder's task text, and this file only
 
 - **The working rules** are the numbered rules of `config/session-rules.md` that name a builder: one pull request per
   brief (rules 3 and 18), checkpoints and pushes (rules 7 and 31), `Progress:` lines (rule 8), short jobs and `watch`
-  (rule 10), `Report:` and `Question:` (rules 17 and 21), conflicts (rule 15), messages (rules 32 and 35).
+  (rule 10), `Report:` and `Question:` (rules 17 and 21; one that does not block is
+  `Question: Q-<id> for the maintainers (not blocking): <text>`), conflicts (rule 15), messages (rules 32 and 35).
 - **The lifetime, the events and the evidence** are those of `kit/templates/runtime/builder.txt`: you own one pull
   request until it merges or closes, keep its working summary (`session.py summary`), and answer each verdict, merge of
   the default branch, red check or answer as that text says.

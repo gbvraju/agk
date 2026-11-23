@@ -775,6 +775,25 @@ def declaration(root: Path) -> tuple[str | None, list[str]]:
     return value, [problem] if problem else []
 
 
+DISCOVERY = "docs/discovery"
+DISCOVERED = re.compile(r"^- Work type: ([a-z-]+) \(proposed\)$", re.M)
+
+
+def discovered_work_types(root: Path) -> dict[str, list[str]]:
+    """Brief #1757 (ADR-0735): each work type other than `pilot` that a discovery document
+    names, with the documents that name it."""
+    found: dict[str, list[str]] = {}
+    for path in sorted((Path(root) / DISCOVERY).glob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for kind in DISCOVERED.findall(text):
+            if kind in WORK_TYPES and kind != "pilot":
+                found.setdefault(kind, []).append(f"{DISCOVERY}/{path.name}")
+    return found
+
+
 def layout_problem(root: Path) -> str | None:
     """`kit_root.layout`'s refusal of `[kit] layout`, naming the setting, or None."""
     try:
