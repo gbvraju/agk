@@ -206,15 +206,26 @@ def test_no_stack_or_no_lock_is_not_run_never_ok(product, capsys) -> None:
     assert capsys.readouterr().out == "licences: not run: no lock\n"
 
 
-def test_adopt_holds_the_findings_until_the_baseline(product, capsys) -> None:
+def test_adopt_holds_the_findings_in_the_baseline(product, capsys) -> None:
     """REQ-061, REQ-079.
 
-    Answer 4: brief #1600's baseline is not built, so an adopted project's findings are held.
+    Brief #1777 answers 1 and 2: an adopted project's findings are held in the baseline and
+    counted, never `ok licences`, and a new one fails as rule 7.
     """
     toml = FILES["agk.toml"].replace('mode = "init"', 'mode = "adopt"')
     odd = {"odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"}}
     product.commit({"agk.toml": toml, "package-lock.json": lock(**odd)})
-    assert licences.check(product.root, {}) == []
+    assert licences.check(product.root, {}) != []
+    code, out = gates(product.root, capsys)
+    held = "licences (baseline): 1 held (path class: package-lock.json)"
+    assert held + "\n" in out and "ok licences" not in out, out
+    assert "odd-pkg" not in out and "LicenseRef-Invented-1" not in out
+    base = product.root / "config" / "agk-baseline" / "licences.txt"
+    assert base.read_text(encoding="utf-8") == "package-lock.json 1\n"
+    more = {"odd-two": {"version": "0.0.2", "license": "LicenseRef-Invented-2"}, **odd}
+    product.commit({"package-lock.json": lock(**more)})
+    code, out = gates(product.root, capsys)
+    assert code == 1 and "FAIL gates: licences: SPEC-0072 rule 7" in out, out
 
 
 def test_a_saved_scan_result_gives_the_issue_body(product, monkeypatch, capsys) -> None:

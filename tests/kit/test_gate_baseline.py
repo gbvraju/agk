@@ -95,7 +95,8 @@ def test_the_first_run_of_an_adopted_tree_writes_the_baseline_and_passes(
     assert "baseline layers: written (path class: config/agk-baseline/)" in out
     assert (root / FILE).read_text(encoding="utf-8") == "data/old_cache.py 2\ndata/store.py 1\n"
     after = _tree(root)
-    assert {k: v for k, v in after.items() if k != FILE} == before
+    assert {k: v for k, v in after.items() if not k.startswith("config/agk-baseline/")} == before
+    assert (root / "config/agk-baseline/committed-secrets.txt").read_text(encoding="utf-8") == ""
     code, out = _gates(root, capsys)
     assert code == 0 and "ok layers (baseline)" in out, out
 
