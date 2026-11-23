@@ -16,7 +16,11 @@ a missing part and a line that is not a field of the inventory. On the path from
 `### M<n> — <milestone>` section (`design.py inventory`, amendment 217) is checked like a
 requirement's, with `- Sources:` in place of `- Specs:`. An inventory with no screen fails, naming
 SPEC-0037 rule 3 and the path class `docs/design/`, when a discovery document of `docs/discovery/`
-says `- Screens: yes` or `open` outside its quoted blocks (brief #1756). It names the rule and the
+says `- Screens: yes` or `open` outside its quoted blocks (brief #1756). A screen section may carry
+`- Sources:`, the page it was written from on the prototype path, and `all_out_problems(root)`,
+run by `check_design.py`, fails each imported version whose `map.md` rows are all `out:` while the
+inventory lists no screen or is absent, naming SPEC-0037 rule 15 and the path class
+`docs/design/imported/` (amendment 219, brief #1779). It names the rule and the
 screen, never a value. Files only: no network, no model, nothing written.
 """
 
@@ -47,6 +51,7 @@ DISCOVERY_SCREENS = re.compile(r"^- Screens: (yes|no|open)$")
 QUOTE_START = re.compile(r"^<!-- agk:(?:problem|answer) sha256=[0-9a-f]{64} -->$")
 QUOTE_END = ("<!-- agk:problem-end -->", "<!-- agk:answer-end -->")
 SCREEN_FIELDS = ("Flow", "Pattern", "Links to")
+OPTIONAL_SCREEN_FIELDS = ("Sources",)  # a page's file on the prototype path (amendment 219)
 
 
 def _parts(text: str) -> dict[str, list[tuple[str, list[str]]]]:
@@ -155,7 +160,8 @@ def _screen_problems(sections: list[tuple[str, list[str]]], out: list[str]) -> N
         seen.add(heading)
         found = _fields(heading, lines, out)
         for name in found:
-            if name not in SCREEN_FIELDS and not name.startswith("State "):
+            allowed = name in SCREEN_FIELDS or name in OPTIONAL_SCREEN_FIELDS
+            if not allowed and not name.startswith("State "):
                 out.append(f"{heading}: a line is not a field of the inventory")
         for name in SCREEN_FIELDS:
             if name not in found:
@@ -224,4 +230,23 @@ def inventory_problems(root: Path) -> list[str]:
             "SPEC-0037 rule 3: docs/design/: the inventory lists no screen while a discovery"
             " document says the work has screens (`Screens: yes` or `open`)"
         )
+    return found
+
+
+def all_out_problems(root: Path) -> list[str]:
+    """Amendment 219 (brief #1779): one problem per imported version whose map rows are all `out:`
+    while the inventory lists no screen or is absent; [] otherwise."""
+    import design_import  # it imports this module: imported here, when it is needed
+
+    path = root / INVENTORY
+    if path.is_file() and _parts(path.read_text(encoding="utf-8")).get("Screens"):
+        return []
+    found = []
+    for version in design_import.versions(root):
+        rows = design_import._rows(root / design_import.IMPORTED / version)
+        if rows and all(design_import.OUT.match(target) for _, target in rows):
+            found.append(
+                f"SPEC-0037 rule 15: docs/design/imported/: every page of {version} is mapped out"
+                " while the inventory lists no screen"
+            )
     return found

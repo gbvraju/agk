@@ -31,6 +31,10 @@ checkout; the other scripts are installed under `scripts/agk/`.
    `docs/design/imported/i<n>/map.md`: one row per page, `<file> -> <screen>/<state>` with a screen and state of
    `docs/design/inventory.md`, or `<file> -> out: <reason>`. Every state the inventory marks `yes` must be covered by a
    row or a kit version.
+   On a new project, with no product requirement in `docs/requirements.md` yet, the inventory may come from the import:
+   `python3 "$AGK/scripts/agk/design.py" inventory` writes one screen section per page of the newest imported version,
+   its `- Sources:` naming the page; fill its slots from that page and nothing else, and map each page to its screen.
+   A map that marks every page `out` while the inventory has no screen is refused (amendment 219, brief #1779).
    Of the kit versions `docs/design/prototype/v<n>/`, only the latest must cover the inventory: a signed-off older
    version that predates a screen added later is not failed for it (brief #1208, ADR-0512).
 2. **Turn the prototype into a source** (SPEC-0043 rule 2a).

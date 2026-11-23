@@ -308,3 +308,125 @@ def test_ac2_a_charter_with_no_milestones_is_refused_naming_its_path_class(tmp_p
     assert proc.returncode == 1
     assert "FAIL design: rule 3:" in proc.stdout and "docs/adr/" in proc.stdout
     assert not (tmp_path / INVENTORY).exists()
+
+
+# Brief #1779 (amendment 219 to SPEC-0037 rules 3 and 15, ADR-0745): on the path from a customer's
+# prototype, with no product requirement yet, the skeleton takes one screen section per page of the
+# newest imported version.
+
+PAGES = ("home", "about", "pricing", "signup", "contact")
+
+
+def prototype_folder(root, name, pages=PAGES, picture=None):
+    folder = root / name
+    folder.mkdir()
+    for page in pages:
+        (folder / f"{page}.html").write_text(
+            f"<html><body><h1>{page}</h1><p>The {page} page of example.com</p></body></html>",
+            encoding="utf-8",
+        )
+    if picture:
+        (folder / picture).write_bytes(b"\x89PNG\r\n\x1a\n invented")
+    return folder
+
+
+def prototype_project(root, reqs=KIT_REQUIREMENTS, versions=(PAGES,), picture=None):
+    project_root = root / "proj"
+    (project_root / "docs").mkdir(parents=True)
+    (project_root / "docs" / "requirements.md").write_text(reqs, encoding="utf-8")
+    for n, pages in enumerate(versions, 1):
+        source = prototype_folder(root, f"src{n}", pages, picture if n == len(versions) else None)
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "import", str(source), "--root", str(project_root)],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+    return project_root
+
+
+def empty_screen(source):
+    states = ["default", "empty", "loading", "error", "no-permission", "long-content", "success"]
+    return [
+        f"- Sources: {source}",
+        "- Flow:",
+        "- Pattern:",
+        "- Links to:",
+        *[f"- State {s}:" for s in states],
+    ]
+
+
+def test_ac2_the_prototype_path_writes_one_screen_section_per_imported_page(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rules 3 and 15 as amendment 219 proposes (brief #1779 answer 1)."""
+    root = prototype_project(tmp_path)
+    proc = design(root, "inventory")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = (root / INVENTORY).read_text(encoding="utf-8")
+    screens = sections(text, "Screens")
+    files = "docs/design/imported/i1/files"
+    assert screens == {p: empty_screen(f"{files}/{p}.html") for p in sorted(PAGES)}
+    assert list(sections(text, "Requirements")) == [
+        "REQ-001 — The kit keeps its rules",
+        "REQ-002 — The kit checks its rules",
+    ]
+
+
+def test_ac2_only_the_newest_imported_version_is_a_source_and_a_picture_gets_a_section(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1779 answer 6: the newest version; a picture page)."""
+    root = prototype_project(tmp_path, versions=(("old",), ("home",)), picture="Board 1.png")
+    assert design(root, "inventory").returncode == 0
+    screens = sections((root / INVENTORY).read_text(encoding="utf-8"), "Screens")
+    files = "docs/design/imported/i2/files"
+    assert screens == {
+        "board-1": empty_screen(f"{files}/Board 1.png"),
+        "home": empty_screen(f"{files}/home.html"),
+    }
+
+
+def test_ac2_a_product_requirement_keeps_todays_skeleton_on_the_prototype_path(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1779 answer 6: with REQ-101 up, no page section)."""
+    reqs = KIT_REQUIREMENTS + "\n### REQ-101 — A guest books a room\n\n- Status: planned\n"
+    root = prototype_project(tmp_path, reqs=reqs)
+    assert design(root, "inventory").returncode == 0
+    assert sections((root / INVENTORY).read_text(encoding="utf-8"), "Screens") == {}
+
+
+def test_ac2_the_filled_page_screens_carry_a_five_row_map_and_a_five_heading_source(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 15 (brief #1779 Measured: five rows reach the plan's source)."""
+    root = prototype_project(tmp_path)
+    assert design(root, "inventory").returncode == 0
+    path = root / INVENTORY
+    text = path.read_text(encoding="utf-8")
+    fills = {
+        "- Flow:\n": "- Flow: visit the site\n",
+        "- Pattern:\n": "- Pattern: detail\n",
+        "- Links to:\n": "- Links to: none\n",
+        "- State default:\n": "- State default: yes\n",
+    }
+    for old, new in fills.items():
+        text = text.replace(old, new)
+    text = re.sub(r"(?m)^- State ([a-z-]+):$", r"- State \1: n/a: a static page", text)
+    path.write_text(text, encoding="utf-8")
+    (root / "docs" / "design" / "imported" / "i1" / "map.md").write_text(
+        "".join(f"{p}.html -> {p}/default\n" for p in PAGES), encoding="utf-8"
+    )
+    proc = check(root)
+    assert proc.returncode == 0, proc.stdout
+    source = subprocess.run(
+        [
+            sys.executable,
+            str(KIT_ROOT / "scripts" / "agk" / "design_import.py"),
+            "source",
+            "--version",
+            "i1",
+            "--slug",
+            "studio",
+            "--root",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert "(5 headings)" in source.stdout, source.stdout + source.stderr
