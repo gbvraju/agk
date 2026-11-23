@@ -229,8 +229,8 @@ MARKER = "SPEC-0072 rule 5: the record holds a TODO(architect) marker"
 )
 def test_req079_a_section_with_a_todo_marker_fails_naming_it(tmp_path, section):
     """REQ-079 (brief #1842 answer 4): one line per section, never the line's text."""
-    project(tmp_path)
-    root = record(tmp_path)
+    root = project(tmp_path)
+    record(root)
     text = (root / "docs/architecture.md").read_text(encoding="utf-8")
     head = f"## {section}\n"
     planted = "TODO(architect): INVENTEDPLANTEDWORD\n"

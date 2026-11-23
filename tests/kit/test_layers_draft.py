@@ -128,12 +128,15 @@ def test_req079_the_draft_writes_nothing(tmp_path, capsys) -> None:
     root = project(tmp_path)
     git = ["git", "-C", str(root)]
     subprocess.run([*git, "init", "-q"], check=True)  # nosec B603 B607 - fixed list
-    subprocess.run([*git, "add", "-A"], check=True)  # nosec B603 B607 - fixed list
+    def status() -> str:
+        return subprocess.run(  # nosec B603 B607 - fixed list
+            [*git, "status", "--porcelain", "--untracked-files=all"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+
+    before = status()
     drafted(root, capsys)
-    status = subprocess.run(  # nosec B603 B607 - fixed list
-        [*git, "status", "--porcelain"], capture_output=True, text=True, check=True
-    )
-    assert status.stdout == ""
+    assert status() == before
 
 
 def test_req079_init_proposes_nothing(tmp_path, capsys) -> None:
@@ -252,18 +255,18 @@ TABLE = {
 # The other files under scripts/agk/ that name the record or read `[architecture]`, each with why
 # it is neither a writer nor a check of what the record or the layers hold.
 OTHERS = {
-    "scripts/agk/basics.py": "names the record in the kit's basics text",
-    "scripts/agk/check_brief.py": "reads the layer names for a brief's `Layer:` line",
+    "scripts/agk/basics.py": "names the layer folders in a comment",
+    "scripts/agk/check_brief.py": "checks a brief's `Layer:` line against the layer names",
     "scripts/agk/check_playbooks.py": "composes `[architecture]`; layers.py and the writers call it",
-    "scripts/agk/config.py": "reads the layer paths as the packs' default scope",
+    "scripts/agk/config.py": "documents the layer paths as the packs' default scope",
     "scripts/agk/gates/injection_set.py": "is not run until the record exists",
     "scripts/agk/gates/node_pack.py": "reads the layer paths as its default scope",
     "scripts/agk/gates/python_pack.py": "reads the layer paths as its default scope",
-    "scripts/agk/gates/tests_floor.py": "reads whether the record exists",
-    "scripts/agk/plan_sources.py": "names the record as a plan source",
+    "scripts/agk/gates/tests_floor.py": "reads whether the record exists and which files are in a layer",
+    "scripts/agk/plan_sources.py": "its `architecture` source is docs/sources/, not the record",
     "scripts/agk/playbook_format.py": "checks the form of `[architecture]`",
     "scripts/agk/run_gates.py": "runs the layers and architecture-record steps",
-    "scripts/agk/steward_owner.py": "shows the layers and passes the draft to derive-write",
+    "scripts/agk/steward_owner.py": "shows the draft and passes it to derive-write (answer 2)",
 }
 NAMES = re.compile(r"docs/architecture\.md|[\"']architecture[\"']|\[architecture\]")
 

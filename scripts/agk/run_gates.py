@@ -162,6 +162,11 @@ def ratchet(
     return [(True, f"{gate_id} (baseline)" if failed else gate_id), *notes]
 
 
+def where(cls: str) -> str:
+    """A failure's class: a path class, or a playbook key (`key: ...`, brief #1842)."""
+    return f"({cls})" if cls.startswith("key: ") else f"(path class: {cls})"
+
+
 def results(root: Path, write: bool = False) -> list[Row]:
     """(passed, line) for each check gate of the composed playbook, in the composed order; passed
     is None for a step that is not run (`skipped`), and the line gives its reason."""
@@ -189,7 +194,10 @@ def results(root: Path, write: bool = False) -> list[Row]:
             out.append((None, f"{gate['id']}: {why}"))
             continue
         failed = [x if isinstance(x, tuple) else (module.RULE, x) for x in module.check(root, data)]
-        rows: list[Row] = [(False, f"{gate['id']}: {r} (path class: {c})") for r, c in failed]
+        rows: list[Row] = [(False, f"{gate['id']}: {r} {where(c)}") for r, c in failed]
+        if getattr(module, "unheld", None) and module.unheld(root):
+            out += rows  # brief #1842: a failure that counts no file; no baseline holds it
+            continue
         if hasattr(module, "counts"):
             held = (
                 ", ".join(dict.fromkeys(c for _, c in failed)) if getattr(module, "HELD", 0) else ""

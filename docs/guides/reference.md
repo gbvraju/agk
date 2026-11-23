@@ -580,7 +580,7 @@ until a hosting option is chosen; a deploy is the person's own act). With `mode 
 `not written: basics: ...`; no work type prints `basics: not run`. `check_plan.py` refuses a foundation milestone with no
 `Kind: slice` brief, the first working slice.
 
-    python3 scripts/agk/gates/layers.py [--root DIR] [--write-record]
+    python3 scripts/agk/gates/layers.py [--root DIR] [--write-record | --draft]
 
 The `layers` step (SPEC-0072 rule 5; `default.toml`'s gate `layers`) reads each Python file of a layer of the composed
 `[architecture]` and fails on an `import` or `from` line, relative ones included, that lands in another layer with no
@@ -589,6 +589,15 @@ One layer (`default.toml`'s `src`, a project with no work type) constrains nothi
 is not Python gives `not run: no reader for <stack>`. `--write-record` is the foundation's: it writes
 `docs/architecture.md` (a protected path of every project) from `kit/templates/architecture.md` once, with the layers,
 their paths, the allowed directions and the stack record's ADR, and is refused with no work type (setting: `work_type`).
+With `mode = "adopt"` (brief #1842, ADR-0767) two or more layers that hold no source file fail, `no source file is in
+any layer (key: architecture.layers)`, held by no baseline, and `--write-record` refuses them, naming `layers.py --draft`;
+another mode gives `not run: no source file in any layer yet`. `--draft` prints, for the person's yes, the layers of the
+product's own folders (the shallowest level that splits them in two or more; the `test_dirs`, `lint_paths`, `docs/` and
+`config/` left out), each import direction a Python file takes today as `allow`, and a `[testing] map` with one code per
+layer path; it writes nothing, and with `mode = "init"` proposes nothing. `steward_owner.py standard` shows it in adopt
+mode, and after the recorded yes `steward_owner.py draft --slug SLUG --layers FILE` writes it into the project's derived
+playbook through `front_door.py derive-write --layers FILE`. The record check fails each section that still holds
+`TODO(architect)`, naming the section.
 
     python3 scripts/agk/gates/architecture_record.py
 

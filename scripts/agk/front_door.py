@@ -46,11 +46,12 @@ repository's head commit by `git`.
     front_door.py check-signals
         checks the form of the signal table `config/stack-signals.toml` against `config/playbooks/`,
         both read from this script's own root and never from a repository (SPEC-0057 rule 5)
-    front_door.py derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]
+    front_door.py derive-write --slug SLUG [--modules NAME,NAME] [--layers FILE] [--root DIR]
         writes one engagement's skeleton `config/playbooks/<slug>.toml` from `default`, the named
         shipped modules and the slug of `docs/research/<slug>.md`, which must pass rule 6; never
         over a file, never in the kit, and only that file: no `agk.toml`, nothing under `kit/`
-        (rule 22)
+        (rule 22). `--layers FILE`, a saved `layers.py --draft`, writes its `[architecture]` and
+        `[testing] map` in place of `map = []` (brief #1842, ADR-0767)
     front_door.py check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]
         the check of `check_playbooks.py` on each playbook (by default every one), then freshness
         from the gate sources: more than 180 days before `--date` is a `flag` line and exit 0, and
@@ -98,7 +99,7 @@ USAGE = (
     " | (check-research | check-design) --date YYYY-MM-DD [FILE ...] [--root DIR]"
     " | status --date YYYY-MM-DD [SLUG ...] [--root DIR]"
     " | status --date YYYY-MM-DD --issue N --api-dir DIR [--pr K] [--root DIR] | check-signals"
-    " | derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]"
+    " | derive-write --slug SLUG [--modules NAME,NAME] [--layers FILE] [--root DIR]"
     " | check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]"
     " | detect [--root DIR] [--json]"
 )
@@ -684,6 +685,7 @@ AMOUNT = re.compile(r"\d+(?:[.,]\d+)?")
 STACK_RECORD = re.compile(r"^docs/adr/\d{4}-stack-options\.md$")
 CHARTER = re.compile(r"^docs/adr/\d{4}-project-charter\.md$")
 RULE_5 = "SPEC-0072 rule 5"
+MARKER = "TODO(architect)"  # brief #1842 answer 4: the template's own word, in these sections
 
 
 def slice_problems(rel: str, text: str, strict: bool) -> tuple[list[str], list[str]]:
@@ -765,6 +767,8 @@ def record_problems(root: Path) -> list[tuple[str, str]]:
     for name in RECORD_SECTIONS:
         if name not in body:
             fail("the record lacks a required section", name)
+        elif name in NEW_SECTIONS and any(MARKER in ln for ln in body[name]):
+            fail(f"the record holds a {MARKER} marker", name)
     diagram = body.get("Diagram")
     if diagram is not None and not diagram_of(diagram):
         fail("the diagram is not a fenced Mermaid or text block", "Diagram")
@@ -1199,7 +1203,7 @@ def _toml(value: object) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def skeleton(name: str, modules: list[str], base: dict) -> str:
+def skeleton(name: str, modules: list[str], base: dict, layers: list[str] | None = None) -> str:
     """The derived playbook's text: `default`'s discovery, testing profile and milestones, and
     the modules; its gates and evidence come by composition, so they have one home (rule 23)."""
     lines = [
@@ -1219,13 +1223,37 @@ def skeleton(name: str, modules: list[str], base: dict) -> str:
     if modules:
         lines.append(f"modules = {_toml(modules)}")
     lines += ["", "[split]", 'brief_order = ["foundation"]', "depends_on = []", "", "[testing]"]
-    lines += [f"profile = {_toml(base['testing']['profile'])}", "always_full = []", "map = []"]
+    lines += [f"profile = {_toml(base['testing']['profile'])}", "always_full = []"]
+    cut = layers.index("[testing]") if layers else 0
+    lines += layers[cut + 1 :] if layers else ["map = []"]  # brief #1842: the drafted map
     milestones = base["milestones"]
     lines += ["", "[milestones]", f"shape = {_toml(milestones['shape'])}"]
     lines.append(f"batch_by = {_toml(milestones['batch_by'])}")
+    if layers:
+        lines += ["", *[ln for ln in layers[:cut] if ln]]
     for row in base["discovery"]:
         lines += ["", "[[discovery]]", f"id = {_toml(row['id'])}", f"text = {_toml(row['text'])}"]
     return "\n".join(lines) + "\n"
+
+
+def drafted_layers(path: str, adr: str | None) -> list[str]:
+    """Brief #1842: a saved `layers.py --draft` as the two tables' lines, each `allow` entry
+    naming ADR when given; refused naming the key when it is not a draft of two or more layers."""
+    from gates import layers  # noqa: PLC0415 - only `--layers` needs it
+
+    bad = Refusal(["rule 22: `--layers` is not a layers draft (key: architecture.layers)"])
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+        data = tomllib.loads("\n".join(ln for ln in text.splitlines() if not ln.startswith("draft ")))
+        arch, mapped = data["architecture"], data["testing"]["map"]
+        found = [(x["name"], list(x["paths"])) for x in arch["layers"]]
+        allow = [(e["from"], e["to"], e.get("adr")) for e in arch.get("allow", [])]
+        tests = {e["tests"] for e in mapped}
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, KeyError, TypeError) as exc:
+        raise bad from exc
+    if len(found) < 2 or len(tests) != 1:
+        raise bad
+    return layers.toml_text(found, [(a, b, adr or e) for a, b, e in allow], tests.pop())
 
 
 def derive_write(opts: dict[str, str], root: Path) -> int:
@@ -1233,6 +1261,7 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
     name = opts["--slug"]
     if not SLUG.match(name):
         raise Refusal(["rule 22: `--slug` is not a slug of rule 5"])
+    drafted = drafted_layers(opts["--layers"], opts.get("--adr")) if "--layers" in opts else None
     if name in WORK_TYPES or name == playbook_format.BASE:
         raise Refusal(["rule 22: `--slug` names a shipped playbook"])
     if (root / "kit" / "manifest.json").is_file():
@@ -1259,7 +1288,7 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
     base = tomllib.loads(base_path.read_text(encoding="utf-8"))
     import check_playbooks  # here, so a load failure leaves every other command as it is
 
-    target.write_text(skeleton(name, modules, base), encoding="utf-8")
+    target.write_text(skeleton(name, modules, base, drafted), encoding="utf-8")
     found = check_playbooks.findings(root, [target])
     if found:
         target.unlink()
@@ -1586,6 +1615,7 @@ def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
             "--date",
             "--slug",
             "--modules",
+            "--layers",
             "--api-dir",
             "--pr",
         ):
@@ -1639,7 +1669,8 @@ def main(argv: list[str] | None = None) -> int:
     elif cmd == "detect":
         ok = set(opts) <= {"--root", "--json"} and not rest
     elif cmd == "derive-write":
-        ok = "--slug" in opts and set(opts) <= {"--slug", "--modules", "--root"} and not rest
+        ok = "--slug" in opts and set(opts) <= {"--slug", "--modules", "--layers", "--root"}
+        ok = ok and not rest
     else:
         by_issue = cmd == "status" and "--issue" in opts
         known = {"--root", "--date"} | ({"--issue", "--api-dir", "--pr"} if by_issue else set())

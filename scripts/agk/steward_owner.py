@@ -18,7 +18,7 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
        python3 scripts/agk/steward_owner.py standard [--playbook SLUG]
        python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]
        python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT
-       python3 scripts/agk/steward_owner.py draft --slug SLUG
+       python3 scripts/agk/steward_owner.py draft --slug SLUG [--layers FILE]
        python3 scripts/agk/steward_owner.py fix-brief --brief N --file FILE --seen UPDATED_AT
        python3 scripts/agk/steward_owner.py file-brief --file FILE --title TEXT
                                            [--said FILE --at TIME [--by LOGIN] [--name NAME]]
@@ -347,6 +347,16 @@ def composed_standard(root: Path, slug: str | None) -> tuple[list, dict, list] |
     return gates, architecture, packs
 
 
+def tree_draft(root: Path) -> tuple[list, list, str] | None:
+    """Brief #1842 answer 2: in adopt mode, the layers drafted from the tree when the composed
+    layers hold no source file of it; None otherwise."""
+    from gates import layers  # noqa: PLC0415 - only the standard screen needs it
+
+    if not layers.adopted(root) or not layers.empty(root):
+        return None
+    return layers.draft(root)[1]
+
+
 def standard_screen(root: Path, slug: str | None) -> tuple[int, list[str]]:
     """Rule 8: one plain screen in solo mode, the full list in team mode; nothing is applied."""
     found = composed_standard(root, slug)
@@ -354,9 +364,13 @@ def standard_screen(root: Path, slug: str | None) -> tuple[int, list[str]]:
         return 1, [NO_WORK_TYPE]
     gates, architecture, packs = found
     layers = [x for x in architecture.get("layers", []) if isinstance(x, dict)]
+    drafted = tree_draft(root)
     if review_mode(root) == "team":
         out = [f"Layer {x.get('name')}: {', '.join(x.get('paths', []))}" for x in layers]
         out += [f"Allowed: {a.get('from')} -> {a.get('to')}" for a in architecture.get("allow", [])]
+        if drafted:  # beside the playbook's: the tree's own parts and the directions used today
+            out += [f"Drafted layer {n}: {', '.join(ps)}" for n, ps in drafted[0]]
+            out += [f"Drafted allowed: {a} -> {b}" for a, b in drafted[1]]
         for p in packs:
             rules = p.get("rules") or {}
             out.append(f"Pack {p.get('stack')}: lint {p.get('lint')}, format {p.get('format')},"
@@ -377,12 +391,17 @@ def standard_screen(root: Path, slug: str | None) -> tuple[int, list[str]]:
     out = [f"Your product will be held to this{extra}:"]
     out += [f"- {line}" for names, line in PLAIN if ids & set(names)]
     parts = f"kept in {len(layers)} separate parts" if len(layers) > 1 else ""
+    if drafted:  # brief #1842: the tree's own parts, in place of the playbook's
+        parts = f"kept in {len(drafted[0])} parts as it is today"
     checked = "checked for style and type mistakes on each change" if packs else ""
     if parts or checked:  # at most five bullets and 100 characters a line (the steward's voice)
         joined = " and ".join(x for x in (parts, checked) if x)
-        out.append(
-            f"- The code is {joined}{' that use each other only in set ways' * (not checked)}."
-        )
+        if drafted:
+            out.append(f"- Your code is {joined.replace(' on each change', '')}.")
+        else:
+            out.append(
+                f"- The code is {joined}{' that use each other only in set ways' * (not checked)}."
+            )
     return 0, [*out, YES_ASK]
 
 
@@ -486,18 +505,48 @@ def next_adr(root: Path) -> int:
     return max(numbers, default=0) + 1
 
 
-def draft(root: Path, slug: str) -> tuple[int, list[str]]:
-    """Rule 8: the project playbook on `default.toml` and its Proposed ADR; never the work type."""
-    import front_door
-
+def drafted_lines(layers_file: Path | None) -> list[str]:
+    """Brief #1842: the ADR's list of the drafted layers and directions, from the saved draft."""
+    if layers_file is None:
+        return []
     try:
-        front_door.derive_write({"--slug": slug}, root)
-    except front_door.Refusal as exc:
-        return 2, [f"refused: {line}" for line in exc.args[0]]
-    record = (root / front_door.RESEARCH / f"{slug}.md").read_text(encoding="utf-8")
-    sources = [ln for ln in record.splitlines() if ln.startswith("- Source:")]
+        text = layers_file.read_text(encoding="utf-8")
+        data = tomllib.loads("\n".join(x for x in text.splitlines() if not x.startswith("draft ")))
+        arch = data["architecture"]
+        out = [f"- `{x['name']}`: {', '.join(f'`{g}`' for g in x['paths'])}" for x in arch["layers"]]
+        out += [f"- `{e['from']}` may import `{e['to']}`" for e in arch.get("allow", [])]
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, KeyError, TypeError):
+        return []  # derive-write refuses it, naming the key
+    return ["", "The layers drafted from the project's own folders, with the directions used today:",
+            "", *out]  # fmt: skip
+
+
+def draft(root: Path, slug: str, layers_file: Path | None = None) -> tuple[int, list[str]]:
+    """Rule 8: the project playbook on `default.toml` and its Proposed ADR; never the work type.
+    Brief #1842: `--layers FILE` carries the drafted layers, only after the recorded yes."""
+    import front_door
+    import playbook_format
+
+    if layers_file is not None and not confirmed(root):
+        return 2, ["refused: the person's yes to the standard is not recorded (setting: Setup)"]
     number = next_adr(root)
     rel = f"docs/adr/{number:04d}-the-project-s-work-type-{slug}.md"
+    opts = {"--slug": slug}
+    listed = drafted_lines(layers_file)
+    if layers_file is not None:  # its `allow` entries name this ADR, written first
+        declared = playbook_format.declaration(root)[0]
+        shipped = declared in playbook_format.WORK_TYPES
+        opts.update({"--layers": str(layers_file), "--adr": f"ADR-{number:04d}"})
+        opts.update({"--modules": declared} if shipped and declared else {})
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(f"# ADR-{number:04d}: drafted\n", encoding="utf-8")
+    try:
+        front_door.derive_write(opts, root)
+    except front_door.Refusal as exc:
+        (root / rel).unlink(missing_ok=True)
+        return 2, [f"refused: {line}" for line in exc.problems]
+    record = (root / front_door.RESEARCH / f"{slug}.md").read_text(encoding="utf-8")
+    sources = [ln for ln in record.splitlines() if ln.startswith("- Source:")]
     text = "\n".join([
         f"# ADR-{number:04d}: The project's work type {slug}, drafted on the default playbook", "",
         "- Status: Proposed", f"- Date: {datetime.now(UTC):%Y-%m-%d}", "- Deciders: maintainers",
@@ -508,7 +557,7 @@ def draft(root: Path, slug: str) -> tuple[int, list[str]]:
         "## Decision", "",
         f"The project's own playbook `{slug}` is composed on `default.toml`, keeping every gate"
         " at its kind;"
-        " the owner names it in `[delivery] work_type` after the person's yes.", "",
+        " the owner names it in `[delivery] work_type` after the person's yes.", *listed, "",
         "## Sources", "", *(sources or ["- the project's requirements only"]), "",
         "## Consequences", "", "Accepted by the project's maintainers, never by an agent.", "",
         *residual(),
@@ -1482,7 +1531,9 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--said", type=Path, required=True)
         c.add_argument("--at", required=True)
         c.add_argument("--by" if name == "confirm" else "--describe", required=name == "research")
-    sub.add_parser("draft").add_argument("--slug", required=True)
+    r = sub.add_parser("draft")
+    r.add_argument("--slug", required=True)
+    r.add_argument("--layers", type=Path)  # brief #1842: a saved `layers.py --draft`
     f = sub.add_parser("fix-brief")  # brief #1715 (ADR-0714)
     f.add_argument("--brief", type=int, required=True)
     f.add_argument("--file", type=Path, required=True)
@@ -1538,7 +1589,7 @@ def main(argv: list[str] | None = None) -> int:
         elif opts.command == "research":
             code, lines = research(root, opts.said, opts.at, opts.describe, steward.gh_api, len)
         elif opts.command == "draft":
-            code, lines = draft(root, opts.slug)
+            code, lines = draft(root, opts.slug, opts.layers)
         elif opts.command == "fix-brief":
             code, lines = fix_brief(root, opts.brief, opts.file, opts.seen)
         elif opts.command == "file-brief":

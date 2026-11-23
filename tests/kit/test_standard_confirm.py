@@ -325,7 +325,8 @@ def test_req079_the_solo_screen_says_it_in_one_plain_line(tmp_path):
     root = adopted(tmp_path, "solo")
     code, lines = steward_owner.standard_screen(root, None)
     text = "\n".join(lines)
-    assert code == 0 and "- Your code is kept in 3 parts as it is today." in lines, lines
+    line = "- Your code is kept in 3 parts as it is today"
+    assert code == 0 and [x for x in lines if x.startswith(line)], lines
     assert steward_owner.KIT_TERMS.search(text) is None, text
     assert len([x for x in lines if x.startswith("- ")]) <= 5
     assert all(len(x) <= 100 for x in lines)
