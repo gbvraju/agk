@@ -18,7 +18,10 @@ from conftest import KIT_ROOT, manifest
 
 # The shipped texts of the brief: skills, role files, guides and the templates of products.
 CLASSES = ("skills/", ".claude/agents/", "docs/guides/", "kit/templates/")
-MAKE_FORM = re.compile(r"make governance|make -f agk\.mk agk-governance")
+# Brief #1841: also `make -C <scratch>` with a separate `-f agk.mk` span later in the sentence.
+MAKE_FORM = re.compile(
+    r"make governance|make -f agk\.mk agk-governance|make -C <[^>]*>[^.`]*`[^.]*?`-f agk\.mk"
+)
 CLAUSE = "installed project"
 INSTALLED_ONLY = "This guide describes an installed project"
 WINDOW = 300  # characters on each side of a mention in which the clause must stand
@@ -92,6 +95,13 @@ def test_req078_a_bare_make_form_is_caught_and_the_clause_clears_it():
     far = "in an installed project." + " x" * WINDOW + " then run `make governance`."
     assert bare_mentions(far) == 1
     assert bare_mentions(f"{INSTALLED_ONLY}.\n\n" + far) == 0
+    old = (  # conductor.md before brief #1841: the make forms in separate code spans
+        "- Run only `make -C <scratch> test`, `governance`, `-f agk.mk agk-governance` or "
+        "`-f agk.mk agk-project-test` (prefer `agk.mk`, the kit's own file in every project)."
+    )
+    assert bare_mentions(old) == 1
+    assert bare_mentions(old.replace("Run only", "In an installed project run only")) == 0
+    assert bare_mentions("`make -C <scratch> test`. Then `-f agk.mk` elsewhere.") == 0
     found = failures_of({"skills/x/SKILL.md": "run `make governance`"})
     assert found and found[0].startswith("skills/: skills/x/SKILL.md ") and "`make" not in found[0]
 

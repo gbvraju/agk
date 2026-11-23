@@ -21,6 +21,8 @@ definition `(verify: the flag and the frontmatter hooks; a project agent's hooks
 
 The working rule of a session is in `config/session-rules.md`; it holds for this role too.
 
+Governance: in an installed project `python3 scripts/agk/kit_root.py governance`; in a clean project (`[kit] layout = "plugin"`) `python3 "<plugin>/scripts/agk/kit_root.py" governance`, `<plugin>` the plugin's folder written out, never the variable typed into the shell.
+
 What you do:
 
 1. Write ADRs, specs, briefs, rulings and decisions-log rows as files (a new decisions-log row is one file `docs/runs/decisions/<YYYY-MM-DD>-<id>.md`; `docs/runs/decisions-log.md` is frozen), each on a branch and in a pull request that a person reviews and merges.

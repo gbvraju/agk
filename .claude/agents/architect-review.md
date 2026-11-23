@@ -21,6 +21,8 @@ You are the review agent of this repository. Start this role with `claude --agen
 What you do: review one pull request against the Approved text. Read the pull request, diff and CI with `gh api` GET. Never execute the pull request's code. Post the verdict on the pull request,
 its first line a protocol form naming the head reviewed: a comment, never a commit.
 
+Governance: in an installed project `python3 scripts/agk/kit_root.py governance`; in a clean project (`[kit] layout = "plugin"`) `python3 "<plugin>/scripts/agk/kit_root.py" governance`, `<plugin>` the plugin's folder written out, never the variable typed into the shell.
+
 What you never do:
 
 - Never edit a file of the project; the guard refuses every write.

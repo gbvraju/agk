@@ -41,7 +41,13 @@ SELECTION = (
 )
 
 
-def record(options: str = OPTION_A + OPTION_B, status: str = "Proposed", chosen="none yet") -> str:
+def record(
+    options: str = OPTION_A + OPTION_B,
+    status: str = "Proposed",
+    chosen="none yet",
+    classes: str | None = "`agk.toml`",
+) -> str:
+    line = "" if classes is None else f"Protected classes: {classes}\n\n"
     return f"""# ADR-0002: stack options
 
 - Status: {status}
@@ -50,7 +56,7 @@ def record(options: str = OPTION_A + OPTION_B, status: str = "Proposed", chosen=
 - Related: ADR-0001
 - Requirements: REQ-001
 
-## Context
+{line}## Context
 
 A reading list for readers at example.com.
 
@@ -78,20 +84,37 @@ def git(root: Path, *args: str) -> str:
     ).stdout
 
 
-def project(tmp: Path, text: str | None = None, toml: str = "", commit: bool = False) -> Path:
+LISTS = KIT_ROOT / "kit" / "templates"
+
+
+def project(
+    tmp: Path,
+    text: str | None = None,
+    toml: str = "",
+    commit: bool = False,
+    listing: str | None = "protected-paths.txt",
+    mode: str = "init",
+) -> Path:
     (tmp / "docs" / "adr").mkdir(parents=True)
+    (tmp / "config").mkdir()
+    if listing is not None:  # brief #1829: the project's own list
+        shutil.copy(LISTS / listing, tmp / "config" / "protected-paths.txt")
     (tmp / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
     shutil.copytree(KIT_ROOT / "config" / "playbooks", tmp / "config" / "playbooks")
-    (tmp / "agk.toml").write_text('default_branch = "main"\n' + toml, encoding="utf-8")
+    head = f'default_branch = "main"\nmode = "{mode}"\n'
+    (tmp / "agk.toml").write_text(head + toml, encoding="utf-8")
     if text is not None:
         (tmp / STACK).write_text(text, encoding="utf-8")
-    if commit:
-        git(tmp, "init", "-q", "-b", "main")
-        git(tmp, "config", "user.email", "builder@example.com")
-        git(tmp, "config", "user.name", "Builder")
-        git(tmp, "add", "-A")
-        git(tmp, "commit", "-q", "-m", "start")
-        git(tmp, "checkout", "-q", "-b", "stack/accept")
+    return start(tmp) if commit else tmp
+
+
+def start(tmp: Path) -> Path:
+    git(tmp, "init", "-q", "-b", "main")
+    git(tmp, "config", "user.email", "builder@example.com")
+    git(tmp, "config", "user.name", "Builder")
+    git(tmp, "add", "-A")
+    git(tmp, "commit", "-q", "-m", "start")
+    git(tmp, "checkout", "-q", "-b", "stack/accept")
     return tmp
 
 
@@ -240,4 +263,103 @@ def test_stack_accept_refuses_an_unknown_option_and_changes_nothing(tmp_path):
     assert proc.returncode == 1
     assert "option C" in proc.stdout
     assert git(root, "log", "--format=%s", "main..HEAD") == ""
+    assert git(root, "status", "--porcelain") == ""
+
+
+# Brief #1829 (ADR-0761): the record names the classes the accepting change meets.
+ADOPT_CLASSES = "`agk.toml`, `config/`, `config/agk-baseline/`"
+
+
+def classes_line(root: Path) -> str:
+    (path,) = (root / "docs" / "adr").glob("*-stack-options.md")
+    text = path.read_text(encoding="utf-8")
+    return next(ln for ln in text.splitlines() if ln.startswith("Protected classes:"))
+
+
+def test_the_template_has_the_classes_line_after_requirements():
+    """REQ-036: brief #1829 answer 1, one plain header line, not a `- ` bullet."""
+    lines = (KIT_ROOT / "kit" / "templates" / "stack-adr.md").read_text("utf-8").splitlines()
+    at = lines.index("Protected classes: {{classes}}")
+    assert lines[at - 2].startswith("- Requirements:") and lines[at - 1] == ""
+
+
+@pytest.mark.parametrize(
+    ("mode", "listing", "extra", "line"),
+    [
+        ("init", "protected-paths.txt", "", "`agk.toml`"),
+        ("adopt", "protected-paths.adopt.txt", "", ADOPT_CLASSES),
+        ("init", "protected-paths.txt", "docs/adr/\n", "`agk.toml`, `docs/adr/`"),
+        ("init", None, "config/\n", "none"),
+    ],
+)
+def test_stack_write_names_the_classes_of_the_project_list(tmp_path, mode, listing, extra, line):
+    """REQ-036: brief #1829 answers 1 and 7, per mode and per project list; a class the project
+    removed is left out, one it added that the change meets is named."""
+    root = project(tmp_path, None, mode=mode, listing=listing or "protected-paths.txt")
+    path = root / "config" / "protected-paths.txt"
+    path.write_text(("" if listing is None else path.read_text("utf-8")) + extra, "utf-8")
+    proc = engines(start(root), "stack-write", "--ref", "main", "--date", "2026-11-23")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert classes_line(root) == f"Protected classes: {line}"
+
+
+def test_stack_write_refuses_an_unreadable_list_and_writes_nothing(tmp_path):
+    """REQ-036: brief #1829 answer 1, the refusal names the class, never a value."""
+    root = start(project(tmp_path, None, listing=None))
+    proc = engines(root, "stack-write", "--ref", "main", "--date", "2026-11-23")
+    assert proc.returncode == 1
+    assert "rule 5: the protected path list cannot be read (path class config/)" in proc.stdout
+    assert list((root / "docs" / "adr").glob("*.md")) == []
+
+
+def test_stack_accept_adds_the_line_to_an_older_record_in_its_first_commit(tmp_path):
+    """REQ-036: brief #1829 answer 2 (Q-G3-1), the one header line beside Status and Chosen."""
+    root = project(tmp_path, record(classes=None), '\n[testing]\nprofile = "balanced"\n', True)
+    proc = engines(root, "stack-accept", "--option", "A", "--reason", "nothing to host suits it")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (
+        "added: Protected classes names 1 classes (setting: config/protected-paths.txt)"
+        in proc.stdout
+    )
+    first = git(root, "diff", "-U0", "main", "HEAD~1", "--", STACK)
+    added = [ln for ln in first.splitlines() if ln[:1] == "+" and ln[:3] != "+++"]
+    assert "+Protected classes: `agk.toml`" in added and len(added) == 4  # with its blank line
+    assert "ok protected-changes (protected change covered by an ADR)" in proc.stdout
+
+
+def test_stack_accept_completes_a_line_that_misses_a_class(tmp_path):
+    """REQ-036: brief #1829 answer 2, an adopted project's record that names only `agk.toml`."""
+    root = project(
+        tmp_path, record(), '\n[testing]\nprofile = "balanced"\n', True,
+        listing="protected-paths.adopt.txt", mode="adopt",
+    )  # fmt: skip
+    proc = engines(root, "stack-accept", "--option", "A", "--reason", "nothing to host suits it")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "added: Protected classes names 3 classes" in proc.stdout
+    assert classes_line(root) == f"Protected classes: {ADOPT_CLASSES}"
+    assert (
+        "next: run_gates.py --root . writes config/agk-baseline/ for the new gates;"
+        " commit it in this pull request" in proc.stdout
+    )
+    assert len(git(root, "log", "--format=%s", "main..HEAD").splitlines()) == 2
+
+
+def test_stack_accept_of_a_record_with_the_line_adds_nothing_and_passes(tmp_path):
+    """REQ-036: brief #1829 answer 2, the protected-changes line after the two commits."""
+    root = project(tmp_path, record(), '\n[testing]\nprofile = "balanced"\n', commit=True)
+    proc = engines(root, "stack-accept", "--option", "A", "--reason", "nothing to host suits it")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "added:" not in proc.stdout and "next:" not in proc.stdout
+    assert "ok protected-changes (protected change covered by an ADR)" in proc.stdout
+
+
+def test_stack_accept_prints_a_failing_check_with_rc_1(tmp_path):
+    """REQ-036: brief #1829 answer 2, a failure is printed, never committed over."""
+    root = project(tmp_path, record(), '\n[testing]\nprofile = "balanced"\n', commit=True)
+    (root / "CLAUDE.md").write_text("# a protected file, changed\n", encoding="utf-8")
+    git(root, "add", "CLAUDE.md")
+    git(root, "commit", "-q", "-m", "an unrelated protected change")
+    proc = engines(root, "stack-accept", "--option", "A", "--reason", "nothing to host suits it")
+    assert proc.returncode == 1
+    assert "FAIL protected-changes: protected path class 'CLAUDE.md'" in proc.stdout
     assert git(root, "status", "--porcelain") == ""

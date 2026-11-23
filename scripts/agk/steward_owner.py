@@ -1313,6 +1313,17 @@ def with_work_type(text: str, kind: str) -> str:
     return f"{text.rstrip(chr(10))}\n\n[delivery]\n{line}\n"
 
 
+def record_classes(root: Path, rel: str) -> str:
+    """Brief #1829 answer 3: the classes the work-type change meets, as `stack-write` names
+    them; `agk.toml` alone when the project's list cannot be read."""
+    import check_protected_changes as protected
+
+    try:
+        return protected.backticked(protected.step_classes(root, ["agk.toml", rel]))
+    except CheckError:
+        return "`agk.toml`"
+
+
 def work_type_adr(root: Path, ask: dict, words: str, at: str) -> str:
     number = next_adr(root)
     kind = ask["work_type"]
@@ -1322,7 +1333,7 @@ def work_type_adr(root: Path, ask: dict, words: str, at: str) -> str:
         "- Status: Proposed", f"- Date: {datetime.now(UTC):%Y-%m-%d}", "- Deciders: the owner",
         f"- Related: agk.toml, {', '.join(ask.get('discovery') or [])}",
         f"- Requirements: {ADR_REQUIREMENT}", "",
-        "Protected classes: `agk.toml`", "",
+        f"Protected classes: {record_classes(root, rel)}", "",
         "## Context", "",
         f"The discovery document names the work type {kind}, and `agk.toml` declared none"
         f" ({WORK_TYPE_RULE}, amendment 218).", "",
