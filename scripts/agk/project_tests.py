@@ -101,6 +101,7 @@ from impact import (
     report_files,
     report_of,
     rerun_alone,
+    run_folder_deprecation,
     testing_table,
     text,
 )
@@ -279,10 +280,20 @@ def version_at(root: Path, ref: str) -> str | None:
     return toml_version(git(root, "show", f"{ref}:agk.toml", check=False) or None)
 
 
+def retired_lines(root: Path) -> list[str]:
+    """ADR-0755: the deprecation line of a retired `[testing]` key, or none; a malformed table
+    gives none here, since the selection refuses it naming the setting."""
+    try:
+        line = run_folder_deprecation(root)
+    except CheckError:
+        return []
+    return [line] if line else []
+
+
 def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     """The runs (name, command, folder, reason) under `selected`, and the lines said before them."""
     event = os.environ.get("EVENT", "").strip()
-    head = [f"project tests: pr_tests selected, event {event or 'unknown'}"]
+    head = [f"project tests: pr_tests selected, event {event or 'unknown'}", *retired_lines(root)]
     if event != EVENT:
         why = f"event {event}" if event else "event unknown"
         return [("full", project, ".", why)], [*head, f"project tests: full ({why})"]
