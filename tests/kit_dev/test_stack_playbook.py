@@ -95,6 +95,7 @@ def rendered_template(names: str = TEMPLATE_NAMES, shape: str = "default") -> st
     text = TEMPLATE.read_text(encoding="utf-8").replace("{{adr}}", "0002")
     text = text.replace("{{recommended}}", recommended(shape))
     text = text.replace("{{classes}}", "`agk.toml`")  # brief #1829: the init list's class
+    text = text.replace("\n{{screens}}", "")  # brief #1843: no inventory, no screens line
     return text.replace("{{date}}", DATE).replace("{{practices}}", names)
 
 
