@@ -268,3 +268,56 @@ def test_req079_a_malformed_command_line_prints_usage(args: list[str]) -> None:
     result = run(PINS, *args)
     assert result.returncode == 2 and "Traceback" not in result.stderr
     assert result.stderr.startswith("usage: python3 scripts/agk/gates/pins.py")
+
+
+# Brief #1776 (ADR-0742): the gate runner runs the pins step, so governance fails an unpinned product.
+
+
+def gate_rows(root: Path) -> list[tuple[object, str]]:
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import run_gates  # noqa: PLC0415 - the gate runner itself
+
+    return [row for row in run_gates.results(root) if row[1].startswith(("pins", "baseline pins"))]
+
+
+def test_req079_the_runner_fails_an_unpinned_sample(tmp_path: Path) -> None:
+    rows = gate_rows(node_project(tmp_path, spec="^4.21.1"))
+    assert rows and all(passed is False for passed, _ in rows), rows
+    assert any("not pinned exactly (component class: dependency)" in line for _, line in rows)
+    no_values(repr(rows))
+
+
+def test_req079_the_runner_fails_a_missing_lock(tmp_path: Path) -> None:
+    rows = gate_rows(python_project(tmp_path, lock=""))
+    assert [p for p, _ in rows] == [False]
+    assert "the lock file is missing (component class: lock file)" in rows[0][1]
+
+
+def test_req079_the_runner_passes_a_pinned_and_locked_sample(tmp_path: Path) -> None:
+    assert gate_rows(python_project(tmp_path)) == [(True, "pins")]
+
+
+def test_req079_no_stack_chosen_is_a_not_run_row(tmp_path: Path) -> None:
+    assert gate_rows(project(tmp_path, record())) == [(None, "pins: not run: no stack chosen")]
+
+
+def test_req079_no_work_type_leaves_the_runner_unchanged(tmp_path: Path) -> None:
+    assert gate_rows(project(tmp_path, record(), toml="")) == []
+
+
+def test_req079_an_adopted_sample_writes_its_baseline_then_fails_on_a_new_range(
+    tmp_path: Path,
+) -> None:
+    root = node_project(tmp_path, spec="^4.21.1")
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    (root / "agk.toml").write_text('mode = "adopt"\n' + text, encoding="utf-8")
+    rows = gate_rows(root)
+    assert (True, "pins (baseline)") in rows, rows
+    assert any(line.startswith("baseline pins: written") for _, line in rows)
+    assert (root / "config" / "agk-baseline" / "pins.txt").is_file()
+    assert gate_rows(root) == [(True, "pins (baseline)")]
+    pkg = json.loads((root / "package.json").read_text(encoding="utf-8"))
+    pkg["dependencies"]["example-api"] = "~3.23.8"
+    (root / "package.json").write_text(json.dumps(pkg), encoding="utf-8")
+    rows = gate_rows(root)
+    assert any(p is False and "SPEC-0072 rule 7" in line for p, line in rows), rows
