@@ -223,3 +223,26 @@ def test_req079_the_markers_are_found_for_each_written_form(repo, form):
     )
     assert found, form
     assert repo.run("check_requirements.py").returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [("", "hold"), ('touched_files = "hold"\n', "hold"), ('touched_files = "meet"\n', "meet")],
+)
+def test_req079_touched_files_is_hold_by_default_or_meet(text, want, tmp_path):
+    """REQ-079: brief #1844 answer 1 (`config.touched_files`)."""
+    import config  # noqa: PLC0415 - the reader of the top-level key
+
+    (tmp_path / "agk.toml").write_text(text, encoding="utf-8")
+    assert config.touched_files(tmp_path) == want
+
+
+@pytest.mark.parametrize("value", ['"Meet"', '"strict"', "true", "1"])
+def test_req079_another_touched_files_value_is_refused_naming_the_setting(value, tmp_path):
+    """REQ-079: brief #1844 answer 5 (never the value)."""
+    import config  # noqa: PLC0415 - the reader of the top-level key
+
+    (tmp_path / "agk.toml").write_text(f"touched_files = {value}\n", encoding="utf-8")
+    with pytest.raises(common.CheckError) as err:
+        config.touched_files(tmp_path)
+    assert str(err.value) == "not an accepted value (setting: touched_files)"
