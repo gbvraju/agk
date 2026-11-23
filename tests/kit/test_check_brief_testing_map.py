@@ -182,7 +182,8 @@ def test_req037_a_stated_whole_test_fails_from_the_day_naming_the_line(tmp_path)
     text = body("tests/kit/test_new_all.py", answer="Whole test: test_new_all.py joins the list.")
     assert result(root_of(tmp_path), text, AFTER)[0] == [M2.format(stated(text))]
     assert four_c(result(root_of(tmp_path / "b"), text)[1]) == [M2.format(stated(text))]
-    without = root_of(tmp_path / "c", KIT_TESTING.replace('whole_tests = ["tests/kit/test_whole.py"]\n', ""))
+    unset = KIT_TESTING.replace('whole_tests = ["tests/kit/test_whole.py"]\n', "")
+    without = root_of(tmp_path / "c", unset)
     assert four_c(result(without, text, AFTER)[1]) == []
 
 
@@ -228,7 +229,7 @@ def test_req037_a_project_folder_mapped_file_by_file_only_warns(tmp_path, profil
      ("balanced", "", "src/other/c.py"), ("balanced", 'map_source = "curated"\n', "src/app/a2.py")],
     ids=["generated", "thorough", "unmapped-folder", "curated"],
 )  # fmt: skip
-def test_req037_a_project_is_silent_outside_a_curated_mapped_folder(tmp_path, profile, source, adds):
+def test_req037_a_project_is_silent_outside_a_curated_folder(tmp_path, profile, source, adds):
     """REQ-037: answer 4 (silent for `generated`, `thorough` or an unmapped folder)."""
     _, warnings = result(project(tmp_path, profile, source), body(adds), AFTER)
     assert four_c(warnings) == ([M4.format("src/app/")] if adds.endswith("a2.py") else [])
@@ -293,8 +294,11 @@ def test_req037_every_writer_refuses_or_warns_alike(tmp_path):
 def test_req037_the_kit_warns_an_open_brief_of_1835s_shape():
     """REQ-037: answers 8 and 9 (the kit's own map: a new script, no agk.toml, before the day)."""
     text = (
-        STUDIED.replace(TOUCHES, "Touches: scripts/agk/check_brief.py, scripts/agk/example_scan.py,"
-                        " docs/x.md\nAdds: scripts/agk/example_scan.py\n")  # fmt: skip
+        STUDIED.replace(
+            TOUCHES,
+            "Touches: scripts/agk/check_brief.py, scripts/agk/example_scan.py,"
+            " docs/x.md\nAdds: scripts/agk/example_scan.py\n",
+        )  # fmt: skip
         .replace("Advances: new", "Advances: REQ-037")
         .replace("Priority: 1\n", "Priority: 1\nWave: 4\n")
     )
