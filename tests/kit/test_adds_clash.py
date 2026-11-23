@@ -13,11 +13,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "agk" / "check_brief.py"
+STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
+    "Impact:\nSpeed: none: a test brief\nQuality: none: a test brief\nGitHub: none: a test brief\n"
+    "Cost: none: a test brief\nTests: none: a test brief\nWiring: none: a test brief\n"
+    "Prior: none: a test brief\nClass: a test brief; seen 0 (searched nothing)\n"
+)
 BODY = (
     'Sentence: "A team can run a thing."\n'
     "Answers (the maintainers'):\n1. one\n"
     "Size: M\nAdvances: new\nTouches: src/app.py\n{adds}"
-    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
+    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n" + STUDY
 )
 
 

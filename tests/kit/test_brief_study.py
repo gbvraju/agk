@@ -1,4 +1,4 @@
-"""brief_study.py prints the earlier record a brief's writer must read (brief #1800, ADR-0752; REQ-037)."""
+"""brief_study.py prints the earlier record a brief's writer reads (brief #1800; REQ-037)."""
 
 from __future__ import annotations
 
@@ -17,9 +17,16 @@ BRIEF = (
 def study(tmp_path: Path, root: Path, body: str = BRIEF):
     (tmp_path / "brief.md").write_text(body, encoding="utf-8")
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(SCRIPTS / "brief_study.py"), str(tmp_path / "brief.md"),
-         "--root", str(root)],
-        cwd=tmp_path, capture_output=True, text=True,
+        [
+            sys.executable,
+            str(SCRIPTS / "brief_study.py"),
+            str(tmp_path / "brief.md"),
+            "--root",
+            str(root),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
     )
 
 
@@ -33,7 +40,7 @@ def tree(tmp_path: Path) -> Path:
 
 def record(root: Path) -> None:
     (root / "docs" / "adr" / "0007-tool.md").write_text(
-        "# ADR-0007: tool\n\n- Status: Proposed\n\nThe whole-tests rule for `scripts/agk/tool.py`.\n",
+        "# ADR-0007: tool\n\n- Status: Proposed\n\nThe rule for `scripts/agk/tool.py`.\n",
         "utf-8",
     )
     (root / "docs" / "adr" / "0008-other.md").write_text(
@@ -41,7 +48,7 @@ def record(root: Path) -> None:
         "utf-8",
     )
     (root / "docs" / "specs" / "0005-tools.md").write_text(
-        "# SPEC-0005: tools\n\n- Status: Approved\n\nRule 1: see https://example.com. Amendment 3.\n",
+        "# SPEC-0005: tools\n\n- Status: Approved\n\nSee https://example.com. Amendment 3.\n",
         "utf-8",
     )
     runs = root / "docs" / "runs"
@@ -86,9 +93,18 @@ def test_ac4_the_study_prints_an_overlapping_open_brief_from_a_saved_list(tmp_pa
     )
     (tmp_path / "brief.md").write_text(BRIEF, encoding="utf-8")
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(SCRIPTS / "brief_study.py"), str(tmp_path / "brief.md"),
-         "--root", str(root), "--open-briefs", str(saved)],
-        cwd=tmp_path, capture_output=True, text=True,
+        [
+            sys.executable,
+            str(SCRIPTS / "brief_study.py"),
+            str(tmp_path / "brief.md"),
+            "--root",
+            str(root),
+            "--open-briefs",
+            str(saved),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
     )
     lines = out.stdout.splitlines()
     assert any(x.startswith("brief #41 (open)") for x in lines), out.stdout + out.stderr
@@ -98,7 +114,9 @@ def test_ac4_the_study_prints_an_overlapping_open_brief_from_a_saved_list(tmp_pa
 def test_ac4_a_usage_error_exits_2(tmp_path):
     """REQ-037 AC4"""
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(SCRIPTS / "brief_study.py")], cwd=tmp_path, capture_output=True,
+        [sys.executable, str(SCRIPTS / "brief_study.py")],
+        cwd=tmp_path,
+        capture_output=True,
         text=True,
     )
     assert out.returncode == 2 and out.stdout.startswith("usage:")

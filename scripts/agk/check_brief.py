@@ -46,6 +46,10 @@ the plan's read cache, never by a request; a clash is refused naming the holder 
 `--number N` (the issue number in `--event`) leaves the brief itself out. Two `Adds:`, `Touches:`,
 `Reserved:` or `Expected:` lines are refused naming both and printing the one line to use.
 
+Brief #1800 (ADR-0752): with `--root DIR` a brief that passes also shows its study, the `Impact:`,
+`Wiring:`, `Prior:` and `Class:` lines of `brief_study.study_result`: warnings (`warning: study:
+...`) until `brief_study.STUDY_FAILS_FROM`, failures from it.
+
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
 the label to clear and the wave.
@@ -62,6 +66,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import brief_study
 import design_signoff
 import plan_names
 import playbook_format
@@ -351,9 +356,11 @@ def check(
     except (OSError, UnicodeDecodeError) as exc:
         raise CheckError("the brief file cannot be read") from exc
     problems = body_problems(body, root, waves, opened)
+    if not problems:
+        problems, study = brief_study.study_result(body, root, (opened or {}).get("number"))
     if problems:
         raise CheckError("; ".join(problems))
-    for warning in protected_warnings(body, root):
+    for warning in protected_warnings(body, root) + study:
         print(f"warning: {warning}")
     print(f"ok {NAME}")
     return 0
@@ -386,6 +393,11 @@ def event_result(
     body = raw if isinstance(raw, str) else ""
     number = issue.get("number")
     problems = body_problems(body, root, waves, {**(opened or {}), "number": number})
+    study: list[str] = []
+    if not problems:
+        problems, study = brief_study.study_result(
+            body, root, number if isinstance(number, int) else None
+        )
     if problems:
         return {
             "action": "fail",
@@ -395,7 +407,7 @@ def event_result(
             "comment": event_comment(problems),
         }
     result = {"action": "pass", "issue": number, "label": INVALID_LABEL, "wave": wave_of(body)}
-    warnings = protected_warnings(body, root)
+    warnings = protected_warnings(body, root) + study
     return {**result, "warnings": warnings} if warnings else result
 
 

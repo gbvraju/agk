@@ -16,10 +16,16 @@ GOOD = (
     "Advances: REQ-001, REQ-002\nTouches: scripts/agk/*.py, docs/**\nPriority: 1\n"
     "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
 )
-
+STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
+    "Impact:\nSpeed: none: a test brief\nQuality: none: a test brief\nGitHub: none: a test brief\n"
+    "Cost: none: a test brief\nTests: none: a test brief\nWiring: none: a test brief\n"
+    "Prior: none: a test brief\nClass: a test brief; seen 0 (searched nothing)\n"
+)
 
 def check(tmp_path: Path, body: str | None, *extra: str):
     args = [str(tmp_path / "brief.md")] if body is not None else [str(tmp_path / "none.md")]
+    if body is not None and "--root" in extra and "Impact:" not in body:
+        body += STUDY
     if body is not None:
         (tmp_path / "brief.md").write_text(body, encoding="utf-8")
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
