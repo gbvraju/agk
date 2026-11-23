@@ -1,0 +1,1 @@
+- The kit's default allowed-licence list also allows `blessing` (SQLite), `0BSD`, `Unlicense`, `Zlib` and `BSL-1.0`, for a new project or one with no `config/licences.toml`; a project's own list is read as before, and widening it stays a project ADR (brief #1811)
