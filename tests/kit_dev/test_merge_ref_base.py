@@ -116,6 +116,62 @@ def test_ac2_build_state_counts_the_other_pull_request_with_a_stale_base(docs_re
     against_both(docs_repo, "check_build_state.py", stale, first, "docs/build-state.md")
 
 
+ROW = "| 2026-10-24 | invented row | REQ-001 |\n"
+
+
+@pytest.fixture
+def rows_repo(docs_repo):
+    put(docs_repo, "docs/build-state.md", "# State\n\n" + ROW)
+    put(docs_repo, "docs/x.md", "x\n")
+    commit(docs_repo, "a row")
+    return docs_repo
+
+
+def docs_only(root: Path) -> None:
+    put(root, "docs/x.md", "y\n")
+
+
+def row_rewritten(root: Path) -> None:
+    put(root, "docs/build-state.md", "# State\n\n" + ROW.replace("invented", "rewritten"))
+
+
+def row_appended_meanwhile(root: Path) -> None:
+    put(root, "docs/build-state.md", "# State\n\n" + ROW + "| 2026-10-25 | REQ-002 | proposed |\n")
+
+
+def test_ac2_an_append_merged_meanwhile_is_not_this_changes_with_either_base(rows_repo):
+    """REQ-006 AC1: brief #1836 answer 3, the other pull request's row is an append."""
+    stale, first = merge_ref(rows_repo, docs_only, row_appended_meanwhile)
+    for base in (stale, first):
+        proc = run_check(rows_repo, "check_build_state.py", base)
+        assert proc.returncode == 0, proc.stdout
+
+
+def test_ac2_a_rewrite_on_the_branch_fails_with_either_base(rows_repo):
+    """REQ-006 AC1: brief #1836 answer 3."""
+    stale, first = merge_ref(rows_repo, row_rewritten, row_appended_meanwhile)
+    for base in (stale, first):
+        proc = run_check(rows_repo, "check_build_state.py", base)
+        assert proc.returncode == 1 and "is only appended" in proc.stdout, proc.stdout
+
+
+def test_ac2_a_local_record_compares_with_its_base_in_a_checkout_worktree(rows_repo, tmp_path):
+    """REQ-006 AC1: brief #1836 answer 3, the evidence worktree (common.CHECKOUT)."""
+    sys.path.insert(0, str(SCRIPTS))
+    from common import CHECKOUT
+
+    record_base = rev(rows_repo, "main")
+    git(rows_repo, "switch", "-q", "-c", "local")
+    row_rewritten(rows_repo)
+    commit(rows_repo, "rewrite")
+    tree = tmp_path / "tree"
+    git(rows_repo, *CHECKOUT, "worktree", "add", "-q", "--detach", str(tree), "HEAD")
+    proc = run_check(tree, "check_build_state.py", record_base)
+    assert proc.returncode == 1 and "is only appended" in proc.stdout, proc.stdout
+    git(rows_repo, *CHECKOUT, "worktree", "add", "-q", "--detach", str(tmp_path / "ok"), "main")
+    assert run_check(tmp_path / "ok", "check_build_state.py", record_base).returncode == 0
+
+
 def test_ac2_the_fragment_count_includes_the_other_pull_requests_fragment_with_a_stale_base(
     tmp_path,
 ):
