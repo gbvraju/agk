@@ -242,3 +242,16 @@ def test_the_foundation_brief_and_no_work_type_need_no_line(tmp_path: Path) -> N
     other = tmp_path / "other"
     other.mkdir()
     assert check_brief.layer_problems(BRIEF, _project(other, None)) == []
+
+
+def test_the_written_record_says_its_protected_class(tmp_path: Path, capsys) -> None:
+    """REQ-036: brief #1829 answer 4, one `protected:` line from the project's own list, never
+    a value, so the foundation build's ADR names the class."""
+    root = _project(tmp_path)
+    shutil.copy(KIT_ROOT / "kit/templates/protected-paths.txt", root / "config")
+    assert layers.main(["--root", str(root), "--write-record"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[-2:] == [
+        "ok layers: wrote docs/architecture.md",
+        "protected: `docs/architecture.md` (name them in this change's ADR)",
+    ]

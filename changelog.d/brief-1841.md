@@ -1,0 +1,1 @@
+- Each role file that has Bash names the one governance command its own guard allows in an installed and a clean project, the conductor's scratch run names the resolver's gate first, and a test runs each named form through its guard (brief #1841)

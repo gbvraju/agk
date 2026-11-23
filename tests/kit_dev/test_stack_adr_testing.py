@@ -14,7 +14,7 @@ import sys
 
 import pytest
 from conftest import KIT_ROOT, clean_env
-from test_engines_stack import NO_PROFILE_NOTES
+from test_engines_stack import NO_PROFILE_NOTES, with_list
 from test_playbook import started as playbook_started  # noqa: F401  (wrapped below)
 
 TEMPLATE = KIT_ROOT / "kit" / "templates" / "stack-adr.md"
@@ -37,7 +37,7 @@ EFFECTS = "Cost: low; Build speed: quick; Security: one sign-in; Uptime: short p
 
 @pytest.fixture
 def started(request):
-    return request.getfixturevalue("playbook_started")
+    return with_list(request.getfixturevalue("playbook_started"))
 
 
 def engines(root, *args):

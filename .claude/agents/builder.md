@@ -29,6 +29,8 @@ its own: the rules live there and in the builder's task text, and this file only
 - **Read the live state.** Before any claim about a pull request (merged, open, its head, its checks), read it from
   GitHub with `gh api repos/{owner}/{repo}/pulls/{n}` (a GET), never from memory (SPEC-0061 rule 7).
 
+Governance: in an installed project `python3 scripts/agk/kit_root.py governance`; in a clean project (`[kit] layout = "plugin"`) `python3 "<plugin>/scripts/agk/kit_root.py" governance`, `<plugin>` the plugin's folder written out, never the variable typed into the shell.
+
 Your guard is the project's existing hooks in `.claude/settings.json`. This agent adds no permission and no option that
 skips a guard. You never merge, never post a `Verdict:`, `Approve:`, `Confirmed:` or `Maintainer answer:` comment
 and never touch a secret; the `- Status:` line of an ADR changes only as the task text says.

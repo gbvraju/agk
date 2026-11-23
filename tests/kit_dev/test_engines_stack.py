@@ -15,10 +15,19 @@ import pytest
 from conftest import KIT_ROOT, clean_env
 from test_playbook import started as playbook_started  # noqa: F401  (wrapped below)
 
+LIST = KIT_ROOT / "kit" / "templates" / "protected-paths.txt"
+
+
+def with_list(root):
+    """Brief #1829: `stack-write` reads the project's own protected path list."""
+    (root / "config").mkdir(exist_ok=True)
+    (root / "config" / "protected-paths.txt").write_bytes(LIST.read_bytes())
+    return root
+
 
 @pytest.fixture
 def started(request):
-    return request.getfixturevalue("playbook_started")
+    return with_list(request.getfixturevalue("playbook_started"))
 
 
 SCRIPT = KIT_ROOT / "scripts" / "agk" / "engines.py"

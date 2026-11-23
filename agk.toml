@@ -930,6 +930,7 @@ code = "scripts/agk/run_gates.py"
 tests = [
   "tests/kit/test_run_gates.py", "tests/kit/test_stop_check_changed.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit/test_python_pack.py", "tests/kit/test_gate_baseline.py", "tests/kit/test_node_pack.py",
+  "tests/kit/test_kit_step_governance.py", "tests/kit/test_stack_choice.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/committed_secrets.py"
@@ -950,7 +951,8 @@ tests = [
   "tests/kit/test_architecture_record.py", "tests/kit/test_contracts.py", "tests/kit/test_gate_baseline.py",
   "tests/kit/test_gate_injection_set.py", "tests/kit/test_gate_secrets_settings.py", "tests/kit/test_layers_step.py",
   "tests/kit/test_playbook_plugin.py", "tests/kit/test_product_deps.py", "tests/kit/test_python_pack.py",
-  "tests/kit/test_node_pack.py", "tests/kit/test_pins.py",
+  "tests/kit/test_node_pack.py", "tests/kit/test_pins.py", "tests/kit/test_kit_step_governance.py",
+  "tests/kit/test_stack_choice.py",
   "tests/kit/test_run_gates.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_tests_floor.py",
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_gate_runner_map.py",
 ]
