@@ -1,0 +1,1 @@
+- An adopted project can set `touched_files = "meet"` in `agk.toml` so each file a change edits must pass the standards pack's lint, format and type steps in full, not only keep its baselined count; the default `"hold"` is unchanged (brief #1844, ADR-0773, proposed amendment 221)
