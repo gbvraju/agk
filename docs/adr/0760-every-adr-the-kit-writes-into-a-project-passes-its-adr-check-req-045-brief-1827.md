@@ -6,7 +6,7 @@
 - Related: brief #1827, ADR-0735, ADR-0681, SPEC-0038, SPEC-0072
 - Requirements: REQ-045
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -25,6 +25,9 @@ project ADR passes, but no test lists the writers, so a new one could ship the s
    `scripts/agk/**/*.py` emitting `# ADR-{` or `"# ADR-`, a `kit/templates/**/*.md` whose first line is `# ADR-`, and
    `docs/adr/TEMPLATE.md`) and fails naming `<file>:<line>` for one the table does not list. The two printed skeletons
    (`upgrade.report` without `--write-adr`, `uninstall.adr_skeleton`) are rows marked `printed` and not validated.
+3. The `[[testing.map]]` entry of `scripts/agk/check_adrs.py` in `agk.toml` lists the three tests that now run the
+   check (`test_kit_adr_writers.py`, `test_standard_confirm.py`, `test_steward_work_type.py`), as
+   `tests/kit/test_always_full_infra.py` requires; no setting changes.
 
 ## Consequences
 
