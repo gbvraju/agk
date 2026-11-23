@@ -180,7 +180,7 @@ BASE = "config/agk-baseline/committed-secrets.txt"  # `secrets.txt` is a secret 
 
 
 def test_adopt_mode_holds_the_findings(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """REQ-079: brief #1777 answers 1 and 2: held in the baseline and counted, never `ok secrets`."""
+    """REQ-079: brief #1777 answers 1 and 2: held in the baseline, counted, never `ok secrets`."""
     files = {"config/key.py": f'TOKEN = "{FAKE}"\n', "app/main.py": APP}
     root = _project(tmp_path, files, mode="adopt")
     code, out = _run(root, capsys)

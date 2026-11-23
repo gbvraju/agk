@@ -44,9 +44,10 @@ prints `baseline <id>: a count fell in <n> file(s)` when one falls, and otherwis
 `SPEC-0072 rule 7` line to its own. In `mode = "adopt"` a missing file is written from today's
 tree and the step passes; in `mode = "init"` nothing is written. A step module with `HELD = True`
 (`secrets` and `licences`, brief #1777, ADR-0743) whose baseline holds findings prints
-`<id> (baseline): <n> held (path class: <class>)`, the count of today's findings, never `ok <id>`. `--baseline` writes the missing
-files and lowers lines, never raising one (the owner's yes on an upgrade, `Q-S0072-5`, and the
-next build's lowering commit). Output names counts and path classes, never a file.
+`<id> (baseline): <n> held (path class: <class>)`, the count of today's findings, never `ok <id>`.
+`--baseline` writes the missing files and lowers lines, never raising one (the owner's yes on an
+upgrade, `Q-S0072-5`, and the next build's lowering commit). Output names counts and path
+classes, never a file.
 """
 
 from __future__ import annotations

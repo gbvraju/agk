@@ -17,8 +17,9 @@ list. Each line names the rule and the component class (`python`, `node`), never
 version or an id (principle 8); a list of another form is refused naming the setting. With no
 stack chosen or no lock it prints `not run: no lock`. `counts` gives the findings per file (the
 lock's failing packages, the setting's form), so the runner's baseline holds an adopted project's
-existing ones, counted on every run (brief #1777, ADR-0743). Offline, files only; widening the list is a project ADR
-(principle 11). The runner calls it, as `layers`, where it `applies` (brief #1586's interface).
+existing ones, counted on every run (brief #1777, ADR-0743). Offline, files only; widening the
+list is a project ADR (principle 11). The runner calls it, as `layers`, where it `applies`
+(brief #1586's interface).
 """
 
 from __future__ import annotations
@@ -132,11 +133,8 @@ HELD = True  # brief #1777: a pass on a baseline that holds findings prints `hel
 
 def check(root: Path, playbook: dict[str, Any]) -> list[tuple[str, str]]:
     """The runner's interface: (rule, path class) of each failure."""
-    lock = (pins.chosen(Path(root)) or ((None, None, None),))[0][2]
-    return [
-        (f"{r} ({w})", SETTING if w.startswith("setting") else lock)
-        for r, w in problems(root) or []
-    ]
+    found = tally(root) or []
+    return sorted({(f"{r} ({w})", rel) for r, w, rel in found})
 
 
 def counts(root: Path, playbook: dict[str, Any]) -> dict[str, int]:
