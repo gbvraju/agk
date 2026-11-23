@@ -333,18 +333,36 @@ def test_ac6_an_unmapped_state_or_an_unsigned_imported_version_is_refused(tmp_pa
     assert proc.returncode == 1 and "signoffs.md" in proc.stdout and "i1" not in proc.stdout
 
 
-def imported_browser(directory, imported_png, built_png):
+# The fake browser's fetch of the page it was asked to open, through the proxy it was given.
+FETCH = """import sys, urllib.request
+proxy = {"http": sys.argv[1]}
+opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxy))
+opener.open(sys.argv[2], timeout=10).read()
+"""
+
+
+def imported_browser(directory, imported_png, built_png, fetch=True):
     """A `chromium` that logs its arguments and writes IMPORTED_PNG for a page it opens through
-    the comparison's server, BUILT_PNG for a file page."""
+    the comparison's server, BUILT_PNG for a file page. With FETCH it first asks the server for
+    the page, as a real browser does; without it the server never sees the page."""
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / "calls"
     cp = shutil.which("cp")
+    (directory / "fetch.py").write_text(FETCH, encoding="utf-8")
+    get = (
+        'for a in "$@"; do case "$a" in --proxy-server=*) '
+        f'"{sys.executable}" "{directory / "fetch.py"}" "${{a#--proxy-server=}}" "$last";; '
+        "esac; done\n"
+        if fetch
+        else ""
+    )
     script = directory / "chromium"
     script.write_text(
         "#!/bin/sh\n"
         f'echo "$@" >> "{log}"\n'
         'last=""; for a in "$@"; do last="$a"; done\n'
-        'for a in "$@"; do case "$a" in --screenshot=*)\n'
+        + get
+        + 'for a in "$@"; do case "$a" in --screenshot=*)\n'
         f'  case "$last" in http://{design_compare.HOST}/*) {cp} "{imported_png}" '
         '"${a#--screenshot=}";;\n'
         f'  *) {cp} "{built_png}" "${{a#--screenshot=}}";; esac;; esac; done\n',
@@ -378,6 +396,58 @@ def test_ac6_with_a_browser_an_imported_page_is_shot_once_at_1440_light_through_
         assert imported_call.endswith(f"http://{design_compare.HOST}/home.html")
         assert "--proxy-server=http://127.0.0.1:" in imported_call
         assert "--proxy-bypass-list=<-loopback>" in imported_call
+        assert "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1" in imported_call
+        assert "--no-proxy-server" not in imported_call
+        assert "--no-proxy-server" in built_call and "EXCLUDE" not in built_call
+        assert "--proxy-server=" not in built_call
+
+
+@pytest.mark.parametrize("tolerance", [None, 1])
+def test_ac6_a_shot_of_a_page_the_server_never_served_is_refused(tmp_path, tolerance):
+    """REQ-044 AC6: brief #1828 answer 3 and Q-G4-1 (an error page is never compared, whatever
+    `pixel_tolerance`, even 1)."""
+    imported(tmp_path)
+    if tolerance is not None:
+        toml = tmp_path / "agk.toml"
+        text = toml.read_text(encoding="utf-8").replace("pixel_tolerance = 0.3", "")
+        toml.write_text(text + f"pixel_tolerance = {tolerance}\n", encoding="utf-8")
+    white = (255, 255, 255)
+    same = png(tmp_path.parent / (tmp_path.name + "-s.png"), [[white] * 4])
+    log = imported_browser(tmp_path.parent / (tmp_path.name + "-b"), same, same, fetch=False)
+    proc = compare(tmp_path, "--version", "i1", "--screens", "home/default", path=str(log.parent))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert proc.stdout == (
+        "FAIL design-compare: rule 11: the headless browser did not open the imported page"
+        " through the files server\n"
+    )
+
+
+def test_ac6_external_references_of_the_page_are_counted_never_named(tmp_path):
+    """REQ-044 AC6: brief #1828 answer 4 and Q-G4-4 (the count from `external.txt` for the page
+    and a stylesheet it links; no URL printed; one line)."""
+    files = imported(tmp_path)
+    (files / "site.css").write_text("@import url(https://example.com/f.css);\n", "utf-8")
+    page = (files / "home.html").read_text(encoding="utf-8")
+    page = page.replace("<title>", '<link rel="stylesheet" href="site.css"><title>')
+    (files / "home.html").write_text(page, encoding="utf-8")
+    (files.parent / "external.txt").write_text(
+        "home.html https://example.com/brand.css\n"
+        "intro.html https://example.com/other.css\n"
+        "site.css https://example.com/f.css\n",
+        encoding="utf-8",
+    )
+    white = (255, 255, 255)
+    same = png(tmp_path.parent / (tmp_path.name + "-s.png"), [[white] * 4])
+    log = imported_browser(tmp_path.parent / (tmp_path.name + "-b"), same, same)
+    proc = compare(tmp_path, "--version", "i1", "--screens", "home/default", path=str(log.parent))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout == (
+        "home/default match; external: 2 not loaded (docs/design/imported/i1/external.txt)\n"
+    )
+    assert "example.com" not in proc.stdout
+    (files.parent / "external.txt").write_text("intro.html https://example.com/o.css\n", "utf-8")
+    proc = compare(tmp_path, "--version", "i1", "--screens", "home/default", path=str(log.parent))
+    assert proc.stdout == "home/default match\n"
 
 
 def test_ac6_a_picture_page_with_a_browser_is_compared_at_the_width_of_the_image(tmp_path):
@@ -442,6 +512,28 @@ def test_ac6_the_server_refuses_every_request_outside_the_version_files(tmp_path
             status, body = request(port, method, target)
             assert status == 403, (method, target)
             assert b"outside the files" not in body
+
+
+def test_ac6_a_client_that_leaves_before_the_refusal_prints_no_traceback(tmp_path, capfd):
+    """REQ-044 AC6: brief #1828 answer 5 (a refused `CONNECT` whose browser has already closed the
+    connection prints nothing; the refusal still stands)."""
+    import socket
+    import struct
+    import time
+
+    files = imported(tmp_path)
+    server = design_compare.FilesServer(files)
+    with server as port:
+        for _ in range(5):
+            sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+            sock.sendall(b"CONNECT a.example.com:443 HTTP/1.1\r\nHost: a.example.com:443\r\n\r\n")
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            sock.close()  # a reset, as a browser that gave up on the tunnel
+        time.sleep(0.5)
+        status, _ = request(port, "GET", "http://example.com/brand.css")
+        assert status == 403
+    err = capfd.readouterr().err
+    assert "Traceback" not in err and "Error" not in err, err
 
 
 @pytest.mark.parametrize(

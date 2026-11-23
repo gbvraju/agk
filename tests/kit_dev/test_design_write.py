@@ -171,6 +171,9 @@ def test_ac5_screenshots_takes_four_with_a_headless_browser(tmp_path):
     assert shots == ["1280-dark.png", "1280-light.png", "360-dark.png", "360-light.png"]
     calls = log.read_text(encoding="utf-8").splitlines()
     assert len(calls) == 4 and all("--headless" in c for c in calls)
+    # brief #1828 answer 2: the mockup screenshots run offline, as every other browser call
+    assert all("--host-resolver-rules=MAP * ~NOTFOUND" in c for c in calls)
+    assert all("--no-proxy-server" in c and "EXCLUDE" not in c for c in calls)
     assert sum("--window-size=360," in c for c in calls) == 2
     assert sum("--window-size=1280," in c for c in calls) == 2
     # in Blink 0 is dark and 1 is light (measured on Chromium); both are passed explicitly

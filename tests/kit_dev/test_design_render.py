@@ -90,6 +90,9 @@ def test_ac6_a_browser_writes_every_screenshot_and_measures_a_sideways_page(tmp_
     calls = log.read_text(encoding="utf-8").splitlines()
     assert calls and all("--headless" in c and "MAP * ~NOTFOUND" in c for c in calls)
     assert all("index.html" not in c for c in calls)  # the flows page is not a screen
+    # brief #1828 answer 1: a file page never uses a machine proxy and never the exclusion
+    assert all("--no-proxy-server" in c and "EXCLUDE" not in c for c in calls)
+    assert all("--proxy-server=" not in c for c in calls)
     assert "sideways" in proc.stdout and "360" in proc.stdout
 
 
