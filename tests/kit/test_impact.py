@@ -488,7 +488,8 @@ def test_a_test_that_reads_a_file_by_a_literal_join_is_selected_by_its_change(re
 
 def test_a_mapped_markdown_file_is_code_and_selects_its_entry(repo):
     """REQ-062: brief #1792 answer 2 (a mapped `*.md` outside docs/ is not documentation)."""
-    body = MAP.replace("map = [\n", 'map = [\n  { code = "guides/**", tests = ["tests/test_smoke.py"] },\n')
+    guides = '  { code = "guides/**", tests = ["tests/test_smoke.py"] },\n'
+    body = MAP.replace("map = [\n", "map = [\n" + guides)
     start_joins(repo, body)
     change(repo, "guides/x.md")
     found = result(repo)
