@@ -1170,6 +1170,12 @@ one. Files only.
 Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
 publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
 writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.
+The same check reads the root's `[testing]` table (rule 4c, brief #1856, ADR-0774): when `Touches:` does not name
+`agk.toml`, a new kit script (`scripts/agk/*.py`, one level) that no `[[testing.map]]` entry or `always_full` covers, and
+a body line that names an added test with `whole_tests` or `whole test`, warn and, from `[flow] brief_study_fails_from`,
+fail (`warning: rule 4c: ...`); an added test beside an answer `**The class stays closed.**`, a test outside the map entry
+of a code path `Touches:` names, and, in a project, a new file of a folder its curated map covers file by file only warn.
+A `Reserved:` line whose path classes leave out a named `agk.toml` warns as rule 4b. Files only.
 
 ## Plan names
 
