@@ -271,8 +271,8 @@ def test_req037_a_brief_without_its_class_line_is_filed_before_the_day_only(proj
 
     guard = guard_module(monkeypatch, project)
     no_class = "\n".join(x for x in BRIEF.splitlines() if not x.startswith("Class:")) + "\n"
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: None)
     assert guard.brief_checked(BRIEF) and guard.brief_checked(no_class)
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     assert guard.brief_checked(BRIEF) and not guard.brief_checked(no_class)
     assert not guard.brief_checked(BRIEF.replace("Contexts:", "Context:"))

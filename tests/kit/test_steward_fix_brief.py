@@ -591,11 +591,11 @@ def test_req037_brief_refusal_reads_the_study_in_every_mode(root, monkeypatch, s
     base, _, _, _ = root
     toml(base, settings)
     whole = BODY.replace("\nWho:", STUDY + "\nWho:")
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: None)
     warned: list[str] = []
     assert steward_owner.brief_refusal(base, NO_CLASS, 5, warned) is None
     assert any(x.startswith("warning: study: exactly one line Class:") for x in warned), warned
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     refusal = steward_owner.brief_refusal(base, NO_CLASS, 5)
     assert refusal is not None and "brief check" in refusal and "Class:" in refusal
     assert steward_owner.brief_refusal(base, whole, 5) is None
@@ -606,11 +606,11 @@ def test_req037_the_steward_prints_the_study_warnings_with_its_lines(root, monke
     import brief_study
 
     base, _, gh, _ = root
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: None)
     toml(base, SOLO + FIX_ON + '[personal]\nforge = "files"\n')
     code, lines = file(base, NO_CLASS, said="Yes, go ahead.")
     assert code == 0 and lines[0].startswith("personal mode:")
     assert lines[-1].startswith("warning: study:") and gh.calls == []
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     code, lines = file(base, NO_CLASS, said="Yes, go ahead.")
     assert code == 2 and "Class:" in lines[0]

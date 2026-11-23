@@ -458,12 +458,12 @@ def test_req037_publish_refuses_a_brief_without_class_once_the_day_is_past(
         requirements.write_text(requirements.read_text("utf-8") + "\n" + extra, "utf-8")
     path = root / "docs/plan/briefs/M1/B1.md"
     path.write_text(re.sub(r"(?m)^Class: .*\n", "", path.read_text("utf-8")), "utf-8")
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: None)
     code, out = publish(root, capsys, approved(), {"M1": 7} if not personal else None)
     assert code == 0, out
     assert "briefs B1: warning: study: exactly one line Class:" in out
     assert "briefs B0: warning: study: the Class line is the render's placeholder" in out
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     code, out = publish(root, capsys, approved(), {"M1": 7} if not personal else None)
     assert code == 1 and "rule 25: briefs B1: check_brief.py fails: study:" in out
     assert "Class:" in out and "nothing was printed to run and nothing was created" in out

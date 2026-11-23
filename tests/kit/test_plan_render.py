@@ -280,7 +280,7 @@ def test_req037_a_rendered_brief_carries_the_study_lines_and_passes_on_a_past_da
     import brief_study  # noqa: PLC0415
 
     assert render(repo, proposals(), capsys)[0] == 0
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     for path in sorted((repo / "docs/plan/briefs").rglob("*.md")):
         body = path.read_text(encoding="utf-8")
         for line in ("Impact:", "Wiring: none: ", "Prior: none: ", "Class: "):

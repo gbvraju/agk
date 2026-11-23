@@ -439,3 +439,30 @@ def test_1143_an_unreadable_list_of_pull_requests_fails_naming_the_rule(proj, st
     proc = push(proj, stub, tmp_path)
     assert proc.returncode == 1 and "rule 7" in proc.stdout
     assert started(stub) == []
+
+
+def test_ac5_the_red_brief_carries_class_and_prior_and_passes_the_study_day(tmp_path):
+    """REQ-039 AC5: brief #1815 answer 5 (held to Class and Prior; naming no ADR or spec id)."""
+    import brief_study
+    import route
+
+    body = route.red_body("proof", TIP, URL)
+    lines = body.splitlines()
+    prior = [x for x in lines if x.startswith("Prior: ")]
+    klass = [x for x in lines if x.startswith("Class: ")]
+    assert prior == [
+        "Prior: none: the router writes this brief from the failing check; the fix's own brief"
+        " searches the record"
+    ]
+    assert klass == [
+        "Class: a red default branch; seen 0 (counted by the fix's own brief, not by the router)"
+    ]
+    assert "ADR-" not in body and "SPEC-" not in body
+    root = tmp_path / "project"  # a project whose docs/ holds none of the kit's records
+    root.mkdir()
+    (root / "agk.toml").write_text('[flow]\nbrief_study_fails_from = "2000-01-01"\n', "utf-8")
+    assert brief_study.study_result(body, root, today="2000-01-02") == ([], [])
+    for key in ("Prior:", "Class:"):
+        cut = "".join(x + "\n" for x in lines if not x.startswith(key))
+        failed, _ = brief_study.study_result(cut, root, today="2000-01-02")
+        assert any(key in f for f in failed), failed
