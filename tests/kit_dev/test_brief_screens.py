@@ -256,6 +256,11 @@ def test_ac5_without_root_the_line_is_not_read(tmp_path):
 # --- the note: the conductor's guard files no UI brief without the line --------------------------
 
 
+def git_repo(root: Path) -> None:
+    for args in (("init", "-q"), ("remote", "add", "origin", "https://github.com/o/r.git")):
+        subprocess.run(["git", "-C", str(root), *args], check=True)  # nosec B603 B607 - fixed list
+
+
 def guard(project_dir: Path, body_file: Path, tmpdir: Path):
     command = (
         "gh api --method POST repos/o/r/issues -f 'title=Brief: x y'"
@@ -274,10 +279,7 @@ def guard(project_dir: Path, body_file: Path, tmpdir: Path):
 def test_ac5_the_conductor_guard_files_no_ui_brief_without_the_screens_line(tmp_path):
     """REQ-044 AC5: brief #460 note (`brief_checked` calls `screens_problems`)."""
     root = project(tmp_path)
-    (root / ".git").mkdir()
-    (root / ".git" / "config").write_text(
-        '[remote "origin"]\n\turl = https://github.com/o/r.git\n', encoding="utf-8"
-    )
+    git_repo(root)  # brief #1813: the guard runs the whole check, which lists the tree
     systmp = tmp_path / "systmp"
     (systmp / "agk-conductor-1").mkdir(parents=True)
     body = systmp / "agk-conductor-1" / "brief.md"

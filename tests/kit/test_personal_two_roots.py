@@ -82,6 +82,15 @@ Advances: {req}
 Size: S
 Touches: docs/requirements.md
 Contexts: personal (the sidecar); kit, github, local, stacks (not applicable: invented)
+Impact:
+Speed: none: one click
+Quality: the cart is emptied in one step
+GitHub: none: the files forge
+Cost: none: no Actions
+Tests: one test file
+Wiring: none: no code of the sidecar
+Prior: none: searched docs/adr and docs/specs of the sidecar
+Class: a missing cart action; seen 0 (searched the sidecar's briefs)
 """
 CHECKS = ("check_requirements", "check_specs", "check_adrs", "check_numbers")
 
@@ -253,6 +262,25 @@ def test_check_brief_passes_on_a_sidecar(tmp_path, make, req):  # REQ-048
     brief.write_text(BRIEF.format(req=req), encoding="utf-8")
     done = run_check(root, "check_brief", str(brief), "--root", ".")
     assert done.returncode == 0, done.stdout + done.stderr
+
+
+@pytest.mark.parametrize(
+    ("make", "req"), [(sidecar, "REQ-001"), (holding, "REQ-101")], ids=["fresh", "holding"]
+)
+def test_check_brief_passes_on_a_sidecar_with_the_study_day_past(
+    tmp_path, make, req, monkeypatch, capsys
+):  # REQ-048
+    """Brief #1813 answer 8: the sidecar's brief carries its study and passes from the day on."""
+    import brief_study  # noqa: PLC0415
+    import check_brief  # noqa: PLC0415
+
+    root = make(tmp_path / "state")
+    brief = tmp_path / "brief.md"
+    brief.write_text(BRIEF.format(req=req), encoding="utf-8")
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.chdir(root)
+    assert check_brief.main([str(brief), "--root", "."]) == 0, capsys.readouterr().out
+    assert "warning: study:" not in capsys.readouterr().out
 
 
 def test_a_done_requirement_needs_its_map_entry(tmp_path):  # REQ-048

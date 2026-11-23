@@ -1002,12 +1002,16 @@ def gate(root: Path) -> str | None:
     return None
 
 
-def brief_refusal(root: Path, body: str, number: int | None) -> str | None:
-    """The in-command checks: `check_brief.py --root` on the body, then the neutrality lists."""
+def brief_refusal(
+    root: Path, body: str, number: int | None, warned: list[str] | None = None
+) -> str | None:
+    """The in-command checks: `check_brief.py --root` on the body, its study included (brief
+    #1813), then the neutrality lists. Each study warning goes into WARNED as `warning: ...`."""
     import check_brief
     import steward_outbound
 
-    if problems := check_brief.body_problems(body, root, None, {"number": number}):
+    problems, warnings = check_brief.brief_result(body, root, None, {"number": number})
+    if problems:
         return f"refused: the body fails the brief check: {'; '.join(problems)} ({FIX_RULE})"
     lists = steward_outbound.tokens(root)
     if isinstance(lists, str):
@@ -1015,6 +1019,8 @@ def brief_refusal(root: Path, body: str, number: int | None) -> str | None:
     for setting, tokens in lists:
         if any(t in body.lower() for t in tokens):
             return f"refused: the body holds a token of {setting} (setting: {setting})"
+    if warned is not None:
+        warned += [f"warning: {w}" for w in warnings]
     return None
 
 
@@ -1054,12 +1060,13 @@ def fix_brief(root: Path, number: int, new_file: Path, seen: str) -> tuple[int, 
     if refusal := gate(root):
         return 2, [refusal]
     new = new_file.read_text(encoding="utf-8").replace("\r\n", "\n")
+    warned: list[str] = []  # brief #1813: the study's warnings, after the lines below
     settings = steward_settings(root)  # a malformed table is refused naming the setting
     if personal_table(root) is not None:
-        if refusal := brief_refusal(root, new, number):
+        if refusal := brief_refusal(root, new, number, warned):
             return 2, [refusal]
         return 0, ["personal mode: nothing is posted or patched; the developer applies this body:",
-                   *new.rstrip().splitlines()]  # fmt: skip
+                   *new.rstrip().splitlines(), *warned]  # fmt: skip
     if settings["fix_briefs"] is not True:
         return proposed(number, new, "steward.fix_briefs")
     if reviewers.solo_person(root) is None:
@@ -1081,7 +1088,7 @@ def fix_brief(root: Path, number: int, new_file: Path, seen: str) -> tuple[int, 
         return 0, [f"#{number}: nothing to change"]
     if any(x.strip() and not x.strip().startswith(MECHANICAL) for x in changed):
         return proposed(number, new, "a line that is not mechanical")
-    if refusal := brief_refusal(root, new, number):
+    if refusal := brief_refusal(root, new, number, warned):
         return 2, [refusal]
     saved = (f"Body fixed: #{number} by the steward, its mechanical lines only; the old body "
              f"follows, one copy restores it.\n\n{old.rstrip()}\n\n{STEWARD_WHO}\n")  # fmt: skip
@@ -1096,6 +1103,7 @@ def fix_brief(root: Path, number: int, new_file: Path, seen: str) -> tuple[int, 
         f"fixed #{number}: {len(changed)} lines",
         f"seen: {found.get('updated_at')}",
         *said,
+        *warned,
     ]
 
 
@@ -1194,10 +1202,12 @@ def file_brief(
                 "refused: the yes is too old or in the future (setting: [flow] owner_wait_minutes)"
             ]
         body = with_owner_said(body, at, words)
-    if refusal := brief_refusal(root, body, None):
+    warned: list[str] = []
+    if refusal := brief_refusal(root, body, None, warned):
         return 2, [refusal]
     if personal_table(root) is not None:
-        return 0, ["personal mode: nothing is posted; the developer files this brief:", *draft]
+        return 0, ["personal mode: nothing is posted; the developer files this brief:", *draft,
+                   *warned]  # fmt: skip
     if (held := duplicate(root, title, body)) is not None:
         return 2, [f"refused: #{held} is an open brief with this title or body; nothing filed"
                    " (setting: --title)"]  # fmt: skip
@@ -1214,7 +1224,7 @@ def file_brief(
     code, lines = steward.record(
         root, "Decision", f"#{made['number']} filed as a brief: {why}", steward.gh_api
     )
-    return code, [f"brief filed: #{made['number']} ({session.LABEL})", *lines]
+    return code, [f"brief filed: #{made['number']} ({session.LABEL})", *lines, *warned]
 
 
 # --- brief #1757 (ADR-0735, amendment 218): the work type named in discovery, on the owner's yes

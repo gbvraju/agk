@@ -271,3 +271,23 @@ def test_ac2_rule_7_render_needs_the_proposals_option(capsys) -> None:
     """REQ-050 AC2: rule 7, the usage line names the command."""
     assert plan_intake.main(["render"]) == 2
     assert "render --proposals FILE" in capsys.readouterr().err
+
+
+def test_req037_a_rendered_brief_carries_the_study_lines_and_passes_on_a_past_day(
+    repo: Path, capsys, monkeypatch
+) -> None:
+    """REQ-037 AC4: brief #1813 answers 2 and 3 (placeholders warned, never failed)."""
+    import brief_study  # noqa: PLC0415
+
+    assert render(repo, proposals(), capsys)[0] == 0
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    for path in sorted((repo / "docs/plan/briefs").rglob("*.md")):
+        body = path.read_text(encoding="utf-8")
+        for line in ("Impact:", "Wiring: none: ", "Prior: none: ", "Class: "):
+            assert f"\n{line}" in body, line
+        body = re.sub(r"(?m)^Advances: .*$", "Advances: REQ-101", body)
+        path.write_text(re.sub(r"(?m)^Depends-on: .*$", "Depends-on: #12", body), "utf-8")
+        assert check_brief.main([str(path), "--root", str(repo)]) == 0
+        out = capsys.readouterr().out
+        assert "warning: study: the Class line is the render's placeholder" in out, out
+        assert "ok brief" in out

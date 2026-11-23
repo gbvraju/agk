@@ -555,3 +555,27 @@ def test_prepush_runs_the_whole_tests_through_their_area(repo, outside):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert ran(outside) == ["kit tests/billing/test_pay.py tests/test_a.py"]
     assert "listed in testing.whole_tests" in proc.stdout
+
+
+# Brief #1812 (ADR-0755): prepush prints the retired key's line once and keeps it in the record.
+RETIRED = "deprecated: testing.every_script_tests (ADR-0755)"
+
+
+def test_the_retired_key_line_is_printed_and_in_the_records_notes(repo, outside):
+    """REQ-062: brief #1812 answer 3 (prepush's line, in the record's `notes`)."""
+    every = 'every_script_tests = ["tests/billing/test_pay.py"]\n'
+    project(repo, toml(outside, testing='profile = "balanced"\n' + MAP + every))
+    record = outside / "record.json"
+    proc = prepush(repo, outside, "--record", str(record))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert [line for line in proc.stdout.splitlines() if RETIRED in line] != []
+    notes = json.loads(record.read_text(encoding="utf-8"))["notes"]
+    assert sum(RETIRED in note for note in notes) == 1
+
+
+def test_without_the_retired_key_prepush_prints_no_such_line(repo, outside):
+    """REQ-062: brief #1812 answer 5 (absent: nothing changes)."""
+    project(repo, toml(outside))
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "every_script_tests" not in proc.stdout
