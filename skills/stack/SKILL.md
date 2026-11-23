@@ -66,7 +66,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
 ```
 
    then run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`). Both must pass.
-4. Then say what the check cannot check: that the options are the right ones and that the trade-offs are true. Each practice marked
+4. Then say what the check cannot check: that the options are the right ones and that the trade-offs are true. Say each `note:`
+   line `stack-check` printed: a part whose licence is not on the project's allowed list (`config/licences.toml`, else the
+   kit's default list) is chosen only with a project ADR that widens that list, the one way for any tool's licence (the
+   `licences` step fails on it after the lock otherwise), and an option that `cannot be accepted` names the refusal
+   `stack-accept` would give, to be fixed in the record first. Each practice marked
    `check` is added as a governance step by the build that adopts the stack, not by this command. Then say how an option is
    accepted, once this Proposed ADR is merged: by one ordinary commit, in its own pull request, that sets `Status: Accepted` and
    `Chosen: Option <X> — <one-line reason>` together (the line reads `3. **Chosen**: Option <X> — <one-line reason>`), and nothing
