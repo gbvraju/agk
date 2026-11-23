@@ -32,15 +32,15 @@ REPORT = [
     {"RuleID": "aws-access-token", "File": "config/old/keys.py"},
     {"RuleID": "generic-api-key", "File": "setup.cfg"},
 ]
-for _row in REPORT:
-    _row.update(
-        Secret="MARKER-SECRET-0001",
-        Match="key = MARKER-MATCH",
-        Message="MARKER-MESSAGE add key",
-        Author="MARKER-AUTHOR",
-        Email="marker@example.com",
-        Commit="0123456789abcdef0123456789abcdef01234567",
-    )
+MARKED = {
+    "Secret": MARKERS[0],
+    "Match": "key = MARKER-MATCH",
+    "Message": "MARKER-MESSAGE add key",
+    "Author": "MARKER-AUTHOR",
+    "Email": "marker@example.com",
+    "Commit": "0123456789abcdef0123456789abcdef01234567",
+}
+REPORT = [{**row, **MARKED} for row in REPORT]
 STUB = """#!{python}
 import json, os, sys, time
 args = sys.argv[1:]
@@ -142,7 +142,10 @@ def test_req063_findings_name_rule_and_class_with_the_runbook_never_a_value(tmp_
         "commits", "findings", "head", "note", "outcome", "reason", "scanned", "tool"
     ]  # fmt: skip
     assert saved["outcome"] == "findings" and saved["commits"] == 1
-    assert saved["tool"] == "gitleaks 8.30.1" and saved["head"] == git(root, "rev-parse", "HEAD").strip()
+    assert (
+        saved["tool"] == "gitleaks 8.30.1"
+        and saved["head"] == git(root, "rev-parse", "HEAD").strip()
+    )
     assert saved["findings"] == [
         {"class": "config/", "count": 2, "rule": "aws-access-token"},
         {"class": "(repository root)", "count": 1, "rule": "generic-api-key"},
@@ -324,11 +327,13 @@ def gitleaks_calls() -> set[tuple[str, str]]:
             if not isinstance(fn, ast.FunctionDef):
                 continue
             for node in ast.walk(fn):
-                if isinstance(node, ast.List) and any(
-                    isinstance(e, ast.Constant) and e.value in ("git", "version")
-                    for e in node.elts
-                ) and any(
-                    isinstance(e, ast.Name) and e.id in ("tool", "exe") for e in node.elts
+                if (
+                    isinstance(node, ast.List)
+                    and any(
+                        isinstance(e, ast.Constant) and e.value in ("git", "version")
+                        for e in node.elts
+                    )
+                    and any(isinstance(e, ast.Name) and e.id in ("tool", "exe") for e in node.elts)
                 ):
                     found.add((path.relative_to(SCRIPTS).as_posix(), fn.name))
     return found

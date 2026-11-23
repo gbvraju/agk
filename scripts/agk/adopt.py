@@ -361,7 +361,9 @@ def history_line(clean: bool, dry_run: bool) -> str:
     if dry_run:
         return "history scan: not run (dry run)"
     kit = '"${CLAUDE_PLUGIN_ROOT}/scripts/agk"' if clean else "scripts/agk"
-    return f"next: scan the whole history once for secrets: python3 {kit}/history_scan.py run --write"
+    return (
+        f"next: scan the whole history once for secrets: python3 {kit}/history_scan.py run --write"
+    )
 
 
 if __name__ == "__main__":

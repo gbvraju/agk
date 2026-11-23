@@ -146,7 +146,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
     """REQ-014 AC2: rule 19 (the issue skill runs the user's own `gh`, no script)."""
     expected = {
         "init": {"init"},
-        "adopt": {"adopt"},
+        "adopt": {"adopt", "history_scan"},  # the one whole-history scan, brief #1835
         "doctor": {"doctor"},
         "upgrade": {"upgrade", "kit_root"},  # the resolver's gate, brief #1759
         "uninstall": {"uninstall"},

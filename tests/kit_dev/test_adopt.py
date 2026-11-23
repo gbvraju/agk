@@ -790,7 +790,9 @@ def test_req051_an_adopted_project_keeps_its_stamped_values(tmp_path):
 
 # --- The one whole-history secret scan (brief #1835, ADR-0764) ---------------------------------
 
-HISTORY_NEXT = "next: scan the whole history once for secrets: python3 {kit}/history_scan.py run --write"
+HISTORY_NEXT = (
+    "next: scan the whole history once for secrets: python3 {kit}/history_scan.py run --write"
+)
 
 
 @pytest.mark.parametrize(
