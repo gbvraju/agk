@@ -167,7 +167,7 @@ def test_ac4_a_placeholder_warns_on_any_day_and_never_fails(repo, monkeypatch):
     """REQ-037 AC4: brief #1813 answer 3 (a placeholder is never taken for a study)."""
     (body,) = rendered(repo)
     for day in (None, PAST, "2999-01-01"):
-        monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: day)
+        monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root, day=day: day)
         failures, warnings = brief_study.study_result(body, repo)
         assert failures == []
         assert "study: the Class line is the render's placeholder" in warnings

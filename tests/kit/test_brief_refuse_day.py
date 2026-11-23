@@ -1,9 +1,10 @@
-"""A brief filed from a day set in agk.toml without its study lines is refused (brief #1815, ADR-0757).
+"""A brief filed from a day set in agk.toml without its study is refused (brief #1815, ADR-0757).
 
-`[flow] brief_study_fails_from` is the one switch: unset, the study lines warn; a day, a brief filed on or after
-it (the issue's `created_at`, else the caller's `today`) fails them in `check_brief.py` and is MALFORMED in the
-plan's `session.brief_shape`. No date is written in `brief_study.py` or `check_brief.py`, and neither reads the
-live clock, so no check or test changes on a calendar day. Invented data only (example.com); no network. REQ-037.
+`[flow] brief_study_fails_from` is the one switch: unset, the study lines warn; a day, a brief
+filed on or after it (the issue's `created_at`, else the caller's `today`) fails them in
+`check_brief.py` and is MALFORMED in the plan's `session.brief_shape`. No date is written in
+`brief_study.py` or `check_brief.py`, and neither reads the live clock, so no check or test
+changes on a calendar day. Invented data only (example.com); no network. REQ-037.
 """
 
 from __future__ import annotations
@@ -25,10 +26,11 @@ sys.path.insert(0, str(SCRIPTS))
 
 import brief_study  # noqa: E402
 import check_brief  # noqa: E402
-import config  # noqa: E402
 import forge  # noqa: E402
 import session  # noqa: E402
 from test_check_brief_study import CLASS, PRIOR, SHAPE, STUDIED, tree  # noqa: E402
+
+import config  # noqa: E402
 
 REFUSED = "rule 4: the setting is refused (setting: flow.brief_study_fails_from)"
 DAY = "2026-12-14"
@@ -57,7 +59,7 @@ def event(body: str, created: object = None, action: str = "opened") -> dict:
     return {"action": action, "issue": issue}
 
 
-# --- answer 1: the setting -----------------------------------------------------------------------
+# --- answer 1: the setting ------------------------------------------------------------------------
 
 
 def test_ac4_unset_is_none_and_the_key_is_known(tmp_path):
@@ -110,7 +112,7 @@ def test_ac4_enforced_compares_the_filed_day_else_today(tmp_path):
     assert not brief_study.enforced(rooted(tmp_path / "unset", None), "2999-01-01")
 
 
-# --- answer 3: the brief check ----------------------------------------------------------------------
+# --- answer 3: the brief check --------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(("today", "fails"), [(BEFORE, False), (DAY, True), (AFTER, True)])
@@ -177,7 +179,7 @@ def test_ac4_prior_leaves_out_stays_a_warning_on_every_day(tmp_path):
     assert failures == [] and any("Prior leaves out ADR-0001" in w for w in warnings)
 
 
-# --- answer 4: the plan stops handing it out -------------------------------------------------------
+# --- answer 4: the plan stops handing it out ------------------------------------------------------
 
 
 def test_ac4_brief_shape_refuses_a_brief_filed_from_the_day(tmp_path):
@@ -216,7 +218,7 @@ def test_ac4_what_if_is_judged_by_today(tmp_path, monkeypatch):
     assert session.brief_shape(root, "example/agk")(SHAPE) == []
 
 
-# --- answer 5: the router's red-branch brief is held to Class and Prior -----------------------------
+# --- answer 5: the router's red-branch brief is held to Class and Prior ---------------------------
 
 
 def test_ac4_a_priority_0_brief_is_held_to_class_and_prior_only(tmp_path):
@@ -235,7 +237,7 @@ def test_ac4_a_priority_0_brief_is_held_to_class_and_prior_only(tmp_path):
     assert brief_study.study_result(zero, root, today=AFTER) == ([], [])
 
 
-# --- answer 7: personal mode -------------------------------------------------------------------------
+# --- answer 7: personal mode ----------------------------------------------------------------------
 
 
 def test_ac4_a_sidecar_reads_its_own_day_and_the_files_forge_created_at(tmp_path):
@@ -252,7 +254,7 @@ def test_ac4_a_sidecar_reads_its_own_day_and_the_files_forge_created_at(tmp_path
         assert got["action"] == verdict, got
 
 
-# --- answer 9: the class stays closed -----------------------------------------------------------------
+# --- answer 9: the class stays closed -------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", ["brief_study.py", "check_brief.py"])
