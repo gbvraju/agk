@@ -487,10 +487,14 @@ def stand_in_gh(outside: Path, issues: list[dict]) -> Path:
 def test_local_full_ci_without_a_proof_workflow_runs_the_full_suite_here(repo, outside):
     """REQ-062: brief #1796 answer 5 (no `.github/workflows/proof.yml`: no CI proof job)."""
     wide_project(repo, toml(outside, testing=CI + SHARED), workflow=False)
-    proc = prepush(repo, outside)
+    record = outside / "record.json"
+    proc = prepush(repo, outside, "--record", str(record))
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert ran(outside) == ["full"]
     assert RUNS_HERE in proc.stdout and "left to CI" not in proc.stdout
+    data = json.loads(record.read_text(encoding="utf-8"))
+    entry = next(s for s in data["steps"] if s["name"] == "tests")
+    assert [r["set"] for r in entry["runs"]] == ["regression"]
 
 
 @pytest.mark.parametrize(
