@@ -10,29 +10,28 @@ a denial prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissi
 "permissionDecisionReason": ...}} and exits 0; an allow prints nothing.
 
 Denies: a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:`,
-`Correction:` or `Merge:`, zero-width characters read as nothing (brief #1732, ADR-0727),
-except, in solo mode with one person listed, an `Approve:` or
-`Confirmed:` body read from a file that closes with the `Owner said`, `Asked` and `Who:
-ProductOwner` lines of `steward_owner.py approve` (SPEC-0062 rule 13, brief #1691, ADR-0704; never
-with `AGK_STEWARD_START=conductor`); a `Maintainer answer:` whose second line is not `Owner said
-(<UTC time>): "…"`; a merge, `merge_cleared.py`, auto-merge, a push to the default branch, a force
-push, a tag (any refspec form, `--follow-tags`, a push setting, a `git config` or `-c` that writes
-one, an alias and `update-ref`, read with the local `for-each-ref` and `config`; a push it cannot
-judge fails closed; brief #1834, ADR-0763); a change to a file under `.github/`, the ruleset, a required check or a secret; an
-issue creation whose `Priority:` is above `[steward] auto_file` with no `Owner said` line; any label
-write other than `agk:parked` and `agk-steward`, and `agk-kit-defect` on a new issue (brief #1411,
-ADR-0594), so `agk-brief` only through `steward_owner.py file-brief`; an issue body edit unless
-`[steward] fix_briefs = true` (brief #1715, ADR-0714); a comment or issue body it cannot read
-(fail closed); a GraphQL call (`CLAUDE.md item 10`); a post to the kit repository from another
-project whose title or body the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6,
-ADR-0561) matches or cannot check; in a clean project
-(`[kit] layout = "plugin"`), a write of a path the plugin's kit manifest lists into the product, by
-a write tool or a Bash command that is not a read (SPEC-0071 rule 7, brief #1458, ADR-0616), any
-write under a kit-only folder of its `snapshot`, and a recursive copy or an unpack into a folder
-that is, lies under or holds one (brief #1752, ADR-0732; a manifest that cannot be read or has no
-`snapshot` denies the write tools and a recursive copy into the project). Each denial names the rule
-and the setting or path class, never the value. It reads the command, the files a body names,
-`agk.toml` and the plugin's kit manifest; no network, nothing stored.
+`Correction:` or `Merge:`, zero-width characters read as nothing (brief #1732, ADR-0727), except, in
+solo mode with one person listed, an `Approve:` or `Confirmed:` body read from a file that closes
+with the `Owner said`, `Asked` and `Who: ProductOwner` lines of `steward_owner.py approve`
+(SPEC-0062 rule 13, brief #1691, ADR-0704; never with `AGK_STEWARD_START=conductor`); a `Maintainer
+answer:` whose second line is not `Owner said (<UTC time>): "…"`; a merge, `merge_cleared.py`,
+auto-merge, a push to the default branch, a force push, a tag (any refspec form, `--follow-tags`, a
+push setting, a `git config` or `-c` that writes one, an alias and `update-ref`, read with the local
+`for-each-ref` and `config`; a push it cannot judge fails closed; brief #1834, ADR-0763); a change
+to a file under `.github/`, the ruleset, a required check or a secret; an issue creation whose
+`Priority:` is above `[steward] auto_file` with no `Owner said` line; any label write other than
+`agk:parked` and `agk-steward`, and `agk-kit-defect` on a new issue (brief #1411, ADR-0594), so
+`agk-brief` only through `steward_owner.py file-brief`; an issue body edit unless `[steward]
+fix_briefs = true` (brief #1715, ADR-0714); a comment or issue body it cannot read (fail closed); a
+GraphQL call (`CLAUDE.md item 10`); a post to the kit repository from another project whose title or
+body the outbound data guard (`scripts/agk/steward_outbound.py`, rule 6, ADR-0561) matches or cannot
+check; in a clean project (`[kit] layout = "plugin"`), a write of a path the plugin's kit manifest
+lists into the product, by a write tool or a Bash command that is not a read (SPEC-0071 rule 7,
+brief #1458, ADR-0616), any write under a kit-only folder of its `snapshot`, and a recursive copy or
+an unpack into a folder that is, lies under or holds one (brief #1752, ADR-0732; a manifest that
+cannot be read or has no `snapshot` denies the write tools and a recursive copy into the project).
+Each denial names the rule and the setting or path class, never the value. It reads the command, the
+files a body names, `agk.toml` and the plugin's kit manifest; no network, nothing stored.
 """
 
 from __future__ import annotations
