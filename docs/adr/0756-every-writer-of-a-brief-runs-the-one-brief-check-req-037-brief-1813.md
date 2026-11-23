@@ -7,7 +7,7 @@
   and 25, amendment 169, SPEC-0059 rules 6, 7 and 12, ADR-0714, plan #661
 - Requirements: REQ-037
 
-Protected classes: `scripts/agk/`, `.claude/`, `kit/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `.claude/`, `kit/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -49,7 +49,8 @@ study refuse day".
 Path classes changed: `scripts/agk/` (`check_brief.py`, `brief_study.py`, `plan_intake.py`, `steward_owner.py`,
 `steward_evidence.py`), `.claude/` (`hooks/conductor_guard.py`), `kit/` (`kit/hashes.json`, regenerated), `tests/kit/`
 (the new test file, the study lines in the writers' fixtures and the guard's fixture as a real git repository, now
-that the guard lists the tree).
+that the guard lists the tree) and `tests/kit_dev/` (the screens test's guard fixture, a real git repository for the
+same reason; ruled on PR #1817).
 
 ## Consequences
 
