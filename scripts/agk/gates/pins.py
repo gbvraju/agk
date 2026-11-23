@@ -43,6 +43,15 @@ STACKS = {
     "python": ("python-pyproject", "pyproject.toml", "requirements.lock", "requirements"),
     "node": ("node", "package.json", "package-lock.json", "npm"),
 }
+# brief #1843 (ADR-0771): the one table of a runtime's common spellings, case-folded -> its key.
+RUNTIME_NAMES = {
+    "node": "node",
+    "node.js": "node",
+    "nodejs": "node",
+    "python": "python",
+    "python3": "python",
+    "cpython": "python",
+}
 RECORD = re.compile(r"^docs/adr/\d{4}-stack-options\.md$")
 OPTION = re.compile(r"^\s*-\s+Option ([A-Z]) — (.+)$")
 CHOSEN = re.compile(r"(?m)^\s*3\.\s+\*\*Chosen\*\*:\s+Option ([A-Z])\b")
@@ -85,7 +94,8 @@ def line(rule: str, cls: str) -> str:
 def option_parts(body: str) -> list[tuple[str, str, str]] | None:
     """Brief #1592 answer 1: an option's parts as (name, version, licence), None with no `Parts:`.
     A missing version or licence is ''; `(verify)` marks are dropped (versions read that day).
-    A name that is a `STACKS` key but for case is that key (`Node` -> `node`, brief #1778)."""
+    A name of `RUNTIME_NAMES` but for case is its `STACKS` key (`Node.js` -> `node`, briefs #1778
+    and #1843); every other name is kept as written."""
     _, key, tail = body.partition(PARTS_KEY)
     if not key:
         return None
@@ -94,7 +104,7 @@ def option_parts(body: str) -> list[tuple[str, str, str]] | None:
     for raw in tail.replace(VERIFY, " ").strip(" .;").split(","):
         words = raw.split()
         if words:
-            name = words[0].lower() if words[0].lower() in STACKS else words[0]
+            name = RUNTIME_NAMES.get(words[0].casefold(), words[0])
             out.append((name, words[1] if len(words) > 1 else "", " ".join(words[2:])))
     return out
 

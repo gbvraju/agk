@@ -53,6 +53,11 @@ ADR-0757): an event by the issue's `created_at`, a saved file by today's UTC dat
 `common.utc_day`.
 Brief #1813 (ADR-0756): `brief_result` is that whole reading, the one that `plan_intake.py
 publish`, the steward's filing, fixing and triage and the conductor's guard call too.
+Brief #1856 (ADR-0774, rule 4c): with a `[testing]` table, a brief whose `Touches:` does not name
+`agk.toml` is warned for a new kit script no map entry or `always_full` covers and for a stated
+whole test (failures from `[flow] brief_study_fails_from`), and for a closed-class test, a test
+outside the map entry of a touched code path and a project's file-by-file mapped folder (warnings
+only); a Reserved line whose path classes leave out a named `agk.toml` warns (rule 4b).
 
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
@@ -74,13 +79,24 @@ import brief_study
 import design_signoff
 import plan_names
 import playbook_format
-from common import REQ_HEADER, CheckError, config_source, run, utc_day, utf8_output
+from common import (
+    REQ_HEADER,
+    CheckError,
+    config_source,
+    load_config,
+    run,
+    utc_day,
+    utf8_output,
+)
 from gates.layers import architecture
-from impact import matches
+from impact import is_test_file, matches, testing_table
 from session import (
+    ADDS,
+    TOUCHES,
     advances_ids,
     brief_problems,
     contexts_line_problems,
+    line_entries,
     plan_issue_set,
     touches_of,
     wave_of,
@@ -288,6 +304,101 @@ def protected_warnings(body: str, root: Path | None) -> list[str]:
     return [WARN_4B.format(", ".join(named))] if named else []
 
 
+KIT_MAKE = "kit/agk-kit.mk"  # only the kit has it, as `check_kit_tests.KIT_MAKE` reads
+KIT_SCRIPT = "scripts/agk/*.py"  # one level, as the kit's coverage test globs
+NEW_FILE = (
+    "rule 4c: Adds names a new {} of the class {} that no [[testing.map]] entry or always_full "
+    "covers, and Touches does not name agk.toml (setting: testing.map)"
+)
+WHOLE = (
+    "rule 4c: line {} adds a whole test and Touches does not name agk.toml "
+    "(setting: testing.whole_tests)"
+)
+CLOSED = (
+    "rule 4c: an Adds test file of the class {} stands beside an answer **The class stays "
+    "closed.**; a whole test joins testing.whole_tests in agk.toml, which Touches does not name"
+)
+JOINS = (
+    "rule 4c: a test file of the class {} is not among the tests of the [[testing.map]] entry of a "
+    "code path Touches names; a test that names that code joins the entry in agk.toml, which "
+    "Touches does not name (setting: testing.map)"
+)
+WHOLE_SAID = re.compile(r"whole_tests|whole test", re.I)
+CLASSES_LINE = re.compile(r"names the path class(es)?\b")
+WARN_4B_TOML = "rule 4b: Touches names agk.toml and the Reserved line's path classes leave it out"
+
+
+def _folder(path: str) -> str:
+    return path.rsplit("/", 1)[0] + "/" if "/" in path else ""
+
+
+def _sibling_mapped(root: Path, path: str, codes: list[str]) -> bool:
+    """Answer 4 (brief #1856): another file of PATH's folder in the tree is a map entry's code."""
+    folder = _folder(path)
+    found = root / folder if folder else None
+    if found is None or not found.is_dir():
+        return False
+    others = (f"{folder}{x.name}" for x in found.iterdir() if x.is_file())
+    return any(o != path and any(matches(o, c) for c in codes) for o in others)
+
+
+def reserved_warnings(body: str, root: Path, touches: list[str]) -> list[str]:
+    """Answer 5 (brief #1856): Touches names agk.toml, a protected class, and the Reserved line's
+    path classes leave it out."""
+    lines = [x for x in body.splitlines() if x.startswith("Reserved:") and CLASSES_LINE.search(x)]
+    named = any(matches("agk.toml", t) for t in touches)
+    if not named or "agk.toml" not in protected_classes(root):
+        return []
+    return [WARN_4B_TOML] if lines and "agk.toml" not in lines[0] else []
+
+
+def testing_problems(
+    body: str, root: Path, today: str | None, filed: object = None
+) -> tuple[list[str], list[str]]:
+    """Rule 4c (brief #1856, ADR-0774), (failures, warnings): a new kit script no map entry or
+    `always_full` covers (answer 1) and a stated whole test (answer 2) fail from `[flow]
+    brief_study_fails_from` and warn before it; a closed-class test (answer 2), a test outside the
+    touched entry (answer 3) and a project's mapped folder (answer 4) only warn. Each needs a
+    `[testing]` table and a Touches line that does not name agk.toml."""
+    touches = [t for t in line_entries(body, TOUCHES) if t]
+    table = testing_table(root)
+    if table is None or any(matches("agk.toml", t) for t in touches):
+        return [], reserved_warnings(body, root, touches)
+    adds = [a for a in line_entries(body, ADDS) if a]
+    codes = [e["code"] for e in table["map"]]
+    covered = codes + table["always_full"]
+    cfg = load_config(root)
+    tests = [p for p in adds + touches if is_test_file(p, cfg["test_dirs"], cfg["test_patterns"])]
+    lines = body.splitlines()
+    fails, warns = [], []
+    new = [a for a in adds if a not in tests and not any(matches(a, g) for g in covered)]
+    if (root / KIT_MAKE).is_file():
+        if any(matches(a, KIT_SCRIPT) for a in new):
+            fails.append(NEW_FILE.format("script", "scripts/agk/"))
+    elif table["profile"] != "thorough" and table.get("map_source", "curated") == "curated":
+        folders = dict.fromkeys(_folder(a) for a in new if _sibling_mapped(root, a, codes))
+        warns += [NEW_FILE.format("file", f) for f in folders]
+    added = [t for t in tests if t in adds]
+    if table.get("whole_tests") and added:
+        said = [
+            n for n, x in enumerate(lines, 1)
+            if WHOLE_SAID.search(x) and any(t in x or t.rsplit("/", 1)[-1] in x for t in added)
+        ]  # fmt: skip
+        fails += [WHOLE.format(n) for n in said]
+        if not said and any(brief_study.CLOSED_ITEM.match(x) for x in lines):
+            warns += [CLOSED.format(f) for f in dict.fromkeys(_folder(t) for t in added)]
+    entries = [
+        e for e in table["map"]
+        if any(matches(t, e["code"]) or matches(e["code"], t) for t in touches if t not in tests)
+    ]  # fmt: skip
+    outside = [t for t in tests if not any(matches(t, g) for e in entries for g in e["tests"])]
+    if entries and outside:
+        warns.append(JOINS.format(", ".join(dict.fromkeys(_folder(t) for t in outside))))
+    if not brief_study.enforced(root, today, filed):
+        fails, warns = [], fails + warns
+    return fails, warns
+
+
 def duplicate_problems(body: str) -> list[str]:
     """Answer 7 of brief #1425: two lines of one key, naming both and the merged line to use."""
     out = []
@@ -378,7 +489,12 @@ def brief_result(
     )
     if problems:
         return problems, []
-    return [], protected_warnings(body, root) + study
+    if root is None:
+        return [], study
+    fails, testing = testing_problems(body, root, today or utc_day(), filed)  # brief #1856
+    if fails:
+        return fails, []
+    return [], protected_warnings(body, root) + testing + study
 
 
 def check(

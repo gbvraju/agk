@@ -1,0 +1,1 @@
+- The brief check now warns a brief whose build needs an `agk.toml` change (a new kit script without a testing map entry, a whole test, a test that joins a map entry) but whose `Touches:` line leaves `agk.toml` out, and refuses the first two from the brief study's refuse day (brief #1856, ADR-0774)
