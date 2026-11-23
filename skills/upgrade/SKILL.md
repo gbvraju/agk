@@ -43,11 +43,12 @@ the whole run and nothing is written; user-owned files are never rewritten.
 
    Show the printed lines. Edit no protected path yourself and never set the ADR `Accepted`.
 
-4. Run the local gate in the target and show its result; on a failure stop and show it:
+4. Run the local gate in the target and show its result; on a failure stop and show it (the target is an
+   installed project, where the resolver's `governance` runs `make -f agk.mk agk-governance`):
 
    ```
    make lint
-   make governance
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance
    ```
 
 5. Print the commit message and the pull request body. Add `--brief <n>` when the work answers a brief, or

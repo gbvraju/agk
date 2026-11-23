@@ -65,7 +65,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
 ```
 
-   then run `make governance`. Both must pass.
+   then run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`). Both must pass.
 4. Then say what the check cannot check: that the options are the right ones and that the trade-offs are true. Each practice marked
    `check` is added as a governance step by the build that adopts the stack, not by this command. Then say how an option is
    accepted, once this Proposed ADR is merged: by one ordinary commit, in its own pull request, that sets `Status: Accepted` and
@@ -93,8 +93,9 @@ Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). From
 only two lines of that file in one ordinary commit: "- Status: Proposed" becomes "- Status: Accepted", and "3. **Chosen**: none
 yet" becomes "3. **Chosen**: Option <X> — <one-line reason>". Then, in a second ordinary commit, copy the [testing] values
 that the ADR's test selection practice gives for option <X> into the [testing] table of agk.toml. Run engines.py stack-check
-and make governance; both must pass. Then run engines.py stack-next-steps and open one pull request with the body it prints,
-unchanged. Neither commit is a Final commit, and they change nothing else.
+and `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs
+`make -f agk.mk agk-governance`); both must pass. Then run engines.py stack-next-steps and open one pull request with the
+body it prints, unchanged. Neither commit is a Final commit, and they change nothing else.
 ```
 
    The body of its pull request is never written by hand: after the accepting commit, the session runs

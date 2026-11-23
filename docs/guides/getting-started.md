@@ -4,6 +4,10 @@ From an empty GitHub repository to your first governed merge. You work alone, wi
 Each step gives the command and what you should see. If what you see is different, stop and open an
 [I got stuck issue](../../.github/ISSUE_TEMPLATE/stuck.md) with the step number.
 
+This guide describes an installed project (`[kit] layout = "installed"`, the kit's files in the repository), so its
+steps run the make targets of the project's own `Makefile`. In a clean project (`[kit] layout = "plugin"`) the same gate
+is `python3 <plugin>/scripts/agk/kit_root.py governance` (`<plugin>` the plugin's folder) wherever a step says `make governance`.
+
 Read [the limits](../../README.md#honest-limits) first. Two steps below are not yet proven live; they are marked **(not yet
 proven live)**. The rest was run and recorded in `docs/runs/`; the link is next to each step.
 
