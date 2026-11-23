@@ -434,3 +434,36 @@ def test_1195_e_the_persona_from_the_requirements_file_and_none_when_unknown(
     assert code == 0, out
     for command in commands(out):
         assert re.findall(r"(?m)^Persona: .*$", field(command, "body")) == ["Persona: P2 Buyer"]
+
+
+# --- brief #1813 (ADR-0756): publish runs the whole brief check, its study included --------------
+
+
+@pytest.mark.parametrize("personal", [False, True], ids=["github", "files forge"])
+def test_req037_publish_refuses_a_brief_without_class_once_the_day_is_past(
+    plan: Path, tmp_path: Path, capsys, monkeypatch, personal: bool
+) -> None:
+    """REQ-037 AC4: brief #1813 answers 1, 2 and 8 (warned before the day, refused from it)."""
+    import brief_study  # noqa: PLC0415
+
+    root = plan
+    if personal:
+        root = tmp_path / "sidecar"
+        ps.make_sidecar(root, OWNER)
+        for rel in ("scripts/agk/guard.py", ".claude/hooks/data_guard.py"):
+            write(root, rel, "# placeholder\n")
+        shutil.copytree(plan / "docs/plan", root / "docs/plan")
+        requirements = root / "docs/requirements.md"
+        extra = (plan / "docs/requirements.md").read_text(encoding="utf-8").split("\n", 2)[2]
+        requirements.write_text(requirements.read_text("utf-8") + "\n" + extra, "utf-8")
+    path = root / "docs/plan/briefs/M1/B1.md"
+    path.write_text(re.sub(r"(?m)^Class: .*\n", "", path.read_text("utf-8")), "utf-8")
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    code, out = publish(root, capsys, approved(), {"M1": 7} if not personal else None)
+    assert code == 0, out
+    assert "briefs B1: warning: study: exactly one line Class:" in out
+    assert "briefs B0: warning: study: the Class line is the render's placeholder" in out
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    code, out = publish(root, capsys, approved(), {"M1": 7} if not personal else None)
+    assert code == 1 and "rule 25: briefs B1: check_brief.py fails: study:" in out
+    assert "Class:" in out and "nothing was printed to run and nothing was created" in out

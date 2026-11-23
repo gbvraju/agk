@@ -23,7 +23,9 @@ functions (a `def`, a `class` or a top-level name) exist under the root, or `Wir
 searched>`; and one `Class: <kind>; seen <n> ...` line, where `seen` above 0 needs an answer item
 headed `**The class stays closed.**`. Until `STUDY_FAILS_FROM` (none set: Q-1800-1) they are
 warnings, from it failures; a `Priority: 0` brief is held only to `Class:` and `Prior:`, and the
-router's own red-branch brief to none. An Accepted ADR or an open brief the study finds and
+router's own red-branch brief to none. A study line that holds the render's placeholder
+`(verify) for the person to state` is warned on any day and never failed (brief #1813, ADR-0756).
+An Accepted ADR or an open brief the study finds and
 `Prior:` leaves out is always a warning. Reads files and the cache only: no network, no model.
 """
 
@@ -52,6 +54,9 @@ NOT_CODE = ("tests/", "docs/", "changelog.d/")
 SHARED = ("agk.toml", "kit/hashes.json")  # nearly every change touches them: no search term
 WIRING_ENTRY = re.compile(r"\s*(\S+):([A-Za-z_]\w*)\s+called by\s+\S.*")
 CLASS_LINE = re.compile(r"Class: \S.*?; seen (\d+)\b.*")
+# Brief #1813 answer 3: the text `plan_intake.py render` leaves for the person on each study line.
+PLACEHOLDER = "(verify) for the person to state"
+STUDY_NAMES = (*IMPACT_NAMES, "Wiring", "Prior", "Class")
 CLOSED_ITEM = re.compile(r"\d+\.\s+\*\*The class stays closed\.\*\*")
 REFS = (
     (re.compile(r"\bADR-(\d{4})\b"), "docs/adr", "{}-*.md", "ADR-{}"),
@@ -235,6 +240,16 @@ def candidates(body: str, root: Path, briefs: list[dict] | None, number: int | N
     return found
 
 
+def placeholder_warnings(lines: list[str]) -> list[str]:
+    """Answer 3 of brief #1813: a study line that still holds the render's placeholder is warned
+    on any day, naming the line, and never failed: it is a line left to fill, not a study."""
+    return [
+        f"study: the {name} line is the render's placeholder"
+        for name in STUDY_NAMES
+        if any(x.startswith(f"{name}:") and PLACEHOLDER in x for x in lines)
+    ]
+
+
 def held(body: str) -> tuple[bool, bool]:
     """(held to the study at all, held to Impact and Wiring too)."""
     lines = [x.rstrip() for x in body.splitlines()]
@@ -266,9 +281,10 @@ def study_result(
         if (kind == "adr" and status == "Accepted") or kind == "brief"
         if not re.search(rf"{re.escape(ref)}(?!\d)", prior)
     ]
+    filled = placeholder_warnings(lines)
     if enforced(today):
-        return problems, left
-    return [], problems + left
+        return problems, filled + left
+    return [], problems + filled + left
 
 
 def open_briefs(path: str | None, root: Path) -> list[dict] | None:

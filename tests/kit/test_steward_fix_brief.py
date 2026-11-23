@@ -568,3 +568,49 @@ def test_req066_the_cli_passes_name_through(root, monkeypatch):
         == 0
     )
     assert seen == {"name": NAME}
+
+
+# --- brief #1813 (ADR-0756): the steward runs the whole brief check, its study included ----------
+
+STUDY = (
+    "Impact:\nSpeed: none: one fix\nQuality: the login is checked\nGitHub: none: no change\n"
+    "Cost: none: no Actions\nTests: one test file\nWiring: none: a new file\n"
+    "Prior: none: searched docs/adr for login.py\nClass: a missing sign-in; seen 0 (searched)\n"
+)
+NO_CLASS = BODY.replace("\nWho:", STUDY.split("Class:")[0] + "\nWho:")
+
+
+@pytest.mark.parametrize(
+    "settings", [SOLO + FIX_ON, FIX_ON, SOLO + FIX_ON + '[personal]\nforge = "files"\n'],
+    ids=["solo", "team", "personal"],
+)  # fmt: skip
+def test_req037_brief_refusal_reads_the_study_in_every_mode(root, monkeypatch, settings):
+    """REQ-037 AC4: brief #1813 answers 1, 5 and 8 (team, solo and personal mode alike)."""
+    import brief_study
+
+    base, _, _, _ = root
+    toml(base, settings)
+    whole = BODY.replace("\nWho:", STUDY + "\nWho:")
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    warned: list[str] = []
+    assert steward_owner.brief_refusal(base, NO_CLASS, 5, warned) is None
+    assert any(x.startswith("warning: study: exactly one line Class:") for x in warned), warned
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    refusal = steward_owner.brief_refusal(base, NO_CLASS, 5)
+    assert refusal is not None and "brief check" in refusal and "Class:" in refusal
+    assert steward_owner.brief_refusal(base, whole, 5) is None
+
+
+def test_req037_the_steward_prints_the_study_warnings_with_its_lines(root, monkeypatch):
+    """REQ-037 AC4: brief #1813 answer 1 (the warnings follow the steward's own lines)."""
+    import brief_study
+
+    base, _, gh, _ = root
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    toml(base, SOLO + FIX_ON + '[personal]\nforge = "files"\n')
+    code, lines = file(base, NO_CLASS, said="Yes, go ahead.")
+    assert code == 0 and lines[0].startswith("personal mode:")
+    assert lines[-1].startswith("warning: study:") and gh.calls == []
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    code, lines = file(base, NO_CLASS, said="Yes, go ahead.")
+    assert code == 2 and "Class:" in lines[0]

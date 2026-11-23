@@ -49,6 +49,8 @@ the plan's read cache, never by a request; a clash is refused naming the holder 
 Brief #1800 (ADR-0752): with `--root DIR` a brief that passes also shows its study, the `Impact:`,
 `Wiring:`, `Prior:` and `Class:` lines of `brief_study.study_result`: warnings (`warning: study:
 ...`) until `brief_study.STUDY_FAILS_FROM`, failures from it.
+Brief #1813 (ADR-0756): `brief_result` is that whole reading, the one that `plan_intake.py
+publish`, the steward's filing, fixing and triage and the conductor's guard call too.
 
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
@@ -348,6 +350,24 @@ def body_problems(
     return problems
 
 
+def brief_result(
+    body: str, root: Path | None, waves: set[int] | None = None, opened: dict | None = None
+) -> tuple[list[str], list[str]]:
+    """Brief #1813 (ADR-0756): the one reading of a brief for every writer, (failures, warnings):
+    `body_problems`, then, when it passes, the study of `brief_study.study_result` with the
+    protected-path warnings. A writer never reads a brief with a part of this file alone."""
+    problems = body_problems(body, root, waves, opened)
+    if problems:
+        return problems, []
+    number = (opened or {}).get("number")
+    problems, study = brief_study.study_result(
+        body, root, number if isinstance(number, int) else None
+    )
+    if problems:
+        return problems, []
+    return [], protected_warnings(body, root) + study
+
+
 def check(
     path: Path, root: Path | None = None, waves: set[int] | None = None, opened: dict | None = None
 ) -> int:
@@ -355,12 +375,10 @@ def check(
         body = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise CheckError("the brief file cannot be read") from exc
-    problems = body_problems(body, root, waves, opened)
-    if not problems:
-        problems, study = brief_study.study_result(body, root, (opened or {}).get("number"))
+    problems, warnings = brief_result(body, root, waves, opened)
     if problems:
         raise CheckError("; ".join(problems))
-    for warning in protected_warnings(body, root) + study:
+    for warning in warnings:
         print(f"warning: {warning}")
     print(f"ok {NAME}")
     return 0
@@ -392,12 +410,7 @@ def event_result(
     raw = issue.get("body")
     body = raw if isinstance(raw, str) else ""
     number = issue.get("number")
-    problems = body_problems(body, root, waves, {**(opened or {}), "number": number})
-    study: list[str] = []
-    if not problems:
-        problems, study = brief_study.study_result(
-            body, root, number if isinstance(number, int) else None
-        )
+    problems, warnings = brief_result(body, root, waves, {**(opened or {}), "number": number})
     if problems:
         return {
             "action": "fail",
@@ -407,7 +420,6 @@ def event_result(
             "comment": event_comment(problems),
         }
     result = {"action": "pass", "issue": number, "label": INVALID_LABEL, "wave": wave_of(body)}
-    warnings = protected_warnings(body, root) + study
     return {**result, "warnings": warnings} if warnings else result
 
 

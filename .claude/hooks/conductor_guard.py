@@ -187,11 +187,9 @@ except ImportError:  # a checkout without the scripts: the hook cannot judge a v
 try:  # the one reading of a brief, `check_brief.py`'s (brief 276)
     import check_brief
 
-    BRIEF_PROBLEMS = check_brief.brief_problems
-    ABSENT_REQUIREMENTS = check_brief.absent_requirements
-    SCREENS_PROBLEMS = check_brief.screens_problems  # SPEC-0037 rule 10 (brief #460)
+    BRIEF_RESULT = check_brief.brief_result  # the whole check, its study included (brief #1813)
 except ImportError:  # without the check no brief is filed
-    BRIEF_PROBLEMS = ABSENT_REQUIREMENTS = SCREENS_PROBLEMS = None
+    BRIEF_RESULT = None
 try:  # the one reading of `auto_start` and `launch_adapter`, launch.py's (brief #331)
     import launch
 
@@ -483,14 +481,13 @@ def brief_text(path: str) -> str | None:
 
 
 def brief_checked(text: str) -> bool:
-    """`check_brief.py FILE --root <project>` accepts the text: the shape, the requirements and
-    the `Screens:` line of a UI brief (SPEC-0037 rule 10, brief #460)."""
-    checks = (BRIEF_PROBLEMS, ABSENT_REQUIREMENTS, SCREENS_PROBLEMS)
-    if any(c is None for c in checks) or BRIEF_PROBLEMS(text):
+    """`check_brief.py FILE --root <project>` accepts the text: `check_brief.brief_result`, the
+    shape, the requirements, the `Screens:` line of a UI brief (SPEC-0037 rule 10, brief #460)
+    and every other rule of the root, then the study (brief #1813); its warnings print nothing."""
+    if BRIEF_RESULT is None:
         return False
-    root = Path(project_root())
     try:
-        return not ABSENT_REQUIREMENTS(text, root) and not SCREENS_PROBLEMS(text, root)
+        return not BRIEF_RESULT(text, Path(project_root()))[0]
     except check_brief.CheckError:  # an unreadable requirements file or setting files nothing
         return False
 

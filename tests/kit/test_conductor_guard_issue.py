@@ -32,6 +32,16 @@ Advances: REQ-039
 Touches: .claude/hooks/conductor_guard.py
 Priority: 1
 Size: M
+Contexts: kit (the guard); github (x); local (x); personal (x); stacks (not applicable: text)
+Impact:
+Speed: none: one file read
+Quality: the conductor files only a checked brief
+GitHub: none: no workflow change
+Cost: none: file reads only
+Tests: one test file
+Wiring: none: the guard's own rule
+Prior: none: searched docs/adr for conductor_guard.py
+Class: a check skipped by one writer; seen 0 (searched the open briefs)
 """
 REQUIREMENTS = "# Requirements\n\n### REQ-039 — a requirement\n\n- Status: planned\n"
 
@@ -55,10 +65,9 @@ def denial(out) -> dict | None:
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     root = tmp_path / "project"
-    (root / ".git").mkdir(parents=True)
-    (root / ".git" / "config").write_text(
-        '[remote "origin"]\n\turl = https://github.com/o/r.git\n', encoding="utf-8"
-    )
+    root.mkdir()
+    for args in (("init", "-q"), ("remote", "add", "origin", "https://github.com/o/r.git")):
+        subprocess.run(["git", "-C", str(root), *args], check=True)  # nosec B603 B607 - fixed list
     (root / "docs").mkdir()
     (root / "docs" / "requirements.md").write_text(REQUIREMENTS, encoding="utf-8")
     return root
@@ -242,3 +251,28 @@ def test_the_session_rules_say_the_last_pull_request_of_a_brief_closes_it():
     """REQ-039: brief #276 answer 3."""
     text = flat("config/session-rules.md")
     assert "last pull request of a brief" in text and "`Closes #<brief>`" in text
+
+
+def guard_module(monkeypatch, project: Path):
+    """The hook in this process, so the study's day can be set (brief #1813)."""
+    import importlib.util  # noqa: PLC0415
+
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.syspath_prepend(str(HOOK.parent))
+    spec = importlib.util.spec_from_file_location("conductor_guard_1813", HOOK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_req037_a_brief_without_its_class_line_is_filed_before_the_day_only(project, monkeypatch):
+    """REQ-037 AC4: brief #1813 answer 1 (the guard runs `check_brief.brief_result`)."""
+    import brief_study  # noqa: PLC0415 - the hook's own copy, from the kit's scripts
+
+    guard = guard_module(monkeypatch, project)
+    no_class = "\n".join(x for x in BRIEF.splitlines() if not x.startswith("Class:")) + "\n"
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    assert guard.brief_checked(BRIEF) and guard.brief_checked(no_class)
+    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    assert guard.brief_checked(BRIEF) and not guard.brief_checked(no_class)
+    assert not guard.brief_checked(BRIEF.replace("Contexts:", "Context:"))

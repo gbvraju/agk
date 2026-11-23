@@ -225,7 +225,7 @@ def neutral(text: str, root: Path) -> str | None:
 
 def triage(item: dict, root: Path) -> dict:
     """Rules 6, 7 and 12: one triage per finding, and a filing only when every check passes."""
-    from check_brief import body_problems
+    from check_brief import brief_result
 
     from config import steward_settings
 
@@ -243,15 +243,19 @@ def triage(item: dict, root: Path) -> dict:
     if item.get("cause") and not str(item.get("reproduced", "")).strip():
         return refused("the cause is not reproduced on the default branch (rule 7)")
     kit = choice.startswith("kit")
+    warnings: list[str] = []
     if choice.endswith("brief"):
         try:
-            problems = body_problems(text, None if kit else root, None)
+            # brief #1813 answer 1: the study too, but a kit brief in a project has no kit tree
+            whole = not kit or (root / "kit" / "manifest.json").is_file()
+            problems, warnings = brief_result(text, root if whole else None)
         except CheckError as exc:
-            problems = [str(exc)]
+            problems, warnings = [str(exc)], []
         if problems:
             return refused(f"check_brief: {problems[0]}")
     if hit := neutral(text, root):
         return refused(f"check_neutrality: {hit}")
+    warned = [f"warning: {w}" for w in warnings]
     priority = PRIORITY.search(text) if choice.endswith("brief") else None
     auto = steward_settings(root)["auto_file"]
     within = priority and auto is not False and int(priority[1]) <= auto
@@ -261,10 +265,10 @@ def triage(item: dict, root: Path) -> dict:
         )
     if kit and not (root / "kit" / "manifest.json").is_file():
         line = "draft: for the owner; nothing goes to the kit from a project before build (e)"
-        return {"action": "draft", "lines": [line], "entry": entry}
+        return {"action": "draft", "lines": [line, *warned], "entry": entry}
     return {
         "action": "file",
-        "lines": [f"file: {choice} (skill: `brief` or `issue`)"],
+        "lines": [f"file: {choice} (skill: `brief` or `issue`)", *warned],
         "entry": entry,
     }
 

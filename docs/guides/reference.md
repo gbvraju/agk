@@ -1126,6 +1126,9 @@ amendments under `docs/runs/` that name one and are not yet in their spec, and t
 (`Speed:`, `Quality:`, `GitHub:`, `Cost:`, `Tests:`), `Wiring:`, `Prior:` and `Class:` lines and warns
 (`warning: study: ...`) for each one missing or wrong, and for each Accepted ADR or open brief the study finds that
 `Prior:` leaves out; the warnings become failures from the day `STUDY_FAILS_FROM` names (none set yet). Files only.
+Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
+publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
+writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.
 
 ## Plan names
 
