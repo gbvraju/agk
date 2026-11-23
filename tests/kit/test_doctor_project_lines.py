@@ -88,7 +88,7 @@ def test_init_without_the_extendable_key_compares_the_whole_file(tmp_path):
     assert report["vendored-differs"]["status"] == "ok"
 
 
-# Brief #1798 answer 2 (amendment 186 build (m)): `tests: whole tests <n>`, a bad entry by its place.
+# Brief #1798 answer 2 (amendment 186 build (m)): the whole-tests count, a bad entry by its place.
 import doctor as doctor_script  # noqa: E402
 
 

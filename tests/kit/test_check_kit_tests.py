@@ -174,11 +174,12 @@ KIT_MAKE = "kit/agk-kit.mk"
 
 
 def the_kit(repo, testing: str | None) -> None:
-    """The kit repository itself (`kit/agk-kit.mk` marks it, as governance's `Project tests` reads it)."""
-    kit(repo, 'repo.run("check_new.py")\n')
+    """The kit repository itself (`kit/agk-kit.mk` marks it, as governance reads it)."""
+    if not (repo.root / KIT_MAKE).exists():
+        kit(repo, 'repo.run("check_new.py")\n')
     files = {KIT_MAKE: "# the kit\n", WHOLE: "def test_w():\n    assert True\n"}
-    if testing is not None:
-        files["agk.toml"] = 'default_branch = "main"\n[testing]\n' + testing
+    toml = 'default_branch = "main"\n'
+    files["agk.toml"] = toml if testing is None else toml + "[testing]\n" + testing
     repo.commit(files)
 
 
