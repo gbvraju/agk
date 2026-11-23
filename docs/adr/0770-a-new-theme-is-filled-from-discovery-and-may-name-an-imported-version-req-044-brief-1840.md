@@ -7,7 +7,7 @@
   ADR-0745, brief #1757, IB-08 of #1769, PB-05 of #1770, plan #661
 - Requirements: REQ-044
 
-Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`, `tests/kit_dev/`
+Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`
 
 ## Context
 
@@ -50,7 +50,9 @@ and helping AGK to reach the exceptional product delivery from Day 0", and "Yes,
 
 Path classes changed: `scripts/agk/` (`design_brand.py`, `design_prototype.py`, `design.py`, `check_design.py`),
 `skills/` (`skills/design/SKILL.md`), `tests/kit/` (`test_check_design.py`) and `tests/kit_dev/`
-(`test_design_theme_brand.py`); `docs/guides/reference.md` is not protected. `check_design.py` is installed; the
+(`test_design_theme_brand.py`, `test_kit_manifest.py`) and `agk.toml` (one `[[testing.map]]` entry for
+`design_brand.py`, which `tests/kit_dev/test_intelligent_testing.py` requires of every script, Q-1840-4);
+`docs/guides/reference.md` is not protected. `check_design.py` is installed; the
 others are kit-only. No workflow, check name or label changes.
 
 ## Consequences
