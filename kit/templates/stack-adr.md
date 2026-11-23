@@ -11,6 +11,7 @@ Protected classes: {{classes}}
 ## Context
 
 TODO(architect): what the product needs from a stack, as the owner gave it in the vision and the charter.
+{{screens}}
 
 ## Decision
 

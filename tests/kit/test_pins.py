@@ -361,10 +361,81 @@ def test_req079_a_capitalised_runtime_is_chosen_as_that_runtime(parts: str, runt
     assert picked(parts) == pins.STACKS[runtime]
 
 
-@pytest.mark.parametrize("name", ["Node.js", "nodejs"])
-def test_req079_a_runtime_spelled_otherwise_is_still_no_stack(name: str) -> None:
-    """Q-F3-1, conservative reading: only a difference of case of the exact key is read."""
+# REQ-079, brief #1843 (ADR-0771, superseding ADR-0744 decision 2): the common spellings of a
+# runtime are that runtime, through one table, for every reader.
+
+SPELLINGS = [
+    ("Node.js", "node"),
+    ("NodeJS", "node"),
+    ("nodejs", "node"),
+    ("NODE.JS", "node"),
+    ("Node", "node"),
+    ("python3", "python"),
+    ("CPython", "python"),
+    ("Python", "python"),
+]
+
+
+def pins_module() -> object:
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    from gates import pins  # noqa: PLC0415 - the step module itself
+
+    return pins
+
+
+@pytest.mark.parametrize(("name", "runtime"), SPELLINGS)
+def test_req079_a_common_spelling_of_a_runtime_is_that_runtime(name: str, runtime: str) -> None:
+    """Brief #1843 answer 3: `option_parts`, `pick` and so `chosen` read the runtime."""
+    pins = pins_module()
+    parts = f"Parts: {name} 22.11.0 MIT, example-web 4.21.1 MIT."
+    assert pins.option_parts(parts)[0] == (runtime, "22.11.0", "MIT")
+    assert picked(parts) == pins.STACKS[runtime]
+
+
+@pytest.mark.parametrize(("name", "runtime"), SPELLINGS)
+def test_req079_the_tests_floor_reads_every_spelling(
+    tmp_path: Path, name: str, runtime: str
+) -> None:
+    """Brief #1843 answers 3 and 5: `tests_floor.runtime` on one Accepted record per spelling."""
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    from gates import tests_floor  # noqa: PLC0415 - the step module itself
+
+    parts = f"Parts: {name} 22.11.0 MIT, example-web 4.21.1 MIT."
+    root = project(tmp_path, record(a_parts=parts, status="Accepted", chosen="Option A"))
+    assert tests_floor.runtime(root) == runtime
+
+
+def test_req079_a_two_word_runtime_stays_two_words() -> None:
+    """Brief #1843 answer 3: `Node JS 22.11.0` is the name `node` and the version `JS`."""
+    pins = pins_module()
+    assert pins.option_parts("Parts: Node JS 22.11.0 MIT.")[0] == ("node", "JS", "22.11.0 MIT")
+
+
+@pytest.mark.parametrize("name", ["Deno", "examplelib", "Node-RED"])
+def test_req079_another_name_stays_as_written(name: str) -> None:
+    """Brief #1843 answer 3: every other name is kept as written, and is no runtime."""
+    pins = pins_module()
+    assert pins.option_parts(f"Parts: {name} 1.0.0 MIT.")[0][0] == name
     assert picked(f"Parts: {name} 22.11.0 MIT, example-web 4.21.1 MIT.") is None
+
+
+def test_req079_the_runtime_table_and_the_stacks_are_one_class() -> None:
+    """Brief #1843 answer 5: every spelling names a `STACKS` key, every key has its row, and
+    each key spells itself, so a runtime added without its spellings fails here."""
+    pins = pins_module()
+    assert set(pins.RUNTIME_NAMES.values()) == set(pins.STACKS)
+    for key in pins.STACKS:
+        assert pins.RUNTIME_NAMES[key] == key
+    assert all(k == k.lower() for k in pins.RUNTIME_NAMES)
+
+
+def test_req079_an_accepted_node_js_record_gets_package_json(tmp_path: Path) -> None:
+    """Brief #1843 answer 8 (Q-HI-2): `stack-files` on an Accepted `Node.js` record."""
+    parts = NODE_PARTS.replace("Parts: node ", "Parts: Node.js ")
+    root = project(tmp_path, record(a_parts=parts, status="Accepted", chosen="Option A"))
+    result = run(ENGINES, "stack-files", "--root", str(root))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (root / "package.json").is_file() and not (root / "pyproject.toml").exists()
 
 
 def test_req079_a_capitalised_node_sample_runs_the_pins_step(tmp_path: Path) -> None:
