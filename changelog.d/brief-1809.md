@@ -1,0 +1,1 @@
+- A draft's skipped proof run no longer cancels the ready run of the same head: the proof workflow puts draft and ready runs of a pull request in separate concurrency groups, and a kit test fails on any workflow with a draft skip that shares one cancelling group (brief #1809)

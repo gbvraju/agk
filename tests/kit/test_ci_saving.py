@@ -62,14 +62,15 @@ def test_proof_and_governance_keep_their_job_names():
 
 def test_proof_cancels_the_run_on_a_superseded_commit():
     """Brief #216 answer 3: one group per pull request, the older run cancelled; brief #972: a
-    merge queue commit has its own group and is never cancelled."""
-    assert re.search(
-        r"^concurrency:\n  group: proof-\$\{\{ github\.event\.pull_request\.number \|\| "
-        r"github\.sha \}\}\n"
-        r"  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}\n",
-        workflow("proof.yml"),
-        flags=re.M,
+    merge queue commit has its own group and is never cancelled; brief #1809 answer 1 (ADR-0753):
+    a draft payload has a group of its own, `proof-<n>-draft`."""
+    group, cancel = concurrency(workflow("proof.yml"))
+    assert group == (
+        "${{ github.event.pull_request.draft && "
+        "format('proof-{0}-draft', github.event.pull_request.number) || "
+        "format('proof-{0}', github.event.pull_request.number || github.sha) }}"
     )
+    assert cancel == "${{ github.event_name == 'pull_request' }}"
 
 
 def test_governance_cancels_a_superseded_run_of_a_pull_request_and_never_a_push():
@@ -298,7 +299,13 @@ def holds(condition: str, github: dict, variables: dict | None = None) -> bool:
     """A job-level `if:` of these workflows, evaluated on one event (a test reading, not GitHub);
     VARIABLES are the repository variables `vars.<NAME>` reads (brief #1554), none by default, and
     `cancelled()` is false (the run was not cancelled)."""
-    expr = condition.strip().removeprefix("${{").removesuffix("}}").strip()
+    return bool(evaluate(condition.strip().removeprefix("${{").removesuffix("}}"), github, variables))
+
+
+def evaluate(expression: str, github: dict, variables: dict | None = None):
+    """One GitHub expression (the text inside `${{ }}`) evaluated on one event, as `holds` reads it;
+    `format()` fills `{0}`, `{1}` as GitHub does (brief #1809)."""
+    expr = expression.strip()
     expr = expr.replace("||", " or ").replace("&&", " and ")
     expr = re.sub(r"!(?!=)", " not ", expr)
     expr = re.sub(r"\btrue\b", "True", re.sub(r"\bfalse\b", "False", expr))
@@ -308,8 +315,29 @@ def holds(condition: str, github: dict, variables: dict | None = None) -> bool:
         "vars": Ctx(variables or {}),
         "starts_with": starts_with,
         "cancelled": lambda: False,
+        "format": lambda text, *args: text.format(*args),
     }
-    return bool(eval(expr, {"__builtins__": {}}, names))  # nosec B307 - the kit's own workflow text
+    return eval(expr, {"__builtins__": {}}, names)  # nosec B307 - the kit's own workflow text
+
+
+def concurrency(text: str) -> tuple[str, str]:
+    """The `group:` and `cancel-in-progress:` values of a workflow's top-level `concurrency:`."""
+    block = text.split("\nconcurrency:\n", 1)[1].split("\njobs:", 1)[0]
+    group = re.search(r"(?m)^  group: (.+)$", block)
+    cancel = re.search(r"(?m)^  cancel-in-progress: (.+)$", block)
+    assert group and cancel
+    return group.group(1).strip(), cancel.group(1).strip()
+
+
+def resolved(value: str, github: dict):
+    """A `group:` or `cancel-in-progress:` value on one event: each `${{ }}` evaluated, the text
+    around it kept; a value that is one expression keeps its type."""
+    whole = re.fullmatch(r"\$\{\{(.+)\}\}", value)
+    if whole:
+        return evaluate(whole.group(1), github)
+    if "${{" not in value:
+        return {"true": True, "false": False}.get(value, value)
+    return re.sub(r"\$\{\{(.+?)\}\}", lambda m: str(evaluate(m.group(1), github)), value)
 
 
 def triggers(text: str) -> dict[str, dict[str, list[str]]]:
@@ -508,3 +536,95 @@ def test_the_workflows_say_why():
         head = workflow(name).split("\njobs:\n", 1)[0]
         assert "brief #369" in head, name
         assert "minute" in head, name
+
+
+# --- a draft's skipped run never cancels the ready run (brief #1809, ADR-0753) -------------------
+#
+# GitHub admits a run to its concurrency group, and cancels the older run there, before it reads the
+# job's `if:`. A draft payload whose job only skips must therefore never share a cancelling group
+# with a ready payload of the same pull request (#1808's head: `ready_for_review` and a draft
+# `synchronize` within milliseconds, proof `skipped, cancelled`).
+
+RACE = (pr_event("ready_for_review", False), pr_event("synchronize", True))
+
+
+def draft_race(text: str) -> bool:
+    """True when a workflow skips a draft at job level and a draft run can cancel a ready run of the
+    same pull request: both events in one group, with `cancel-in-progress` true."""
+    if "\nconcurrency:\n" not in text:
+        return False
+    if not any("github.event.pull_request.draft" in c for c in job_conditions(text)):
+        return False
+    group, cancel = concurrency(text)
+    ready, draft = RACE
+    if not resolved(cancel, draft):
+        return False
+    return resolved(group, ready) == resolved(group, draft)
+
+
+def test_a_draft_run_and_a_ready_run_of_one_pull_request_fall_in_two_groups():
+    """REQ-039: brief #1809 answers 1 and 6 (the fixture of two events, same number)."""
+    group, cancel = concurrency(workflow("proof.yml"))
+    ready, draft = RACE
+    assert resolved(group, ready) == "proof-7"
+    assert resolved(group, draft) == "proof-7-draft"
+    assert resolved(cancel, ready) is True and resolved(cancel, draft) is True
+    # a ready run still cancels an older ready run, a draft run an older draft run
+    assert resolved(group, pr_event("synchronize", False)) == "proof-7"
+    assert resolved(group, pr_event("reopened", False)) == "proof-7"
+    assert resolved(group, pr_event("opened", True)) == "proof-7-draft"
+
+
+def test_a_merge_queue_run_keeps_its_own_group_and_is_never_cancelled():
+    """REQ-039: brief #1809 answer 1 (`merge_group` keeps its sha group, brief #972)."""
+    group, cancel = concurrency(workflow("proof.yml"))
+    queue = {
+        "event_name": "merge_group",
+        "sha": "b" * 40,
+        "ref_name": "gh-readonly-queue/main/pr-7-x",
+        "event": {"action": "checks_requested", "repository": {"default_branch": "main"}},
+    }
+    assert resolved(group, queue) == "proof-" + "b" * 40
+    assert resolved(cancel, queue) is False
+
+
+def test_the_draft_skip_of_proof_is_unchanged():
+    """REQ-039: brief #1809 answer 2 (a draft still starts no proof job, brief #369)."""
+    (condition,) = job_conditions(workflow("proof.yml"))
+    assert condition == "${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}"
+
+
+INVENTED = """name: example
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+concurrency:
+  group: example-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  example:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo example.com
+"""
+
+
+def test_the_guard_finds_a_draft_skip_that_shares_one_cancelling_group():
+    """REQ-039: brief #1809 answer 3 (an invented workflow with a draft skip and one group)."""
+    assert draft_race(INVENTED)
+    assert not draft_race(INVENTED.replace("cancel-in-progress: true", "cancel-in-progress: false"))
+    separated = INVENTED.replace(
+        "example-${{ github.event.pull_request.number }}",
+        "example-${{ github.event.pull_request.number }}-${{ github.event.pull_request.draft }}",
+    )
+    assert not draft_race(separated)
+    assert not draft_race(INVENTED.replace("!github.event.pull_request.draft", "true"))
+
+
+def test_no_workflow_lets_a_skipped_draft_run_cancel_a_ready_run():
+    """REQ-039: brief #1809 answer 3 (every workflow with a job-level draft skip, by file)."""
+    raced = [p.name for p in sorted(WORKFLOWS.glob("*.yml")) if draft_race(p.read_text("utf-8"))]
+    assert raced == [], f"a draft run can cancel a ready run (ADR-0753): {raced}"
