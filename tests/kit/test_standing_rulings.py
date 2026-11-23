@@ -66,3 +66,161 @@ def test_req037_the_conductor_file_and_the_adr_carry_both_rulings():
     assert "standing ruling (ADR-0583)`" in conductor and "Rule budget: <file>" in conductor
     adr = next((ROOT / "docs" / "adr").glob("0583-*.md")).read_text(encoding="utf-8")
     assert "- Status: " in adr and '"Go ahead"' in adr
+
+
+# --- brief #1788 (ADR-0749): one count, one guide, one line ------------------------------------
+
+# The recorded file list of #1762 at head 56db4b4b (filename, status, additions, deletions).
+FILES_1762 = [
+    ("changelog.d/brief-1757.md", "added", 1, 0),
+    ("docs/adr/0735-the-kind-of-product-named-in-discovery-req-045-brief-1757.md", "added", 57, 0),
+    ("docs/runs/proposed-spec-amendments-218.md", "added", 34, 0),
+    ("scripts/agk/doctor.py", "modified", 24, 0),
+    ("scripts/agk/engines.py", "modified", 19, 1),
+    ("scripts/agk/playbook_format.py", "modified", 19, 0),
+    ("scripts/agk/steward_owner.py", "modified", 214, 0),
+    ("tests/kit/test_steward_work_type.py", "added", 277, 0),
+]
+PLAN_1757 = (
+    "Sentence: invented.\n"
+    "Plan: #661, milestone Wave 4. One pull request; tests first, marker `REQ-045`; about 100 "
+    "changed lines outside tests or fewer; invented data only (example.com).\n"
+)
+HEAD = "56db4b4b45b0b1e4f62182d91909f4a95e61f287"
+
+
+def files_of(rows) -> list[dict]:
+    return [{"filename": f, "status": s, "additions": a, "deletions": d} for f, s, a, d in rows]
+
+
+def api_dir(tmp_path, verdict: str | None = None, rows=FILES_1762) -> str:
+    """Recorded responses of #1762 in the `--api-dir` form; no network."""
+    import json
+
+    pull = {
+        "number": 1762,
+        "head": {"sha": HEAD},
+        "body": "Brief: #1757\n",
+        "changed_files": len(rows),
+    }
+    comments = []
+    if verdict is not None:
+        comments.append({"id": 7, "user": {"login": "gbvraju"}, "body": verdict})
+    for name, data in (
+        ("pull-1762", pull),
+        ("files-1762", files_of(rows)),
+        ("brief-1757", {"number": 1757, "body": PLAN_1757}),
+        ("comments-1762", comments),
+    ):
+        (tmp_path / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    return str(tmp_path)
+
+
+def test_req037_size_count_leaves_out_the_records_of_1762():
+    """REQ-037: code and guides count (277); tests, ADR, amendment and fragment do not."""
+    from rules import size_count
+
+    assert size_count(files_of(FILES_1762)) == (277, 369)
+    assert size_count(files_of(FILES_1762[:7])) == (277, 92)
+    assert size_count([{"filename": "docs/img.png", "status": "added"}]) == (0, 0)
+    assert size_count(files_of([("docs/guides/x.md", "added", 5, 0)])) == (5, 0)
+    assert size_count(files_of([("docs/other/0749-x.md", "added", 9, 0)])) == (9, 0)
+
+
+def test_req037_size_guide_reads_the_plan_line():
+    """REQ-037: brief #1757's `Plan:` line gives 100; another line's phrase never wins."""
+    from rules import size_guide
+
+    assert size_guide(PLAN_1757) == 100
+    assert size_guide("Size: about 40 changed lines\n" + PLAN_1757) == 100
+    assert size_guide("Plan: one pull request.\n") is None
+    assert size_guide(None) is None
+
+
+def test_req037_size_findings_leave_out_merge_reprove_and_record_items():
+    """REQ-037 (Q-F4-1): a merge of main, a re-prove or an evidence record is not a finding."""
+    from rules import size_findings
+
+    fix = (
+        f"Verdict: fix list {HEAD}\n"
+        "1. Merge origin/main into the branch (rule: config/session-rules.md 31)\n"
+        "2. Post the local evidence line (rule: config/session-rules.md 30)\n"
+        "3. Re-prove the head after the merge (rule: none)\n"
+    )
+    assert size_findings(fix) == 0
+    assert (
+        size_findings(fix + "4. The refusal names a value (rule: constitution/principles.md 8)\n")
+        == 1
+    )
+    assert size_findings(f"Verdict: cleared {HEAD}\n") == 0
+    assert size_findings(f"Verdict: rejected {HEAD}\nWrong item.\n") == 1
+
+
+def run_size(*args: str) -> tuple[int, str]:
+    import contextlib
+    import io
+
+    from rules import main
+
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = main(["size", *args])
+    return code, out.getvalue()
+
+
+def test_req037_rules_size_on_1762_is_accepted_by_the_standing_ruling(tmp_path):
+    """REQ-037: `rules.py size --pr 1762` prints 277 of 100, accepted, and the records."""
+    code, out = run_size("--pr", "1762", "--root", str(ROOT), "--api-dir", api_dir(tmp_path))
+    assert code == 0
+    assert out.splitlines() == [
+        "Size: 277 of 100, accepted by standing ruling (ADR-0583)",
+        "records: 369 lines not counted",
+    ]
+
+
+def test_req037_rules_size_over_three_times_or_with_a_finding_asks(tmp_path):
+    """REQ-037: 301 of 100, or one finding in the newest verdict, prints the ask line."""
+    rows = [*FILES_1762, ("docs/guides/example.md", "modified", 24, 0)]
+    code, out = run_size(
+        "--pr", "1762", "--root", str(ROOT), "--api-dir", api_dir(tmp_path, rows=rows)
+    )
+    assert code == 0
+    assert (
+        out.splitlines()[0]
+        == "Size: 301 of 100, over the standing ruling (ADR-0583): ask the owner"
+    )
+    verdict = f"Verdict: fix list {HEAD}\n1. The refusal names a value (rule: none)\n"
+    (tmp_path / "b").mkdir()
+    code, out = run_size(
+        "--pr", "1762", "--root", str(ROOT), "--api-dir", api_dir(tmp_path / "b", verdict)
+    )
+    assert (
+        out.splitlines()[0]
+        == "Size: 277 of 100, over the standing ruling (ADR-0583): ask the owner"
+    )
+
+
+def test_req037_rules_size_with_3000_files_is_unknown_and_asks(tmp_path):
+    """REQ-037: GitHub's 3000-file limit gives `unknown`, never an acceptance."""
+    rows = [(f"scripts/x{i}.py", "added", 0, 0) for i in range(3000)]
+    code, out = run_size(
+        "--pr", "1762", "--root", str(ROOT), "--api-dir", api_dir(tmp_path, rows=rows)
+    )
+    assert out.splitlines()[0] == "Size: unknown of 100 (3000 files or more): ask the owner"
+
+
+def test_req037_rules_size_in_personal_mode_and_without_the_ruling(tmp_path):
+    """REQ-037: personal mode is not run; an ADR withdrawing ADR-0583 leaves no ruling."""
+    (tmp_path / "agk.toml").write_text("[personal]\n", encoding="utf-8")
+    assert run_size("--pr", "1762", "--root", str(tmp_path)) == (0, "not run: personal mode\n")
+    proj = tmp_path / "proj"
+    (proj / "docs" / "adr").mkdir(parents=True)
+    (proj / "agk.toml").write_text("", encoding="utf-8")
+    (proj / "docs" / "adr" / "0002-x.md").write_text(
+        "# ADR-0002: x\n\n- Status: Accepted\n- Withdraws: ADR-0583\n", encoding="utf-8"
+    )
+    (tmp_path / "api").mkdir()
+    code, out = run_size(
+        "--pr", "1762", "--root", str(proj), "--api-dir", api_dir(tmp_path / "api")
+    )
+    assert out.splitlines()[0] == "Size: 277 of 100, no standing ruling: ask the owner"

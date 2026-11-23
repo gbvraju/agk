@@ -184,3 +184,75 @@ def test_ac3_a_fix_list_without_a_sha_is_as_before(tmp_path):
         ("fix", None),
         ("cleared", "05ccccc"),
     ]
+
+
+# --- brief #1788 (ADR-0749): the verdict cannot state another size ------------------------------
+
+SIZE_HEAD = "56db4b4b45b0b1e4f62182d91909f4a95e61f287"
+
+
+def size_reads(monkeypatch, comments=()):
+    """Recorded #1762 (277 counted of a guide of 100) behind the conductor's reads; no network."""
+    import conductor
+    from test_standing_rulings import FILES_1762, PLAN_1757, files_of
+
+    ones = {
+        "repos/o/r/pulls/1762": {
+            "head": {"sha": SIZE_HEAD},
+            "body": "Brief: #1757\n",
+            "changed_files": 8,
+        },
+        "repos/o/r/issues/1757": {"body": PLAN_1757},
+    }
+    lists = {
+        "repos/o/r/pulls/1762/files": files_of(FILES_1762),
+        "repos/o/r/issues/1762/comments": list(comments),
+    }
+    monkeypatch.setattr(conductor, "read_one", lambda endpoint, what: ones[endpoint])
+    monkeypatch.setattr(conductor, "read", lambda endpoint, what: lists[endpoint])
+    monkeypatch.setattr(conductor, "gate_problem", lambda *a: None)
+    return conductor
+
+
+def cleared(size_line: str) -> str:
+    return (
+        f"Verdict: cleared {SIZE_HEAD}\nRead: 8 files\nLens:\n- {size_line}\nWho: AGK conductor\n"
+    )
+
+
+def test_req037_a_verdict_stating_368_on_1762_is_refused(monkeypatch):
+    """REQ-037: the lens line states 368; `size_count` gives 277, so the verdict is refused."""
+    conductor = size_reads(monkeypatch)
+    line = "Size: 368 changed lines outside tests against a guide of about 100; the owner is asked."
+    problem = conductor.full_problem("o/r", 1762, cleared(line))
+    assert problem is not None and "277" in problem and "Size:" in problem
+
+
+def test_req037_a_verdict_stating_277_accepted_passes(monkeypatch):
+    """REQ-037: the stated 277 of 100, accepted, is what `rules.py size` prints."""
+    conductor = size_reads(monkeypatch)
+    line = "Size: 277 of 100, accepted by standing ruling (ADR-0583)"
+    assert conductor.full_problem("o/r", 1762, cleared(line)) is None
+    assert conductor.full_problem("o/r", 1762, cleared("Security: nothing logged.")) is None
+
+
+def test_req037_an_accepted_size_line_with_a_finding_is_refused(monkeypatch):
+    """REQ-037: one finding ends the ruling, so `accepted by standing ruling` is refused."""
+    conductor = size_reads(monkeypatch)
+    body = (
+        f"Verdict: fix list {SIZE_HEAD}\nLens:\n- Size: 277 of 100, accepted by standing ruling "
+        "(ADR-0583)\n1. The refusal names a value (rule: constitution/principles.md 8)\n"
+    )
+    assert "does not accept" in (conductor.full_problem("o/r", 1762, body) or "")
+
+
+def test_req037_an_owner_size_ask_the_ruling_accepts_is_refused(monkeypatch):
+    """REQ-037: `Owner needed:` asking about a size the ruling accepts is refused, naming it."""
+    conductor = size_reads(monkeypatch)
+    ask = "Owner needed: it is larger than the standing size limit (368 against about 100).\n"
+    assert conductor.full_problem("o/r", 1762, ask) == (
+        "refused: the size is accepted by the standing ruling (ADR-0583); post no owner "
+        "question (setting: Size:)"
+    )
+    other = "Owner needed: amendment 218 needs your yes.\n"
+    assert conductor.full_problem("o/r", 1762, other) is None
