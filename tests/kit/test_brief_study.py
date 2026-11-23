@@ -160,7 +160,8 @@ def test_ac4_an_adr_without_a_decision_heading_is_searched_whole_as_strong(tmp_p
     """REQ-037 AC4 (brief #1819 answer 7)"""
     root = tree(tmp_path)
     (root / "docs" / "adr" / "0030-old.md").write_text(
-        "# ADR-0030: old\n\n- Status: Accepted\n\n## Background\n\n`scripts/agk/tool.py`.\n", "utf-8"
+        "# ADR-0030: old\n\n- Status: Accepted\n\n## Background\n\n`scripts/agk/tool.py`.\n",
+        "utf-8",
     )
     assert marks(study(tmp_path, root)) == {"ADR-0030": "strong"}
 
