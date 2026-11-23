@@ -10,6 +10,7 @@ Usage:
     python3 design.py screenshots --version v<n> [--root DIR]
     python3 design.py inventory [--root DIR]
     python3 design.py import <folder> [--root DIR]
+    python3 design.py theme [--root DIR]
     python3 design.py write ...   (refused: SPEC-0037 rule 12)
 
 Kit-only (never installed). `prototype` writes the next version folder
@@ -31,6 +32,11 @@ with its `manifest.json` and `external.txt`, and refuses a symbolic link, a sour
 new version has exactly one HTML page and that page holds a `<script` element, it prints one line
 `notice: i<n> has one page drawn by script; ...` pointing at the planning guide's step 0, and still
 succeeds (brief #1204, ADR-0511).
+`theme` (brief #1840, ADR-0770) writes `docs/design/theme.md` from the template, its brand record
+and accent filled from the discovery brand answer by `design_brand.py`, its Evidence line naming the
+newest kit version, else the newest imported version; it needs no `inventory` row, so the import
+path holds a theme before any inventory. It refuses an existing theme (rule 2) and a project with no
+version (rule 7), writing nothing, and prints each `ask the person:` line for the person.
 `inventory` writes the skeleton of `docs/design/inventory.md` from
 `kit/templates/design-inventory.md` (SPEC-0037 rule 3): one section for each requirement of
 `docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines of `docs/specs/*.md`
@@ -63,9 +69,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_brand
 import design_import
 import design_inventory
 import design_prototype
+import design_prototype_check
+import design_signoff
 import design_standard
 from common import PROJECT_FIRST_REQ, CheckError, parse_requirements
 from intake import section
@@ -75,9 +84,9 @@ KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
 USAGE = (
     "usage: design.py prototype | screenshots --folder FOLDER | screenshots --version v<n>"
-    " | inventory | import <folder>  [--root DIR]"
+    " | inventory | import <folder> | theme  [--root DIR]"
 )
-COMMANDS = ("prototype", "write", "screenshots", "inventory", "import")
+COMMANDS = ("prototype", "write", "screenshots", "inventory", "import", "theme")
 WRITE_REFUSAL = "rule 12: a new mockup folder is not written; use /agk:design prototype"
 FLAGS = ("--root", "--name", "--date", "--theme-file", "--folder", "--version")
 FOLDER = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$")
@@ -127,6 +136,27 @@ def cmd_prototype(root: Path, opts: dict[str, str]) -> int:
     if set(opts) - {"root"}:
         raise UsageError("prototype takes only --root")
     return design_prototype.write(root)
+
+
+def cmd_theme(root: Path, opts: dict[str, str]) -> int:
+    """SPEC-0037 rules 2 and 12 (brief #1840): a new theme, never over an existing one."""
+    if set(opts) - {"root"}:
+        raise UsageError("theme takes only --root")
+    if (root / THEME).exists():
+        raise CheckError(f"rule 2: {THEME} exists; it is never overwritten")
+    kit, imported = design_prototype_check.versions(root), design_import.versions(root)
+    if not (kit or imported):
+        raise CheckError(
+            "rule 7: no prototype or imported version for the evidence line "
+            "(path class docs/design/)"
+        )
+    version = kit[-1] if kit else imported[-1]
+    text, notes = design_brand.theme_text(root, f"{design_signoff.folder_of(version)}/")
+    (root / THEME).write_text(text, encoding="utf-8")
+    print(f"wrote {THEME}")
+    for note in notes:
+        print(note)
+    return 0
 
 
 def find_browser() -> str | None:
@@ -377,6 +407,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_prototype(root, opts)
         if args[0] == "inventory":
             return cmd_inventory(root, opts)
+        if args[0] == "theme":
+            return cmd_theme(root, opts)
         if source is not None:
             return cmd_import(root, source, opts)
         return cmd_screenshots(root, opts)
