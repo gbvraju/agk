@@ -28,7 +28,7 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import check_playbooks  # noqa: E402
 import run_gates  # noqa: E402
-from gates import bom, node_pack  # noqa: E402
+from gates import bom, node_pack, python_pack  # noqa: E402
 from test_pins import with_lock  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
@@ -361,3 +361,28 @@ def test_a_javascript_only_product_skips_the_type_step(
     assert code == 0, out
     assert "standards node: the type step is skipped: no TypeScript file" in out
     assert "ok standards node" in out
+
+
+def test_the_floors_fill_the_tally(tmp_path: Path) -> None:
+    """REQ-079: brief #1837 answer 1 (one line per configuration read, counting its floor lines)."""
+    rules: dict[str, object] = dict(floor_rules(), **{"no-debugger": "off", "no-empty": 0})
+    root = sample(tmp_path, rules=rules, tsconfig=SOLUTION)
+    (root / "frontend" / "tsconfig.json").write_text(
+        '{"compilerOptions": {"strict": false, "noImplicitAny": false}}', encoding="utf-8"
+    )
+    entry = next(e for e in node_entries("web-app") if e["stack"] == "node")
+    tally: dict[str, dict[str, int]] = {}
+    node_pack.run(root, entry, tally)
+    assert tally["floor"] == {"package.json": 2}
+    assert tally["type-floor"] == {"frontend/tsconfig.json": 2}
+    (root / "eslint-rules.json").unlink()
+    tally = {}
+    node_pack.run(root, entry, tally)
+    assert tally["floor"] == {"package.json": 1}  # an unreadable configuration counts 1
+
+
+def test_no_file_in_scope_is_one_reason(tmp_path: Path) -> None:
+    """REQ-079: brief #1837 answer 3 (no step runs)."""
+    root = sample(tmp_path, toml='project_lint_paths = ["web/**"]')
+    entry = next(e for e in node_entries("web-app") if e["stack"] == "node")
+    assert node_pack.run(root, entry, {}) == [(python_pack.NO_FILE, [])]
