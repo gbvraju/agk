@@ -47,8 +47,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" prototype
 
    It refuses, naming rule 3, when the inventory's digest has no `inventory` row in `docs/design/signoffs.md` (the
    person's `Approve: inventory` line comes first). With no `docs/design/theme.md` it writes one on the standard from
-   the kit's template, with the evidence line set to the version; an old-format theme is moved onto the standard, its
-   five tokens kept in value and its brand record, source lines and evidence line carried over unchanged.
+   the kit's template, with the evidence line set to the version and its brand record filled from the discovery brand
+   answer (`docs/discovery/*.md`) with each value's source; a brand colour too light or dark to read at 4.5:1 is
+   written as a proposed shade. Say each `ask the person:` line it prints to the person as printed. An existing theme
+   is never rewritten; an old-format theme is moved onto the standard, its five tokens kept in value and its brand
+   record, source lines and evidence line carried over unchanged.
 2. Do not edit the pages, `standard.css` or `agk-prototype.js`, and add no script. Every name, address, amount, date,
    phone number, email address and link on a page comes from the kit's invented fixture set, never from `private/`,
    `reference/` or a real record. Fill the brand record from what the owner gave, and from nothing else; a value still
@@ -103,7 +106,17 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" import <folder>
    report: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"`, then `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (in an installed project it runs `make -f agk.mk agk-governance`).
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/doctor.py"` prints one `design import:` line per version with its manifest
    and map state, as information.
-4. Sign-off is the person's: `Approve: design i<n> <full head ID>` from an account listed in `spec_approvers`. A session
+4. With no `docs/design/theme.md`, write the theme, which needs no inventory row:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" theme
+```
+
+   It writes the theme on the standard from the kit's template, its brand record filled from the discovery brand answer
+   and its evidence line naming the imported version (the newest kit version when there is one). Say each
+   `ask the person:` line it prints to the person as printed. It refuses an existing theme (rule 2) and a project with
+   no version (rule 7), writing nothing, and reads nothing of `files/`.
+5. Sign-off is the person's: `Approve: design i<n> <full head ID>` from an account listed in `spec_approvers`. A session
    never posts it. Once signed off the version is frozen; a corrected map or a new delivery is a new version, imported
    again. Do not commit or push, and do not open a pull request: the person or their session does.
 
