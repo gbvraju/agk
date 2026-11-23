@@ -15,7 +15,10 @@ line names the rule and the component class, never a name or a version (principl
 chosen`. Lock line ends are normalised. The lock is made by the stack's own tool on the builder's
 machine, never here; the build file comes from `kit/templates/stacks/<folder>/` by
 `engines.py stack-files`. The runner's interface (`RULE`, `check(root, playbook)`) is that of
-`scripts/agk/gates/` (brief #1586). Installed; it imports only installed modules.
+`scripts/agk/gates/` (brief #1586); `run_gates.py` runs it where a work type is declared
+(`applies`), prints `not run pins: no stack chosen` without a stack (`skipped`), and holds its
+per-file `counts` to the baseline (brief #1776, ADR-0742). Installed; it imports only installed
+modules.
 """
 
 from __future__ import annotations
@@ -45,12 +48,15 @@ ACCEPTED = re.compile(r"(?m)^- Status: Accepted\s*$")
 PARTS_KEY = "Parts:"
 PARTS_ENDS = ("Why:", "External services:", "Practices:")
 VERIFY = "(verify)"
-NOT_RUN = "not run: no stack chosen"
+NO_STACK = "no stack chosen"
+NOT_RUN = f"not run: {NO_STACK}"
 USAGE = "usage: python3 scripts/agk/gates/pins.py [--root DIR]"
 PEP508 = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*?)\s*(;.*)?$")
 EXACT_PY = re.compile(r"^==\s*([0-9][0-9A-Za-z.+!-]*)$")
 EXACT_NPM = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 LOCKED_PY = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([^\s;\\]+)")
+UNPINNED = "a direct dependency is not pinned exactly"
+STALE = "a direct dependency differs from the lock"
 NPM_GROUPS = ("dependencies", "devDependencies", "optionalDependencies")
 
 
@@ -141,8 +147,9 @@ def locked(reader: str, text: str) -> dict[str, str]:
     return {norm(m.group(1)): m.group(2) for ln in text.split("\n") if (m := LOCKED_PY.match(ln))}
 
 
-def problems(root: Path) -> list[str] | None:
-    """The failure lines, or None when no stack is chosen (the step is not run)."""
+def findings(root: Path) -> list[tuple[str, str, str]] | None:
+    """(the rule's line, the component class, the file it is held to) of each failure, one per
+    dependency or part (brief #1776: the baseline counts them); None when no stack is chosen."""
     found = chosen(Path(root))
     if found is None:
         return None
@@ -151,36 +158,55 @@ def problems(root: Path) -> list[str] | None:
     try:
         deps = direct(reader, build.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, ValueError, AttributeError):
-        return [line(f"{RULE}: the build file is missing or unreadable", "build file")]
+        return [(f"{RULE}: the build file is missing or unreadable", "build file", build_file)]
     try:
         have = locked(reader, lock.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return [line(f"{RULE}: the lock file is missing", "lock file")]
+        return [(f"{RULE}: the lock file is missing", "lock file", lock_file)]
     except (OSError, UnicodeDecodeError, ValueError, AttributeError):
-        return [line(f"{RULE}: the lock file is unreadable", "lock file")]
-    out: set[str] = set()
+        return [(f"{RULE}: the lock file is unreadable", "lock file", lock_file)]
+    out: list[tuple[str, str, str]] = []
     for name, version in deps:
         if version is None:
-            out.add(line(f"{RULE}: a direct dependency is not pinned exactly", "dependency"))
+            out.append((f"{RULE}: {UNPINNED}", "dependency", build_file))
         elif name not in have:
-            out.add(line(f"{RULE}: a direct dependency is not in the lock", "dependency"))
+            out.append((f"{RULE}: a direct dependency is not in the lock", "dependency", lock_file))
         elif have[name] != version:
-            out.add(line(f"{RULE}: a direct dependency differs from the lock", "dependency"))
+            out.append((f"{RULE}: {STALE}", "dependency", lock_file))
     for name, version, _ in parts:
         if norm(name) in have and have[norm(name)] != version:
-            out.add(
-                line(
-                    f"{RULE}: a part of the Accepted stack record differs from the lock",
-                    "stack part",
-                )
-            )
-    return sorted(out)
+            why = f"{RULE}: a part of the Accepted stack record differs from the lock"
+            out.append((why, "stack part", lock_file))
+    return out
 
 
-def check(root: Path, playbook: dict[str, Any]) -> list[str]:
-    """The runner's interface: the path classes that fail, none when the step passes."""
-    found = problems(root)
-    return ["build and lock files"] if found else []
+def problems(root: Path) -> list[str] | None:
+    """The failure lines, or None when no stack is chosen (the step is not run)."""
+    found = findings(root)
+    return None if found is None else sorted({line(r, c) for r, c, _ in found})
+
+
+def applies(root: Path) -> bool:
+    """Brief #1776 answer 1: the runner holds the step where a work type is declared."""
+    return declaration(Path(root))[0] is not None
+
+
+def skipped(root: Path) -> str | None:
+    """Brief #1776 answer 2: with no stack chosen the runner prints a not-run row, never `ok`."""
+    return NO_STACK if chosen(Path(root)) is None else None
+
+
+def check(root: Path, playbook: dict[str, Any]) -> list[tuple[str, str]]:
+    """The runner's interface: (the rule and component class, the file's path class) of each."""
+    return sorted({(f"{r} (component class: {c})", f) for r, c, f in findings(root) or []})
+
+
+def counts(root: Path, playbook: dict[str, Any]) -> dict[str, int]:
+    """Brief #1776 answer 3: the findings per build file or lock, for the baseline (rule 7)."""
+    out: dict[str, int] = {}
+    for _, _, held in findings(root) or []:
+        out[held] = out.get(held, 0) + 1
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:

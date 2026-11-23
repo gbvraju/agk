@@ -28,7 +28,8 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import check_playbooks  # noqa: E402
 import run_gates  # noqa: E402
-from gates import node_pack  # noqa: E402
+from gates import bom, node_pack  # noqa: E402
+from test_pins import with_lock  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
 VALUES = ("greet.ts", "greeting", "hello", "example.com")
@@ -104,6 +105,13 @@ def node_entries(work_type: str) -> list[dict]:
     return check_playbooks.standard(PLAYBOOKS / f"{work_type}.toml", KIT_ROOT)[1]
 
 
+@pytest.fixture(autouse=True)
+def _no_bill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Brief #1776: the sample's new lock would start the `bom` step, which these samples never
+    ran (they had no lock) and which needs a committed, installed project; it has its own tests."""
+    monkeypatch.setattr(bom, "applies", lambda _root: False)
+
+
 def sample(tmp: Path, code: str = CLEAN, rules: dict | None = None, **kw: object) -> Path:
     shutil.copytree(PLAYBOOKS, tmp / "config" / "playbooks")
     toml = kw.get("toml", "")
@@ -131,6 +139,8 @@ def sample(tmp: Path, code: str = CLEAN, rules: dict | None = None, **kw: object
     (tmp / "frontend").mkdir()
     (tmp / "frontend" / str(kw.get("name", "greet.ts"))).write_text(code, encoding="utf-8")
     (tmp / "node_modules" / "dep.js").write_text("debugger;\n", encoding="utf-8")  # never read
+    if kw.get("package", True):
+        with_lock(tmp, "node")  # brief #1776: the pins step reads the lock
     return tmp
 
 

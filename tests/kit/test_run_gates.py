@@ -157,7 +157,8 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
     out = capsys.readouterr().out
     count = len(WORK_TYPES) + 1
     gates = NOT_FOUNDED + "ok secrets\nok environment-settings\nok cut-over-order\n"
-    gates += "ok gates (4 check gates; not run: tests-first)\n"  # brief #1590
+    gates += "not run pins: no stack chosen\n"  # brief #1776: a work type, no stack chosen
+    gates += "ok gates (5 check gates; not run: tests-first, pins)\n"  # brief #1590
     assert f"ok playbooks ({count} playbooks)\n{gates}" in out
     path = root / "config" / "playbooks" / "cloud-migration.toml"
     text = path.read_text(encoding="utf-8")
@@ -174,6 +175,13 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
 
 # brief #1685 (ADR-0702): a chosen runtime that no standards pack serves is told so, never silent.
 NO_PACK = "not run standards: no pack for node\n"
+# brief #1776 (ADR-0742): a Node record with no `package.json` now fails the pins step, and only it.
+PINS_FAIL = "FAIL gates: pins: SPEC-0072 rule 4: the stack's build file and lock are not pinned"
+
+
+def others(out: str) -> list[str]:
+    """The failure lines of the run but the pins step's."""
+    return [ln for ln in out.splitlines() if ln.startswith("FAIL") and not ln.startswith(PINS_FAIL)]
 
 
 def _record(root: Path, runtime: str) -> None:
@@ -192,11 +200,10 @@ def test_a_node_record_prints_no_pack_and_lists_standards(
     """REQ-079: brief #1685 answers 1 and 3 (every work type; the exit code is unchanged)."""
     root = _project(tmp_path, work_type)
     _record(root, "node")
-    assert run_gates.main(["--root", str(root)]) == 0
+    assert run_gates.main(["--root", str(root)]) == 1  # brief #1776: pins, the build file missing
     out = capsys.readouterr().out
     assert NO_PACK in out and "ok standards" not in out
-    last = out.rstrip().splitlines()[-1]
-    assert last.startswith("ok gates (") and "standards" in last.split("not run:", 1)[1]
+    assert PINS_FAIL in out and others(out) == []
 
 
 @pytest.mark.parametrize("runtime", ["python", None])
@@ -261,8 +268,10 @@ def test_each_setting_leaves_the_no_pack_line_and_the_exit_code(
         from common import personal_table
 
         assert personal_table(root) is not None  # personal mode, not team mode
-    before = run_gates.main(["--root", str(root)])
-    assert NO_PACK not in capsys.readouterr().out
+    run_gates.main(["--root", str(root)])
+    first = capsys.readouterr().out
+    assert NO_PACK not in first
     _record(root, "node")
-    assert run_gates.main(["--root", str(root)]) == before
-    assert NO_PACK in capsys.readouterr().out
+    assert run_gates.main(["--root", str(root)]) == 1  # brief #1776: pins, the build file missing
+    out = capsys.readouterr().out
+    assert NO_PACK in out and others(out) == others(first)
