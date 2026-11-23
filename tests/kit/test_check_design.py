@@ -385,7 +385,41 @@ def test_ac6_the_check_reads_files_only_and_prints_no_value(tmp_path):
 # --- brief #1840 answer 4: the evidence line may name an imported version -----------------------
 
 DESIGN = KIT_ROOT / "scripts" / "agk" / "design.py"
-STANDARD_THEME = (KIT_ROOT / "kit" / "templates" / "design-theme.md").read_text(encoding="utf-8")
+STANDARD_THEME = """# Theme
+
+Standard: agk design standard 1
+
+## Brand
+
+- name: [brand name] — source: [where the owner wrote it down]
+- primary: [primary colour as a hex value] — source: [where the owner wrote it down]
+- font: system-ui — source: the kit's default, a system font with no download
+- logo: [logo file] — source: [where the owner wrote it down]
+
+## Theme
+
+```css
+:root {
+  --color-accent: #1a56db;
+  --color-on-accent: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-accent: #8ab4ff;
+    --color-on-accent: #101418;
+  }
+}
+```
+
+## Layout
+
+- density: comfortable
+- alignment: start
+
+## Evidence
+
+Evidence: {{evidence}}
+"""  # the shape of kit/templates/design-theme.md (not installed)
 IMPORT_REQUIREMENTS = """# Requirements
 
 ### REQ-001 — A reader keeps a list of books

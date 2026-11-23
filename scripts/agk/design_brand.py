@@ -88,7 +88,7 @@ def expand(colour: str) -> str:
 def parse(words: str) -> dict[str, str]:
     """The brand values an answer gives without guessing (brief #1840 answers 1 and 8)."""
     parts = [p.strip() for p in re.split(r"[;\n]", words) if p.strip()]
-    labelled = {}
+    labelled: dict[str, str] = {}
     for part in parts:
         label, colon, value = part.partition(":")
         if colon and label.strip().lower() in LABELS:
@@ -185,10 +185,9 @@ def theme_block(template: str, primary: str | None, font: str | None) -> tuple[s
     lines += ["  :root {", *rule(dark, "dark", "    "), "  }", "}"]
     notes = []
     if proposed:
-        word = {
-            ("light",): "too light",
-            ("dark",): "too dark",
-        }.get(tuple(proposed), "too light in light mode and too dark in dark mode")
+        words = {"light": "too light", "dark": "too dark"}
+        both = "too light in light mode and too dark in dark mode"
+        word = words[proposed[0]] if len(proposed) == 1 else both
         notes.append(ASK.format(word=word))
     if failed:
         notes.append(NO_SHADE.format(modes=" and ".join(failed)))
@@ -202,8 +201,8 @@ def theme_text(root: Path, evidence: str) -> tuple[str, list[str]]:
     if values:
         for key, (value, source) in values.items():
             line = f"- {key}: {value} — source: {source}"
-            text = re.sub(rf"(?m)^- {key}: .*$", lambda _m, line=line: line, text)
-    primary, font = values.get("primary", ("",))[0], values.get("font", ("",))[0]
+            text = re.sub(rf"(?m)^- {key}: .*$", line.replace("\\", "\\\\"), text)
+    primary, font = (values[k][0] if k in values else "" for k in ("primary", "font"))
     if primary or font:
         block, more = theme_block(text, primary, font)
         fence = r"(?s)(## Theme\n\n```css\n).*?(```)"
