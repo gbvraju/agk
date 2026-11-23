@@ -527,3 +527,117 @@ def test_req061_a_project_list_of_the_old_six_still_notes_blessing(started):
     (started / "config" / "licences.toml").write_text(f"allowed = [{six}]\n", "utf-8")
     proc = engines(with_part(started, "blessing"), "stack-check")
     assert proc.returncode == 0 and OFF_LIST in proc.stdout.splitlines(), proc.stdout
+
+
+# --- brief #1843 (ADR-0771; REQ-079): the runtime's common spellings, and the screens to build --
+
+
+@pytest.mark.parametrize("name", ["Node.js", "NodeJS", "nodejs", "Node"])
+def test_req079_a_common_node_spelling_prints_no_runtime_note(started, name):
+    """REQ-079: brief #1843 answers 3 and 4 (option B names a runtime of the table too)."""
+    root = declared(started)
+    path = root / "docs" / "adr" / "0002-stack-options.md"
+    head, _, tail = path.read_text(encoding="utf-8").partition("   - Option B")
+    tail = tail.replace("Parts: a 1.0 MIT.", f"Parts: {name} 22.11.0 MIT, a 1.0 MIT.", 1)
+    path.write_text(head + "   - Option B" + tail, encoding="utf-8")
+    proc = engines(root, "stack-check")
+    assert proc.returncode == 0, proc.stdout
+    assert "names no runtime" not in proc.stdout
+
+
+def test_req079_an_unknown_runtime_still_prints_its_note(started):
+    """REQ-079: brief #1843 answer 4 (the note names the two runtimes, never a part)."""
+    root = declared(started)
+    path = root / "docs" / "adr" / "0002-stack-options.md"
+    head, _, tail = path.read_text(encoding="utf-8").partition("   - Option B")
+    tail = tail.replace("Parts: a 1.0 MIT.", "Parts: Deno 2.1.4 MIT, a 1.0 MIT.", 1)
+    path.write_text(head + "   - Option B" + tail, encoding="utf-8")
+    proc = engines(root, "stack-check")
+    assert NOTE_B in proc.stdout.splitlines() and "Deno" not in proc.stdout
+
+
+INVENTORY = """# Design inventory
+
+## Requirements
+
+### REQ-001
+
+- Specs: none
+- Screens: home, menu
+
+## Screens
+
+### home
+
+- Flow: open the app at example.com
+- Pattern: app shell and navigation
+- Links to: menu
+- Sources: docs/design/imported/i1/files/index.html
+
+### menu
+
+- Flow: pick a dish
+- Pattern: list with filter and sort
+- Links to: home
+- Sources: docs/design/imported/i1/files/menu.html
+"""
+SCREENS_LINE = (
+    "Screens to build (docs/design/inventory.md; {version}): `home` (app shell and navigation),"
+    " `menu` (list with filter and sort). Each option says, in its Build speed phrase, how it"
+    " builds these screens."
+)
+
+
+def with_inventory(root, text=INVENTORY):
+    (root / "docs" / "design").mkdir(parents=True, exist_ok=True)
+    (root / "docs" / "design" / "inventory.md").write_text(text, encoding="utf-8")
+    return root
+
+
+def sign_i1(root):
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import design_signoff as ds  # noqa: PLC0415 - the sign-off reader itself
+
+    files = root / "docs" / "design" / "imported" / "i1" / "files"
+    files.mkdir(parents=True)
+    (files / "index.html").write_text("<!doctype html><title>Home</title>\n", encoding="utf-8")
+    (files / "menu.html").write_text("<h1>Menu</h1>\n", encoding="utf-8")
+    value = ds.imported_digest(root, "i1")
+    (root / ds.SIGNOFFS).write_text(
+        "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+        f"|---|---|---|---|---|---|\n| design | i1 | {value} | {'a' * 40} | 2026-11-20 |"
+        " https://example.com/c/1 |\n",
+        encoding="utf-8",
+    )
+
+
+def written(root):
+    proc = engines(root, "stack-write", "--ref", "main", "--date", "2026-11-23")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return (root / "docs" / "adr" / "0002-stack-options.md").read_text(encoding="utf-8")
+
+
+def test_req079_the_skeleton_names_the_inventorys_screens(started):
+    """REQ-079: brief #1843 answer 1 (no sign-off yet), under the Context's TODO line."""
+    text = written(with_inventory(started))
+    line = SCREENS_LINE.format(version="no signed-off version yet")
+    assert f"the vision and the charter.\n{line}\n\n## Decision" in text
+    assert engines(started, "stack-check").returncode == 0
+    assert "files/" not in text and "Menu" not in text
+
+
+def test_req079_the_skeleton_names_the_signed_off_version(started):
+    """REQ-079: brief #1843 answer 1 (a `design` row of `i1`'s digest)."""
+    root = with_inventory(started)
+    sign_i1(root)
+    assert SCREENS_LINE.format(version="signed-off version i1") in written(root)
+
+
+@pytest.mark.parametrize("inventory", [None, "# Design inventory\n\n## Screens\n"])
+def test_req079_no_inventory_or_no_screens_writes_the_skeleton_as_before(started, inventory):
+    """REQ-079: brief #1843 answer 1 (the template as before, its slot removed)."""
+    if inventory is not None:
+        with_inventory(started, inventory)
+    text = written(started)
+    assert "Screens to build" not in text and "{{screens}}" not in text
+    assert "the charter.\n\n## Decision" in text
