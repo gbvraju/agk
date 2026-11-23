@@ -24,7 +24,9 @@ the pinned module is the one that checks. A failure names the rule code and the 
 class (the glob the file fell under), never a file name or a value (principle 8).
 
 With a `tally` dict, `run` also fills `{step: {file: count}}` for `lint`, `format` and `type`, the
-per-file counts the runner holds to the baseline (SPEC-0072 rule 7; brief #1600, ADR-0680).
+per-file counts the runner holds to the baseline (SPEC-0072 rule 7; brief #1600, ADR-0680), and
+for `floor` the count of its lines against the configuration's path (brief #1837, ADR-0766). With
+no product file in scope it runs no step, the floor included, and returns `(NO_FILE, [])`.
 """
 
 from __future__ import annotations
@@ -59,6 +61,7 @@ SKIP = {".venv", "venv", "node_modules", "__pycache__", "vendor", "third_party",
 INSTALL = "python3 -m pip install -r config/ci-tools.txt"
 MYPY_FLAGS = ["--strict-optional", "--disallow-untyped-defs", "--disallow-incomplete-defs"]
 RUFF_CODE = re.compile(r"^[A-Z]{1,4}[0-9]{0,4}$")
+NO_FILE = "no-file"  # brief #1837: no product file in scope; the runner prints `not run`
 MYPY_LINE = re.compile(r"^(.+?):\d+(?::\d+)?: error: .*?(?:\[([a-z][a-z-]*)\])?$")
 
 
@@ -215,16 +218,12 @@ def lint(
     return _ruff(root, argv, found, "lint", tally)
 
 
-def format_check(
-    root: Path, found: list[tuple[str, str]], tally: Tally | None = None
-) -> list[str]:
+def format_check(root: Path, found: list[tuple[str, str]], tally: Tally | None = None) -> list[str]:
     argv = ["format", "--check", "--no-cache", *_config(root)]
     return _ruff(root, argv, found, "format", tally)
 
 
-def type_check(
-    root: Path, found: list[tuple[str, str]], tally: Tally | None = None
-) -> list[str]:
+def type_check(root: Path, found: list[tuple[str, str]], tally: Tally | None = None) -> list[str]:
     config = root / "pyproject.toml"
     argv = ["mypy", *(["--config-file", str(config)] if config.is_file() else []), *MYPY_FLAGS]
     argv += ["--no-error-summary", "--no-color-output", "--show-error-codes"]
@@ -261,15 +260,18 @@ def run(
         found = files(root, patterns(root))
     except CheckError:
         return [("paths", [f"{RULE}: not an accepted value (setting: {PROJECT_LINT})"])]
+    if not found:
+        return [(NO_FILE, [])]
     codes = [c for c in entry.get("rules", {}).get("codes", []) if isinstance(c, str)]
-    steps = [("floor", floor(root, entry))]
-    if found:
-        own: dict[str, Tally] = {"lint": {}, "format": {}, "type": {}}
-        steps += [
-            ("lint", lint(root, codes, found, own["lint"])),
-            ("format", format_check(root, found, own["format"])),
-            ("type", type_check(root, found, own["type"])),
-        ]
-        if tally is not None:
-            tally.update(own)
+    lines = floor(root, entry)
+    own: dict[str, Tally] = {"floor": {str(entry.get("config")): len(lines)} if lines else {}}
+    own.update(lint={}, format={}, type={})
+    steps = [
+        ("floor", lines),
+        ("lint", lint(root, codes, found, own["lint"])),
+        ("format", format_check(root, found, own["format"])),
+        ("type", type_check(root, found, own["type"])),
+    ]
+    if tally is not None:
+        tally.update(own)
     return steps

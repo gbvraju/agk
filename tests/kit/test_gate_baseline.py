@@ -209,3 +209,29 @@ def test_an_adr_that_names_the_file_lets_it_rise(adopted) -> None:
     adopted.commit({NAMED: "data/old_cache.py 3\ndata/store.py 1\n", "docs/adr/0002-x.md": ADR})
     proc = _protected(adopted)
     assert proc.returncode == 0, proc.stdout
+
+
+def test_a_floor_step_has_its_own_baseline_file() -> None:
+    """REQ-079: brief #1837 answer 1 (the floor files of `config/agk-baseline/`)."""
+    assert baseline.name("standards node floor") == "standards-node-floor"
+    assert baseline.name("standards node type-floor") == "standards-node-type-floor"
+    assert baseline.name("standards python-pyproject floor") == "standards-python-pyproject-floor"
+
+
+@pytest.mark.parametrize("had", [None, "web/a.ts 2\n"])
+@pytest.mark.parametrize("write", [False, True])
+def test_the_ratchet_never_passes_a_line_without_a_count(
+    had: str | None, write: bool, tmp_path: Path
+) -> None:
+    """REQ-079: brief #1837 answer 2 (a tool that did not run counts no file: never held)."""
+    root = _project(tmp_path)
+    gid = "standards node lint"
+    if had is not None:
+        baseline.path(root, gid).parent.mkdir(parents=True, exist_ok=True)
+        baseline.path(root, gid).write_text(had, encoding="utf-8")
+    line = f"{gid}: SPEC-0072 rule 6: the lint tool did not run (setting: standards.lint)"
+    rows = run_gates.ratchet(root, gid, {}, [(False, line)], write)
+    assert (False, line) in rows
+    assert not any(ok is True or ok == run_gates.HELD for ok, _ in rows)
+    assert (baseline.path(root, gid).read_text(encoding="utf-8") if had else None) == had
+    assert baseline.path(root, gid).is_file() == (had is not None)

@@ -1,0 +1,1 @@
+- Gates: an adopted project's first run holds its own lint and compiler configuration below the pack's floor in `config/agk-baseline/` and names it (`held`, and a `warn standards:` line in the doctor), never failing it; a tool that did not run is never held; a pack with no product file in scope prints `not run`, never `ok` (brief #1837, ADR-0766)
