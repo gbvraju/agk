@@ -334,6 +334,12 @@ def agent_refusal(target: Path, plan: Plan) -> None:
         plan.notes.append(AGENT_REFUSED)
 
 
+# Brief #1814, ADR-0755: a retired `[testing]` key the project still sets is named before its pull
+# request; the upgrade never writes a project's `[testing]` keys (Q-F10-4).
+RETIRED_KEY_NOTE = (
+    "retired-key agk.toml testing.every_script_tests (ADR-0755): list its files in "
+    "testing.whole_tests before this upgrade merges"
+)
 ROUTER_NOTE = (
     "router-workflows none added (setting: required_checks in agk.toml is not a list of names)"
 )
@@ -693,6 +699,8 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
         plan.notes.append(fix_note)
     if required is None and ROUTER_WORKFLOW in whole:
         plan.notes.append(ROUTER_NOTE)
+    if retired_key_set(target):
+        plan.notes.append(RETIRED_KEY_NOTE)
     if legacy is not None:
         plan.notes = [n for n in plan.notes if not n.startswith("template-changed agk.toml ")]
         plan.notes.insert(0, LEGACY_NOTE)
@@ -704,6 +712,17 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
         if passes_symlink(target, item.rel):
             raise Refusal(f"{item.rel} passes through a symlink (path class symlink)")
     return plan
+
+
+def retired_key_set(target: Path) -> bool:
+    """Whether the target's `agk.toml` sets `[testing] every_script_tests`, any value (brief #1814
+    answer 3); an unreadable file is read_stamp's refusal, so it reads as not set here."""
+    try:
+        data = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    table = data.get("testing")
+    return isinstance(table, dict) and "every_script_tests" in table
 
 
 def protected_classes(plan: Plan) -> list[str]:

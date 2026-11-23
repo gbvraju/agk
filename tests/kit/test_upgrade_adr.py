@@ -183,3 +183,43 @@ def test_the_skill_branches_first_writes_the_adr_gates_and_holds_for_the_owner()
     assert "check_pr_body.py" in text
     assert "held for the owner's merge" in text and "merge_cleared.py" in text
     assert "Write no ADR" not in text
+
+
+# --- brief #1814 answer 3: an upgrade names a set retired key and never writes it ---------------
+RETIRED_NOTE = (
+    "retired-key agk.toml testing.every_script_tests (ADR-0755): list its files in "
+    "testing.whole_tests before this upgrade merges"
+)
+EVERY = '[testing]\nevery_script_tests = ["tests/test_every.py"]\n'
+
+
+@pytest.mark.parametrize("value", [EVERY, "[testing]\nevery_script_tests = []\n"])
+def test_an_upgrade_names_the_retired_key_before_its_pull_request(tmp_path, kit, capsys, value):
+    """REQ-062: brief #1814 answer 3 (the report names a set key, `[]` too, once)."""
+    root = target(tmp_path)
+    with (root / "agk.toml").open("a", encoding="utf-8") as handle:
+        handle.write(value)
+    code, out = run(capsys, root, "--dry-run")
+    assert code == 0, out
+    assert out.splitlines().count(RETIRED_NOTE) == 1
+    assert upgrade.build_plan(root, kit).notes.count(RETIRED_NOTE) == 1
+
+
+def test_an_upgrade_without_the_retired_key_gives_no_such_note(tmp_path, kit, capsys):
+    """REQ-062: brief #1814 answer 3 (no key: no note)."""
+    root = target(tmp_path)
+    code, out = run(capsys, root, "--dry-run")
+    assert code == 0, out
+    assert "retired-key" not in out
+
+
+def test_an_upgrade_never_writes_the_projects_testing_key(tmp_path, kit, capsys):
+    """REQ-062: brief #1814 answer 3, Q-F10-4 (the upgrade names the key; it never moves it)."""
+    root = target(tmp_path)
+    with (root / "agk.toml").open("a", encoding="utf-8") as handle:
+        handle.write(EVERY)
+    code, out = run(capsys, root)
+    assert code == 0, out
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    assert 'every_script_tests = ["tests/test_every.py"]' in text and "whole_tests" not in text
+    assert RETIRED_NOTE in out.splitlines()

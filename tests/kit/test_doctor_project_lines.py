@@ -132,7 +132,7 @@ def test_doctor_refuses_a_whole_tests_that_is_not_a_list(tmp_path):
 def test_doctor_prints_nothing_without_a_list(tmp_path):
     """REQ-062: brief #1798 answer 7 (a project with no list)."""
     root = tmp_path / "none"
-    root.mkdir(parents=True)
+    root.mkdir()
     (root / "agk.toml").write_text('[testing]\nprofile = "fast"\n', encoding="utf-8")
     assert doctor_script.whole_lines(root) == []
     (root / "agk.toml").write_text('mode = "init"\n', encoding="utf-8")
@@ -151,12 +151,13 @@ def test_doctor_prints_the_count_in_its_report(tmp_path):
     assert "tests: whole tests 1" in proc.stdout, proc.stdout
 
 
-# Brief #1812 (ADR-0755): doctor prints the retired key's line in its report.
+# Brief #1814 (ADR-0755 decision 4): the key is refused like any bad `[testing]` key, so doctor's
+# report gives no deprecation line and no value; the commands that read the table refuse it.
 RETIRED = "deprecated: testing.every_script_tests (ADR-0755)"
 
 
-def test_doctor_prints_the_retired_key_line_in_its_report(tmp_path):
-    """REQ-062: brief #1812 answer 3 (doctor's line when the key is set, none without)."""
+def test_doctor_gives_no_retired_key_line_and_no_value(tmp_path):
+    """REQ-062: brief #1814 answers 1 and 2 (no deprecation line, no value in the report)."""
     dirs = init_target(tmp_path, BLOCK)
     root = dirs["root"]
     (root / "tests").mkdir(exist_ok=True)
@@ -165,9 +166,8 @@ def test_doctor_prints_the_retired_key_line_in_its_report(tmp_path):
     toml = 'mode = "init"\nversion = "9.9.9"\n[testing]\n'
     every = 'every_script_tests = ["tests/test_w.py"]\n'
     (root / "agk.toml").write_text(toml + every, encoding="utf-8")
-    assert doctor(*args).stdout.count(RETIRED) == 1
-    (root / "agk.toml").write_text(toml + 'profile = "fast"\n', encoding="utf-8")
-    assert RETIRED not in doctor(*args).stdout
+    out = doctor(*args).stdout
+    assert RETIRED not in out and "tests/test_w.py" not in out, out
 
 
 # Brief #1838 answer 3 (ADR-0768): one doctor line while the licences baseline holds a line.

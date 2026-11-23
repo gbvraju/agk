@@ -10,7 +10,8 @@ Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails
 and the path and never a value, on: a script or an event handler in a mockup, an external request
 or a loaded resource, a colour that is not a token, a token block that is not one with a light and
 a dark set, a contrast under 4.5:1 (computed from the tokens, in both modes), a brand value with no
-source, an evidence line that points to no mockup or prototype folder. When
+source, an evidence line that points to no mockup, prototype or imported folder (an imported
+version `docs/design/imported/i<n>/` is evidence as a kit version is, ADR-0770). When
 `docs/design/inventory.md` exists, `design_inventory.py` checks it (SPEC-0037 rule 3): an empty
 slot, a requirement or a screen left out, a pattern that is not the standard's, a link to no screen
 or a missing state fails naming the rule and the screen. Each prototype version folder
@@ -27,9 +28,9 @@ theme block and its layout block, and its contrast is computed on the standard's
 its overrides, in light and dark; a theme without the line is checked as before. A version
 with a `design` row in `docs/design/signoffs.md` is frozen (SPEC-0037 rule 9, `design_signoff.py`):
 a change in its folder outside `screenshots/` fails naming the version. Two things are information
-and not failures: a theme whose evidence folder has no approval line, or whose prototype version has
-no `design` row of its digest (rule 12), reads "not approved yet", and a placeholder brand is
-reported as at risk.
+and not failures: a theme whose evidence folder has no approval line, or whose prototype or imported
+version has no `design` row of its digest (rule 12), reads "not approved yet", and a placeholder
+brand is reported as at risk.
 Each imported version `docs/design/imported/i<n>/` is checked by `design_import.py` (SPEC-0037
 rule 15 as amendment 161 items 2 and 3 propose): its files against `manifest.json` and
 `external.txt`, its `map.md` against the manifest and the inventory, and every `yes` state of the
@@ -62,7 +63,9 @@ MOCKUPS = "docs/design/mockups"
 MIN_CONTRAST = 4.5
 FOLDER = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$")
 EVIDENCE = re.compile(
-    r"^Evidence:\s*docs/design/(?:mockups/([^/\s]+)|prototype/(v[1-9]\d*))/?\s*$", re.M
+    r"^Evidence:\s*docs/design/"
+    r"(?:mockups/([^/\s]+)|prototype/(v[1-9]\d*)|imported/(i[1-9]\d*))/?\s*$",
+    re.M,
 )
 PROTOTYPE = "docs/design/prototype"
 APPROVAL = re.compile(r"(?m)^Approved by \S.* on \d{4}-\d{2}-\d{2}\s*$")
@@ -263,17 +266,20 @@ def theme_problems(root: Path, text: str) -> tuple[list[str], list[tuple[str, st
         folder = None
     elif evidence.group(1):
         folder = root / MOCKUPS / evidence.group(1)
-    else:
-        folder = root / PROTOTYPE / evidence.group(2)
+    else:  # a kit version v<n> or an imported version i<n> (brief #1840, ADR-0770)
+        version = evidence.group(2) or evidence.group(3)
+        folder = root / design_signoff.folder_of(version)
     if "Evidence" not in sections:
         out.append(f"rule 7: {THEME}: the theme has no Evidence section")
     elif folder is None or not folder.is_dir():
-        out.append(f"rule 7: {THEME}: the evidence line points to no mockup or prototype folder")
+        out.append(
+            f"rule 7: {THEME}: the evidence line points to no mockup, prototype or imported folder"
+        )
     elif evidence is not None and evidence.group(1):
         readme = folder / "README.md"
         approved = readme.is_file() and bool(APPROVAL.search(readme.read_text(encoding="utf-8")))
     elif evidence is not None:
-        approved = design_signoff.signed_off(root, evidence.group(2))  # rule 12
+        approved = design_signoff.signed_off(root, version)  # rule 12
     return out, pairs, placeholder, approved
 
 
