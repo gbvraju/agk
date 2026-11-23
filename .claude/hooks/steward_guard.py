@@ -579,6 +579,8 @@ def git_read(where: list[str], cwd: Path, *args: str) -> tuple[int, str] | None:
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env=env,
             timeout=GIT_SECONDS,
             check=False,
