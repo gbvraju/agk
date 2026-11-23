@@ -270,7 +270,7 @@ def test_req079_a_malformed_command_line_prints_usage(args: list[str]) -> None:
     assert result.stderr.startswith("usage: python3 scripts/agk/gates/pins.py")
 
 
-# Brief #1776 (ADR-0742): the gate runner runs the pins step, so governance fails an unpinned product.
+# Brief #1776 (ADR-0742): the gate runner runs the pins step; governance fails an unpinned product.
 
 
 def gate_rows(root: Path) -> list[tuple[object, str]]:

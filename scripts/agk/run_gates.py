@@ -24,6 +24,10 @@ no hosted scanner, nothing written. From `check_playbooks.py` it prints nothing 
 check, so that check's output is unchanged there (the kit's own repository's case).
 `required_checks` is unchanged: it runs inside `governance`.
 
+The product steps (`PRODUCT_STEPS`): `pins` (SPEC-0072 rule 4; brief #1776, ADR-0742) where a
+work type is declared, not run without a chosen stack, then `bom` and `licences` where a lock is
+read.
+
 The standards packs (SPEC-0072 rule 6; brief #1589, ADR-0669): after the gates, each composed
 `[[standards]]` entry whose stack a pack module of `PACKS` serves is run once per module, only when
 that module is `on` (its stack chosen in the Accepted stack record). Its steps print `ok standards
@@ -66,7 +70,8 @@ STEP = re.compile(r"^[a-z][a-z0-9-]*$")
 ARCHITECTURE_STEPS = ("layers", "architecture-record")  # brief #1595 (ADR-0675)
 # brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way
 # only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
-PRODUCT_STEPS = ("bom", "licences")
+# brief #1776 (ADR-0742): `pins` first, where a work type is declared; no stack chosen is not run.
+PRODUCT_STEPS = ("pins", "bom", "licences")
 PACKS = ("python_pack", "node_pack")  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
