@@ -371,7 +371,6 @@ def test_the_new_script_step_is_removed_from_the_selection():
     """REQ-062: brief #1814 Measured (`new_scripts` and its reason are gone)."""
     for name in ("new_scripts", "check_every_script", "NEW_SCRIPT", "EVERY_SCRIPT_BAD"):
         assert not hasattr(impact, name), name
-    assert "every_script_tests" not in impact.KEYS
 
 
 def test_the_replay_of_a_script_adding_merge_gives_whole_lines_and_no_new_script_line():

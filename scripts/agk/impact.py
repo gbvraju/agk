@@ -157,6 +157,7 @@ KEYS = {
     "results_dir",
     "keep_passed",
     "keep_runs",
+    "every_script_tests",  # retired: refused first by name (brief #1814); agrees with TABLE_KEYS
     "whole_tests",
     "pre_merge_tests",
     "rerun_alone",
