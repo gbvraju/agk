@@ -58,7 +58,7 @@ SHA = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 
 
 def iso(delta: timedelta = timedelta(0)) -> str:
-    """A time `delta` from the pinned clock the code reads (`AGK_TEST_NOW`, brief #1791), else from now."""
+    """A time `delta` from the pinned clock the code reads (`AGK_TEST_NOW`, brief #1791) or now."""
     try:
         now = datetime.fromisoformat(os.environ.get("AGK_TEST_NOW") or "-").astimezone(UTC)
     except ValueError:

@@ -623,7 +623,7 @@ def test_brief1026_a_reasoned_release_with_windows_line_ends_frees_the_take():
 
 
 def test_brief1791_iso_builds_its_time_from_the_pinned_clock(clock, monkeypatch):
-    """REQ-053: `iso` reads the instant the code reads, so an age it builds is exact on a slow runner."""
+    """REQ-053: `iso` reads the instant the code reads, so its age holds on a slow runner."""
     import test_session
 
     pin = datetime(2026, 11, 23, 2, 18, 0, 750000, tzinfo=UTC)
