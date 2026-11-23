@@ -1,10 +1,11 @@
-"""Tests of the steward guard's tag rule (SPEC-0059 rule 11, session rule 2, brief #1834, ADR-0763; REQ-066 AC5).
+"""Tests of the steward guard's tag rule (SPEC-0059 rule 11, brief #1834, ADR-0763; REQ-066 AC5).
 
-The steward's guard reads a `git push` as git does: a tag's short name, a tag destination, `tag <name>`, an empty
-source, a pattern into `refs/tags/`, `--follow-tags`, a push setting, a `git config` or `-c` that writes one, an alias
-and `update-ref` of a tag are denied; a work branch push is allowed as before. The same table runs through every role
-guard that `plugin_hooks.ROLE_GUARDS` names. Each test builds a scratch repository in `tmp_path` with invented tags
-and an `example.com` remote; nothing is pushed and nothing uses the network.
+The steward's guard reads a `git push` as git does: a tag's short name, a tag destination, `tag
+<name>`, an empty source, a pattern into `refs/tags/`, `--follow-tags`, a push setting, a `git
+config` or `-c` that writes one, an alias and `update-ref` of a tag are denied; a work branch push
+is allowed as before. The same table runs through every role guard that `plugin_hooks.ROLE_GUARDS`
+names. Each test builds a scratch repository in `tmp_path` with invented tags and an `example.com`
+remote; nothing is pushed and nothing uses the network.
 """
 
 from __future__ import annotations
@@ -47,7 +48,7 @@ DENIED = [
     ("git push origin HEAD:refs/tags/v9", "(path class: default branch)"),
     ("git push origin 'refs/*:refs/*'", TAG),
     ("git push origin '*:*'", TAG),
-    ("git push --repo=origin v1.0.0", TAG),
+    ("git push --repo=origin v1.0.0", "(path class: git push)"),
     ("git push --follow-tags origin feature", "(path class: git push)"),
     ("git -c push.followTags=true push origin feature", "(path class: git config)"),
     ("git config push.followTags true", "(path class: git config)"),
@@ -113,7 +114,7 @@ def git_env(home: Path) -> dict:
 
 
 def repo(tmp_path: Path, toml: str = '[kit]\nlayout = "plugin"\n') -> Path:
-    """One commit, tags `v1.0.0` (lightweight), `v1.1.0` (annotated) and `release`, branches `feature`, `release`."""
+    """Tags `v1.0.0` (plain), `v1.1.0` (annotated), `release`; branches `feature`, `release`"""
     root = tmp_path / "p"
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
@@ -129,7 +130,9 @@ def repo(tmp_path: Path, toml: str = '[kit]\nlayout = "plugin"\n') -> Path:
     return root
 
 
-def run(script: Path, root: Path, command: str, *args: str, path: str | None = None, **env) -> str | None:
+def run(
+    script: Path, root: Path, command: str, *args: str, path: str | None = None, **env
+) -> str | None:
     payload = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(root)}
     full = {**git_env(root), "CLAUDE_PROJECT_DIR": str(root), **env}
     if path is not None:
@@ -161,7 +164,7 @@ def never_a_value(line: str) -> None:
 
 @pytest.mark.parametrize(("command", "ending"), DENIED)
 def test_req066_every_tag_form_is_denied_with_its_rule_and_class(tmp_path, command, ending):
-    """REQ-066 AC5: rule 11, each way a command makes, moves or deletes a tag is denied (brief #1834)."""
+    """REQ-066 AC5: rule 11, each way a command makes, moves or deletes a tag is denied."""
     found = bash(repo(tmp_path), command)
     assert found is not None, command
     assert found.startswith(f"steward guard: {RULE} ") and found.endswith(ending), found
@@ -170,7 +173,7 @@ def test_req066_every_tag_form_is_denied_with_its_rule_and_class(tmp_path, comma
 
 @pytest.mark.parametrize("command", ALLOWED)
 def test_req066_a_work_branch_push_and_the_reads_stay_allowed(tmp_path, command):
-    """REQ-066 AC5: rule 11, a work branch push, the evidence note, a fetch and the reads pass as before."""
+    """REQ-066 AC5: rule 11, a work branch push, the evidence note, a fetch and reads pass."""
     assert bash(repo(tmp_path), command) is None, command
 
 
@@ -184,8 +187,10 @@ def test_req066_a_work_branch_push_and_the_reads_stay_allowed(tmp_path, command)
         ("remote.origin.push", "v1.0.0", "remote.<name>.push"),
     ],
 )
-def test_req066_a_push_setting_that_sends_a_tag_denies_naming_the_setting(tmp_path, key, value, setting):
-    """REQ-066 AC5: rule 11, `push.followTags` true, a tag push refspec or a mirror remote deny the push."""
+def test_req066_a_push_setting_that_sends_a_tag_denies_naming_the_setting(
+    tmp_path, key, value, setting
+):
+    """REQ-066 AC5: rule 11, `push.followTags` true, a tag refspec or a mirror deny a push."""
     root = repo(tmp_path)
     git(root, "config", key, value)
     found = bash(root, "git push origin feature")
@@ -203,7 +208,7 @@ def test_req066_a_push_setting_that_sends_a_tag_denies_naming_the_setting(tmp_pa
     ],
 )
 def test_req066_a_push_setting_that_sends_no_tag_leaves_the_push_allowed(tmp_path, key, value):
-    """REQ-066 AC5: rule 11, `push.followTags` false, a branch refspec and `tagOpt` leave a branch push alone."""
+    """REQ-066 AC5: rule 11, `followTags` false, a branch refspec and `tagOpt` deny nothing."""
     root = repo(tmp_path)
     git(root, "config", key, value)
     assert bash(root, "git push origin feature") is None
@@ -226,7 +231,7 @@ def test_req066_an_alias_is_judged_as_its_expansion(tmp_path):
 
 
 def test_req066_a_push_it_cannot_judge_is_denied(tmp_path):
-    """REQ-066 AC5: rule 11 fails closed, with no git on PATH a push is denied; another command as before."""
+    """REQ-066 AC5: rule 11 fails closed: with no git on PATH a push is denied, a read is not."""
     root = repo(tmp_path)
     empty = tmp_path / "no-git"
     empty.mkdir()
@@ -237,7 +242,7 @@ def test_req066_a_push_it_cannot_judge_is_denied(tmp_path):
 
 
 def test_req066_a_push_outside_a_repository_has_no_tag_to_send(tmp_path):
-    """REQ-066 AC5: rule 11, outside a repository git itself refuses the push, so no tag can leave."""
+    """REQ-066 AC5: rule 11, outside a repository git refuses the push, so no tag can leave."""
     (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
     assert bash(tmp_path, "git push origin feature") is None
     assert bash(tmp_path, "git push origin main") is not None
@@ -259,7 +264,7 @@ def test_req066_git_dash_c_reads_the_tags_of_that_folder(tmp_path):
     ],
 )
 def test_req066_the_default_branch_setting_and_a_tag_of_its_name(tmp_path, toml, branch):
-    """REQ-066 AC5: `default_branch` unset, set and unreadable; a tag of the default branch's name is denied."""
+    """REQ-066 AC5: `default_branch` unset, set, unreadable; a tag of its name is denied."""
     root = repo(tmp_path, toml)
     assert bash(root, f"git push origin HEAD:{branch}") is not None
     git(root, "tag", "trunk")
@@ -279,7 +284,7 @@ def test_req066_the_default_branch_setting_and_a_tag_of_its_name(tmp_path, toml,
 )
 @pytest.mark.parametrize("start", [None, "conductor"])
 def test_req066_the_modes_and_settings_change_no_tag_rule(tmp_path, toml, start):
-    """REQ-066 AC5: `pr_mode`, `review_mode`, `execution`, `[steward]`, personal mode and AGK_STEWARD_START."""
+    """REQ-066 AC5: `pr_mode`, `review_mode`, `execution`, `[steward]`, personal, the start."""
     root = repo(tmp_path, toml)
     env = {"AGK_STEWARD_START": start} if start else {}
     assert run(HOOK, root, "git push origin v1.0.0", **env).endswith(TAG)
@@ -296,11 +301,18 @@ def plugin(tmp_path_factory) -> Path:
 
 
 @pytest.mark.parametrize("agent", ["agk:steward", "steward"])
-def test_req066_the_plugin_hook_denies_a_tag_for_the_steward_in_a_clean_project(tmp_path, plugin, agent):
-    """REQ-066 AC5: the clean layout, `plugin_hooks.py pre` runs the same guard for the steward (ADR-0612)."""
+def test_req066_the_plugin_hook_denies_a_tag_for_the_steward_in_a_clean_project(
+    tmp_path, plugin, agent
+):
+    """REQ-066 AC5: the clean layout, `plugin_hooks.py pre` runs the same guard (ADR-0612)."""
     root = repo(tmp_path)
     script = plugin / ".claude" / "hooks" / "plugin_hooks.py"
-    payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "cwd": str(root), "agent_type": agent}
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "cwd": str(root),
+        "agent_type": agent,
+    }
     for command, denied in (("git push origin v1.0.0", True), ("git push origin feature", False)):
         proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
             [sys.executable, str(script), "pre"],
@@ -313,16 +325,22 @@ def test_req066_the_plugin_hook_denies_a_tag_for_the_steward_in_a_clean_project(
         )
         assert proc.returncode == 0, proc.stderr
         if denied:
-            assert json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecisionReason"].endswith(TAG)
+            assert json.loads(proc.stdout)["hookSpecificOutput"][
+                "permissionDecisionReason"
+            ].endswith(TAG)
         else:
             assert not proc.stdout.strip(), proc.stdout
 
 
 def test_req066_the_steward_frontmatter_hook_denies_a_tag_in_the_installed_layout(tmp_path):
-    """REQ-066 AC5: the installed layout, the steward's own frontmatter command runs the same guard."""
+    """REQ-066 AC5: the installed layout, the steward's frontmatter command runs the guard."""
     root = repo(tmp_path, 'version = "0.1.0"\n')
     shutil.copytree(HOOKS, root / ".claude" / "hooks", ignore=shutil.ignore_patterns("__pycache__"))
-    head = (ROOT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8").split("\n---\n", 1)[0]
+    head = (
+        (ROOT / ".claude" / "agents" / "steward.md")
+        .read_text(encoding="utf-8")
+        .split("\n---\n", 1)[0]
+    )
     command = re.search(r'command: "(.+steward_guard\.py)"', head)[1].replace('\\"', '"')
     for line, denied in (("git push origin v1.0.0", True), ("git push origin feature", False)):
         payload = {"tool_name": "Bash", "tool_input": {"command": line}, "cwd": str(root)}
@@ -340,7 +358,7 @@ def test_req066_the_steward_frontmatter_hook_denies_a_tag_in_the_installed_layou
 
 @pytest.mark.parametrize("role", sorted(plugin_hooks.ROLE_GUARDS))
 def test_req066_every_role_guard_denies_every_tag_form(tmp_path, role):
-    """REQ-066 AC5: the class stays closed, each `ROLE_GUARDS` guard denies each form of the table."""
+    """REQ-066 AC5: the class stays closed, each `ROLE_GUARDS` guard denies each form."""
     root = repo(tmp_path)
     guard, *args = plugin_hooks.ROLE_GUARDS[role]
     for command, _ in DENIED:
@@ -354,7 +372,7 @@ def tools_of(agent: Path) -> str | None:
 
 
 def test_req066_the_builder_is_the_one_role_with_bash_and_no_push_judgement():
-    """REQ-066 AC5: Q-1834-1, the builder has Bash and no role guard; a builder guard later removes this row."""
+    """REQ-066 AC5: Q-1834-1, the builder has Bash and no role guard; a guard removes this row."""
     with_bash = {
         agent.stem
         for agent in (ROOT / ".claude" / "agents").glob("*.md")
