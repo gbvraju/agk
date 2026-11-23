@@ -42,9 +42,12 @@ module's `counts(root, playbook)`, or a pack's tally) is held to `config/agk-bas
 when that file exists: it passes while no file's count exceeds its line (`ok <id> (baseline)`),
 prints `baseline <id>: a count fell in <n> file(s)` when one falls, and otherwise adds one
 `SPEC-0072 rule 7` line to its own. In `mode = "adopt"` a missing file is written from today's
-tree and the step passes; in `mode = "init"` nothing is written. `--baseline` writes the missing
-files and lowers lines, never raising one (the owner's yes on an upgrade, `Q-S0072-5`, and the
-next build's lowering commit). Output names counts and path classes, never a file.
+tree and the step passes; in `mode = "init"` nothing is written. A step module with `HELD = True`
+(`secrets` and `licences`, brief #1777, ADR-0743) whose baseline holds findings prints
+`<id> (baseline): <n> held (path class: <class>)`, the count of today's findings, never `ok <id>`.
+`--baseline` writes the missing files and lowers lines, never raising one (the owner's yes on an
+upgrade, `Q-S0072-5`, and the next build's lowering commit). Output names counts and path
+classes, never a file.
 """
 
 from __future__ import annotations
@@ -128,11 +131,15 @@ def unfound(root: Path) -> list[Row]:
 
 Row = tuple[bool | None | str, str]  # passed (True, False, None: not run) or NOTE, and the line
 NOTE = "note"
+HELD = "held"  # brief #1777: a step passing on its baseline that holds findings; never `ok`
 
 
-def ratchet(root: Path, gate_id: str, found: dict[str, int], failed: list, write: bool) -> list:
+def ratchet(
+    root: Path, gate_id: str, found: dict[str, int], failed: list, write: bool, held: str = ""
+) -> list:
     """The rows of a step with per-file counts against its baseline (rule 7); with no baseline
-    file, and none written, its own FAILED rows."""
+    file, and none written, its own FAILED rows. HELD, the path classes of FAILED, makes a pass
+    on findings one `held` row with today's count (brief #1777)."""
     where = f"(path class: {baseline.CLASS})"
     notes: list[Row] = []
     had = baseline.read(root, gate_id)
@@ -149,6 +156,9 @@ def ratchet(root: Path, gate_id: str, found: dict[str, int], failed: list, write
     if under:
         files = "file" if under == 1 else "files"
         notes.append((NOTE, f"baseline {gate_id}: a count fell in {under} {files} {where}"))
+    if failed and held:
+        n = sum(found.values())
+        return [(HELD, f"{gate_id} (baseline): {n} held (path class: {held})"), *notes]
     return [(True, f"{gate_id} (baseline)" if failed else gate_id), *notes]
 
 
@@ -181,7 +191,10 @@ def results(root: Path, write: bool = False) -> list[Row]:
         failed = [x if isinstance(x, tuple) else (module.RULE, x) for x in module.check(root, data)]
         rows: list[Row] = [(False, f"{gate['id']}: {r} (path class: {c})") for r, c in failed]
         if hasattr(module, "counts"):
-            rows = ratchet(root, gate["id"], module.counts(root, data), rows, write)
+            held = (
+                ", ".join(dict.fromkeys(c for _, c in failed)) if getattr(module, "HELD", 0) else ""
+            )
+            rows = ratchet(root, gate["id"], module.counts(root, data), rows, write, held)
         out += rows or [(True, gate["id"])]
     return out + pack_results(path, root, write) + no_pack_rows(root)
 
@@ -237,7 +250,7 @@ def cmd_check(root: Path, quiet: bool = False, write: bool = False) -> int:
     found = results(root, write)
     if quiet and not found:
         return 0
-    words: dict[bool | None | str, str] = {True: "ok ", None: "not run ", NOTE: ""}
+    words: dict[bool | None | str, str] = {True: "ok ", None: "not run ", NOTE: "", HELD: ""}
     for passed, line in found:
         print(f"{words.get(passed, f'FAIL {NAME}: ')}{line}")
     found = [row for row in found if row[0] != NOTE]

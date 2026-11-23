@@ -12,8 +12,9 @@ a tracked file holding a secret shape of the data guard's detectors (`guard.scan
 `[guard] patterns` entry, and on an example settings file (`.env.example`, Q-1593-1) whose
 values are not empty or `<placeholder>`. A secret shape of only letters and separators is a
 word, not a key, and is not counted. Names compare case-folded. Each failure is one path class,
-never a path or a value (principle 8); no pattern list grows (principle 9). With `mode = "adopt"`
-the findings are held until brief #1600's baseline, so nothing existing goes red.
+never a path or a value (principle 8); no pattern list grows (principle 9). `counts` gives the
+findings per file, so the runner's baseline holds an adopted project's existing ones, named and
+counted on every run, while a new one fails as rule 7 (brief #1777, ADR-0743).
 """
 
 from __future__ import annotations
@@ -27,7 +28,6 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
 import guard  # noqa: E402
-from common import load_config  # noqa: E402
 
 from config import guard_patterns  # noqa: E402
 
@@ -63,39 +63,64 @@ def example_values(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def shaped(text: str, patterns: list) -> bool:
+def shapes(text: str, patterns: list) -> int:
+    """The secret shapes of TEXT: a custom pattern's, or a key shape holding a digit."""
+    n = 0
     for f in guard.scan_text(text, patterns):
         value = text[f.start : f.start + f.length]
-        if f.kind.startswith("CUSTOM-") or (f.kind in SHAPES and re.search(r"\d", value)):
-            return True
-    return False
+        n += f.kind.startswith("CUSTOM-") or (f.kind in SHAPES and bool(re.search(r"\d", value)))
+    return n
 
 
-def problems(root: Path) -> list[str]:
+def findings(root: Path) -> list[tuple[str, str, int]]:
+    """(path class, file, count) of each finding."""
     tracked = files(root)
-    out = []
-    if any(guard.secret_file_name(rel) for rel in tracked):
-        out.append("secret files (tracked)")
-    if any(env_file(rel) for rel in files(root, "--others", "--exclude-standard")):
-        out.append("environment files (not ignored)")
+    out = [("secret files (tracked)", r, 1) for r in tracked if guard.secret_file_name(r)]
+    unignored = files(root, "--others", "--exclude-standard")
+    out += [("environment files (not ignored)", r, 1) for r in unignored if env_file(r)]
     patterns = guard_patterns(root)
     for rel in tracked:
         path = root / rel
         if rel.casefold() == EXAMPLE or not path.is_file() or path.stat().st_size > MAX_BYTES:
             continue
         data = path.read_bytes()
-        if b"\0" not in data[:8192] and shaped(data.decode("utf-8", "replace"), patterns):
-            out.append("tracked files (a secret shape)")
-            break
+        n = 0 if b"\0" in data[:8192] else shapes(data.decode("utf-8", "replace"), patterns)
+        out += [("tracked files (a secret shape)", rel, n)] if n else []
     example = root / EXAMPLE
     if example.is_file():
         text = example.read_text(encoding="utf-8", errors="replace")
-        if any(not PLACEHOLDER.match(v) for _, v in example_values(text)):
-            out.append("example settings file (a value)")
+        n = sum(1 for _, v in example_values(text) if not PLACEHOLDER.match(v))
+        out += [("example settings file (a value)", EXAMPLE, n)] if n else []
     return out
+
+
+ORDER = (
+    "secret files (tracked)",
+    "environment files (not ignored)",
+    "tracked files (a secret shape)",
+    "example settings file (a value)",
+)
+_last: dict[Path, list[tuple[str, str, int]]] = {}  # one scan serves `check` and then `counts`
+
+
+def problems(root: Path) -> list[str]:
+    found = findings(root)
+    _last[Path(root).resolve()] = found
+    return [c for c in ORDER if any(f[0] == c for f in found)]
+
+
+HELD = True  # brief #1777: a pass on a baseline that holds findings prints `held`, never `ok`
 
 
 def check(root: Path, playbook: dict[str, Any]) -> list[str]:
     """The runner's interface: the path classes that fail, none when the step passes."""
-    found = problems(root)
-    return [] if load_config(root)["mode"] == "adopt" else found
+    return problems(root)
+
+
+def counts(root: Path, playbook: dict[str, Any]) -> dict[str, int]:
+    """The runner's baseline interface (SPEC-0072 rule 7): the findings per file."""
+    found = _last.pop(Path(root).resolve(), None)
+    out: dict[str, int] = {}
+    for _, rel, n in findings(root) if found is None else found:
+        out[rel] = out.get(rel, 0) + n
+    return out

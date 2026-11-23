@@ -2902,6 +2902,27 @@ def standards_lines(root: Path) -> list[str]:
     return [STANDARDS_LINE] if stack else []
 
 
+HELD_SECRETS = (
+    "warn secrets: the baseline holds {n} committed secret {files}; follow"
+    " docs/runbooks/leaked-secret.md, rotate and remove each, then lower it with"
+    " run_gates.py --baseline (path class: config/agk-baseline/)"
+)
+
+
+def held_secret_lines(root: Path) -> list[str]:
+    """Brief #1777 (ADR-0743): one warn line while the `secrets` baseline holds a line, naming
+    the path class and the runbook, never a file or a value; it changes no exit code."""
+    from gates import baseline  # noqa: PLC0415 - only this line needs the baseline
+
+    try:
+        held = baseline.read(root, "secrets") or {}
+    except (OSError, UnicodeDecodeError):
+        return []
+    if not held:
+        return []
+    return [HELD_SECRETS.format(n=len(held), files="file" if len(held) == 1 else "files")]
+
+
 def _count(n: int) -> str:
     return f"{n} problem" if n == 1 else f"{n} problems"
 
@@ -3125,6 +3146,7 @@ def main(argv: list[str] | None = None) -> int:
         skills = skill_lines(root.resolve(), Path(options["kit"]) if options["kit"] else None)
         skills += work_type_discovery_lines(root.resolve())
         skills += standards_lines(root.resolve())
+        skills += held_secret_lines(root.resolve())
         design = design_import_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")

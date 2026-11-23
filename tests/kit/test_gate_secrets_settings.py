@@ -175,11 +175,72 @@ def test_a_back_slash_test_folder_reads_as_the_same_folder(
     assert _run(root, capsys)[0] == 0
 
 
+HELD = "secrets (baseline): 1 held (path class: tracked files (a secret shape))"
+BASE = "config/agk-baseline/committed-secrets.txt"  # `secrets.txt` is a secret file name
+
+
 def test_adopt_mode_holds_the_findings(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """REQ-079 AC4: held until brief #1600's baseline, so nothing existing goes red."""
+    """REQ-079: brief #1777 answers 1 and 2: held in the baseline, counted, never `ok secrets`."""
     files = {"config/key.py": f'TOKEN = "{FAKE}"\n', "app/main.py": APP}
-    code, out = _run(_project(tmp_path, files, mode="adopt"), capsys)
+    root = _project(tmp_path, files, mode="adopt")
+    code, out = _run(root, capsys)
     assert code == 0, out
+    assert HELD + "\n" in out and "ok secrets" not in out, out
+    assert (root / BASE).read_text(encoding="utf-8") == "config/key.py 1\n"
+    assert FAKE not in out and "config/key.py" not in out
+    subprocess.run([*GIT, "-C", str(root), "add", "-A"], check=True)  # nosec B603 - fixed
+    code, out = _run(root, capsys)  # named and counted on every run
+    assert code == 0 and HELD + "\n" in out, out
+
+
+@pytest.mark.parametrize("rel", ["config/other.py", "config/key.py"])
+def test_adopt_mode_fails_a_new_secret(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], rel: str
+) -> None:
+    """REQ-079: brief #1777 answer 7: a key added after adoption, or a second key in a held file,
+    fails as rule 7, never naming the file or the value."""
+    files = {"config/key.py": f'TOKEN = "{FAKE}"\n', "app/main.py": APP}
+    root = _project(tmp_path, files, mode="adopt")
+    assert _run(root, capsys)[0] == 0
+    path = root / rel
+    path.write_text(path.read_text(encoding="utf-8") if path.is_file() else "", encoding="utf-8")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f'OTHER = "{FAKE[:-1]}Q"\n')
+    subprocess.run([*GIT, "-C", str(root), "add", "-A"], check=True)  # nosec B603 - fixed
+    code, out = _run(root, capsys)
+    assert code == 1, out
+    assert "FAIL gates: secrets: SPEC-0072 rule 7" in out, out
+    assert FAKE[:8] not in out and rel not in out
+
+
+def test_an_unset_mode_fails_and_writes_no_baseline(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1777 answer 5: `mode` unset fails as today; no baseline is written."""
+    files = {"agk.toml": "", "config/key.py": f'TOKEN = "{FAKE}"\n', "app/main.py": APP}
+    root = _project(tmp_path, files)
+    code, out = _run(root, capsys)
+    assert code == 1, out
+    assert "FAIL gates: secrets: SPEC-0072 rule 2" in out and "(baseline)" not in out, out
+    assert not (root / "config" / "agk-baseline").exists()
+
+
+def test_doctor_warns_while_the_baseline_holds_a_secret(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1777 answer 3: one warning naming the path class and the runbook."""
+    import doctor  # noqa: PLC0415 - the one test of the doctor's line
+
+    files = {"config/key.py": f'TOKEN = "{FAKE}"\n', "app/main.py": APP}
+    root = _project(tmp_path, files, mode="adopt")
+    assert doctor.held_secret_lines(root) == []
+    assert _run(root, capsys)[0] == 0
+    lines = doctor.held_secret_lines(root)
+    assert len(lines) == 1, lines
+    assert lines[0].startswith("warn secrets: ") and "docs/runbooks/leaked-secret.md" in lines[0]
+    assert "(path class: config/agk-baseline/)" in lines[0] and "config/key.py" not in lines[0]
+    (root / BASE).write_text("", encoding="utf-8")
+    assert doctor.held_secret_lines(root) == []
 
 
 def test_the_kits_own_tree_is_green() -> None:

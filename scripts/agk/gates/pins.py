@@ -70,7 +70,8 @@ def line(rule: str, cls: str) -> str:
 
 def option_parts(body: str) -> list[tuple[str, str, str]] | None:
     """Brief #1592 answer 1: an option's parts as (name, version, licence), None with no `Parts:`.
-    A missing version or licence is ''; `(verify)` marks are dropped (versions read that day)."""
+    A missing version or licence is ''; `(verify)` marks are dropped (versions read that day).
+    A name that is a `STACKS` key but for case is that key (`Node` -> `node`, brief #1778)."""
     _, key, tail = body.partition(PARTS_KEY)
     if not key:
         return None
@@ -79,7 +80,8 @@ def option_parts(body: str) -> list[tuple[str, str, str]] | None:
     for raw in tail.replace(VERIFY, " ").strip(" .;").split(","):
         words = raw.split()
         if words:
-            out.append((words[0], words[1] if len(words) > 1 else "", " ".join(words[2:])))
+            name = words[0].lower() if words[0].lower() in STACKS else words[0]
+            out.append((name, words[1] if len(words) > 1 else "", " ".join(words[2:])))
     return out
 
 

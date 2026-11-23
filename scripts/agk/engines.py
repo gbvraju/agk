@@ -103,7 +103,7 @@ from common import (
     parse_requirements,
     resolve_base,
 )
-from gates.pins import option_parts
+from gates.pins import STACKS, option_parts
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
@@ -847,6 +847,18 @@ def testing_match(root: Path, text: str, letter: str) -> str:
     return f"matches option {letter}"
 
 
+def runtime_notes(text: str) -> list[str]:
+    """Brief #1778 answer 2: one note per option whose parts name no runtime the kit checks."""
+    known = ", ".join(STACKS)
+    return [
+        f"note: option {m.group(1)} names no runtime the kit checks ({known}); "
+        "its pins and standards pack will not run"
+        for ln in text.splitlines()
+        if (m := OPTION.match(ln))
+        and not any(p[0] in STACKS for p in option_parts(m.group(2)) or [])
+    ]
+
+
 def cmd_stack_check(root: Path) -> int:
     files = sorted(
         p for p in root.glob("docs/adr/*.md") if STACK_NAME.match(p.relative_to(root).as_posix())
@@ -861,6 +873,10 @@ def cmd_stack_check(root: Path) -> int:
         print(f"FAIL engines: {problem}")
     if not problems:
         print("ok engines-stack")
+        if declaration(root)[0] is not None:
+            for path in files:
+                for note in runtime_notes(path.read_text(encoding="utf-8")):
+                    print(note)
         stack = accepted_stack(root)
         if stack is not None:
             print(f"info engines: [testing] {testing_match(root, stack[1], stack[2])}")

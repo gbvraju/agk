@@ -8,7 +8,9 @@ reads it too.
 
 `config/agk-baseline/<gate id>.txt` holds one line `<path> <count>` per file with findings, the
 path with forward slashes, the lines sorted bytewise, so two machines write the same file. A
-gate id's runs of other characters than `a-z0-9` are `-` in its file name. The files are the
+gate id's runs of other characters than `a-z0-9` are `-` in its file name; the `secrets` gate's
+file is `committed-secrets.txt`, its step's name, since `secrets.txt` is itself a secret file name
+of the data guard (`guard.secret_file_name`; brief #1777, ADR-0743). The files are the
 project's (SPEC-0071 rule 2); the runner writes one only in `mode = "adopt"` and only when it is
 missing, and `run_gates.py --baseline` writes missing ones and lowers lines, never raising one.
 """
@@ -24,8 +26,12 @@ RULE = "SPEC-0072 rule 7: a finding is new or its count rose against the baselin
 CLASS = f"{FOLDER}/"
 
 
+NAMES = {"secrets": "committed-secrets"}  # brief #1777: never a secret file name
+
+
 def name(gate_id: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", gate_id.lower()).strip("-")
+    out = re.sub(r"[^a-z0-9]+", "-", gate_id.lower()).strip("-")
+    return NAMES.get(out, out)
 
 
 def path(root: Path, gate_id: str) -> Path:
