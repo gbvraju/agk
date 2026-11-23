@@ -211,8 +211,43 @@ def test_req_079_ac1_the_record_the_foundation_writes_passes_the_step(tmp_path, 
     assert layers.main(["--root", str(tmp_path), "--write-record"]) == 0
     text = (tmp_path / "docs/architecture.md").read_text(encoding="utf-8")
     assert f"- {SERVICE}:" in text and "{{" not in text
+    # brief #1842 answer 4: the written record holds the template's markers until the foundation
+    # fills it; each marked section fails, and nothing else does
+    marked = {"Context", "Parts", "Data stores", "Outside services", "Needs", "Diagram"}
+    assert found(tmp_path) == sorted((MARKER, f"{front_door.RECORD}; section: {s}") for s in marked)
+    filled = text.replace("TODO(architect): ", "").replace("TODO(architect)", "none")
+    (tmp_path / "docs/architecture.md").write_text(filled, encoding="utf-8")
     assert found(tmp_path) == []
     capsys.readouterr()
+
+
+MARKER = "SPEC-0072 rule 5: the record holds a TODO(architect) marker"
+
+
+@pytest.mark.parametrize(
+    "section", ["Context", "Parts", "Data stores", "Outside services", "Needs", "Diagram"]
+)
+def test_req079_a_section_with_a_todo_marker_fails_naming_it(tmp_path, section):
+    """REQ-079 (brief #1842 answer 4): one line per section, never the line's text."""
+    root = project(tmp_path)
+    record(root)
+    text = (root / "docs/architecture.md").read_text(encoding="utf-8")
+    head = f"## {section}\n"
+    planted = "TODO(architect): INVENTEDPLANTEDWORD\n"
+    if section == "Diagram":  # inside the fenced block: still the kit's own word
+        text = text.replace(head + "\n```mermaid\n", head + "\n```mermaid\n" + planted)
+    else:
+        text = text.replace(head, head + "\n" + planted)
+    (root / "docs/architecture.md").write_text(text, encoding="utf-8")
+    rows = found(root)
+    assert rows == [(MARKER, f"docs/architecture.md; section: {section}")], rows
+    assert all("INVENTEDPLANTEDWORD" not in r + c for r, c in rows)
+
+
+def test_req079_a_held_record_with_markers_stays_not_run(tmp_path):
+    """REQ-079 (brief #1842 answer 4): `record_held` is unchanged."""
+    write(tmp_path, "docs/architecture.md", "# Architecture\n\nTODO(architect): all\n\n## Layers\n")
+    assert architecture_record.skipped(tmp_path) == architecture_record.HELD
 
 
 def test_req_079_ac1_the_template_carries_every_section():
