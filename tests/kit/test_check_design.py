@@ -380,3 +380,103 @@ def test_ac6_the_check_reads_files_only_and_prints_no_value(tmp_path):
     before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     check(tmp_path)
     assert before == {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+
+
+# --- brief #1840 answer 4: the evidence line may name an imported version -----------------------
+
+DESIGN = KIT_ROOT / "scripts" / "agk" / "design.py"
+STANDARD_THEME = (KIT_ROOT / "kit" / "templates" / "design-theme.md").read_text(encoding="utf-8")
+IMPORT_REQUIREMENTS = """# Requirements
+
+### REQ-001 — A reader keeps a list of books
+
+- Acceptance: AC1 a reader adds a book
+- Status: planned
+"""
+IMPORT_INVENTORY = """# Design inventory
+
+The screens and states of the product.
+
+## Requirements
+
+### REQ-001 — A reader keeps a list of books
+
+- Specs: SPEC-0001
+- Screens: books
+
+## Screens
+
+### books
+
+- Flow: keep a list
+- Pattern: list with filter and sort
+- Links to: none
+- State default: yes
+- State empty: n/a: the list is never empty
+- State loading: n/a: the list is read at once
+- State error: n/a: nothing can fail
+- State no-permission: n/a: every reader may see their own list
+- State long-content: n/a: the list is short
+- State success: n/a: nothing is saved
+"""
+SIGNOFF_HEAD = "0123456789abcdef0123456789abcdef01234567"
+
+
+def imported_theme(tmp_path, accent="#1a56db", evidence="docs/design/imported/i1/"):
+    """A project on the import path: i1 with its map, and a theme on the standard naming it."""
+    root = tmp_path / "proj"
+    put(root, "docs/requirements.md", IMPORT_REQUIREMENTS)
+    put(root, "docs/design/inventory.md", IMPORT_INVENTORY)
+    put(tmp_path / "customer", "index.html", "<!doctype html><title>Books</title><p>Books</p>\n")
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(DESIGN), "import", str(tmp_path / "customer"), "--root", str(root)],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    put(root, "docs/design/imported/i1/map.md", "# Screen map of i1\n\n- index.html -> books/default\n")
+    theme = STANDARD_THEME.replace("{{evidence}}", evidence)
+    put(root, "docs/design/theme.md", theme.replace("--color-accent: #1a56db;", f"--color-accent: {accent};"))
+    return root
+
+
+def test_ac7_an_imported_evidence_line_passes_and_reads_not_approved_yet(tmp_path):
+    """REQ-036 AC7: SPEC-0037 rules 12 and 15 (brief #1840 answer 4)."""
+    proc = check(imported_theme(tmp_path))
+    assert proc.returncode == 0, proc.stdout
+    assert "design: the theme is not approved yet" in proc.stdout
+    assert proc.stdout.endswith("ok design\n")
+
+
+def test_ac7_an_imported_evidence_line_reads_approved_with_a_design_row_of_its_digest(tmp_path):
+    """REQ-036 AC7: SPEC-0037 rules 9 and 12 (the `i<n>` row of `design_signoff.signed_off`)."""
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import design_signoff
+
+    root = imported_theme(tmp_path)
+    template = (KIT_ROOT / "kit" / "templates" / "design-signoffs.md").read_text(encoding="utf-8")
+    row = (
+        f"| design | i1 | {design_signoff.imported_digest(root, 'i1')} | {SIGNOFF_HEAD} "
+        "| 2026-11-23 | https://example.com/review/2 |\n"
+    )
+    put(root, "docs/design/signoffs.md", template + row)
+    proc = check(root)
+    assert proc.returncode == 0, proc.stdout
+    assert "not approved yet" not in proc.stdout
+
+
+def test_ac6_an_imported_evidence_line_to_a_missing_version_fails_with_the_new_wording(tmp_path):
+    """REQ-036 AC6: SPEC-0029 rule 7 (brief #1840 answer 4: the folder must exist)."""
+    root = imported_theme(tmp_path, evidence="docs/design/imported/i2/")
+    failed(root, "rule 7: docs/design/theme.md: the evidence line points to no mockup, prototype or imported folder")
+
+
+def test_ac6_pb05_colour_still_fails_contrast_alone_with_an_imported_evidence_line(tmp_path):
+    """REQ-036 AC6: SPEC-0037 rule 7 (brief #1840 answer 2: the check is unchanged)."""
+    proc = check(imported_theme(tmp_path, accent="#b5562b"))
+    assert proc.returncode == 1
+    fails = [ln for ln in proc.stdout.splitlines() if ln.startswith("FAIL")]
+    assert fails == [
+        "FAIL design: rule 7: docs/design/theme.md: contrast below 4.5:1 in light for accent on surface"
+    ], proc.stdout
