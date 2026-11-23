@@ -67,6 +67,7 @@
     "scripts/agk/autopilot.py",
     "scripts/agk/basics.py",
     "scripts/agk/batch.py",
+    "scripts/agk/brief_study.py",
     "scripts/agk/caps.py",
     "scripts/agk/check_acceptance.py",
     "scripts/agk/check_adrs.py",

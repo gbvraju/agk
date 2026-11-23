@@ -17,11 +17,16 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "agk" / "check_brief.py"
 WORDS = "A person at example.com can open a widget."
+STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
+    "Impact:\nSpeed: none: a test brief\nQuality: none: a test brief\nGitHub: none: a test brief\n"
+    "Cost: none: a test brief\nTests: none: a test brief\nWiring: none: a test brief\n"
+    "Prior: none: a test brief\nClass: a test brief; seen 0 (searched nothing)\n"
+)
 GOOD = (
     f'Sentence: "{WORDS}"\n'
     "Answers:\n1. one\n2. two\n"
     "Size: S\nAdvances: new\nTouches: docs/**\nPriority: 1\n"
-    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
+    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n" + STUDY
 )
 WAVED = GOOD + "Wave: 2\n"
 LONG = GOOD.replace(WORDS, "x" * 301)

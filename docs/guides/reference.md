@@ -1115,6 +1115,18 @@ source headers and design links (rules 1 and 2), the plan's checks (rule 10) and
 (rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
 (rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.
 
+## Brief study
+
+    python3 scripts/agk/brief_study.py FILE --root DIR [--open-briefs FILE]
+
+A kit brief shows its study before it is filed (brief #1800, ADR-0752). `brief_study.py` prints the earlier record its
+writer must read: the ADRs and specs that name a code path of `Touches:` or a `Wiring:` file or function, the proposed
+amendments under `docs/runs/` that name one and are not yet in their spec, and the open briefs of the plan's read cache
+(or the saved list) whose `Touches:` meet this one's. `check_brief.py --root` then reads the brief's `Impact:` block
+(`Speed:`, `Quality:`, `GitHub:`, `Cost:`, `Tests:`), `Wiring:`, `Prior:` and `Class:` lines and warns
+(`warning: study: ...`) for each one missing or wrong, and for each Accepted ADR or open brief the study finds that
+`Prior:` leaves out; the warnings become failures from the day `STUDY_FAILS_FROM` names (none set yet). Files only.
+
 ## Plan names
 
     python3 scripts/agk/plan_names.py next --base PATH [--root DIR] [--issues FILE] [--pulls FILE]
