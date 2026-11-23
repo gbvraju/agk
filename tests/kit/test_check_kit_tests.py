@@ -166,3 +166,75 @@ def test_ac1_a_string_in_a_data_table_that_a_test_uses_counts(repo):
     """REQ-009 AC2: a test may name the check in a table it later runs."""
     kit(repo, 'TABLE = {"F1": ("check_new.py", "needle")}\n')
     assert repo.run("check_kit_tests.py").returncode == 0
+
+
+# Brief #1798 (amendment 186 build (m), ADR-0650): the kit sets its own `[testing] whole_tests`.
+WHOLE = "tests/kit/test_whole.py"
+KIT_MAKE = "kit/agk-kit.mk"
+
+
+def the_kit(repo, testing: str | None) -> None:
+    """The kit repository itself (`kit/agk-kit.mk` marks it, as governance's `Project tests` reads it)."""
+    kit(repo, 'repo.run("check_new.py")\n')
+    files = {KIT_MAKE: "# the kit\n", WHOLE: "def test_w():\n    assert True\n"}
+    if testing is not None:
+        files["agk.toml"] = 'default_branch = "main"\n[testing]\n' + testing
+    repo.commit(files)
+
+
+def test_the_kit_without_whole_tests_fails_naming_the_setting(repo):
+    """REQ-062: brief #1798 answer 2 (absent: the key, and the whole `[testing]` table)."""
+    for testing in ('profile = "balanced"\n', None):
+        the_kit(repo, testing)
+        proc = repo.run("check_kit_tests.py")
+        assert proc.returncode == 1, proc.stdout
+        assert "FAIL kit-tests" in proc.stdout and "setting: testing.whole_tests" in proc.stdout
+
+
+def test_the_kit_with_an_empty_whole_tests_fails_naming_the_setting(repo):
+    """REQ-062: brief #1798 answer 2 (empty)."""
+    the_kit(repo, "whole_tests = []\n")
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "setting: testing.whole_tests" in proc.stdout + proc.stderr
+    assert "[]" not in proc.stdout + proc.stderr
+
+
+def test_the_kit_with_a_whole_test_passes(repo):
+    """REQ-062: brief #1798 answer 2."""
+    the_kit(repo, f'whole_tests = ["{WHOLE}"]\n')
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_a_kit_like_repository_without_the_kit_make_file_needs_no_list(repo):
+    """REQ-062: brief #1798 answer 3 (a project's list stays empty until it sets one)."""
+    kit(repo, 'repo.run("check_new.py")\n')
+    repo.commit({"agk.toml": 'default_branch = "main"\n[testing]\nprofile = "balanced"\n'})
+    assert repo.run("check_kit_tests.py").returncode == 0
+
+
+def whole_block(text: str) -> list[str]:
+    """The lines of the `whole_tests = [` ... `]` block of the kit's `agk.toml`."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("whole_tests = ["))
+    end = next(i for i in range(start, len(lines)) if lines[i].strip() == "]")
+    return [line for line in lines[start + 1 : end] if line.strip()]
+
+
+def test_the_kits_own_list_is_set_each_file_exists_with_a_whole_reason():
+    """REQ-062: brief #1798 answers 1 and 8 (16 files, each with a `# whole:` reason)."""
+    from pathlib import Path
+
+    import impact
+
+    root = Path(__file__).resolve().parents[2]
+    listed = impact.testing_table(root)["whole_tests"]
+    assert "tests/kit/test_core_contradictions.py" in listed  # Q-F7-1
+    assert all((root / name).is_file() for name in listed)
+    block = whole_block((root / "agk.toml").read_text(encoding="utf-8"))
+    assert len(block) == len(listed)
+    for line in block:
+        entry, _, reason = line.partition("# whole:")
+        assert entry.strip().strip(",").strip('"') in listed, line
+        assert reason.strip(), line
