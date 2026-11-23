@@ -132,7 +132,7 @@ def test_doctor_refuses_a_whole_tests_that_is_not_a_list(tmp_path):
 def test_doctor_prints_nothing_without_a_list(tmp_path):
     """REQ-062: brief #1798 answer 7 (a project with no list)."""
     root = tmp_path / "none"
-    root.mkdir()
+    root.mkdir(parents=True)
     (root / "agk.toml").write_text('[testing]\nprofile = "fast"\n', encoding="utf-8")
     assert doctor_script.whole_lines(root) == []
     (root / "agk.toml").write_text('mode = "init"\n', encoding="utf-8")
@@ -178,7 +178,7 @@ def held_licences(tmp_path: Path, layout: str | None, held: str | None) -> Path:
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
     root = tmp_path / "proj"
-    root.mkdir()
+    root.mkdir(parents=True)
     kit = f'\n[kit]\nlayout = "{layout}"\n' if layout else ""
     (root / "agk.toml").write_text('mode = "adopt"\n' + kit, encoding="utf-8")
     if held is not None:
