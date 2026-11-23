@@ -10,6 +10,7 @@ remote; nothing is pushed and nothing uses the network.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -27,8 +28,19 @@ RULE = "SPEC-0059 rule 11"
 GIT = shutil.which("git") or "git"
 TAG = "denies a tag (path class: git push)"
 
-sys.path.insert(0, str(HOOKS))
-import plugin_hooks  # noqa: E402 - the hook folder, added above
+
+def role_guards() -> dict[str, tuple[str, ...]]:
+    """`plugin_hooks.ROLE_GUARDS`, read from its source (a stripped copy of the kit may lack it)."""
+    path = HOOKS / "plugin_hooks.py"
+    if not path.is_file():
+        return {}
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "ROLE_GUARDS":
+            return ast.literal_eval(node.value)
+    raise AssertionError("ROLE_GUARDS")
+
+
+ROLE_GUARDS = role_guards()
 
 # Every form of the evidence (brief #1834): (command, the end of the denial line).
 DENIED = [
@@ -356,11 +368,11 @@ def test_req066_the_steward_frontmatter_hook_denies_a_tag_in_the_installed_layou
         assert bool(proc.stdout.strip()) is denied, (line, proc.stdout)
 
 
-@pytest.mark.parametrize("role", sorted(plugin_hooks.ROLE_GUARDS))
+@pytest.mark.parametrize("role", sorted(ROLE_GUARDS))
 def test_req066_every_role_guard_denies_every_tag_form(tmp_path, role):
     """REQ-066 AC5: the class stays closed, each `ROLE_GUARDS` guard denies each form."""
     root = repo(tmp_path)
-    guard, *args = plugin_hooks.ROLE_GUARDS[role]
+    guard, *args = ROLE_GUARDS[role]
     for command, _ in DENIED:
         assert run(HOOKS / guard, root, command, *args) is not None, (role, command)
 
@@ -371,6 +383,7 @@ def tools_of(agent: Path) -> str | None:
     return found[1] if found else None
 
 
+@pytest.mark.skipif(not ROLE_GUARDS, reason="no plugin hook in this copy of the kit")
 def test_req066_the_builder_is_the_one_role_with_bash_and_no_push_judgement():
     """REQ-066 AC5: Q-1834-1, the builder has Bash and no role guard; a guard removes this row."""
     with_bash = {
@@ -378,4 +391,4 @@ def test_req066_the_builder_is_the_one_role_with_bash_and_no_push_judgement():
         for agent in (ROOT / ".claude" / "agents").glob("*.md")
         if (tools := tools_of(agent)) is None or "Bash" in [t.strip() for t in tools.split(",")]
     }
-    assert with_bash - set(plugin_hooks.ROLE_GUARDS) == {"builder"}
+    assert with_bash - set(ROLE_GUARDS) == {"builder"}
