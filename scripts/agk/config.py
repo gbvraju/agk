@@ -85,6 +85,7 @@ import math
 import re
 import sys
 import tomllib
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -592,6 +593,38 @@ def brief_prior_warnings(root: Path) -> int:
     return value
 
 
+# --- the day the brief study fails from (brief #1815, ADR-0757) ---------------------------------
+
+DAY_FORM = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+class BriefStudyDaySettingError(CheckError):
+    """`[flow] brief_study_fails_from` is refused, naming the setting and never the value."""
+
+
+def brief_study_fails_from(root: Path) -> date | None:
+    """The UTC day from which a brief filed without its study lines fails: a TOML date or a
+    `"YYYY-MM-DD"` string; None when unset (the study lines only warn)."""
+    refused = BriefStudyDaySettingError(
+        "rule 4: the setting is refused (setting: flow.brief_study_fails_from)"
+    )
+    try:
+        flow = config_source(root).get("flow", {})
+    except (OSError, ValueError):
+        raise refused from None
+    value = flow.get("brief_study_fails_from") if isinstance(flow, dict) else None
+    if value is None:
+        return None
+    if type(value) is date:
+        return value
+    if isinstance(value, str) and DAY_FORM.fullmatch(value):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            raise refused from None
+    raise refused
+
+
 # --- the stop hook's mode (brief #1254, ADR-0531) -------------------------------------------------
 
 STOP_CHECK_MODES = ("changed", "full", "off")
@@ -828,6 +861,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "auto_start",
             "brief_code_paths",
             "brief_prior_warnings",
+            "brief_study_fails_from",
             "builder_memory_gb",
             "builder_slots",
             "builder_start",

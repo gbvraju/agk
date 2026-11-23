@@ -48,7 +48,9 @@ the plan's read cache, never by a request; a clash is refused naming the holder 
 
 Brief #1800 (ADR-0752): with `--root DIR` a brief that passes also shows its study, the `Impact:`,
 `Wiring:`, `Prior:` and `Class:` lines of `brief_study.study_result`: warnings (`warning: study:
-...`) until `brief_study.STUDY_FAILS_FROM`, failures from it.
+...`), failures for a brief filed on or after `[flow] brief_study_fails_from` (brief #1815,
+ADR-0757): an event by the issue's `created_at`, a saved file by today's UTC date from
+`common.utc_day`.
 Brief #1813 (ADR-0756): `brief_result` is that whole reading, the one that `plan_intake.py
 publish`, the steward's filing, fixing and triage and the conductor's guard call too.
 
@@ -72,7 +74,7 @@ import brief_study
 import design_signoff
 import plan_names
 import playbook_format
-from common import REQ_HEADER, CheckError, config_source, run, utf8_output
+from common import REQ_HEADER, CheckError, config_source, run, utc_day, utf8_output
 from gates.layers import architecture
 from impact import matches
 from session import (
@@ -351,17 +353,28 @@ def body_problems(
 
 
 def brief_result(
-    body: str, root: Path | None, waves: set[int] | None = None, opened: dict | None = None
+    body: str,
+    root: Path | None,
+    waves: set[int] | None = None,
+    opened: dict | None = None,
+    today: str | None = None,
+    filed: object = None,
 ) -> tuple[list[str], list[str]]:
     """Brief #1813 (ADR-0756): the one reading of a brief for every writer, (failures, warnings):
     `body_problems`, then, when it passes, the study of `brief_study.study_result` with the
-    protected-path warnings. A writer never reads a brief with a part of this file alone."""
+    protected-path warnings. A writer never reads a brief with a part of this file alone. FILED
+    is the issue's `created_at`; TODAY, the caller's day, is `common.utc_day()` when not given
+    (brief #1815 answer 2)."""
     problems = body_problems(body, root, waves, opened)
     if problems:
         return problems, []
     number = (opened or {}).get("number")
     problems, study = brief_study.study_result(
-        body, root, number if isinstance(number, int) else None
+        body,
+        root,
+        number if isinstance(number, int) else None,
+        today=today or utc_day(),
+        filed=filed,
     )
     if problems:
         return problems, []
@@ -392,9 +405,14 @@ def event_comment(problems: list[str]) -> str:
 
 
 def event_result(
-    payload: dict, root: Path | None, waves: set[int] | None, opened: dict | None = None
+    payload: dict,
+    root: Path | None,
+    waves: set[int] | None,
+    opened: dict | None = None,
+    today: str | None = None,
 ) -> dict:
-    """What the job does for one saved `issues` event: the decision only, nothing is posted."""
+    """What the job does for one saved `issues` event: the decision only, nothing is posted. The
+    study is judged by the issue's `created_at` (brief #1815 answer 3)."""
     issue = payload.get("issue")
     labels = issue.get("labels") if isinstance(issue, dict) else None
     names = (
@@ -410,7 +428,9 @@ def event_result(
     raw = issue.get("body")
     body = raw if isinstance(raw, str) else ""
     number = issue.get("number")
-    problems, warnings = brief_result(body, root, waves, {**(opened or {}), "number": number})
+    problems, warnings = brief_result(
+        body, root, waves, {**(opened or {}), "number": number}, today, issue.get("created_at")
+    )
     if problems:
         return {
             "action": "fail",

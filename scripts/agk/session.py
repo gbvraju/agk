@@ -244,6 +244,7 @@ from config import (
     MODEL_KINDS,
     REVIEW_MINUTES,
     brief_code_paths,
+    brief_study_fails_from,
     capacity_settings,
     caps_settings,
     model_providers,
@@ -1929,7 +1930,7 @@ def judge(
     me: str,
     prs: list,
     hours: int,
-    shape: Callable = lambda body, _number=None: brief_problems(body),
+    shape: Callable = lambda body, _number=None, _filed=None: brief_problems(body),
     root=None,
     known_open: set[int] | None = None,
     read: bool = True,
@@ -1943,7 +1944,11 @@ def judge(
         return "stale", []
     if is_parked(brief):
         return "parked", []
-    problems = [] if is_red(brief) else shape(brief.get("body"), brief.get("number"))  # #854
+    problems = (
+        []
+        if is_red(brief)  # #854
+        else shape(brief.get("body"), brief.get("number"), brief.get("created_at"))
+    )
     if problems:
         return problems[0], []
     for dep in depends_on(brief["body"]):
@@ -2010,7 +2015,11 @@ def priority_of(body: str) -> int:
 def brief_shape(root, repo: str, s: Survey | None = None) -> Callable:
     """What this repository refuses in a brief body: rule 4, and the wave with a plan issue. With
     the survey S and a brief's number, an `Adds:` refusal is read again against the files the
-    brief's own merged pull requests added (brief #1717)."""
+    brief's own merged pull requests added (brief #1717). From `[flow] brief_study_fails_from`,
+    a brief filed on or after it (its `created_at`, else today) also fails its study lines, each
+    as `rule 4: study: ...` (brief #1815 answer 4); the setting is read, and refused, here."""
+    import common
+    from brief_study import study_failures
     from session_plan import ADDS_EXISTS, own_added, touch_problems, touch_rules
 
     # The default branch's files, never the main folder's (brief #1301, ADR-0551).
@@ -2018,8 +2027,10 @@ def brief_shape(root, repo: str, s: Survey | None = None) -> Callable:
     known = plan_waves(repo) if plan_issue_set(root) else None
     waves = plan_issue_set(root)
     limits = brief_code_paths(root)
+    study_day = brief_study_fails_from(Path(root))
+    today = common.utc_day()
 
-    def shape(body: str | None, number: int | None = None) -> list[str]:
+    def shape(body: str | None, number: int | None = None, filed: object = None) -> list[str]:
         found = brief_problems(body, limits) + (wave_problems(body, known) if waves else [])
         if found:
             return found
@@ -2027,7 +2038,9 @@ def brief_shape(root, repo: str, s: Survey | None = None) -> Callable:
         if s is not None and isinstance(number, int) and number > 0:
             if any(p.endswith(ADDS_EXISTS) for p in found):
                 found = touch_problems(str(body), rules, own_added(s, number))
-        return found
+        if found or study_day is None:
+            return found
+        return [f"rule 4: {p}" for p in study_failures(str(body), Path(root), filed, today)]
 
     return shape
 

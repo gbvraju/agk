@@ -90,6 +90,9 @@ reviews_in_flight = 9
 # A brief's size limits its code paths (amendment 168 of SPEC-0030 rule 4, brief #1121, ADR-0479): `Size: S` names at most S
 # and `Size: M` at most M `Touches:` entries outside tests/, docs/, changelog.d/ and kit/hashes.json; the kit defaults. A change needs an ADR.
 brief_code_paths = { S = 3, M = 6 }
+# The day a brief filed without its study lines is refused (brief #1815, ADR-0757, Q-B2-1): the later of 14 days after
+# brief #1813 merged and 7 days after its pull request, never before 2026-12-14; unset, they only warn. A change needs an ADR.
+brief_study_fails_from = "2026-12-14"
 # The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; merge-queue refuses while another holds it (ADR-0353).
 plan_issue = 661
 # The conductor lapse (brief #1615, amendment 212 of SPEC-0039, ADR-0684): in local mode the merger's sweep merges a cleared head, with
@@ -259,6 +262,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/check_brief.py"
 tests = [
+  "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_layers_step.py",
   "tests/kit/test_agk_mk.py", "tests/kit/test_check_brief.py", "tests/kit/test_conductor_guard_issue.py",
   "tests/kit/test_isolated_mode.py", "tests/kit/test_session.py", "tests/kit_dev/test_conductor_role.py",
@@ -269,6 +273,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/brief_study.py"
 tests = [
+  "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_brief_study.py", "tests/kit/test_check_brief_study.py", "tests/kit/test_check_brief.py",
   "tests/kit/test_installed_imports.py", "tests/kit_dev/test_reference_commands.py",
 ]
@@ -431,6 +436,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
+  "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_python_pack.py",
   "tests/kit/test_conductor_tier.py", "tests/kit/test_autopilot_settings.py",
   "tests/kit/test_agk_config.py", "tests/kit/test_check_brief.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_adapt.py",
@@ -1020,6 +1026,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
   "tests/kit/test_injection_set.py",
   "tests/kit/test_merger_spec_record.py",
@@ -1067,6 +1074,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
   "tests/kit/test_injection_set.py",
   "tests/kit/test_guard_plugin_forms.py",

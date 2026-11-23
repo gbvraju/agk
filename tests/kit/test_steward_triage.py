@@ -177,11 +177,11 @@ def test_req037_triage_refuses_a_brief_without_class_once_the_day_is_past(
     root = kit_tree(project) if choice == "kit brief" else project
     whole = BRIEF.format(priority=0) + STUDY
     no_class = "\n".join(x for x in whole.splitlines() if not x.startswith("Class:")) + "\n"
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: None)
     found = ev.triage(finding(choice, text=no_class), root)
     assert found["action"] == "file", found
     assert any(x.startswith("warning: study: exactly one line Class:") for x in found["lines"])
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     found = ev.triage(finding(choice, text=no_class), root)
     assert found["action"] == "refused" and "Class:" in found["lines"][0], found
     assert ev.triage(finding(choice, text=whole), root)["action"] == "file"
@@ -191,6 +191,6 @@ def test_req037_a_kit_brief_in_a_project_stays_shape_only(project, monkeypatch):
     """REQ-037 AC4: brief #1813 answer 1 and Q-1813-1 (no kit tree to judge the study against)."""
     import brief_study  # noqa: PLC0415
 
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     found = ev.triage(finding("kit brief"), project)
     assert found["action"] == "draft" and not any("study" in x for x in found["lines"]), found

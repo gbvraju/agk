@@ -24,10 +24,12 @@ lines `Speed:`, `Quality:`, `GitHub:`, `Cost:` and `Tests:` in that order, each 
 functions (a `def`, a `class` or a top-level name) exist under the root, or `Wiring: none:
 <reason>`; one `Prior:` line whose ADR, spec and amendment ids exist, or `Prior: none: <what was
 searched>`; and one `Class: <kind>; seen <n> ...` line, where `seen` above 0 needs an answer item
-headed `**The class stays closed.**`. Until `STUDY_FAILS_FROM` (none set: Q-1800-1) they are
-warnings, from it failures; a `Priority: 0` brief is held only to `Class:` and `Prior:`, and the
-router's own red-branch brief to none. A study line that holds the render's placeholder
-`(verify) for the person to state` is warned on any day and never failed (brief #1813, ADR-0756).
+headed `**The class stays closed.**`. They are warnings, and failures for a brief filed on or after
+`[flow] brief_study_fails_from` of the root's agk.toml (brief #1815, ADR-0757): judged by the
+issue's `created_at`, else by the `today` its caller passes; unset, never. A `Priority: 0` brief,
+the router's red-branch brief among them, is held only to `Class:` and `Prior:`. A study line
+that holds the render's placeholder `(verify) for the person to state` is warned on any day and
+never failed (brief #1813, ADR-0756).
 An open brief the study finds and `Prior:` leaves out is always a warning, and so are the first
 `[flow] brief_prior_warnings` (10 when unset) strong Accepted ADRs it leaves out, with one line
 counting the rest. Reads files and the cache only: no network, no model.
@@ -39,22 +41,18 @@ import fnmatch
 import json
 import re
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import plan_names
 from common import CheckError, run, utf8_output
-from session import ROUTER_PAIR, touches_of
+from session import touches_of
 
-from config import BRIEF_PRIOR_WARNINGS, brief_prior_warnings
+from config import BRIEF_PRIOR_WARNINGS, brief_prior_warnings, brief_study_fails_from
 
 NAME = "brief-study"
 USAGE = "usage: brief_study.py FILE --root DIR [--open-briefs FILE]"
-# Answer 5: the day the study lines start to fail (YYYY-MM-DD). None until the maintainers name it
-# (Q-1800-1): the plan's rendered briefs and a sidecar's briefs carry no study lines yet.
-STUDY_FAILS_FROM: str | None = None
 IMPACT_NAMES = ("Speed", "Quality", "GitHub", "Cost", "Tests")
 NOT_CODE = ("tests/", "docs/", "changelog.d/")
 SHARED = ("agk.toml", "kit/hashes.json")  # nearly every change touches them: no search term
@@ -84,12 +82,22 @@ SECTION = re.compile(r"^## ", re.M)
 DECISION = re.compile(r"^## Decision\b.*$", re.M)
 
 
-def enforced(today: str | None) -> bool:
-    """From `STUDY_FAILS_FROM` the study lines fail; before it, or with no day set, they warn."""
-    if STUDY_FAILS_FROM is None:
-        return False
-    day = today or datetime.now(UTC).date().isoformat()
-    return day >= STUDY_FAILS_FROM
+FILED = re.compile(r"(\d{4}-\d{2}-\d{2})T")
+
+
+def filed_day(created: object) -> str | None:
+    """The UTC day of an issue's `created_at` (`YYYY-MM-DDT...Z`), None when it cannot be read."""
+    match = FILED.match(created) if isinstance(created, str) else None
+    return match.group(1) if match else None
+
+
+def enforced(root: Path, today: str | None, filed: object = None) -> bool:
+    """Brief #1815 answer 2: the study lines fail for a brief filed on or after the root's
+    `[flow] brief_study_fails_from`, judged by its `created_at`, else by the caller's `today`;
+    with no day set, or no day to judge by, they warn."""
+    day = brief_study_fails_from(root)
+    judged = filed_day(filed) or today
+    return day is not None and judged is not None and judged >= str(day)
 
 
 def _one(lines: list[str], key: str) -> str | None:
@@ -157,8 +165,12 @@ def prior_problems(lines: list[str], root: Path) -> list[str]:
     if not text:
         return ["study: exactly one line Prior: naming the earlier record, or Prior: none: <what>"]
     for pattern, folder, glob, label in REFS:
-        for number in pattern.findall(text):
-            if not any((root / folder).glob(glob.format(number))):
+        numbers = pattern.findall(text)
+        found = [p.name for p in (root / folder).glob(glob.format("*"))] if numbers else []
+        # one listing per folder (brief #1815: the plan reads this per open brief)
+        known = {n.split("-", 1)[0] for n in found} if glob.startswith("{}-") else set(found)
+        for number in numbers:
+            if (number if glob.startswith("{}-") else glob.format(number)) not in known:
                 return [f"study: the Prior line names {label.format(number)}, not in {folder}/"]
     return []
 
@@ -303,11 +315,24 @@ def placeholder_warnings(lines: list[str]) -> list[str]:
 
 
 def held(body: str) -> tuple[bool, bool]:
-    """(held to the study at all, held to Impact and Wiring too)."""
+    """(held to the study at all, held to Impact and Wiring too): a `Priority: 0` brief, the
+    router's red-branch brief among them, only to `Class:` and `Prior:` (brief #1815 answer 5)."""
     lines = [x.rstrip() for x in body.splitlines()]
-    if all(pair in lines for pair in ROUTER_PAIR):
-        return False, False
     return True, "Priority: 0" not in lines
+
+
+def study_problems(body: str, root: Path) -> list[str]:
+    """What the study lines break, by the line and never a value: no ADR scan, no cache."""
+    _, full = held(body)
+    lines = body.splitlines()
+    problems = (impact_problems(lines) + wiring_problems(lines, root)) if full else []
+    return problems + prior_problems(lines, root) + class_problems(lines)
+
+
+def study_failures(body: str, root: Path, filed: object, today: str | None) -> list[str]:
+    """Brief #1815 answer 4: the failures alone, for the plan's brief shape; nothing before the
+    day or with none set."""
+    return study_problems(body, root) if enforced(root, today, filed) else []
 
 
 def study_result(
@@ -316,14 +341,14 @@ def study_result(
     number: int | None = None,
     today: str | None = None,
     briefs: list[dict] | None = None,
+    filed: object = None,
 ) -> tuple[list[str], list[str]]:
-    """(failures, warnings) of the study lines; nothing without a root (answer 5)."""
-    whole, full = held(body)
-    if root is None or not whole:
+    """(failures, warnings) of the study lines; nothing without a root (answer 5). FILED is the
+    issue's `created_at`, TODAY the caller's day (brief #1815 answer 2)."""
+    if root is None:
         return [], []
     lines = body.splitlines()
-    problems = (impact_problems(lines) + wiring_problems(lines, root)) if full else []
-    problems += prior_problems(lines, root) + class_problems(lines)
+    problems = study_problems(body, root)
     prior = _one(lines, "Prior:") or ""
     if briefs is None:
         briefs = plan_names.cached_issues(root)
@@ -347,7 +372,7 @@ def study_result(
             " brief_study.py <file> --root . lists them"
         )
     filled = placeholder_warnings(lines)
-    if enforced(today):
+    if enforced(root, today, filed):
         return problems, filled + left
     return [], problems + filled + left
 

@@ -35,7 +35,7 @@ SHAPE = (
 
 @pytest.fixture
 def past(monkeypatch):
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", PAST)
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: PAST)
 
 
 @pytest.fixture
@@ -112,15 +112,22 @@ def test_ac4_brief_result_is_the_shape_then_the_study(repo, past):
 
 
 def test_ac4_brief_result_warns_before_the_day(repo, monkeypatch):
-    """REQ-037 AC4: brief #1813 answer 5 (`STUDY_FAILS_FROM` stays None: warnings only)."""
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
+    """REQ-037 AC4: brief #1813 answer 5 (no day set: warnings only; brief #1815 answer 1)."""
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: None)
     failures, warnings = check_brief.brief_result(SHAPE, repo)
     assert failures == [] and any(w.startswith("study: exactly one line Class:") for w in warnings)
 
 
 def test_ac4_the_study_day_ships_unset():
-    """REQ-037 AC4: brief #1813 answer 5 (the day is brief 2's)."""
-    assert brief_study.STUDY_FAILS_FROM is None
+    """REQ-037 AC4: brief #1813 answer 5; brief #1815 answers 1 and 6 (the day is a setting of
+    agk.toml, no constant, and no project template sets one)."""
+    assert not hasattr(brief_study, "STUDY_FAILS_FROM")
+    import config
+
+    for name in ("agk.toml", "agk.adopt.toml", "personal.toml"):
+        text = (KIT_ROOT / "kit" / "templates" / name).read_text(encoding="utf-8")
+        assert "brief_study_fails_from" not in text, name
+    assert config.brief_study_fails_from(KIT_ROOT) is not None  # the kit's own day (answer 6)
 
 
 def test_ac4_every_rendered_brief_passes_the_full_check_on_a_past_day(repo, past):
@@ -160,7 +167,7 @@ def test_ac4_a_placeholder_warns_on_any_day_and_never_fails(repo, monkeypatch):
     """REQ-037 AC4: brief #1813 answer 3 (a placeholder is never taken for a study)."""
     (body,) = rendered(repo)
     for day in (None, PAST, "2999-01-01"):
-        monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", day)
+        monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root, day=day: day)
         failures, warnings = brief_study.study_result(body, repo)
         assert failures == []
         assert "study: the Class line is the render's placeholder" in warnings

@@ -277,7 +277,7 @@ def test_check_brief_passes_on_a_sidecar_with_the_study_day_past(
     root = make(tmp_path / "state")
     brief = tmp_path / "brief.md"
     brief.write_text(BRIEF.format(req=req), encoding="utf-8")
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2000-01-01")
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     monkeypatch.chdir(root)
     assert check_brief.main([str(brief), "--root", "."]) == 0, capsys.readouterr().out
     assert "warning: study:" not in capsys.readouterr().out

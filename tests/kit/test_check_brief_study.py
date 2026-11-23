@@ -14,8 +14,6 @@ sys.path.insert(0, str(SCRIPTS))
 
 import brief_study  # noqa: E402
 
-SHIPPED = brief_study.STUDY_FAILS_FROM  # what a child process reads, before any monkeypatch
-
 SHAPE = (
     'Sentence: "A team can run a thing."\nAnswers:\n1. one\n2. two\nSize: M\n'
     "Advances: new\nTouches: scripts/agk/tool.py, docs/x.md\nPriority: 1\n"
@@ -36,8 +34,9 @@ AFTER = "2099-01-01"
 
 @pytest.fixture(autouse=True)
 def switch_day(monkeypatch):
-    """The roll-in's switch day as the maintainers would set it (Q-1800-1)."""
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", "2026-12-01")
+    """The roll-in's switch day as a root's `[flow] brief_study_fails_from` would set it (brief
+    #1815 answer 1); a child process reads the tree's own agk.toml, which sets none."""
+    monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2026-12-01")
 
 
 def tree(tmp_path: Path) -> Path:
@@ -89,18 +88,20 @@ def test_ac4_a_brief_without_its_study_warns_during_the_roll_in_and_fails_after(
     assert all(name in joined for name in ("Impact:", "Wiring:", "Prior:", "Class:"))
 
 
-def test_ac4_the_roll_in_is_one_dated_constant(monkeypatch):
-    """REQ-037 AC4"""
-    assert brief_study.enforced("2026-12-01") and not brief_study.enforced("2026-11-30")
-    monkeypatch.setattr(brief_study, "STUDY_FAILS_FROM", None)
-    assert not brief_study.enforced("2099-01-01")
+def test_ac4_the_roll_in_is_one_setting(tmp_path):
+    """REQ-037 AC4 (brief #1815 answer 1: the day is `[flow] brief_study_fails_from`)."""
+    root = tree(tmp_path)
+    (root / "agk.toml").write_text('[flow]\nbrief_study_fails_from = "2026-12-01"\n', "utf-8")
+    import config
+
+    assert config.brief_study_fails_from(root).isoformat() == "2026-12-01"
+    (root / "agk.toml").write_text("[flow]\n", "utf-8")
+    assert config.brief_study_fails_from(root) is None
 
 
 def test_ac4_the_cli_prints_a_study_warning_and_still_passes_in_the_roll_in(tmp_path):
     """REQ-037 AC4"""
     root = tree(tmp_path)
-    if SHIPPED is not None and brief_study.enforced(None):
-        pytest.skip("the shipped switch day has passed; the failure is tested in-process")
     out = cli(tmp_path, SHAPE, root)
     lines = out.stdout.splitlines()
     assert out.returncode == 0 and lines[-1] == "ok brief"
@@ -196,10 +197,13 @@ def test_ac4_a_red_branch_brief_is_held_only_to_class_and_prior(tmp_path):
     assert len(failed) == 2
 
 
-def test_ac4_the_routers_own_red_brief_is_not_held(tmp_path):
-    """REQ-037 AC4"""
+def test_ac4_the_routers_pair_is_held_to_class_and_prior(tmp_path):
+    """REQ-037 AC4 (brief #1815 answer 5: held as any `Priority: 0` brief)"""
     body = SHAPE.replace("Advances: new", "Advances: none").replace("Priority: 1", "Priority: 0")
-    assert result(body, tree(tmp_path)) == ([], [])
+    root = tree(tmp_path)
+    failed, _ = result(body, root)
+    assert len(failed) == 2 and "Prior:" in failed[0] and "Class:" in failed[1], failed
+    assert result(body + PRIOR + CLASS, root) == ([], [])
 
 
 def test_ac4_without_root_the_study_is_not_read(tmp_path):
@@ -224,8 +228,6 @@ def test_ac4_a_text_fix_may_say_none_everywhere(tmp_path):
 def test_ac4_an_event_carries_the_study_warnings_in_the_roll_in(tmp_path):
     """REQ-037 AC4"""
     root = tree(tmp_path)
-    if SHIPPED is not None and brief_study.enforced(None):
-        pytest.skip("the shipped switch day has passed; the failure is tested in-process")
     payload = {
         "action": "opened",
         "issue": {"number": 9, "body": SHAPE, "labels": [{"name": "agk-brief"}]},
