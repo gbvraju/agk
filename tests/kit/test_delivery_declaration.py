@@ -126,7 +126,8 @@ def test_ac2_a_declared_shipped_playbook_is_selected(tmp_path):
     # steps have no module, so each is refused naming its gate id
     lines = result.stdout.strip().splitlines()
     assert lines[0] == "ok playbooks (1 playbooks)", result.stdout + result.stderr
-    assert lines[1:] and all(line.startswith("FAIL gates: ") for line in lines[1:])
+    fails = [ln for ln in lines[1:] if not ln.startswith("not run ")]  # pins: brief #1776
+    assert fails and all(line.startswith("FAIL gates: ") for line in fails)
 
 
 @pytest.mark.parametrize(

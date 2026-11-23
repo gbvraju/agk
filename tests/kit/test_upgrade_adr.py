@@ -179,7 +179,7 @@ def test_the_skill_branches_first_writes_the_adr_gates_and_holds_for_the_owner()
     branch = text.index("git switch -c upgrade/agk-<version> origin/<default branch>")
     write = text.index('upgrade.py" . --write-adr')
     assert branch < write
-    assert write < text.index("make governance") < text.index('upgrade.py" . --next-steps')
+    assert write < text.index('kit_root.py" governance') < text.index('upgrade.py" . --next-steps')
     assert "check_pr_body.py" in text
     assert "held for the owner's merge" in text and "merge_cleared.py" in text
     assert "Write no ADR" not in text
