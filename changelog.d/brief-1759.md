@@ -1,1 +1,0 @@
-- Every shipped skill, role file, guide and template names the governance command that works in both layouts, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/kit_root.py" governance` (the make form only where it says installed project), and the getting-started, planning and testing guides the skills cite now ship with the plugin (brief #1759)

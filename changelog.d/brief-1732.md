@@ -1,1 +1,0 @@
-- The steward guard reads zero-width characters as nothing before it checks a comment's reserved first line, so a `Verdict:`, `Confirmed:` or `Approve:` line behind an invisible character is refused like the plain line (brief #1732)

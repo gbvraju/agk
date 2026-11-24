@@ -1,1 +1,0 @@
-- A real licence id that starts in lower case, such as SQLite's `blessing`, is read by one reader in the stack record and the licences step; `stack-check` says a licence off the project's list at the choice, and names every refusal `stack-accept` would give (brief #1785)

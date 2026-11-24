@@ -1,1 +1,0 @@
-- A new design theme takes its brand name, colour and font from the discovery brand answer, with each value's source; a brand colour too light or dark to read at 4.5:1 is written as a proposed shade with an `ask the person:` line; `design.py theme` writes the theme on the import path, and the theme's Evidence line may name an imported version (brief #1840, ADR-0770)

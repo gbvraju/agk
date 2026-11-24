@@ -1,1 +1,0 @@
-- A new web app or API service now gets a standard interface contract and a data model page, and governance turns red when an operation has no test or no matching mock (brief #1597)

@@ -1,1 +1,0 @@
-- The brief study warns only for the earlier decisions most likely to matter: an Accepted ADR whose header or Decision names a touched code path or a wired function, at most `[flow] brief_prior_warnings` (10 when unset), ranked, with one line counting the rest; `brief_study.py` still prints every candidate, marked `strong` or `weak` (brief #1819)

@@ -1,1 +1,0 @@
-- The last check before a guarded merge also runs the tests a project lists as checking every file of a kind (`[testing] whole_tests`) on the would-be merge, so a break that only a newer default branch shows is held, not merged (brief #1797)

@@ -1,1 +1,0 @@
-- The `pins` step sets its output to UTF-8 at the start of its own entry point, as every other printing script does, and the reference names no Apache licence id as an example, so the default branch is green again (brief #1626)

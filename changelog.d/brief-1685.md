@@ -1,1 +1,0 @@
-- The gates and `agk doctor` say `no pack` for a chosen stack that has no standards pack yet, instead of a silent pass (brief #1685)

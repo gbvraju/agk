@@ -1,1 +1,0 @@
-- A change of a shipped skill or agent file, or of any file a test builds its path to in parts, now runs the tests that read it on its own pull request, not only on the default branch (brief #1792)

@@ -1,1 +1,0 @@
-- A brief built in several steps is no longer turned away because its own first step already added a file it names as new (brief #1717)

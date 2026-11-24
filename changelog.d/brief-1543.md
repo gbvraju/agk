@@ -1,1 +1,0 @@
-- `evidence.py check` no longer leaves a sampled test run running when it is stopped (SIGTERM or SIGHUP) at the moment the run starts: the signal is held while the run starts and delivered once its process group can be killed (brief #1543)

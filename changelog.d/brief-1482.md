@@ -1,1 +1,0 @@
-- In local mode a cloud builder works in its own clone again: `execution = "local"` no longer makes a cloud session's clone count as shared, as the launch adapter setting already did not; a machine is refused in its main folder as before (brief #1482)
