@@ -445,3 +445,227 @@ def test_req079_a_capitalised_node_sample_runs_the_pins_step(tmp_path: Path) -> 
     result = check(root)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "ok pins" in result.stdout and "not run" not in result.stdout
+
+
+# REQ-079, brief #1909 (ADR-0791, amendment 234): in a new project, from the stack's acceptance to
+# the foundation, the step waits: `not run: no foundation yet`, never a failure and never `ok`.
+
+INIT = 'mode = "init"\n[delivery]\nwork_type = "web-app"\n'
+FOUNDATION = "not run: no foundation yet"
+
+
+def init_build_file(root: Path) -> None:
+    """`init`'s own `pyproject.toml`, which declares no dependency."""
+    text = (KIT_ROOT / "kit" / "templates" / "pyproject.toml").read_text(encoding="utf-8")
+    (root / "pyproject.toml").write_text(text.replace("{{project}}", "sample"), encoding="utf-8")
+
+
+def init_python(tmp: Path, toml: str = INIT) -> Path:
+    """An init project with an Accepted Python record, `init`'s build file, no lock, no record."""
+    root = project(tmp, record(status="Accepted", chosen="Option A"), toml=toml)
+    init_build_file(root)
+    return root
+
+
+def init_node(tmp: Path) -> Path:
+    return project(tmp, record(a_parts=NODE_PARTS, status="Accepted", chosen="Option A"), INIT)
+
+
+def add_dependency(root: Path) -> None:
+    text = (root / "pyproject.toml").read_text(encoding="utf-8")
+    text = text.replace("dependencies = []", 'dependencies = ["examplelib==1.2.3"]')
+    (root / "pyproject.toml").write_text(text, encoding="utf-8")
+
+
+def test_req079_an_init_project_before_the_foundation_waits(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = init_python(tmp_path)
+    assert pins.waiting(root) is True
+    assert pins.skipped(root) == "no foundation yet"
+    assert pins.findings(root) is None and pins.counts(root, {}) == {}
+    result = check(root)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == f"pins: {FOUNDATION}"
+    assert gate_rows(root) == [(None, "pins: no foundation yet")]
+
+
+def test_req079_the_stack_files_template_still_waits(tmp_path: Path) -> None:
+    root = project(tmp_path, record(status="Accepted", chosen="Option A"), toml=INIT)
+    assert run(ENGINES, "stack-files", "--root", str(root)).returncode == 0
+    assert (root / "pyproject.toml").is_file()
+    result = check(root)
+    assert result.returncode == 0 and FOUNDATION in result.stdout, result.stdout
+
+
+def end_by_dependency(root: Path) -> None:
+    add_dependency(root)
+
+
+def end_by_requirements(root: Path) -> None:
+    (root / "requirements.txt").write_text("examplelib==1.2.3\n", encoding="utf-8")
+
+
+def end_by_architecture(root: Path) -> None:
+    (root / "docs" / "architecture.md").write_text("# Architecture\n", encoding="utf-8")
+
+
+def end_by_adopt(root: Path) -> None:
+    text = (root / "agk.toml").read_text(encoding="utf-8")
+    (root / "agk.toml").write_text(text.replace('mode = "init"', 'mode = "adopt"'), "utf-8")
+
+
+@pytest.mark.parametrize(
+    "end", [end_by_dependency, end_by_requirements, end_by_architecture, end_by_adopt]
+)
+def test_req079_each_condition_alone_ends_the_wait(tmp_path: Path, end) -> None:
+    """Brief #1909 answer 9: each of the four conditions alone makes the step strict again."""
+    pins = pins_module()
+    root = init_python(tmp_path)
+    end(root)
+    assert pins.waiting(root) is False and pins.skipped(root) is None
+    result = check(root)
+    assert result.returncode == 1
+    assert "the lock file is missing (component class: lock file)" in result.stdout
+    no_values(result.stdout + result.stderr)
+
+
+def test_req079_an_adopted_sample_holds_the_missing_lock_in_its_baseline(tmp_path: Path) -> None:
+    root = init_python(tmp_path)
+    end_by_adopt(root)
+    rows = gate_rows(root)
+    assert (True, "pins (baseline)") in rows, rows
+    assert (root / "config" / "agk-baseline" / "pins.txt").is_file()
+
+
+def test_req079_a_committed_lock_ends_the_wait_and_is_read_in_full(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = init_python(tmp_path)
+    with_lock(root)
+    assert pins.waiting(root) is False
+    assert check(root).returncode == 0 and "ok pins" in check(root).stdout
+    add_dependency(root)
+    (root / "requirements.lock").write_text(f"examplelib==1.2.4 \\\n    {HASH}\n", "utf-8")
+    result = check(root)
+    assert result.returncode == 1 and "differs from the lock" in result.stdout
+
+
+def test_req079_a_malformed_build_file_never_waits(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = init_python(tmp_path)
+    (root / "pyproject.toml").write_text("[project\nname = \n", encoding="utf-8")
+    assert pins.waiting(root) is False
+    result = check(root)
+    assert result.returncode == 1 and "the build file is missing or unreadable" in result.stdout
+
+
+def test_req079_a_missing_requirements_include_never_waits(tmp_path: Path) -> None:
+    root = init_python(tmp_path)
+    (root / "requirements.txt").write_text("-r missing.txt\n", encoding="utf-8")
+    result = check(root)
+    assert result.returncode == 1 and "the build file is missing or unreadable" in result.stdout
+
+
+def test_req079_a_node_record_with_no_package_json_waits(tmp_path: Path) -> None:
+    result = check(init_node(tmp_path))
+    assert result.returncode == 0 and FOUNDATION in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize("groups", [{}, {"dependencies": {}, "devDependencies": {}}])
+def test_req079_a_node_build_file_with_no_dependency_waits(tmp_path: Path, groups: dict) -> None:
+    root = init_node(tmp_path)
+    (root / "package.json").write_text(json.dumps({"name": "sample", **groups}), "utf-8")
+    assert check(root).returncode == 0 and FOUNDATION in check(root).stdout
+
+
+@pytest.mark.parametrize("group", ["dependencies", "devDependencies", "optionalDependencies"])
+def test_req079_a_node_dependency_with_no_lock_fails(tmp_path: Path, group: str) -> None:
+    root = init_node(tmp_path)
+    pkg = {"name": "sample", group: {"example-web": "4.21.1"}}
+    (root / "package.json").write_text(json.dumps(pkg), encoding="utf-8")
+    result = check(root)
+    assert result.returncode == 1 and "the lock file is missing" in result.stdout
+    no_values(result.stdout + result.stderr)
+
+
+def test_req079_a_malformed_package_json_never_waits(tmp_path: Path) -> None:
+    root = init_node(tmp_path)
+    (root / "package.json").write_text("{not json", encoding="utf-8")
+    result = check(root)
+    assert result.returncode == 1 and "the build file is missing or unreadable" in result.stdout
+
+
+def test_req079_no_stack_chosen_still_wins_over_the_wait(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = project(tmp_path, record(), toml=INIT)
+    assert pins.skipped(root) == "no stack chosen"
+    assert check(root).stdout.strip() == "pins: not run: no stack chosen"
+
+
+def test_req079_the_wait_reads_the_record_path_of_the_layers_step() -> None:
+    """Brief #1909 answer 9: one architecture record for the wait and the foundation's steps."""
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    from gates import layers  # noqa: PLC0415 - the step module itself
+
+    assert pins_module().ARCHITECTURE == layers.RECORD
+
+
+def test_req079_the_runner_passes_an_init_project_with_pins_not_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import run_gates  # noqa: PLC0415 - the gate runner itself
+
+    root = init_python(tmp_path)
+    assert run_gates.main(["--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    last = out.strip().splitlines()[-1]
+    assert "not run: " in last and "pins" in last.split("not run: ", 1)[1].split(", "), out
+    assert "FAIL" not in out
+
+
+def git(root: Path, *args: str) -> str:
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", str(root), *args], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def accept_record() -> str:
+    """The Proposed record with what `stack-accept` reads: a test selection and its classes."""
+    lint = "   - pinned actions: check (step: the workflow lint of the adopting build)\n"
+    selection = (
+        "   - test selection: judgement (Option A: profile fast, always_full `app/auth/**`; "
+        "Option B: profile thorough, always_full `src/**`)\n"
+    )
+    text = record().replace("Practices: pinned actions.", "Practices: pinned actions, test selection.")
+    text = text.replace(lint, lint + selection)
+    return text.replace("## Context", "Protected classes: `agk.toml`\n\n## Context", 1)
+
+
+def test_req079_after_stack_accept_the_runner_holds_no_failed_pins_row(tmp_path: Path) -> None:
+    """Brief #1909 answer 8: the accepting change of an init project leaves governance green."""
+    remote = tmp_path / "remote.git"
+    root = tmp_path / "web"
+    root.mkdir()
+    project(root, accept_record(), toml=INIT + '\n[testing]\nprofile = "balanced"\n')
+    shutil.copy(
+        KIT_ROOT / "kit" / "templates" / "protected-paths.txt",
+        root / "config" / "protected-paths.txt",
+    )
+    init_build_file(root)
+    subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "init", "-q", "--bare", str(remote)], check=True
+    )
+    git(root, "init", "-q", "-b", "main")
+    git(root, "config", "user.email", "builder@example.com")
+    git(root, "config", "user.name", "Builder")
+    git(root, "remote", "add", "origin", str(remote))
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "start")
+    git(root, "push", "-q", "origin", "main")
+    git(root, "checkout", "-q", "-b", "stack/accept")
+    args = ("stack-accept", "--option", "A", "--reason", "smallest", "--root", str(root))
+    accept = run(ENGINES, *args)
+    assert accept.returncode == 0, accept.stdout + accept.stderr
+    assert "Accepted" in (root / STACK).read_text(encoding="utf-8")
+    rows = gate_rows(root)
+    assert rows == [(None, "pins: no foundation yet")], rows
