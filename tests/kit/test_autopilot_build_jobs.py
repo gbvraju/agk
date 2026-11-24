@@ -101,6 +101,48 @@ def test_a_verdict_starts_one_fix_job_that_ends_without_watch(builders, capsys, 
     assert len(starts(builders)) == 1
 
 
+FINAL_ONLY = "Final: docs/adr/0999-an-example-decision.md Proposed -> Accepted"
+
+
+@pytest.mark.parametrize(
+    "first", [f"Verdict: fix list {'a' * 40}\n\n{FINAL_ONLY}", f"Verdict: cleared {'a' * 40}"]
+)
+def test_a_verdict_that_clears_the_head_starts_no_fix_job(builders, capsys, first):  # noqa: F811
+    """REQ-046 (brief #1879 answer 2, Q-1879-3): a Final-only fix list on the head, or a
+    `Verdict: cleared`, is owed nothing: the ended builder is left waiting, no job starts."""
+    builders["table"].clear()
+    pr_comments(
+        builders,
+        comment(2, "builder", "Report: aaaaaaa ready for review", iso(timedelta(hours=-2))),
+        comment(3, "boss", first, iso(timedelta(minutes=-60))),
+    )
+    _, out = watchdog(builders, capsys)
+    assert (
+        builder_line(out)
+        == f"watchdog: builder {builders['name']} #7 ended -> left (waits for an event)"
+    )
+    assert starts(builders) == []
+
+
+def test_a_label_event_after_a_final_only_fix_list_still_starts_the_job(builders, capsys):  # noqa: F811
+    """REQ-046 (brief #1879 answer 2): a conflict label on that head is an event as today."""
+    builders["table"].clear()
+    pr_comments(
+        builders,
+        comment(2, "builder", "Report: aaaaaaa ready for review", iso(timedelta(hours=-2))),
+        comment(3, "boss", f"Verdict: fix list {'a' * 40}\n\n{FINAL_ONLY}", 
+                iso(timedelta(hours=-1))),
+    )
+    head = {"sha": "a" * 40, "ref": "claude/brief-7"}
+    builders["stub"].serve(
+        f"repos/{REPO}/pulls",
+        [{"number": 70, "state": "open", "body": "Brief: #7", "head": head,
+          "labels": [{"name": "agk:conflict"}], "user": {"login": "builder"}, "created_at": iso()}],
+    )  # fmt: skip
+    _, out = watchdog(builders, capsys)
+    assert builder_line(out) == f"watchdog: builder {builders['name']} #7 ended -> restarted"
+
+
 @pytest.mark.parametrize("label", ["agk:conflict", "agk:ci-red"])
 def test_a_conflict_or_a_red_check_starts_the_next_job(builders, capsys, label):  # noqa: F811
     """REQ-071 AC2: a merge-of-main or conflict need and a red check are events too."""
