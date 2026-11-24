@@ -357,7 +357,9 @@ def test_a_listed_runner_test_deleted_is_gone_and_stale(repo):
 def test_a_map_name_that_matches_no_test_file_fails(repo):
     """REQ-062: brief #1878 answer 3 (each glob of every entry, read every run)."""
     gate_kit(repo)
-    extra = '[[testing.map]]\ncode = "scripts/agk/check_new.py"\ntests = ["tests/kit/test_no_*.py"]\n'
+    extra = (
+        '[[testing.map]]\ncode = "scripts/agk/check_new.py"\ntests = ["tests/kit/test_no_*.py"]\n'
+    )
     repo.commit({"agk.toml": gates_toml([LISTED], extra=extra)})
     proc = repo.run("check_kit_tests.py")
     assert proc.returncode == 1, proc.stdout + proc.stderr
@@ -400,6 +402,7 @@ def test_a_kit_without_a_gates_entry_misses_every_runner_test(repo):
     gate_kit(repo)
     extra = f'[[testing.map]]\ncode = "scripts/agk/check_new.py"\ntests = ["{LISTED}"]\n'
     toml = f'default_branch = "main"\n[testing]\nwhole_tests = ["{WHOLE}"]\n' + extra
+    repo.branch()
     repo.commit({"agk.toml": toml})
     proc = repo.run("check_kit_tests.py")
     assert proc.returncode == 1 and MISSING_KIT in proc.stdout, proc.stdout
@@ -461,7 +464,9 @@ def test_a_quick_record_fails_at_governance_with_the_same_five_steps(repo, tmp_p
     )
     assert proc.returncode == 1, proc.stdout + proc.stderr
     data = json.loads(record.read_text(encoding="utf-8"))
-    names = [s["name"] for s in data["steps"]]
-    assert names == ["pr-body", "lint", "governance", "secret-scan", "tests"]
+    names = [s["name"] for s in data["steps"]]  # the run stops at the first failure
+    assert data["schema"] == 1
+    assert names == ["pr-body", "lint", "governance", "secret-scan", "tests"][: len(names)]
+    assert names[-1] == "governance"
     governance = next(s for s in data["steps"] if s["name"] == "governance")
     assert governance["outcome"] == "FAIL" and data["result"] == "failed"

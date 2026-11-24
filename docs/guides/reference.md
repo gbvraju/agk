@@ -22,7 +22,9 @@ the branch's commits (a missing `gitleaks` fails the run, naming the tool and th
 ADR-0306), and the tests that `test_plan.py` selects
 (`--quick` skips them). It prints `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one
 did, 2 on a usage error (session rule 31, ADR-0186). `--no-lock` leaves the heavy-step lock (`lock.py`, name `heavy`) of the
-tests step out, for CI. The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
+tests step out, for CI. In the kit, governance's `check_kit_tests.py` also holds the rules of the kit's own testing
+map (each test that runs the gate runner is in the `scripts/agk/gates/*.py` entry; each map test name matches a test
+file), so `--quick` fails on a map miss too, and a later rule over that map is added there (ADR-0777). The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
 `python3 scripts/agk/reviewers.py --codeowners` prints the rendered CODEOWNERS; with `--write` it writes the file (in an
 adopted repository only the marked block). `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
 
