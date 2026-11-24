@@ -973,7 +973,9 @@ def milestone_order(root: Path) -> str:
     if not lines or problems or path is None:
         return head + "no playbook declares batch_by"
     batch_by = tomllib.loads(path.read_text(encoding="utf-8"))["milestones"]["batch_by"]
-    return f"{head}{_one(batch_by)} (playbook {path.relative_to(root).as_posix()})"
+    # brief #1887 answer 1: the path class, never `relative_to`, so the plugin's file in a clean
+    # project reads as the project's own does (Q-PP-1)
+    return f"{head}{_one(batch_by)} (playbook {playbook_format.FOLDER}/{path.name})"
 
 
 DIGESTS = f"{PLAN}/render-digests.json"  # brief #1221 answer 2 (ADR-0520)

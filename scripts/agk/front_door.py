@@ -1258,6 +1258,14 @@ def drafted_layers(path: str, adr: str | None) -> list[str]:
     return layers.toml_text(found, [(a, b, adr or e) for a, b, e in allow], tests.pop())
 
 
+def _undo(target: Path, made: list[Path]) -> None:
+    """Removes the derived file and the folders `derive_write` made for it, innermost first."""
+    target.unlink(missing_ok=True)
+    for folder in made:
+        if folder.is_dir() and not any(folder.iterdir()):
+            folder.rmdir()
+
+
 def derive_write(opts: dict[str, str], root: Path) -> int:
     """Rule 22: writes the skeleton, or refuses and leaves nothing behind."""
     name = opts["--slug"]
@@ -1272,8 +1280,12 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
     target = root / rel
     if target.exists():
         raise Refusal([f"rule 22: {rel}: the file exists and is never overwritten"])
-    base_path = root / playbook_format.FOLDER / f"{playbook_format.BASE}.toml"
-    if not base_path.is_file() or playbook_format.problems(base_path, root):
+    refused = playbook_format.layout_problem(root)
+    if refused is not None:
+        raise Refusal([refused])
+    # brief #1887 answer 2: the project's own `default.toml`, else the plugin's (ADR-0697)
+    base_path = playbook_format.default_playbook(root)
+    if base_path is None or playbook_format.problems(base_path, root):
         raise Refusal([f"rule 22: {playbook_format.FOLDER}/default.toml: missing or not sound"])
     record = root / RESEARCH / f"{name}.md"
     record_rel = f"{RESEARCH}/{name}.md"
@@ -1290,10 +1302,19 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
     base = tomllib.loads(base_path.read_text(encoding="utf-8"))
     import check_playbooks  # here, so a load failure leaves every other command as it is
 
-    target.write_text(skeleton(name, modules, base, drafted), encoding="utf-8")
-    found = check_playbooks.findings(root, [target])
+    text = skeleton(name, modules, base, drafted)
+    # a clean project holds no `config/playbooks/` yet: the folders made here go with a refusal or
+    # any failure after them, so nothing is left behind (brief #1887 answer 5, Q-1887-3)
+    made = [f for f in (target.parent, target.parent.parent) if not f.is_dir()]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        target.write_text(text, encoding="utf-8")
+        found = check_playbooks.findings(root, [target])
+    except BaseException:
+        _undo(target, made)
+        raise
     if found:
-        target.unlink()
+        _undo(target, made)
         raise Refusal(found)
     print(f"ok {NAME}: wrote {rel}")
     import check_protected_changes  # brief #1829 answer 4: the classes the playbook meets
