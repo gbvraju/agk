@@ -1,0 +1,1 @@
+- A release's plugin snapshot now builds: it no longer ships the kit's own tests (`tests/kit/`), and the kit files the data guard read as an address, number or key are rewritten with the same behaviour; a whole test keeps every shipped file clean (brief #1886)
