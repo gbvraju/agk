@@ -80,7 +80,11 @@ from init import (
     slug,
 )
 from reviewers import parse, render_codeowners
-from tree_walk import FRONTEND_PATTERNS, WEB_EXTENSIONS, walked_dirs  # installed, unlike this file (brief #1214)
+from tree_walk import (
+    FRONTEND_PATTERNS,
+    WEB_EXTENSIONS,
+    walked_dirs,
+)  # installed, unlike this file (brief #1214)
 
 TEST_PATTERNS = ("*_test.py", "test_*.py")
 MARKERS = {

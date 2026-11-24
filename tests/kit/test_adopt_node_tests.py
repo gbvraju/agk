@@ -77,7 +77,9 @@ def test_req051_every_web_extension_the_detector_knows_has_its_patterns():
         for kind in ("*.test", "*.spec")
         if f"{kind}{ext}" not in tree_walk.FRONTEND_PATTERNS
     ]
-    assert missing == [], f"survey.LANGUAGES knows these, tree_walk.FRONTEND_PATTERNS not: {missing}"
+    assert missing == [], (
+        f"survey.LANGUAGES knows these, tree_walk.FRONTEND_PATTERNS not: {missing}"
+    )
 
 
 # Answer 2 and answer 9: detection by name, matched as the readers match.
@@ -93,7 +95,10 @@ def test_req051_the_measured_node_project_gives_its_js_pattern(tmp_path):
 @pytest.mark.parametrize(
     ("files", "expected"),
     [
-        (("tests/test_a.py", "pkg/tests/b_test.py"), (["pkg/tests", "tests"], ["*_test.py", "test_*.py"])),
+        (
+            ("tests/test_a.py", "pkg/tests/b_test.py"),
+            (["pkg/tests", "tests"], ["*_test.py", "test_*.py"]),
+        ),
         (("package.json", "tests/cart.test.js"), (["tests"], ["*.test.js"])),
         (
             ("tsconfig.json", "src/a.test.ts", "src/b.spec.tsx", "src/c.test.js"),
@@ -214,7 +219,7 @@ def test_req051_init_writes_the_patterns_it_finds(tmp_path, capsys):
 
 
 def test_req051_init_on_a_manifest_only_tree_writes_the_stack(tmp_path, capsys):
-    """REQ-051 AC6: answer 4 (a bare `package.json` gives the web names; `go.mod` the empty list)."""
+    """REQ-051 AC6: answer 4 (a bare `package.json` gives web names, `go.mod` an empty list)."""
     node = tree(tmp_path / "n", "package.json")
     assert init.main([str(node), "--unreleased"]) == 0
     assert written(node)["test_patterns"] == WEB
@@ -225,7 +230,9 @@ def test_req051_init_on_a_manifest_only_tree_writes_the_stack(tmp_path, capsys):
 
 
 @pytest.mark.parametrize(
-    "files", [(), ("README.md",), ("requirements.txt", "tests/test_a.py")], ids=["empty", "plain", "python"]
+    "files",
+    [(), ("README.md",), ("requirements.txt", "tests/test_a.py")],
+    ids=["empty", "plain", "python"],
 )
 def test_req051_init_on_an_empty_or_python_tree_renders_as_before(tmp_path, capsys, files):
     """REQ-051 AC6: answer 4, Q-AN-4 (byte for byte the template, no `test_patterns` line)."""
@@ -256,7 +263,8 @@ def test_req051_an_init_rerun_keeps_its_file(tmp_path, capsys):
 def stamp(root: Path, dirs: str, patterns: str) -> Path:
     git_dir(tree(root, "tests/test_a.py"))
     (root / "agk.toml").write_text(
-        f'mode = "adopt"\ndefault_branch = "main"\ntest_dirs = {dirs}\ntest_patterns = {patterns}\n',
+        f'mode = "adopt"\ndefault_branch = "main"\n'
+        f"test_dirs = {dirs}\ntest_patterns = {patterns}\n",
         encoding="utf-8",
     )
     return root
@@ -272,7 +280,9 @@ def stamp(root: Path, dirs: str, patterns: str) -> Path:
     ],
     ids=["dirs-string", "dirs-number", "patterns-string", "patterns-number"],
 )
-def test_req051_a_malformed_stamp_is_refused_before_any_write(tmp_path, capsys, dirs, patterns, setting):
+def test_req051_a_malformed_stamp_is_refused_before_any_write(
+    tmp_path, capsys, dirs, patterns, setting
+):
     """REQ-051 AC6: answer 5 (refused naming the setting; nothing written; the stamp kept)."""
     root = stamp(tmp_path / "p", dirs, patterns)
     before = sorted(p.relative_to(root).as_posix() for p in root.rglob("*"))
