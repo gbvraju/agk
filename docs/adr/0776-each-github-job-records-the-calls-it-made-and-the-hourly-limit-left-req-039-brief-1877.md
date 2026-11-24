@@ -35,7 +35,8 @@ owner's word (the steward chat, 2026-11-24, quoted as data): "Yes, draft all fou
    (`Q-API-3`). The GITHUB_TOKEN hourly figure and whether a cloud session's calls share the workflows' bucket stay
    unconfirmed (verify); the line prints what GitHub's headers say (`Q-API-4`).
 5. Path classes changed: `scripts/agk/` (`session.py`, `route.py`, `merge_cleared.py`), `tests/kit/`
-   (`test_github_call_record.py`) and `agk.toml` (the new test joins the three scripts' map entries). `kit/` is named
+   (`test_github_call_record.py`; `conftest.py` drops the runner's `GITHUB_ACTIONS` for kit tests, so a test's `gh`
+   double never sees the record; a test that needs it sets it) and `agk.toml` (the new test joins the three scripts' map entries). `kit/` is named
    for the installed scripts' hash rows, which the release regenerates (session rule 14); this build leaves
    `kit/hashes.json` unchanged.
 
