@@ -280,6 +280,23 @@ def test_a_fix_list_with_a_report_after_it_is_answered(proj, stub):
     assert last(slot(proj, stub, "--next")) == "wait pr #7"
 
 
+def test_a_final_only_fix_list_on_the_head_is_no_follow_up(proj, stub):
+    """REQ-046 (brief #1879): a fix list on the head whose only line accepts an ADR clears it for
+    the merger, so the slot waits for the merge and owes no `nothing to change` Report."""
+    held(proj, stub)
+    final = "Final: docs/adr/0999-an-example-decision.md Proposed -> Accepted"
+    owned(stub, said=[comment(60, "boss", f"Verdict: fix list {'a' * 40}\n\n{final}")])
+    assert last(slot(proj, stub, "--next")) == "wait pr #7"
+
+
+def test_a_final_only_fix_list_on_another_head_is_still_a_follow_up(proj, stub):
+    """REQ-046 (brief #1879): the head moved, so the fix list is an event as today."""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    final = "Final: docs/adr/0999-an-example-decision.md Proposed -> Accepted"
+    owned(stub, said=[comment(60, "boss", f"Verdict: fix list {'b' * 40}\n\n{final}")])
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 fix list"
+
+
 ESCALATE = f"Report: {'d' * 7} escalate Q-5-1 Q-5-2; Usage: not shown"
 
 

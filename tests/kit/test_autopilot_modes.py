@@ -115,6 +115,75 @@ def test_a_clearing_verdict_starts_no_builder_job():
     assert autopilot.pick([pr(72, 6)], [], comments, NOW) == ([], [])
 
 
+# --- a Final-only fix list on the head is no builder event (brief #1879, ADR-0778) --------------
+
+HEAD = "a" * 40
+ADR_FINAL = "Final: docs/adr/0999-an-example-decision.md Proposed -> Accepted"
+SHAPES = {  # verdict body -> is it a builder event (brief #1879 answers 1 and 9)
+    f"Verdict: cleared {HEAD}": False,
+    f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}": False,
+    f"Verdict: fix list {HEAD}\n\n1. Name the setting (rule: none).\n{ADR_FINAL}": True,
+    f"Verdict: fix list {HEAD}\n\nFinal: docs/requirements.md REQ-046 planned -> built": True,
+    f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}\nFinal: docs/requirements.md REQ-046 planned -> built":
+        True,
+    f"Verdict: fix list aaaaaaa\n\n{ADR_FINAL}": True,
+    f"Verdict: fix list {'b' * 40}\n\n{ADR_FINAL}": True,
+}
+
+
+def test_a_final_only_fix_list_on_the_head_starts_no_fix_job():
+    """REQ-046: #1870's shape (its Report, then a fix list on the head whose only line accepts an
+    ADR) starts no `fix` job and no review job; with no Report after it nothing is due."""
+    comments = {72: [said(2, "Report: aaaaaaa ready for review", -120),
+                     said(3, f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}", -60, "boss")]}  # fmt: skip
+    assert autopilot.pick([pr(72, 6)], [], comments, NOW) == ([], [])
+
+
+@pytest.mark.parametrize("body", [b for b, event in SHAPES.items() if event])
+def test_any_other_fix_list_still_starts_a_fix_job(body):
+    """REQ-046: a numbered item, a requirements Final, a mix, a short sha or another head is an
+    event as today."""
+    comments = {72: [said(2, "Report: aaaaaaa ready for review", -120),
+                     said(3, body, -60, "boss")]}  # fmt: skip
+    assert kinds(autopilot.pick([pr(72, 6)], [], comments, NOW)[0]) == [("fix", 72, "cb6")]
+
+
+def test_a_label_event_still_starts_a_job_after_a_final_only_fix_list():
+    """REQ-046: a conflict or a red check on that head is the builder's event as today."""
+    comments = {72: [said(2, "Report: aaaaaaa ready for review", -120),
+                     said(3, f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}", -60, "boss")]}  # fmt: skip
+    jobs, _ = autopilot.pick([pr(72, 6, ("agk:conflict",))], [], comments, NOW)
+    assert kinds(jobs) == [("fix", 72, "cb6")]
+
+
+def test_every_waker_and_the_merger_read_one_table_of_verdict_shapes(monkeypatch):
+    """REQ-046 (answer 9): `autopilot.pick`, `conductor.builder_facts`' owed line,
+    `session.follow_up_owed`, the watch's verdict lines and `merge_cleared.judge` agree: a verdict
+    is no builder event exactly where the merger clears the head (the watch still ends on a
+    `Verdict: cleared`, session rule 1)."""
+    import merge_cleared
+    import session
+
+    for body, event in SHAPES.items():
+        verdict = said(3, body, -60, "boss")
+        comments = [said(2, "Report: aaaaaaa ready for review", -120), verdict]
+        cleared = merge_cleared.judge(comments, HEAD, ["boss"]) == ("cleared", "")
+        assert cleared is (not event), body
+        picked = bool(autopilot.pick([pr(72, 6)], [], {72: comments}, NOW)[0])
+        assert picked is event, body
+        assert (conductor.owed_of(comments, HEAD) is not None) is event, body
+        assert (merge_cleared.no_builder_event(verdict, HEAD)) is (not event), body
+        assert (session.builder_verdicts(comments, HEAD, ["boss"]) == comments) is (
+            event or body.startswith("Verdict: cleared")
+        ), body
+        monkeypatch.setattr(session, "gh", lambda path: {"mergeable_state": "clean",
+                                                         "head": {"sha": HEAD}})  # fmt: skip
+        monkeypatch.setattr(session, "pages", lambda path: comments)
+        monkeypatch.setattr(session, "reports_after", lambda repo, n, cid: False)
+        owed = session.follow_up_owed("example/demo", {"number": 72}, {"boss"})
+        assert (owed == "fix list") is (event and "fix list" in body), body
+
+
 def test_another_machines_claim_holds_the_job_until_its_take_lapses():
     """REQ-071 AC8: two machines never run one job, and one never restarts the other's before
     its take lapses (Q-S0064-4)."""
