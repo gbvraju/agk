@@ -254,12 +254,14 @@ def test_without_the_key_no_test_runs(tmp_path):
 
 def test_this_repository_lists_the_brief_s_three_files():
     """REQ-046: brief #667 (the brief's list, each name verified on the default branch and
-    followed from the code: the testing map test is tests/kit_dev/test_intelligent_testing.py)."""
+    followed from the code: the testing map test is tests/kit_dev/test_intelligent_testing.py);
+    brief #1873 answer 2 (ADR-0775) adds the reference guide's command test as the fourth."""
     root = SCRIPTS.parents[1]
     assert impact.pre_merge_tests(root) == [
         "tests/kit/test_rule_budget.py",
         "tests/kit_dev/test_intelligent_testing.py",
         "tests/kit_dev/test_kit_manifest.py",
+        "tests/kit_dev/test_reference_commands.py",
     ]
 
 
