@@ -636,7 +636,8 @@ def accept_record() -> str:
         "   - test selection: judgement (Option A: profile fast, always_full `app/auth/**`; "
         "Option B: profile thorough, always_full `src/**`)\n"
     )
-    text = record().replace("Practices: pinned actions.", "Practices: pinned actions, test selection.")
+    practices = "Practices: pinned actions"
+    text = record().replace(f"{practices}.", f"{practices}, test selection.")
     text = text.replace(lint, lint + selection)
     return text.replace("## Context", "Protected classes: `agk.toml`\n\n## Context", 1)
 
