@@ -15,8 +15,8 @@ import sys
 import pytest
 from conftest import KIT_ROOT, clean_env
 from test_playbook import (  # noqa: F401
-    GOOD_CHARTER,
     GOOD_VISION,
+    charter,
     check_start,
     failed,
     good_start,
@@ -226,15 +226,7 @@ def test_ac3_a_vision_without_the_idea_section_is_not_this_checks_business(start
 
 def charter_of(topics, answers=None, slice_lines=()):
     answers = {**ANSWERS, **(answers or {})}
-    discovery = "".join(f"   - {t}: {answers[t]}\n" for t in topics)
-    text = re.sub(r"   - (?:users|existing|runs|data|scale|compliance): [^\n]*\n", "", GOOD_CHARTER)
-    text = text.replace("4. **Discovery**\n", "4. **Discovery**\n" + discovery, 1)
-    if slice_lines:
-        text = text.replace(
-            "\n## Consequences",
-            "5. **Slice**\n" + "".join(f"   - {ln}\n" for ln in slice_lines) + "\n## Consequences",
-        )
-    return text
+    return charter(topics, answers, tuple(slice_lines))
 
 
 def idea_start(root, topics=TEN, answers=None, slice_lines=()):

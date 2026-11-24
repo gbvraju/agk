@@ -155,6 +155,15 @@ def upgrade_clean(tmp: Path) -> tuple[str, str]:
     return path.name, text
 
 
+def charter_record(tmp: Path) -> tuple[str, str]:
+    """Brief #1888 (ADR-0782): the charter template `/agk:start` and `/agk:vision` copy, filled."""
+    values = {"adr": "0002", "date": TODAY, "related": "ADR-0001", "slice_topic": "scale"}
+    text = (KIT_ROOT / "kit" / "templates" / "charter-adr.md").read_text(encoding="utf-8")
+    return "0002-project-charter.md", re.sub(
+        r"\{\{([a-z_]+)\}\}", lambda m: values.get(m[1], "an invented answer"), text
+    )
+
+
 def personal_record(tmp: Path) -> tuple[str, str]:
     text = personal_adopt.adr_text("ADR-0002", "Carts are kept", [], [], ["REQ-001"], TODAY)
     return "0002-carts-are-kept.md", text
@@ -172,6 +181,7 @@ WRITERS: dict[str, object] = {
         "kit/templates/adr-0001-adopt.md", solo=True
     ),
     "kit/templates/stack-adr.md": stack_record,
+    "kit/templates/charter-adr.md": charter_record,
     "scripts/agk/intake.py::render_stub": intake_stub,
     "scripts/agk/new_spec.py::make_requirement": new_spec_requirement,
     "docs/adr/TEMPLATE.md": new_spec_requirement,
@@ -261,3 +271,43 @@ def test_req045_a_field_check_adrs_requires_is_in_every_built_text(tmp_path):
         assert re.search(rf"(?m)^- {field}: \S", text), field
     for section in check_adrs.SECTIONS:
         assert f"\n## {section}\n" in text, section
+
+
+# Brief #1888 (ADR-0782): a skill step that has the model write an ADR by hand copies a kit
+# template that the table above lists; `stack` and `upgrade` write theirs by script, and `design`
+# only reads the charter. A new skill that names an ADR file fails, named, until review lists it.
+SKILL_WRITERS = {
+    "start": "kit/templates/charter-adr.md",
+    "vision": "kit/templates/charter-adr.md",
+}
+SKILL_OTHERS = {"stack", "upgrade", "design"}
+HAND_ADR = re.compile(r"`docs/adr/<[a-z]+>-[a-z0-9<>-]+\.md`")
+
+
+def hand_writers(root: Path) -> list[str]:
+    """The skills whose text names an ADR file it writes (`docs/adr/<n>-<slug>.md`)."""
+    return sorted(
+        path.parent.name
+        for path in (root / "skills").glob("*/SKILL.md")
+        if HAND_ADR.search(path.read_text(encoding="utf-8"))
+    )
+
+
+def test_req045_a_skill_that_writes_an_adr_by_hand_copies_a_listed_template():
+    """REQ-045: brief #1888 answer 9, each such step names a `kit/templates/` file of the census."""
+    found = set(hand_writers(KIT_ROOT)) - SKILL_OTHERS
+    assert sorted(found - set(SKILL_WRITERS)) == []
+    for skill, template in SKILL_WRITERS.items():
+        body = (KIT_ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+        assert template in body, skill
+        assert template in WRITERS, skill
+
+
+def test_req045_a_new_skill_that_writes_an_adr_is_named(tmp_path):
+    """REQ-045: brief #1888 answer 9, a new hand-writing skill is named, never its text."""
+    copy = tmp_path / "kit"
+    shutil.copytree(KIT_ROOT / "skills", copy / "skills")
+    extra = copy / "skills" / "extra" / "SKILL.md"
+    extra.parent.mkdir()
+    extra.write_text("Write `docs/adr/<adr>-extra-record.md` with the fields.\n", "utf-8")
+    assert set(hand_writers(copy)) - SKILL_OTHERS - set(SKILL_WRITERS) == {"extra"}

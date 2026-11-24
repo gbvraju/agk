@@ -348,7 +348,7 @@ Syncing between devices.
 
 - Prefer plain files over a database. <!-- project-specific -->
 """
-GOOD_CHARTER = """# ADR-0002: the project charter
+GOOD_CHARTER = """# ADR-0002: project charter
 
 - Status: Proposed
 - Date: 2026-10-19
@@ -364,29 +364,75 @@ The statement, restated as data.
 
 ## Decision
 
-1. **Milestones**
-   - M1: a saved list exists. exit: 3 items can be saved and read back.
-   - M2: export. exit: every saved item is in the exported file.
-2. **Non-goals**
-   - Syncing between devices.
-3. **Done means**
-   - The milestones' exit statements hold and a person merged the work.
-4. **Discovery**
+1. **Discovery**
    - users: readers, who pay nothing
    - existing: one public repository
    - runs: a laptop, not portable
    - data: saved items, kept for a year
    - scale: one reader
    - compliance: none
+   <!-- The /agk:vision path adds four bullets here, in this order: devices, accessibility, languages, brand. -->
+2. **Slice**
+   - scale: a second reader would need a shared store, which the first slice leaves out.
+   <!-- One bullet for each topic answered `not known yet` and for any topic the first slice leaves out; remove this item when there is none. -->
+3. **Milestones**
+   - M1 a saved list: exit: 3 items can be saved and read back.
+   <!-- One line per milestone; each says `exit:` and a measurable statement (a number, or all, every, none, zero). -->
+4. **Non-goals**
+   - Syncing between devices.
+5. **Done means**
+   - The milestones' exit statements hold and a person merged the work.
+
+The ruleset that ADR-0001 records stays as it is; this charter does not restate or change it.
 
 ## Consequences
 
-The ruleset recorded in ADR-0001 stays as it is.
+The vision and this charter guide the first briefs.
 
 ## Residual
 
 None.
 """
+# Brief #1888 (ADR-0782): the one source of the charter's form, which both skills copy.
+CHARTER_TEMPLATE = KIT_ROOT / "kit" / "templates" / "charter-adr.md"
+SLOT = re.compile(r"\{\{([a-z_]+)\}\}")
+SIX = ("users", "existing", "runs", "data", "scale", "compliance")
+CHARTER_VALUES = {
+    "adr": "0002",
+    "date": "2026-10-19",
+    "related": "ADR-0001",
+    "context": "The statement, restated as data.",
+    "users": "readers, who pay nothing",
+    "existing": "one public repository",
+    "runs": "a laptop, not portable",
+    "data": "saved items, kept for a year",
+    "scale": "one reader",
+    "compliance": "none",
+    "slice_topic": "scale",
+    "slice": "a second reader would need a shared store, which the first slice leaves out.",
+    "name": "a saved list",
+    "measurable": "3 items can be saved and read back.",
+    "non_goal": "Syncing between devices.",
+    "done": "The milestones' exit statements hold and a person merged the work.",
+    "consequences": "The vision and this charter guide the first briefs.",
+    "residual": "None.",
+}
+DISCOVERY_SLOTS = "".join(f"   - {t}: {{{{{t}}}}}\n" for t in SIX)
+SLICE_SLOT = "   - {{slice_topic}}: {{slice}}\n"
+
+
+def charter(topics=SIX, answers=None, slice_lines=None, values=None):
+    """The kit's charter template filled: `topics` as the Discovery bullets with `answers`,
+    `slice_lines` as the Slice bullets (None keeps the template's one, () drops the item)."""
+    text = CHARTER_TEMPLATE.read_text(encoding="utf-8")
+    vals = {**CHARTER_VALUES, **(values or {})}
+    answers = {**{t: vals[t] for t in SIX}, **(answers or {})}
+    text = text.replace(DISCOVERY_SLOTS, "".join(f"   - {t}: {answers[t]}\n" for t in topics))
+    if slice_lines == ():
+        text = re.sub(r"\d\. \*\*Slice\*\*\n(?:   .*\n)+", "", text)
+    elif slice_lines is not None:
+        text = text.replace(SLICE_SLOT, "".join(f"   - {ln}\n" for ln in slice_lines))
+    return SLOT.sub(lambda m: vals[m[1]], text)
 
 
 @pytest.fixture
@@ -529,11 +575,11 @@ def test_ac1_a_vision_without_project_rules_is_fine(started):
         (lambda t: t.replace("- Status: Proposed", "- Status: Accepted"), "not Proposed"),
         (lambda t: t.replace("`constitution/`", "`docs/`"), "constitution"),
         (
-            lambda t: t.replace("2. **Non-goals**\n   - Syncing between devices.\n", ""),
+            lambda t: t.replace("4. **Non-goals**\n   - Syncing between devices.\n", ""),
             "numbered items",
         ),
-        (lambda t: t.replace("3. **Done means**", "3. **Finished**"), "numbered items"),
-        (lambda t: t.replace("exit: every saved item", "every saved item"), "`exit:`"),
+        (lambda t: t.replace("5. **Done means**", "5. **Finished**"), "numbered items"),
+        (lambda t: t.replace("exit: 3 items", "3 items"), "`exit:`"),
         (
             lambda t: t.replace(
                 "exit: 3 items can be saved and read back.", "exit: it works well."
@@ -674,3 +720,126 @@ def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_pat
         env=clean_env(),
     )
     assert gov.returncode == 0, gov.stdout + gov.stderr
+
+
+# --- brief #1888 (ADR-0782): one charter template, which both skills copy ---------------------
+
+
+def test_req020_the_charter_fixture_is_the_kit_template_filled():
+    """REQ-020: brief #1888 answer 4, `GOOD_CHARTER` cannot drift from the template."""
+    assert set(SLOT.findall(CHARTER_TEMPLATE.read_text(encoding="utf-8"))) == set(CHARTER_VALUES)
+    assert charter() == GOOD_CHARTER
+    assert "{{" not in GOOD_CHARTER
+
+
+def test_req020_the_filled_template_passes_check_start_and_the_adr_check(started):
+    """REQ-020: brief #1888 answer 4, SPEC-0013 rules 4 and 5 on the first try."""
+    from check_adrs import validate
+
+    good_start(started, charter=charter())
+    proc = check_start(started)
+    assert (proc.returncode, proc.stdout) == (0, "ok playbook-start\n")
+    assert validate("0002-project-charter.md", charter(), {"0001", "0002"}) == []
+
+
+def test_req020_the_template_without_an_adr_0001_says_related_none(started):
+    """REQ-020: brief #1888 answer 7 (no ADR-0001: `Related: none`)."""
+    good_start(started, charter=charter(values={"related": "none"}))
+    assert check_start(started).stdout == "ok playbook-start\n"
+
+
+@pytest.mark.parametrize("slot", ["adr", "date"])
+def test_req020_a_number_or_date_slot_left_unfilled_fails_the_format(started, slot):
+    """REQ-020: brief #1888 answer 7 (a placeholder left in fails check-start's format)."""
+    text = SLOT.sub(lambda m: m[0] if m[1] == slot else CHARTER_VALUES[m[1]], charter_raw())
+    good_start(started, charter=text)
+    failed(started, "ADR format")
+
+
+def charter_raw() -> str:
+    return CHARTER_TEMPLATE.read_text(encoding="utf-8")
+
+
+def test_req020_a_crlf_charter_passes_as_its_lf_form(started):
+    """REQ-020: brief #1888 answer 7 (CRLF line ends from a Windows editor)."""
+    good_start(started)
+    path = started / "docs" / "adr" / "0002-project-charter.md"
+    path.write_bytes(charter().replace("\n", "\r\n").encode("utf-8"))
+    assert check_start(started).stdout == "ok playbook-start\n"
+
+
+def test_req020_the_template_passes_on_a_trunk_default_branch(tmp_path):
+    """REQ-020: brief #1888 answer 6 (`default_branch` set to another name)."""
+    root = make_repo(tmp_path / "proj")
+    files = {
+        "agk.toml": 'default_branch = "trunk"\n',
+        "constitution/principles.md": PRINCIPLES,
+        "constitution/vision.md": VISION_TEMPLATE,
+        "docs/adr/0001-adopt-agk.md": ADR1,
+        "docs/requirements.md": "### REQ-001 — T\n\n- Status: planned\n",
+    }
+    for rel, body in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(body, encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+    git(root, "branch", "-m", "trunk")
+    ids = run("start-ids", "--statement", "A list.", "--ref", "trunk", "--root", str(root))
+    assert json.loads(ids.stdout)["adr"] == "0002"
+    git(root, "switch", "-q", "-c", "start/a-list")
+    good_start(root, charter=charter())
+    proc = run("check-start", "--base", "trunk", "--root", str(root))
+    assert proc.stdout == "ok playbook-start\n"
+
+
+@pytest.mark.parametrize("skill", ["start", "vision"])
+def test_req020_both_skills_copy_the_kit_template(skill):
+    """REQ-020: brief #1888 answer 2, the skill names the template and states no form of its own."""
+    body = (KIT_ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "${CLAUDE_PLUGIN_ROOT}/kit/templates/charter-adr.md" in body
+    assert "Status: Proposed" not in body
+    assert "Deciders: maintainers" not in body and "Requirements: REQ-001" not in body
+
+
+@pytest.mark.parametrize("skill", ["start", "vision"])
+def test_req020_both_skills_merge_the_day_zero_source_first(skill):
+    """REQ-020: brief #1888 answer 3 (ADR-0664 item 4: the source goes in its own pull request)."""
+    flat = " ".join((KIT_ROOT / "skills" / skill / "SKILL.md").read_text("utf-8").split())
+    assert "`docs/sources/day-zero.md`" in flat
+    assert "its own pull request, merged first" in flat
+
+
+def dirty(root, kind):
+    path = root / "docs" / "sources" / "day-zero.md"
+    if kind == "untracked":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Day zero\n\nInvented answers.\n", encoding="utf-8")
+    else:
+        (root / "docs" / "requirements.md").write_text("changed\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("kind", ["untracked", "modified"])
+def test_req020_start_ids_refuses_a_work_tree_that_is_not_clean(started, kind):
+    """REQ-020: brief #1888 answer 3, the rule is named, never a path."""
+    dirty(started, kind)
+    proc = run("start-ids", "--statement", "A reading list.", "--ref", "main", "--root", str(started))
+    assert proc.returncode == 1
+    assert proc.stdout == (
+        "FAIL playbook: rule 4: the work tree is not clean; the start branch holds only the "
+        "vision and the charter\n"
+    )
+    assert "day-zero" not in proc.stdout and "requirements" not in proc.stdout
+
+
+def test_req020_an_ignored_file_or_a_merged_source_is_allowed(started):
+    """REQ-020: brief #1888 answer 7 (ignored files and a source already on the default branch)."""
+    (started / ".gitignore").write_text("*.log\n", encoding="utf-8")
+    dirty(started, "untracked")
+    git(started, "add", "-A")
+    git(started, "commit", "-q", "-m", "the day-zero source, merged")
+    (started / "notes.log").write_text("x\n", encoding="utf-8")
+    proc = run("start-ids", "--statement", "A reading list.", "--ref", "HEAD", "--root", str(started))
+    assert proc.returncode == 0, proc.stdout
+    git(started, "branch", "-f", "main", "HEAD")
+    good_start(started, charter=charter())
+    assert check_start(started).stdout == "ok playbook-start\n"
