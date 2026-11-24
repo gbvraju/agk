@@ -33,6 +33,7 @@ import json
 import os
 import sys
 import tomllib
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -79,7 +80,7 @@ from init import (
     slug,
 )
 from reviewers import parse, render_codeowners
-from tree_walk import FRONTEND_PATTERNS, walked_dirs  # installed, unlike this file (brief #1214)
+from tree_walk import FRONTEND_PATTERNS, WEB_EXTENSIONS, walked_dirs  # installed, unlike this file (brief #1214)
 
 TEST_PATTERNS = ("*_test.py", "test_*.py")
 MARKERS = {
@@ -93,25 +94,110 @@ def toml_list(items: list[str]) -> str:
     return "[" + ", ".join(json.dumps(i) for i in items) + "]"
 
 
-def detect_tests(root: Path) -> tuple[list[str], list[str]]:
-    """Topmost directories holding Python or front-end test files, and the patterns matched."""
+# Brief #1891 (ADR-0785): with no test file found, the stacks whose manifests the tree holds name
+# the patterns; the manifests come from the kit's own table, never the target's.
+SIGNALS = KIT_ROOT / "config" / "stack-signals.toml"
+PYTHON_STACKS = ("python-pyproject", "python-pip")
+NODE_STACK = "node"
+UNREACHED_FOLDERS = ("__tests__",)  # jest's folder convention; `test/` beside a package.json too
+EMPTY_LINE = (
+    "tests: no test file found and no stack with known test names; test_patterns is empty, "
+    "so no test is selected until a person sets it (setting: test_patterns)"
+)
+
+
+@dataclass
+class Scan:
+    """One walk of a tree: the test folders and patterns found, the stacks, and the web files
+    under a test folder that a name pattern may not reach (brief #1891 answers 2, 3 and 6)."""
+
+    dirs: list[str]
+    patterns: list[str]
+    found: bool  # a test file matched a name pattern
+    stacks: set[str] = field(default_factory=set)
+    candidates: list[str] = field(default_factory=list)  # file names under a test folder
+
+
+def stack_manifests() -> tuple[dict[str, str], set[str]]:
+    """(manifest name -> stack, folder names to ignore) of `config/stack-signals.toml`."""
+    data = tomllib.loads(SIGNALS.read_text(encoding="utf-8"))
+    names = {m: s["name"] for s in data.get("stack", []) for m in s.get("manifests", [])}
+    return names, set(data.get("ignore", []))
+
+
+def scan_tests(root: Path) -> Scan:
+    """Topmost directories holding Python or web test files, the patterns matched (by
+    `fnmatchcase`, as `impact.is_test_file` matches), or the stacks' patterns when none is."""
+    manifests, ignore = stack_manifests()
     dirs: set[str] = set()
     found: set[str] = set()
+    stacks: set[str] = set()
+    packages: set[str] = set()
+    candidates: list[str] = []
     for here, dirnames, filenames in os.walk(root):
         rel_here = Path(here).relative_to(root).as_posix()
         rel_here = "" if rel_here == "." else rel_here
-        dirnames[:] = walked_dirs(rel_here, dirnames)
-        for name in filenames:
+        dirnames[:] = sorted(walked_dirs(rel_here, dirnames))
+        parts = rel_here.split("/") if rel_here else []
+        if "package.json" in filenames:
+            packages.add(rel_here)
+        in_test_folder = any(p in UNREACHED_FOLDERS for p in parts) or any(
+            p == "test" and "/".join(parts[:i]) in packages for i, p in enumerate(parts)
+        )
+        for name in sorted(filenames):
+            if name in manifests and not any(p in ignore for p in parts):
+                stacks.add(manifests[name])
             for pattern in TEST_PATTERNS + FRONTEND_PATTERNS:
-                if fnmatch.fnmatch(name, pattern):
+                if fnmatch.fnmatchcase(name, pattern):
                     found.add(pattern)
                     dirs.add(rel_here)
+            if in_test_folder and os.path.splitext(name)[1] in WEB_EXTENSIONS:
+                candidates.append(name)
     top = sorted(d for d in dirs if d and not any(d.startswith(e + "/") for e in dirs if e))
     if "" in dirs:
         top = ["."]
-    if not top:
-        return ["tests"], ["test_*.py"]
-    return top, sorted(found)
+    if top:
+        return Scan(top, sorted(found), True, stacks, candidates)
+    fallback: set[str] = set()
+    if stacks & set(PYTHON_STACKS):
+        fallback.add("test_*.py")  # today's default for a Python project (Q-AN-2)
+    if NODE_STACK in stacks:
+        fallback.update(FRONTEND_PATTERNS)
+    return Scan(["tests"], sorted(fallback), False, stacks, candidates)
+
+
+def detect_tests(root: Path) -> tuple[list[str], list[str]]:
+    """Topmost directories holding Python or front-end test files, and the patterns matched."""
+    scan = scan_tests(root)
+    return scan.dirs, scan.patterns
+
+
+def unreached(scan: Scan, patterns: list[str]) -> int:
+    """The web files under a `__tests__/` or `test/` folder that no entry of PATTERNS matches."""
+    return sum(1 for n in scan.candidates if not any(fnmatch.fnmatchcase(n, p) for p in patterns))
+
+
+def detection_lines(scan: Scan, patterns: list[str]) -> list[str]:
+    """The information lines of answers 3 and 6, for adopt and init."""
+    lines = [EMPTY_LINE] if not patterns else []
+    count = unreached(scan, patterns)
+    if count:
+        lines.append(
+            f"tests: {count} files in __tests__ or test folders match no test_patterns entry "
+            "(setting: test_patterns)"
+        )
+    return lines
+
+
+def stamped_lists(stamp: dict) -> None:
+    """Brief #1891 answer 5: a stamped `test_dirs` or `test_patterns` is a list of strings, or
+    adopt refuses before any write; a stamp is never rewritten."""
+    for key, what in (("test_dirs", "folder paths"), ("test_patterns", "file-name patterns")):
+        value = stamp.get(key)
+        if key in stamp and not (
+            isinstance(value, list) and all(isinstance(i, str) for i in value)
+        ):
+            raise Refusal(f"{key} must be a list of {what} (setting: {key})")
 
 
 def read_stamp(target: Path) -> dict:
@@ -165,8 +251,15 @@ def existing_protected_files(target: Path, entries: list[str], owned: set[str]) 
     return sorted(found)
 
 
-def build_plan(target: Path, today: str, setup: dict | None = None, clean: bool = False):
-    """(plan entries (rel, action, content, detail), protected entries, default branch)."""
+def build_plan(
+    target: Path,
+    today: str,
+    setup: dict | None = None,
+    clean: bool = False,
+    notes: list[str] | None = None,
+):
+    """(plan entries (rel, action, content, detail), protected entries, default branch). NOTES,
+    when given, gains the information lines of the test detection (brief #1891)."""
     manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
     spec = manifest["adopt"]
     stamp = read_stamp(target)
@@ -177,10 +270,14 @@ def build_plan(target: Path, today: str, setup: dict | None = None, clean: bool 
             "run `git remote set-head origin --auto` in TARGET, or check out the default branch "
             "of a repository without an origin remote, then run adopt again"
         )
+    stamped_lists(stamp)
+    scan = scan_tests(target)
     if "test_dirs" in stamp and "test_patterns" in stamp:
         dirs, patterns = list(stamp["test_dirs"]), list(stamp["test_patterns"])
     else:
-        dirs, patterns = detect_tests(target)
+        dirs, patterns = scan.dirs, scan.patterns
+    if notes is not None:
+        notes.extend(detection_lines(scan, patterns))
     date = stamp.get("installed")
     date = date if isinstance(date, str) and DATE_RE.match(date) else today
 
@@ -315,7 +412,8 @@ def main(argv: list[str] | None = None) -> int:
             print(plugin_settings())
             return 1
         today = datetime.now(UTC).date().isoformat()
-        plan, entries, branch = build_plan(target, today, setup, clean)
+        notes: list[str] = []
+        plan, entries, branch = build_plan(target, today, setup, clean, notes)
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1
@@ -329,6 +427,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{action} {rel}{detail}")
     if clean:
         print(LAYOUT_LINE)
+    for line in notes:
+        print(line)
     if any(action == "conflict" for _, action, _, _ in plan):
         print("refused: existing files differ; nothing was written")
         print_branch_rules(branch, "adopt", "plugin" if clean else "installed")

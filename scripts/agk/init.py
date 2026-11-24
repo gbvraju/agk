@@ -212,6 +212,48 @@ def with_test_dirs(rendered: str, added: list[str]) -> str:
     return re.sub(rf"(?m)^{re.escape(TEST_DIRS_LINE)}$", lambda _m: line, rendered, count=1)
 
 
+def found_test_patterns(target: Path):
+    """Brief #1891 answer 4 (ADR-0785): (patterns to write after `test_dirs`, or None to keep the
+    template's bytes; the detection's scan). A re-run reuses a stamped `test_patterns` list, so it
+    compares against the same rendered file; an empty or Python-only tree keeps the template."""
+    from adopt import scan_tests  # adopt imports this module; kit-only, as this file is
+
+    scan = scan_tests(target)
+    path = target / "agk.toml"
+    if path.exists():
+        try:
+            value = tomllib.loads(path.read_text(encoding="utf-8")).get("test_patterns")
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            return None, scan
+        if isinstance(value, list) and all(isinstance(i, str) for i in value):
+            return value, scan
+        return None, scan
+    if not (scan.found or scan.stacks) or scan.patterns == ["test_*.py"]:
+        return None, scan
+    return scan.patterns, scan
+
+
+def test_notes(scan, patterns: list[str] | None) -> list[str]:
+    """Answer 6's line for init, against the patterns init writes (or the default it keeps)."""
+    from adopt import unreached
+
+    count = unreached(scan, ["test_*.py"] if patterns is None else patterns)
+    if not count:
+        return []
+    return [
+        f"tests: {count} files in __tests__ or test folders match no test_patterns entry "
+        "(setting: test_patterns)"
+    ]
+
+
+def with_test_patterns(rendered: str, patterns: list[str] | None) -> str:
+    """The rendered agk.toml with a `test_patterns` line after its `test_dirs` line."""
+    if patterns is None:
+        return rendered
+    line = "test_patterns = " + json.dumps(patterns)
+    return re.sub(r"(?m)^(test_dirs = .*)$", lambda m: f"{m[1]}\n{line}", rendered, count=1)
+
+
 def setup_login() -> str | None:
     """The signed-in login the steward read with `gh api user` into AGK_SETUP_LOGIN, or None;
     never printed."""
@@ -363,6 +405,7 @@ def build_items(
         rendered = render(text, variables, src)
         if dest == "agk.toml":
             rendered = with_test_dirs(rendered, found_test_dirs(target))
+            rendered = with_test_patterns(rendered, found_test_patterns(target)[0])
         items[dest] = rendered.encode("utf-8")
     if ROUTER_WORKFLOW in items:
         items[ROUTER_WORKFLOW] = router_bytes(target, items[ROUTER_WORKFLOW], items["agk.toml"])
@@ -582,6 +625,11 @@ def main(argv: list[str] | None = None) -> int:
     added = found_test_dirs(target)
     if added:
         print(f"test_dirs: added {', '.join(added)} (front-end and end-to-end test folders found)")
+    patterns, scan = found_test_patterns(target)
+    if patterns is not None and not (target / "agk.toml").exists():
+        print(f"test_patterns: {json.dumps(patterns)} (test files or a stack manifest found)")
+    for line in test_notes(scan, patterns):
+        print(line)
     if any(action == "conflict" for _, action, _, _ in plan):
         print("refused: existing files differ; nothing was written (merging is `agk adopt`)")
         print_branch_rules(branch, "init", "plugin" if clean else "installed")
