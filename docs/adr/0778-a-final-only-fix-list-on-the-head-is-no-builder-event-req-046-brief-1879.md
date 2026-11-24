@@ -1,6 +1,6 @@
 # ADR-0778: A Final-only fix list on the head is no builder event (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1879, amendment 225 (SPEC-0039 rules 2 and 9, SPEC-0064 rule 4), ADR-0277, ADR-0265, ADR-0293,

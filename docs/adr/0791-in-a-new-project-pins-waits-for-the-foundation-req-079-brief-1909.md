@@ -1,6 +1,6 @@
 # ADR-0791: In a new project, pins waits for the foundation instead of failing the stack's acceptance (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1909, the test-run re-run on #1769 (IB-11), ADR-0672 (the stack writes its own build file and lock),

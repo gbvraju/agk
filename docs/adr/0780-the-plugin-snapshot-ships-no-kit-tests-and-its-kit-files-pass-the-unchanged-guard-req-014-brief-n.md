@@ -1,6 +1,6 @@
 # ADR-0780: The plugin snapshot ships no kit tests, and its kit files pass the unchanged guard (REQ-014, brief 1886)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1886, amendment 226 (SPEC-0071 rule 2), ADR-0627, ADR-0596, ADR-0616, SPEC-0042 rule 10, brief

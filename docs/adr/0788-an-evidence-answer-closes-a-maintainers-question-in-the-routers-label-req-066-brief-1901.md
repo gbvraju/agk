@@ -1,6 +1,6 @@
 # ADR-0788: An evidence Answer: closes a maintainers question in the router's label (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1901, SPEC-0059 rules 3, 4 and 10, ADR-0442 (the maintainers question in the label), ADR-0497 (a new head

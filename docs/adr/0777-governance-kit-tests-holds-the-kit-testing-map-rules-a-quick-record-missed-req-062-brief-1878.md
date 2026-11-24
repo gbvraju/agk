@@ -1,6 +1,6 @@
 # ADR-0777: Governance's kit-tests check holds the kit's testing map rules that a quick record missed (REQ-062)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1878, ADR-0731 (the gate runner map rule, moved here), ADR-0359 (the check's first map rule), ADR-0650

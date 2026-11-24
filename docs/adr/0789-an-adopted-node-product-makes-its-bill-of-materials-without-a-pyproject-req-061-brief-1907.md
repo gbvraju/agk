@@ -1,6 +1,6 @@
 # ADR-0789: An adopted Node product makes its bill of materials without a pyproject.toml (REQ-061, brief 1907)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1907, amendment 232 (SPEC-0054 rules 2 and 3), ADR-0370, ADR-0676, ADR-0694, ADR-0672, ADR-0742,

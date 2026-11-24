@@ -1,6 +1,6 @@
 # ADR-0776: Each GitHub job records the calls it made and the hourly limit left (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1877, ADR-0529, ADR-0548, ADR-0565, ADR-0566, ADR-0654, ADR-0653, ADR-0196, plan #661

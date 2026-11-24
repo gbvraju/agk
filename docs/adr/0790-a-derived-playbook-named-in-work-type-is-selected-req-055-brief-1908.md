@@ -1,6 +1,6 @@
 # ADR-0790: A derived playbook named in `[delivery] work_type` is selected in both layouts (REQ-055)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1908, SPEC-0038 rule 5, SPEC-0048 rules 21 and 22, SPEC-0072 rules 3 and 8, ADR-0312 (the declaration),

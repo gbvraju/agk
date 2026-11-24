@@ -1,6 +1,6 @@
 # ADR-0784: A TypeScript product with the stock typescript-eslint config meets the Node pack's lint floor
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers
 - Related: brief #1890, brief #1764, brief #1766, brief #1837, brief #1771, ADR-0739, ADR-0740, ADR-0766, ADR-0773, SPEC-0072, amendment 230, plan #661

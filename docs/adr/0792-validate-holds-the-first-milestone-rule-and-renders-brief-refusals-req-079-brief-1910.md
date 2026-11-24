@@ -1,6 +1,6 @@
 # ADR-0792: Validate holds the first-milestone rule and render's brief refusals (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0043, brief #1910, brief #1587, brief #1594, plan #661, ADR-0667, ADR-0674, ADR-0456, ADR-0461, ADR-0472

@@ -1,6 +1,6 @@
 # ADR-0783: The discovery Screens line is read past the quoted problem, by one reader (REQ-044, REQ-055)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1889, ADR-0249 (the design inventory and its check), ADR-0734 (the idea path's inventory and the

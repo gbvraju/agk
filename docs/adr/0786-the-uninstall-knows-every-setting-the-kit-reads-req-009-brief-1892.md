@@ -1,6 +1,6 @@
 # ADR-0786: The uninstall knows every setting the kit reads, and removes reviewers.yaml only when the kit wrote it (REQ-009)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1892, ADR-0203 (the uninstall, whose rule 4 this redefines), ADR-0604 (the lines left), ADR-0615 (the

@@ -1,6 +1,6 @@
 # ADR-0787: A second init run reads test_dirs back from agk.toml (REQ-062)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1899, found-bug #1898, ADR-0490 (front-end test folders in `test_dirs`), ADR-0769 (the forms of

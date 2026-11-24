@@ -1,6 +1,6 @@
 # ADR-0779: A failed design browser call names its cause, and the browser's sandbox stays on (REQ-044)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1876, found-bug #1833 (from brief #1828, pull request #1830), ADR-0762, ADR-0350, ADR-0450, ADR-0107, plan #661
