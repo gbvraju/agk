@@ -805,11 +805,12 @@ def no_builder_event(comment: dict, sha: str) -> bool:
     return cleared or accepted_adrs(comment, sha) is not None
 
 
-def builder_owed(comments: list[dict], sha: str) -> list[dict]:
+def builder_owed(comments: list[dict], sha: str, allowed: list[str] | None) -> list[dict]:
     """COMMENTS without what owes the builder nothing: each `no_builder_event` comment, and every
-    `Verdict:` comment when the latest is one, since only the newest verdict counts (brief #1879
-    answer 7); the wakers `autopilot.pick` and `conductor.owed_of` read this list."""
-    latest = latest_verdict(comments)
+    `Verdict:` comment when the latest by an author in ALLOWED is one, since only the newest
+    verdict counts (brief #1879 answer 7); a stranger's verdict never hides a listed one, and with
+    no author known nothing older is dropped. `autopilot.pick` and `conductor.owed_of` read it."""
+    latest = latest_verdict(trusted(comments, allowed)) if allowed else None
     if latest is not None and no_builder_event(latest, sha):
         return [c for c in comments if not first_line(c).startswith("Verdict:")]
     return [c for c in comments if not no_builder_event(c, sha)]

@@ -609,7 +609,14 @@ def holder(said: list, since: datetime | None, now: datetime) -> str | None:
     return (session.first_line(found[-1]).split() + ["?"])[1] if found else None
 
 
-def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict | None = None):
+def pick(
+    pulls: list,
+    issues: list,
+    comments: dict,
+    now: datetime,
+    ready: dict | None = None,
+    authors: list[str] | None = None,
+):
     """(the jobs, the held ones) by the supervisor's rules, from GitHub-shaped records of any
     forge: one `review` job while a non-draft pull request's newest `Report:` is newer than every
     `Verdict:`, `Correction:` or answer; a `fix` job where `conductor.job_gate` (build (c)) sees
@@ -640,7 +647,7 @@ def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict |
             review = review or n
         own = conductor.newest(said, conductor.ALIVE) or session.moment(pull.get("created_at"))
         head = str((pull.get("head") or {}).get("sha") or "")
-        owing = merge_cleared.builder_owed(said, head)  # brief #1879
+        owing = merge_cleared.builder_owed(said, head, authors)  # brief #1879: AUTHORS listed
         facts = {"own": own, "owed": conductor.newest(owing, conductor.OWED),
                  "labels": session.labels_of(pull)}  # fmt: skip
         if brief is not None and conductor.job_gate(None, facts, now) is None:
@@ -695,7 +702,7 @@ def jobs_command(root: Path, claiming: bool, now: datetime) -> int:
     them and fires one cloud session per `job:` line); a review job waits for a held lease."""
     repo = session.repo_name(root)
     pulls, briefs, comments, ready = github_records(root, repo)
-    jobs, held = pick(pulls, briefs, comments, now, ready)
+    jobs, held = pick(pulls, briefs, comments, now, ready, conductor.verdict_authors(root))
     issue = conductor.plan_issue(root)
     lease = None if issue is None else conductor.lease_holder(
         conductor.plan_comments(repo, issue), conductor.verdict_authors(root), now)  # fmt: skip
@@ -727,7 +734,7 @@ def next_command(root: Path, brief: int | None, now: datetime) -> int:
     repo = root.name if personal else session.repo_name(root)
     pulls, briefs, comments, ready = (forge_records(root) if personal
                                       else github_records(root, repo))  # fmt: skip
-    jobs, held = pick(pulls, briefs, comments, now, ready)
+    jobs, held = pick(pulls, briefs, comments, now, ready, conductor.verdict_authors(root))
     if brief is not None:
         jobs = [{"kind": "build", "item": brief, "session": f"cb{brief}"}]
         held = [h for h in held if h["item"] == brief]

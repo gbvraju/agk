@@ -3326,11 +3326,11 @@ def newest(comments: list, prefixes: tuple[str, ...]) -> datetime | None:
     return max(times, default=None)
 
 
-def owed_of(comments: list, sha: str) -> datetime | None:
+def owed_of(comments: list, sha: str, authors: list[str] | None) -> datetime | None:
     """The newest line the builder owes an answer to, leaving out a verdict that clears the head
     SHA and, when the newest verdict is one, every older verdict (`merge_cleared.builder_owed`,
     brief #1879, Q-1391-1)."""
-    return newest(merge_cleared.builder_owed(comments, sha), OWED)
+    return newest(merge_cleared.builder_owed(comments, sha, authors), OWED)
 
 
 def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | None:
@@ -3368,7 +3368,7 @@ def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | Non
         "mark": f"{sha}|{newest(said, ALIVE)}|{max(summaries, default='')}",
         "pr": pull["number"],
         "own": max(x for x in moves if x is not None),
-        "owed": owed_of(said, sha),
+        "owed": owed_of(said, sha, verdict_authors(root)),
         "final": bool(reports) and bool(FINAL.match(session.first_line(reports[-1]))),
         "parked": session.PARKED_LABEL in session.labels_of(pull)
         or session.own_park(said) is not None,

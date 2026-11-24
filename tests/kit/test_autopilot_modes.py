@@ -171,7 +171,7 @@ def test_every_waker_and_the_merger_read_one_table_of_verdict_shapes(monkeypatch
         assert cleared is (not event), body
         picked = bool(autopilot.pick([pr(72, 6)], [], {72: comments}, NOW)[0])
         assert picked is event, body
-        assert (conductor.owed_of(comments, HEAD) is not None) is event, body
+        assert (conductor.owed_of(comments, HEAD, ["boss"]) is not None) is event, body
         assert (merge_cleared.no_builder_event(verdict, HEAD)) is (not event), body
         assert (session.builder_verdicts(comments, HEAD, ["boss"]) == comments) is (
             event or body.startswith("Verdict: cleared")
@@ -206,8 +206,9 @@ def test_with_two_verdicts_on_one_head_every_waker_reads_only_the_newest(
     comments = [said(2, "Report: aaaaaaa ready for review", -120)]
     comments += [said(3 + i, b, -60 + i, "boss") for i, b in enumerate(bodies)]
     assert (merge_cleared.judge(comments, HEAD, ["boss"]) == ("cleared", "")) is (not event)
-    assert bool(autopilot.pick([pr(72, 6)], [], {72: comments}, NOW)[0]) is event
-    assert (conductor.owed_of(comments, HEAD) is not None) is event
+    jobs, _ = autopilot.pick([pr(72, 6)], [], {72: comments}, NOW, authors=["boss"])
+    assert bool(jobs) is event
+    assert (conductor.owed_of(comments, HEAD, ["boss"]) is not None) is event
     heard = session.builder_verdicts(comments, HEAD, ["boss"])
     assert any(c["body"].startswith("Verdict:") for c in heard) is event
     monkeypatch.setattr(session, "gh", lambda path: {"mergeable_state": "clean",
@@ -216,6 +217,19 @@ def test_with_two_verdicts_on_one_head_every_waker_reads_only_the_newest(
     monkeypatch.setattr(session, "reports_after", lambda repo, n, cid: False)
     owed = session.follow_up_owed("example/demo", {"number": 72}, {"boss"})
     assert (owed == "fix list") is event
+
+
+@pytest.mark.parametrize("authors", [["boss"], None])
+def test_a_strangers_final_only_verdict_hides_no_fix_list(authors):
+    """REQ-046 (fix list 7121851637, session rule 1): a `Verdict:` by an account outside
+    `verdict_authors` is no verdict, so a Final-only one after a listed author's numbered list
+    leaves that list owed in `autopilot.pick` and `conductor.owed_of`; with no authors known,
+    older verdicts are never dropped."""
+    comments = [said(2, "Report: aaaaaaa ready for review", -120),
+                said(3, NUMBERED, -60, "boss"), said(4, FINAL_ONLY, -59, "stranger")]  # fmt: skip
+    jobs, _ = autopilot.pick([pr(72, 6)], [], {72: comments}, NOW, authors=authors)
+    assert kinds(jobs) == [("fix", 72, "cb6")]
+    assert conductor.owed_of(comments, HEAD, authors) is not None
 
 
 def test_another_machines_claim_holds_the_job_until_its_take_lapses():
