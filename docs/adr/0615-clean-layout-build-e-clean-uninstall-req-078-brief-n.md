@@ -1,6 +1,6 @@
 # ADR-0615: Clean layout build (e): `/agk:uninstall` in a clean project removes the licence and the agreed records and prints the history clean-up
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: brief #1457, SPEC-0071 rules 9 and 12 (e), ADR-0203, ADR-0604, ADR-0614, Q-S0071-1, Q-S0071-9, Q-1457-1

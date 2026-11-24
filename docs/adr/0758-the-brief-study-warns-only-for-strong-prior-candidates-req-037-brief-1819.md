@@ -1,6 +1,6 @@
 # ADR-0758: The brief study warns only for the earlier decisions most likely to matter, at most ten (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1819, ADR-0752 (brief #1800), brief #1813, brief #1815, plan #661

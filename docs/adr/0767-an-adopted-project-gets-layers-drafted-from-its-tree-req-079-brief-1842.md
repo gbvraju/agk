@@ -1,6 +1,6 @@
 # ADR-0767: An adopted project gets layers drafted from its tree; a layer set that holds no file and an unfilled record fail (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rules 5, 7, 8 and 9, SPEC-0038 rule 5, SPEC-0048 rule 22, ADR-0668, ADR-0675, ADR-0680, ADR-0681, ADR-0697, brief #1842, brief #1829, plan #661

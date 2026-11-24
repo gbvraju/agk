@@ -1,6 +1,6 @@
 # ADR-0710: The release script accepts the decisions their Final comments accepted (REQ-035)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0277, ADR-0510, ADR-0575, SPEC-0021, SPEC-0028, brief #1706, note #1197, plan #661

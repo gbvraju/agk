@@ -1,6 +1,6 @@
 # ADR-0688: The steward lands on the default branch, or stops
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1583 (its second pull request), SPEC-0066 rule 3 (build (d)), ADR-0663 (decision 6 plans this split), ADR-0662, Q-1583-1

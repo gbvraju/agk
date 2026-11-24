@@ -1,6 +1,6 @@
 # ADR-0705: The steward, the confirm skill and the guides name the natural path
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1692, brief #1691, brief #1690, ADR-0661, ADR-0703, ADR-0704, ADR-0179, ADR-0310, SPEC-0062, amendment 194, plan #661

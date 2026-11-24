@@ -1,6 +1,6 @@
 # ADR-0651: The distribution spec states the shipped plugin and its contexts, so its pending amendments apply (REQ-014)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: SPEC-0005, amendment 188, amendment 113, amendment 142, brief #1551, brief #1507, #1550, Q-1507-1, Q-1518-1, ADR-0612, ADR-0641, plan #661

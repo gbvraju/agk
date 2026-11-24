@@ -1,6 +1,6 @@
 # ADR-0747: Every owner wait names the line that ends it, and a question both sides call not blocking never parks (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1784, ADR-0543, ADR-0685, ADR-0722, ADR-0723, ADR-0749, plan #661

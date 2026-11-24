@@ -1,6 +1,6 @@
 # ADR-0617: Clean layout build (g): the rehearsal's four figures are recorded, checked and gate any customer move
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: brief #1459, SPEC-0071 rules 11, 12 (g) and 13, ADR-0614, ADR-0616, Q-1459-1, Q-1459-2

@@ -1,6 +1,6 @@
 # ADR-0753: A draft's proof run waits in its own group, so it never cancels the ready run (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1809, found bug of #1808, brief #216, brief #283, brief #369, ADR-0207, brief #972, found bug #1253, brief #1371, ADR-0576, plan #661

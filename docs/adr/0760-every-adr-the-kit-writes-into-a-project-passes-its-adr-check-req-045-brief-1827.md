@@ -1,6 +1,6 @@
 # ADR-0760: Every ADR the kit writes into a project passes its ADR check (REQ-045, brief #1827)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1827, ADR-0735, ADR-0681, SPEC-0038, SPEC-0072

@@ -1,6 +1,6 @@
 # ADR-0650: A change runs the whole-kit tests on its pull request and on the would-be merge (REQ-062)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: SPEC-0055, SPEC-0039, amendment 186, amendment 187, brief #1548, ADR-0440, ADR-0359, #1516, #1527, #1529, #1532, #1546, #1547, plan #661

@@ -1,6 +1,6 @@
 # ADR-0703: The steward asks about one pinned head and writes the line on one yes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1690, ADR-0661, ADR-0681, ADR-0179, SPEC-0062, amendment 194, Q-1690-1, Q-1690-2, Q-1690-3, plan #661

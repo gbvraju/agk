@@ -1,6 +1,6 @@
 # ADR-0626: The kit's own repository runs in local mode, every gate recorded as evidence
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1471, brief #1447, ADR-0182, ADR-0237, ADR-0536, ADR-0605, ADR-0306, plan #661

@@ -1,6 +1,6 @@
 # ADR-0608: The WSL setup installs the pinned gitleaks
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: ADR-0577, ADR-0306, ADR-0327, ADR-0158, brief #1450, plan #661

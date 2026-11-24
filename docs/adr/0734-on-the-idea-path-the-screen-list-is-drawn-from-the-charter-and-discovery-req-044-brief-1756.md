@@ -1,6 +1,6 @@
 # ADR-0734: On the path from an idea, the screen list is drawn from the charter and discovery (REQ-044)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1756, SPEC-0037, amendment 217, ADR-0504

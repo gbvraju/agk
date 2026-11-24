@@ -1,6 +1,6 @@
 # ADR-0681: The steward shows the standard and applies it on one yes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1601, SPEC-0072, SPEC-0062, SPEC-0059, SPEC-0048, ADR-0665, ADR-0667, ADR-0679, plan #661

@@ -1,6 +1,6 @@
 # ADR-0746: The upgrade skill's test reads the resolver's governance command (REQ-078)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1783, issue #1782, brief #1759, ADR-0737

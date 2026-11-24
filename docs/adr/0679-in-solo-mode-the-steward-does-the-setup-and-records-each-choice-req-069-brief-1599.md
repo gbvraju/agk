@@ -1,6 +1,6 @@
 # ADR-0679: In solo mode the steward does the setup and records each choice
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1599, SPEC-0062, SPEC-0048, SPEC-0001, ADR-0678, ADR-0557, plan #661, amendments 208 and 209

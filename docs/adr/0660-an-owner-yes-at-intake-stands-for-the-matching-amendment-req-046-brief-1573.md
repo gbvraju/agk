@@ -1,6 +1,6 @@
 # ADR-0660: The owner's yes on a brief's answers stands for the amendment that matches them (REQ-046, REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0039, SPEC-0059, SPEC-0062, amendment 192, amendment 193, brief #1573, brief #1555, amendment 190, ADR-0653, amendment 170, amendment 124, plan #661

@@ -1,6 +1,6 @@
 # ADR-0645: A testing-map conflict in agk.toml is settled by the kit, not a person (REQ-041)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: SPEC-0034, amendment 184, brief #1531, #1521, #1523, ADR-0509, plan #661

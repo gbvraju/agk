@@ -1,6 +1,6 @@
 # ADR-0773: An adopted project can require each file a change edits to meet the standards pack
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1844, brief #1837, brief #1771, ADR-0666, ADR-0669, ADR-0680, ADR-0681, ADR-0702, ADR-0743, ADR-0766, ADR-0111, SPEC-0072, plan #661

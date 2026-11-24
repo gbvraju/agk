@@ -1,6 +1,6 @@
 # ADR-0748: One licence reader, an off-list licence said at the stack choice, and the check names the accept's refusals (REQ-061)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0054 rule 4, SPEC-0029 rule 5, ADR-0676, ADR-0671, ADR-0744, brief #1785, plan #661

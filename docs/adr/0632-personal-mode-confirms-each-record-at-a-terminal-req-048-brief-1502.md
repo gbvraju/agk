@@ -1,6 +1,6 @@
 # ADR-0632: Personal mode confirms each record at a terminal, and the sidecar's readers accept only that
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0179, ADR-0426, SPEC-0041, brief #1502

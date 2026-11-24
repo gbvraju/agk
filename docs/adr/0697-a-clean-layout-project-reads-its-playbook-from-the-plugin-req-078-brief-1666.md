@@ -1,6 +1,6 @@
 # ADR-0697: A clean-layout project reads its playbook from the plugin
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1666, SPEC-0071, ADR-0683, ADR-0611, ADR-0666, plan #661

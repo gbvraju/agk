@@ -1,6 +1,6 @@
 # ADR-0711: Every merge path counts only a listed author's verdict and holds outside pull requests (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0261, ADR-0263, ADR-0277, ADR-0684, SPEC-0021, SPEC-0025, SPEC-0039, brief #1709, plan #661

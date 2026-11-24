@@ -1,6 +1,6 @@
 # ADR-0674: The foundation writes each product's basics and the first milestone ends with a working slice (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0041, brief #1594, brief #1587, brief #1593, brief #1597, plan #661, ADR-0667, ADR-0673, amendment 202

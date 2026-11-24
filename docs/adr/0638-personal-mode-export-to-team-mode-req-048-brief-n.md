@@ -1,6 +1,6 @@
 # ADR-0638: Personal mode exports its records to team mode on new branches, renumbered and lossless, never pushed
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: ADR-0267, SPEC-0041, brief #1508

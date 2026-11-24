@@ -1,6 +1,6 @@
 # ADR-0662: Every session the kit starts names its agent
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1582, SPEC-0066 rules 5 and 11 (build (a)), Q-S0066-4, Q-S0066-5, SPEC-0061 rule 7, SPEC-0064, plan #661

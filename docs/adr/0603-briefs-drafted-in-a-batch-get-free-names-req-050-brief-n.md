@@ -1,6 +1,6 @@
 # ADR-0603: Briefs drafted in a batch get free names
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1442, ADR-0598, Q-1425-2

@@ -1,6 +1,6 @@
 # ADR-0606: Inside WSL the one autopilot scheduler is a Windows task that runs signed out
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1448, ADR-0587 (the autopilot command), ADR-0577 (`/agk:wsl`), plan #661

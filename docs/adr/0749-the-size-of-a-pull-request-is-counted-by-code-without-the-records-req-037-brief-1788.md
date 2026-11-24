@@ -1,6 +1,6 @@
 # ADR-0749: The size of a pull request is counted by code, without the records its brief requires (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1788, ADR-0583, plan #661

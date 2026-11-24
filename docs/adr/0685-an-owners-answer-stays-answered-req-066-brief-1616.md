@@ -1,6 +1,6 @@
 # ADR-0685: An owner's answer stays answered (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1616, found bug #1578, brief #1534 (ADR-0646), brief #1567 (ADR-0657), brief #1163 (ADR-0495), SPEC-0039 rule 4

@@ -1,6 +1,6 @@
 # ADR-0706: The standards pack gets the plugin root from the resolver (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0630, ADR-0700, SPEC-0071, SPEC-0072, brief #1696, plan #661

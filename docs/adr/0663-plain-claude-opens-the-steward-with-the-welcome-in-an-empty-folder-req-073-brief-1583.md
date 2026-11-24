@@ -1,6 +1,6 @@
 # ADR-0663: Plain claude opens the steward, with the welcome in an empty folder
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1583, SPEC-0066 rules 2, 4, 8 and 11 (build (d)), Q-S0066-1, Q-S0066-2, Q-S0066-3, Q-S0066-8, ADR-0662, plan #661

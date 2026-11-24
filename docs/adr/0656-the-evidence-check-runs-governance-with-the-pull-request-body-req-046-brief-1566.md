@@ -1,6 +1,6 @@
 # ADR-0656: The evidence check runs governance with the pull request body
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: ADR-0233, ADR-0271, ADR-0542, ADR-0550, SPEC-0039, brief #1566, plan #661

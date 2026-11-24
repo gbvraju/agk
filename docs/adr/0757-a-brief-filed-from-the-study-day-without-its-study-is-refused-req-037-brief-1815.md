@@ -1,6 +1,6 @@
 # ADR-0757: A brief filed from a day set in agk.toml without its study lines is refused (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1815, ADR-0752 (brief #1800), ADR-0756 (brief #1813), ADR-0112, ADR-0699, ADR-0750, found bug #1783,

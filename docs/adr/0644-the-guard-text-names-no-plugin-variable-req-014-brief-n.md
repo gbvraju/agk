@@ -1,6 +1,6 @@
 # ADR-0644: The architect guard's description names no plugin variable (REQ-014)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: brief #1529, brief #1530 (duplicate), issue #1528, ADR-0630, ADR-0631, ADR-0612

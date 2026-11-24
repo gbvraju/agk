@@ -1,6 +1,6 @@
 # ADR-0604: An uninstall names the lines left
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1443, ADR-0196, ADR-0203, ADR-0481

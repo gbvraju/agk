@@ -1,6 +1,6 @@
 # ADR-0700: A new Python product passes the standards pack on day one (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: SPEC-0072, ADR-0669, ADR-0674, brief #1683, plan #661

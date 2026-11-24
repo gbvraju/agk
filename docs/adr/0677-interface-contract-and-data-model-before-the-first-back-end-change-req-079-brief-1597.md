@@ -1,6 +1,6 @@
 # ADR-0677: The interface contract and the data model before the first back-end change (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0048, SPEC-0062, brief #1597, brief #1586, brief #1588, brief #1602, plan #661, ADR-0666, ADR-0668, amendment 207

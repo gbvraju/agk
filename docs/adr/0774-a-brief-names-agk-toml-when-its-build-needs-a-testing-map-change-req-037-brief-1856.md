@@ -1,6 +1,6 @@
 # ADR-0774: A brief names agk.toml in Touches when its build needs a testing map change (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1856, ADR-0757 (brief #1815), ADR-0756 (brief #1813), ADR-0752 (brief #1800), ADR-0479,

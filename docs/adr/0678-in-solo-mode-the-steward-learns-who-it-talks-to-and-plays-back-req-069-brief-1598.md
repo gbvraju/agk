@@ -1,6 +1,6 @@
 # ADR-0678: In solo mode the steward learns who it talks to and plays back what it understood
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1598, SPEC-0062, SPEC-0059, ADR-0557, ADR-0582, ADR-0310, plan #661

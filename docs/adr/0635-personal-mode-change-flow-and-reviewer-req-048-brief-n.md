@@ -1,6 +1,6 @@
 # ADR-0635: A personal change runs start, review, confirm and finish, with a read-only personal reviewer
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0612, ADR-0632, ADR-0634, SPEC-0041, SPEC-0005, brief #1507

@@ -1,6 +1,6 @@
 # ADR-0661: A person approves in their own words, and the steward posts the exact line on a clear yes (REQ-069, REQ-070)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0062, SPEC-0063, SPEC-0059, SPEC-0041, amendment 194, amendment 195, amendment 185, amendment 193, brief #1577, brief #1573, brief #1381, ADR-0179, ADR-0546, ADR-0574, ADR-0660, plan #661

@@ -1,6 +1,6 @@
 # ADR-0759: A clean project reads the kit's own files from the plugin (REQ-078)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1826, ADR-0456, ADR-0503, ADR-0611, ADR-0612, briefs #1665, #1666, #1667, plan #661

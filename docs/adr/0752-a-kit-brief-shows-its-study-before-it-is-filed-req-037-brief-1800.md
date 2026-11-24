@@ -1,6 +1,6 @@
 # ADR-0752: A kit brief shows its study before it is filed: impact, wiring, earlier record and the lasting fix (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1800, SPEC-0030 rule 4, amendment 142, amendment 168, brief #1425 (ADR-0598), brief #982, ADR-0650,

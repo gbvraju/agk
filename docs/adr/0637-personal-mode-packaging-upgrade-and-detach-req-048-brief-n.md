@@ -1,6 +1,6 @@
 # ADR-0637: Personal mode records its plugin version, upgrades one step at a time and detaches with its hook
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0634, SPEC-0041, brief #1506

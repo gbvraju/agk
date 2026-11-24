@@ -1,6 +1,6 @@
 # ADR-0733: The steward files a brief on the owner's named yes, and never files the same draft twice (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1753, brief #1715, ADR-0714, SPEC-0059, SPEC-0062

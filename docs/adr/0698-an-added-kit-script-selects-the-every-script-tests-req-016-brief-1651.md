@@ -1,6 +1,6 @@
 # ADR-0698: An added kit script selects the every-script contract tests
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1651, SPEC-0055 rule 6 (widened here), ADR-0692, ADR-0359, red-main brief #1645

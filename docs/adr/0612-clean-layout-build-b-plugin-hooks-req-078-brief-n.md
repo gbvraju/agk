@@ -1,6 +1,6 @@
 # ADR-0612: Clean layout build (b): the hooks, agents and permission rules run from the plugin
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: brief #1454, SPEC-0071 rules 4 and 12 (b), ADR-0611

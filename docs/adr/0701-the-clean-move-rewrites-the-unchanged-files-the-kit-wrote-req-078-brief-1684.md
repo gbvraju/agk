@@ -1,6 +1,6 @@
 # ADR-0701: The clean-layout move rewrites the unchanged files the kit wrote
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1684, SPEC-0071, ADR-0614, ADR-0683, plan #661

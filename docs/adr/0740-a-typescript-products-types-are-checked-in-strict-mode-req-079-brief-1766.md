@@ -1,6 +1,6 @@
 # ADR-0740: A TypeScript product's types are checked in strict mode, and a weakened compiler setting is refused (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: SPEC-0072 rules 6, 7 and 8, ADR-0739, brief #1766 (part 2 of 2; part 1 brief #1764), plan #661

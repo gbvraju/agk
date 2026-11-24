@@ -1,6 +1,6 @@
 # ADR-0772: Each role file names the governance command its own guard allows in both layouts
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1841, brief #1758, brief #1759, ADR-0612, ADR-0631, ADR-0736, ADR-0737, SPEC-0071, plan #661

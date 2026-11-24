@@ -1,6 +1,6 @@
 # ADR-0764: An adopted project's whole history is scanned for secrets once, and doctor reports the record
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1835, plan #661, ADR-0008, ADR-0017, ADR-0158, ADR-0306, ADR-0372, ADR-0673, ADR-0680, ADR-0743, SPEC-0002, SPEC-0056
