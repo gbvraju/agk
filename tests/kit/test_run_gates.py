@@ -186,13 +186,22 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
 
 # brief #1685 (ADR-0702): a chosen runtime that no standards pack serves is told so, never silent.
 NO_PACK = "not run standards: no pack for node\n"
-# brief #1776 (ADR-0742): a Node record with no `package.json` now fails the pins step, and only it.
+# brief #1776 (ADR-0742): a Node record with no `package.json` now fails the pins step, and only it,
+# once the project does not wait for its foundation (brief #1909, ADR-0791; tested in test_pins.py).
 PINS_FAIL = "FAIL gates: pins: SPEC-0072 rule 4: the stack's build file and lock are not pinned"
 
 
 def others(out: str) -> list[str]:
     """The failure lines of the run but the pins step's."""
     return [ln for ln in out.splitlines() if ln.startswith("FAIL") and not ln.startswith(PINS_FAIL)]
+
+
+def _strict(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Brief #1909: these samples are init projects before their foundation, where pins waits;
+    the no-pack line is read with the wait off, as it was."""
+    from gates import pins
+
+    monkeypatch.setattr(pins, "waiting", lambda _root: False)
 
 
 def _record(root: Path, runtime: str) -> None:
@@ -206,9 +215,14 @@ def _record(root: Path, runtime: str) -> None:
 
 @pytest.mark.parametrize("work_type", WORK_TYPES)
 def test_a_node_record_prints_no_pack_and_lists_standards(
-    work_type: str, tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str]
+    work_type: str,
+    tmp_path: Path,
+    no_network: None,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """REQ-079: brief #1685 answers 1 and 3 (every work type; the exit code is unchanged)."""
+    _strict(monkeypatch)
     root = _project(tmp_path, work_type)
     _record(root, "node")
     assert run_gates.main(["--root", str(root)]) == 1  # brief #1776: pins, the build file missing
@@ -263,9 +277,14 @@ def _settings() -> list[str]:
 
 @pytest.mark.parametrize("setting", _settings())
 def test_each_setting_leaves_the_no_pack_line_and_the_exit_code(
-    setting: str, tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str]
+    setting: str,
+    tmp_path: Path,
+    no_network: None,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """REQ-079: brief #1685 answer 3 (each setting: the same line; the exit code unchanged)."""
+    _strict(monkeypatch)
     root = _project(tmp_path, "web-app")
     text = (root / "agk.toml").read_text(encoding="utf-8")
     top, _, delivery = text.partition("\n[delivery]")

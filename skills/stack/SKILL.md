@@ -114,6 +114,11 @@ body it prints, unchanged. Neither commit is a Final commit, and they change not
    `stack-next-steps` again on that branch, and it prints the commit, the push and a body whose `Advances:`, `Build-state row:`
    and `Summary:` lines passed the repository's body check (the Summary cut to 120 characters at a word boundary).
 
+   In a project not adopted, on the accepting branch and on every branch until the foundation, governance prints
+   `not run pins: no foundation yet` while no lock is committed and the build file declares no dependency; the
+   foundation's first dependency, the lock the stack's own tool makes or `docs/architecture.md` ends it, and
+   `engines.py stack-files` alone does not (brief #1909).
+
    On that accepting branch `stack-next-steps` prints one extra step after the body: the default local-profile requirement, a
    ready-to-run `/agk:spec "<sentence>"` made from `kit/templates/local-profile.md` and filled in with the accepted option's
    `External services:` (the whole product on one machine with one command, a stand-in for each external service chosen by a
