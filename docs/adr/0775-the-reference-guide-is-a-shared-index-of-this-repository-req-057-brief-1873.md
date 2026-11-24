@@ -8,7 +8,7 @@
   ADR-0725 (the router's light and full labels), ADR-0626 (this repository runs in local mode), plan #661
 - Requirements: REQ-057
 
-Protected classes: `agk.toml`, `tests/kit_dev/`
+Protected classes: `agk.toml`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -31,6 +31,8 @@ the reference light re-prove brief".
    the default branch once it merges.
 2. `[testing] pre_merge_tests` gains `tests/kit_dev/test_reference_commands.py`, so `merge_cleared.py` runs the
    reference's whole-file command test on every would-be merge, light or full (`Q-RL-3`).
+   `tests/kit/test_merge_cleared_pre_tests.py`, which pins this repository's list, names it as the fourth entry and
+   keeps the other three (the conductor's ruling of 2026-11-24 on #1875).
 3. `tests/kit_dev/test_shared_index_reference.py` guards the list: it holds every default and the reference and passes
    `session_plan.shared_indexes`; each entry is a tracked file, not under `docs/specs/` or `docs/adr/`, with no wildcard;
    and `pre_merge_tests` names the reference test. It is listed in the map entry of `scripts/agk/session_plan.py`.
