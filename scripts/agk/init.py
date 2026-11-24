@@ -201,19 +201,38 @@ def render(text: str, variables: dict[str, str], source: str) -> str:
 
 
 def found_test_dirs(target: Path) -> list[str]:
-    """The folders of `FRONT_END_TEST_DIRS` that TARGET holds, in that order. None when TARGET
-    already has an agk.toml: a re-run of init keeps comparing against the same rendered file."""
+    """The folders of `FRONT_END_TEST_DIRS` that TARGET holds, in that order; none when TARGET
+    already has an agk.toml, whose own list a re-run renders back (`existing_test_dirs`)."""
     if (target / "agk.toml").exists():
         return []
     return [d for d in FRONT_END_TEST_DIRS if (target / d).is_dir()]
 
 
+def existing_test_dirs(target: Path) -> list[str] | None:
+    """Brief #1899 (ADR-0787): the `test_dirs` list of TARGET's existing agk.toml, which a re-run
+    renders back as `stamped` does `installed` (SPEC-0001 rule 14); None when there is no file, it
+    is not TOML, or the value is not a list of strings."""
+    path = target / "agk.toml"
+    if not path.is_file():
+        return None
+    try:
+        value = tomllib.loads(path.read_text(encoding="utf-8")).get("test_dirs")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None
+    if isinstance(value, list) and all(isinstance(i, str) for i in value):
+        return value
+    return None
+
+
+def test_dirs_line(rendered: str, dirs: list[str]) -> str:
+    """The rendered agk.toml with DIRS on its `test_dirs` line, in the kit's form."""
+    line = "test_dirs = " + json.dumps(dirs)
+    return re.sub(rf"(?m)^{re.escape(TEST_DIRS_LINE)}$", lambda _m: line, rendered, count=1)
+
+
 def with_test_dirs(rendered: str, added: list[str]) -> str:
     """The rendered agk.toml with ADDED after `tests` on its `test_dirs` line."""
-    if not added:
-        return rendered
-    line = "test_dirs = " + json.dumps(["tests", *added])
-    return re.sub(rf"(?m)^{re.escape(TEST_DIRS_LINE)}$", lambda _m: line, rendered, count=1)
+    return test_dirs_line(rendered, ["tests", *added]) if added else rendered
 
 
 def found_test_patterns(target: Path):
@@ -404,7 +423,11 @@ def build_items(
         text = (KIT_ROOT / src).read_text(encoding="utf-8")
         rendered = render(text, variables, src)
         if dest == "agk.toml":
-            rendered = with_test_dirs(rendered, found_test_dirs(target))
+            reused = existing_test_dirs(target)
+            if reused is None:
+                rendered = with_test_dirs(rendered, found_test_dirs(target))
+            else:
+                rendered = test_dirs_line(rendered, reused)
             rendered = with_test_patterns(rendered, found_test_patterns(target)[0])
         items[dest] = rendered.encode("utf-8")
     if ROUTER_WORKFLOW in items:
