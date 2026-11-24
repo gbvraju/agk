@@ -52,7 +52,7 @@ the runs".
    `scripts/agk/` (`common.py` and the 28 rewritten scripts), `.claude/` (`hooks/steward_guard.py`: one comparison
    reordered and `kit_only_folders` reading `kit_tests`), `config/`
    (`playbooks/mobile.toml`, `playbooks/web-app.toml`), `kit/` (`manifest.json`,
-   `templates/design-prototype/fixtures.json`, `hashes.json` by `kit_hashes.py`) and `tests/kit/`
+   `templates/design-prototype/fixtures.json`; `hashes.json` needed no change: `kit_hashes.py` reads `ok kit-hashes`) and `tests/kit/`
    (`test_plugin_snapshot.py`, `test_check_design_prototype.py`, `test_kit_in_repository.py`, the new
    `test_common_option_pairs.py`).
 
