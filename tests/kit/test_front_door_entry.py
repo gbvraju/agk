@@ -437,3 +437,58 @@ def test_a_named_file_git_cannot_read_is_noted_and_not_read(tmp_path, monkeypatc
         'file "package.json" not read (binary)',
         'file "a/package.json" not read (binary)',
     ]
+
+
+# Brief #1889 (ADR-0783): `screens_of` reads the discovery Screens line through the one reader of
+# `design_inventory.py`, past a quoted vision with its own `## ` headings; rule 8 then asks work
+# without screens for its run record and work with screens for a prototype version.
+
+VISION = (
+    "# Vision\n\n## The idea\n\nA shop at example.com keeps its orders.\n\n"
+    "## Who it serves\n\nInvented shoppers of example.com."
+)
+
+
+def vision_document(tmp_path: Path, screens: str) -> Path:
+    vision = tmp_path / "vision.md"
+    vision.write_text(VISION, encoding="utf-8")
+    data = tmp_path / "answers.json"
+    data.write_text(json.dumps({"screens": screens, "answers": []}), encoding="utf-8")
+    proc = run(tmp_path, "discovery-write", "--vision", str(vision), "--answers", str(data))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    (doc,) = sorted((tmp_path / "docs" / "discovery").glob("*.md"))
+    return doc
+
+
+@pytest.mark.parametrize("screens", ["yes", "no", "open"])
+def test_ac4_screens_of_reads_the_written_value_past_the_quoted_vision(tmp_path, screens):
+    """REQ-055 AC4: SPEC-0048 rules 5 and 8 (brief #1889 answer 1: one reader, two callers)."""
+    import design_inventory
+    import front_door
+
+    doc = vision_document(tmp_path, screens)
+    assert front_door.screens_of(tmp_path, doc.stem) == screens
+    assert design_inventory.discovery_screens(tmp_path) == [(f"docs/discovery/{doc.name}", screens)]
+    assert front_door.screens_of(tmp_path, "no-such-problem") == "open"
+    doc.write_text("# Discovery: orders\n\n- Problem: vision\n", encoding="utf-8")
+    assert front_door.screens_of(tmp_path, doc.stem) == "open"
+
+
+@pytest.mark.parametrize(
+    "screens,why",
+    [
+        ("no", "work without screens has no `Demo:` line naming its run record"),
+        ("yes", "has no prototype version"),
+        ("open", "has no prototype version"),
+    ],
+)
+def test_ac4_rule_8_asks_for_the_artifact_the_written_answer_names(tmp_path, screens, why):
+    """REQ-055 AC4: SPEC-0048 rule 8 (brief #1889 answer 4: `no` wants the `Demo:` record)."""
+    import front_door
+
+    doc = vision_document(tmp_path, screens)
+    rel = f"docs/design/architecture/{doc.stem}.md"
+    found, _ = front_door.artifact_problems(rel, "# Architecture: orders\n", tmp_path)
+    assert [p for p in found if why in p], found
+    other = "has no prototype version" if screens == "no" else "no `Demo:` line"
+    assert not [p for p in found if other in p], found
