@@ -1,6 +1,6 @@
 # ADR-0641: The plugin hook is pinned to LF, reads UTF-8 and is allowed by the distribution test (REQ-014)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: brief #1518, issue #1517, SPEC-0005 rule 7, ADR-0612

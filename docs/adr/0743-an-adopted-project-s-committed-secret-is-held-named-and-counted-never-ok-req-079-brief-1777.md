@@ -1,6 +1,6 @@
 # ADR-0743: An adopted project's committed secret is held, named and counted, never shown as ok (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rules 2 and 7, ADR-0673, ADR-0676, ADR-0680, ADR-0742, brief #1777, plan #661

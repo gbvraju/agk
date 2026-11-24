@@ -1,1 +1,0 @@
-- Every writer of a brief now runs the same full brief check, its study included: the plan's rendered and published briefs, personal-mode briefs, the steward's filed, fixed and triaged briefs and the conductor's filed briefs; a rendered brief and the brief template carry the study lines with a placeholder that warns until it is filled (brief #1813)

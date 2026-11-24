@@ -1,6 +1,6 @@
 # ADR-0769: The Node format step keeps each file's line end, and every reader reads `test_dirs` as one folder (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rule 6, ADR-0160, ADR-0490, ADR-0648, ADR-0669, ADR-0680, ADR-0730, ADR-0739, brief #1360, brief #1839, plan #661

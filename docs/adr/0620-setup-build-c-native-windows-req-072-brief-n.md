@@ -1,6 +1,6 @@
 # ADR-0620: /agk:setup build (c): native Windows installs through winget at minimum versions, stopping cleanly
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0618, ADR-0619, ADR-0577, brief #1462, plan #661

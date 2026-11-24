@@ -1,6 +1,6 @@
 # ADR-0602: A suggested rename is always a free name
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1441, brief #1425, ADR-0598, ADR-0388, ADR-0583, Q-1425-1

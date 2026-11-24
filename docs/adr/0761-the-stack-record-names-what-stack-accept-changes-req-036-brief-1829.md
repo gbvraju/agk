@@ -1,6 +1,6 @@
 # ADR-0761: The stack record names what stack-accept changes, so the accepting change passes governance (REQ-036, brief #1829)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1829, ADR-0228, ADR-0671, ADR-0680, ADR-0735, ADR-0760, SPEC-0029, SPEC-0072

@@ -1,6 +1,6 @@
 # ADR-0696: The guarded merge runs a clean project's governance from the plugin, and its printed ruleset fits
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: ADR-0611, ADR-0613, ADR-0683, SPEC-0039, SPEC-0071, brief #1665, plan #661

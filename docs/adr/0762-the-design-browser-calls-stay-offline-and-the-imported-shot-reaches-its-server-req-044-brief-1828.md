@@ -1,6 +1,6 @@
 # ADR-0762: The design browser calls stay offline and the imported shot reaches its own server (REQ-044)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1828, ADR-0450 (brief #1063), ADR-0350 (brief #461), ADR-0107, PB-08 of #1770, plan #661

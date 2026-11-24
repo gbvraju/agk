@@ -1,1 +1,0 @@
-- A project's `[testing] every_script_tests` is now refused naming the setting (any value, an empty list too) and its `(new script)` selection step is removed; an upgrade names the key before its pull request so its files move to `whole_tests` (brief #1814, ADR-0755)

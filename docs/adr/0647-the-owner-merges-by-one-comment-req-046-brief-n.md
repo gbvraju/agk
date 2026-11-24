@@ -1,6 +1,6 @@
 # ADR-0647: The owner merges a held pull request by one comment, and a button merge is recorded (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: SPEC-0039, amendment 185, brief #1539, ADR-0570, ADR-0354, ADR-0546, #1521, #1522, #1525, #1536, plan #661

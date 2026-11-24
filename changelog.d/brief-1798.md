@@ -1,1 +1,0 @@
-- The kit lists its own whole tests (`[testing] whole_tests`, 16 files) and checks the list is set; `doctor.py` prints `tests: whole tests <n>` and names a bad entry by its place; the template carries the key commented out; prepush's line names governance as the job that runs the full suite (brief #1798)

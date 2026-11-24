@@ -1,1 +1,0 @@
-- When the steward starts again, `steward.py start` lists only the open owner questions (at most three, then `<n> more open`) and one `Owner question: <k> answered` line; a `Decision:` or relayed `Maintainer answer:` naming the Q id answers it, also for the roll-over (brief #1765, ADR-0741)

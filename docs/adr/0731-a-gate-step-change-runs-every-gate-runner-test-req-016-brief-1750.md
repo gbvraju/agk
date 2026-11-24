@@ -1,6 +1,6 @@
 # ADR-0731: A change to a gate step runs every test that runs the gate steps together (REQ-016)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1750, issue #1747, brief #1748, brief #1651

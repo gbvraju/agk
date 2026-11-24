@@ -1,6 +1,6 @@
 # ADR-0742: The gate runner runs the pins step once a stack is chosen (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rules 3, 4 and 7, ADR-0672, ADR-0676, ADR-0680, ADR-0731, brief #1776, plan #661

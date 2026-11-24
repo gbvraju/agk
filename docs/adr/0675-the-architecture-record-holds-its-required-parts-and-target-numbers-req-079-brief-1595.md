@@ -1,6 +1,6 @@
 # ADR-0675: The architecture record holds its required parts and target numbers (REQ-079, REQ-055)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1595, SPEC-0029, SPEC-0072, SPEC-0048, amendment 203, amendment 204, amendment 205, ADR-0668, brief #1588, plan #661

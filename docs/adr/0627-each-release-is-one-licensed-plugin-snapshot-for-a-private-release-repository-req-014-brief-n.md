@@ -1,6 +1,6 @@
 # ADR-0627: Each release is one licensed plugin snapshot for a private release repository (REQ-014, brief 1476)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1476, ADR-0596, ADR-0326, SPEC-0071 rules 5 and 7, plan #661

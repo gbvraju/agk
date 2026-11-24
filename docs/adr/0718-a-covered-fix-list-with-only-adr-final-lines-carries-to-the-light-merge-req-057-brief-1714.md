@@ -1,6 +1,6 @@
 # ADR-0718: A covered fix list with only ADR Final lines carries to the light re-prove's merge (REQ-057)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0277, ADR-0495, SPEC-0021, SPEC-0039, SPEC-0050, brief #1714, brief #1163, brief #1616, plan #661

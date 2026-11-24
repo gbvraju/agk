@@ -1,6 +1,6 @@
 # ADR-0708: The steward reads only what changed since its checkpoint (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0557, SPEC-0059, brief #1702, plan #661

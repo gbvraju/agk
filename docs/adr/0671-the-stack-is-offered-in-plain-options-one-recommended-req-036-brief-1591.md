@@ -1,6 +1,6 @@
 # ADR-0671: The stack is offered in plain options, one recommended, accepted by one yes (REQ-036, REQ-069)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1591, SPEC-0029, amendment 199, SPEC-0062, SPEC-0072, SPEC-0057, ADR-0103, ADR-0163, ADR-0667, brief #1587, brief #1577, brief #1602, plan #661

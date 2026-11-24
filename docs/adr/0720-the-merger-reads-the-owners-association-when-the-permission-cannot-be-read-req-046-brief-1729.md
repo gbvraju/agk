@@ -1,6 +1,6 @@
 # ADR-0720: The merger reads the owner's association when the permission cannot be read (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0711, SPEC-0039, brief #1729, brief #1709, plan #661

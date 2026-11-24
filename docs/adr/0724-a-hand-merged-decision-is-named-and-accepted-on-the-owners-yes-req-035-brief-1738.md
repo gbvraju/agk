@@ -1,6 +1,6 @@
 # ADR-0724: A hand-merged decision is named by doctor and accepted at release on the owner's yes (REQ-035)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0277, ADR-0575, ADR-0710, SPEC-0021, SPEC-0028, brief #1738, brief #1735, plan #661

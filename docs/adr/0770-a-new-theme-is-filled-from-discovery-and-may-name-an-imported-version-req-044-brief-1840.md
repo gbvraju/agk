@@ -1,6 +1,6 @@
 # ADR-0770: A new theme is filled from discovery and its Evidence line may name an imported version (REQ-044)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1840, ADR-0104, ADR-0107, ADR-0248, ADR-0252 (changed here), ADR-0408, ADR-0446, ADR-0448,

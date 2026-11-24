@@ -1,6 +1,6 @@
 # ADR-0771: The stack skeleton names the inventory's screens, and Node.js reads as node (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rule 4, SPEC-0029 rule 5, SPEC-0037 rule 13, ADR-0744, ADR-0672, ADR-0745, brief #1843, brief #1778, plan #661

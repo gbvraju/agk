@@ -1,6 +1,6 @@
 # ADR-0649: The gate's `review` step guards its import of an experimental file (REQ-039, REQ-048)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: brief #1546, brief #1503, brief #1214, ADR-0634, ADR-0514, ADR-0610

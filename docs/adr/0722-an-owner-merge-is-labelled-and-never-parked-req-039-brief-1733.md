@@ -1,6 +1,6 @@
 # ADR-0722: An owner merge is labelled and never parked
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1733, brief #1719, brief #1656, brief #1534, brief #1282, ADR-0385, ADR-0543, ADR-0570, ADR-0690

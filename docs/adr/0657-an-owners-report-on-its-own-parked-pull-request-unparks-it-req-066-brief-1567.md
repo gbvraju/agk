@@ -1,6 +1,6 @@
 # ADR-0657: An owner's Report on its own parked pull request unparks it (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1567, brief #1282 (ADR-0543), brief #1534 (ADR-0646), brief #1568 (ADR-0658), SPEC-0059 rules 1 and 10

@@ -1,1 +1,0 @@
-- The conductor's evidence check reads the records' Final comments as prepush does, so a head covered by an ADR accepted only by its Final record agrees without an owner accept (brief #1650)

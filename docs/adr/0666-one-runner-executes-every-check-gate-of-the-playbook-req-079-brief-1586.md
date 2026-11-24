@@ -1,6 +1,6 @@
 # ADR-0666: One runner executes every check gate of the playbook (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0048, SPEC-0038, SPEC-0007, brief #1586, plan #661, ADR-0665

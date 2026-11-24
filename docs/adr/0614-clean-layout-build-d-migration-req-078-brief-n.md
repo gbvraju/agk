@@ -1,6 +1,6 @@
 # ADR-0614: Clean layout build (d): `/agk:upgrade --clean-repo` moves a local-mode project in one reversible pull request
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: brief #1456, SPEC-0071 rules 2, 8, 11 and 12 (d), ADR-0611, ADR-0612, ADR-0613, ADR-0203, Q-S0071-5, Q-S0071-8

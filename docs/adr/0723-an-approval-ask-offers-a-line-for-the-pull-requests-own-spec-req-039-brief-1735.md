@@ -1,6 +1,6 @@
 # ADR-0723: An approval ask offers a line for the pull request's own spec
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1735, brief #1733, brief #1656, brief #1534, ADR-0690, ADR-0722, ADR-0543, ADR-0710

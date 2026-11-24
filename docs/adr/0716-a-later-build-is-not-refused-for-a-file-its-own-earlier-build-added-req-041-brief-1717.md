@@ -1,6 +1,6 @@
 # ADR-0716: A brief's later build is not refused for a file its own earlier build added
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1717, ADR-0691 (brief #1660), brief #1583

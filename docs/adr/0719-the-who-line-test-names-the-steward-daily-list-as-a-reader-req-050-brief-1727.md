@@ -1,6 +1,6 @@
 # ADR-0719: The Who-line test names the steward's daily list as a reader of the line
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1727, brief #1716 (ADR-0715), brief #1289, brief #1691 (ADR-0704)

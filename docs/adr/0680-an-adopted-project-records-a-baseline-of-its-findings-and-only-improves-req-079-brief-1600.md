@@ -1,6 +1,6 @@
 # ADR-0680: An adopted project records a baseline of its findings and only improves (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: SPEC-0072, ADR-0666, ADR-0668, ADR-0669, brief #1600, brief #1586, plan #661

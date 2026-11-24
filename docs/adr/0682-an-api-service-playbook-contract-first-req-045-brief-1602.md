@@ -1,6 +1,6 @@
 # ADR-0682: An api-service playbook, contract first, with its layers, gates and detect signals (REQ-045, REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0038, SPEC-0057, SPEC-0072, ADR-0665, brief #1602, brief #1585, brief #1591, brief #1597, brief #1593, plan #661

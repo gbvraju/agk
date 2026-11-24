@@ -1,1 +1,0 @@
-- `agk measures` sets its output to UTF-8 at the start of its own entry point, as every other printing script does, so the default branch is green again (brief #1580)

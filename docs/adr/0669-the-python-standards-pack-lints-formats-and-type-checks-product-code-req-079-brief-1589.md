@@ -1,6 +1,6 @@
 # ADR-0669: The Python standards pack lints, formats and type-checks product code (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0002, ADR-0007, ADR-0665, ADR-0666, ADR-0672, brief #1589, plan #661

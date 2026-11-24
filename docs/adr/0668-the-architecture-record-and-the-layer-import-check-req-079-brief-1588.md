@@ -1,6 +1,6 @@
 # ADR-0668: The architecture record, the layer import check and the Layer: line (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0048, SPEC-0030, brief #1588, brief #1586, brief #1587, plan #661, ADR-0665, ADR-0666, ADR-0667

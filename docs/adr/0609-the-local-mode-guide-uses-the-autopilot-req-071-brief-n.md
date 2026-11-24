@@ -1,6 +1,6 @@
 # ADR-0609: The local-mode guide uses the autopilot
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1451, ADR-0587, ADR-0589

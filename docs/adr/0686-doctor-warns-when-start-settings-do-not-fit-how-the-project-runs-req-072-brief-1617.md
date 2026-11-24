@@ -1,6 +1,6 @@
 # ADR-0686: Doctor warns when the start settings do not fit how the project runs (REQ-072)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1617, SPEC-0006 rule 5, SPEC-0045 rules 2 and 4, SPEC-0034 rule 1, ADR-0402, ADR-0409, ADR-0525, ADR-0662

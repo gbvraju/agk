@@ -1,6 +1,6 @@
 # ADR-0672: The stack record pins versions and licences, and the stack writes its own build and lock files (REQ-036, REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1592, SPEC-0029, SPEC-0072, SPEC-0054, amendment 200, amendment 201, ADR-0671, brief #1591, brief #1586, plan #661

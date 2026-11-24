@@ -1,1 +1,0 @@
-- `design.py inventory` on the path from an idea writes one section per milestone of the Accepted charter, and `check_design.py` refuses an inventory with no screen when a discovery document says `Screens: yes` or `open` (brief #1756)

@@ -1,6 +1,6 @@
 # ADR-0729: A take adds reserved numbers only when the owner posted it (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: SPEC-0058, brief #1711, brief #1729, brief #1731, Q-1711-1, Q-1731-1

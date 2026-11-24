@@ -1,1 +1,0 @@
-- The ADR that the steward's work-type step writes, and the one its playbook draft writes, now carry `- Requirements:` and `## Residual`, so the project's ADR check passes them; a project whose branch already holds the old Proposed record adds those two parts by hand. A kit test lists every kit writer of a project ADR and runs the check on each (brief #1827)

@@ -1,6 +1,6 @@
 # ADR-0726: Two steward runs never act at once and a run's work survives the next start (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0557, ADR-0708, SPEC-0059, brief #1741, plan #661

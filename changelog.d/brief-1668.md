@@ -1,1 +1,0 @@
-- `agk doctor` passes a correct clean-layout project: it checks the files that layout keeps and has a new `layout` line (brief #1668)

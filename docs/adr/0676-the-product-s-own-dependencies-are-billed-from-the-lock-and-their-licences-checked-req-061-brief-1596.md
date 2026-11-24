@@ -1,6 +1,6 @@
 # ADR-0676: The product's own dependencies are billed from its lock, and their licences are checked (REQ-061, REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1596, SPEC-0054, SPEC-0072, amendment 206, ADR-0349, ADR-0672, ADR-0666, brief #1592, brief #1586, brief #1600, plan #661

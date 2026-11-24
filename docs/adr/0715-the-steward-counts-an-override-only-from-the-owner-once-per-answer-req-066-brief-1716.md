@@ -1,6 +1,6 @@
 # ADR-0715: The steward counts an override only from the owner, once per answer (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0546, ADR-0560, SPEC-0059, brief #1716, brief #1289, plan #661

@@ -1,1 +1,0 @@
-- A project that starts from a customer's prototype gets one screen in its design inventory for each imported page, and a map that marks every page out while no screen exists is refused (brief #1779)

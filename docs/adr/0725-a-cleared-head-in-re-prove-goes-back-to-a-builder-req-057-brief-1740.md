@@ -1,6 +1,6 @@
 # ADR-0725: A cleared head in re-prove goes back to a builder
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1740, brief #1735, brief #1733, brief #1071, brief #1358, ADR-0385, ADR-0453, ADR-0570, ADR-0722

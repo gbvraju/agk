@@ -1,6 +1,6 @@
 # ADR-0648: The merge check reads committed bytes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: ADR-0257, ADR-0550, ADR-0572, SPEC-0039, brief #1291, brief #1540, plan #661

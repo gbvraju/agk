@@ -1,6 +1,6 @@
 # ADR-0683: A new or adopted project starts in the clean layout, held by the rehearsal's proof
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1603, SPEC-0071, ADR-0614, ADR-0617, ADR-0679, plan #661, amendment 211

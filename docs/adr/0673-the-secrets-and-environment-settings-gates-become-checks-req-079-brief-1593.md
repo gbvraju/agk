@@ -1,6 +1,6 @@
 # ADR-0673: The secrets and environment-settings gates become checks (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1593, SPEC-0072, ADR-0666, brief #1586, brief #1594, brief #1600, SPEC-0042, plan #661

@@ -1,6 +1,6 @@
 # ADR-0659: The measures of a delivered feature for a date range (REQ-012)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1557, SPEC-0007, amendment 191, SPEC-0046, SPEC-0049 rules 5 and 6, SPEC-0041 rule 6, brief #1459

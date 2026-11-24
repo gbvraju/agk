@@ -1,6 +1,6 @@
 # ADR-0691: A brief's `Adds: none` adds no file, and a clashed brief is skipped naming its clash
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1660, ADR-0598 (brief #1425), briefs #1648 to #1651

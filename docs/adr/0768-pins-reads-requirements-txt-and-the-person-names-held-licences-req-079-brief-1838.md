@@ -1,6 +1,6 @@
 # ADR-0768: The pins step reads a Python project's requirements files, and the person can name each failing licence (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rules 4 and 7, SPEC-0054 rule 4 (amendment 206), ADR-0672, ADR-0676, ADR-0680, ADR-0742, ADR-0743, ADR-0744, brief #1838, plan #661

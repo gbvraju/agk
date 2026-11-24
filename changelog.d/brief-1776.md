@@ -1,1 +1,0 @@
-- Once a stack is chosen, the gate run checks that the product's dependencies are pinned exactly and locked, and says `not run pins: no stack chosen` before then; an adopted project holds today's count by the baseline (brief #1776)

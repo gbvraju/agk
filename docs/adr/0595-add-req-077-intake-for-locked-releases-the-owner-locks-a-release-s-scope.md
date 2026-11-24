@@ -1,6 +1,6 @@
 # ADR-0595: Add REQ-077: A locked release is cut on its own branch while all work keeps merging
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: SPEC-0070, SPEC-0028, SPEC-0031, SPEC-0039, SPEC-0041, SPEC-0051, SPEC-0052, SPEC-0069, ADR-0108, brief #1418, plan #661

@@ -1,1 +1,0 @@
-- A brief filed on or after `[flow] brief_study_fails_from` without its study lines is refused by the brief check and skipped by the plan; unset (the default in every project template), they only warn. The day is judged by the issue's filing date, the router's red-branch brief now carries `Prior:` and `Class:`, and no check reads a date of its own (brief #1815)

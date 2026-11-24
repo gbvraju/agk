@@ -1,6 +1,6 @@
 # ADR-0727: The steward guard reads zero-width characters as nothing before its first-line checks
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1732, PR #1730, brief #1711, ADR-0557, ADR-0704, ADR-0721, SPEC-0059 rule 11

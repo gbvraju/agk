@@ -1,1 +1,0 @@
-- The architect guard's description no longer writes out the plugin folder variable, which only the kit resolver may name; the default branch is green again (brief #1529)

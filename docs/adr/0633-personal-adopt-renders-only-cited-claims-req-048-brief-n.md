@@ -1,6 +1,6 @@
 # ADR-0633: Personal adopt renders only the claims whose citations exist, for the person to confirm
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0632, SPEC-0041, brief #1504

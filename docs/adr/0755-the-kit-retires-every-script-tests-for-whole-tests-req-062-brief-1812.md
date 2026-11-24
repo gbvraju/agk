@@ -1,6 +1,6 @@
 # ADR-0755: The kit retires `every_script_tests` for `whole_tests`, and a project that still sets it is told (REQ-062)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1812, ADR-0698 (superseded here: brief #1651, the key), ADR-0650 and SPEC-0055 rule 6a (the whole

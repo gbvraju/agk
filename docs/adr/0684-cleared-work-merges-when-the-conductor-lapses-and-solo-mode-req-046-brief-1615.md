@@ -1,6 +1,6 @@
 # ADR-0684: Cleared work merges when the conductor lapses, and this repository runs in solo mode (REQ-046, REQ-069)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0039 (amendment 212), ADR-0266, ADR-0330, ADR-0368, ADR-0373, ADR-0570, ADR-0654, brief #1615, plan #661

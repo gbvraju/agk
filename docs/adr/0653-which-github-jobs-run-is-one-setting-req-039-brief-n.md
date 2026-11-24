@@ -1,6 +1,6 @@
 # ADR-0653: Which GitHub jobs a repository runs is one setting, full, events or off (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0032, amendment 190, brief #1555, brief #1554, ADR-0654, brief #1539, brief #1534, SPEC-0039, SPEC-0064, SPEC-0071, SPEC-0072, plan #661

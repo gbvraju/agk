@@ -1,6 +1,6 @@
 # ADR-0628: The autopilot names its own launch adapter
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1480, Q-1451-2 (b) (on pull request #1473), ADR-0587, ADR-0589, SPEC-0064, plan #661

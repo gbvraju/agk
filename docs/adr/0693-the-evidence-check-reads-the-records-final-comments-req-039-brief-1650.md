@@ -1,6 +1,6 @@
 # ADR-0693: The evidence check reads the records' Final comments
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: ADR-0233, ADR-0293, ADR-0605, ADR-0656, SPEC-0021, brief #1650, plan #661

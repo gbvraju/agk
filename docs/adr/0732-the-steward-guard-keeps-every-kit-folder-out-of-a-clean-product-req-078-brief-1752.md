@@ -1,6 +1,6 @@
 # ADR-0732: The steward's guard keeps every kit folder out of a clean product (REQ-078)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1752, ADR-0616, SPEC-0071 rules 2 and 7, brief #1748

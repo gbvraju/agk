@@ -1,6 +1,6 @@
 # ADR-0750: A kit test builds its comment times from the pinned clock the code reads (REQ-053)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1791, ADR-0699, brief #1680, found bugs #446 and #1497, plan #661
