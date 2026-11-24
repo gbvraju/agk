@@ -445,9 +445,11 @@ def shoot_at(browser: str, url: str, size: tuple[int, int], target: Path, port=N
         design.SCHEME["light"],
         url,
     ]
-    proc = design_render._run(command)
+    proc = design.browser_run(command)
     if proc.returncode != 0 or not target.is_file():
-        raise CheckError("rule 11: the headless browser did not make a screenshot")
+        raise design.browser_refusal(
+            "rule 11: the headless browser did not make a screenshot", proc
+        )
 
 
 def pdf_page(renderer: str, pdf: Path, page: int, target: Path) -> Path | None:
@@ -593,7 +595,8 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE)
         return 1
     except CheckError as exc:
-        print(f"FAIL design-compare: {exc}")
+        print(f"FAIL design-compare: {exc}", flush=True)
+        design.print_browser_log(exc)
         return 1
 
 
