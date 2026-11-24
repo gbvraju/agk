@@ -64,7 +64,7 @@ RUNTIME_HASHES = ("00f6853d42f9f12c0deb6cbebcd881cba79a00479ab96c12b7cec0a72d203
 # The values of the kit's fixture set, `fixtures.json` (a kit test keeps them equal).
 FIXTURE_EMAILS = ("ada.fenwick@example.com", "tomas.okafor@example.org")
 FIXTURE_HOSTS = ("www.example.org",)
-FIXTURE_PHONES = ("+1 202 555 0143", "+44 20 7946 0958")
+FIXTURE_PHONES = ("+1 (202) 555-0143", "+44 (20) 7946 0958")
 
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 HOST = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://([^/\s\"'<>:?#]+)")

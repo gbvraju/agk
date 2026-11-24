@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, json_records, pr_mode, repo_root, run, utf8_output
+from common import CheckError, json_records, option_pairs, pr_mode, repo_root, run, utf8_output
 
 NAME = "pr-mode"
 USAGE = (
@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     listing = "--list-depends" in args
     rest = [a for a in args if a != "--list-depends"]
-    opts = dict(zip(rest[::2], rest[1::2], strict=False))
+    opts = dict(option_pairs(rest, strict=False))
     if len(rest) % 2 or not set(opts) <= OPTIONS or (listing and set(opts) != {"--body"}):
         print(USAGE)
         return 2

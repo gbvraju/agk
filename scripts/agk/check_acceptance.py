@@ -34,7 +34,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from check_final_clearance import comments_of
 from check_specs import in_history
-from common import agent_apps, config_source, repo_root, review_mode, run, show, utf8_output
+from common import (
+    agent_apps,
+    config_source,
+    option_pairs,
+    repo_root,
+    review_mode,
+    run,
+    show,
+    utf8_output,
+)
 from front_door import (
     ANSWER_END,
     ANSWER_START,
@@ -326,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     status = args[:1] == ["status"]
     args = args[1:] if status else args
-    opts = dict(zip(args[::2], args[1::2], strict=False))
+    opts = dict(option_pairs(args, strict=False))
     known = {"--root"} if status else {"--root", "--comments"}
     root = Path(opts["--root"]) if "--root" in opts else None
     bad_root = root is not None and not root.is_dir()

@@ -12,9 +12,8 @@ from __future__ import annotations
 import itertools
 import re
 
-import pytest
-
 import common
+import pytest
 
 # Every form the replaced call sites used, as (the list, where the pairs start, strict).
 FORMS = [

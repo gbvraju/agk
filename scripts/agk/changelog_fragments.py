@@ -38,7 +38,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import check_adrs
-from common import STATUS_LINE, CheckError, base_arg, git, repo_root, run
+from common import STATUS_LINE, CheckError, base_arg, git, option_pairs, repo_root, run
 
 NAME = "changelog-fragments"
 USAGE = (
@@ -167,11 +167,12 @@ def accept(
 
 
 def accept_main(rest: list[str]) -> int:
-    names = rest[::2]
+    pairs = option_pairs(rest, strict=False)
+    names = [name for name, _ in pairs]
     if len(rest) % 2 or any(name not in ("--comments", "--base", "--pulls") for name in names):
         print(USAGE, file=sys.stderr)
         return 2
-    opts = dict(zip(rest[::2], rest[1::2], strict=True))
+    opts = dict(option_pairs(rest, strict=True))
     accept(repo_root(), opts.get("--comments"), base_arg(rest), opts.get("--pulls"))
     return 0
 

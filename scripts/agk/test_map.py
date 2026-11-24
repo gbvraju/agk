@@ -35,6 +35,7 @@ cannot be built adds no entries, which `impact.py` says naming `testing.map_sour
 from __future__ import annotations
 
 import ast
+import itertools
 import json
 import os
 import posixpath
@@ -608,7 +609,7 @@ def entries(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[dict[str, set
     deps = import_edges(tree, texts, configs)
     unit_edges(files, set(tests), texts, deps)
     for test in (t for t in tests if t.endswith(".py")):  # pytest loads each conftest above a test
-        above = package_roots(posixpath.dirname(test))[::2]
+        above = list(itertools.islice(package_roots(posixpath.dirname(test)), 0, None, 2))
         deps.setdefault(test, set()).update(
             c for c in (posixpath.join(d, "conftest.py") for d in above) if c in files
         )

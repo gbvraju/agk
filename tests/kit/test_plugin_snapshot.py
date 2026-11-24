@@ -335,7 +335,7 @@ def test_req014_a_list_with_tests_ships_them_and_scans_them(repo, tmp_path_facto
 
 
 def test_req014_a_list_without_tests_leaves_them_out(repo, tmp_path_factory):
-    """REQ-014 brief #1886 answer 5: without `tests/kit/` the file is left out and the build passes."""
+    """REQ-014 brief #1886 answer 5: without `tests/kit/` the file is left out; the build passes."""
     address = "t" + "@" + "example.invalid"
     kit(repo, {"tests/kit/test_y.py": f"ADDRESS = {address!r}\n"})
     out = tmp_path_factory.mktemp("snap") / "s"

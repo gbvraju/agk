@@ -30,7 +30,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, repo_root, utf8_output
+from common import CheckError, option_pairs, repo_root, utf8_output
 from metrics import ApiDir, author_of
 from reviewers import verdict_authors
 
@@ -242,7 +242,7 @@ def summary(totals: dict) -> dict[str, Any]:
 def parse(args: list[str]) -> dict[str, str] | None:
     if len(args) % 2 or not args:
         return None
-    opts = dict(zip(args[::2], args[1::2], strict=True))
+    opts = dict(option_pairs(args, strict=True))
     if len(opts) != len(args) // 2 or not set(opts) <= {"--api-dir", "--shadow-issue", "--authors"}:
         return None
     if not {"--api-dir", "--shadow-issue"} <= set(opts) or not opts["--shadow-issue"].isdigit():

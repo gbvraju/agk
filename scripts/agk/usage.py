@@ -33,7 +33,12 @@ from common import utf8_output
 
 USAGE = "usage: usage.py [--transcript FILE] [--since YYYY-MM-DDTHH:MM:SSZ]"
 NOT_SHOWN = "Usage: not shown"
-COUNTS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+COUNTS = (
+    "input_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "output_tokens",
+)
 SESSION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 SINCE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 

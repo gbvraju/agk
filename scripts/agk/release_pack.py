@@ -61,6 +61,7 @@ from common import (
     block_source,
     git,
     load_config,
+    option_pairs,
     parse_requirements,
     repo_root,
     run,
@@ -695,7 +696,7 @@ def check(arg: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = sys.argv[1:] if argv is None else argv
-    pairs = list(zip(args[1::2], args[2::2], strict=False)) if len(args) % 2 else []
+    pairs = option_pairs(args[1:], strict=False) if len(args) % 2 else []
     options = dict(pairs)
     allowed = {"--tag", "--out", "--api-dir", "--repo"}
     if (

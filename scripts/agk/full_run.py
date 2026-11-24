@@ -50,7 +50,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git, run, utf8_output
+from common import CheckError, git, option_pairs, run, utf8_output
 
 NAME = "full-run"
 USAGE = "usage: full_run.py --runs FILE --head SHA [--jobs FILE]"
@@ -231,7 +231,7 @@ def check(runs: Path, head: str, jobs: Path | None = None) -> int:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = sys.argv[1:] if argv is None else argv
-    opts = dict(zip(args[::2], args[1::2], strict=False))
+    opts = dict(option_pairs(args, strict=False))
     if len(args) % 2 or not {"--runs", "--head"} <= set(opts) <= {"--runs", "--head", "--jobs"}:
         print(USAGE, file=sys.stderr)
         return 2

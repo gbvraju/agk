@@ -109,6 +109,7 @@ from common import (
     CHECKOUT,
     CheckError,
     long_temp_dir,
+    option_pairs,
     proof_areas,
     proof_timeout,
     temp_env,
@@ -385,9 +386,10 @@ def push(root: Path, args: list[str]) -> int:
     push the branch and the notes ref. When the branch landed and only the notes ref was refused,
     print `NOTE_RACE` (exit 1) when the remote's notes moved since the fetch, else
     `NOTE_NOT_PUSHED` (exit 0); a merge that fails pushes nothing (exit 1)."""
-    if len(args) % 2 or any(a not in ("--branch", "--remote") for a in args[::2]):
+    names = [name for name, _ in option_pairs(args, strict=False)]
+    if len(args) % 2 or any(a not in ("--branch", "--remote") for a in names):
         raise Usage(PUSH_USAGE)
-    options = dict(zip(args[::2], args[1::2], strict=True))
+    options = dict(option_pairs(args, strict=True))
     branch, remote = options.get("--branch", ""), options.get("--remote", "origin")
     if not safe_name(root, branch, remote):
         raise Usage(BAD_NAME)

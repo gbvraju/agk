@@ -114,6 +114,7 @@ from common import (
     ESTIMATE_LINES,
     CheckError,
     committed_bytes,
+    option_pairs,
     plan_settings,
     repo_root,
     run,
@@ -1945,7 +1946,7 @@ def main(argv: list[str] | None = None) -> int:
     again = command == "render" and "--again" in rest  # brief #1221: a flag of render alone
     rest = [a for a in rest if not (again and a == "--again")]
     flags = {"--again": ""} if again else {}
-    options = dict(zip(rest[::2], rest[1::2], strict=False)) if len(rest) % 2 == 0 else None
+    options = dict(option_pairs(rest, strict=False)) if len(rest) % 2 == 0 else None
     allowed = {"validate": {"--proposals", "--root"}, "states": {"--root"}}
     allowed["publish"] = {"--comments", "--head", "--numbers", "--root"}
     allowed["openspec-import"] = {"--path", "--slug", "--root"}

@@ -63,6 +63,7 @@ from common import (
     installed_version,
     lf,
     matches,
+    option_pairs,
     project_agent,
     read_list,
     required_checks,
@@ -1442,7 +1443,7 @@ def parse_next(args: list[str]) -> tuple[str, dict[str, str]] | None:
     rest = [a for a in args if a != "--next-steps"]
     if not rest or rest[0].startswith("-") or len(rest) % 2 != 1:
         return None
-    opts = dict(zip(rest[1::2], rest[2::2], strict=True))
+    opts = dict(option_pairs(rest[1:], strict=True))
     if any(key not in NEXT_FLAGS for key in opts):
         return None
     return rest[0], {key[2:]: value for key, value in opts.items()}

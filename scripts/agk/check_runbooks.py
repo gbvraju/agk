@@ -31,7 +31,11 @@ from common import CheckError, repo_root, run, utf8_output
 
 NAME = "runbooks"
 FOLDER = "docs/runbooks"
-KIT_PAGES = ("actions-blocked.md", "leaked-secret.md", "red-default-branch.md")
+KIT_PAGES = (
+    "actions-blocked.md",
+    "leaked-secret.md",
+    "red-default-branch.md",
+)
 SECTIONS = ("When this applies", "Who acts", "Steps", "Over when", "By mode")
 MODES = ["GitHub", "Local", "Personal"]
 MAX_LINES = 60

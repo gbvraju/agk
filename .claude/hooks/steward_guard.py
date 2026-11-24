@@ -669,7 +669,7 @@ def push_problem(args: list[str], where: list[str], cwd: Path) -> str | None:
             return deny
         j += 1
     for key, value in found:
-        if key == "push.followtags" and value.lower() in TRUE:
+        if "push.followtags" == key and value.lower() in TRUE:
             return f"steward guard: {RULE} denies a tag (setting: push.followTags)"
         if remote and key == f"remote.{remote.lower()}.mirror" and value.lower() in TRUE:
             return f"steward guard: {RULE} denies a tag (setting: remote.<name>.mirror)"

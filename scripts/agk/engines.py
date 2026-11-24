@@ -106,6 +106,7 @@ from common import (
     load_config,
     merge_base,
     next_free_ids,
+    option_pairs,
     parse_requirements,
     resolve_base,
 )
@@ -702,7 +703,7 @@ def choice_problems(options: list[re.Match]) -> list[str]:
             marked.append(m)
         parts = EFFECT.split(segment(body, "Trade-offs:") or "")
         phrases: dict[str, list[str]] = {}
-        for label, text in zip(parts[1::2], parts[2::2], strict=True):
+        for label, text in option_pairs(parts[1:], strict=True):
             phrases.setdefault(label, []).append(text.strip(" .;"))
         for label in EFFECTS:
             got = phrases.get(label, [])

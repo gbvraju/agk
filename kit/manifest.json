@@ -291,7 +291,6 @@
     "docs/specs/TEMPLATE.md",
     "kit/",
     "scripts/agk/",
-    "skills/",
-    "tests/kit/"
+    "skills/"
   ]
 }
