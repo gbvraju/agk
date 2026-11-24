@@ -267,6 +267,11 @@ def test_ac2_render_prints_the_declared_playbooks_batch_by(design: Path, capsys)
         write(design, rel, read(KIT_ROOT, rel))
     data = sliced()
     data["briefs"][0]["foundation"] = True  # SPEC-0072 rule 4: a work-type plan's foundation
+    # brief #1910: the first milestone ends with one slice brief after the foundation
+    cut = {k: v for k, v in data["briefs"][1].items() if k != "screens"}
+    data["briefs"].append(
+        cut | {"key": "B3", "milestone": "M1", "depends_on": ["B1"], "slice": True}
+    )
     code, out = render(design, data, capsys)
     assert code == 0, out
     line = (

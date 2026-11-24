@@ -1,0 +1,1 @@
+- Plan intake: `validate` now refuses a work-type plan whose first milestone has no slice brief after the foundation, and the brief problems `render` refused (an empty `advances` or `touches`, a key that is not a file name, a title over 300 characters), so a plan it accepts renders and passes `check_plan.py` (brief #1910, ADR-0792)

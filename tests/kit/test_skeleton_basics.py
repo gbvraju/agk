@@ -418,3 +418,184 @@ def test_req079_the_personal_sidecar_runs_the_same_pack_over_the_skeleton(tmp_pa
     assert ok, line
     assert line.startswith("floor: gates ok")
     assert len(runs) == 1 and [x for _, lines in runs[0] for x in lines] == []
+
+
+# --- brief #1910 (ADR-0792): one first-milestone rule, validate holds render's brief refusals ----
+
+FIRST_SLICE = (
+    "rule 5: briefs: the first milestone has no slice brief after the foundation"
+    " (setting: work_type)"
+)
+
+
+def _intake():
+    import plan_intake
+    import test_foundation_kind as kind
+    import test_plan_intake as intake
+
+    return plan_intake, kind, intake
+
+
+def _intake_root(tmp: Path, work_type: str | None = "web-app") -> Path:
+    plan_intake, kind, intake = _intake()
+    root = tmp / "repo"
+    intake.write(root, "scripts/agk/guard.py", "# the data guard (a placeholder of the fixture)\n")
+    intake.write(root, ".claude/hooks/data_guard.py", "# the read hook (a placeholder)\n")
+    intake.write(root, intake.SOW, intake.SOW_TEXT)
+    intake.write(root, intake.PRD, intake.PRD_TEXT)
+    template = (KIT_ROOT / "docs/specs/TEMPLATE.md").read_text("utf-8")
+    intake.write(root, "docs/specs/TEMPLATE.md", template)
+    if work_type:
+        toml = f'default_branch = "main"\n\n[delivery]\nwork_type = "{work_type}"\n'
+        intake.write(root, "agk.toml", toml)
+        own = KIT_ROOT / "config" / "playbooks" / f"{work_type}.toml"
+        intake.write(root, f"config/playbooks/{work_type}.toml", own.read_text("utf-8"))
+    return root
+
+
+def _plan(*briefs: tuple[str, str, dict]) -> dict:
+    """A proposals file with milestones M1 and M2 and the briefs (key, milestone, extra fields)."""
+    _, _, intake = _intake()
+    data = intake.good()
+    second = dict(data["milestones"][0], id="M2", target=None)
+    data["milestones"] = [data["milestones"][0], second]
+    data["briefs"] = [dict(intake.BRIEF, key=k, milestone=m) | extra for k, m, extra in briefs]
+    return data
+
+
+FOUNDATION_ONLY = (("B1", "M1", {"foundation": True}), ("B2", "M2", {"depends_on": ["B1"]}))
+WITH_SLICE = (*FOUNDATION_ONLY, ("B3", "M1", {"depends_on": ["B1"], "slice": True}))
+SLICE_IN_M2 = (FOUNDATION_ONLY[0], ("B2", "M2", {"depends_on": ["B1"], "slice": True}))
+
+
+def test_req079_validate_refuses_a_first_milestone_with_only_the_foundation(tmp_path, capsys):
+    """REQ-079 AC3: brief #1910 answers 1, 2 and 7 (validate holds check_plan's slice rule; render
+    refuses the same plan with the same line before it writes anything)."""
+    plan_intake, _, intake = _intake()
+    root = _intake_root(tmp_path)
+    intake.refused(root, _plan(*FOUNDATION_ONLY), capsys, FIRST_SLICE)
+    path = root.parent / "proposals.json"
+    assert plan_intake.main(["render", "--proposals", str(path), "--root", str(root)]) == 1
+    assert FIRST_SLICE in capsys.readouterr().out
+    assert not (root / "docs" / "plan").exists()
+
+
+def test_req079_validate_accepts_a_slice_brief_after_the_foundation(tmp_path, capsys):
+    """REQ-079 AC3: brief #1910 answer 7 (an `M1` brief `"slice": true` depending on the
+    foundation passes, as before)."""
+    _, _, intake = _intake()
+    code, out = intake.validate(_intake_root(tmp_path), _plan(*WITH_SLICE), capsys)
+    assert (code, out.strip()) == (0, "ok proposals"), out
+
+
+def test_req079_validate_refuses_a_slice_brief_in_a_later_milestone_only(tmp_path, capsys):
+    """REQ-079 AC3: brief #1910 answer 6 (the slice brief in `M2` only is refused)."""
+    _, _, intake = _intake()
+    intake.refused(_intake_root(tmp_path), _plan(*SLICE_IN_M2), capsys, FIRST_SLICE)
+
+
+PARITY = {
+    "no-work-type": (None, (("B1", "M1", {}), ("B2", "M2", {"depends_on": ["B1"]}))),
+    "foundation-only": ("web-app", FOUNDATION_ONLY),
+    "foundation-and-slice": ("web-app", WITH_SLICE),
+    "slice-in-m2": ("web-app", SLICE_IN_M2),
+    "no-foundation": ("web-app", (("B1", "M1", {}), ("B2", "M2", {"depends_on": ["B1"]}))),
+    "two-foundations": (
+        "web-app",
+        (
+            ("B1", "M1", {"foundation": True}),
+            ("B2", "M1", {"foundation": True, "depends_on": ["B1"]}),
+            ("B3", "M1", {"depends_on": ["B1"], "slice": True}),
+            ("B4", "M2", {"depends_on": ["B1"]}),
+        ),
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(PARITY))
+def test_req079_validate_and_check_plan_give_one_verdict_on_the_rendered_plan(
+    tmp_path, capsys, monkeypatch, name
+):
+    """REQ-079 AC3: brief #1910 answers 7 and 8 (the parity test: validate's verdict on the
+    first-milestone rules equals check_plan's on the files render writes, rendered with the rule
+    switched off so both readers judge the same plan)."""
+    plan_intake, _, _ = _intake()
+    work_type, briefs = PARITY[name]
+    root, data = _intake_root(tmp_path, work_type), _plan(*briefs)
+    refused_by_validate = plan_intake.foundation_problems(root, data)
+    path = root.parent / "proposals.json"
+    path.write_text(__import__("json").dumps(data), encoding="utf-8")
+    monkeypatch.setattr(plan_intake, "foundation_problems", lambda *_: [])
+    code = plan_intake.main(["render", "--proposals", str(path), "--root", str(root)])
+    assert code == 0, capsys.readouterr().out
+    refused_by_check = check_plan.foundation_problems(root) + check_plan.slice_brief_problems(root)
+    assert bool(refused_by_validate) == bool(refused_by_check), (
+        refused_by_validate,
+        refused_by_check,
+    )
+    assert bool(refused_by_validate) == (name not in ("no-work-type", "foundation-and-slice"))
+
+
+@pytest.mark.parametrize("work_type", sorted(__import__("playbook_format").WORK_TYPES))
+def test_req079_each_shipped_work_type_holds_the_same_first_milestone_rule(
+    tmp_path, capsys, work_type
+):
+    """REQ-079 AC3: brief #1910 answer 5 (the value of `[delivery] work_type` is not read; each
+    declarable work type, as `default.toml` is the fallback playbook and no `work_type` value)."""
+    _, _, intake = _intake()
+    root = _intake_root(tmp_path, work_type)
+    intake.refused(root, _plan(*FOUNDATION_ONLY), capsys, FIRST_SLICE)
+    code, out = intake.validate(root, _plan(*WITH_SLICE), capsys)
+    assert (code, out.strip()) == (0, "ok proposals"), out
+
+
+def test_req079_the_shared_rule_returns_each_code():
+    """REQ-079 AC3: brief #1910 answer 1 (`first_milestone_problems`, called directly)."""
+    rule = check_plan.first_milestone_problems
+    found, sliced = {"foundation"}, {"slice"}
+    base = [("B1", "M1", found, []), ("B2", "M1", sliced, ["B1"])]
+    assert rule("web-app", "M1", base) == []
+    assert rule(None, "M1", base) == [("no-work-type", "B1")]
+    assert rule(None, "M1", base[1:]) == []
+    assert rule("web-app", "M1", []) == []
+    assert rule("web-app", "M1", base[1:]) == [("no-foundation", None)]
+    assert rule("web-app", "M1", [base[0], ("B2", "M1", found | sliced, ["B1"])]) == [
+        ("many-foundations", None)
+    ]
+    assert rule("web-app", "M2", base) == [("not-first", "B1")]
+    assert rule("web-app", None, base) == []
+    assert rule("web-app", "M1", [base[0], ("B2", "M1", sliced, [])]) == [
+        ("before-foundation", "B2")
+    ]
+    assert rule("web-app", "M1", [base[0], ("B2", "M2", sliced, ["B1"])]) == [("no-slice", None)]
+
+
+@pytest.mark.parametrize(
+    "change, line",
+    [
+        (lambda b: b.update(advances=[]), "rule 7: briefs B2: advances is empty"),
+        (lambda b: b.update(touches=[]), "rule 7: briefs B2: touches is empty"),
+        (lambda b: b.update(key="B/2"), "rule 7: briefs B/2: the key is not a file name"),
+        (
+            lambda b: b.update(title="t" * 301),
+            "rule 7: briefs B2: the title is over 300 characters",
+        ),
+    ],
+    ids=["advances", "touches", "key", "title"],
+)
+def test_req079_validate_holds_renders_brief_refusals(tmp_path, capsys, change, line):
+    """REQ-079 AC3: brief #1910 answer 3 (validate prints render's `rule 7:` brief lines, once)."""
+    _, _, intake = _intake()
+    data = _plan(*WITH_SLICE)
+    change(data["briefs"][1])
+    out = intake.refused(_intake_root(tmp_path), data, capsys, line)
+    assert out.count(line) == 1
+
+
+def test_req079_validate_still_accepts_a_requirement_with_no_milestone(tmp_path, capsys):
+    """REQ-079 AC3: brief #1910 answer 3 and `Q-PS-2` (the openspec draft state stays render's)."""
+    _, _, intake = _intake()
+    data = _plan(*WITH_SLICE)
+    data["requirements"][0]["milestone"] = None
+    code, out = intake.validate(_intake_root(tmp_path), data, capsys)
+    assert (code, out.strip()) == (0, "ok proposals"), out
