@@ -5,77 +5,36 @@ a module of `scripts/agk/gates/` and the importer rule selects nothing for one. 
 `scripts/agk/gates/*.py` entry of `[[testing.map]]` in the kit's own `agk.toml` therefore names
 every test file of `tests/kit/` and `tests/kit_dev/` that runs the runner: one with an
 `import run_gates` or `from run_gates` line, or one that names `run_gates.py` in a string outside
-a docstring (a command that starts it, Q-30A-1). This test lives in `tests/kit_dev/` because
-`tests/kit/` runs in every project, whose `agk.toml` has no kit map.
+a docstring (a command that starts it, Q-30A-1). The rule itself is
+`check_kit_tests.runner_problems` (brief #1878, ADR-0777), so governance holds it with or without
+`prepush.py --quick`; this file is the full suite's copy over the kit's whole tree.
 """
 
 from __future__ import annotations
 
-import ast
-import re
+import sys
 import tomllib
 from pathlib import Path
 
-SELF = Path(__file__).resolve()  # names the runner in its own fixtures, and runs no gate
-ROOT = SELF.parents[2]
-WILDCARD = "scripts/agk/gates/*.py"
-FOLDERS = ("tests/kit", "tests/kit_dev")
-IMPORT = re.compile(r"^\s*(import|from)\s+run_gates\b", re.MULTILINE)
-MISSING = "{n} test files of {folder}/ that run the gate runner are missing from testing.map"
-GONE = "testing.map names a test file that does not exist for the gate steps"
-SCOPES = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 
+import check_kit_tests  # noqa: E402  (brief #1878, ADR-0777: the rule's one source)
 
-def docstrings(tree: ast.AST) -> set[int]:
-    """The ids of the string nodes that are docstrings."""
-    found = set()
-    for node in ast.walk(tree):
-        if isinstance(node, SCOPES) and node.body:
-            first = node.body[0]
-            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
-                found.add(id(first.value))
-    return found
-
-
-def runs_runner(text: str) -> bool:
-    """True when the file imports the runner or names `run_gates.py` in a non-docstring."""
-    if IMPORT.search(text):
-        return True
-    tree = ast.parse(text)
-    skip = docstrings(tree)
-    return any(
-        isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and "run_gates.py" in node.value
-        and id(node) not in skip
-        for node in ast.walk(tree)
-    )
-
-
-def runner_tests(root: Path) -> dict[str, set[str]]:
-    """The test files of each folder that run the gate runner."""
-    return {
-        folder: {
-            p.relative_to(root).as_posix()
-            for p in (root / folder).glob("test_*.py")
-            if p.resolve() != SELF and runs_runner(p.read_text(encoding="utf-8"))
-        }
-        for folder in FOLDERS
-    }
+WILDCARD = check_kit_tests.GATES
+FOLDERS = check_kit_tests.folders_of("tests/kit")
+MISSING = check_kit_tests.MISSING
+GONE = check_kit_tests.GONE
 
 
 def problems(root: Path) -> list[str]:
     """One message per path class missing a runner test, and one for a named file gone."""
     table = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
-    entries = [e for e in table.get("testing", {}).get("map", []) if e.get("code") == WILDCARD]
-    named = {t for e in entries for t in e.get("tests", [])}
-    out = []
-    for folder, files in runner_tests(root).items():
-        if files - named:
-            out.append(MISSING.format(n=len(files - named), folder=folder))
-    if any(not (root / t).is_file() for t in named):
-        out.append(GONE)
-    return out
+    entries = [
+        {"code": e.get("code"), "tests": list(e.get("tests", []))}
+        for e in table.get("testing", {}).get("map", [])
+    ]
+    return check_kit_tests.runner_problems(root, entries, FOLDERS)
 
 
 def fake(tmp_path: Path, files: dict[str, str], tests: str) -> Path:
