@@ -1,12 +1,13 @@
 """Tests of `front_door.py` build (k): the derived playbook and its check (SPEC-0048 22, 24, 25).
 
-REQ-055 AC8. `derive-write` writes one engagement's skeleton from `default`, the named modules and
-the research record's slug, which passes the checks and holds every `default` gate; it writes
-nothing else, never under `kit/` or `agk.toml`, and the kit's manifest lists no derived playbook. A
-gate of a derived playbook with neither `source` nor `basis = "expected"` fails. `check-playbook
---date` flags a gate source more than 180 days old, without failing, and fails when a design cites
-that playbook; 180 days passes. Fixtures in `tmp_path` only: invented data (`example.com`), no
-network (a socket stub raises).
+REQ-055 AC8; REQ-078 (the clean layout, brief #1887). `derive-write` writes one engagement's
+skeleton from `default`, the named modules and the research record's slug, which passes the checks
+and holds every `default` gate; it writes nothing else, never under `kit/` or `agk.toml`, and the
+kit's manifest lists no derived playbook. A gate of a derived playbook with neither `source` nor
+`basis = "expected"` fails. `check-playbook --date` flags a gate source more than 180 days old,
+without failing, and fails when a design cites that playbook; 180 days passes. In a clean project
+the base is the plugin's `default.toml` unless the project holds its own. Fixtures in `tmp_path`
+only: invented data (`example.com`), no network (a socket stub raises).
 """
 
 from __future__ import annotations
@@ -495,3 +496,127 @@ def test_req079_a_file_that_is_no_layers_draft_writes_nothing(root: Path, text: 
     done = derive(root, "--layers", str(path))
     assert done.returncode == 1 and "(key: architecture.layers)" in done.stdout
     assert tree(root) == before
+
+
+# --- the clean layout (brief #1887, ADR-0781; SPEC-0071 rule 2; REQ-078) ---
+
+
+def clean_env(plugin: Path | None = KIT_ROOT) -> dict[str, str]:
+    import os
+
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE_", "AGK_", "GIT_"))}
+    return env | ({"CLAUDE_PLUGIN_ROOT": str(plugin)} if plugin is not None else {})
+
+
+@pytest.fixture
+def clean(tmp_path: Path) -> Path:
+    """A clean project made by the kit's own `init.py`, the kit tree as the plugin; it holds no
+    `config/playbooks/`, so every shipped playbook is the plugin's."""
+    project = tmp_path / "shop-example"
+    project.mkdir()
+    subprocess.run(  # nosec B603 B607 - fixed argument list, local git
+        ["git", "init", "-q"], cwd=project, check=True, capture_output=True
+    )
+    made = subprocess.run(  # nosec B603 - the kit's own installer, no shell
+        [sys.executable, str(SCRIPTS / "init.py"), str(project), "--layout", "plugin"]
+        + ["--login-from-env", "--solo", "--unreleased", "--rehearsal"],
+        cwd=tmp_path,
+        env=clean_env() | {"AGK_SETUP_LOGIN": "example-owner"},
+        capture_output=True,
+        text=True,
+    )
+    assert made.returncode == 0, made.stdout + made.stderr
+    assert not (project / "config/playbooks").exists()
+    write(project, f"docs/research/{SLUG}.md", record_text())
+    return project
+
+
+def clean_derive(root: Path, *extra: str, plugin: Path | None = KIT_ROOT):
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPT), "derive-write", "--slug", SLUG, *extra, "--root", str(root)],
+        capture_output=True,
+        text=True,
+        cwd=root,
+        env=clean_env(plugin),
+        check=False,
+    )
+
+
+@pytest.mark.parametrize("plugin", [KIT_ROOT, None], ids=["variable", "unset"])
+def test_req078_derive_write_composes_on_the_plugins_default_in_a_clean_project(
+    clean: Path, plugin: Path | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REQ-078: the brief's measure: with no project `default.toml` the plugin's base is read; the
+    derived file is the project's own and passes `check_playbooks.findings`."""
+    done = clean_derive(clean, "--modules", "web-app", plugin=plugin)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert f"ok front-door: wrote {REL}" in done.stdout
+    assert (clean / REL).is_file() and not (clean / "config/playbooks/default.toml").exists()
+    assert str(KIT_ROOT) not in done.stdout + done.stderr
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(KIT_ROOT))
+    assert check_playbooks.findings(clean, [clean / REL]) == []
+    data = tomllib.loads((clean / REL).read_text(encoding="utf-8"))
+    assert data["work_type"] == SLUG
+
+
+def test_req078_a_projects_own_default_wins_in_a_clean_project(clean: Path) -> None:
+    """REQ-078, ADR-0697: the project's own `default.toml` is read before the plugin's; an unsound
+    one is refused with today's line, though the plugin's is sound."""
+    write(clean, "config/playbooks/default.toml", "not toml = = 1\n")
+    before = tree(clean)
+    done = clean_derive(clean)
+    assert done.returncode == 1
+    assert "rule 22: config/playbooks/default.toml: missing or not sound" in done.stdout
+    assert tree(clean) == before
+    source = (KIT_ROOT / "config/playbooks/default.toml").read_text(encoding="utf-8")
+    write(clean, "config/playbooks/default.toml", source)
+    assert clean_derive(clean).returncode == 0
+
+
+def stub_plugin(tmp_path: Path) -> Path:
+    """A plugin of the kit's version whose `config/playbooks/` holds no `default.toml`."""
+    plugin = tmp_path / "plugin-example"
+    for rel in (".claude-plugin/plugin.json", "scripts/agk/kit_root.py"):
+        write(plugin, rel, (KIT_ROOT / rel).read_text(encoding="utf-8"))
+    source = (KIT_ROOT / "config/playbooks/web-app.toml").read_text(encoding="utf-8")
+    write(plugin, "config/playbooks/web-app.toml", source)
+    return plugin
+
+
+def test_req078_a_plugin_without_a_default_writes_nothing(clean: Path, tmp_path: Path) -> None:
+    """REQ-078: the rule 22 line names the path class, never the plugin's folder."""
+    plugin = stub_plugin(tmp_path)
+    before = tree(clean)
+    done = clean_derive(clean, plugin=plugin)
+    assert done.returncode == 1
+    assert "rule 22: config/playbooks/default.toml: missing or not sound" in done.stdout
+    assert str(plugin) not in done.stdout + done.stderr
+    assert tree(clean) == before
+
+
+def test_req078_another_layout_is_refused_naming_the_setting(root: Path) -> None:
+    """REQ-078: `[kit] layout` outside `installed` and `plugin` is refused naming `setting: layout`
+    before the base is read, and writes nothing."""
+    write(root, "agk.toml", '[kit]\nlayout = "sideways-example"\n')
+    before = tree(root)
+    done = derive(root)
+    assert done.returncode == 1
+    assert "(setting: layout)" in done.stdout and "sideways-example" not in done.stdout
+    assert "default.toml" not in done.stdout
+    assert tree(root) == before
+
+
+def test_req078_the_installed_layout_reads_the_projects_default(root: Path) -> None:
+    """REQ-078: an installed project (`[kit] layout = "installed"`) composes on its own base."""
+    write(root, "agk.toml", '[kit]\nlayout = "installed"\n')
+    done = derive(root)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert f"ok front-door: wrote {REL}" in done.stdout
+
+
+def test_req078_a_refused_skeleton_leaves_no_folder_in_a_clean_project(clean: Path) -> None:
+    """REQ-078: the check refuses the written skeleton; the file and the folder made for it go."""
+    path = draft_file(clean, adr="")
+    done = clean_derive(clean, "--layers", str(path))
+    assert done.returncode == 1 and "key: allow" in done.stdout, done.stdout + done.stderr
+    assert not (clean / "config/playbooks").exists()

@@ -1272,8 +1272,12 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
     target = root / rel
     if target.exists():
         raise Refusal([f"rule 22: {rel}: the file exists and is never overwritten"])
-    base_path = root / playbook_format.FOLDER / f"{playbook_format.BASE}.toml"
-    if not base_path.is_file() or playbook_format.problems(base_path, root):
+    refused = playbook_format.layout_problem(root)
+    if refused is not None:
+        raise Refusal([refused])
+    # brief #1887 answer 2: the project's own `default.toml`, else the plugin's (ADR-0697)
+    base_path = playbook_format.default_playbook(root)
+    if base_path is None or playbook_format.problems(base_path, root):
         raise Refusal([f"rule 22: {playbook_format.FOLDER}/default.toml: missing or not sound"])
     record = root / RESEARCH / f"{name}.md"
     record_rel = f"{RESEARCH}/{name}.md"
@@ -1290,10 +1294,15 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
     base = tomllib.loads(base_path.read_text(encoding="utf-8"))
     import check_playbooks  # here, so a load failure leaves every other command as it is
 
+    # a clean project holds no `config/playbooks/` yet: the folders made here go with a refusal
+    made = [f for f in (target.parent, target.parent.parent) if not f.is_dir()]
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(skeleton(name, modules, base, drafted), encoding="utf-8")
     found = check_playbooks.findings(root, [target])
     if found:
         target.unlink()
+        for folder in made:
+            folder.rmdir()
         raise Refusal(found)
     print(f"ok {NAME}: wrote {rel}")
     import check_protected_changes  # brief #1829 answer 4: the classes the playbook meets
