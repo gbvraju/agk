@@ -1,0 +1,1 @@
+- In a new project, the `pins` step prints `not run pins: no foundation yet` from the stack's acceptance until the first dependency, lock or `docs/architecture.md`, instead of failing governance on the accepting and planning pull requests (brief #1909)
