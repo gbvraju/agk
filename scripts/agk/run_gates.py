@@ -95,6 +95,10 @@ PRODUCT_STEPS = ("pins", "bom", "licences")
 PACKS = ("python_pack", "node_pack")  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
+# brief #1908 (ADR-0790): a declared playbook that fails its check runs no gate (Q-DP-4)
+DECLARED_FAILS = (
+    "SPEC-0038 rule 5: the declared playbook fails check_playbooks.py (setting: work_type)"
+)
 UNFOUND = "REQ-078: no playbook is found in the project or the plugin"  # brief #1666
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
 UNCOUNTED = "tool did not run"  # brief #1837: a failure that counts no file is never held
@@ -212,6 +216,8 @@ def results(root: Path, write: bool = False) -> list[Row]:
         path = None
     if path is None or not path.is_file():
         return unfound(root)
+    if playbook_format.declaration(root)[0] and check_playbooks.findings(root, [path]):
+        return [(False, f"playbook: {DECLARED_FAILS}")]
     gates, _, _ = check_playbooks.composed(path, root)
     data = playbook_format.load(path)
     out: list[Row] = []

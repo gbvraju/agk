@@ -504,12 +504,13 @@ def skills(path: Path, root: Path) -> list[str]:
 def folder(root: Path, name: str | None = None) -> Path:
     """The folder a playbook is read from (brief #1666, ADR-0697): the project's `config/playbooks/`
     in the installed layout; in a clean one (`[kit] layout = "plugin"`) the project's when it holds
-    `<name>.toml`, else the plugin's. Raises `kit_root.Refused`, whose line
+    `<name>.toml`, else the plugin's. A derived name (`is_derived`) is the project's alone in both
+    layouts (brief #1908, ADR-0790, SPEC-0048 rule 22). Raises `kit_root.Refused`, whose line
     names the setting (`kit_root.layout`, `kit_root.plugin_root`)."""
     own = Path(root) / FOLDER
     if kit_root is None or kit_root.layout(Path(root)) != "plugin":
         return own
-    if name and (own / f"{name}.toml").is_file():
+    if name and ((own / f"{name}.toml").is_file() or is_derived(name, root)):
         return own
     return kit_root.plugin_root(Path(root)) / FOLDER
 
@@ -755,7 +756,8 @@ def _declared(root: Path) -> tuple[str | None, str | None]:
     if not isinstance(value, str):
         # Q-S0038-1: one work type per project; a list of two is refused like any other type.
         return None, f"{where} `{WORK_TYPE}` is not one work type (setting: {WORK_TYPE})"
-    if value not in WORK_TYPES:
+    # brief #1908 (ADR-0790): a derived playbook's slug, by the one test `problems` uses
+    if value not in WORK_TYPES and not is_derived(value, root):
         return None, f"{where} `{WORK_TYPE}` is not one of the work types (setting: {WORK_TYPE})"
     try:
         found = folder(root, value) / f"{value}.toml"
