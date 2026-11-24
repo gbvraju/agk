@@ -423,7 +423,8 @@ def test_req079_the_personal_sidecar_runs_the_same_pack_over_the_skeleton(tmp_pa
 # --- brief #1910 (ADR-0792): one first-milestone rule, validate holds render's brief refusals ----
 
 FIRST_SLICE = (
-    "rule 5: briefs: the first milestone has no slice brief after the foundation (setting: work_type)"
+    "rule 5: briefs: the first milestone has no slice brief after the foundation"
+    " (setting: work_type)"
 )
 
 
@@ -528,7 +529,10 @@ def test_req079_validate_and_check_plan_give_one_verdict_on_the_rendered_plan(
     code = plan_intake.main(["render", "--proposals", str(path), "--root", str(root)])
     assert code == 0, capsys.readouterr().out
     refused_by_check = check_plan.foundation_problems(root) + check_plan.slice_brief_problems(root)
-    assert bool(refused_by_validate) == bool(refused_by_check), (refused_by_validate, refused_by_check)
+    assert bool(refused_by_validate) == bool(refused_by_check), (
+        refused_by_validate,
+        refused_by_check,
+    )
     assert bool(refused_by_validate) == (name not in ("no-work-type", "foundation-and-slice"))
 
 
@@ -572,7 +576,10 @@ def test_req079_the_shared_rule_returns_each_code():
         (lambda b: b.update(advances=[]), "rule 7: briefs B2: advances is empty"),
         (lambda b: b.update(touches=[]), "rule 7: briefs B2: touches is empty"),
         (lambda b: b.update(key="B/2"), "rule 7: briefs B/2: the key is not a file name"),
-        (lambda b: b.update(title="t" * 301), "rule 7: briefs B2: the title is over 300 characters"),
+        (
+            lambda b: b.update(title="t" * 301),
+            "rule 7: briefs B2: the title is over 300 characters",
+        ),
     ],
     ids=["advances", "touches", "key", "title"],
 )

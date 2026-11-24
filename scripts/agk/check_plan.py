@@ -726,56 +726,86 @@ def briefs(root: Path) -> list[tuple[str, str | None, list[str]]]:
     return out
 
 
+def first_milestone_problems(
+    declared: str | None, first: str | None, briefs: list[tuple[str, str | None, set, list[str]]]
+) -> list[tuple[str, str | None]]:
+    """SPEC-0072 rule 4, once for both readers (brief #1910, ADR-0792): each brief as (key, its
+    milestone, its kinds, its `depends_on`). With no work type, each foundation brief is refused
+    (rule 8's hold); with one: exactly one foundation brief, in `first` when it is known, every
+    other brief of its milestone after it (brief #1587), and a slice brief in its milestone
+    (brief #1594). Returns (code, key) pairs; each reader words them."""
+    found = [b for b in briefs if playbook_format.FOUNDATION in b[2]]
+    if not declared:
+        return [("no-work-type", b[0]) for b in found]
+    if not briefs:
+        return []
+    if len(found) != 1:
+        return [("many-foundations" if found else "no-foundation", None)]
+    key, home = found[0][0], found[0][1]
+    if first is not None and home != first:
+        out = [("not-first", key)]
+    else:
+        out = [
+            ("before-foundation", k)
+            for k, m, _, d in briefs
+            if k != key and m == home and key not in d
+        ]
+    if not any("slice" in kinds and m == home for _, m, kinds, _ in briefs):
+        out.append(("no-slice", None))
+    return out
+
+
+def _brief_kinds(root: Path) -> list[tuple[str, str | None, set, list[str]]]:
+    """Each brief file as (key, its Milestone:, its `Kind:` values, its `Depends-on:` keys)."""
+    folder = root / BRIEFS
+    out = []
+    for path in sorted(folder.rglob("*.md")) if folder.is_dir() else []:
+        text = _read(path) or ""
+        lines = [ln.strip() for ln in text.splitlines()]
+        kinds = {ln[len("Kind:") :].strip() for ln in lines if ln.startswith("Kind:")}
+        named = [ln[len("Depends-on:") :] for ln in lines if ln.startswith("Depends-on:")]
+        after = [w for ln in named for w in re.split(r"[,\s]+", ln) if w]
+        out.append((path.stem, _line_value(text, "Milestone"), kinds, after))
+    return out
+
+
+def _first_milestone(root: Path) -> tuple[list[tuple[str, str | None]], str | None]:
+    """`first_milestone_problems` over the brief files, and the foundation brief's key."""
+    read = _brief_kinds(root)
+    found = [k for k, _, kinds, _ in read if playbook_format.FOUNDATION in kinds]
+    first = next(iter(milestones(root)), None)
+    problems = first_milestone_problems(playbook_format.declaration(root)[0], first, read)
+    return problems, found[0] if len(found) == 1 else None
+
+
 def foundation_problems(root: Path) -> list[str]:
     """SPEC-0072 rule 4 (brief #1587): with a declared work type, one brief file `Kind: foundation`
     in the first milestone, and every other brief file of that milestone `Depends-on:` it; with no
     work type, no foundation brief (rule 8's hold). Each line names the rule and the key."""
-    where, folder = "SPEC-0072 rule 4", root / BRIEFS
-    files = sorted(folder.rglob("*.md")) if folder.is_dir() else []
-    read = [(p.stem, _read(p) or "") for p in files]
     kind = f"Kind: {playbook_format.FOUNDATION}"
-    found = [(k, t) for k, t in read if kind in [ln.strip() for ln in t.splitlines()]]
-    if playbook_format.declaration(root)[0] is None:
-        return [
-            f"{where}: {k}: a foundation brief while no work type is set (setting: work_type)"
-            for k, _ in found
-        ]
-    if not read:
-        return []
-    if len(found) != 1:
-        many = "more than one brief is" if found else "no brief is"
-        return [f"{where}: {BRIEFS}: {many} {kind} (setting: work_type)"]
-    key, text = found[0]
-    first, home = next(iter(milestones(root)), None), _line_value(text, "Milestone")
-    if first is not None and home != first:
-        return [f"{where}: {key}: the foundation brief is not in the first milestone"]
-    out = []
-    for other, body in read:
-        named = [ln.strip() for ln in body.splitlines() if ln.strip().startswith("Depends-on:")]
-        after = any(key in re.split(r"[,\s]+", ln[len("Depends-on:") :]) for ln in named)
-        if other != key and _line_value(body, "Milestone") == home and not after:
-            out.append(f"{where}: {other}: runs before the foundation brief (no Depends-on: {key})")
-    return out
+    words = {
+        "no-work-type": "{k}: a foundation brief while no work type is set (setting: work_type)",
+        "many-foundations": f"{BRIEFS}: more than one brief is {kind} (setting: work_type)",
+        "no-foundation": f"{BRIEFS}: no brief is {kind} (setting: work_type)",
+        "not-first": "{k}: the foundation brief is not in the first milestone",
+        "before-foundation": "{k}: runs before the foundation brief (no Depends-on: {f})",
+    }
+    problems, foundation = _first_milestone(root)
+    return [
+        "SPEC-0072 rule 4: " + words[code].format(k=key, f=foundation)
+        for code, key in problems
+        if code in words
+    ]
 
 
 def slice_brief_problems(root: Path) -> list[str]:
     """Brief #1594 (ADR-0674, amendment 202): with a work type and a foundation brief, the first
     milestone ends with one working slice, so a brief file of that milestone says `Kind: slice`."""
-    folder = root / BRIEFS
-    if playbook_format.declaration(root)[0] is None or not folder.is_dir():
-        return []
-    read = [_read(p) or "" for p in sorted(folder.rglob("*.md"))]
-
-    def kinds(value: str) -> list[str | None]:
-        lines = [(t, [ln.strip() for ln in t.splitlines()]) for t in read]
-        return [_line_value(t, "Milestone") for t, ls in lines if f"Kind: {value}" in ls]
-
-    foundation = kinds(playbook_format.FOUNDATION)
-    if len(foundation) != 1 or foundation[0] in kinds("slice"):
-        return []
     return [
         f"SPEC-0072 rule 4: {BRIEFS}: the first milestone has no Kind: slice brief after the "
         "foundation (setting: work_type)"
+        for code, _ in _first_milestone(root)[0]
+        if code == "no-slice"
     ]
 
 

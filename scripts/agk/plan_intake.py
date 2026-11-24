@@ -439,28 +439,35 @@ def plan_problems(root: Path, data: dict) -> list[str]:
         + foundation_problems(root, data)
     )
     out += openspec_problems(root, data) + rule_problems(data) + access_problems(root, data)
-    return out + conflict_problems(items)
+    return out + conflict_problems(items) + brief_form_problems(data)
+
+
+KIND_FLAGS = ("foundation", "slice")  # the proposals' flags `brief_text` writes as `Kind:` lines
 
 
 def foundation_problems(root: Path, data: dict) -> list[str]:
-    """SPEC-0072 rule 4 (brief #1587): with a declared work type, one foundation brief in `M1` that
-    every other `M1` brief names in `depends_on`; with none, no foundation brief (rule 8's hold)."""
-    found = [b for b in data["briefs"] if b.get("foundation") is True]
-    if playbook_format.declaration(root)[0] is None:
-        return [
-            f"rule 5: briefs {b['key']}: a foundation brief needs a work type (setting: work_type)"
-            for b in found
-        ]
-    if len(found) != 1:
-        many = "more than one foundation brief" if found else "no foundation brief"
-        return [f"rule 5: briefs: {many} (setting: work_type)"]
-    key = found[0]["key"]
-    if found[0]["milestone"] != "M1":
-        return [f"rule 5: briefs {key}: the foundation brief is not in M1"]
-    return [
-        f"rule 5: briefs {b['key']}: depends_on does not name foundation {key}"
+    """SPEC-0072 rule 4 (briefs #1587 and #1594): with a declared work type, one foundation brief
+    in `M1` that every other `M1` brief names in `depends_on`, and an `M1` slice brief after it;
+    with none, no foundation brief (rule 8's hold). The rule is `check_plan`'s, read from the
+    proposals (brief #1910, ADR-0792); rule 4 makes `M1` the first milestone."""
+    briefs = [
+        (b["key"], b["milestone"], {k for k in KIND_FLAGS if b.get(k) is True}, b["depends_on"])
         for b in data["briefs"]
-        if b["milestone"] == "M1" and b["key"] != key and key not in b["depends_on"]
+    ]
+    found = [b["key"] for b in data["briefs"] if b.get("foundation") is True]
+    words = {
+        "no-work-type": "briefs {k}: a foundation brief needs a work type (setting: work_type)",
+        "many-foundations": "briefs: more than one foundation brief (setting: work_type)",
+        "no-foundation": "briefs: no foundation brief (setting: work_type)",
+        "not-first": "briefs {k}: the foundation brief is not in M1",
+        "before-foundation": "briefs {k}: depends_on does not name foundation {f}",
+        "no-slice": "briefs: the first milestone has no slice brief after the foundation"
+        " (setting: work_type)",
+    }
+    declared = playbook_format.declaration(root)[0]
+    return [
+        "rule 5: " + words[code].format(k=key, f=found[0] if found else None)
+        for code, key in check_plan.first_milestone_problems(declared, "M1", briefs)
     ]
 
 
@@ -932,9 +939,10 @@ def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
     return "\n".join([*out, *_sources(sources)]) + "\n"
 
 
-def render_problems(data: dict) -> list[str]:
-    """Rule 7: a brief that could never pass `check_brief.py` or would leave its folder, and an
-    area whose name gives `new_spec.slug` no file name."""
+def brief_form_problems(data: dict) -> list[str]:
+    """Rule 7's brief refusals, held by `validate` too (brief #1910, ADR-0792): a brief that could
+    never pass `check_brief.py` or would leave its folder, and an area whose name gives
+    `new_spec.slug` no file name."""
     out: list[str] = []
     for b in data["briefs"]:
         where = f"rule 7: briefs {b['key']}"
@@ -943,13 +951,20 @@ def render_problems(data: dict) -> list[str]:
         out += [f"{where}: {field} is empty" for field in ("touches", "advances") if not b[field]]
         if len(_one(b["title"])) > SENTENCE_MAX:
             out.append(f"{where}: the title is over {SENTENCE_MAX} characters")
-    for r in data["requirements"]:
-        if r["milestone"] is None:
-            out.append(f"rule 7: requirements {r['key']}: milestone is not set")
     for a in data["areas"]:
         if not re.search(r"[a-z0-9]", a["name"].lower()):
             out.append(f"rule 7: areas {a['name']}: the name has no letters or digits")
     return out
+
+
+def render_problems(data: dict) -> list[str]:
+    """Rule 7: a requirement whose milestone is not set, the one draft state `validate` accepts
+    (amendment 166, `Q-PS-2`); the brief refusals are `brief_form_problems`, run by `validate`."""
+    return [
+        f"rule 7: requirements {r['key']}: milestone is not set"
+        for r in data["requirements"]
+        if r["milestone"] is None
+    ]
 
 
 def for_the_person(data: dict) -> list[str]:
