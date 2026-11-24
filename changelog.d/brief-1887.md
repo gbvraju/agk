@@ -1,0 +1,1 @@
+- In a clean project `plan_intake.py render` names the plugin's playbook as `config/playbooks/<name>.toml` and writes the plan, and `front_door.py derive-write` composes on the plugin's `default.toml`, so neither needs a hand copy of the kit's playbooks; the kit-path guard test now also sees another module's constant, a kit-only folder and `relative_to` (brief #1887, ADR-0781)

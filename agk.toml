@@ -634,6 +634,7 @@ tests = ["tests/kit/test_forge.py"]
 code = "scripts/agk/front_door.py"
 tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
+  "tests/kit/test_front_door_derive.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
@@ -831,7 +832,7 @@ code = "scripts/agk/plan_intake.py"
 tests = [
   "tests/kit/test_board.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_plan_intake.py", "tests/kit/test_plan_questions.py",
   "tests/kit/test_plan_render_installed.py", "tests/kit_dev/test_kit_manifest.py",
-  "tests/kit_dev/test_plan_intake_skill.py",
+  "tests/kit_dev/test_plan_intake_skill.py", "tests/kit/test_plan_intake_clean.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_sources.py"
