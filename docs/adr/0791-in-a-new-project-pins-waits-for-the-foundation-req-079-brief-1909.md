@@ -53,7 +53,11 @@ state read offline from the tree, as `tests-first` and `injection-set` do, which
 The accepting and planning pull requests of a new project pass governance with `pins` not run. Every declared
 dependency is still pinned and locked from the first one on, and from the foundation on in any case. The line names
 the reason only, never a file name, a package or a version (principle 8). `pins.ARCHITECTURE` repeats the path of
-`layers.RECORD`, because `gates/layers.py` imports `gates/pins.py`; a test holds the two equal.
+`layers.RECORD`, because `gates/layers.py` imports `gates/pins.py`; a test holds the two equal. Three existing tests
+that read an init sample before its foundation as red on `pins` change with this decision:
+`test_layers_step.py::test_a_non_python_stack_is_not_run_never_ok` now expects `not run pins: no foundation yet` and
+no failure; the two no-pack tests of `test_run_gates.py` turn the wait off by a monkeypatch, so their line and exit
+code are read as before; `test_layers_draft.py` lists `gates/pins.py` as a reader of the record.
 
 ## Residual
 
