@@ -1,6 +1,6 @@
 # ADR-0738: The five guarded roles refuse the PowerShell tool
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1763, SPEC-0071 rule 4, SPEC-0059 rule 11, ADR-0612, plan #661

@@ -1,6 +1,6 @@
 # ADR-0695: doctor passes a correct clean-layout project
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: ADR-0613, ADR-0616, ADR-0683, SPEC-0071, brief #1668, plan #661

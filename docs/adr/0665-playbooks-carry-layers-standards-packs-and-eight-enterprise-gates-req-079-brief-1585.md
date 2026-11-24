@@ -1,6 +1,6 @@
 # ADR-0665: Playbooks carry their layers, a place for standards packs and the eight enterprise gates (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0048, SPEC-0038, brief #1585, plan #661, ADR-0643

@@ -1,6 +1,6 @@
 # ADR-0598: One owner per new path across the plan
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1425, ADR-0189, ADR-0529, ADR-0548, SPEC-0030 amendment 141 item 2

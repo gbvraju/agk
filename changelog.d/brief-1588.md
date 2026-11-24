@@ -1,1 +1,0 @@
-- A project's foundation now writes down its architecture, governance stops code that imports across its layers the wrong way, and each build brief names the layers it touches (brief #1588)

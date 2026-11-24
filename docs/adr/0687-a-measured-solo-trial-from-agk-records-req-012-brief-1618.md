@@ -1,6 +1,6 @@
 # ADR-0687: A measured solo trial from AGK's own records (REQ-012)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1618, SPEC-0007 rules 25 to 28, amendment 213, ADR-0659, SPEC-0045 rule 2, brief #1282, brief #1534

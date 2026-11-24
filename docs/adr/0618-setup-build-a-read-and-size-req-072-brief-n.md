@@ -1,6 +1,6 @@
 # ADR-0618: /agk:setup build (a): read the machine and the repository, size the builders, print the plan
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0578, ADR-0577, ADR-0409, brief #1460, plan #661

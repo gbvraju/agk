@@ -1,6 +1,6 @@
 # ADR-0690: An owner approval ask reads agk:approve, and a latest cancelled run is not red
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1656, ADR-0143 (decision 2 changes here), ADR-0471, ADR-0497, ADR-0442, the case of #1654

@@ -1,6 +1,6 @@
 # ADR-0756: Every writer of a brief runs the one brief check with its study (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1813, brief #1800 (ADR-0752, Q-1800-1), ADR-0102, ADR-0120, ADR-0170, ADR-0361, SPEC-0043 rules 7

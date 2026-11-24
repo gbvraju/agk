@@ -1,1 +1,0 @@
-- The steward's guard denies a tag pushed by its short name, `tag <name>`, a tag destination, a delete, a pattern, `--follow-tags`, a push setting, a `git config` or `-c` that writes one, an alias and `update-ref`, and fails closed when it cannot read the local tags or config; a work branch push is unchanged (brief #1834)

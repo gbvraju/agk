@@ -1,6 +1,6 @@
 # ADR-0625: /agk:setup build (h): each team machine gets exactly the roles the repository allows
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0607, ADR-0618, ADR-0619, brief #1467, plan #661

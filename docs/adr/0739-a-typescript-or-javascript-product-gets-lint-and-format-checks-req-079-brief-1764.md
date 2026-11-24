@@ -1,6 +1,6 @@
 # ADR-0739: A TypeScript or JavaScript product gets lint and format checks from a standards pack (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: SPEC-0072 rules 2, 6, 7 and 8, ADR-0665, ADR-0669, ADR-0702, brief #1764, plan #661

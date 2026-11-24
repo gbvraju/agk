@@ -1,6 +1,6 @@
 # ADR-0717: The prompt-injection test set becomes an offline check (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1712, SPEC-0072, ADR-0666, ADR-0670, plan #661

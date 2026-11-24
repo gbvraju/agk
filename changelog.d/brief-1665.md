@@ -1,1 +1,0 @@
-- A project in the clean layout passes the guarded merge: governance runs from the plugin in the merged tree, and init and adopt print a ruleset that requires `agk/verdict` (brief #1665)

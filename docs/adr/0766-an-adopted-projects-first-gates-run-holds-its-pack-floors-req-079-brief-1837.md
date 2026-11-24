@@ -1,6 +1,6 @@
 # ADR-0766: An adopted project's first gates run holds its pack floors and never passes a pack that read nothing (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rules 6, 7 and 8, ADR-0668, ADR-0669, ADR-0680, ADR-0702, ADR-0739, ADR-0740, ADR-0743, brief #1837, plan #661

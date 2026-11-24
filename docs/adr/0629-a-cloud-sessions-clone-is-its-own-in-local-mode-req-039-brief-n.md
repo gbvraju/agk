@@ -1,6 +1,6 @@
 # ADR-0629: A cloud session's clone is its own in local mode
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: ADR-0551, brief #1482, brief #1471, Q-1471-1, Q-1301-1, plan #661

@@ -1,6 +1,6 @@
 # ADR-0611: Clean layout build (a): one resolver runs the kit from the plugin or the repository
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1453, SPEC-0071 rules 2, 3 and 12 (a), ADR-0531

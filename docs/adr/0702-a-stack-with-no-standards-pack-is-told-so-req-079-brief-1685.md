@@ -1,6 +1,6 @@
 # ADR-0702: A stack with no standards pack is told so
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1685, SPEC-0072 rule 6, ADR-0669, ADR-0668

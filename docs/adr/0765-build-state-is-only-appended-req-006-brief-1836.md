@@ -1,6 +1,6 @@
 # ADR-0765: The build-state check fails a changed or removed row (REQ-006)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1836, ADR-0001, ADR-0111, ADR-0146, ADR-0550, ADR-0648, CM-14.4 of #1772, plan #661

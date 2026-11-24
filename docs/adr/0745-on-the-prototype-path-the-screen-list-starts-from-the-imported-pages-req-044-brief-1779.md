@@ -1,6 +1,6 @@
 # ADR-0745: On the prototype path the screen list starts from the imported pages (REQ-044)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1779, SPEC-0037, amendment 219, ADR-0734, ADR-0504

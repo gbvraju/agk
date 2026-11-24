@@ -1,6 +1,6 @@
 # ADR-0704: The solo steward posts the approval on the person's recorded yes, and the kit counts it
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1691, brief #1690, ADR-0661, ADR-0703, ADR-0179, ADR-0546, SPEC-0062, amendment 194, Q-1691-1, Q-1691-2, Q-1691-3, plan #661

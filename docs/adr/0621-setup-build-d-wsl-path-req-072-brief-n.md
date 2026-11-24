@@ -1,6 +1,6 @@
 # ADR-0621: /agk:setup build (d): the WSL path calls /agk:wsl unchanged, then the scheduler
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0577, ADR-0579, ADR-0606, ADR-0618, ADR-0619, ADR-0620, brief #1463, plan #661

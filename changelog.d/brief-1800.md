@@ -1,1 +1,0 @@
-- A kit brief now shows its study before it is filed: its effect on speed, quality, GitHub, cost and tests, where it is wired in, the earlier decisions it builds on and the guard that closes its kind; the brief check warns about a missing study, and a new script lists the earlier record to read (brief #1800)

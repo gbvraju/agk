@@ -1,6 +1,6 @@
 # ADR-0721: One injection test set proves a planted line changes no kit decision
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1711, session rule 38, brief #1709, brief #1710, ADR-0717, plan #661

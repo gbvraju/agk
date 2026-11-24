@@ -1,6 +1,6 @@
 # ADR-0730: A back-slash test folder reads as the same folder in the environment-settings step (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1748, issue #1747, ADR-0728, SPEC-0072

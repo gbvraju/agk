@@ -1,6 +1,6 @@
 # ADR-0754: The kit's default allowed-licence list adds five permissive ids (REQ-061)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0054 rule 4, ADR-0748, ADR-0676, ADR-0743, amendment 206, brief #1811, brief #1785, brief #1596, plan #661

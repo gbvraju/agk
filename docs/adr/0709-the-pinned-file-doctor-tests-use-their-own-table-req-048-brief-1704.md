@@ -1,6 +1,6 @@
 # ADR-0709: The pinned-file doctor tests check against their own table (REQ-048)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1704, brief #1691, pull request #1699, brief #1506

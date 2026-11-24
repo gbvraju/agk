@@ -1,6 +1,6 @@
 # ADR-0619: /agk:setup build (b): at most five plain questions, and the project settings proposed as one change
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0618, ADR-0577, SPEC-0064, SPEC-0041, brief #1461, plan #661

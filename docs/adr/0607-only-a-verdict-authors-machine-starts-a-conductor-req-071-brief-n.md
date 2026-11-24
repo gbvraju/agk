@@ -1,6 +1,6 @@
 # ADR-0607: Only a verdict author's machine starts a conductor; other machines run builders only
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1449, ADR-0330, ADR-0592, ADR-0525, ADR-0554, ADR-0559, SPEC-0064, SPEC-0065

@@ -1,6 +1,6 @@
 # ADR-0642: The merger records a spec approval in the merge (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: brief #1520, Q-1418-1, #1511, brief #797, brief #628, ADR-0304, ADR-0373, SPEC-0021 rule 3a

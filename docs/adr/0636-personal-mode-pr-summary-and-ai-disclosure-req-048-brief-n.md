@@ -1,6 +1,6 @@
 # ADR-0636: Personal mode prints a summary of the change and always discloses AI use
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0634, SPEC-0041, brief #1505

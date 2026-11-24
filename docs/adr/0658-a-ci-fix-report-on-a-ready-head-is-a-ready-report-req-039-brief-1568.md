@@ -1,6 +1,6 @@
 # ADR-0658: A CI fix report on a ready head is a ready report (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1568, amendment 150 (the ready report of `route.py`), amendment 162, brief #842 (ADR-0384), ADR-0385

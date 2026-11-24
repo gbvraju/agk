@@ -1,6 +1,6 @@
 # ADR-0622: /agk:setup build (e): Linux and cloud virtual machines install through apt or dnf, and macOS gets one line
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0618, ADR-0619, ADR-0620, ADR-0577, ADR-0608, brief #1464, plan #661

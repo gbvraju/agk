@@ -1,6 +1,6 @@
 # ADR-0613: Clean layout build (c): `[kit] plugin_version` pins one plugin version on every machine
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: brief #1455, SPEC-0071 rules 6, 10 and 12 (c), ADR-0611, Q-S0071-4, Q-S0071-7

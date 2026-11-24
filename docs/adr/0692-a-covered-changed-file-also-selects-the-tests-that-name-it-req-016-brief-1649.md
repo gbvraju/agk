@@ -1,6 +1,6 @@
 # ADR-0692: A covered changed file also selects the tests that name it
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1649, SPEC-0055 rule 6 (widened here), ADR-0359, ADR-0220, bug #1636, brief #1638

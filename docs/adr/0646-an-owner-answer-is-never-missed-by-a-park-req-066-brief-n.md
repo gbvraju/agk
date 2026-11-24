@@ -1,6 +1,6 @@
 # ADR-0646: An owner's answer is never missed by a park (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: brief #1534, ADR-0543 (brief #1282), ADR-0559, SPEC-0059 rule 10, SPEC-0064 rule 2, #1532, #1519, #1511, #1516

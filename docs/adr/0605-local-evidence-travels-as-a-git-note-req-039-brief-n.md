@@ -1,6 +1,6 @@
 # ADR-0605: Local evidence travels as a git note
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1447, ADR-0208, ADR-0233, ADR-0536, ADR-0564, plan #661

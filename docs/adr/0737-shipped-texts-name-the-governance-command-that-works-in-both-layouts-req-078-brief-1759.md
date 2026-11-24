@@ -1,6 +1,6 @@
 # ADR-0737: Shipped texts name the governance command that works in both layouts
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1759, brief #1758, ADR-0611, ADR-0631, ADR-0736, SPEC-0071, plan #661

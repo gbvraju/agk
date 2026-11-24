@@ -1,6 +1,6 @@
 # ADR-0654: A comment or a finished run starts a job only when it can act (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: brief #1554, ADR-0207 (brief #369), ADR-0368 (brief #776), ADR-0373 (brief #797), ADR-0476 (brief #1116), ADR-0646 (brief #1534), brief #1539

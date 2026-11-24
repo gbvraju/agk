@@ -1,6 +1,6 @@
 # ADR-0707: The 502 evidence test checks the fake error's words (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1650, brief #1700, plan #661

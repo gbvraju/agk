@@ -1,6 +1,6 @@
 # ADR-0736: The reviewing roles run the resolver's governance command in a clean project
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1758, SPEC-0071 rule 4, ADR-0611, ADR-0612, ADR-0631, plan #661

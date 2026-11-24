@@ -1,6 +1,6 @@
 # ADR-0652: The personal reviewer agent file is pinned to LF in the installed gitattributes (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: maintainers
 - Related: brief #1559, brief #1507, #1550, ADR-0160, ADR-0641

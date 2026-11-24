@@ -1,6 +1,6 @@
 # ADR-0694: The bill of materials and the steward's skill lookup read the plugin's files in a clean project
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1667, SPEC-0054, SPEC-0059, SPEC-0071, ADR-0683, ADR-0611, plan #661

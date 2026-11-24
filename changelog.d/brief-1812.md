@@ -1,1 +1,0 @@
-- The kit drops its own `every_script_tests`, whose tests already run as whole tests; a project that still sets the key runs as before and is told by doctor, prepush and its CI step to move its files to `whole_tests` before the next release refuses it (brief #1812)

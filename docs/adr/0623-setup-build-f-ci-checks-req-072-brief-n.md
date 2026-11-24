@@ -1,6 +1,6 @@
 # ADR-0623: /agk:setup build (f): CI mode checks the repository with GET calls only and installs nothing
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0618, ADR-0619, ADR-0620, brief #1465, plan #661

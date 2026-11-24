@@ -1,6 +1,6 @@
 # ADR-0728: A malformed test_dirs is refused by the environment-settings step (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1725, SPEC-0072, ADR-0673, ADR-0717

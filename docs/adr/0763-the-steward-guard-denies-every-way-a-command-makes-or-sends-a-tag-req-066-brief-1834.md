@@ -1,6 +1,6 @@
 # ADR-0763: The steward guard denies every way a command makes, moves or sends a tag
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: brief #1834, ADR-0541, ADR-0557, ADR-0561, ADR-0612, ADR-0727, ADR-0732, brief #1763, SPEC-0059 rule 11, session rule 2

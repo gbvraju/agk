@@ -1,6 +1,6 @@
 # ADR-0670: A tests floor: the tests-first gate becomes a check (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1590, SPEC-0072, amendment 198, ADR-0666, ADR-0668, ADR-0673, brief #1586, brief #1587, plan #661

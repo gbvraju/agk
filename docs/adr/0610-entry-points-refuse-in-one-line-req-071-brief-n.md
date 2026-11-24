@@ -1,6 +1,6 @@
 # ADR-0610: Kit entry points refuse in one plain line
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1452, ADR-0589

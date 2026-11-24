@@ -1,6 +1,6 @@
 # ADR-0714: The steward fixes a brief's mechanical lines and files an approved draft as a brief
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1715, ADR-0557, ADR-0594, ADR-0704, SPEC-0059, amendment 215, Q-1715-1 to Q-1715-4, plan #661

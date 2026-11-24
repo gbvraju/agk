@@ -1,6 +1,6 @@
 # ADR-0699: The session tests pin the clock the code reads
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1680, found bug #1497, plan #661

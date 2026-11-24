@@ -1,6 +1,6 @@
 # ADR-0640: The personal-mode guide names exactly what the code accepts, and a recorded walk shows the product untouched
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0637, ADR-0638, SPEC-0041, brief #1510

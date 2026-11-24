@@ -1,1 +1,0 @@
-- The autopilot, session and conductor commands refuse in one plain line, never a Python traceback: `autopilot.py` prints `refused: <message>` and exits 1, and in a personal-mode clone without `--root` every line ends `(personal mode: pass --root <the sidecar's folder>)` (brief #1452)

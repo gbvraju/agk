@@ -1,6 +1,6 @@
 # ADR-0667: Every plan starts with one foundation brief, and the stack record arrives with its practices (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-20
 - Deciders: maintainers
 - Related: SPEC-0072, SPEC-0043, SPEC-0038, SPEC-0029, brief #1587, brief #1585, plan #661, ADR-0665, ADR-0643

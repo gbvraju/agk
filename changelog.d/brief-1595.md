@@ -1,1 +1,0 @@
-- A project's architecture record now must hold its context, parts, data stores, outside services, target numbers and a diagram, and the person is asked one plain question about the busiest hour, downtime and cost with a recommended answer (brief #1595)

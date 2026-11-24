@@ -1,6 +1,6 @@
 # ADR-0741: An answered owner question shows as answered at the steward's start (REQ-066)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0557, ADR-0726, SPEC-0059, brief #1765, plan #661

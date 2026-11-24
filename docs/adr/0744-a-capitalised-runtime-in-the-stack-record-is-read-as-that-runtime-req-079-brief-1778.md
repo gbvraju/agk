@@ -1,6 +1,6 @@
 # ADR-0744: A capitalised runtime in the stack record is read as that runtime (REQ-079)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 - Deciders: maintainers
 - Related: SPEC-0072 rule 4, SPEC-0029 rule 5, ADR-0672, ADR-0742, brief #1778, plan #661

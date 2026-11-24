@@ -1,6 +1,6 @@
 # ADR-0735: The kind of product named in discovery becomes the work type on the owner's yes (REQ-045)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: brief #1757, SPEC-0038, ADR-0312, ADR-0316, ADR-0703, amendment 218

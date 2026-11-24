@@ -1,6 +1,6 @@
 # ADR-0624: /agk:setup build (g): the steward hands off to /agk:setup, and back undoes only what it added
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Deciders: maintainers
 - Related: SPEC-0065, ADR-0619, ADR-0621, brief #1466, plan #661

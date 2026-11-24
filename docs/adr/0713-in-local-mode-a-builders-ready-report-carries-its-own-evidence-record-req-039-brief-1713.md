@@ -1,6 +1,6 @@
 # ADR-0713: In local mode a builder's ready report carries its own evidence record (REQ-039)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-22
 - Deciders: maintainers
 - Related: ADR-0477, ADR-0510, ADR-0536, ADR-0605, ADR-0710, brief #1713, brief #1706, plan #661

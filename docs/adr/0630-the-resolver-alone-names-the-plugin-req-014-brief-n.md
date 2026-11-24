@@ -1,6 +1,6 @@
 # ADR-0630: The resolver alone names the plugin (REQ-014 AC3)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-17
 - Deciders: maintainers
 - Related: brief #1486, issue #1485, SPEC-0071 rule 2, ADR-0611

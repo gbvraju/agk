@@ -1,6 +1,6 @@
 # ADR-0664: Day zero: the steward talks the idea through before a repository exists
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-21
 - Deciders: maintainers
 - Related: brief #1584, SPEC-0066 rules 4 and 8, SPEC-0065 rule 8, SPEC-0043 rule 1, SPEC-0062 rules 3, 4 and 10, ADR-0663, amendments 196 and 197, Q-1584-1, Q-1584-2, Q-1584-3
