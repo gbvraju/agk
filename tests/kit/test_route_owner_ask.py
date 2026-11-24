@@ -610,3 +610,113 @@ def test_1735_the_docstring_names_the_rule():
     """REQ-039: brief #1735 answer 7."""
     assert "ADR-0723" in (route.owner_ask.__doc__ or "")
     assert "ADR-0723" in (route.approval_ask.__doc__ or "")
+
+
+# --- brief #1901 (ADR-0788): an evidence `Answer: Q-<id>` closes a maintainers question -------
+
+import session  # noqa: E402
+
+ASKED_1897 = "2026-11-24T05:13:18Z"
+PUSHED_1897 = {"commit": {"committer": {"date": "2026-11-24T05:10:53Z"}}}
+
+
+def q_1901(qid: str = "Q-1891-1", when: str = ASKED_1897, cid: int = 1) -> dict:
+    return at(cid, "builder", f"Question: {qid} for the maintainers: (a) or (b)?", when)
+
+
+def answer_1901(qid: str = "Q-1891-1", login: str = "boss", when: str = "2026-11-24T05:14:40Z"):
+    return at(9, login, f"Answer: {qid}: (b). The amendment file settles it.", when)
+
+
+def f_1901(comments: list[dict], **kw) -> dict:
+    return facts(draft=True, comments=comments, commit=PUSHED_1897, **kw)
+
+
+def session_items(f: dict) -> dict:
+    """The owner wait's items for the same fixture, with its answerers (`session.owner_people`)."""
+    pr = {"head": {"sha": f["head"]}, "user": {"login": f["author"]}, "number": 7, "labels": []}
+    listed = {a.lower() for a in f["authors"]}
+    return session.open_owner_items(pr, f["comments"], listed, listed | set(f["approvers"]))
+
+
+def test_1901_5a_the_1897_shape_an_evidence_answer_closes_the_question():
+    """REQ-066: brief #1901 answers 1 and 5 (the #1897 shape gives no owner state)."""
+    before = f_1901([q_1901()])
+    assert route.owner_ask(before, before["comments"], before["authors"]) == "agk:question"
+    after = f_1901([q_1901(), answer_1901()])
+    assert route.owner_ask(after, after["comments"], after["authors"]) is None
+    assert route.decide(after) == "agk:build"  # the next state of the pull request
+    assert session_items(after) == {}
+    by_approver = f_1901([q_1901(), answer_1901(login="maintainer")])
+    assert route.owner_ask(by_approver, by_approver["comments"], by_approver["authors"]) is None
+
+
+@pytest.mark.parametrize(
+    "comments",
+    [
+        [q_1901(), answer_1901("Q-1891-2")],  # another Q id
+        [answer_1901(when="2026-11-24T05:12:00Z"), q_1901()],  # before the question
+        [q_1901(), answer_1901(login="stranger")],  # a login outside the answerers
+        [q_1901(), q_1901("Q-1891-2", cid=2), answer_1901()],  # two open, one answered
+    ],
+)
+def test_1901_4_an_answer_that_does_not_settle_this_question_closes_nothing(comments):
+    """REQ-066: brief #1901 answer 4 (the edge cases)."""
+    f = f_1901(comments)
+    assert route.owner_ask(f, f["comments"], f["authors"]) == "agk:question"
+    assert session_items(f) != {}
+
+
+def test_1901_4_a_correction_after_the_answer_reopens_nothing():
+    """REQ-066: brief #1901 answer 4 (a `Correction:` naming the same id reopens nothing)."""
+    fix = at(10, "boss", "Correction: Q-1891-1 read (b) as written", "2026-11-24T05:20:00Z")
+    f = f_1901([q_1901(), answer_1901(), fix])
+    assert route.owner_ask(f, f["comments"], f["authors"]) is None
+    plain = at(1, "builder", "Question: Q-1891-1 (a) or (b)?", ASKED_1897)  # not for maintainers
+    g = f_1901([plain, answer_1901()])
+    assert route.owner_ask(g, g["comments"], g["authors"]) is None
+
+
+def test_1901_4_an_answer_never_closes_an_owner_needed_or_an_approval_ask():
+    """REQ-066: brief #1901 answer 1 and Q-1901-1 (the other asks keep today's closers)."""
+    needed = at(2, "boss", "Owner needed: Q-1891-1 a size ruling", "2026-11-24T05:13:30Z")
+    f = f_1901([q_1901(), needed, answer_1901()])
+    assert route.owner_ask(f, f["comments"], f["authors"]) == "agk:question"
+    asked = at(2, "boss", "Owner needed:\nApprove: SPEC-0059", "2026-11-24T05:13:30Z")
+    g = f_1901([q_1901(), asked, answer_1901()], files=[{"filename": "docs/specs/0059-x.md"}])
+    assert route.owner_ask(g, g["comments"], g["authors"]) == "agk:approve"
+
+
+def test_1901_3_solo_an_answer_by_the_person_closes_as_any_answerers():
+    """REQ-066: brief #1901 answer 3 (`review_mode = "solo"`: `confirmed_comments` runs first)."""
+    f = f_1901([q_1901(), answer_1901()], solo_person="boss", agent_apps=["claude"])
+    assert route.decide(f) == "agk:build"
+
+
+def test_1901_2_the_router_reads_the_owner_waits_id_match():
+    """REQ-066: brief #1901 answer 2 (the id match is imported, not written twice)."""
+    assert route.ANSWER_LINE is session.ANSWER_LINE
+    assert route.QUESTION_ID is session.QUESTION_ID
+    assert "brief #1901" in (route.owner_ask.__doc__ or "")
+
+
+PARITY_1901 = [
+    [q_1901()],
+    [q_1901(), answer_1901()],
+    [q_1901(), answer_1901(login="maintainer")],
+    [q_1901(), answer_1901("Q-1891-2")],
+    [answer_1901(when="2026-11-24T05:12:00Z"), q_1901()],
+    [q_1901(), answer_1901(login="stranger")],
+    [q_1901(), q_1901("Q-1891-2", cid=2), answer_1901()],
+    [q_1901(), q_1901("Q-1891-2", cid=2), answer_1901(), answer_1901("Q-1891-2")],
+    [q_1901(), at(9, "maintainer", "Maintainer answer: Q-1891-1 (b)", "2026-11-24T05:20:00Z")],
+]
+
+
+@pytest.mark.parametrize("comments", PARITY_1901)
+def test_1901_6_the_router_and_the_owner_wait_read_each_question_alike(comments):
+    """REQ-066: brief #1901 answer 6 (a closer added to one reader alone fails here)."""
+    f = f_1901(comments)
+    asks = route.owner_ask(f, f["comments"], f["authors"]) == "agk:question"
+    waits = any(k.startswith("Q-") or k == "question" for k in session_items(f))
+    assert asks == waits
