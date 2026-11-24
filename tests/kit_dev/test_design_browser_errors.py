@@ -66,7 +66,7 @@ def noisy_browser(directory: Path, shot: Path) -> Path:
         "#!/bin/sh\n"
         f'echo "$@" >> "{directory / "calls"}"\n'
         "echo 'WARNING: No usable sandbox at https://example.com/w' >&2\n"
-        "case \"$*\" in *--dump-dom*) echo '<pre id=\"agk-reflow\">ok</pre>'; exit 0;; esac\n"
+        'case "$*" in *--dump-dom*) echo \'<pre id="agk-reflow">ok</pre>\'; exit 0;; esac\n'
         'for a in "$@"; do case "$a" in --screenshot=*) '
         f'{cp} "{shot}" "${{a#--screenshot=}}";; esac; done\n',
         encoding="utf-8",
@@ -157,7 +157,10 @@ def test_ac6_the_reflow_and_the_comparison_name_why_the_browser_failed(tmp_path)
     frozen_version(tmp_path)
     proc = run("design.py", "screenshots", "--version", VERSION, "--root", str(tmp_path), path=path)
     assert proc.returncode == 1, proc.stdout + proc.stderr
-    assert proc.stdout == f"FAIL design: rule 8: the headless browser did not make a screenshot; {ROOT}\n"
+    assert (
+        proc.stdout
+        == f"FAIL design: rule 8: the headless browser did not make a screenshot; {ROOT}\n"
+    )
     other = tmp_path.parent / (tmp_path.name + "-compare")
     other.mkdir()
     project(other, tolerance=0.3)
@@ -229,7 +232,9 @@ def test_ac6_without_a_browser_the_commands_read_not_run_never_a_cause(tmp_path)
     empty = tmp_path.parent / (tmp_path.name + "-empty")
     empty.mkdir()
     frozen_version(tmp_path)
-    proc = run("design.py", "screenshots", "--version", VERSION, "--root", str(tmp_path), path=str(empty))
+    proc = run(
+        "design.py", "screenshots", "--version", VERSION, "--root", str(tmp_path), path=str(empty)
+    )
     assert proc.returncode == 0
     assert proc.stdout == "design: no headless browser found; reflow not run\n"
 
@@ -264,7 +269,10 @@ def test_ac6_a_timeout_or_a_browser_that_cannot_start_is_a_refusal_not_a_traceba
     existing_mockup(tmp_path)
     assert design.main(["screenshots", "--folder", FOLDER, "--root", str(tmp_path)]) == 1
     out = capsys.readouterr()
-    assert out.out == f"FAIL design: rule 6: the headless browser did not make a screenshot; {clause}\n"
+    assert (
+        out.out
+        == f"FAIL design: rule 6: the headless browser did not make a screenshot; {clause}\n"
+    )
     assert out.err == ""
     other = tmp_path / "compare"
     other.mkdir()

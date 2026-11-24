@@ -135,7 +135,9 @@ It prints `<screen>/<state> match` or `<screen>/<state> drift: structure, tokens
 `Design match:` line and leave the judgement to the conductor. A build that changes no screen named by a `Screens:` line
 runs none. The browser runs offline; an imported page is opened only through the script's own files server, and a line
 may end `; external: <n> not loaded (...)` (copy it whole). An exit 1 naming `did not open the imported page` means the
-browser showed an error page: report it, do not copy a `Design match:` line for it.
+browser showed an error page: report it, do not copy a `Design match:` line for it. An exit 1 that names the sandbox or root means the
+machine's browser cannot start its sandbox: tell the person so in plain words and point to "Design screenshots and
+comparison" in `docs/guides/reference.md`; never add `--no-sandbox` or wrap the browser for them.
 
 ## /agk:design inventory
 
