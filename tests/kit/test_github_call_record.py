@@ -31,7 +31,6 @@ import session  # noqa: E402
 EP = "repos/acme/widgets/issues/7"
 RESET = 1_900_000_000  # 2030-03-17T17:46:40Z
 REFUSED = "github calls: the job summary cannot be written (setting: GITHUB_STEP_SUMMARY)"
-TOKEN = "invented-token-value-example"
 
 
 def head(status: str, headers: dict[str, str], body: str = "") -> str:
@@ -96,7 +95,7 @@ def test_two_gets_one_304_and_one_post_write_one_line(monkeypatch, fresh, capsys
             " limit 3999 of 5000 left, resets 17:46Z")  # fmt: skip
     assert fresh.read_text(encoding="utf-8") == line + "\n"
     assert line in capsys.readouterr().err
-    assert EP not in line and "body" not in line and TOKEN not in line
+    assert EP not in line and "body" not in line and "body=hi" not in line
 
 
 def test_the_routers_writes_and_searches_and_the_mergers_calls_count(monkeypatch, fresh):
