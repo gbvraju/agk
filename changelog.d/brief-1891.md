@@ -1,0 +1,1 @@
+- Adopt and init write the test file names of the project's own stack: a Node or TypeScript project's `*.test.js`, `*.spec.ts` and the like are found and selected, a mixed project gets both sets, and a project with no test and no known stack gets an empty list it is told about instead of the Python default (brief #1891)

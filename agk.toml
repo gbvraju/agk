@@ -188,12 +188,13 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/tree_walk.py"
 tests = [
-  "tests/kit/test_doctor.py", "tests/kit/test_installed_imports.py", "tests/kit/test_test_dirs_front_end.py",
+  "tests/kit/test_adopt_node_tests.py", "tests/kit/test_doctor.py", "tests/kit/test_installed_imports.py", "tests/kit/test_test_dirs_front_end.py",
   "tests/kit_dev/test_adopt.py",
 ]
 [[testing.map]]
 code = "scripts/agk/adopt.py"
 tests = [
+  "tests/kit/test_adopt_node_tests.py",
   "tests/kit/test_clean_init.py",
   "tests/kit/test_steward_setup.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_reviewers_approvers_install.py",
@@ -657,6 +658,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/init.py"
 tests = [
+  "tests/kit/test_adopt_node_tests.py",
   "tests/kit/test_clean_init.py",
   "tests/kit/test_steward_setup.py",
   "tests/kit/test_architect_guard.py", "tests/kit/test_flakes.py", "tests/kit/test_personal_mode_rules.py",
