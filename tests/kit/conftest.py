@@ -25,6 +25,10 @@ else:
         os.environ[f"GIT_CONFIG_KEY_{_GIT_COUNT + _n}"] = _key
         os.environ[f"GIT_CONFIG_VALUE_{_GIT_COUNT + _n}"] = _value
     os.environ["GIT_CONFIG_COUNT"] = str(_GIT_COUNT + 2)
+    # The runner's GITHUB_ACTIONS turns on each script's exit record of its GitHub calls (brief
+    # #1877, ADR-0776), which would ask `rate_limit` of a test's `gh` double and add a line to its
+    # output. A test of the record, or of the merge queue, sets it itself.
+    os.environ.pop("GITHUB_ACTIONS", None)
 
 
 PROTECTED = "constitution/\nconfig/\n.claude/\n.github/\ndocs/requirements.md\n"

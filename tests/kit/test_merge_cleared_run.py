@@ -744,6 +744,35 @@ def test_review_queue_is_unchanged_without_the_setting_or_an_exact_cleared_verdi
     assert lines == ["empty", f"#7 {HEAD[:7]} skip: verdict on this head (comment 3)"]
 
 
+FINAL_ONLY = "Final: docs/adr/0999-an-example-decision.md Proposed -> Accepted"
+
+
+def test_review_queue_lists_a_final_only_fix_list_on_the_head_as_cleared_not_merged(tmp_path):
+    """REQ-046 (brief #1879 answer 3, amendment 225): a rule 3a fix list on the full head is
+    retried like `Verdict: cleared`, with no builder Report after it."""
+    lines = queue_world(tmp_path, ON, f"Verdict: fix list {HEAD}\n\n{FINAL_ONLY}")
+    assert lines == [f"#7 {HEAD[:7]} cleared, not merged"]
+
+
+@pytest.mark.parametrize(
+    ("flow", "line"),
+    [
+        ("auto_merge = false\n", f"Verdict: fix list {HEAD}\n\n{FINAL_ONLY}"),
+        ("", f"Verdict: fix list {HEAD}\n\n{FINAL_ONLY}"),
+        (ON, f"Verdict: fix list {HEAD[:7]}\n\n{FINAL_ONLY}"),
+        (ON, f"Verdict: fix list {HEAD}\n\n1. Name the setting (rule: none).\n{FINAL_ONLY}"),
+        (ON, f"Verdict: fix list {HEAD}\n\nFinal: docs/requirements.md REQ-046 planned -> built"),
+    ],
+)
+def test_review_queue_skips_a_final_only_fix_list_without_the_setting_or_the_rule_3a_shape(
+    tmp_path, flow, line
+):
+    """REQ-046 (brief #1879 answer 6): `auto_merge` off or absent, a short sha, a numbered item
+    or another Final line: `skip` as today, nothing merges."""
+    lines = queue_world(tmp_path, flow, line)
+    assert lines == ["empty", f"#7 {HEAD[:7]} skip: verdict on this head (comment 3)"]
+
+
 def test_conductor_accounts_do_not_change_what_a_listed_verdict_author_counts_for(tmp_path):
     """REQ-046 AC2: SPEC-0039 rule 3 holds after build (b) (a listed author merges)."""
     yaml = f'version: 1\nspec_approvers: ["@{OWNER}"]\nconductor_accounts: ["@{CONDUCTOR}"]\n'

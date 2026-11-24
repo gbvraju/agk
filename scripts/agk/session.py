@@ -406,6 +406,10 @@ WRITE_GAP = 1.0  # seconds between two mutating calls of one process (brief #133
 WRITES = 0  # the mutating calls this run made (brief #1335 answer 3)
 LAST_WRITE: float | None = None  # the monotonic time of the last mutating call
 MUTATING = frozenset({"POST", "PATCH", "PUT", "DELETE"})
+WAITS = 0  # the limits this run waited out (brief #1877 answer 2, ADR-0776)
+WAITED = 0.0  # the seconds of those waits
+LIMIT_SEEN: dict[str, str] = {}  # the last `x-ratelimit-*` headers a call of this run saw
+RECORD_REFUSED = "github calls: the job summary cannot be written (setting: GITHUB_STEP_SUMMARY)"
 UNREACHABLE = re.compile(
     r"error connecting|dial tcp|no such host|could not resolve|connection (?:refused|reset)"
     r"|network is unreachable|i/o timeout|tls handshake|timed out|temporary failure in name",
@@ -413,9 +417,13 @@ UNREACHABLE = re.compile(
 )
 
 
-def rate_state() -> tuple[float | None, float] | None:
+LIMIT_KEYS = ("remaining", "limit")  # of the core limit that `rate_state` reads
+
+
+def rate_state(limit: bool = False) -> Any:
     """The core limit that GitHub reports (`GET rate_limit` is free): (remaining, reset), the
-    remaining None when not given; None when it cannot be read."""
+    remaining None when not given; with LIMIT, (remaining, limit, reset), the limit None when not
+    given (brief #1877 answer 1); None when it cannot be read."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["gh", "api", "--method", "GET", "rate_limit"],
         capture_output=True,
@@ -424,10 +432,65 @@ def rate_state() -> tuple[float | None, float] | None:
     )
     try:
         core = json.loads(proc.stdout)["resources"]["core"]
-        left = core.get("remaining")
-        return (None if left is None else float(left)), float(core["reset"])
+        left, most = (None if (v := core.get(k)) is None else float(v) for k in LIMIT_KEYS)
+        return (left, most, float(core["reset"])) if limit else (left, float(core["reset"]))
     except (ValueError, KeyError, TypeError, AttributeError):
         return None
+
+
+def count_call(method: str = "GET") -> None:
+    """Brief #1877 answer 2 (ADR-0776): one GitHub call made outside `gh` (the router's writes and
+    searches, the merger's direct calls), counted as `gh` counts its own."""
+    global CALLS, WRITES
+    CALLS += 1
+    WRITES += method.upper() in MUTATING
+
+
+def argv_method(argv: Sequence[str]) -> str:
+    """The method of a `gh api ARGV`: the named one, POST for GraphQL or a field, else GET."""
+    for flag in ("--method", "-X"):
+        if flag in argv[:-1]:
+            return str(argv[argv.index(flag) + 1]).upper()
+    fields = {"-f", "-F", "--field", "--raw-field", "--input"}
+    return "POST" if "graphql" in argv or fields.intersection(argv) else "GET"
+
+
+def limit_figure(value: Any) -> str:
+    found = number(None if value is None else str(value))
+    return "unknown" if found is None else str(int(found))
+
+
+def call_record() -> None:
+    """Brief #1877 answer 1 (ADR-0776): in GitHub Actions, after at least one call, one line of
+    counts and times in the log and the job summary; never an endpoint, a token or a body, and
+    never a change of the exit code."""
+    if os.environ.get("GITHUB_ACTIONS") != "true" or CALLS <= 0:
+        return
+    seen = LIMIT_SEEN
+    left, most, reset = (seen.get(f"x-ratelimit-{k}") for k in ("remaining", "limit", "reset"))
+    if left is None:
+        try:
+            state = rate_state(limit=True)
+        except OSError:  # no `gh` to ask
+            state = None
+        if state is not None:
+            left, most, reset = state
+    at = number(None if reset is None else str(reset))
+    when = "unknown" if at is None else f"{datetime.fromtimestamp(at, UTC):%H:%M}Z"
+    place = " / ".join(os.environ.get(k) or "unknown" for k in ("GITHUB_WORKFLOW", "GITHUB_JOB"))
+    line = (
+        f"github calls: {place}: {CALLS} calls ({CACHED} cached, {WRITES} writes, {WAITS} waits,"
+        f" {math.ceil(WAITED)} s waited); limit {limit_figure(left)} of {limit_figure(most)} left,"
+        f" resets {when}"
+    )
+    print(line, file=sys.stderr, flush=True)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            with open(summary, "a", encoding="utf-8") as out:
+                out.write(line + "\n")
+        except OSError:
+            print(RECORD_REFUSED, file=sys.stderr, flush=True)
 
 
 def number(text: str | None) -> float | None:
@@ -780,6 +843,7 @@ class ReadCache:
 
 
 CACHE = ReadCache()
+atexit.register(call_record)  # brief #1877: runs after CACHE.save (atexit runs last-first)
 atexit.register(CACHE.save)  # the 304s' new read times
 
 
@@ -930,7 +994,7 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     A GET goes through the read cache: `If-None-Match` with the last ETag, the cached body on a
     304 (counted in CACHED), and no request at all for a comment page that the plan's `since` read
     showed unchanged (brief #1251 build (b), ADR-0548)."""
-    global LAST_ERROR, CALLS, CACHED
+    global LAST_ERROR, CALLS, CACHED, WAITS, WAITED
     key = (endpoint, *extra)
     if MEMO is not None and method == "GET" and key in MEMO:
         return MEMO[key]
@@ -961,6 +1025,8 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
         if proc is None:  # brief #1336: the direct transport is off, or fell back for this call
             proc = run_gh(["--method", method, endpoint, *fields, *asked])
         status, headers, text = split_response(proc.stdout) if headed else (None, {}, "")
+        if "x-ratelimit-remaining" in headers:  # brief #1877 answer 1: the last limit seen
+            LIMIT_SEEN.update({k: v for k, v in headers.items() if k.startswith("x-ratelimit-")})
         if status == 304 and entry is not None:
             LAST_ERROR = ""
             CACHED += 1
@@ -990,6 +1056,7 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
         seconds = min(seconds, SECONDARY_CAP) if kind == "secondary" else seconds
         print(f"github: limited, waiting {math.ceil(seconds)} s ({wait_kind(kind, seconds)})",
               file=sys.stderr)  # fmt: skip
+        WAITS, WAITED = WAITS + 1, WAITED + seconds  # brief #1877 answer 2
         time.sleep(seconds)
         if capped:
             return None  # brief #1335 answer 4: the caller's unreadable path runs
@@ -1151,6 +1218,23 @@ def missed_verdict(comments: list, floor: int, head: str, authors: list[str] | N
     if latest and latest[0] > floor and head.startswith(latest[1].group(2)):
         return f"verdict {latest[1].group(1)} {latest[1].group(2)} (comment {latest[0]})"
     return None
+
+
+def builder_verdicts(comments: list, head: str, authors: list[str] | None) -> list:
+    """COMMENTS for the watch's verdict lines without a listed author's rule 3a fix list on exactly
+    HEAD, which is the merger's to apply and no builder event (brief #1879 answer 2,
+    `merge_cleared.accepted_adrs`), and without every listed verdict when the newest is one, since
+    only the newest counts; a `Verdict: cleared` stays the watch's event (session rule 1)."""
+    import merge_cleared  # merge_cleared imports this module
+
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    listed = [c for c in comments if author_of(c) in allowed and VERDICT.fullmatch(first_line(c))]
+    quiet = [c for c in listed if merge_cleared.accepted_adrs(c, head) is not None]
+    if not quiet:
+        return comments
+    latest = max(listed, key=lambda c: c.get("id", 0))
+    gone = listed if latest in quiet else quiet
+    return [c for c in comments if c not in gone]
 
 
 def label_of(pr: dict) -> str:
@@ -1462,12 +1546,13 @@ def watch(root, args: dict[str, str]) -> int:
                 approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
                 answerers = approvers | {a.lstrip("@").lower() for a in verdict_authors(root) or []}
                 head = str((pr.get("head") or {}).get("sha") or "")
+                heard = builder_verdicts(comments, head, authors)  # brief #1879
                 if first:  # what landed after the last Report: and before this watch started
                     first = False
                     floor = max(report_floor(comments, own), since)
                     if shown(
                         [
-                            missed_verdict(comments, floor, head, authors),
+                            missed_verdict(heard, floor, head, authors),
                             correction_line(comments, floor, authors, int(number)),
                             answer_line(comments, floor, own, answerers),
                         ]
@@ -1475,7 +1560,7 @@ def watch(root, args: dict[str, str]) -> int:
                         return 0
                 if shown(
                     [
-                        verdict_line(comments, seen, head, authors),
+                        verdict_line(heard, seen, head, authors),
                         correction_line(comments, seen, authors, int(number)),
                         answer_line(comments, seen, own, answerers),
                         approve_line(comments, max(seen, since), head, approvers),
@@ -3138,13 +3223,21 @@ def follow_up_owed(
     comments = pages(f"repos/{repo}/issues/{number}/comments")
     if comments is None:
         raise CheckError(f"slot: the comments of #{number} cannot be read")
+    import merge_cleared  # merge_cleared imports this module
+
+    head = str((full.get("head") or {}).get("sha") or "")
     verdicts = [
-        (c.get("id", 0), m.group(1))
+        (c.get("id", 0), m.group(1), c)
         for c in comments
         if author_of(c) in allowed and (m := VERDICT.match(first_line(c)))
     ]
-    if verdicts and max(verdicts)[1] == "fix list":
-        if not reports_after(repo, int(number or 0), max(verdicts)[0]):
+    newest_verdict = max(verdicts, key=lambda v: v[0]) if verdicts else None
+    if (
+        newest_verdict
+        and newest_verdict[1] == "fix list"
+        and merge_cleared.accepted_adrs(newest_verdict[2], head) is None  # brief #1879
+    ):
+        if not reports_after(repo, int(number or 0), newest_verdict[0]):
             return "fix list"
     return "answer" if answer_owed({**pull, **full}, comments, allowed | approvers) else None
 
@@ -4076,11 +4169,12 @@ def auto_merge_on(root) -> bool:
 
 
 def cleared_unmerged(comments: list, head: str) -> bool:
-    """The latest `Verdict:` comment clears exactly this head, as `merge_cleared.py` reads it."""
+    """The latest `Verdict:` comment clears exactly this head, as `merge_cleared.py` reads it:
+    `Verdict: cleared <head>` or a rule 3a fix list on it (brief #1879, amendment 225)."""
     import merge_cleared
 
     latest = merge_cleared.latest_verdict(comments)
-    return latest is not None and merge_cleared.first_line(latest) == f"Verdict: cleared {head}"
+    return latest is not None and merge_cleared.clears_head(latest, head)
 
 
 def review_line(

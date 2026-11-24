@@ -319,7 +319,7 @@ tests = [
 code = "scripts/agk/check_kit_tests.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_kit_tests_own_adr_status.py",
-  "tests/kit_dev/test_kit_tests_check_wiring.py",
+  "tests/kit_dev/test_kit_tests_check_wiring.py", "tests/kit_dev/test_gate_runner_map.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_licence_notice.py"
@@ -450,6 +450,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
+  "tests/kit_dev/test_uninstall_settings.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_python_pack.py",
   "tests/kit/test_conductor_tier.py", "tests/kit/test_autopilot_settings.py",
@@ -741,7 +742,9 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_github_call_record.py",
   "tests/kit_dev/test_shared_index_reference.py",
+  "tests/kit/test_autopilot_modes.py",
   "tests/kit/test_injection_set.py",
   "tests/kit/test_merge_cleared_clean.py",
   "tests/kit/test_merger_lapse.py",
@@ -1019,7 +1022,7 @@ code = "kit/templates/architecture.md"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_contracts.py"]
 [[testing.map]]
 code = "kit/templates/runtime/builder.txt"
-tests = ["tests/kit/test_layers_step.py"]
+tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py"]
 [[testing.map]]
 code = "kit/templates/protected-paths*.txt"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_project_mk_protected.py"]
@@ -1055,6 +1058,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_github_call_record.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
   "tests/kit/test_injection_set.py",
@@ -1103,6 +1107,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_github_call_record.py",
+  "tests/kit/test_autopilot_modes.py",
   "tests/kit_dev/test_kit_paths_resolved.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
@@ -1262,6 +1268,7 @@ tests = ["tests/kit/test_check_requirements.py", "tests/kit/test_retired_require
 code = "scripts/agk/uninstall.py"
 tests = [
   "tests/kit/test_route_reprove.py",
+  "tests/kit_dev/test_uninstall_settings.py",
   "tests/kit/test_uninstall_clean.py", "tests/kit/test_upgrade_clean_repo.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_uninstall.py",
 ]

@@ -598,6 +598,8 @@ def setting_on(data: dict) -> None:
 
 def gh_api(args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """`gh api ARGS`: the one way this command calls GitHub, an argument list with no shell."""
+    if session.RUN is not via_gh_api:  # brief #1877 answer 2: `shared_get` counts its own
+        session.count_call(session.argv_method(args))
     return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["gh", "api", *args], capture_output=True, text=True, encoding="utf-8", env=env
     )
@@ -705,8 +707,7 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
     verdict = latest_verdict(trusted(comments, allowed))
     if verdict is None:
         return "held", "no verdict (rule 3)"
-    first = first_line(verdict).removesuffix(FALLBACK)  # ADR-0431 decision 3: read as the same
-    if first != f"Verdict: cleared {sha}" and accepted_adrs(verdict, sha) is None:
+    if not clears_head(verdict, sha):
         return "held", "the latest verdict does not clear this head (rule 3)"
     if login(verdict) not in {a.lstrip("@").lower() for a in allowed}:
         return "held", (
@@ -790,6 +791,31 @@ def judge_head(
     """`judge_named` without the head it names."""
     state, reason, _ = judge_named(root, number, comments, sha, allowed)
     return state, reason
+
+
+def clears_head(verdict: dict, sha: str) -> bool:
+    """VERDICT clears exactly SHA (rule 3): `Verdict: cleared <sha>` (a ` (conductor fallback)`
+    ending read as the same, ADR-0431 decision 3) or a rule 3a fix list on SHA (`accepted_adrs`)."""
+    first = first_line(verdict).removesuffix(FALLBACK)
+    return first == f"Verdict: cleared {sha}" or accepted_adrs(verdict, sha) is not None
+
+
+def no_builder_event(comment: dict, sha: str) -> bool:
+    """COMMENT owes the builder nothing (brief #1879, ADR-0778): a `Verdict: cleared` waits for
+    its merge (Q-1391-1) and a rule 3a fix list on exactly the head SHA is the merger's to apply."""
+    cleared = first_line(comment).startswith("Verdict: cleared")
+    return cleared or accepted_adrs(comment, sha) is not None
+
+
+def builder_owed(comments: list[dict], sha: str, allowed: list[str] | None) -> list[dict]:
+    """COMMENTS without what owes the builder nothing: each `no_builder_event` comment, and every
+    `Verdict:` comment when the latest by an author in ALLOWED is one, since only the newest
+    verdict counts (brief #1879 answer 7); a stranger's verdict never hides a listed one, and with
+    no author known nothing older is dropped. `autopilot.pick` and `conductor.owed_of` read it."""
+    latest = latest_verdict(trusted(comments, allowed)) if allowed else None
+    if latest is not None and no_builder_event(latest, sha):
+        return [c for c in comments if not first_line(c).startswith("Verdict:")]
+    return [c for c in comments if not no_builder_event(c, sha)]
 
 
 def accepted_adrs(verdict: dict, sha: str) -> list[str] | None:

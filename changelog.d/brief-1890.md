@@ -1,0 +1,1 @@
+- A TypeScript product with the stock typescript-eslint config now meets the Node pack's lint floor: a floor rule typescript-eslint turns off is met by its replacement rule or, in a file a strict `tsconfig.json` checks, by the compiler, from a fixed table; every floor rule is still judged (brief #1890, ADR-0784, proposed amendment 230)
