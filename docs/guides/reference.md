@@ -1117,6 +1117,24 @@ imported page through the files server`, whatever `pixel_tolerance`. A page whos
 lists ends its line `; external: <n> not loaded (docs/design/imported/i<n>/external.txt)`; no URL is printed (brief
 #1828, ADR-0762).
 
+A found browser that fails is refused with the call's own rule and one fixed clause after `; `: `the browser could not
+start its sandbox (see ...)`, `the browser does not start its sandbox as root (see ...)`, `the browser did not finish within
+120 seconds`, `the browser could not be started` or `the browser failed (its own message: AGK_DESIGN_BROWSER_LOG=1)`; exit
+1, never `not run`, which is only for a missing browser. The clause holds none of the browser's text. With
+`AGK_DESIGN_BROWSER_LOG=1` (that exact value) a refused call also prints the last 20 lines of the browser's standard error to
+standard error, each starting `browser: `, the home folder written `~`; nothing of it is written to a file, and a passing
+call prints none of it. A sandbox cannot start on Linux kernels that restrict unprivileged user namespaces through AppArmor
+(Ubuntu 23.10 and later by default), when running as root, as cloud and container sessions do, and in containers without
+user namespaces. Without turning it off, run as a normal user, use a browser whose package brings its AppArmor profile
+(verify per distribution), or have the machine's administrator add a profile as Chromium's AppArmor note describes. The kit
+picks the first of `chromium`, `chromium-browser`, `google-chrome`, `google-chrome-stable` and `chrome` on PATH, so a
+`chromium` that cannot start its sandbox is chosen before a working `google-chrome`. The kit never adds `--no-sandbox`: the
+sandbox confines the renderer that runs a page's HTML, CSS and script, the imported pages are a customer's content that may
+hold script, and the offline flags stop the network, not local reads; without it a renderer flaw reached by such a page runs
+with the full rights of the account (the repository, the `gh` login, keys, the session's environment), and as root with the
+whole machine's. A person who turns it off on their own machine, with a browser wrapper of their own, takes that risk (brief
+#1876, ADR-0779).
+
 The `[design]` table of `agk.toml` (off when absent): `ui_paths`, the globs of the project's UI files (a brief whose
 `Touches:` meets one needs a `Screens:` line); `render`, the project's command that writes the built
 page of a screen and state into `AGK_DESIGN_OUT`; and `pixel_tolerance`, the share of a screenshot's pixels that may differ
