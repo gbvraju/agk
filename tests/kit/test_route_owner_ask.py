@@ -697,7 +697,7 @@ def test_1901_2_the_router_reads_the_owner_waits_id_match():
     """REQ-066: brief #1901 answer 2 (the id match is imported, not written twice)."""
     assert route.ANSWER_LINE is session.ANSWER_LINE
     assert route.QUESTION_ID is session.QUESTION_ID
-    assert "brief #1901" in (route.owner_ask.__doc__ or "")
+    assert "Brief #1901 (ADR-0788)" in (route.owner_ask.__doc__ or "")
 
 
 PARITY_1901 = [
