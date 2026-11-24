@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
 CHECK = "scripts/agk/check_new.py"
 TEST = "tests/kit/test_check_new.py"
@@ -267,3 +269,199 @@ def test_a_project_that_sets_the_retired_key_is_refused_naming_the_setting(repo)
     proc = repo.run("check_kit_tests.py")
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert REFUSED in proc.stdout and WHOLE not in proc.stdout
+
+
+# Brief #1878 (ADR-0777): the rules of the kit's own testing map that a quick record could miss
+# (every test that runs the gate runner is in the gates' entry; every map test name matches a test
+# file) live in the check, so prepush's governance step fails with or without --quick. The fixture
+# texts build the runner's file name in two parts and start no line with an import of it, so this
+# file is not itself a runner test.
+RUNNER = "run_gates"
+IMPORTS = f"import {RUNNER}\n"
+COMMAND = 'CMD = ["python3", "scripts/agk/' + RUNNER + '.py"]\n'
+DOC_ONLY = '"""Names scripts/agk/' + RUNNER + '.py in a docstring only."""\n'
+GATES = "scripts/agk/gates/*.py"
+LISTED = "tests/kit/test_listed.py"
+NEW = "tests/kit/test_a.py"
+MISSING_KIT = (
+    "FAIL kit-tests: 1 test files of tests/kit/ that run the gate runner are missing from "
+    "testing.map (setting: testing.map)"
+)
+GONE_LINE = (
+    "FAIL kit-tests: testing.map names a test file that does not exist for the gate steps "
+    "(setting: testing.map)"
+)
+STALE_LINE = "FAIL kit-tests: 1 testing.map test names match no test file (setting: testing.map)"
+
+
+def gates_toml(tests: list[str], branch: str = "main", extra: str = "") -> str:
+    names = ", ".join(f'"{t}"' for t in tests)
+    return (
+        f'default_branch = "{branch}"\n[testing]\nwhole_tests = ["{WHOLE}"]\n'
+        f'[[testing.map]]\ncode = "{GATES}"\ntests = [{names}]\n' + extra
+    )
+
+
+def gate_kit(repo, tests: list[str] | None = None, branch: str = "main") -> None:
+    """The kit with a gates entry naming `tests` and one listed runner test, on `main`."""
+    the_kit(repo, f'whole_tests = ["{WHOLE}"]\n')
+    toml = gates_toml([LISTED] if tests is None else tests, branch)
+    repo.commit({"agk.toml": toml, LISTED: IMPORTS})
+
+
+def test_a_new_runner_test_missing_from_the_gates_entry_fails_naming_the_class(repo):
+    """REQ-062: brief #1878 answers 2 and 7 (red on main: the #1870 miss)."""
+    gate_kit(repo)
+    repo.branch()
+    repo.commit({NEW: IMPORTS})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert MISSING_KIT in proc.stdout
+    assert "test_a" not in proc.stdout
+
+
+def test_a_listed_runner_test_and_a_docstring_mention_pass(repo):
+    """REQ-062: brief #1878 answers 6 and 7 (listed; a docstring is not a runner test)."""
+    gate_kit(repo)
+    repo.branch()
+    repo.commit({NEW: COMMAND, "agk.toml": gates_toml([LISTED, NEW])})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    repo.commit({"tests/kit_dev/test_doc.py": DOC_ONLY})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.splitlines()[-1].startswith("ok kit-tests (")
+
+
+def test_a_command_that_starts_the_runner_counts_in_the_dev_folder(repo):
+    """REQ-062: brief #1878 answer 2 (Q-30A-1: a command naming the runner's file counts)."""
+    gate_kit(repo)
+    repo.branch()
+    repo.commit({"tests/kit_dev/test_c.py": COMMAND})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert MISSING_KIT.replace("tests/kit/", "tests/kit_dev/") in proc.stdout
+
+
+def test_a_listed_runner_test_deleted_is_gone_and_stale(repo):
+    """REQ-062: brief #1878 answers 2, 3 and 6 (a deleted or renamed test leaves its name)."""
+    gate_kit(repo)
+    repo.branch()
+    repo.commit({LISTED: None})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert GONE_LINE in proc.stdout and STALE_LINE in proc.stdout
+    assert "test_listed" not in proc.stdout
+
+
+def test_a_map_name_that_matches_no_test_file_fails(repo):
+    """REQ-062: brief #1878 answer 3 (each glob of every entry, read every run)."""
+    gate_kit(repo)
+    extra = '[[testing.map]]\ncode = "scripts/agk/check_new.py"\ntests = ["tests/kit/test_no_*.py"]\n'
+    repo.commit({"agk.toml": gates_toml([LISTED], extra=extra)})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert STALE_LINE in proc.stdout and "test_no_" not in proc.stdout
+
+
+def test_with_a_base_an_untouched_runner_test_is_read_only_when_the_map_changes(repo):
+    """REQ-062: brief #1878 answers 2 and 7 (with a base, the change's own test files)."""
+    gate_kit(repo)
+    repo.commit({NEW: IMPORTS})  # on main itself: the base, so the change reads nothing
+    assert repo.run("check_kit_tests.py").returncode == 0
+    repo.branch()
+    repo.commit({"scripts/agk/reviewers.py": "x = 2\n"})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    repo.commit({"agk.toml": gates_toml([LISTED]) + "# the map changes\n"})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1 and MISSING_KIT in proc.stdout, proc.stdout
+
+
+def test_without_a_base_every_test_file_is_read(repo):
+    """REQ-062: brief #1878 answer 5 (no base resolves outside CI: every file, never a skip)."""
+    gate_kit(repo, branch="trunk")
+    repo.commit({NEW: IMPORTS})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1 and MISSING_KIT in proc.stdout, proc.stdout
+
+
+def test_an_untracked_runner_test_is_read(repo):
+    """REQ-062: brief #1878 answer 6 (an untracked new test is an added file)."""
+    gate_kit(repo)
+    repo.branch()
+    repo.write(NEW, IMPORTS)
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1 and MISSING_KIT in proc.stdout, proc.stdout
+
+
+def test_a_kit_without_a_gates_entry_misses_every_runner_test(repo):
+    """REQ-062: brief #1878 answer 5 (`[testing]` present without the gates entry)."""
+    gate_kit(repo)
+    extra = f'[[testing.map]]\ncode = "scripts/agk/check_new.py"\ntests = ["{LISTED}"]\n'
+    toml = f'default_branch = "main"\n[testing]\nwhole_tests = ["{WHOLE}"]\n' + extra
+    repo.commit({"agk.toml": toml})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1 and MISSING_KIT in proc.stdout, proc.stdout
+
+
+def test_a_test_file_that_cannot_be_parsed_is_named_by_its_folder(repo):
+    """REQ-062: brief #1878 answer 6 (a parse error is a FAIL naming the path class, no crash)."""
+    gate_kit(repo)
+    repo.branch()
+    repo.commit({"tests/kit/test_bad.py": "def (\n"})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "FAIL kit-tests: a test file of tests/kit/ cannot be read (path class: tests/kit/)" in (
+        proc.stdout
+    )
+    assert "Traceback" not in proc.stderr
+
+
+def test_a_bad_tests_value_is_refused_naming_the_setting(repo):
+    """REQ-062: brief #1878 answer 5 (refused by impact.testing_table before either rule)."""
+    gate_kit(repo)
+    toml = f'default_branch = "main"\n[testing]\nwhole_tests = ["{WHOLE}"]\n'
+    repo.commit({"agk.toml": toml + f'[[testing.map]]\ncode = "{GATES}"\ntests = "x-value"\n'})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode != 0
+    assert "setting: testing.map[1].tests" in proc.stdout + proc.stderr
+    assert "x-value" not in proc.stdout + proc.stderr
+
+
+def test_the_rules_read_only_the_kit_with_its_testing_table(repo):
+    """REQ-062: brief #1878 answer 4 (no table, no kit make file, no manifest: no rule)."""
+    the_kit(repo, None)  # the kit without [testing]: only the whole_tests line, no map rule
+    repo.commit({NEW: IMPORTS})
+    proc = repo.run("check_kit_tests.py")
+    assert "gate runner" not in proc.stdout and "testing.map" not in proc.stdout
+    repo.commit({KIT_MAKE: None, "agk.toml": gates_toml(["tests/kit/test_gone.py"])})
+    proc = repo.run("check_kit_tests.py")  # a kit-like repository: neither rule
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    repo.commit({"kit/manifest.json": None})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 0 and "nothing to check" in proc.stdout
+
+
+def test_a_quick_record_fails_at_governance_with_the_same_five_steps(repo, tmp_path):
+    """REQ-062: brief #1878 answers 1 and 7 (no passing quick record; the record is unchanged)."""
+    from test_prepush import path_with, scanner
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "agk" / "check_kit_tests.py"
+    gate_kit(repo)
+    mk = f'agk-governance:\n\t@"{sys.executable}" "{script}"\n'
+    repo.commit({"agk.mk": mk, "Makefile": "lint:\n\t@true\n"})
+    repo.branch()
+    repo.commit({NEW: IMPORTS})
+    outside = tmp_path / "outside"
+    record = outside / "record.json"
+    scan = scanner(outside / "bin", 0)
+    proc = repo.run(
+        "prepush.py", "--quick", "--no-lock", "--record", str(record), PATH=path_with(scan)
+    )
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    data = json.loads(record.read_text(encoding="utf-8"))
+    names = [s["name"] for s in data["steps"]]
+    assert names == ["pr-body", "lint", "governance", "secret-scan", "tests"]
+    governance = next(s for s in data["steps"] if s["name"] == "governance")
+    assert governance["outcome"] == "FAIL" and data["result"] == "failed"
