@@ -1479,13 +1479,13 @@ def watch(root, args: dict[str, str]) -> int:
                 approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
                 answerers = approvers | {a.lstrip("@").lower() for a in verdict_authors(root) or []}
                 head = str((pr.get("head") or {}).get("sha") or "")
-                quiet = builder_verdicts(comments, head, authors)  # brief #1879
+                heard = builder_verdicts(comments, head, authors)  # brief #1879
                 if first:  # what landed after the last Report: and before this watch started
                     first = False
                     floor = max(report_floor(comments, own), since)
                     if shown(
                         [
-                            missed_verdict(quiet, floor, head, authors),
+                            missed_verdict(heard, floor, head, authors),
                             correction_line(comments, floor, authors, int(number)),
                             answer_line(comments, floor, own, answerers),
                         ]
@@ -1493,7 +1493,7 @@ def watch(root, args: dict[str, str]) -> int:
                         return 0
                 if shown(
                     [
-                        verdict_line(quiet, seen, head, authors),
+                        verdict_line(heard, seen, head, authors),
                         correction_line(comments, seen, authors, int(number)),
                         answer_line(comments, seen, own, answerers),
                         approve_line(comments, max(seen, since), head, approvers),
