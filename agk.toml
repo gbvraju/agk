@@ -319,7 +319,7 @@ tests = [
 code = "scripts/agk/check_kit_tests.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_kit_tests_own_adr_status.py",
-  "tests/kit_dev/test_kit_tests_check_wiring.py",
+  "tests/kit_dev/test_kit_tests_check_wiring.py", "tests/kit_dev/test_gate_runner_map.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_licence_notice.py"
