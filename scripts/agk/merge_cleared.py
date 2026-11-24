@@ -598,6 +598,8 @@ def setting_on(data: dict) -> None:
 
 def gh_api(args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """`gh api ARGS`: the one way this command calls GitHub, an argument list with no shell."""
+    if session.RUN is not via_gh_api:  # brief #1877 answer 2: `shared_get` counts its own
+        session.count_call(session.argv_method(args))
     return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["gh", "api", *args], capture_output=True, text=True, encoding="utf-8", env=env
     )
