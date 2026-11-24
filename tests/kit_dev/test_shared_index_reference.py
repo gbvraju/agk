@@ -171,7 +171,9 @@ def test_light_merge_holds_only_for_the_clean_merge_tree(tmp_path):
 
 def test_a_list_of_the_reference_alone_replaces_the_default(tmp_path):
     root, head, _ = world(
-        tmp_path, {"agk.toml": CODE.replace("line 1", "x")}, {"agk.toml": CODE.replace("line 5", "y")}
+        tmp_path,
+        {"agk.toml": CODE.replace("line 1", "x")},
+        {"agk.toml": CODE.replace("line 5", "y")},
     )
     assert session_plan.reprove_kind(root, "main", head, FIVE) == ("light", ["agk.toml"])
     assert session_plan.reprove_kind(root, "main", head, [REFERENCE]) == ("full", ["agk.toml"])
@@ -201,6 +203,8 @@ def test_an_absent_setting_is_the_five(tmp_path):
 def test_a_value_that_is_not_exact_paths_is_refused_naming_the_setting(tmp_path, line, value):
     with pytest.raises(CheckError) as caught:
         session_plan.shared_indexes(flow_root(tmp_path, line))
-    assert str(caught.value) == "setting: flow.shared_indexes must be a list of exact repository paths"
+    assert (
+        str(caught.value) == "setting: flow.shared_indexes must be a list of exact repository paths"
+    )
     assert "docs/guides" not in str(caught.value)
     assert merge_cleared.shared_of({"flow": {"shared_indexes": value}}) is None
