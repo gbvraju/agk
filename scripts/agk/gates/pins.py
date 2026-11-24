@@ -14,8 +14,8 @@ line names the rule and the component class, never a name or a version (principl
 `[delivery] work_type`, no Accepted record or no runtime it knows, it prints `not run: no stack
 chosen`; in a project not adopted, while `docs/architecture.md`, the lock and every declared
 dependency are absent, it prints `not run: no foundation yet` (brief #1909, ADR-0791, amendment
-234), never `ok`. Lock line ends are normalised. The lock is made by the stack's own tool on the builder's
-machine, never here; the build file comes from `kit/templates/stacks/<folder>/` by
+234), never `ok`. Lock line ends are normalised. The lock is made by the stack's own tool on the
+builder's machine, never here; the build file comes from `kit/templates/stacks/<folder>/` by
 `engines.py stack-files`. The runner's interface (`RULE`, `check(root, playbook)`) is that of
 `scripts/agk/gates/` (brief #1586); `run_gates.py` runs it where a work type is declared
 (`applies`), prints `not run pins: no stack chosen` without a stack (`skipped`), and holds its
@@ -37,8 +37,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
 from common import utf8_output  # noqa: E402
-from gates import baseline  # noqa: E402
 from playbook_format import declaration  # noqa: E402
+
+from gates import baseline  # noqa: E402
 
 RULE = "SPEC-0072 rule 4: the stack's build file and lock are not pinned and in step"
 # runtime part name -> its template folder, build file, lock file and reader (amendment 201).
@@ -66,7 +67,7 @@ NO_STACK = "no stack chosen"
 NOT_RUN = f"not run: {NO_STACK}"
 # brief #1909 (ADR-0791, amendment 234): in a project not adopted, before the foundation.
 NO_FOUNDATION = "no foundation yet"
-ARCHITECTURE = "docs/architecture.md"  # `layers.RECORD`; layers imports this module, so not imported
+ARCHITECTURE = "docs/architecture.md"  # `layers.RECORD`: layers imports this module
 USAGE = "usage: python3 scripts/agk/gates/pins.py [--root DIR]"
 PEP508 = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*?)\s*(;.*)?$")
 EXACT_PY = re.compile(r"^==\s*([0-9][0-9A-Za-z.+!-]*)$")
