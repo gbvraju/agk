@@ -17,6 +17,7 @@ here (no network, no real install). Fixtures in `tmp_path` only: invented data (
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -96,18 +97,42 @@ for name in [n for n in names if bad(n)]:
 sys.exit(1 if any(bad(n) for n in names) else 0)
 """
 # The stand-in tsc: `--noEmit -p <config>` reports TS2322 for each `.ts` file under the config's
-# folder that holds `: number = "`, as `tsc --pretty false` prints it, relative to the cwd.
+# folder that holds `: number = "`, and TS7027 for one that holds `return 1;` then more code when
+# the config sets `"allowUnreachableCode": false`, as `tsc --pretty false` prints it, relative to
+# the cwd. `--listFilesOnly -p <config>` (brief #1890) prints the absolute path of each `.ts` file
+# under the config's folder, or under its `include` folders (none for `"files": []`), and fails
+# when `tsc-list-fails` exists.
 TSC = """
-import os, sys
+import os, re, sys
 conf = sys.argv[sys.argv.index("-p") + 1]
 base, bad = os.path.dirname(conf) or ".", []
-for top, dirs, names in os.walk(base):
-    dirs[:] = [d for d in dirs if d != "node_modules"]
-    for name in sorted(names):
-        path = os.path.relpath(os.path.join(top, name))
-        if name.endswith(".ts") and ': number = "' in open(path).read():
-            bad.append(path)
-            print(path + "(1,14): error TS2322: Type 'string' is not assignable to type 'number'.")
+text = open(conf).read()
+found = re.search(r'"include"\\s*:\\s*\\[([^\\]]*)\\]', text)
+none = re.search(r'"files"\\s*:\\s*\\[\\s*\\]', text) is not None
+dirs = re.findall(r'"([^"]+)"', found.group(1)) if found else [] if none else ["."]
+tops = [os.path.join(base, d) for d in dirs]
+listing = "--listFilesOnly" in sys.argv
+if listing and os.path.exists("tsc-list-fails"):
+    sys.exit(1)
+reach = re.search(r'"allowUnreachableCode"\\s*:\\s*false', text) is not None
+for root in tops if listing else [base]:
+    for top, dirs, names in os.walk(root):
+        dirs[:] = [d for d in dirs if d != "node_modules"]
+        for name in sorted(names):
+            path = os.path.relpath(os.path.join(top, name))
+            if not name.endswith(".ts"):
+                continue
+            if listing:
+                print(os.path.abspath(path))
+                continue
+            body = open(path).read()
+            if ': number = "' in body:
+                bad.append(path)
+                msg = "error TS2322: Type 'string' is not assignable to type 'number'."
+                print(path + "(1,14): " + msg)
+            if reach and "return 1;\\n  " in body:
+                bad.append(path)
+                print(path + "(3,3): error TS7027: Unreachable code detected.")
 sys.exit(2 if bad else 0)
 """
 STRICT = (
@@ -482,3 +507,196 @@ def test_the_real_prettier_keeps_a_crlf_files_line_end(
         (root / ".prettierrc").write_text(rc, encoding="utf-8")
     out = node_pack.format_check(root, [("frontend/greet.ts", "frontend/**")])
     assert bool(out) is fails, out
+
+
+# Brief #1890, ADR-0784: a floor rule that typescript-eslint turns off is met by its replacement
+# rule, or, for a TypeScript file a strict tsconfig.json checks, by the compiler (`EQUIVALENT`).
+# The 18 core rules typescript-eslint 8.46.2's `eslint-recommended` block turns off for `.ts`
+# files, and `no-unused-vars`, which its `recommended` set turns off for every file.
+TS_OFF = (
+    "constructor-super", "getter-return", "no-class-assign", "no-const-assign", "no-dupe-args",
+    "no-dupe-class-members", "no-dupe-keys", "no-func-assign", "no-import-assign",
+    "no-new-native-nonconstructor", "no-obj-calls", "no-redeclare", "no-setter-return",
+    "no-this-before-super", "no-undef", "no-unreachable", "no-unsafe-negation", "no-with",
+)  # fmt: skip
+TS_RULE = "@typescript-eslint/no-unused-vars"
+UNREACHABLE = 'export function total(): number {\n  return 1;\n  console.log("example.com");\n}\n'
+
+
+def stock(**over: object) -> dict[str, object]:
+    """The printed rules of the stock `js.configs.recommended` with typescript-eslint's
+    `recommended`, numeric severities as `--print-config` prints them."""
+    rules: dict[str, object] = dict(floor_rules(), **{r: [0] for r in TS_OFF})
+    rules.update({"no-unused-vars": [0], TS_RULE: [2], "no-var": [2]})
+    rules.update(over)
+    return rules
+
+
+def strict_with(extra: str = "") -> str:
+    return '{"compilerOptions": {"strict": true' + extra + "}}"
+
+
+def floor_ids(root: Path, rel: str = "frontend/greet.ts") -> list[str]:
+    entry = next(e for e in node_entries("web-app") if e["stack"] == "node")
+    lines = node_pack.floor(root, entry, [(rel, "frontend/**")])
+    return [ln.split("pack's rule ", 1)[1].split(" ", 1)[0].rstrip(",") for ln in lines]
+
+
+def test_the_stock_typescript_config_leaves_only_no_unreachable(tmp_path: Path) -> None:
+    """REQ-079: brief #1890 answers 1 to 3 and its Measured line (19 lines before, 1 after)."""
+    root = sample(tmp_path, rules=stock(), tsconfig=strict_with())
+    entry = next(e for e in node_entries("web-app") if e["stack"] == "node")
+    lines = node_pack.floor(root, entry, [("frontend/greet.ts", "frontend/**")])
+    assert lines == [
+        "SPEC-0072 rule 8: the configuration does not enable the pack's rule no-unreachable, or "
+        "the compiler with allowUnreachableCode off for a file a strict tsconfig.json checks "
+        "(setting: standards.config)"
+    ]
+    no_values("\n".join(lines))
+
+
+def test_allow_unreachable_code_false_meets_the_whole_floor(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1890 answer 2 (only `false` meets `no-unreachable`); the node-type step
+    then catches unreachable code as TS7027."""
+    for value, want in (("", ["no-unreachable"]), ("true", ["no-unreachable"]), ("false", [])):
+        extra = f', "allowUnreachableCode": {value}' if value else ""
+        root = sample(tmp_path / (value or "unset"), rules=stock(), tsconfig=strict_with(extra))
+        assert floor_ids(root) == want, value
+    root = tmp_path / "false"
+    assert gates(root, capsys)[0] == 0
+    (root / "frontend" / "greet.ts").write_text(UNREACHABLE, encoding="utf-8")
+    code, out = gates(root, capsys)
+    assert code == 1 and "standards node type: SPEC-0072 rule 6: type rule TS7027" in out
+
+
+def test_without_the_core_set_the_other_floor_rules_are_still_named(tmp_path: Path) -> None:
+    """REQ-079: brief #1890 answer 5 (61 before; 43, and 42 with allowUnreachableCode false)."""
+    rules = {k: [0] for k in floor_rules()}
+    rules.update({TS_RULE: [2], "no-var": [2]})
+    root = sample(tmp_path / "a", rules=rules, tsconfig=strict_with())
+    assert len(floor_ids(root)) == 43
+    root = sample(
+        tmp_path / "b", rules=rules, tsconfig=strict_with(', "allowUnreachableCode": false')
+    )
+    ids = floor_ids(root)
+    assert len(ids) == 42 and not set(ids) & set(TS_OFF) and "no-unused-vars" not in ids
+
+
+@pytest.mark.parametrize(
+    "tsconfig",
+    [
+        '{"compilerOptions": {"strict": false}}',
+        '{"compilerOptions": {"strict": true, "noImplicitAny": false}}',
+        '{"compilerOptions": {"strict": true, "strictNullChecks": false}}',
+    ],
+)
+def test_a_weak_compiler_meets_no_rule(tsconfig: str, tmp_path: Path) -> None:
+    """REQ-079: brief #1890 answer 2 (all 18 named, beside the type floor's own lines)."""
+    root = sample(tmp_path, rules=stock(), tsconfig=tsconfig)
+    assert sorted(floor_ids(root)) == sorted(TS_OFF)
+
+
+def test_a_javascript_file_meets_rules_by_rule_rows_only(tmp_path: Path) -> None:
+    """REQ-079: brief #1890 answers 2 and 6 (a `.js` file never meets a rule by the compiler)."""
+    rules = dict(floor_rules(), **{"no-unused-vars": [0], TS_RULE: [2]})
+    root = sample(tmp_path, rules=rules, name="price.test.js", tsconfig=strict_with())
+    assert floor_ids(root, "frontend/price.test.js") == []
+    (root / "eslint-rules.json").write_text(
+        json.dumps({"rules": dict(rules, **{"no-undef": "off"})}), encoding="utf-8"
+    )
+    assert floor_ids(root, "frontend/price.test.js") == ["no-undef"]
+
+
+def test_no_redeclare_needs_no_var_on(tmp_path: Path) -> None:
+    """REQ-079: brief #1890 answer 2 (TS2451 covers `let` and `const`, not `var`)."""
+    root = sample(tmp_path, rules=stock(**{"no-var": "off"}), tsconfig=strict_with())
+    assert floor_ids(root) == ["no-redeclare", "no-unreachable"]
+    (root / "eslint-rules.json").write_text(
+        json.dumps(
+            {"rules": stock(**{"no-var": "off", "@typescript-eslint/no-redeclare": "warn"})}
+        ),
+        encoding="utf-8",
+    )
+    assert floor_ids(root) == ["no-unreachable"]  # the replacement rule meets it
+
+
+def test_a_file_outside_the_program_or_a_failed_listing_meets_no_compiler_row(
+    tmp_path: Path,
+) -> None:
+    """REQ-079: brief #1890 answers 2 and 6 (`include`; a listing that fails: the safe side)."""
+    root = sample(
+        tmp_path / "a",
+        rules=stock(),
+        tsconfig='{"compilerOptions": {"strict": true}, "include": ["src"]}',
+    )
+    assert sorted(floor_ids(root)) == sorted(TS_OFF)
+    root = sample(tmp_path / "b", rules=stock(), tsconfig=strict_with())
+    (root / "tsc-list-fails").write_text("", encoding="utf-8")
+    assert sorted(floor_ids(root)) == sorted(TS_OFF)
+
+
+def test_a_strict_referenced_config_counts(tmp_path: Path) -> None:
+    """REQ-079: brief #1890 answers 2 and 6 (`references`: that config's program and options)."""
+    root = sample(tmp_path, rules=stock(), tsconfig=SOLUTION)
+    (root / "frontend" / "tsconfig.json").write_text(
+        strict_with(', "allowUnreachableCode": false'), encoding="utf-8"
+    )
+    assert floor_ids(root) == []
+    (root / "frontend" / "tsconfig.json").write_text(
+        '{"compilerOptions": {"strict": false}}', encoding="utf-8"
+    )
+    assert sorted(floor_ids(root)) == sorted(TS_OFF)
+
+
+@pytest.mark.parametrize(("level", "met"), [("warn", True), (1, True), ("off", False), (0, False)])
+def test_the_replacement_rule_counts_at_warn_and_not_at_off(
+    level: object, met: bool, tmp_path: Path
+) -> None:
+    """REQ-079: brief #1890 answer 6 (as core rules do)."""
+    root = sample(
+        tmp_path,
+        rules=stock(**{TS_RULE: level}),
+        tsconfig=strict_with(', "allowUnreachableCode": false'),
+    )
+    assert floor_ids(root) == ([] if met else ["no-unused-vars"])
+
+
+def test_the_table_only_names_floor_codes_and_compiler_codes() -> None:
+    """REQ-079: brief #1890 answer 8 (the table can neither add nor drop a floor code)."""
+    for work_type in ("web-app", "mobile"):
+        entry = next(e for e in node_entries(work_type) if e["stack"] == "node")
+        codes = entry["rules"]["codes"]
+        assert len(codes) == 61 and set(node_pack.EQUIVALENT) <= set(codes)
+    assert set(node_pack.EQUIVALENT) == {*TS_OFF, "no-unused-vars"}
+    for code, row in node_pack.EQUIVALENT.items():
+        assert set(row) <= {"rule", "compiler", "needs"} and ("rule" in row or "compiler" in row)
+        assert row.get("rule", f"@typescript-eslint/{code}") == f"@typescript-eslint/{code}"
+        for ts in row.get("compiler", ()):
+            assert re.fullmatch(r"TS\d+", ts), (code, ts)
+        assert row.get("needs") in (None, "allowUnreachableCode", "no-var")
+    assert node_pack.EQUIVALENT["no-unreachable"]["needs"] == "allowUnreachableCode"
+    assert node_pack.EQUIVALENT["no-redeclare"]["needs"] == "no-var"
+    assert "compiler" not in node_pack.EQUIVALENT["no-unused-vars"]
+
+
+def test_an_adopted_stock_config_lowers_the_held_floor(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079: brief #1890 answer 5 and its Measured line (`package.json 19` falls)."""
+    root = sample(tmp_path, rules=stock(), tsconfig=strict_with())
+    path = root / "agk.toml"
+    path.write_text(path.read_text(encoding="utf-8").replace('"init"', '"adopt"'), "utf-8")
+    base = root / "config" / "agk-baseline"
+    base.mkdir(parents=True)
+    (base / "standards-node-floor.txt").write_text("package.json 19\n", encoding="utf-8")
+    code, out = gates(root, capsys)
+    assert code == 0, out
+    assert "baseline standards node floor: a count fell in 1 file" in out
+    (base / "standards-node-floor.txt").write_text("package.json 1\n", encoding="utf-8")
+    (root / "eslint-rules.json").write_text(
+        json.dumps({"rules": stock(**{TS_RULE: "off"})}), encoding="utf-8"
+    )
+    code, out = gates(root, capsys)
+    assert code == 1, out  # 1 to 2: a held count rose
