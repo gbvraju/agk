@@ -1,6 +1,6 @@
 # ADR-0781: A clean project's plan render and derive-write read the plugin's playbooks (REQ-078)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1887, ADR-0697 (the playbook resolver of brief #1666), ADR-0759 (the kit's own files from the plugin

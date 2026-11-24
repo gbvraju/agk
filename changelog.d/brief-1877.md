@@ -1,1 +1,0 @@
-- Each kit job that calls GitHub in Actions (the router and the merger) ends with one `github calls:` line in its log and job summary: its calls, cached answers, writes, waits and the hourly limit left; nothing changes outside Actions (brief #1877)

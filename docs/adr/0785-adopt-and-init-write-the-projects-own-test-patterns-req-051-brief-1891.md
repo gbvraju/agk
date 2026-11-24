@@ -1,6 +1,6 @@
 # ADR-0785: Adopt and init write the project's own test patterns (REQ-051, REQ-010)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1891, ADR-0490 (front-end test folders in `test_dirs`), ADR-0769 (the Windows forms of `test_dirs`),

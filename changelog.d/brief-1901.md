@@ -1,1 +1,0 @@
-- An evidence `Answer: Q-<id>` by a listed answerer now clears the `agk:question` label for that maintainers question, as it already ends the owner wait (brief #1901)

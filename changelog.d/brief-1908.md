@@ -1,1 +1,0 @@
-- A project's derived playbook, written by `front_door.py derive-write` with its research record, can now be named in `[delivery] work_type` and is selected in both layouts; `run_gates.py` fails a declared playbook that fails `check_playbooks.py` (brief #1908)

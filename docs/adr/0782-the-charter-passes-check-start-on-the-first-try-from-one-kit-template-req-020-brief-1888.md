@@ -1,6 +1,6 @@
 # ADR-0782: The charter passes check-start on the first try, from one kit template (REQ-020)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers
 - Related: brief #1888, ADR-0043 (the start command), ADR-0075 (discovery and the Slice item), ADR-0101 (the vision step),

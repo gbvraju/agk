@@ -1,6 +1,6 @@
 # ADR-0775: The reference guide is a shared index of this repository, so a clean merge that only meets it takes the light re-prove (REQ-057)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1873, ADR-0495 (amendment 171, the light re-prove), ADR-0718 (amendment 216, the one-merge carry),

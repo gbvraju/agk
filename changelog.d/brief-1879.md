@@ -1,1 +1,0 @@
-- A review that only accepts a decision record (`Final: docs/adr/<file> Proposed -> Accepted` on the head) no longer wakes the builder: the supervisor, the watchdog, the builder slots and `session.py watch --pr` read it as no event, `review-queue` lists it `cleared, not merged` with `auto_merge` on, and the conductor merges it in the act of posting it (brief #1879)
