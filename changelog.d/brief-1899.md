@@ -1,0 +1,1 @@
+- A second `agk init` on a project whose first run added front-end test folders to `test_dirs` now reads them back from `agk.toml` and finishes with `unchanged agk.toml` instead of refusing a conflict (brief #1899)
