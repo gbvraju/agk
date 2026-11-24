@@ -297,3 +297,177 @@ def test_doctor_warns_a_stack_with_no_pack(tmp_path):
     assert line in proc.stdout.splitlines()
     data = json.loads(run_doctor(dirs, "--json").stdout)
     assert line in data["skills"]
+
+
+# --- a derived playbook named in the line (brief #1908, ADR-0790) -------------------------------
+
+DERIVED = "orders"
+FRONT_DOOR = SCRIPTS / "front_door.py"
+DERIVED_LINE = "work type: orders (playbook config/playbooks/orders.toml)"
+UNKNOWN_LINE = "rule 5: agk.toml: `work_type` is not one of the work types (setting: work_type)"
+MISSING_LINE = (
+    "rule 5: agk.toml: `work_type` names a work type whose playbook is missing under "
+    "config/playbooks/ (setting: work_type)"
+)
+
+
+def research_text() -> str:
+    """A research record of SPEC-0048 rule 6, from the derive tests (one source of its form)."""
+    spec = importlib.util.spec_from_file_location(
+        "derive_tests", Path(__file__).parent / "test_front_door_derive.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.record_text()
+
+
+def stub_plugin(where: Path, books: dict[str, str] | None = None) -> Path:
+    """A plugin folder `kit_root` accepts, holding only the playbooks named."""
+    (where / ".claude-plugin").mkdir(parents=True)
+    version = json.loads((KIT_ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8"))
+    (where / ".claude-plugin" / "plugin.json").write_text(json.dumps(version), encoding="utf-8")
+    (where / "scripts" / "agk").mkdir(parents=True)
+    (where / "scripts" / "agk" / "kit_root.py").write_text("", encoding="utf-8")
+    books_dir = where / "config" / "playbooks"
+    books_dir.mkdir(parents=True)
+    shutil.copy(KIT_ROOT / "config" / "playbooks" / "default.toml", books_dir / "default.toml")
+    for name, text in (books or {}).items():
+        (books_dir / f"{name}.toml").write_text(text, encoding="utf-8")
+    return where
+
+
+def derived_project(root: Path, layout: str, value: str = DERIVED, write: bool = True) -> Path:
+    """An invented project with a research record and the skeleton `derive-write` writes, then
+    the owner's line naming `value`; installed (the kit's playbooks copied in) or clean."""
+    root.mkdir(parents=True, exist_ok=True)
+    kit = ""
+    if layout == "installed":
+        shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
+    else:
+        kit = '\n[kit]\nlayout = "plugin"\n'
+    (root / "agk.toml").write_text(BASE_TOML + kit, encoding="utf-8")
+    record = root / "docs" / "research" / f"{DERIVED}.md"
+    record.parent.mkdir(parents=True)
+    record.write_text(research_text(), encoding="utf-8")
+    if write:
+        proc = subprocess.run(  # nosec B603 - fixed argument list
+            [sys.executable, str(FRONT_DOOR), "derive-write", "--slug", DERIVED]
+            + ["--modules", "api-service", "--root", str(root)],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+            cwd=root,
+            check=False,
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+    with (root / "agk.toml").open("a", encoding="utf-8") as handle:
+        handle.write(f'\n[delivery]\nwork_type = "{value}"\n')
+    return root
+
+
+@pytest.fixture
+def plugin_env(monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The clean layout's plugin, the kit itself (which ships no derived file), by the variable."""
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(KIT_ROOT))
+    return KIT_ROOT
+
+
+@pytest.mark.parametrize("layout", ["installed", "plugin"])
+def test_ac8_a_derived_playbook_named_in_the_line_is_selected(tmp_path, plugin_env, layout):
+    """REQ-055 AC8: SPEC-0048 rule 22 (the owner's line selects the project's derived playbook)."""
+    import check_playbooks
+    import engines
+
+    root = derived_project(tmp_path / "project", layout)
+    own = root / "config" / "playbooks" / f"{DERIVED}.toml"
+    assert playbook_format.declaration(root) == (DERIVED, [])
+    assert playbook_format.selected(root) == own
+    assert playbook_format.folder(root, DERIVED) == root / "config" / "playbooks"
+    assert check_playbooks.findings(root, [own]) == []
+    proc = check(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.splitlines()[0].startswith("ok playbooks (")
+    asked = engines.playbook_questions(root, None)
+    data = tomllib.loads(own.read_text(encoding="utf-8"))
+    assert asked and [q for _, q in asked] == [row["text"] for row in data["discovery"]]
+
+
+@pytest.mark.parametrize("layout", ["installed", "plugin"])
+def test_ac8_doctor_line_names_the_derived_playbook(tmp_path, plugin_env, layout):
+    """REQ-055 AC8: SPEC-0048 rule 22 (doctor's line names the derived playbook, both layouts)."""
+    root = derived_project(tmp_path / "project", layout)
+    assert doctor.work_type_line(root) == (DERIVED_LINE, False)
+
+
+def test_ac8_doctor_run_names_the_derived_playbook(tmp_path):
+    """REQ-055 AC8: SPEC-0048 rule 22 (a doctor run prints the line and fails no work type)."""
+    made = derived_project(tmp_path / "scratch", "installed")
+    dirs = doctor_target(tmp_path, f'\n[delivery]\nwork_type = "{DERIVED}"\n')
+    root = dirs["tree"]
+    for rel in (f"config/playbooks/{DERIVED}.toml", f"docs/research/{DERIVED}.md"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(made / rel, root / rel)
+    proc = run_doctor(dirs)
+    lines = proc.stdout.splitlines()
+    assert DERIVED_LINE in lines, proc.stdout
+    assert not [ln for ln in lines if ln.startswith("FAIL work type")], proc.stdout
+
+
+@pytest.mark.parametrize("layout", ["installed", "plugin"])
+@pytest.mark.parametrize(
+    ("case", "line"),
+    [
+        ("file-missing", MISSING_LINE),
+        ("record-missing", UNKNOWN_LINE),
+        ("default", UNKNOWN_LINE),
+        ("Orders", UNKNOWN_LINE),
+        ("ord_ers", UNKNOWN_LINE),
+        ("ord ers", UNKNOWN_LINE),
+        ("../x", UNKNOWN_LINE),
+        ("web-ap", UNKNOWN_LINE),
+    ],
+)
+def test_ac8_a_bad_derived_declaration_is_refused_naming_the_setting(
+    tmp_path, plugin_env, layout, case, line
+):
+    """REQ-055 AC8: SPEC-0038 rule 5 and SPEC-0048 rules 21 and 22 (refused, never the value)."""
+    value = DERIVED if case in ("file-missing", "record-missing") else case
+    root = derived_project(tmp_path / "project", layout, value, write=case != "file-missing")
+    if case == "record-missing":
+        (root / "docs" / "research" / f"{DERIVED}.md").unlink()
+    assert playbook_format.declaration(root) == (None, [line])
+    assert playbook_format.selected(root) is None
+    proc = check(root)
+    assert proc.returncode == 1
+    assert f"FAIL playbooks: {line}" in proc.stdout.splitlines(), proc.stdout
+    # the declaration's line never names the value (a playbook file's own line names its path)
+    assert all(value not in ln for ln in proc.stdout.splitlines() if "agk.toml" in ln)
+
+
+def test_ac8_a_clean_project_never_reads_a_derived_name_from_the_plugin(tmp_path, monkeypatch):
+    """REQ-055 AC8: SPEC-0048 rule 22 and Q-DP-2 (a derived playbook is the project's alone)."""
+    made = derived_project(tmp_path / "scratch", "installed")
+    text = (made / "config" / "playbooks" / f"{DERIVED}.toml").read_text(encoding="utf-8")
+    plugin = stub_plugin(tmp_path / "plugin", {DERIVED: text})
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin))
+    root = derived_project(tmp_path / "project", "plugin", write=False)
+    assert playbook_format.declaration(root) == (None, [MISSING_LINE])
+    assert playbook_format.folder(root, DERIVED) == root / "config" / "playbooks"
+
+
+def test_ac8_the_check_and_the_selection_accept_the_same_names(tmp_path, plugin_env):
+    """REQ-055 AC8: brief #1908 answer 8 (`problems` and `declaration` cannot disagree)."""
+    root = derived_project(tmp_path / "project", "installed")
+    books = root / "config" / "playbooks"
+    for name in ("web-app", DERIVED, "default", "web-ap"):
+        text = (books / f"{name if name != 'web-ap' else 'web-app'}.toml").read_text("utf-8")
+        target = books / f"{name}.toml"
+        if name == "web-ap":
+            target.write_text(text.replace('work_type = "web-app"', 'work_type = "web-ap"'), "utf-8")
+        agk = (root / "agk.toml").read_text(encoding="utf-8").split("\n[delivery]")[0]
+        (root / "agk.toml").write_text(agk + f'\n[delivery]\nwork_type = "{name}"\n', "utf-8")
+        checked = not any("is not one of the work types" in p for p in playbook_format.problems(target, root))
+        selected = playbook_format.declaration(root)[0] == name
+        assert checked == selected or name == "default", name
+        assert selected == (name in ("web-app", DERIVED)), name

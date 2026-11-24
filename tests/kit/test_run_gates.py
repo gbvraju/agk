@@ -275,3 +275,72 @@ def test_each_setting_leaves_the_no_pack_line_and_the_exit_code(
     assert run_gates.main(["--root", str(root)]) == 1  # brief #1776: pins, the build file missing
     out = capsys.readouterr().out
     assert NO_PACK in out and others(out) == others(first)
+
+
+# --- a declared playbook, derived or shipped, that fails its check (brief #1908, ADR-0790) --------
+
+DERIVED = "orders"
+DECLARED_FAILS = (
+    "FAIL gates: playbook: SPEC-0038 rule 5: the declared playbook fails check_playbooks.py "
+    "(setting: work_type)\n"
+)
+
+
+def _derived(tmp_path: Path) -> Path:
+    """An installed project with a research record, the skeleton `derive-write` writes and the
+    owner's line naming it (invented data, example.com hosts)."""
+    import importlib.util
+    import subprocess  # nosec B404 - fixed argument lists only, no shell
+
+    root = _project(tmp_path, None)
+    spec = importlib.util.spec_from_file_location(
+        "derive_tests", Path(__file__).parent / "test_front_door_derive.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    (root / "docs" / "research").mkdir(parents=True)
+    (root / "docs" / "research" / f"{DERIVED}.md").write_text(module.record_text(), "utf-8")
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(AGK / "front_door.py"), "derive-write", "--slug", DERIVED]
+        + ["--modules", "api-service", "--root", str(root)],
+        capture_output=True,
+        text=True,
+        cwd=root,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    with (root / "agk.toml").open("a", encoding="utf-8") as handle:
+        handle.write(f'\n[delivery]\nwork_type = "{DERIVED}"\n')
+    return root
+
+
+def test_a_declared_derived_playbook_runs_its_gates(
+    tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-055 AC8: SPEC-0048 rule 22 (the derived playbook's composed gates run)."""
+    root = _derived(tmp_path)
+    assert run_gates.main(["--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "FAIL" not in out
+    assert out.rstrip().splitlines()[-1].startswith("ok gates (")
+    assert "ok secrets\n" in out
+
+
+@pytest.mark.parametrize("kind", ["not-toml", "name-differs"])
+@pytest.mark.parametrize("name", [DERIVED, "web-app"])
+def test_a_declared_playbook_that_fails_its_check_runs_no_gate(
+    tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str], kind: str, name: str
+) -> None:
+    """REQ-055 AC8: brief #1908 answer 3, Q-DP-4 (the personal floor fails closed too)."""
+    root = _derived(tmp_path) if name == DERIVED else _project(tmp_path, name)
+    path = root / "config" / "playbooks" / f"{name}.toml"
+    text = path.read_text(encoding="utf-8")
+    if kind == "not-toml":
+        path.write_text("this is [ not toml\n", encoding="utf-8")
+    else:
+        path.write_text(text.replace(f'work_type = "{name}"', 'work_type = "api-service"'), "utf-8")
+    assert run_gates.main(["--root", str(root)]) == 1
+    out = capsys.readouterr().out
+    assert out == DECLARED_FAILS
+    assert name not in out.replace("playbooks.py", "")
