@@ -140,11 +140,13 @@ def test_a_non_python_stack_is_not_run_never_ok(tmp_path: Path, capsys) -> None:
     (root / "docs/adr/0003-stack-options.md").write_text(STACK_RECORD, encoding="utf-8")
     (root / "data/store.py").write_text("from api import routes\n", encoding="utf-8")
     code, out = _gates(root, capsys)
-    # brief #1776 (ADR-0742): with no `package.json` the pins step fails, and only it
-    assert code == 1
+    # brief #1909 (ADR-0791): an init project with no `package.json` and no architecture record
+    # waits for its foundation, so pins is not run (brief #1776 failed it here) and nothing fails
+    assert code == 0
     assert "not run layers: no reader for node\n" in out and "ok layers" not in out
+    assert "not run pins: no foundation yet\n" in out
     fails = [ln for ln in out.splitlines() if ln.startswith("FAIL")]
-    assert len(fails) == 1 and fails[0].startswith("FAIL gates: pins: SPEC-0072 rule 4"), fails
+    assert fails == [], fails
 
 
 def test_windows_line_ends_and_paths_compare_by_forward_slash(tmp_path: Path, capsys) -> None:

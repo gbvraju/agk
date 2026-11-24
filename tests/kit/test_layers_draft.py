@@ -264,6 +264,7 @@ OTHERS = {
     "scripts/agk/config.py": "documents the layer paths as the packs' default scope",
     "scripts/agk/gates/injection_set.py": "is not run until the record exists",
     "scripts/agk/gates/node_pack.py": "reads the layer paths as its default scope",
+    "scripts/agk/gates/pins.py": "reads whether the record exists, for its wait (brief #1909)",
     "scripts/agk/gates/python_pack.py": "reads the layer paths as its default scope",
     "scripts/agk/gates/tests_floor.py": "reads whether the record exists and the files in a layer",
     "scripts/agk/plan_sources.py": "its `architecture` source is docs/sources/, not the record",
