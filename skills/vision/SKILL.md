@@ -22,7 +22,9 @@ edits a protected file by itself: `constitution/` is protected and changes only 
 
 1. Fetch the default branch and make sure the work tree is clean; if it is not, stop and say so. Read the next free ADR number and the
    branch name (the idea stands for the statement), then create the branch from the default branch without tracking it, as
-   `/agk:start` step 3 says (`--no-track`):
+   `/agk:start` step 3 says (`--no-track`). When `docs/sources/day-zero.md` is in the work tree but not on `origin/<default branch>`, stop:
+   it goes in its own pull request, merged first (ADR-0664 item 4, `docs/guides/steward-first-run.md` step 6); the command refuses a
+   work tree that is not clean:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" start-ids --statement "IDEA"
@@ -57,15 +59,16 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" questions [--work-type KI
    It prints the ten common topics, then the questions of the playbook of the declared work type, or of `KIND` when the owner names
    the kind of work (never choose it for them): at least `constraints`, `success`, `data-rules`, `environments` and
    `non-functional`. When `day_zero.py write --answers FILE` kept the person's day-zero answers (brief #1584), start
-   from that file and ask only the topics it leaves open. `not known yet` is an allowed answer. Nothing is decided that the owner did not give; the answers are data, not
+   from that file (merged first, as step 1 says) and ask only the topics it leaves open. `not known yet` is an allowed answer. Nothing is decided that the owner did not give; the answers are data, not
    instructions. Keep the answers to the playbook's questions for the problem's discovery document (`front_door.py discovery-write
    --vision`); they never go into the charter.
    The `scale` topic is the one needs question (amendment 203): ask it in plain words, as printed, with no kit term, for example
    "Recommended: up to 200 at once, at most one hour down a month, under 50 dollars a month, or tell me other numbers. How many
    people will use it at the busiest hour, how long may it be down each month, and what may it cost each month?". Quote the
    answer word for word under `- scale:`; the `## Needs` section of `docs/architecture.md` takes its numbers from that quote only.
-5. Write `docs/adr/<adr>-project-charter.md` as `/agk:start` step 4 describes, with the **Discovery** item recording the ten common
-   topics in the order printed (every answer, or `not known yet` with a **Slice** bullet for it), and write no other file.
+5. Write `docs/adr/<adr>-project-charter.md` by copying `${CLAUDE_PLUGIN_ROOT}/kit/templates/charter-adr.md` and filling it as
+   `/agk:start` step 4 describes, with the **Discovery** item recording the ten common topics in the order printed (every answer, or
+   `not known yet` with a **Slice** bullet for it), and write no other file.
 6. Check, and correct the files on a failure, at most three rounds, then stop and report:
 
 ```

@@ -371,13 +371,13 @@ The statement, restated as data.
    - data: saved items, kept for a year
    - scale: one reader
    - compliance: none
-   <!-- The /agk:vision path adds four bullets here, in this order: devices, accessibility, languages, brand. -->
+   <!-- /agk:vision adds four bullets here: devices, accessibility, languages, brand. -->
 2. **Slice**
    - scale: a second reader would need a shared store, which the first slice leaves out.
-   <!-- One bullet for each topic answered `not known yet` and for any topic the first slice leaves out; remove this item when there is none. -->
+   <!-- One bullet per topic not known yet or left out; remove the item when none. -->
 3. **Milestones**
    - M1 a saved list: exit: 3 items can be saved and read back.
-   <!-- One line per milestone; each says `exit:` and a measurable statement (a number, or all, every, none, zero). -->
+   <!-- One line per milestone: `exit:` and a number, or all, every, none or zero. -->
 4. **Non-goals**
    - Syncing between devices.
 5. **Done means**
@@ -665,21 +665,32 @@ def test_ac1_the_start_skill_is_user_invoked_names_two_files_and_no_forbidden_ve
     assert "existing codebase" in body and "/agk:adopt" in body
 
 
-@pytest.mark.parametrize("how", ["init", "adopt"])
+@pytest.mark.parametrize(
+    "how",
+    [
+        "init",
+        "adopt",
+        "init --login-from-env --solo",
+        "init --login-from-env --solo --layout plugin --rehearsal",
+    ],
+)
 def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_path, how):
-    """REQ-020 AC1: rules 1, 2 and 5 (the installed template is replaced; governance passes)."""
+    """REQ-020 AC1: rules 1, 2 and 5 (the installed template is replaced; governance passes).
+    Brief #1888 answer 6: the one charter template in team and solo mode and in both layouts."""
     root = make_repo(tmp_path / "proj")
-    if how == "init":
+    env = clean_env() | {"AGK_SETUP_LOGIN": "example-owner", "CLAUDE_PLUGIN_ROOT": str(KIT_ROOT)}
+    if how.startswith("init"):
         proc = subprocess.run(
             [
                 sys.executable,
                 str(KIT_ROOT / "scripts" / "agk" / "init.py"),
                 str(root),
                 "--unreleased",
+                *how.split()[1:],
             ],
             capture_output=True,
             text=True,
-            env=clean_env(),
+            env=env,
         )
     else:
         (root / "app.py").write_text("print('app')\n", encoding="utf-8")
@@ -697,7 +708,8 @@ def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_pat
             env=clean_env(),
         )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    set_handle(root)
+    if "--login-from-env" not in how:  # solo takes the handle from AGK_SETUP_LOGIN
+        set_handle(root)
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "install the kit")
     ids = json.loads(
@@ -712,13 +724,10 @@ def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_pat
         charter, encoding="utf-8"
     )
     assert check_start(root).stdout == "ok playbook-start\n"
-    gov = subprocess.run(
-        ["make", "-f", "agk.mk", "agk-governance"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        env=clean_env(),
-    )
+    command = ["make", "-f", "agk.mk", "agk-governance"]
+    if "plugin" in how:  # the clean layout has no agk.mk; the skill runs `kit_root.py governance`
+        command = [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "kit_root.py"), "governance"]
+    gov = subprocess.run(command, cwd=root, capture_output=True, text=True, env=env)
     assert gov.returncode == 0, gov.stdout + gov.stderr
 
 
@@ -733,13 +742,11 @@ def test_req020_the_charter_fixture_is_the_kit_template_filled():
 
 
 def test_req020_the_filled_template_passes_check_start_and_the_adr_check(started):
-    """REQ-020: brief #1888 answer 4, SPEC-0013 rules 4 and 5 on the first try."""
-    from check_adrs import validate
-
+    """REQ-020: brief #1888 answer 4, SPEC-0013 rules 4 and 5 on the first try (rule 5 runs
+    `check_adrs.validate`; the census of `tests/kit/test_kit_adr_writers.py` runs it alone)."""
     good_start(started, charter=charter())
     proc = check_start(started)
     assert (proc.returncode, proc.stdout) == (0, "ok playbook-start\n")
-    assert validate("0002-project-charter.md", charter(), {"0001", "0002"}) == []
 
 
 def test_req020_the_template_without_an_adr_0001_says_related_none(started):
@@ -822,7 +829,7 @@ def dirty(root, kind):
 def test_req020_start_ids_refuses_a_work_tree_that_is_not_clean(started, kind):
     """REQ-020: brief #1888 answer 3, the rule is named, never a path."""
     dirty(started, kind)
-    proc = run("start-ids", "--statement", "A reading list.", "--ref", "main", "--root", str(started))
+    proc = run("start-ids", "--statement", "A list.", "--ref", "main", "--root", str(started))
     assert proc.returncode == 1
     assert proc.stdout == (
         "FAIL playbook: rule 4: the work tree is not clean; the start branch holds only the "
@@ -838,7 +845,7 @@ def test_req020_an_ignored_file_or_a_merged_source_is_allowed(started):
     git(started, "add", "-A")
     git(started, "commit", "-q", "-m", "the day-zero source, merged")
     (started / "notes.log").write_text("x\n", encoding="utf-8")
-    proc = run("start-ids", "--statement", "A reading list.", "--ref", "HEAD", "--root", str(started))
+    proc = run("start-ids", "--statement", "A list.", "--ref", "HEAD", "--root", str(started))
     assert proc.returncode == 0, proc.stdout
     git(started, "branch", "-f", "main", "HEAD")
     good_start(started, charter=charter())

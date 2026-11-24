@@ -33,7 +33,7 @@ def started(request):
 
 
 def charter_with(answers=None, slice_lines=None, topics=TOPICS, gap=""):
-    """The kit's charter template filled, with these Discovery bullets and, when given, Slice ones."""
+    """The kit's charter template filled, with these Discovery and, when given, Slice bullets."""
     answers = {**ANSWERS, **(answers or {})}
     return charter(topics, answers, () if slice_lines is None else slice_lines) + gap
 
