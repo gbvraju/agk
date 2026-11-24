@@ -61,6 +61,7 @@ version's `screenshots/` folder is written only by `design.py screenshots`, neve
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess  # nosec B404 - a fixed argument list, no shell
@@ -116,6 +117,77 @@ SCHEME = {
     "dark": "--blink-settings=preferredColorScheme=0",
     "light": "--blink-settings=preferredColorScheme=1",
 }
+# Why a found browser failed, from a closed list matched on its stderr (brief #1876, ADR-0779);
+# the clause never holds the browser's text. The kit never adds `--no-sandbox`.
+BROWSER_TIMEOUT = 120
+BROWSER_LOG = "AGK_DESIGN_BROWSER_LOG"
+GUIDE = 'see "Design screenshots and comparison" in docs/guides/reference.md'
+SANDBOX = ("No usable sandbox", "Failed to move to new namespace", "SUID sandbox helper binary")
+CAUSES = (
+    (SANDBOX, f"the browser could not start its sandbox ({GUIDE})"),
+    (
+        ("Running as root without --no-sandbox",),
+        f"the browser does not start its sandbox as root ({GUIDE})",
+    ),
+)
+
+
+class BrowserFailed(subprocess.CompletedProcess):
+    """A browser call that timed out or could not start: FAILED is its clause."""
+
+    def __init__(self, command: list[str], failed: str) -> None:
+        super().__init__(command, -1, "", "")
+        self.failed = failed
+
+
+class BrowserRefusal(CheckError):
+    """A refused browser call; LOG is its stderr tail for `AGK_DESIGN_BROWSER_LOG=1`."""
+
+    def __init__(self, message: str, log: list[str]) -> None:
+        super().__init__(message)
+        self.log = log
+
+
+def browser_run(command: list[str]) -> subprocess.CompletedProcess:
+    """Run a browser COMMAND; a timeout or a browser that cannot start is a result marked so."""
+    try:
+        return subprocess.run(  # nosec B603 - a fixed argument list, no shell
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=BROWSER_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        failed = f"the browser did not finish within {BROWSER_TIMEOUT} seconds"
+    except OSError:
+        failed = "the browser could not be started"
+    return BrowserFailed(command, failed)
+
+
+def browser_cause(result: subprocess.CompletedProcess) -> str:
+    """The one fixed clause that names why RESULT's browser failed."""
+    if isinstance(result, BrowserFailed):
+        return result.failed
+    for texts, clause in CAUSES:
+        if any(text in (result.stderr or "") for text in texts):
+            return clause
+    return f"the browser failed (its own message: {BROWSER_LOG}=1)"
+
+
+def browser_refusal(message: str, result: subprocess.CompletedProcess) -> BrowserRefusal:
+    """MESSAGE and the cause clause; the browser's stderr tail is printed by the command's main,
+    after the refusal line, only with `AGK_DESIGN_BROWSER_LOG=1`."""
+    home, text = str(Path.home()), result.stderr or ""
+    tail = (text.replace(home, "~") if home != "/" else text).splitlines()[-20:]
+    return BrowserRefusal(f"{message}; {browser_cause(result)}", [f"browser: {t}" for t in tail])
+
+
+def print_browser_log(error: CheckError) -> None:
+    if os.environ.get(BROWSER_LOG) == "1":
+        for line in error.log if isinstance(error, BrowserRefusal) else ():
+            print(line, file=sys.stderr)
 
 
 class UsageError(Exception):
@@ -195,11 +267,11 @@ def cmd_screenshots(root: Path, opts: dict[str, str]) -> int:
                 SCHEME[mode],
                 f"file://{folder / 'index.html'}",
             ]
-            proc = subprocess.run(  # nosec B603 - a fixed argument list, no shell
-                command, capture_output=True, text=True, encoding="utf-8"
-            )
+            proc = browser_run(command)
             if proc.returncode != 0 or not target.is_file():
-                raise CheckError("rule 6: the headless browser did not make a screenshot")
+                raise browser_refusal(
+                    "rule 6: the headless browser did not make a screenshot", proc
+                )
     print(f"wrote 4 screenshots in {MOCKUPS}/{name}/screenshots/")
     return 0
 
@@ -416,7 +488,8 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE, file=sys.stderr)
         return 2
     except CheckError as exc:
-        print(f"FAIL design: {exc}")
+        print(f"FAIL design: {exc}", flush=True)
+        print_browser_log(exc)
         return 1
 
 
