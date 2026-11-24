@@ -812,22 +812,17 @@ SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def screens_of(root: Path, name: str) -> str:
-    """The `- Screens:` line of the problem's discovery document; `open` when there is none."""
+    """The `- Screens:` line of the problem's discovery document; `open` when there is none.
+
+    Read by `design_inventory.screens_line`, the one reader of the line (brief #1889, ADR-0783).
+    """
+    import design_inventory  # the installed reader; imported here, when it is needed
+
     try:
         lines = (root / DIR / f"{name}.md").read_text(encoding="utf-8").split("\n")
     except (OSError, UnicodeDecodeError):
         return "open"
-    quoted = False
-    for ln in lines:
-        if START.match(ln) or ANSWER_START.match(ln):
-            quoted = True
-        elif ln in (END, ANSWER_END):
-            quoted = False
-        elif ln.startswith("## "):
-            break
-        elif not quoted and (m := re.match(r"^- Screens: (yes|no|open)$", ln)):
-            return m.group(1)
-    return "open"
+    return design_inventory.screens_line(lines) or "open"
 
 
 def artifact_problems(rel: str, text: str, root: Path) -> tuple[list[str], list[str]]:

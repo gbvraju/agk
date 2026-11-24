@@ -16,7 +16,8 @@ a missing part and a line that is not a field of the inventory. On the path from
 `### M<n> — <milestone>` section (`design.py inventory`, amendment 217) is checked like a
 requirement's, with `- Sources:` in place of `- Specs:`. An inventory with no screen fails, naming
 SPEC-0037 rule 3 and the path class `docs/design/`, when a discovery document of `docs/discovery/`
-says `- Screens: yes` or `open` outside its quoted blocks (brief #1756). A screen section may carry
+says `- Screens: yes` or `open` outside its quoted blocks (brief #1756), read by `screens_line`,
+the one reader of that line, past a quoted problem with its own `## ` lines (brief #1889). A screen section may carry
 `- Sources:`, the page it was written from on the prototype path, and `all_out_problems(root)`,
 run by `check_design.py`, fails each imported version whose `map.md` rows are all `out:` while the
 inventory lists no screen or is absent, naming SPEC-0037 rule 15 and the path class
@@ -48,7 +49,7 @@ MILESTONE_HEADING = re.compile(r"^(M\d+) — \S")
 MILESTONE_FIELDS = ("Sources", "Screens")
 DISCOVERY = "docs/discovery"
 DISCOVERY_SCREENS = re.compile(r"^- Screens: (yes|no|open)$")
-QUOTE_START = re.compile(r"^<!-- agk:(?:problem|answer) sha256=[0-9a-f]{64} -->$")
+QUOTE_START = re.compile(r"^<!-- agk:(problem|answer) sha256=[0-9a-f]{64} -->$")
 QUOTE_END = ("<!-- agk:problem-end -->", "<!-- agk:answer-end -->")
 SCREEN_FIELDS = ("Flow", "Pattern", "Links to")
 OPTIONAL_SCREEN_FIELDS = ("Sources",)  # a page's file on the prototype path (amendment 219)
@@ -186,9 +187,31 @@ def sectioned_requirements(text: str) -> set[str] | None:
     return {m.group(1) for heading, _ in parts["Requirements"] if (m := REQ_HEADING.match(heading))}
 
 
+def screens_line(lines: list[str]) -> str | None:
+    """The `- Screens:` value of a discovery document's lines, or None (brief #1889, ADR-0783).
+
+    Read outside its quoted blocks and before its first `## ` line outside them. A quote ends only
+    at its own end marker, so a person's quoted words (a vision with `## ` headings, a quoted
+    Screens line or answer marker) never end the walk and are never read.
+    """
+    closing = None
+    for raw in lines:
+        line = raw.removesuffix("\r")
+        if closing is not None:
+            if line == closing:
+                closing = None
+        elif match := QUOTE_START.match(line):
+            closing = QUOTE_END[0] if match.group(1) == "problem" else QUOTE_END[1]
+        elif line.startswith("## "):
+            return None
+        elif match := DISCOVERY_SCREENS.match(line):
+            return match.group(1)
+    return None
+
+
 def discovery_screens(root: Path) -> list[tuple[str, str]]:
-    """(path, `- Screens:` value) of each discovery document that has the line, outside its quoted
-    blocks and before its first `## ` part, in file name order."""
+    """(path, `- Screens:` value) of each discovery document that has the line (`screens_line`),
+    in file name order."""
     found: list[tuple[str, str]] = []
     folder = root / DISCOVERY
     for path in sorted(folder.glob("*.md")) if folder.is_dir() else []:
@@ -196,17 +219,8 @@ def discovery_screens(root: Path) -> list[tuple[str, str]]:
             lines = path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError):
             continue
-        quoted = False
-        for line in lines:
-            if QUOTE_START.match(line):
-                quoted = True
-            elif line in QUOTE_END:
-                quoted = False
-            elif line.startswith("## "):
-                break
-            elif not quoted and (match := DISCOVERY_SCREENS.match(line)):
-                found.append((f"{DISCOVERY}/{path.name}", match.group(1)))
-                break
+        if (value := screens_line(lines)) is not None:
+            found.append((f"{DISCOVERY}/{path.name}", value))
     return found
 
 
