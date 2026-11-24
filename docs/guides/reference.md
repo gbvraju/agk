@@ -22,7 +22,9 @@ the branch's commits (a missing `gitleaks` fails the run, naming the tool and th
 ADR-0306), and the tests that `test_plan.py` selects
 (`--quick` skips them). It prints `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one
 did, 2 on a usage error (session rule 31, ADR-0186). `--no-lock` leaves the heavy-step lock (`lock.py`, name `heavy`) of the
-tests step out, for CI. The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
+tests step out, for CI. In the kit, governance's `check_kit_tests.py` also holds the rules of the kit's own testing
+map (each test that runs the gate runner is in the `scripts/agk/gates/*.py` entry; each map test name matches a test
+file), so `--quick` fails on a map miss too, and a later rule over that map is added there (ADR-0777). The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
 `python3 scripts/agk/reviewers.py --codeowners` prints the rendered CODEOWNERS; with `--write` it writes the file (in an
 adopted repository only the marked block). `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
 
@@ -674,7 +676,10 @@ settings to tidy by hand first, then records, which stay as written.
 
 - **Deleted:** every kit file whose content (CRLF read as LF) equals a copy that some release row of the kit's
   `kit/hashes.json` lists for its path, whatever release the project was installed at; `agk.toml` when it holds only the kit's
-  settings; `.github/CODEOWNERS` when it is what the kit generates from `config/reviewers.yaml`.
+  settings; `.github/CODEOWNERS` when it is what the kit generates from `config/reviewers.yaml`. The kit's settings are the one
+  list `config.KIT_SETTINGS` (ADR-0786); a key of your own, also one inside a kit table, keeps `agk.toml`, named by key, never a
+  value. `config/reviewers.yaml` goes when it is a released template with its one maintainers handle filled in.
+- **Named, never deleted:** `config/agk-baseline/`, the gates' and the history scan's records of your project.
 - **Edited:** a file that holds the project's own lines and an agk block a release shipped (`.gitignore`, `.gitattributes`,
   `CLAUDE.md`, the pull request template, `CODEOWNERS`) loses the block only; the project's `Makefile` loses the line
   `include agk.mk` when `agk.mk` goes (targets that call `agk-*` are yours to change).
@@ -768,6 +773,17 @@ the launch skill print (ADR-0215). See [project-ci.md](project-ci.md#how-many-mi
 A private repository short of minutes can run its own heavy jobs on an ephemeral self-hosted runner, one job per runner, no
 secret beyond the job's own, never for forks, while governance and proof stay on GitHub-hosted runners:
 [self-hosted-runner.md](self-hosted-runner.md) (ADR-0217).
+
+## GitHub calls of a job
+
+A kit script that calls GitHub inside GitHub Actions (`GITHUB_ACTIONS=true`), such as the router's `route.py` and the
+merger's `merge_cleared.py`, ends with one line in its log and its job summary (`GITHUB_STEP_SUMMARY`):
+`github calls: <workflow> / <job>: <n> calls (<c> cached, <w> writes, <k> waits, <s> s waited); limit <r> of <l> left,
+resets <HH:MM>Z`. The limit figures are the last `x-ratelimit-*` headers a call saw, else one free `GET rate_limit`; a
+figure that cannot be read is `unknown`, never 0. A script that made no call, or runs outside Actions, prints nothing. The
+line names counts and times only, never changes the exit code, and a summary that cannot be written prints
+`github calls: the job summary cannot be written (setting: GITHUB_STEP_SUMMARY)`. The reads that the workflow files make
+themselves (governance's fetch steps) are not counted (brief #1877, ADR-0776).
 
 ## Where checks run
 
@@ -1116,6 +1132,24 @@ lets through; a shot of a page that server never served is refused, `rule 11: th
 imported page through the files server`, whatever `pixel_tolerance`. A page whose external references `external.txt`
 lists ends its line `; external: <n> not loaded (docs/design/imported/i<n>/external.txt)`; no URL is printed (brief
 #1828, ADR-0762).
+
+A found browser that fails is refused with the call's own rule and one fixed clause after `; `: `the browser could not
+start its sandbox (see ...)`, `the browser does not start its sandbox as root (see ...)`, `the browser did not finish within
+120 seconds`, `the browser could not be started` or `the browser failed (its own message: AGK_DESIGN_BROWSER_LOG=1)`; exit
+1, never `not run`, which is only for a missing browser. The clause holds none of the browser's text. With
+`AGK_DESIGN_BROWSER_LOG=1` (that exact value) a refused call also prints the last 20 lines of the browser's standard error to
+standard error, each starting `browser: `, the home folder written `~`; nothing of it is written to a file, and a passing
+call prints none of it. A sandbox cannot start on Linux kernels that restrict unprivileged user namespaces through AppArmor
+(Ubuntu 23.10 and later by default), when running as root, as cloud and container sessions do, and in containers without
+user namespaces. Without turning it off, run as a normal user, use a browser whose package brings its AppArmor profile
+(verify per distribution), or have the machine's administrator add a profile as Chromium's AppArmor note describes. The kit
+picks the first of `chromium`, `chromium-browser`, `google-chrome`, `google-chrome-stable` and `chrome` on PATH, so a
+`chromium` that cannot start its sandbox is chosen before a working `google-chrome`. The kit never adds `--no-sandbox`: the
+sandbox confines the renderer that runs a page's HTML, CSS and script, the imported pages are a customer's content that may
+hold script, and the offline flags stop the network, not local reads; without it a renderer flaw reached by such a page runs
+with the full rights of the account (the repository, the `gh` login, keys, the session's environment), and as root with the
+whole machine's. A person who turns it off on their own machine, with a browser wrapper of their own, takes that risk (brief
+#1876, ADR-0779).
 
 The `[design]` table of `agk.toml` (off when absent): `ui_paths`, the globs of the project's UI files (a brief whose
 `Touches:` meets one needs a `Screens:` line); `render`, the project's command that writes the built

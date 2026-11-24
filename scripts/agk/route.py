@@ -136,6 +136,7 @@ from session import (
     READY_REPORTS,  # noqa: F401 - route.READY_REPORTS is the one list (brief #1568)
     RED_TITLE,
     ROUTER_PAIR,
+    count_call,
     gh,
     is_red,
     pages,
@@ -256,6 +257,7 @@ class ReadOnly(Exception):
 
 def write(endpoint: str, *extra: str, method: str, what: str = "rule 2: a label") -> None:
     """One write with `gh api`; a 403 is `ReadOnly`, any other failure a CheckError."""
+    count_call(method)  # brief #1877 answer 2
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["gh", "api", "--method", method, endpoint, *who_fields(endpoint, method, extra, "router")],
         capture_output=True,
@@ -306,6 +308,7 @@ def search_once(endpoint: str) -> dict | None:
     """One `gh api` GET of a search; None when it fails for any reason. A rate limit is a failed
     search here, never a wait (brief #1263 answer 6b): the search limit is not the core limit
     that `session.gh` waits for, and the caller falls back to paging at once."""
+    count_call("GET")  # brief #1877 answer 2
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["gh", "api", "--method", "GET", endpoint],
         capture_output=True,

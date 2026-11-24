@@ -1,0 +1,1 @@
+- Governance's kit-tests check now fails when a test that runs the gate runner is missing from the kit's testing map, or a map test name matches no test file, so a quick prepush record catches it before the hosted run (brief #1878, ADR-0777)

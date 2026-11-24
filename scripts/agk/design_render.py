@@ -20,7 +20,8 @@ reads it; without a browser every entry reads `not run`.
 `screenshots/` is written only by `design.py screenshots`, never by hand. The browser runs with
 `design.OFFLINE` (`--host-resolver-rules=MAP * ~NOTFOUND` and `--no-proxy-server`), so no request
 leaves the machine; `proxied(port)` is the flags of the one call through `design_compare.py`'s files
-server (ADR-0762). Messages name the rule, never a value.
+server (ADR-0762). Messages name the rule, never a value; a found browser that fails adds one
+fixed cause, `design.browser_cause` (brief #1876, ADR-0779).
 """
 
 from __future__ import annotations
@@ -100,10 +101,10 @@ def measure(browser: str, page: Path, width: int, mode: str) -> bool:
             design.SCHEME[mode],
             wrapper.as_uri(),
         ]
-        proc = _run(command)
+        proc = design.browser_run(command)
     found = MARK.search(proc.stdout or "")
     if proc.returncode != 0 or found is None:
-        raise CheckError("rule 8: the headless browser did not measure a page")
+        raise design.browser_refusal("rule 8: the headless browser did not measure a page", proc)
     return found.group(1) == "sideways"
 
 
@@ -117,9 +118,9 @@ def shoot(browser: str, page: Path, width: int, mode: str, target: Path) -> None
         design.SCHEME[mode],
         page.resolve().as_uri(),
     ]
-    proc = _run(command)
+    proc = design.browser_run(command)
     if proc.returncode != 0 or not target.is_file():
-        raise CheckError("rule 8: the headless browser did not make a screenshot")
+        raise design.browser_refusal("rule 8: the headless browser did not make a screenshot", proc)
 
 
 def _paeth(a: int, b: int, c: int) -> int:

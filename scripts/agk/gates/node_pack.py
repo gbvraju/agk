@@ -12,7 +12,10 @@ paths of `[architecture] layers`, as for Python), less hidden, `node_modules/`, 
 the kit's own `lint_paths`, it runs these steps:
 
 - `floor` (rule 8): `eslint --print-config <file>` shows every rule id of `rules.codes` at `error`
-  or `warn`, never `off` or absent, else it names each missing id;
+  or `warn`, never `off` or absent, or the fixed table `EQUIVALENT` meets it (brief #1890,
+  ADR-0784): typescript-eslint's replacement rule on, or, for a `.ts` or `.tsx` file that
+  `tsc --listFilesOnly` lists for a strict config, the compiler (with the row's extra condition);
+  else it names each missing id;
 - `node-lint`: `eslint --max-warnings 0` (a "File ignored" notice of the config's own `ignores` is
   not counted);
 - `node-format`: `prettier --check --end-of-line auto --config-precedence file-override`: each
@@ -78,6 +81,42 @@ CONFIG_HELD = "the pack's configuration is held (setting: standards.config)"
 # the project's own prettier configuration or `.editorconfig` sets one.
 FORMAT_FLAGS = ("--check", "--end-of-line", "auto", "--config-precedence", "file-override")
 
+# Brief #1890, ADR-0784: what else meets a floor rule that typescript-eslint 8.46.2 turns off
+# (`eslint-recommended-raw.js`, its `ts(<n>)` comments; `recommended` for `no-unused-vars`). A kit
+# table, never a setting (Q-TL-1); no row removes a code from `rules.codes`. `rule`: the
+# replacement rule, on at `error` or `warn`; `compiler`: the compiler's codes, met only for a
+# TypeScript file a strict config's program lists; `needs`: the compiler's extra condition,
+# `allowUnreachableCode` false in that config or `no-var` on in the printed configuration.
+EQUIVALENT: dict[str, dict[str, Any]] = {
+    "constructor-super": {"compiler": ("TS2335", "TS2377")},
+    "getter-return": {"compiler": ("TS2378",)},
+    "no-class-assign": {"compiler": ("TS2629",)},
+    "no-const-assign": {"compiler": ("TS2588",)},
+    "no-dupe-args": {"compiler": ("TS2300",)},
+    "no-dupe-class-members": {
+        "rule": "@typescript-eslint/no-dupe-class-members",
+        "compiler": ("TS2393", "TS2300"),
+    },
+    "no-dupe-keys": {"compiler": ("TS1117",)},
+    "no-func-assign": {"compiler": ("TS2630",)},
+    "no-import-assign": {"compiler": ("TS2632", "TS2540")},
+    "no-new-native-nonconstructor": {"compiler": ("TS7009",)},
+    "no-obj-calls": {"compiler": ("TS2349",)},
+    "no-redeclare": {
+        "rule": "@typescript-eslint/no-redeclare",
+        "compiler": ("TS2451",),
+        "needs": "no-var",
+    },
+    "no-setter-return": {"compiler": ("TS2408",)},
+    "no-this-before-super": {"compiler": ("TS2376", "TS17009")},
+    "no-undef": {"compiler": ("TS2304", "TS2552")},
+    "no-unreachable": {"compiler": ("TS7027",), "needs": "allowUnreachableCode"},
+    "no-unsafe-negation": {"compiler": ("TS2365", "TS2322", "TS2358")},
+    "no-unused-vars": {"rule": "@typescript-eslint/no-unused-vars"},
+    "no-with": {"compiler": ("TS1101", "TS2410")},
+}
+CHECKED = "for a file a strict tsconfig.json checks"
+
 Tally = dict[str, int]
 
 
@@ -127,9 +166,67 @@ def _on(value: object) -> bool:
     return level not in OFF and level not in ("0",) and level is not None
 
 
+def _strict(opts: dict[str, Any] | None) -> bool:
+    return (
+        opts is not None
+        and opts.get("strict") is True
+        and not any(opts.get(o) is False for o in STRICT_OFF)
+    )
+
+
+def _same(a: str, b: str) -> bool:
+    return a.lower() == b.lower() if os.name == "nt" else a == b
+
+
+def compiled(root: Path, rel: str) -> list[dict[str, Any]]:
+    """The merged options of each strict config whose program lists REL (`tsc --listFilesOnly`),
+    only for a `.ts` or `.tsx` file; a listing that fails names nothing (brief #1890 answer 2)."""
+    if Path(rel).suffix not in TYPED or not (root / TSCONFIG).is_file() or not tool(root, "tsc"):
+        return []
+    out = []
+    for path, _ in configs(root):
+        opts = options(root, path)
+        if opts is None or not _strict(opts):
+            continue
+        argv = ["--listFilesOnly", "-p", path.relative_to(root).as_posix()]
+        proc = _run(root, "tsc", argv)
+        listed = proc.stdout.splitlines() if proc.returncode == 0 else []
+        if any(_same(_rel(root, ln.strip()), rel) for ln in listed if ln.strip()):
+            out.append(opts)
+    return out
+
+
+def _met(code: str, rules: dict[str, Any], strict: list[dict[str, Any]]) -> bool:
+    row = EQUIVALENT.get(code, {})
+    if _on(rules.get(code, "off")) or ("rule" in row and _on(rules.get(row["rule"], "off"))):
+        return True
+    if "compiler" not in row:
+        return False
+    need = row.get("needs")
+    if need == "no-var":
+        return bool(strict) and _on(rules.get("no-var", "off"))
+    if need == "allowUnreachableCode":
+        return any(o.get("allowUnreachableCode") is False for o in strict)
+    return bool(strict)
+
+
+def _missing(code: str) -> str:
+    row = EQUIVALENT.get(code, {})
+    shown = code if isinstance(code, str) and RULE_ID.match(code) else "of the pack"
+    text = f"{shown} or {row['rule']}" if "rule" in row else shown
+    if "compiler" in row:
+        need = {
+            "no-var": " with no-var on",
+            "allowUnreachableCode": " with allowUnreachableCode off",
+        }
+        text += f", or the compiler{need.get(str(row.get('needs')), '')} {CHECKED}"
+    return text
+
+
 def floor(root: Path, entry: dict[str, Any], found: list[tuple[str, str]]) -> list[str]:
-    """Rule 8: each pinned rule id that the resolved configuration leaves off or absent."""
-    rules = None
+    """Rule 8: each pinned rule id that the resolved configuration leaves off or absent and that
+    no row of `EQUIVALENT` meets (brief #1890)."""
+    rules, read = None, ""
     for rel, _ in found[:20]:  # a file the config ignores resolves to no config; try the next
         proc = _run(root, "eslint", ["--print-config", rel])
         try:
@@ -137,19 +234,19 @@ def floor(root: Path, entry: dict[str, Any], found: list[tuple[str, str]]) -> li
         except ValueError:
             data = None
         if isinstance(data, dict) and isinstance(data.get("rules"), dict):
-            rules = data["rules"]
+            rules, read = data["rules"], rel
             break
     if rules is None:
         return [f"{FLOOR}: {UNREADABLE} (setting: standards.config)"]
-    out = []
-    for code in entry.get("rules", {}).get("codes", []):
-        if not _on(rules.get(code, "off")):
-            shown = code if isinstance(code, str) and RULE_ID.match(code) else "of the pack"
-            out.append(
-                f"{FLOOR}: the configuration does not enable the pack's rule {shown} "
-                "(setting: standards.config)"
-            )
-    return out
+    codes = entry.get("rules", {}).get("codes", [])
+    off = [c for c in codes if not _on(rules.get(c, "off"))]
+    strict = compiled(root, read) if any("compiler" in EQUIVALENT.get(c, {}) for c in off) else []
+    return [
+        f"{FLOOR}: the configuration does not enable the pack's rule {_missing(code)} "
+        "(setting: standards.config)"
+        for code in off
+        if not _met(code, rules, strict)
+    ]
 
 
 def _count(tally: Tally | None, rel: str) -> None:

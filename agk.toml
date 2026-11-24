@@ -319,7 +319,7 @@ tests = [
 code = "scripts/agk/check_kit_tests.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_kit_tests_own_adr_status.py",
-  "tests/kit_dev/test_kit_tests_check_wiring.py",
+  "tests/kit_dev/test_kit_tests_check_wiring.py", "tests/kit_dev/test_gate_runner_map.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_licence_notice.py"
@@ -450,6 +450,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
+  "tests/kit_dev/test_uninstall_settings.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_python_pack.py",
   "tests/kit/test_conductor_tier.py", "tests/kit/test_autopilot_settings.py",
@@ -473,6 +474,7 @@ tests = [
   "tests/kit/test_check_design_prototype.py", "tests/kit_dev/test_design_inventory.py",
   "tests/kit_dev/test_design_prototype.py", "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit/test_design_import.py", "tests/kit/test_design_inventory_update.py",
+  "tests/kit_dev/test_design_browser_errors.py",
 ]
 [[testing.map]]
 code = "scripts/agk/design_brand.py"
@@ -485,7 +487,9 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/design_compare.py"
-tests = ["tests/kit_dev/test_design_compare.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit_dev/test_design_compare.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_design_browser_errors.py",
+]
 [[testing.map]]
 code = "scripts/agk/design_inventory.py"
 tests = [
@@ -514,6 +518,7 @@ tests = [
 code = "scripts/agk/design_render.py"
 tests = [
   "tests/kit_dev/test_design_compare.py", "tests/kit_dev/test_design_render.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_design_browser_errors.py",
 ]
 [[testing.map]]
 code = "scripts/agk/design_signoff.py"
@@ -736,6 +741,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_github_call_record.py",
   "tests/kit_dev/test_shared_index_reference.py",
   "tests/kit/test_injection_set.py",
   "tests/kit/test_merge_cleared_clean.py",
@@ -1050,6 +1056,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_github_call_record.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
   "tests/kit/test_injection_set.py",
@@ -1098,6 +1105,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_github_call_record.py",
   "tests/kit_dev/test_kit_paths_resolved.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
@@ -1257,6 +1265,7 @@ tests = ["tests/kit/test_check_requirements.py", "tests/kit/test_retired_require
 code = "scripts/agk/uninstall.py"
 tests = [
   "tests/kit/test_route_reprove.py",
+  "tests/kit_dev/test_uninstall_settings.py",
   "tests/kit/test_uninstall_clean.py", "tests/kit/test_upgrade_clean_repo.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_uninstall.py",
 ]
