@@ -186,6 +186,7 @@ def test_brief_1899_a_persons_list_in_the_kit_form_is_unchanged(tmp_path, capsys
         "test_dirs = ['tests', 'e2e']",  # reformatted by hand
         'test_dirs = "e2e"',  # a string, not a list
         'test_dirs = ["tests", 3]',  # a list holding a non-string
+        'test_dirs = ["tests", "./e2e"]',  # read as one folder (ADR-0769), so not the file's form
     ],
 )
 def test_brief_1899_a_reformatted_or_non_list_line_still_refuses(line, tmp_path, capsys):

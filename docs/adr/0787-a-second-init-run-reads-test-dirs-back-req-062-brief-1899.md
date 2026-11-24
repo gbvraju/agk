@@ -21,14 +21,15 @@ rendered from the tree and was never read back. The owner's word (2026-11-24, th
 
 ## Decision
 
-1. `init.existing_test_dirs(target)` returns the `test_dirs` value of the target's existing `agk.toml` when it is a list
-   of strings, else None (no file, unreadable, not TOML, no key or another type). The render of `agk.toml` writes that
+1. `init.existing_test_dirs(target)` returns the `test_dirs` value of the target's existing `agk.toml`, read through
+   `common.load_config` (each entry one folder, ADR-0769), when it is a list of strings, else None (no file,
+   unreadable, not TOML or another type; a missing key reads as the default `["tests"]`, the template's line). The render of `agk.toml` writes that
    list on the `test_dirs` line in the kit's form (`test_dirs = ` and the JSON of the list); only when it is None does it
    fall back to the first-run detection, `found_test_dirs`, unchanged.
 2. A re-run does not detect again: a front-end folder made after the first run is not added (`Q-1898-2`); `adopt` is
    the merge path and doctor's warning still names the folder.
-3. A line a person reformatted (single quotes, several lines, a comment) still compares `differs` and refuses as today;
-   init never rewrites a person's file.
+3. A line a person reformatted (single quotes, several lines, a comment, or an entry `load_config` reads in another
+   form, such as `./e2e`) still compares `differs` and refuses as today; init never rewrites a person's file.
 4. An older install's `pyproject.toml` `[tool.agk]` is not read for `test_dirs` (`Q-1898-1`).
 5. `tests/kit/test_test_dirs_front_end.py` re-runs init on front-end trees in both layouts, and one case runs init twice
    on a tree holding every folder of `FRONT_END_TEST_DIRS` and test files of each kind, asserting the second run plans
