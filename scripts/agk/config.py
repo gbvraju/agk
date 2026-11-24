@@ -954,6 +954,49 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
 }
 TOP_LEVEL = "top level"
 
+# --- every setting the kit reads in agk.toml (brief #1892, ADR-0786) ----------------------------
+# The top-level keys a reader takes that DEFAULT_CONFIG does not hold, each with its reader.
+TOP_KEYS: frozenset[str] = frozenset(
+    {
+        "version",  # upgrade.py, doctor.py: the installed release
+        "installed",  # adopt.py: the install date
+        "mode",  # init or adopt (also in DEFAULT_CONFIG)
+        "paused",  # common.paused (ADR-0196)
+        "experimental_reviewer",  # common.EXPERIMENTAL_KEY
+        "execution",  # common.execution: hosted, hybrid, pool or local
+        "governance",  # common.governance_level (SPEC-0041 rule 31)
+        "project_lint_paths",  # config.project_lint_paths (ADR-0669)
+        "touched_files",  # config.touched_files (ADR-0773)
+        "rule_tags_from",  # common.RULE_TAGS_FROM
+        "lock_dir",  # lock.lock_folder
+        "lock_stale_minutes",  # lock.py
+        "lock_slots",  # common.lock_slots
+        "lock_cleanup",  # common.lock_cleanup
+    }
+)
+# The tables read by name that have no TABLE_KEYS row; judged by name only.
+OTHER_TABLES: frozenset[str] = frozenset(
+    {
+        "personal",  # common.personal_table (SPEC-0041); its keys are common.PERSONAL_KEYS
+        "guard",  # config.guard_settings
+        "models",  # config.model_settings and its sub-tables
+        "failures",  # config.failures_settings
+        "scorecard",  # config.scorecard_settings
+        "caps",  # config.caps_settings
+        "autopilot",  # config.autopilot_settings, launch.py
+        "locks",  # common.py: the lock queue
+        "rules",  # rules.py
+        "proof",  # common.py
+        "checklist",  # checklist.py
+        "cost",  # metrics.py
+        "tidy",  # session.py
+        "engines",  # doctor.py
+    }
+)
+KIT_SETTINGS: frozenset[str] = (
+    frozenset(DEFAULT_CONFIG) | TOP_KEYS | frozenset(TABLE_KEYS) | OTHER_TABLES
+)
+
 
 def misplaced_settings(source: dict) -> list[tuple[str, str, tuple[str, ...]]]:
     """(key, where it is, the tables it belongs to) for each key of TABLE_KEYS found at the top

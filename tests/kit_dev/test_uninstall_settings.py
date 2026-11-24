@@ -28,8 +28,9 @@ ROOT = Path(__file__).resolve().parents[2]
 AGK = ROOT / "scripts" / "agk"
 sys.path.insert(0, str(AGK))
 import common  # noqa: E402
-import config  # noqa: E402
 import uninstall  # noqa: E402
+
+import config  # noqa: E402
 
 REVIEWERS = ("kit/templates/reviewers.yaml", "kit/templates/reviewers.adopt.yaml")
 TOML_TEMPLATES = ("kit/templates/agk.toml", "kit/templates/agk.adopt.toml")
@@ -51,7 +52,7 @@ BASELINE_LINE = (
     "kept config/agk-baseline/ (path class config/agk-baseline/: the gates' and the history "
     "scan's records of your project; delete by hand if no longer wanted)"
 )
-# An adopted web project of the clean layout: only the kit's settings, `project_lint_paths` among them.
+# An adopted web project of the clean layout: the kit's settings only, `project_lint_paths` too.
 WEB_TOML = (
     'mode = "adopt"\nversion = "2.0.0"\ninstalled = "2026-11-24"\ndefault_branch = "main"\n'
     'test_dirs = ["tests"]\ntest_patterns = ["*.test.js"]\nlint_paths = ["scripts/agk"]\n'
@@ -264,7 +265,7 @@ def test_the_names_missing_on_main_are_kit_settings_now():
     assert inner - config.KIT_SETTINGS == inner
 
 
-# --- answer 9 (b): every template name is listed ---------------------------------------------------
+# --- answer 9 (b): every template name is listed -------------------------------------------------
 
 HEAD = re.compile(r"^#?\s*\[([A-Za-z_][\w-]*)(?:\.[\w.-]+)?\]\s*$")
 KEY = re.compile(r"^#?\s*([A-Za-z_][\w-]*)\s*=")
@@ -348,7 +349,10 @@ def test_an_adopted_clean_project_loses_its_kit_settings_and_reviewers(
 )
 def test_an_installed_init_project_solo_and_team(tmp_path, kit, capsys, review, src, handle, kept):
     """REQ-009: answers 4, 7 and 9 (d): the installed layout, no licence or history lines."""
-    files = {"agk.toml": INIT_TOML.format(review=review), "config/reviewers.yaml": rendered(src, handle)}
+    files = {
+        "agk.toml": INIT_TOML.format(review=review),
+        "config/reviewers.yaml": rendered(src, handle),
+    }
     target = project(tmp_path, files)
     code, out = run(capsys, target)
     assert code == 0, out
@@ -405,8 +409,8 @@ def test_the_persons_own_keys_keep_agk_toml_named_by_key(tmp_path, kit, capsys):
         "project_lint_paths = 7\n",  # outside the reader's form: still the kit's name
         "\n[proof]\nx = 1\n\n[caps]\nS = { tokens = 1, hours = 1 }\n\n[tidy]\na = 1\n"
         "\n[checklist]\na = 1\n\n[cost]\na = 1\n\n[scorecard]\na = 1\n\n[failures]\na = 1\n"
-        "\n[capacity]\nprofile = \"auto\"\n\n[engines]\nvision = \"v\"\n\n[models.routes]\n"
-        "mid = { task = \"t\" }\n\n[guard]\ndeny_paths = []\n",
+        '\n[capacity]\nprofile = "auto"\n\n[engines]\nvision = "v"\n\n[models.routes]\n'
+        'mid = { task = "t" }\n\n[guard]\ndeny_paths = []\n',
     ],
 )
 def test_every_kit_setting_counts_as_the_kits(tmp_path, kit, capsys, extra):
@@ -434,6 +438,7 @@ def test_unreadable_toml_and_an_empty_baseline(tmp_path, kit, capsys):
     (target / "config" / "agk-baseline").mkdir(parents=True)
     code, out = run(capsys, target)
     assert code == 0, out
-    assert "changed agk.toml (path class agk.toml: not readable TOML; kept for you to decide)" in out
+    assert (
+        "changed agk.toml (path class agk.toml: not readable TOML; kept for you to decide)" in out
+    )
     assert not any(ln.startswith("kept config/agk-baseline/") for ln in out)
-

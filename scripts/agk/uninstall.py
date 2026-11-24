@@ -18,9 +18,12 @@ row of `kit/hashes.json` lists for its path is deleted, whatever version the tar
 at; a kit file the project changed is listed, never deleted. A marked agk block is taken out of a
 file that holds the project's own lines too, and only when the block is one a release shipped; the
 line `include agk.mk` leaves the project's Makefile when `agk.mk` goes. `agk.toml` goes when it
-holds only the kit's settings. The project's own work (answer 3: requirements, ADRs, specs, briefs,
-the vision, the design documents, the records under docs/runs/, the tests other than the kit's own
-tests/kit/) is never deleted or edited; `--remove-docs` lists it for the person to delete by hand.
+holds only the kit's settings (`config.KIT_SETTINGS`, and in a table with a key set only its keys;
+brief #1892, ADR-0786), and `config/reviewers.yaml` when it is a released template with its one
+maintainers handle filled in; `config/agk-baseline/` is named, never deleted. The project's own
+work (answer 3: requirements, ADRs, specs, briefs, the vision, the design documents, the records
+under docs/runs/, the tests other than the kit's own tests/kit/) is never deleted or edited;
+`--remove-docs` lists it for the person to delete by hand.
 A legacy install (kits 0.1.0 and 0.2.0, stamped `[tool.agk]` in pyproject.toml) loses that table.
 The GitHub side (answer 4) is printed, never done, in order (brief #1124, ADR-0481). `--pause`
 (answer 1) adds the top-level line `paused = true` to agk.toml.
@@ -47,10 +50,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from adopt import MARKERS
-from common import DEFAULT_CONFIG, CheckError, lf, matches, paused, read_list, without_agent
+from common import (
+    PERSONAL_KEYS,
+    PERSONAL_TABLE,
+    CheckError,
+    lf,
+    matches,
+    paused,
+    read_list,
+    without_agent,
+)
 from init import KIT_ROOT as KIT_ROOT  # noqa: PLC0414 - tests point it at a fixture kit
 from init import MANIFEST, TABLE, Refusal, check_interpreter, passes_symlink, path_class
 from reviewers import ReviewerError, parse, render_codeowners
+
+from config import KIT_SETTINGS, TABLE_KEYS
 
 USAGE = (
     "usage: uninstall.py TARGET [--write] [--remove-docs] [--agreed PATH ...] | "
@@ -99,9 +113,17 @@ PLUGIN_COMMANDS = ("claude plugin uninstall agk@agk", "claude plugin marketplace
 # The project's own work (answer 3), never deleted or edited; a kit TEMPLATE.md is not in it.
 OWN_FILES = ("docs/requirements.md", "docs/build-state.md", "constitution/vision.md")
 OWN_DIRS = ("docs/adr/", "docs/specs/", "docs/briefs/", "docs/runs/", "docs/design/", "tests/")
-# Settings the kit reads that its templates do not list as `key =` lines.
-MORE_SETTINGS = {"version", "installed", "mode", "paused", "experimental_reviewer"}
-SETTING_LINE = re.compile(r"^#?\s*\[?([A-Za-z_][\w-]*)\]?\s*(=|$)")
+REVIEWERS = "config/reviewers.yaml"
+PLACEHOLDER = "@REPLACE-ME"
+HANDLE = re.compile(r"@[A-Za-z0-9][A-Za-z0-9._-]*")
+# Brief #1892 answer 5 (ADR-0786): kit-written, but the project's own records; named, never deleted.
+BASELINE = "config/agk-baseline/"
+BASELINE_DETAIL = (
+    f" (path class {BASELINE}: the gates' and the history scan's records of your project; delete "
+    "by hand if no longer wanted)"
+)
+# The tables whose keys are known one by one (answer 2); every other table is judged by name.
+KEYED_TABLES: dict[str, frozenset[str]] = {**TABLE_KEYS, PERSONAL_TABLE: frozenset(PERSONAL_KEYS)}
 
 
 @dataclass
@@ -183,20 +205,35 @@ def template_sources(manifest: dict) -> dict[str, set[str]]:
     return out
 
 
-def kit_settings(kit_root: Path, manifest: dict) -> set[str]:
-    """Every top-level key and table name the kit reads in agk.toml: its defaults, the lines of its
-    templates (set or commented out), and the few it reads that no template line sets."""
-    names = set(DEFAULT_CONFIG) | MORE_SETTINGS
-    for src in template_sources(manifest).get("agk.toml", set()):
-        try:
-            text = (kit_root / src).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for line in text.splitlines():
-            match = SETTING_LINE.match(line)
-            if match and (match.group(2) == "=" or line.lstrip("# ").startswith("[")):
-                names.add(match.group(1))
-    return names
+def kit_settings() -> frozenset[str]:
+    """Every top-level key and table name the kit reads in agk.toml: `config.KIT_SETTINGS`, the one
+    list a test keeps whole against every reader (brief #1892 answer 1, ADR-0786); a template's
+    text no longer decides."""
+    return KIT_SETTINGS
+
+
+def foreign_settings(data: dict, known: frozenset[str] = KIT_SETTINGS) -> list[str]:
+    """The names in DATA (a parsed agk.toml) the kit does not read, sorted, never a value: a
+    top-level name outside KNOWN (a table's key standing at the top level among them, ADR-0527),
+    and `<table>.<key>` for a key outside the key set of a table that has one (answer 2)."""
+    found = [name for name in data if name not in known]
+    for table, keys in KEYED_TABLES.items():
+        value = data.get(table)
+        if isinstance(value, dict):
+            found += [f"{table}.{key}" for key in value if key not in keys]
+    return sorted(found)
+
+
+def placeholder_text(text: str) -> str | None:
+    """TEXT of config/reviewers.yaml with its one maintainers handle put back to the template's
+    placeholder (answer 4), or None when the file does not parse or names no one plain handle."""
+    try:
+        team = parse(text)["teams"]["maintainers"]["github_team"]
+    except (ReviewerError, KeyError, TypeError, AttributeError):
+        return None
+    if not isinstance(team, str) or not HANDLE.fullmatch(team) or team == PLACEHOLDER:
+        return None
+    return text.replace(team, PLACEHOLDER)
 
 
 def locate(text: str, style: str) -> tuple[str, int, int, list[str]]:
@@ -236,7 +273,7 @@ class Reader:
         self.templates = released(table, "templates")
         self.sources = template_sources(self.manifest)
         self.styles = block_styles(self.manifest)
-        self.settings = kit_settings(kit_root, self.manifest)
+        self.settings = kit_settings()
         self.codeowners = codeowners_of(target)
 
     def paths(self) -> list[str]:
@@ -253,11 +290,25 @@ class Reader:
             return True
         if digest(normalized(data)) in self.blocks.get(rel, set()):
             return True  # a file that adopt wrote whole, as its block's text
+        if rel == REVIEWERS and self.is_rendered_template(rel, data):
+            return True
         return (
             rel == CODEOWNERS
             and self.codeowners is not None
             and data == lf(self.codeowners.encode("utf-8"))
         )
+
+    def is_rendered_template(self, rel: str, data: bytes) -> bool:
+        """A released template of REL with its one maintainers handle filled in, as init and
+        adopt write it (`init.apply_setup`; brief #1892 answer 4)."""
+        try:
+            back = placeholder_text(data.decode("utf-8"))
+        except UnicodeDecodeError:
+            return False
+        if back is None:
+            return False
+        mark = digest(back.encode("utf-8"))
+        return any(mark in self.templates.get(src, set()) for src in self.sources.get(rel, set()))
 
     def is_kit_block(self, rel: str, inner: str) -> bool:
         data = inner.encode("utf-8")
@@ -282,7 +333,7 @@ def agk_toml_item(target: Path, reader: Reader, entries: list[str]) -> Item:
         data = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return changed("agk.toml", entries, "not readable TOML")
-    unknown = sorted(k for k in data if k not in reader.settings)
+    unknown = foreign_settings(data, reader.settings)
     if unknown:
         return changed("agk.toml", entries, f"settings the kit does not read: {', '.join(unknown)}")
     return Item("agk.toml", "delete", " (the kit's settings only)")
@@ -462,6 +513,10 @@ def build_plan(target: Path, kit_root: Path, agreed: tuple[str, ...] = ()) -> Pl
             )
         )
     makefile_item(target, plan)
+    baseline = target / BASELINE
+    if not passes_symlink(target, BASELINE.rstrip("/")) and baseline.is_dir():
+        if any(p.is_file() for p in baseline.rglob("*")):
+            plan.items.append(Item(BASELINE, "kept", BASELINE_DETAIL))
     if clean_layout(target):
         clean_items(target, kit_root, reader, plan, agreed)
     elif agreed:
