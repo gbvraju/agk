@@ -276,10 +276,10 @@ def test_req078_render_names_the_projects_own_playbook_the_same_way(clean: Path)
     """REQ-078, ADR-0697: the project's own `web-app.toml` wins; the line is the same text."""
     designed(clean)
     source = (KIT_ROOT / "config/playbooks/web-app.toml").read_text(encoding="utf-8")
-    write_file = clean / "config/playbooks/web-app.toml"
-    write_file.parent.mkdir(parents=True)
-    write_file.write_text(source, encoding="utf-8")
-    assert playbook_format.selected(clean) == write_file
+    own = clean / "config/playbooks/web-app.toml"
+    own.parent.mkdir(parents=True)
+    own.write_text(source, encoding="utf-8")
+    assert playbook_format.selected(clean) == own
     out = intake(clean, "render", "--proposals", str(sliced_file(clean)))
     assert out.returncode == 0, out.stdout + out.stderr
     assert LINE in out.stdout.splitlines()
@@ -295,4 +295,5 @@ def test_req078_the_line_never_resolves_the_root(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(playbook_format, "split", lambda root: (["line"], []))
     monkeypatch.setattr(playbook_format, "selected", lambda root: other)
     line = plan_intake.milestone_order(Path("."))
-    assert line == "Milestone order for the person: demo value (playbook config/playbooks/web-app.toml)"
+    head = "Milestone order for the person: demo value"
+    assert line == f"{head} (playbook config/playbooks/web-app.toml)"
