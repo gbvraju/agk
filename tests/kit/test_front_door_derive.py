@@ -620,3 +620,26 @@ def test_req078_a_refused_skeleton_leaves_no_folder_in_a_clean_project(clean: Pa
     done = clean_derive(clean, "--layers", str(path))
     assert done.returncode == 1 and "key: allow" in done.stdout, done.stdout + done.stderr
     assert not (clean / "config/playbooks").exists()
+
+
+@pytest.mark.parametrize("where", ["skeleton", "findings"])
+def test_req078_a_failure_after_the_folders_leaves_none_in_a_clean_project(
+    clean: Path, monkeypatch: pytest.MonkeyPatch, where: str
+) -> None:
+    """REQ-078 (brief #1887 answer 5): an exception other than a refusal, in the skeleton or in the
+    check, leaves no file and no `config/playbooks/` behind."""
+    import front_door
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("an invented failure")
+
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(KIT_ROOT))
+    if where == "skeleton":
+        monkeypatch.setattr(front_door, "skeleton", broken)
+    else:
+        monkeypatch.setattr(check_playbooks, "findings", broken)
+    before = tree(clean)
+    with pytest.raises(RuntimeError):
+        front_door.derive_write({"--slug": SLUG}, clean)
+    assert not (clean / "config/playbooks").exists()
+    assert tree(clean) == before

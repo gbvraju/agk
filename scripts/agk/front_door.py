@@ -1258,6 +1258,14 @@ def drafted_layers(path: str, adr: str | None) -> list[str]:
     return layers.toml_text(found, [(a, b, adr or e) for a, b, e in allow], tests.pop())
 
 
+def _undo(target: Path, made: list[Path]) -> None:
+    """Removes the derived file and the folders `derive_write` made for it, innermost first."""
+    target.unlink(missing_ok=True)
+    for folder in made:
+        if folder.is_dir() and not any(folder.iterdir()):
+            folder.rmdir()
+
+
 def derive_write(opts: dict[str, str], root: Path) -> int:
     """Rule 22: writes the skeleton, or refuses and leaves nothing behind."""
     name = opts["--slug"]
@@ -1294,15 +1302,19 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
     base = tomllib.loads(base_path.read_text(encoding="utf-8"))
     import check_playbooks  # here, so a load failure leaves every other command as it is
 
-    # a clean project holds no `config/playbooks/` yet: the folders made here go with a refusal
+    text = skeleton(name, modules, base, drafted)
+    # a clean project holds no `config/playbooks/` yet: the folders made here go with a refusal or
+    # any failure after them, so nothing is left behind (brief #1887 answer 5, Q-1887-3)
     made = [f for f in (target.parent, target.parent.parent) if not f.is_dir()]
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(skeleton(name, modules, base, drafted), encoding="utf-8")
-    found = check_playbooks.findings(root, [target])
+    try:
+        target.write_text(text, encoding="utf-8")
+        found = check_playbooks.findings(root, [target])
+    except BaseException:
+        _undo(target, made)
+        raise
     if found:
-        target.unlink()
-        for folder in made:
-            folder.rmdir()
+        _undo(target, made)
         raise Refusal(found)
     print(f"ok {NAME}: wrote {rel}")
     import check_protected_changes  # brief #1829 answer 4: the classes the playbook meets
