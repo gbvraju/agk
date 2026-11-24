@@ -395,9 +395,10 @@ def test_one_list_a_table_that_cannot_be_read_is_refused(tmp_path, table):
 
 
 def test_rule12_adopt_detect_tests_is_unchanged(tmp_path):
-    """REQ-048 AC3: rule 12 (`adopt.detect_tests` keeps its answer)."""
+    """REQ-048 AC3: rule 12 (`adopt.detect_tests` keeps its answer); a root `x.test.js` is a web
+    test since brief #1891 (ADR-0785), so the root folder and its pattern join."""
     write(tmp_path, {"tests/test_a.py": "\n", "tests/deep/b_test.py": "\n", "x.test.js": "\n"})
-    assert adopt.detect_tests(tmp_path) == (["tests"], ["*_test.py", "test_*.py"])
+    assert adopt.detect_tests(tmp_path) == (["."], ["*.test.js", "*_test.py", "test_*.py"])
 
 
 def test_rule10_the_sidecar_comes_from_the_registry(tmp_path):

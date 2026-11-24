@@ -210,3 +210,90 @@ def test_req078_an_installed_project_without_a_stack_table_still_skips(tmp_path:
     root.mkdir()
     (root / "agk.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
     assert playbook_format.stacks(root) is None
+
+
+# --- render names the plugin's playbook (brief #1887, ADR-0781; REQ-078) ---
+
+
+def designed(root: Path) -> Path:
+    """The clean project with the plan sources, an invented design import and a work type."""
+    from test_plan_intake import PRD, PRD_TEXT, SOW, SOW_TEXT, write
+    from test_plan_render import REQUIREMENTS
+    from test_plan_slices import INVENTORY, PARTS, PARTS_TEXT, PROTO, PROTO_TEXT, SIGNOFFS
+
+    for rel, text in (
+        (SOW, SOW_TEXT),
+        (PRD, PRD_TEXT),
+        ("docs/requirements.md", REQUIREMENTS),
+        (PROTO, PROTO_TEXT),
+        (PARTS, PARTS_TEXT),
+        ("docs/design/inventory.md", INVENTORY),
+        ("docs/design/signoffs.md", SIGNOFFS),
+    ):
+        write(root, rel, text)
+    config = root / "agk.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8") + '\n[delivery]\nwork_type = "web-app"\n',
+        encoding="utf-8",
+    )
+    return root
+
+
+def sliced_file(root: Path) -> Path:
+    import json
+
+    from test_plan_slices import sliced
+
+    data = sliced()
+    data["briefs"][0]["foundation"] = True  # SPEC-0072 rule 4: a work-type plan's foundation
+    path = root.parent / "proposals-example.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+LINE = (
+    "Milestone order for the person: demo value: the joins that show the most in a demo"
+    " come first (playbook config/playbooks/web-app.toml)"
+)
+
+
+@pytest.mark.parametrize("plugin", [KIT_ROOT, None], ids=["variable", "unset"])
+def test_req078_render_names_the_plugins_playbook_in_a_clean_project(
+    clean: Path, plugin: Path | None
+) -> None:
+    """REQ-078: the brief's measure: with no project `config/playbooks/`, `render` exits 0, prints
+    the path class of the plugin's playbook (never the plugin's folder) and writes the plan."""
+    designed(clean)
+    assert not (clean / "config/playbooks").exists()
+    out = intake(clean, "render", "--proposals", str(sliced_file(clean)), plugin=plugin)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert LINE in out.stdout.splitlines()
+    assert str(KIT_ROOT) not in out.stdout + out.stderr
+    assert (clean / "docs/plan/milestones.md").is_file()
+
+
+def test_req078_render_names_the_projects_own_playbook_the_same_way(clean: Path) -> None:
+    """REQ-078, ADR-0697: the project's own `web-app.toml` wins; the line is the same text."""
+    designed(clean)
+    source = (KIT_ROOT / "config/playbooks/web-app.toml").read_text(encoding="utf-8")
+    own = clean / "config/playbooks/web-app.toml"
+    own.parent.mkdir(parents=True)
+    own.write_text(source, encoding="utf-8")
+    assert playbook_format.selected(clean) == own
+    out = intake(clean, "render", "--proposals", str(sliced_file(clean)))
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert LINE in out.stdout.splitlines()
+
+
+def test_req078_the_line_never_resolves_the_root(tmp_path: Path, monkeypatch) -> None:
+    """REQ-078: a plugin on another tree (another drive on Windows) and a relative root: no
+    `relative_to` is called, so the text is the forward-slash path class."""
+    monkeypatch.chdir(tmp_path)
+    other = tmp_path / "elsewhere-example" / "web-app.toml"
+    other.parent.mkdir()
+    other.write_text('[milestones]\nbatch_by = "demo value"\n', encoding="utf-8")
+    monkeypatch.setattr(playbook_format, "split", lambda root: (["line"], []))
+    monkeypatch.setattr(playbook_format, "selected", lambda root: other)
+    line = plan_intake.milestone_order(Path("."))
+    head = "Milestone order for the person: demo value"
+    assert line == f"{head} (playbook config/playbooks/web-app.toml)"

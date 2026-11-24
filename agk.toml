@@ -188,12 +188,13 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/tree_walk.py"
 tests = [
-  "tests/kit/test_doctor.py", "tests/kit/test_installed_imports.py", "tests/kit/test_test_dirs_front_end.py",
+  "tests/kit/test_adopt_node_tests.py", "tests/kit/test_doctor.py", "tests/kit/test_installed_imports.py", "tests/kit/test_test_dirs_front_end.py",
   "tests/kit_dev/test_adopt.py",
 ]
 [[testing.map]]
 code = "scripts/agk/adopt.py"
 tests = [
+  "tests/kit/test_adopt_node_tests.py",
   "tests/kit/test_clean_init.py",
   "tests/kit/test_steward_setup.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_reviewers_approvers_install.py",
@@ -634,6 +635,7 @@ tests = ["tests/kit/test_forge.py"]
 code = "scripts/agk/front_door.py"
 tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
+  "tests/kit/test_front_door_derive.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
@@ -662,6 +664,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/init.py"
 tests = [
+  "tests/kit/test_adopt_node_tests.py",
   "tests/kit/test_clean_init.py",
   "tests/kit/test_steward_setup.py",
   "tests/kit/test_architect_guard.py", "tests/kit/test_flakes.py", "tests/kit/test_personal_mode_rules.py",
@@ -831,7 +834,7 @@ code = "scripts/agk/plan_intake.py"
 tests = [
   "tests/kit/test_board.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_plan_intake.py", "tests/kit/test_plan_questions.py",
   "tests/kit/test_plan_render_installed.py", "tests/kit_dev/test_kit_manifest.py",
-  "tests/kit_dev/test_plan_intake_skill.py",
+  "tests/kit_dev/test_plan_intake_skill.py", "tests/kit/test_plan_intake_clean.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_sources.py"
