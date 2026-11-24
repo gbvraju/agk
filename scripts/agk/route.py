@@ -132,6 +132,8 @@ from reviewers import (
     via_agent,
 )
 from session import (
+    ANSWER_LINE,  # brief #1901: the owner wait's id match, one reading
+    QUESTION_ID,
     READY_REPORT,
     READY_REPORTS,  # noqa: F401 - route.READY_REPORTS is the one list (brief #1568)
     RED_TITLE,
@@ -550,7 +552,12 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     Brief #1735 (ADR-0723): an approval ask is an offered line for a spec or amendment this pull
     request changes (`approval_ask`), so a recap or a quote inside a merge ask or a note asks
     nothing; an approval line for a spec the pull request does not change closes nothing, and one
-    of several asked approvals closes only its own (`answer_step`). None when no ask is open."""
+    of several asked approvals closes only its own (`answer_step`).
+    Brief #1901 (ADR-0788): a maintainers question is kept by its Q id (`QUESTION_ID`, else
+    `question`), and an `Answer:` of `ANSWER_LINE` naming that id by an answerer of
+    `session.owner_people` (the listed verdict authors and the spec approvers), after it, closes
+    that question only, as the owner wait does; it closes no `Owner needed:`, approval or merge
+    ask. None when no ask is open."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
@@ -559,7 +566,8 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     files = f.get("files")  # None: unread, today's reading (brief #1735 Q-1)
     owner_open = False  # an `Owner needed:`: only the owner's answer closes it (brief #1168)
     pending: set[str] = set()  # the approvals open asks offer (brief #1656, brief #1735)
-    question_open = False  # a maintainers question: that answer or a newer head closes it
+    questions: set[str] = set()  # open maintainers questions by Q id: an answer or a newer head
+    answerers = approvers | {str(a).lstrip("@").lower() for a in f.get("authors") or []}
     merge_at: str | None = None  # an open merge ask, when it was posted (brief #1733)
     for c in comments:
         line = first_line(c)
@@ -572,17 +580,22 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
             owner_open = True
             pending |= asked
         elif for_maintainers(line):
-            question_open = not pushed or str(c.get("created_at") or "") >= pushed
+            if not pushed or str(c.get("created_at") or "") >= pushed:
+                found = QUESTION_ID.search(line)
+                questions.add(found.group(0) if found else "question")
+        elif line.startswith("Answer:") and login_of(c) in answerers:
+            if found := ANSWER_LINE.match(line):  # brief #1901: an evidence answer, its id only
+                questions.discard(found.group(1))
         elif line.startswith(("Maintainer answer:", "Approve:")) and login_of(c) in approvers:
             if answer_step(line, files, pending) != "all":
                 continue  # misplaced, or one of several asked approvals (brief #1735)
             if not pending:
                 merge_at = None
-            owner_open = question_open = False
-            pending = set()
+            owner_open = False
+            questions, pending = set(), set()
     if owner_open and pending:
         return "agk:approve"
-    if owner_open or question_open:
+    if owner_open or questions:
         return "agk:question"
     if merge_at is not None and not f.get("draft") and (not pushed or merge_at >= pushed):
         if clears_head(f, comments, authors):
