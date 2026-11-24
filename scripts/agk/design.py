@@ -132,6 +132,22 @@ CAUSES = (
 )
 
 
+class BrowserFailed(subprocess.CompletedProcess):
+    """A browser call that timed out or could not start: FAILED is its clause."""
+
+    def __init__(self, command: list[str], failed: str) -> None:
+        super().__init__(command, -1, "", "")
+        self.failed = failed
+
+
+class BrowserRefusal(CheckError):
+    """A refused browser call; LOG is its stderr tail for `AGK_DESIGN_BROWSER_LOG=1`."""
+
+    def __init__(self, message: str, log: list[str]) -> None:
+        super().__init__(message)
+        self.log = log
+
+
 def browser_run(command: list[str]) -> subprocess.CompletedProcess:
     """Run a browser COMMAND; a timeout or a browser that cannot start is a result marked so."""
     try:
@@ -147,34 +163,30 @@ def browser_run(command: list[str]) -> subprocess.CompletedProcess:
         failed = f"the browser did not finish within {BROWSER_TIMEOUT} seconds"
     except OSError:
         failed = "the browser could not be started"
-    proc = subprocess.CompletedProcess(command, -1, "", "")
-    proc.failed = failed  # type: ignore[attr-defined]
-    return proc
+    return BrowserFailed(command, failed)
 
 
 def browser_cause(result: subprocess.CompletedProcess) -> str:
     """The one fixed clause that names why RESULT's browser failed."""
-    if getattr(result, "failed", None):
-        return result.failed  # type: ignore[attr-defined]
+    if isinstance(result, BrowserFailed):
+        return result.failed
     for texts, clause in CAUSES:
         if any(text in (result.stderr or "") for text in texts):
             return clause
     return f"the browser failed (its own message: {BROWSER_LOG}=1)"
 
 
-def browser_refusal(message: str, result: subprocess.CompletedProcess) -> CheckError:
+def browser_refusal(message: str, result: subprocess.CompletedProcess) -> BrowserRefusal:
     """MESSAGE and the cause clause; the browser's stderr tail is printed by the command's main,
     after the refusal line, only with `AGK_DESIGN_BROWSER_LOG=1`."""
-    error = CheckError(f"{message}; {browser_cause(result)}")
     home, text = str(Path.home()), result.stderr or ""
     tail = (text.replace(home, "~") if home != "/" else text).splitlines()[-20:]
-    error.browser_log = [f"browser: {line}" for line in tail]  # type: ignore[attr-defined]
-    return error
+    return BrowserRefusal(f"{message}; {browser_cause(result)}", [f"browser: {t}" for t in tail])
 
 
 def print_browser_log(error: CheckError) -> None:
     if os.environ.get(BROWSER_LOG) == "1":
-        for line in getattr(error, "browser_log", ()):
+        for line in error.log if isinstance(error, BrowserRefusal) else ():
             print(line, file=sys.stderr)
 
 
