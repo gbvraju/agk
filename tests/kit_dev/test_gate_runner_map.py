@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 import check_kit_tests  # noqa: E402  (brief #1878, ADR-0777: the rule's one source)
 
 WILDCARD = check_kit_tests.GATES
-FOLDERS = check_kit_tests.RUNNER_FOLDERS
+FOLDERS = check_kit_tests.folders_of("tests/kit")
 MISSING = check_kit_tests.MISSING
 GONE = check_kit_tests.GONE
 
@@ -34,7 +34,7 @@ def problems(root: Path) -> list[str]:
         {"code": e.get("code"), "tests": list(e.get("tests", []))}
         for e in table.get("testing", {}).get("map", [])
     ]
-    return check_kit_tests.runner_problems(root, entries)
+    return check_kit_tests.runner_problems(root, entries, FOLDERS)
 
 
 def fake(tmp_path: Path, files: dict[str, str], tests: str) -> Path:

@@ -34,12 +34,13 @@ absent key or table fails naming the setting, and an empty or malformed list is 
 
 Brief #1878 (ADR-0777): the rules of the kit's own testing map that a quick record could miss live
 here, so they run wherever governance runs, `prepush.py --quick` included, and only in the kit
-(`kit/agk-kit.mk`) with a `[testing]` table. `runner_problems`: every `test_*.py` of `tests/kit/`
-and `tests/kit_dev/` that runs the gate runner (an import line, or the runner's file name in a
-string outside a docstring) is in the `scripts/agk/gates/*.py` entry, and no file it names is
-gone; with a base and `agk.toml` unchanged only the change's own test files are read.
-`stale_problems`: each test glob of every entry matches a test file. A later rule over the kit's
-map is added here, with a `tests/kit/` fixture case, and not only as a `tests/kit_dev/` test.
+(`kit/agk-kit.mk`) with a `[testing]` table. `runner_problems`: every `test_*.py` of the manifest's
+`kit_tests` folder and its `_dev` sibling that runs the gate runner (an import line, or the
+runner's file name in a string outside a docstring) is in the `scripts/agk/gates/*.py` entry,
+and no file it names is gone; with a base and `agk.toml` unchanged only the change's own test
+files are read. `stale_problems`: each test glob of every entry matches a test file. A later rule
+over the kit's map is added here, with a fixture case in the `kit_tests` folder, and not only
+as a `_dev` test.
 """
 
 from __future__ import annotations
@@ -78,7 +79,6 @@ MAP_ROOTS = ("config/", "kit/", "skills/", ".claude/")
 KIT_MAKE = "kit/agk-kit.mk"  # only the kit repository has it (governance's `Project tests` step)
 NO_WHOLE = "the kit sets no whole tests (setting: testing.whole_tests)"
 GATES = "scripts/agk/gates/*.py"  # brief #1878: the entry that names every runner test
-RUNNER_FOLDERS = ("tests/kit", "tests/kit_dev")
 RUNNER_IMPORT = re.compile(r"^\s*(import|from)\s+run_gates\b", re.MULTILINE)
 RUNNER_FILE = "run_gates.py"
 MISSING = (
@@ -268,15 +268,20 @@ def runs_runner(text: str) -> bool:
     return any(RUNNER_FILE in t for t in _strings(tree, skip))
 
 
+def folders_of(kit_tests: str) -> tuple[str, str]:
+    """The `kit_tests` folder of the manifest and its `_dev` sibling (the kit's own tests)."""
+    return (kit_tests, f"{kit_tests}_dev")
+
+
 def runner_problems(
-    root: Path, entries: list[dict], only: set[str] | None = None
+    root: Path, entries: list[dict], folders: tuple[str, ...], only: set[str] | None = None
 ) -> list[str]:
     """Brief #1878 answer 2 (the rule of brief #1750, ADR-0731): the runner tests of each folder
     that the gates' entry does not name, and a named file that is gone. `only` limits the files
     read to those paths (a change's own test files); None reads every one."""
     named = {t for e in entries if e["code"] == GATES for t in e["tests"]}
     out = []
-    for folder in RUNNER_FOLDERS:
+    for folder in folders:
         found, unreadable = set(), False
         for path in sorted((root / folder).glob("test_*.py")):
             rel = path.relative_to(root).as_posix()
@@ -296,11 +301,11 @@ def runner_problems(
     return out
 
 
-def stale_problems(root: Path, entries: list[dict]) -> list[str]:
-    """Brief #1878 answer 3: each test glob of the map matches a test file of RUNNER_FOLDERS."""
+def stale_problems(root: Path, entries: list[dict], folders: tuple[str, ...]) -> list[str]:
+    """Brief #1878 answer 3: each test glob of the map matches a test file of `folders`."""
     tests = [
         p.relative_to(root).as_posix()
-        for folder in RUNNER_FOLDERS
+        for folder in folders
         for p in (root / folder).glob("test_*.py")
     ]
     globs = {g for e in entries for g in e["tests"]}
@@ -308,7 +313,7 @@ def stale_problems(root: Path, entries: list[dict]) -> list[str]:
     return [STALE.format(n=len(stale))] if stale else []
 
 
-def kit_map_problems(root: Path, argv: list[str] | None) -> list[str]:
+def kit_map_problems(root: Path, argv: list[str] | None, kit_tests: str) -> list[str]:
     """Brief #1878 answers 2 to 4: the two rules, in the kit with a `[testing]` table only."""
     if not (root / KIT_MAKE).is_file():
         return []
@@ -321,7 +326,9 @@ def kit_map_problems(root: Path, argv: list[str] | None) -> list[str]:
         changed = changed_files(root, merge_base(root, base))
         if "agk.toml" not in changed:
             only = {p for p, status in changed.items() if status in ("A", "M")}
-    return runner_problems(root, table["map"], only) + stale_problems(root, table["map"])
+    folders = folders_of(kit_tests)
+    entries = table["map"]
+    return runner_problems(root, entries, folders, only) + stale_problems(root, entries, folders)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -360,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     problems += map_problems(root, argv)
     problems += selection.always_full_problems(root)
     problems += whole_problems(root)
-    problems += kit_map_problems(root, argv)
+    problems += kit_map_problems(root, argv, folder)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     if not problems:
