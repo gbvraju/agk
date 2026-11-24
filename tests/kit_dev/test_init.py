@@ -102,7 +102,8 @@ def test_ac1_init_has_no_network_or_process_imports():
             names.add(node.module.split(".")[0])
     forbidden = {"subprocess", "socket", "urllib", "http", "ftplib", "smtplib", "requests", "ssl"}
     assert not names & forbidden
-    local = {"common", "reviewers", "rehearsal"}  # rehearsal: the proof of --layout (ADR-0683)
+    # rehearsal: the proof of --layout (ADR-0683); adopt: its test detection (ADR-0785), kit-only
+    local = {"common", "reviewers", "rehearsal", "adopt"}
     assert names <= set(sys.stdlib_module_names) | local
     proof = ast.parse((INIT.parent / "rehearsal.py").read_text(encoding="utf-8"))
     used = {

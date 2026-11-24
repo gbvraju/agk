@@ -41,9 +41,11 @@ word (2026-11-24, the steward chat, quoted as data): "Yes, draft the test briefs
    matches is counted in one line naming `test_patterns`; no `*.js` pattern is written (`Q-AN-3`).
 7. `lint_paths` stays the kit's own scope in both templates and `project_lint_paths` is not written (`Q-AN-1`).
 8. `tests/kit/test_adopt_node_tests.py` tests it and joins the `[[testing.map]]` entries of `scripts/agk/tree_walk.py`,
-   `scripts/agk/adopt.py` and `scripts/agk/init.py` in this repository's `agk.toml`. Four pinned tests of
-   `tests/kit_dev/test_adopt.py` change to the new answers: a `.test.js` file is now detected, and a tree with no test
-   and no manifest gives the empty list.
+   `scripts/agk/adopt.py` and `scripts/agk/init.py` in this repository's `agk.toml`. Pinned tests change to the new
+   answers: three asserts of `tests/kit_dev/test_adopt.py` and `tests/kit/test_survey.py`'s
+   `test_rule12_adopt_detect_tests_is_unchanged` (a `.test.js` file is now detected, and a tree with no test and no
+   manifest gives the empty list), and `tests/kit_dev/test_init.py`'s import allowlist gains `adopt`, which init
+   imports at call time for its detection (kit-only, standard library and kit modules only).
 
 Amendment 231 (`docs/runs/proposed-spec-amendments-231.md`) proposes the words for SPEC-0044 rule 10, SPEC-0002 rule 9
 and SPEC-0001 rule 14; it edits no spec.
