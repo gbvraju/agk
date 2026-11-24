@@ -32,3 +32,5 @@ declaration.
    drafted without the playbook by omission; `doctor.py` warns once, naming the setting `work_type` (amendment 218)."
 
 No other rule changes.
+
+2026-11-24 (from `date -u`), brief #1900: items 1 and 2 (to rule 5) applied to `docs/specs/0038-a-project-s-work-type-selects-a-delivery-playbook-that-never-weakens-a-gate.md` word for word, on the maintainer's answer on #1762 (comment 7083876125).

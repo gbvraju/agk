@@ -20,3 +20,5 @@ checks, by the compiler, from a fixed table; no rule is dropped."
    judged, so `Q-S0072-14`'s "may add rules and never disable one" holds.
 
 No other rule changes.
+
+2026-11-24 (from `date -u`), brief #1900: item 1 (to rule 8, its second bullet) applied to `docs/specs/0072-each-work-type-playbook-carries-its-architecture-a-stack-sta.md` word for word, on the maintainer's answer on #1893 (comment 7122686489).

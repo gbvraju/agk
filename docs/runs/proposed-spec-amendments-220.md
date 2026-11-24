@@ -30,3 +30,5 @@ protected. Replayed on `ee47218b..11255059` (#1773), the selection does not hold
    change under `docs/` only still selects nothing (amendment 186, Q-1548-3; amendment 220)."
 
 No other rule changes. `docs/guides/testing.md` says the same in its `Documentation` item.
+
+2026-11-24 (from `date -u`), brief #1900: items 1 and 2 (to rule 6, item 2 as its last bullet) applied to `docs/specs/0055-the-right-tests-for-each-stack-run-at-the-right-time-by-a-map-that-learns.md` word for word, on the maintainer's answer on #1794 (comment 7090814831).

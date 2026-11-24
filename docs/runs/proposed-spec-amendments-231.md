@@ -28,3 +28,5 @@ no test and no known stack an empty list, never the Python default."
    gets no such line" (amendment 231).
 
 No other rule changes.
+
+2026-11-24 (from `date -u`), brief #1900: item 1 (to rule 10) applied to `docs/specs/0044-a-large-test-suite-finishes-sooner-without-removing-a-test.md`, item 2 (to rule 9) applied to `docs/specs/0002-agk-adopt.md` and item 3 (to rule 14) applied to `docs/specs/0001-agk-init.md` word for word, on the maintainer's answer on #1897 (comment 7122681261).
