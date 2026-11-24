@@ -3326,6 +3326,12 @@ def newest(comments: list, prefixes: tuple[str, ...]) -> datetime | None:
     return max(times, default=None)
 
 
+def owed_of(comments: list, sha: str) -> datetime | None:
+    """The newest line the builder owes an answer to, leaving out a verdict that clears the head
+    SHA (`merge_cleared.no_builder_event`, brief #1879, Q-1391-1)."""
+    return newest([c for c in comments if not merge_cleared.no_builder_event(c, sha)], OWED)
+
+
 def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | None:
     """What GitHub says of one recorded session: None when it holds no live take of its brief."""
     number, name = record["brief"], record["session"]
@@ -3361,7 +3367,7 @@ def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | Non
         "mark": f"{sha}|{newest(said, ALIVE)}|{max(summaries, default='')}",
         "pr": pull["number"],
         "own": max(x for x in moves if x is not None),
-        "owed": newest(said, OWED),
+        "owed": owed_of(said, sha),
         "final": bool(reports) and bool(FINAL.match(session.first_line(reports[-1]))),
         "parked": session.PARKED_LABEL in session.labels_of(pull)
         or session.own_park(said) is not None,

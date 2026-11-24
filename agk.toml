@@ -1007,7 +1007,7 @@ code = "kit/templates/architecture.md"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_contracts.py"]
 [[testing.map]]
 code = "kit/templates/runtime/builder.txt"
-tests = ["tests/kit/test_layers_step.py"]
+tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py"]
 [[testing.map]]
 code = "kit/templates/protected-paths*.txt"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_project_mk_protected.py"]

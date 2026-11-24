@@ -81,6 +81,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import conductor
 import guard_logs
 import launch
+import merge_cleared
 import metrics
 import session
 import session_plan
@@ -587,7 +588,6 @@ def mode_lines(root: Path, now: datetime) -> list[str]:
 
 # --- every mode runs the same jobs (brief #1391, SPEC-0064 build (f), rule 13, ADR-0589) ----------
 
-CLEARED = "Verdict: cleared"  # waits for its merge: no builder job (Q-1391-1)
 HELD_BY = ("Started: ", "taken: ")  # a claim on an item: its job runs on some machine (rule 13)
 DEPENDS = re.compile(r"^Depends-on: #(\d+)\s*$", re.M)
 NEXT_POLL = 5  # seconds between two reads of the foreground job's exit file
@@ -639,7 +639,8 @@ def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict |
         if not pull.get("draft") and report and (verdict is None or report > verdict):
             review = review or n
         own = conductor.newest(said, conductor.ALIVE) or session.moment(pull.get("created_at"))
-        owing = [c for c in said if not session.first_line(c).startswith(CLEARED)]
+        head = str((pull.get("head") or {}).get("sha") or "")
+        owing = [c for c in said if not merge_cleared.no_builder_event(c, head)]  # brief #1879
         facts = {"own": own, "owed": conductor.newest(owing, conductor.OWED),
                  "labels": session.labels_of(pull)}  # fmt: skip
         if brief is not None and conductor.job_gate(None, facts, now) is None:

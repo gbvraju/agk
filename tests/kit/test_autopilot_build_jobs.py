@@ -130,7 +130,8 @@ def test_a_label_event_after_a_final_only_fix_list_still_starts_the_job(builders
     pr_comments(
         builders,
         comment(2, "builder", "Report: aaaaaaa ready for review", iso(timedelta(hours=-2))),
-        comment(3, "boss", f"Verdict: fix list {'a' * 40}\n\n{FINAL_ONLY}", iso(timedelta(hours=-1))),
+        comment(3, "boss", f"Verdict: fix list {'a' * 40}\n\n{FINAL_ONLY}", 
+                iso(timedelta(hours=-1))),
     )
     head = {"sha": "a" * 40, "ref": "claude/brief-7"}
     builders["stub"].serve(

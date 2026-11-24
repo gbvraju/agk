@@ -124,8 +124,8 @@ SHAPES = {  # verdict body -> is it a builder event (brief #1879 answers 1 and 9
     f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}": False,
     f"Verdict: fix list {HEAD}\n\n1. Name the setting (rule: none).\n{ADR_FINAL}": True,
     f"Verdict: fix list {HEAD}\n\nFinal: docs/requirements.md REQ-046 planned -> built": True,
-    f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}\nFinal: docs/requirements.md REQ-046 planned -> built":
-        True,
+    f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}\n"
+    "Final: docs/requirements.md REQ-046 planned -> built": True,
     f"Verdict: fix list aaaaaaa\n\n{ADR_FINAL}": True,
     f"Verdict: fix list {'b' * 40}\n\n{ADR_FINAL}": True,
 }
@@ -178,7 +178,7 @@ def test_every_waker_and_the_merger_read_one_table_of_verdict_shapes(monkeypatch
         ), body
         monkeypatch.setattr(session, "gh", lambda path: {"mergeable_state": "clean",
                                                          "head": {"sha": HEAD}})  # fmt: skip
-        monkeypatch.setattr(session, "pages", lambda path: comments)
+        monkeypatch.setattr(session, "pages", lambda path, said=comments: said)
         monkeypatch.setattr(session, "reports_after", lambda repo, n, cid: False)
         owed = session.follow_up_owed("example/demo", {"number": 72}, {"boss"})
         assert (owed == "fix list") is (event and "fix list" in body), body

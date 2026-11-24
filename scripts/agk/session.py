@@ -1153,6 +1153,23 @@ def missed_verdict(comments: list, floor: int, head: str, authors: list[str] | N
     return None
 
 
+def builder_verdicts(comments: list, head: str, authors: list[str] | None) -> list:
+    """COMMENTS for the watch's verdict lines without a listed author's rule 3a fix list on exactly
+    HEAD, which is the merger's to apply and no builder event (brief #1879 answer 2,
+    `merge_cleared.accepted_adrs`), and without every listed verdict when the newest is one, since
+    only the newest counts; a `Verdict: cleared` stays the watch's event (session rule 1)."""
+    import merge_cleared  # merge_cleared imports this module
+
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    listed = [c for c in comments if author_of(c) in allowed and VERDICT.fullmatch(first_line(c))]
+    quiet = [c for c in listed if merge_cleared.accepted_adrs(c, head) is not None]
+    if not quiet:
+        return comments
+    latest = max(listed, key=lambda c: c.get("id", 0))
+    gone = listed if latest in quiet else quiet
+    return [c for c in comments if c not in gone]
+
+
 def label_of(pr: dict) -> str:
     """The router's label of a pull request (SPEC-0032 rule 2), `none` without one."""
     names = sorted(
@@ -1462,12 +1479,13 @@ def watch(root, args: dict[str, str]) -> int:
                 approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
                 answerers = approvers | {a.lstrip("@").lower() for a in verdict_authors(root) or []}
                 head = str((pr.get("head") or {}).get("sha") or "")
+                quiet = builder_verdicts(comments, head, authors)  # brief #1879
                 if first:  # what landed after the last Report: and before this watch started
                     first = False
                     floor = max(report_floor(comments, own), since)
                     if shown(
                         [
-                            missed_verdict(comments, floor, head, authors),
+                            missed_verdict(quiet, floor, head, authors),
                             correction_line(comments, floor, authors, int(number)),
                             answer_line(comments, floor, own, answerers),
                         ]
@@ -1475,7 +1493,7 @@ def watch(root, args: dict[str, str]) -> int:
                         return 0
                 if shown(
                     [
-                        verdict_line(comments, seen, head, authors),
+                        verdict_line(quiet, seen, head, authors),
                         correction_line(comments, seen, authors, int(number)),
                         answer_line(comments, seen, own, answerers),
                         approve_line(comments, max(seen, since), head, approvers),
@@ -3138,13 +3156,21 @@ def follow_up_owed(
     comments = pages(f"repos/{repo}/issues/{number}/comments")
     if comments is None:
         raise CheckError(f"slot: the comments of #{number} cannot be read")
+    import merge_cleared  # merge_cleared imports this module
+
+    head = str((full.get("head") or {}).get("sha") or "")
     verdicts = [
-        (c.get("id", 0), m.group(1))
+        (c.get("id", 0), m.group(1), c)
         for c in comments
         if author_of(c) in allowed and (m := VERDICT.match(first_line(c)))
     ]
-    if verdicts and max(verdicts)[1] == "fix list":
-        if not reports_after(repo, int(number or 0), max(verdicts)[0]):
+    newest_verdict = max(verdicts, key=lambda v: v[0]) if verdicts else None
+    if (
+        newest_verdict
+        and newest_verdict[1] == "fix list"
+        and merge_cleared.accepted_adrs(newest_verdict[2], head) is None  # brief #1879
+    ):
+        if not reports_after(repo, int(number or 0), newest_verdict[0]):
             return "fix list"
     return "answer" if answer_owed({**pull, **full}, comments, allowed | approvers) else None
 
@@ -4076,11 +4102,12 @@ def auto_merge_on(root) -> bool:
 
 
 def cleared_unmerged(comments: list, head: str) -> bool:
-    """The latest `Verdict:` comment clears exactly this head, as `merge_cleared.py` reads it."""
+    """The latest `Verdict:` comment clears exactly this head, as `merge_cleared.py` reads it:
+    `Verdict: cleared <head>` or a rule 3a fix list on it (brief #1879, amendment 225)."""
     import merge_cleared
 
     latest = merge_cleared.latest_verdict(comments)
-    return latest is not None and merge_cleared.first_line(latest) == f"Verdict: cleared {head}"
+    return latest is not None and merge_cleared.clears_head(latest, head)
 
 
 def review_line(
