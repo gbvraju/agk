@@ -676,7 +676,10 @@ settings to tidy by hand first, then records, which stay as written.
 
 - **Deleted:** every kit file whose content (CRLF read as LF) equals a copy that some release row of the kit's
   `kit/hashes.json` lists for its path, whatever release the project was installed at; `agk.toml` when it holds only the kit's
-  settings; `.github/CODEOWNERS` when it is what the kit generates from `config/reviewers.yaml`.
+  settings; `.github/CODEOWNERS` when it is what the kit generates from `config/reviewers.yaml`. The kit's settings are the one
+  list `config.KIT_SETTINGS` (ADR-0786); a key of your own, also one inside a kit table, keeps `agk.toml`, named by key, never a
+  value. `config/reviewers.yaml` goes when it is a released template with its one maintainers handle filled in.
+- **Named, never deleted:** `config/agk-baseline/`, the gates' and the history scan's records of your project.
 - **Edited:** a file that holds the project's own lines and an agk block a release shipped (`.gitignore`, `.gitattributes`,
   `CLAUDE.md`, the pull request template, `CODEOWNERS`) loses the block only; the project's `Makefile` loses the line
   `include agk.mk` when `agk.mk` goes (targets that call `agk-*` are yours to change).
@@ -1369,8 +1372,8 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:upgrade` | `scripts/agk/upgrade.py` | vendored files |
 | `/agk:uninstall` | `scripts/agk/uninstall.py` (a dry run; `--write` after you say yes) | one new branch: the kit's unchanged files deleted and its own lines removed, or `paused = true` with `--pause`; nothing committed |
 | `/agk:ruleset` | `scripts/agk/ruleset.py plan`, then the `gh api` commands it prints, after you say yes | the default branch's ruleset and two repository settings (add-only) |
-| `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR on a new branch |
-| `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR on a new branch |
+| `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR (a copy of `kit/templates/charter-adr.md`) on a new branch |
+| `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR (a copy of `kit/templates/charter-adr.md`) on a new branch |
 | `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check`, `stack-files` | one Proposed ADR of stack options on a new branch |
 | `/agk:design` | `scripts/agk/design.py write`, `screenshots`, `scripts/agk/check_design.py` | `docs/design/theme.md` (when absent) and a mockup folder with `index.html` and `README.md` on a new branch |
 | `/agk:launch` | `scripts/agk/session.py plan`, `scripts/agk/launch.py prompts` | nothing in the repository (after you say yes, one session per planned slot is started through an adapter, or its prompt is printed) |

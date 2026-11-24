@@ -15,7 +15,8 @@ Usage:
     python3 playbook.py split [--goal TEXT] [--kind KIND] [--root DIR]
 
 Kit-only (never installed). `start-ids`, `check-start` and `next-steps` serve `/agk:start`
-(rules 2 to 5): the next free ADR number and the branch name, the deterministic checks of the two
+(rules 2 to 5): the next free ADR number and the branch name (refused while the work tree is not
+clean, brief #1888), the deterministic checks of the two
 files it writes, and the commands for the person, with a pull request body that passed
 the repository's body check (`pr_body.py`, brief #273); `next-steps` shows the vision and the
 charter before the commit steps, prints `git push -u origin HEAD`, and, where `gh` is logged in,
@@ -177,6 +178,14 @@ def cmd_start_ids(root: Path, opts: dict[str, str]) -> int:
     text = statement_ok(opts.get("statement", ""))
     branch = load_config(root)["default_branch"]
     ids = next_free_ids(root, opts.get("ref") or f"origin/{branch}")
+    # Brief #1888 (ADR-0782): an untracked or modified file would ride onto the start branch,
+    # which holds exactly the vision and the charter (SPEC-0013 rule 4); ignored files are not
+    # listed. The refusal names the rule, never a path.
+    if git(root, "status", "--porcelain").strip():
+        raise CheckError(
+            "rule 4: the work tree is not clean; the start branch holds only the vision and the "
+            "charter"
+        )
     name = slug(text)
     print(json.dumps({"adr": ids["adr"], "slug": name, "branch": f"start/{name}"}))
     return 0

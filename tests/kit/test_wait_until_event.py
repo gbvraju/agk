@@ -224,6 +224,34 @@ def test_1310b_a_verdict_on_another_head_is_no_event(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "renew: no event"
 
 
+FINAL_ONLY = "Final: docs/adr/0999-an-example-decision.md Proposed -> Accepted"
+
+
+@pytest.mark.parametrize("from_start", [False, True])
+def test_1879_a_final_only_fix_list_on_the_head_is_no_event_and_the_merge_ends_it(
+    monkeypatch, capsys, from_start
+):
+    """REQ-046: brief #1879 answer 2 (no event for a rule 3a fix list on the full head, read
+    when the watch starts or later; the wait ends on `merged`)."""
+    clock = Clock()
+    final = comment(11, "boss", f"Verdict: fix list {SHA}\n\n{FINAL_ONLY}")
+    first = [ASKED, final] if from_start else [ASKED]
+    pr_world(monkeypatch, clock, [pull(), pull(), pull(), pull(merged=iso())],
+             [first, [ASKED, final], [ASKED, final]])  # fmt: skip
+    assert session_script.watch("root", until()) == 0
+    assert capsys.readouterr().out.strip() == "merged #7"
+
+
+def test_1879_a_numbered_item_after_it_is_an_event_again(monkeypatch, capsys):
+    """REQ-046: brief #1879 answer 7 (the newest verdict counts: a numbered list is an event)."""
+    clock = Clock()
+    final = comment(11, "boss", f"Verdict: fix list {SHA}\n\n{FINAL_ONLY}")
+    numbered = comment(12, "boss", f"Verdict: fix list {SHA}\n\n1. Name the setting.")
+    pr_world(monkeypatch, clock, [pull()], [[ASKED], [ASKED, final], [ASKED, final, numbered]])
+    assert session_script.watch("root", until()) == 0
+    assert capsys.readouterr().out.strip() == f"verdict fix list {SHA} (comment 12)"
+
+
 # --- watch --assign --until-event ----------------------------------------------------------------
 
 
