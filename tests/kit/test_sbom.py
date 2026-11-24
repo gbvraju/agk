@@ -685,3 +685,66 @@ def test_advisory_ids_of_rule_form_are_kept_in_order():
     """REQ-016: brief #1007 answer 3 (guard: a list of ids is returned as a new list)."""
     ids = ["GHSA-aaaa-bbbb-cccc", "CVE-2026-0001"]
     assert sbom.advisory_ids(ids) == ids and sbom.advisory_ids(ids) is not ids
+
+
+# Brief #1907 (ADR-0789, amendment 232): a repository with no `[delivery]` keeps rule 2's reading.
+
+PINNED = {
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@example.com",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@example.com",
+    "GIT_AUTHOR_DATE": "2026-11-24T00:00:00+00:00",
+    "GIT_COMMITTER_DATE": "2026-11-24T00:00:00+00:00",
+}
+# sha256 of the bill `make` wrote for the pinned fixture below on main at 9258dd10 (brief #1907)
+KIT_FORM_SHA256 = "d856f55134a1ce70a315a084463a5aec4d2a1988f76a4fb7b44c961d030ed168"
+
+
+def pinned_repo(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    import subprocess  # nosec B404 - fixed argument lists only, no shell
+
+    for key, value in PINNED.items():
+        monkeypatch.setenv(key, value)
+    root.mkdir()
+    for rel, text in FILES.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text or "", encoding="utf-8")
+    for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "kit"]):
+        subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "-c", "commit.gpgsign=false", *args], cwd=root, check=True
+        )
+    monkeypatch.chdir(root)
+    return root
+
+
+def test_the_kit_form_bill_is_byte_identical_to_main(tmp_path: Path, monkeypatch) -> None:
+    """REQ-061: brief #1907 answers 3 and 6 (no `[delivery]`, `pyproject.toml` read as today)."""
+    import hashlib
+
+    root = pinned_repo(tmp_path / "kit", monkeypatch)
+    out = tmp_path / "bill.json"
+    assert sbom.main(["make", "--out", str(out)]) == 0
+    assert hashlib.sha256(out.read_bytes()).hexdigest() == KIT_FORM_SHA256
+    assert root.is_dir()
+
+
+def test_no_work_type_and_no_pyproject_is_refused_as_today(repo, tmp_path: Path, capsys) -> None:
+    """REQ-061: brief #1907 answer 1 (the kit, a project before discovery)."""
+    repo.commit({"pyproject.toml": None, "package.json": json.dumps({"name": "shop"})})
+    code, out = make(tmp_path)
+    assert code == 1 and not out.exists()
+    assert capsys.readouterr().out == (
+        "FAIL bom: pyproject.toml cannot be read at the commit (rule 2)\n"
+    )
+
+
+def test_a_bad_layout_names_the_setting_before_the_build_file(repo, tmp_path: Path, capsys):
+    """REQ-061: brief #1907 answer 5 (`[kit] layout` is read before the build file)."""
+    repo.commit({"pyproject.toml": None, "agk.toml": 'version = "1.2.0"\n[kit]\nlayout = "x"\n'})
+    code, _ = make(tmp_path)
+    assert code == 1
+    assert capsys.readouterr().out == (
+        "FAIL bom: [kit] layout is neither installed nor plugin (setting: layout)\n"
+    )

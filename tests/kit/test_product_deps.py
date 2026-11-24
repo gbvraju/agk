@@ -478,3 +478,162 @@ def test_no_workflow_or_prepush_step_calls_names() -> None:
     for path in paths:
         if path.is_file():
             assert "--names" not in path.read_text(encoding="utf-8"), path
+
+
+# Brief #1907 (ADR-0789, amendment 232 to SPEC-0054 rules 2 and 3): a Node product with no
+# `pyproject.toml` names its bill from `package.json`; every other repository reads as today.
+
+PACKAGE_FAIL = "FAIL bom: package.json {what} at the commit (rule 2)\n"
+CLASS = "bom: SPEC-0054 rule 4 (amendment 206): the product's bill cannot be made or is refused"
+
+
+def no_pyproject(repo, **extra: str | None) -> None:
+    repo.commit({"pyproject.toml": None, **extra})
+
+
+def node_refs(doc: dict) -> set[str]:
+    return {c["bom-ref"] for c in doc["components"] if c["bom-ref"].startswith("node:")}
+
+
+@pytest.mark.parametrize(
+    "toml",
+    [
+        FILES["agk.toml"],
+        FILES["agk.toml"].replace('mode = "init"', 'mode = "adopt"'),
+        FILES["agk.toml"].replace('mode = "init"', 'mode = "init"\nexecution = "local"'),
+        FILES["agk.toml"] + '\n[kit]\nlayout = "plugin"\nplugin_version = "0.1.0"\n',
+        FILES["agk.toml"].replace('"web-app"', '"mobile"'),
+    ],
+    ids=["init", "adopt", "local", "plugin", "mobile"],
+)
+def test_a_node_product_without_pyproject_makes_its_bill(product, monkeypatch, capsys, toml):
+    """REQ-061, REQ-078: brief #1907 answers 1, 2 and 5 (named from `package.json`)."""
+    no_pyproject(product, **{"agk.toml": toml})
+    monkeypatch.chdir(product.root)
+    doc = bill(product.root)
+    assert doc["metadata"]["component"] == {
+        "type": "application",
+        "name": "shop",
+        "version": "0.1.0",
+    }
+    assert node_refs(doc) == {"node:left-pad-x@1.0.0", "node:tiny-util@2.1.0"}
+    assert not [c for c in doc["components"] if c["bom-ref"].startswith("python:")]
+    capsys.readouterr()
+    assert sbom.main(["check", str(product.root / "out" / "bill.json")]) == 0
+    assert capsys.readouterr().out == "ok bom\n"
+    code, out = gates(product.root, capsys)
+    assert "ok bom\n" in out, out
+
+
+def test_a_scoped_name_is_kept_as_written(product, monkeypatch) -> None:
+    """REQ-061: brief #1907 answer 2 (`@scope/name` too)."""
+    no_pyproject(product, **{"package.json": json.dumps({"name": "@example/shop"})})
+    monkeypatch.chdir(product.root)
+    assert bill(product.root)["metadata"]["component"]["name"] == "@example/shop"
+
+
+@pytest.mark.parametrize(
+    "text,what",
+    [
+        (None, "cannot be read"),
+        ("{not json", "cannot be parsed"),
+        ("[1]", "cannot be parsed"),
+        (json.dumps({"private": True}), "cannot be parsed"),
+        (json.dumps({"name": 1}), "cannot be parsed"),
+        (json.dumps({"name": ""}), "cannot be parsed"),
+        (json.dumps({"name": "   "}), "cannot be parsed"),
+        ("﻿" + json.dumps({"name": "shop"}), "cannot be parsed"),
+    ],
+    ids=["absent", "not-json", "not-object", "no-name", "number", "empty", "blank", "bom"],
+)
+def test_a_package_json_that_names_nothing_is_refused(product, monkeypatch, capsys, text, what):
+    """REQ-061: brief #1907 answers 2 and 6; the line names the path, never a value."""
+    no_pyproject(product, **{"package.json": text})
+    monkeypatch.chdir(product.root)
+    out = product.root / "out" / "bill.json"
+    out.parent.mkdir(exist_ok=True)
+    capsys.readouterr()
+    assert sbom.main(["make", "--out", str(out)]) == 1 and not out.exists()
+    assert capsys.readouterr().out == PACKAGE_FAIL.format(what=what)
+    code, printed = gates(product.root, capsys)
+    if text is not None:  # `bom` applies only with a chosen stack and its lock in the tree
+        assert code == 1 and f"FAIL gates: {CLASS} (path class: bill of materials)" in printed
+
+
+def test_a_crlf_package_json_parses(product, monkeypatch) -> None:
+    """REQ-061: brief #1907 answer 6."""
+    no_pyproject(product, **{"package.json": '{\r\n  "name": "shop"\r\n}\r\n'})
+    monkeypatch.chdir(product.root)
+    assert bill(product.root)["metadata"]["component"]["name"] == "shop"
+
+
+def test_a_kept_pyproject_still_names_and_lists_python(product, monkeypatch, capsys) -> None:
+    """REQ-061: brief #1907 answer 1 (present, it is read as today)."""
+    py = '[project]\nname = "shop-tools"\ndependencies = ["example-req==2.0.0"]\n'
+    product.commit({"pyproject.toml": py})
+    monkeypatch.chdir(product.root)
+    doc = bill(product.root)
+    assert doc["metadata"]["component"]["name"] == "shop-tools"
+    refs = {c["bom-ref"] for c in doc["components"]}
+    assert "python:example-req@2.0.0" in refs and "node:left-pad-x@1.0.0" in refs
+    for bad in ("[tool.example]\nx = 1\n", "x = [\n"):  # Q-SB-3: refused as today
+        product.commit({"pyproject.toml": bad})
+        out = product.root / "out" / "bill.json"
+        capsys.readouterr()
+        assert sbom.main(["make", "--out", str(out)]) == 1
+        assert capsys.readouterr().out == (
+            "FAIL bom: pyproject.toml cannot be parsed at the commit (rule 2)\n"
+        )
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"docs/adr/0003-stack-options.md": PY_RECORD},
+        {"agk.toml": 'version = "0.1.0"\nmode = "init"\n'},
+        {"docs/adr/0003-stack-options.md": RECORD.replace("Accepted", "Proposed")},
+        {"docs/adr/0003-stack-options.md": None},
+        {"docs/adr/0004-stack-options.md": RECORD},
+        {"docs/adr/0003-stack-options.md": RECORD.replace("MIT,", "MIT, python 3.12.7 PSF-2.0,")},
+    ],
+    ids=["python-stack", "no-work-type", "proposed", "no-record", "two-records", "both-parts"],
+)
+def test_elsewhere_a_missing_pyproject_is_refused_as_today(product, monkeypatch, capsys, files):
+    """REQ-061: brief #1907 answers 1 and 5 (no `node` stack chosen: today's line)."""
+    no_pyproject(product, **files)
+    monkeypatch.chdir(product.root)
+    out = product.root / "out" / "bill.json"
+    out.parent.mkdir(exist_ok=True)
+    capsys.readouterr()
+    assert sbom.main(["make", "--out", str(out)]) == 1
+    assert capsys.readouterr().out == (
+        "FAIL bom: pyproject.toml cannot be read at the commit (rule 2)\n"
+    )
+
+
+def test_with_both_parts_and_no_pyproject_bom_does_not_run(product, capsys) -> None:
+    """REQ-061: brief #1907 answer 5 (no stack chosen: no lock read, `bom` not run)."""
+    both = RECORD.replace("MIT,", "MIT, python 3.12.7 PSF-2.0,")
+    no_pyproject(product, **{"docs/adr/0003-stack-options.md": both})
+    code, out = gates(product.root, capsys)
+    assert "bom" not in out, out
+
+
+def test_package_json_is_read_at_the_ref(product, monkeypatch, capsys) -> None:
+    """REQ-061: brief #1907 answer 5 (`--ref`: the build file, `package.json` and the lock)."""
+    no_pyproject(product, **{"package.json": None})
+    product.commit({"package.json": json.dumps({"name": "shop"})})
+    monkeypatch.chdir(product.root)
+    out = product.root / "out" / "bill.json"
+    out.parent.mkdir(exist_ok=True)
+    capsys.readouterr()
+    assert sbom.main(["make", "--ref", "HEAD~1", "--out", str(out)]) == 1
+    assert capsys.readouterr().out == PACKAGE_FAIL.format(what="cannot be read")
+    assert sbom.main(["make", "--out", str(out)]) == 0
+
+
+def test_each_stack_has_a_name_reader() -> None:
+    """REQ-061: brief #1907 answer 8 (a later `STACKS` row cannot fall back unseen)."""
+    from gates import pins
+
+    assert {row[1] for row in pins.STACKS.values()} == set(sbom.NAMERS)
