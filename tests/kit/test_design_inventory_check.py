@@ -478,3 +478,196 @@ def test_ac2_an_all_out_map_in_a_project_with_screens_passes(tmp_path):
     imported_all_out(tmp_path)
     proc = check(tmp_path)
     assert "every page of i1 is mapped out" not in proc.stdout, proc.stdout
+
+
+# Brief #1889 (ADR-0783): the discovery Screens line is read past the quoted problem. Every
+# discovery document here is written by `front_door.py discovery-write` itself, from a vision with
+# its own `## ` headings or an issue whose problem holds one, so a reader that stops inside a quote
+# fails at once.
+
+VISION = (
+    "# Vision\n\n## The idea\n\nA reader at example.com keeps a list of books.\n\n"
+    "## Who it serves\n\nInvented readers of example.com."
+)
+TOMLS = {
+    "installed": '[kit]\nlayout = "installed"\n',
+    "plugin": '[kit]\nlayout = "plugin"\n',
+    "personal": '[personal]\nforge = "files"\n',
+}
+
+
+def written_discovery(root: Path, screens: str | None, problem: str = VISION, issue: bool = False):
+    """Run the kit's writer on an invented vision (or saved issue); return the written document."""
+    import front_door
+
+    inputs = root.parent / f"in-{root.name}"
+    inputs.mkdir(exist_ok=True)
+    data = {} if screens is None else {"screens": screens}
+    data["answers"] = []
+    answers = inputs / f"answers-{len(list(inputs.iterdir()))}.json"
+    answers.write_text(json.dumps(data), encoding="utf-8")
+    source = inputs / f"problem-{len(list(inputs.iterdir()))}"
+    if issue:
+        body = {
+            "number": 7,
+            "title": f"Books are lost {len(list(inputs.iterdir()))}",
+            "html_url": "https://github.com/example/books/issues/7",
+            "body": f"Problem: {problem}",
+            "labels": [{"name": "agk-problem"}],
+        }
+        source.write_text(json.dumps(body), encoding="utf-8")
+        args = ["discovery-write", "--issue", str(source)]
+    else:
+        source.write_text(problem, encoding="utf-8")
+        args = ["discovery-write", "--vision", str(source)]
+    folder = root / "docs" / "discovery"
+    before = set(folder.glob("*.md")) if folder.is_dir() else set()
+    assert front_door.main([*args, "--answers", str(answers), "--root", str(root)]) == 0
+    (new,) = set(folder.glob("*.md")) - before
+    return new
+
+
+def layout_root(tmp_path: Path, layout: str) -> Path:
+    root = tmp_path / layout
+    root.mkdir()
+    (root / "agk.toml").write_text(TOMLS[layout], encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize("layout", sorted(TOMLS))
+@pytest.mark.parametrize("screens", ["yes", "no", "open", None])
+def test_ac2_the_written_screens_value_is_read_past_the_quoted_vision(tmp_path, layout, screens):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1889 answers 1 and 6: yes, no, open, the default)."""
+    root = layout_root(tmp_path, layout)
+    doc = written_discovery(root, screens)
+    assert "\n## The idea\n" in doc.read_text(encoding="utf-8")
+    expected = screens or "open"
+    assert di.discovery_screens(root) == [(f"docs/discovery/{doc.name}", expected)]
+
+
+@pytest.mark.parametrize("layout", sorted(TOMLS))
+@pytest.mark.parametrize("screens,fails", [("yes", True), ("open", True), ("no", False)])
+def test_ac2_a_screenless_inventory_is_refused_for_a_written_yes_or_open(
+    tmp_path, layout, screens, fails
+):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1889 answer 3: the refusal, unchanged, now reached)."""
+    root = layout_root(tmp_path, layout)
+    project(root, KIT_ONLY)
+    written_discovery(root, screens)
+    assert any(p.startswith(EMPTY_LIST) for p in problems(root)) is fails, problems(root)
+    proc = check(root)
+    assert proc.returncode == (1 if fails else 0), proc.stdout + proc.stderr
+    assert (f"FAIL design: {EMPTY_LIST}" in proc.stdout) is fails
+    assert "The idea" not in proc.stdout and "example.com" not in proc.stdout
+
+
+@pytest.mark.parametrize("layout", sorted(TOMLS))
+def test_ac2_any_written_yes_among_several_documents_refuses(tmp_path, layout):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1889 answer 6: several documents, one says yes)."""
+    root = layout_root(tmp_path, layout)
+    project(root, KIT_ONLY)
+    written_discovery(root, "no", VISION.replace("books", "maps"))
+    assert problems(root) == []
+    written_discovery(root, "yes")
+    assert sorted(v for _, v in di.discovery_screens(root)) == ["no", "yes"]
+    assert any(p.startswith(EMPTY_LIST) for p in problems(root))
+    assert check(root).returncode == 1
+
+
+@pytest.mark.parametrize("layout", sorted(TOMLS))
+def test_ac2_a_quote_ends_only_at_its_own_end_marker(tmp_path, layout):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1889 answer 2, Q-DS-2: an answer's end marker and a
+    Screens line quoted in the problem are the person's words)."""
+    root = layout_root(tmp_path, layout)
+    project(root, KIT_ONLY)
+    vision = VISION + "\n<!-- agk:answer-end -->\n- Screens: no\n\n## More\n\nInvented."
+    doc = written_discovery(root, "yes", vision)
+    assert "<!-- agk:answer-end -->\n- Screens: no" in doc.read_text(encoding="utf-8")
+    assert di.discovery_screens(root) == [(f"docs/discovery/{doc.name}", "yes")]
+    assert check(root).returncode == 1
+
+
+@pytest.mark.parametrize("layout", ["installed", "plugin"])
+def test_ac2_an_issue_problem_holding_a_heading_no_longer_hides_the_line(tmp_path, layout):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1889 answer 6: the brief path, an issue problem; a
+    sidecar has no issue door, SPEC-0048 rule 13, so the personal root takes the vision tests)."""
+    root = layout_root(tmp_path, layout)
+    project(root, KIT_ONLY)
+    doc = written_discovery(
+        root, "yes", "Books at example.com are lost.\n## Steps\nInvented steps.", issue=True
+    )
+    assert "\n## Steps\n" in doc.read_text(encoding="utf-8")
+    assert di.discovery_screens(root) == [(f"docs/discovery/{doc.name}", "yes")]
+    assert any(p.startswith(EMPTY_LIST) for p in problems(root))
+    assert check(root).returncode == 1
+
+
+CHARTER = """# ADR-0002: Project charter
+
+- Status: Accepted
+- Date: 2026-11-24
+
+## Context
+
+A list of books on example.com.
+
+## Decision
+
+1. **Milestones**
+   - M1: a reader keeps a list. exit: 3 books are kept.
+2. **Non-goals**
+   - Payments.
+
+## Consequences
+
+None.
+"""
+
+
+@pytest.mark.parametrize("layout", sorted(TOMLS))
+@pytest.mark.parametrize("screens,named", [("yes", True), ("open", True), ("no", False)])
+def test_ac2_design_inventory_names_a_written_yes_or_open_in_sources(
+    tmp_path, layout, screens, named
+):
+    """REQ-044 AC2: SPEC-0037 rule 3 as amendment 217 (brief #1889 answer 3: `design.py
+    inventory` names the writer-made document in each milestone's `- Sources:`)."""
+    import design
+
+    root = layout_root(tmp_path, layout)
+    (root / "docs" / "adr").mkdir(parents=True)
+    (root / "docs" / "adr" / "0002-project-charter.md").write_text(CHARTER, encoding="utf-8")
+    doc = written_discovery(root, screens)
+    text = design.milestone_sections(root, [])
+    sources = [ln for ln in text.splitlines() if ln.startswith("- Sources:")]
+    assert len(sources) == 1, text
+    assert (f"docs/discovery/{doc.name}" in sources[0]) is named, sources
+    assert "docs/adr/0002-project-charter.md" in sources[0]
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("# Discovery: x\n\n- Screens: no\r\n\n## Answers\n", "no"),
+        ("# Discovery: x\n\n## Answers\n\n- Screens: yes\n", None),
+        ("# Discovery: x\n\n<!-- agk:problem sha256=" + "0" * 64 + " -->\n- Screens: yes\n", None),
+        ("# Discovery: x\n\n- Problem: vision\n", None),
+    ],
+)
+def test_ac2_screens_line_reads_only_the_writer_s_place(text, expected):
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1889 answer 7: CRLF, below `## Answers` (Q-DS-4),
+    an unclosed quote, no line)."""
+    assert di.screens_line(text.split("\n")) == expected
+
+
+def test_ac2_the_discovery_screens_line_has_one_reader():
+    """REQ-044 AC2: SPEC-0037 rule 3 (brief #1889 answer 9: a third reader must call
+    `screens_line`; the writer's own check-discovery test is the one other match)."""
+    import re
+
+    pattern = re.compile(r"- Screens: \(")  # any regex of the discovery line, whatever it captures
+    found = {
+        path.name: len(pattern.findall(path.read_text(encoding="utf-8")))
+        for path in sorted((KIT_ROOT / "scripts" / "agk").glob("*.py"))
+        if pattern.search(path.read_text(encoding="utf-8"))
+    }
+    assert found == {"design_inventory.py": 1, "front_door.py": 1}, found

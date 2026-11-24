@@ -1,0 +1,1 @@
+- The discovery `- Screens:` line is read past a quoted vision or issue with its own `## ` headings, by one reader in `design_inventory.py` that `front_door.py` also calls: a screenless inventory is refused when discovery says `yes` or `open`, and work without screens is asked for its `Demo:` run record, not a prototype (brief #1889, ADR-0783)
