@@ -218,6 +218,7 @@ from common import (
     load_config,
     main_folder_refusal,
     next_free_ids,
+    option_pairs,
     paused,
     personal_table,
     repo_root,
@@ -230,7 +231,11 @@ from common import (
     without_who,
 )
 from facts import ORIGIN
-from metrics import author_of, counted_authors, latest_verdict_body
+from metrics import (
+    author_of,
+    counted_authors,
+    latest_verdict_body,
+)
 from reviewers import (  # Q-1784-1: the sidecar answer reader
     APPROVE,
     derived_only,
@@ -3876,7 +3881,7 @@ def tidy_settings(root) -> dict:
     if not isinstance(table, dict):
         raise CheckError("tidy must be a table of tidy's settings (setting: [tidy])")
     for key, value in table.items():
-        if key == "branch_prefix":
+        if "branch_prefix" == key:
             ok = isinstance(value, str) and bool(value.strip())
         elif key == "min_idle_minutes":
             ok = isinstance(value, int) and not isinstance(value, bool) and value >= 1
@@ -5545,8 +5550,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args or args[0] not in COMMANDS or len(args[1:]) % 2:
         print(USAGE)
         return 2
-    cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
-    pairs = len(args[1::2])
+    cmd, opts = args[0], dict(option_pairs(args[1:], strict=False))
+    pairs = len(option_pairs(args[1:], strict=False))
     allowed = {
         "watch": {
             "--pr",

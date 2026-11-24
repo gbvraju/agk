@@ -195,15 +195,15 @@ def project_lint_paths(root: Path) -> list[str] | None:
     return list(value)
 
 
-TOUCHED_KEY = "touched_files"
+TOUCHED_SETTING = "touched_files"
 
 
 def touched_files(root: Path) -> str:
     """Brief #1844 (ADR-0773): `hold` (absent, the default: rule 7's no-rise) or `meet` (a file
     the change touches is held to 0 by the pack's steps); another value is refused, never named."""
-    value = config_source(root).get(TOUCHED_KEY, "hold")
+    value = config_source(root).get(TOUCHED_SETTING, "hold")
     if value not in ("hold", "meet") or not isinstance(value, str):
-        raise CheckError(f"not an accepted value (setting: {TOUCHED_KEY})")
+        raise CheckError(f"not an accepted value (setting: {TOUCHED_SETTING})")
     return value
 
 

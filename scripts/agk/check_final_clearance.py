@@ -52,6 +52,7 @@ from common import (
     fix_items,
     git,
     item_tag,
+    option_pairs,
     repo_root,
     resolve_base,
     rule_tags_from,
@@ -59,7 +60,10 @@ from common import (
     show,
     utf8_output,
 )
-from metrics import counted_authors, latest_verdict_body
+from metrics import (
+    counted_authors,
+    latest_verdict_body,
+)
 from reviewers import (
     confirmed_comments,
     design_approvals,
@@ -278,7 +282,7 @@ def check(
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = sys.argv[1:] if argv is None else argv
-    opts = dict(zip(args[::2], args[1::2], strict=False))
+    opts = dict(option_pairs(args, strict=False))
     known = {"--comments", "--reviews", "--head", "--author", "--draft"}
     if len(args) % 2 or not set(opts) <= known:
         print(USAGE)

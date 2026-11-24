@@ -98,7 +98,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, available_memory, conductor_refusal, utf8_output
+from common import CheckError, available_memory, conductor_refusal, option_pairs, utf8_output
 
 import config
 
@@ -814,10 +814,10 @@ SUPERVISED = (
 def role_main(args: list[str], root: Path | None = None, extra: dict | None = None) -> int:
     """`role --role steward|conductor --session ID [--adapter COMMAND]` (brief #1322); ROOT and
     EXTRA (the supervisor's `AGK_STEWARD_START`, brief #1387) for a start from a pass."""
-    opts = dict(zip(args[1::2], args[2::2], strict=False))
+    opts = dict(option_pairs(args[1:], strict=False))
     if (
         len(args[1:]) % 2
-        or len(opts) != len(args[1::2])
+        or len(opts) != len(option_pairs(args[1:], strict=False))
         or not {"--role", "--session"} <= set(opts) <= {"--role", "--session", "--adapter"}
         or opts["--role"] not in ROLES
         or not SESSION_ID.fullmatch(opts["--session"])
@@ -888,13 +888,13 @@ def main(argv: list[str] | None = None) -> int:
     resume = args.count("--resume") == 1 and args[:1] == ["prompts"]
     if resume:
         args.remove("--resume")
-    opts = dict(zip(args[1::2], args[2::2], strict=False))
+    opts = dict(option_pairs(args[1:], strict=False))
     if (
         args[:1] != ["prompts"]
         or len(args[1:]) % 2
         or "--plan" not in opts
         or not set(opts) <= {"--plan", "--adapter"}
-        or len(opts) != len(args[1::2])
+        or len(opts) != len(option_pairs(args[1:], strict=False))
     ):
         print(USAGE, file=sys.stderr)
         return 2

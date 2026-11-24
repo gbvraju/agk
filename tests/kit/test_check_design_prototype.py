@@ -847,3 +847,34 @@ def test_ac4_a_signed_off_older_version_still_freezes(tmp_path):
     proc = check(tmp_path)
     assert proc.returncode == 1, proc.stdout
     assert f"FAIL design: rule 9: {REL}: a signed-off version changed" in proc.stdout
+
+
+# The fixture set's two numbers as digits only: brief #1886 rewrote their form, never their digits.
+FIXTURE_DIGITS = {"12025550143", "442079460958"}
+
+
+def test_req014_the_fixture_phones_keep_their_digits():
+    """REQ-014 brief #1886 answer 3c: the same digits in the check and in the kit's fixture set."""
+    data = json.loads(FIXTURES.read_text(encoding="utf-8"))
+    kit_phones = {data["person"]["phone"], data["person"]["admin_phone"]}
+    assert {re.sub(r"\D", "", p) for p in kit_phones} == FIXTURE_DIGITS
+    assert {re.sub(r"\D", "", p) for p in design_prototype_check.FIXTURE_PHONES} == FIXTURE_DIGITS
+    assert set(design_prototype_check.FIXTURE_PHONES) == kit_phones
+    for phone in kit_phones:
+        assert design_prototype_check.PHONE.fullmatch(phone), "the check still reads the new form"
+
+
+@pytest.mark.parametrize("phone", ["+1 202 555 0143", "+1 (202) 555-0143"])
+def test_req014_a_page_with_either_form_of_the_fixture_phone_passes(tmp_path, phone):
+    """REQ-014 brief #1886 answer 6: a project's page in the old or the new form passes rule 7."""
+    folder = version(tmp_path)
+    edit(folder, "book-list--default.html", "+1 202 555 0143", phone)
+    assert problems(tmp_path) == []
+
+
+def test_req014_the_guard_finds_nothing_in_the_fixture_set():
+    """REQ-014 brief #1886 answer 3c: the shipped fixture set passes the unchanged data guard."""
+    import guard
+
+    text = FIXTURES.read_text(encoding="utf-8")
+    assert [f.kind for f in guard.scan_text(text)] == []

@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import kit_hashes
 from changelog_fragments import FRAG_DIR, tree_fragments
-from common import CheckError, git, repo_root, run
+from common import CheckError, git, option_pairs, repo_root, run
 
 NAME = "tag"
 USAGE = "usage: check_tag.py --tag vN.N.N [--issue-json FILE]"
@@ -111,7 +111,7 @@ def check(root: Path, tag: str, out: Path | None) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    opts = dict(zip(args[::2], args[1::2], strict=False))
+    opts = dict(option_pairs(args, strict=False))
     if len(args) % 2 or "--tag" not in opts or not set(opts) <= {"--tag", "--issue-json"}:
         print(USAGE)
         return 2

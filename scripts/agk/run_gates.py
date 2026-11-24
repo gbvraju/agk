@@ -80,7 +80,7 @@ import playbook_format
 from common import CheckError, changed_files, merge_base, repo_root, resolve_base, run, utf8_output
 from gates import baseline, pins, python_pack
 
-from config import PROJECT_LINT, TOUCHED_KEY, project_lint_paths, touched_files
+from config import PROJECT_LINT, TOUCHED_SETTING, project_lint_paths, touched_files
 
 NAME = "gates"
 REGISTRY = Path(__file__).resolve().parent / "gates"
@@ -101,9 +101,9 @@ UNCOUNTED = "tool did not run"  # brief #1837: a failure that counts no file is 
 FLOORS = {"floor": "setting: standards.config", "type-floor": "path class: tsconfig.json"}
 NO_FILE = "no product file in scope"
 TOUCHED = (
-    f"SPEC-0072 rule 7: a file this change touches must meet the pack (setting: {TOUCHED_KEY})"
+    f"SPEC-0072 rule 7: a file this change touches must meet the pack (setting: {TOUCHED_SETTING})"
 )
-NO_BASE = f"no base (setting: {TOUCHED_KEY})"
+NO_BASE = f"no base (setting: {TOUCHED_SETTING})"
 
 
 def step_module(step: object) -> ModuleType | None:

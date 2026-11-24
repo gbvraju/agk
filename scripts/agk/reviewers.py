@@ -42,7 +42,7 @@ BLOCK_END = "# <<< agk\n"
 HANDLE_RE = re.compile(r"^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 USER_RE = re.compile(r"^@?[A-Za-z0-9_.-]+$")
-AUTHORS = "verdict_authors"
+VERDICTS = "verdict_authors"
 APPROVERS = "spec_approvers"
 CONDUCTORS = "conductor_accounts"  # SPEC-0039 rule 3: the optional second account (brief #528)
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
@@ -184,7 +184,7 @@ def authors_of(data: dict) -> list[str]:
     """The listed verdict authors, lower case without `@` (SPEC-0021 rule 5): the list, else the
     user handle of the team `maintainers`; a team handle (`@org/slug`) lists nobody, and the
     installed placeholder `@REPLACE-ME` is never listed."""
-    listed = data.get(AUTHORS)
+    listed = data.get(VERDICTS)
     if listed is None:
         team = (data.get("teams") or {}).get("maintainers")
         handle = team.get("github_team") if isinstance(team, dict) else None
@@ -699,12 +699,12 @@ def solo_problems(data: dict, mode: str) -> list[str]:
     people = set(authors_of(data)) | set(approvers_of(data))
     if not people:
         return [
-            f"solo mode needs one listed person in {AUTHORS}, and nobody is listed {SOLO_SETTING}"
+            f"solo mode needs one listed person in {VERDICTS}, and nobody is listed {SOLO_SETTING}"
         ]
     if len(people) > 1:
         return [
-            f"solo mode allows one person in {AUTHORS} and {APPROVERS} together, and more than one "
-            f"is listed: use team mode {SOLO_SETTING}"
+            f"solo mode allows one person in {VERDICTS} and {APPROVERS} together, and more than "
+            f"one is listed: use team mode {SOLO_SETTING}"
         ]
     return []
 
@@ -752,7 +752,7 @@ def parse(text: str) -> dict:
     return data
 
 
-TOP_KEYS = ("version", "classes", "teams", AUTHORS, APPROVERS, CONDUCTORS)
+TOP_KEYS = ("version", "classes", "teams", VERDICTS, APPROVERS, CONDUCTORS)
 
 
 def misplaced(data: dict) -> list[str]:
@@ -818,13 +818,13 @@ def validate(data: dict, protected_list: str) -> list[str]:
 def author_problems(data: dict) -> list[str]:
     """SPEC-0021 rule 6: a list that is not user handles, or nobody listed; names the setting."""
     problems: list[str] = []
-    listed = data.get(AUTHORS)
+    listed = data.get(VERDICTS)
     if listed is not None and not (
         isinstance(listed, list) and all(isinstance(a, str) and USER_RE.match(a) for a in listed)
     ):
-        problems.append(f"{AUTHORS} must be a list of user handles")
+        problems.append(f"{VERDICTS} must be a list of user handles")
     if not authors_of(data):
-        problems.append(f"no listed verdict author: set {AUTHORS} (SPEC-0021)")
+        problems.append(f"no listed verdict author: set {VERDICTS} (SPEC-0021)")
     return problems
 
 

@@ -57,7 +57,7 @@ USAGE = "usage: batch.py PR [PR...] [--command CMD] [--base REF] [--json] [--rec
 DEFAULT = "make -f agk.mk agk-project-test"
 SCHEMA = 1
 REMOTE = "origin"
-IDENTITY = ["-c", "user.name=agk-batch", "-c", "user.email=agk-batch@localhost.invalid"]
+IDENTITY = ["-c", "user.name=agk-batch", "-c", "user.email=agk-batch@example.com"]
 QUIET = ["-c", "commit.gpgsign=false"]
 GREEN = ("batch-green", "green")
 

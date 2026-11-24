@@ -7,15 +7,18 @@ network, and the `gh` on PATH is a stub that records any call.
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
 import shlex
 import stat
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import tomllib
 from pathlib import Path
 
 import check_licence_notice as notice
+import plugin_snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
 HEAD = "\n".join(notice.header_lines("hash")) + "\n"
@@ -262,9 +265,11 @@ def test_req014_the_kit_manifest_snapshot_covers_every_installed_path():
     }
     for rel in installed:
         assert any(rel.startswith(a) if a.endswith("/") else rel == a for a in listed), rel
-    for folder in (".claude-plugin/", "skills/", "scripts/agk/", "kit/", "config/", "tests/kit/"):
+    for folder in (".claude-plugin/", "skills/", "scripts/agk/", "kit/", "config/"):
         assert folder in listed
+    assert manifest["kit_tests"] == "tests/kit"  # doctor and check_kit_tests read it, unchanged
     for never in (
+        "tests/",  # brief #1886 answer 2: nothing reads the kit's tests from the plugin
         "docs/adr/",
         "docs/specs/",
         "docs/runs/",
@@ -278,3 +283,62 @@ def test_req014_the_kit_manifest_snapshot_covers_every_installed_path():
     entry = [e for e in cfg["testing"]["map"] if e["code"] == "scripts/agk/plugin_snapshot.py"]
     assert entry and "tests/kit/test_plugin_snapshot.py" in entry[0]["tests"]
     assert "scripts/agk/plugin_snapshot.py" not in manifest["verbatim"]  # kit-only
+
+
+def shipped_files() -> dict[str, tuple[int, bytes]]:
+    """The tracked files of the working tree that its own `snapshot` list allows, as bytes."""
+    listed = json.loads((ROOT / "kit/manifest.json").read_text(encoding="utf-8"))["snapshot"]
+    tracked = subprocess.run(  # nosec B603 B607 - git with a fixed argument list
+        ["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, check=True
+    ).stdout.decode("utf-8").split("\0")
+    return {
+        rel: (0o644, (ROOT / rel).read_bytes())
+        for rel in tracked
+        if rel and plugin_snapshot.allowed(rel, listed) and (ROOT / rel).is_file()
+    }
+
+
+def test_req014_every_shipped_file_passes_the_guard():
+    """REQ-014 brief #1886 answer 4: every file the plugin ships passes the unchanged guard."""
+    files = shipped_files()
+    assert files and not any(rel.startswith("tests/") for rel in files)
+    problems = plugin_snapshot.secret_problems(files)
+    classes = sorted({line.rsplit("(path class ", 1)[-1].rstrip(")") for line in problems})
+    assert problems == [], f"{len(problems)} shipped files hold a shape in path classes {classes}"
+
+
+def test_req014_the_scan_holds_no_exemption():
+    """REQ-014 brief #1886 answer 1: every shipped file is scanned; no allowance, no path list."""
+    source = inspect.getsource(plugin_snapshot.secret_problems)
+    assert "allow_paths" not in source
+    assert "scan_text(text)" in source
+    assert not re.search(r"\b(?:startswith|endswith)\(|\bin \(|\bin \[", source)
+
+
+def test_req014_a_list_with_tests_ships_them_and_scans_them(repo, tmp_path_factory):
+    """REQ-014 brief #1886 answer 5: a `snapshot` naming `tests/kit/` scans its files too."""
+    address = "t" + "@" + "example.invalid"  # built here; a reserved name the guard reads
+    manifest = {"kit_version": "1.0.0", "verbatim": [], "snapshot": [*SNAPSHOT, "tests/kit/"]}
+    kit(
+        repo,
+        {
+            "kit/manifest.json": json.dumps(manifest) + "\n",
+            "tests/kit/test_y.py": f"ADDRESS = {address!r}\n",
+        },
+    )
+    out = tmp_path_factory.mktemp("snap") / "s"
+    proc = repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(out))
+    assert proc.returncode == 1
+    assert "tests/kit/test_y.py holds a EMAIL shape (path class tests/)" in proc.stdout
+    assert address not in proc.stdout
+    assert not out.exists()
+
+
+def test_req014_a_list_without_tests_leaves_them_out(repo, tmp_path_factory):
+    """REQ-014 brief #1886 answer 5: without `tests/kit/` the file is left out; the build passes."""
+    address = "t" + "@" + "example.invalid"
+    kit(repo, {"tests/kit/test_y.py": f"ADDRESS = {address!r}\n"})
+    out = tmp_path_factory.mktemp("snap") / "s"
+    proc = repo.run("plugin_snapshot.py", "build", "--tag", "v1.0.0", "--out", str(out))
+    assert proc.returncode == 0, proc.stdout
+    assert "tests/kit/test_y.py" not in files_of(out)

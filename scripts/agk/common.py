@@ -88,6 +88,17 @@ def pin_gate(cwd: Path | None = None) -> None:
 pin_gate()
 
 
+def option_pairs(args: Sequence[str], *, strict: bool) -> list[tuple[str, str]]:
+    """A command line's items two by two: (`args[0]`, `args[1]`), (`args[2]`, `args[3]`), ...
+    With `strict` an odd count raises `ValueError`, as `zip(..., strict=True)` does; without it
+    the last item is dropped (brief #1886, ADR-0780: no stepped slice, which the data guard reads
+    as an address)."""
+    if strict and len(args) % 2:
+        raise ValueError("an odd number of items cannot be read as pairs")
+    items = iter(args)
+    return list(zip(items, items, strict=False))
+
+
 def utf8_output() -> None:
     """Reconfigure stdout and stderr to UTF-8 (`errors="replace"`) when they are text streams in
     another encoding (brief #1233, ADR-0524). A Windows console writes in its code page (cp1252),
@@ -1820,7 +1831,7 @@ def plan_settings(root: Path) -> dict:
             want = 'a table of S, M and L to "<low>-<high>" hours'
         if not ok:
             raise CheckError(f"{key} must be {want} (setting: [plan] {key})")
-        found[key] = dict(value) if key == "default_hours" else value
+        found[key] = dict(value) if "default_hours" == key else value
     return found
 
 

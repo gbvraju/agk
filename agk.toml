@@ -1105,6 +1105,7 @@ tests = [
   "tests/kit/test_merger_spec_record.py",
   "tests/kit/test_cloud_clone_local_mode.py", "tests/kit/test_plugin_version_pin.py", "tests/kit/test_shared_main.py",
   "tests/kit/test_governance_level.py", "tests/kit/test_personal_lifecycle.py",
+  "tests/kit/test_common_option_pairs.py",
 ]
 [[testing.map]]
 code = "scripts/agk/session.py"

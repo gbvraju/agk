@@ -31,7 +31,7 @@ unchanged, and a missing gitleaks fails (`Q-S0041-15`); with `--approve` the tes
 the base tree and on the head tree, and a test that passed on the base and fails on the head fails
 the floor, or, without `{junit}`, a passing base and a failing head do, and a failing base is
 `unknown`, never a pass. No setting changes a step; it exits 0 only when both pass. With
-`--approve`, after the secret scan, `run_gates.py`'s gates run on the head tree, files only and
+`--approve`, after the secret scan, the gates of `run_gates.py` run on the head tree, files only and
 with no forge call, at every level; a red gate fails the floor (SPEC-0072 rule 11; brief #1601).
 
 Rule 23 (build (k), first part): a floor with `--approve` appends one line `{head, step, result,
@@ -533,7 +533,7 @@ def team_ref_warnings(clone: Path, base: str, head: str, table: dict) -> list[st
 
 DISCLOSURE = "personal.ai_disclosure"
 DISCLOSURE_LINE = "This change was made with the help of an AI coding assistant."
-TRAILER_KEY = "Co-Authored-By"
+TRAILER_NAME = "Co-Authored-By"
 
 
 def trailer_warnings(clone: Path, base: str, head: str, table: dict) -> list[str]:
@@ -543,10 +543,10 @@ def trailer_warnings(clone: Path, base: str, head: str, table: dict) -> list[str
         return []
     found = []
     for sha in branch_commits(clone, base, head):
-        shown = _git(clone, "show", "-s", f"--format=%(trailers:key={TRAILER_KEY},valueonly)", sha)
+        shown = _git(clone, "show", "-s", f"--format=%(trailers:key={TRAILER_NAME},valueonly)", sha)
         if not shown.stdout.strip():
             found.append(
-                f"gate: warning: commit {sha[:12]} has no {TRAILER_KEY} trailer; if an agent "
+                f"gate: warning: commit {sha[:12]} has no {TRAILER_NAME} trailer; if an agent "
                 f"session made it, add the trailer yourself (setting: {DISCLOSURE})"
             )
     return found

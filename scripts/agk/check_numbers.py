@@ -34,6 +34,7 @@ from common import (
     changed_files,
     json_records,
     merge_base,
+    option_pairs,
     parse_requirements,
     read_text,
     repo_root,
@@ -144,7 +145,7 @@ def check(root: Path, opts: dict[str, str]) -> int:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = sys.argv[1:] if argv is None else argv
-    opts = dict(zip(args[::2], args[1::2], strict=False))
+    opts = dict(option_pairs(args, strict=False))
     if (
         len(args) % 2
         or not set(opts) <= {"--open", "--number", "--briefs", "--brief"}

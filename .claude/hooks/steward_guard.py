@@ -129,7 +129,8 @@ def default_branch(project: Path) -> str:
 
 def kit_only_folders(manifest: dict) -> tuple[str, ...]:
     """Brief #1752 (ADR-0732): the `snapshot` folders under which no template, rendered or rule 2
-    kept path lies. Raises ValueError without a `snapshot` list."""
+    kept path lies, and the `kit_tests` folder, which the snapshot no longer ships (brief #1886,
+    ADR-0780) but a product still never holds. Raises ValueError without a `snapshot` list."""
     snapshot = manifest.get("snapshot")
     if not isinstance(snapshot, list):
         raise ValueError("snapshot")
@@ -140,6 +141,8 @@ def kit_only_folders(manifest: dict) -> tuple[str, ...]:
         *KEEPS_UNDER,
     ]
     folders = [str(p) for p in snapshot if str(p).endswith("/")]
+    tests = str(manifest.get("kit_tests") or "").strip("/")
+    folders += [f"{tests}/"] if tests and f"{tests}/" not in folders else []
     return tuple(f for f in folders if not any(str(h).startswith(f) for h in held))
 
 
@@ -669,7 +672,7 @@ def push_problem(args: list[str], where: list[str], cwd: Path) -> str | None:
             return deny
         j += 1
     for key, value in found:
-        if key == "push.followtags" and value.lower() in TRUE:
+        if "push.followtags" == key and value.lower() in TRUE:
             return f"steward guard: {RULE} denies a tag (setting: push.followTags)"
         if remote and key == f"remote.{remote.lower()}.mirror" and value.lower() in TRUE:
             return f"steward guard: {RULE} denies a tag (setting: remote.<name>.mirror)"

@@ -57,6 +57,7 @@ from common import (
     final_accepts,
     git,
     merge_base,
+    option_pairs,
     pr_mode,
     repo_root,
     resolve_base,
@@ -365,10 +366,10 @@ OPTIONS = ("--comments", "--body", "--pulls")
 
 def main() -> int:
     args = sys.argv[1:]
-    names = args[::2]
+    names = [name for name, _ in option_pairs(args, strict=False)]
     if len(args) % 2 or any(n not in OPTIONS for n in names) or len(set(names)) != len(names):
         raise CheckError(USAGE)
-    opts = dict(zip(args[::2], args[1::2], strict=True))
+    opts = dict(option_pairs(args, strict=True))
     root = repo_root()
     # without the option, the file AGK_RECORD_COMMENTS names (amendment 122, brief #601)
     path = opts.get("--comments") or os.environ.get("AGK_RECORD_COMMENTS") or None
