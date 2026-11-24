@@ -167,5 +167,5 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 - kit: `python3 scripts/agk/adopt.py TARGET [--dry-run]`, standard library only, installs the kit's files into an existing git work tree and refuses before any write (rules 1 and 2)
 - github: the installed `governance.yml` workflow runs on `pull_request` and on every `push`, and the printed ruleset instructions name the detected branch, with the one-line pointer to `/agk:ruleset` (rule 8)
 - local: no network, no `git` or `gh` calls, no commits and no writes outside TARGET (rule 2)
-- personal: not applicable: no rule here names personal mode; adopt writes the files of a governed repository (rules 1 and 12)
+- personal: not applicable: no rule here names personal mode. Adopt writes the files of a governed repository (rules 1 and 12)
 - stacks: the stacks whose manifests of the kit's `config/stack-signals.toml` the tree holds give the test patterns when no test file matches, and target code is never imported, run or parsed (rules 3 and 9)

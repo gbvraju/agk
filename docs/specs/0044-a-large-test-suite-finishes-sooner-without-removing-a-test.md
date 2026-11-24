@@ -55,10 +55,10 @@ REQ-051 AC1: *per-file timing is recorded where the runner gives it, and missing
 
 ## Contexts
 
-- kit: each new key of the `[testing]` table is optional, and with every one absent each command prints and runs what the default branch does today; a malformed value is refused naming the setting (rule 1)
+- kit: each new key of the `[testing]` table is optional, and with every one absent each command prints and runs what the default branch does today. A malformed value is refused naming the setting (rule 1)
 - github: CI's push run, a release pull request and `pr_tests = "full"` run the full suite exactly as `project_tests.py` does today (rule 1)
 - local: `prepush.py`'s tests step adds `-n <workers>` only when `import xdist` succeeds, `smoke.py --run` runs under the heavy-step lock, and `doctor.py --record FILE` reads one prepush record and fails nothing (rules 4, 7, 8 and 9)
-- personal: not applicable: no rule here names personal mode; the keys are read by the same commands wherever they run (rule 1)
+- personal: not applicable: no rule here names personal mode. The keys are read by the same commands wherever they run (rule 1)
 - stacks: timing comes from pytest's durations table or any runner's JUnit report, workers from pytest-xdist for pytest and `parallel_command` for other runners, and adopt detects the web test name patterns (rules 2, 4, 5 and 10)
 
 ## Open questions

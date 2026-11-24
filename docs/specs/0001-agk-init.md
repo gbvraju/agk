@@ -164,5 +164,5 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
 - kit: `python3 scripts/agk/init.py TARGET [--dry-run]`, standard library only, writes the kit's files into TARGET, and the installed `agk.toml` carries the version stamp and dates (rules 1 and 14)
 - github: the verbatim set installs `.github/workflows/governance.yml`, and the branch-rule instructions are printed for the user to apply by hand, with the pointer to `/agk:ruleset` (rules 7 and 19)
 - local: no network, no `git` or `gh` calls, no `git push`, no commits and no writes outside TARGET (rule 3)
-- personal: not applicable: no rule here names personal mode; init writes the files of a governed repository (rules 1 and 14)
+- personal: not applicable: no rule here names personal mode. Init writes the files of a governed repository (rules 1 and 14)
 - stacks: a target that holds a test file or a stack manifest whose patterns are not all Python names gets the `test_patterns` line adopt would detect (rule 14, SPEC-0002 rule 9)

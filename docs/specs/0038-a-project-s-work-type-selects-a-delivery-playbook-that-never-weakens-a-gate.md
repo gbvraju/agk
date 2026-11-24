@@ -68,11 +68,11 @@ REQ-045 AC1: *a playbook is checkable data, and a speed claim is never presented
 
 ## Contexts
 
-- kit: a playbook is a data file under `config/playbooks/`, read and checked by `playbook.py` and `check_playbooks.py`, and a project declares one with `work_type` in the `[delivery]` table of `agk.toml`; with none declared no command reads a playbook (rules 1, 2 and 5)
-- github: `check_pr_body.py`, `proof.py` and the CI proof job do not change; the conductor reads the `Playbook evidence:` line of a clearing verdict (rule 9), and a playbook only adds gates, never removing, skipping or relaxing one (rule 4)
+- kit: a playbook is a data file under `config/playbooks/`, read and checked by `playbook.py` and `check_playbooks.py`, and a project declares one with `work_type` in the `[delivery]` table of `agk.toml`. With none declared no command reads a playbook (rules 1, 2 and 5)
+- github: `check_pr_body.py`, `proof.py` and the CI proof job do not change. The conductor reads the `Playbook evidence:` line of a clearing verdict (rule 9), and a playbook only adds gates, never removing, skipping or relaxing one (rule 4)
 - local: the same `check_playbooks.py`, `doctor.py` and `playbook.py split` read the same files, `playbook.py split` prints and writes no file, and a gate that needs a browser, a device, a cloud account, a model or a network to decide is `judgement` (rules 5, 7 and 10)
 - personal: in personal mode the steward only prints the work-type change, as in team mode (rule 5, amendment 218)
-- stacks: `engines.py stack-write` writes the playbook's gates and `[testing]` suggestions into the stack ADR's skeleton as proposals, and refuses while a discovery document names a work type other than `pilot` and none is declared; a playbook names no vendor or framework (rules 1, 5 and 6)
+- stacks: `engines.py stack-write` writes the playbook's gates and `[testing]` suggestions into the stack ADR's skeleton as proposals, and refuses while a discovery document names a work type other than `pilot` and none is declared. A playbook names no vendor or framework (rules 1, 5 and 6)
 
 ## Open questions
 
