@@ -1372,8 +1372,8 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:upgrade` | `scripts/agk/upgrade.py` | vendored files |
 | `/agk:uninstall` | `scripts/agk/uninstall.py` (a dry run; `--write` after you say yes) | one new branch: the kit's unchanged files deleted and its own lines removed, or `paused = true` with `--pause`; nothing committed |
 | `/agk:ruleset` | `scripts/agk/ruleset.py plan`, then the `gh api` commands it prints, after you say yes | the default branch's ruleset and two repository settings (add-only) |
-| `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR on a new branch |
-| `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR on a new branch |
+| `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR (a copy of `kit/templates/charter-adr.md`) on a new branch |
+| `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR (a copy of `kit/templates/charter-adr.md`) on a new branch |
 | `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check`, `stack-files` | one Proposed ADR of stack options on a new branch |
 | `/agk:design` | `scripts/agk/design.py write`, `screenshots`, `scripts/agk/check_design.py` | `docs/design/theme.md` (when absent) and a mockup folder with `index.html` and `README.md` on a new branch |
 | `/agk:launch` | `scripts/agk/session.py plan`, `scripts/agk/launch.py prompts` | nothing in the repository (after you say yes, one session per planned slot is started through an adapter, or its prompt is printed) |

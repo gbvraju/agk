@@ -1,0 +1,1 @@
+- `/agk:start` and `/agk:vision` copy one charter template, `kit/templates/charter-adr.md`, whose own test runs `playbook.py check-start` and the ADR check, so a new project's charter passes on the first try; `start-ids` refuses a work tree that is not clean, and the day-zero source goes in its own pull request first (brief #1888)

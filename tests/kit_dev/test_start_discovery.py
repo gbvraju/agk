@@ -11,7 +11,7 @@ import re
 
 import pytest
 from conftest import KIT_ROOT
-from test_playbook import GOOD_CHARTER, GOOD_VISION, check_start, failed, good_start
+from test_playbook import GOOD_VISION, charter, check_start, failed, good_start
 from test_playbook import started as playbook_started  # noqa: F401  (wrapped below)
 
 SKILL = KIT_ROOT / "skills" / "start" / "SKILL.md"
@@ -33,17 +33,9 @@ def started(request):
 
 
 def charter_with(answers=None, slice_lines=None, topics=TOPICS, gap=""):
-    """GOOD_CHARTER with Discovery (and Slice) items as numbered items 1 and 2 of the Decision."""
+    """The kit's charter template filled, with these Discovery and, when given, Slice bullets."""
     answers = {**ANSWERS, **(answers or {})}
-    discovery = "".join(f"   - {t}: {answers[t]}\n" for t in topics)
-    items = f"1. **Discovery**\n{discovery}"
-    if slice_lines is not None:
-        items += "2. **Slice**\n" + "".join(f"   - {ln}\n" for ln in slice_lines)
-    text = re.sub(r"4\. \*\*Discovery\*\*\n(?:   - .*\n)+", "", GOOD_CHARTER)
-    text = text.replace("1. **Milestones**", "3. **Milestones**")
-    text = text.replace("2. **Non-goals**", "4. **Non-goals**")
-    text = text.replace("3. **Done means**", "5. **Done means**")
-    return text.replace("## Decision\n\n", f"## Decision\n\n{items}") + gap
+    return charter(topics, answers, () if slice_lines is None else slice_lines) + gap
 
 
 def test_ac5_a_start_with_all_six_topics_answered_passes(started):
