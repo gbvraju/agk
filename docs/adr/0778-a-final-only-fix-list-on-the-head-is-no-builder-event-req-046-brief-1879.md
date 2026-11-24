@@ -24,10 +24,11 @@ the steward chat, quoted as data): "Yes, draft all four along with release".
 1. **One reading of "no event".** `merge_cleared.clears_head(verdict, sha)` is the merger's own test of rule 3
    (`Verdict: cleared <sha>`, or `accepted_adrs(verdict, sha) is not None`), and `judge` and `session.cleared_unmerged`
    call it. `merge_cleared.no_builder_event(comment, sha)` is what the wakers read: a `Verdict: cleared` (`Q-1391-1`) or
-   `accepted_adrs` on exactly the full head. A fix list with a numbered item, any other `Final:` line
+   `accepted_adrs` on exactly the full head; `merge_cleared.builder_owed` drops those and, when the newest verdict is
+   one, every older verdict too, since only the newest counts. A fix list with a numbered item, any other `Final:` line
    (`docs/requirements.md`, a spec, a stack-options ADR), a mix, a short sha or another head stays an event as today.
-2. **The builder is not woken.** `autopilot.pick` leaves such a verdict out of `owing`; `conductor.owed_of`, read by
-   `builder_facts`, leaves it out of `owed`, so `job_gate` says `left (waits for an event)` (this also aligns the
+2. **The builder is not woken.** `autopilot.pick` reads `builder_owed` as `owing`; `conductor.owed_of`, read by
+   `builder_facts`, reads it for `owed`, so `job_gate` says `left (waits for an event)` (this also aligns the
    watchdog with `Q-1391-1` for a `Verdict: cleared`); `session.follow_up_owed` returns no `fix list` for it;
    `session.builder_verdicts` takes it out of the watch's `missed_verdict` and `verdict_line`, and every older listed
    verdict with it when it is the newest, so `watch --pr` waits on and ends at `merged` or `closed`. A `Verdict:
@@ -45,7 +46,7 @@ the steward chat, quoted as data): "Yes, draft all four along with release".
 5. **The specs.** Amendment 225 (`docs/runs/proposed-spec-amendments-225.md`) proposes SPEC-0039 rules 2 and 9 and
    SPEC-0064 rule 4; the reviewers approve it (principle 6).
 6. **Path classes changed:** `scripts/agk/` (`merge_cleared.py`, `autopilot.py`, `conductor.py`, `session.py`), `kit/`
-   (`templates/runtime/builder.txt`, `hashes.json` regenerated), `.claude/` (`agents/conductor.md`), `tests/kit/` (the
+   (`templates/runtime/builder.txt`; `hashes.json` needed no change: `kit_hashes.py` reads `ok kit-hashes`), `.claude/` (`agents/conductor.md`), `tests/kit/` (the
    seven mapped test files) and `agk.toml` (`test_runtime_templates.py` joins the `builder.txt` map entry).
 
 ## Consequences

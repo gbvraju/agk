@@ -3328,8 +3328,9 @@ def newest(comments: list, prefixes: tuple[str, ...]) -> datetime | None:
 
 def owed_of(comments: list, sha: str) -> datetime | None:
     """The newest line the builder owes an answer to, leaving out a verdict that clears the head
-    SHA (`merge_cleared.no_builder_event`, brief #1879, Q-1391-1)."""
-    return newest([c for c in comments if not merge_cleared.no_builder_event(c, sha)], OWED)
+    SHA and, when the newest verdict is one, every older verdict (`merge_cleared.builder_owed`,
+    brief #1879, Q-1391-1)."""
+    return newest(merge_cleared.builder_owed(comments, sha), OWED)
 
 
 def builder_facts(root, repo: str, record: dict, pulls: list, now) -> dict | None:

@@ -805,6 +805,16 @@ def no_builder_event(comment: dict, sha: str) -> bool:
     return cleared or accepted_adrs(comment, sha) is not None
 
 
+def builder_owed(comments: list[dict], sha: str) -> list[dict]:
+    """COMMENTS without what owes the builder nothing: each `no_builder_event` comment, and every
+    `Verdict:` comment when the latest is one, since only the newest verdict counts (brief #1879
+    answer 7); the wakers `autopilot.pick` and `conductor.owed_of` read this list."""
+    latest = latest_verdict(comments)
+    if latest is not None and no_builder_event(latest, sha):
+        return [c for c in comments if not first_line(c).startswith("Verdict:")]
+    return [c for c in comments if not no_builder_event(c, sha)]
+
+
 def accepted_adrs(verdict: dict, sha: str) -> list[str] | None:
     """The ADRs a covered fix list on exactly SHA accepts by its `Final:` lines alone (SPEC-0021
     rule 3a, brief 557), or None: such a verdict clears the head like `Verdict: cleared <sha>`."""

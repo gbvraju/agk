@@ -640,7 +640,7 @@ def pick(pulls: list, issues: list, comments: dict, now: datetime, ready: dict |
             review = review or n
         own = conductor.newest(said, conductor.ALIVE) or session.moment(pull.get("created_at"))
         head = str((pull.get("head") or {}).get("sha") or "")
-        owing = [c for c in said if not merge_cleared.no_builder_event(c, head)]  # brief #1879
+        owing = merge_cleared.builder_owed(said, head)  # brief #1879
         facts = {"own": own, "owed": conductor.newest(owing, conductor.OWED),
                  "labels": session.labels_of(pull)}  # fmt: skip
         if brief is not None and conductor.job_gate(None, facts, now) is None:

@@ -184,6 +184,40 @@ def test_every_waker_and_the_merger_read_one_table_of_verdict_shapes(monkeypatch
         assert (owed == "fix list") is (event and "fix list" in body), body
 
 
+NUMBERED = f"Verdict: fix list {HEAD}\n\n1. Name the setting (rule: none)."
+FINAL_ONLY = f"Verdict: fix list {HEAD}\n\n{ADR_FINAL}"
+TWO = [  # two verdicts on one head, oldest first -> is it a builder event (answer 7)
+    ((NUMBERED, FINAL_ONLY), False),
+    ((f"Verdict: cleared {HEAD}", FINAL_ONLY), False),
+    ((FINAL_ONLY, NUMBERED), True),
+]
+
+
+@pytest.mark.parametrize(("bodies", "event"), TWO)
+def test_with_two_verdicts_on_one_head_every_waker_reads_only_the_newest(
+    monkeypatch, bodies, event
+):
+    """REQ-046 (brief #1879 answers 7 and 9, fix list 7121705182 item 1): an older numbered list
+    under a newer Final-only fix list owes nothing in any waker, as the merger clears the head;
+    a numbered list after it is an event again."""
+    import merge_cleared
+    import session
+
+    comments = [said(2, "Report: aaaaaaa ready for review", -120)]
+    comments += [said(3 + i, b, -60 + i, "boss") for i, b in enumerate(bodies)]
+    assert (merge_cleared.judge(comments, HEAD, ["boss"]) == ("cleared", "")) is (not event)
+    assert bool(autopilot.pick([pr(72, 6)], [], {72: comments}, NOW)[0]) is event
+    assert (conductor.owed_of(comments, HEAD) is not None) is event
+    heard = session.builder_verdicts(comments, HEAD, ["boss"])
+    assert any(c["body"].startswith("Verdict:") for c in heard) is event
+    monkeypatch.setattr(session, "gh", lambda path: {"mergeable_state": "clean",
+                                                     "head": {"sha": HEAD}})  # fmt: skip
+    monkeypatch.setattr(session, "pages", lambda path: comments)
+    monkeypatch.setattr(session, "reports_after", lambda repo, n, cid: False)
+    owed = session.follow_up_owed("example/demo", {"number": 72}, {"boss"})
+    assert (owed == "fix list") is event
+
+
 def test_another_machines_claim_holds_the_job_until_its_take_lapses():
     """REQ-071 AC8: two machines never run one job, and one never restarts the other's before
     its take lapses (Q-S0064-4)."""
