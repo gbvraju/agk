@@ -1,1 +1,0 @@
-- An adopted Node product now makes its bill of materials without a `pyproject.toml`: the bill takes its name from `package.json` and lists the lock's packages, so the `bom` gate passes; every other repository reads `pyproject.toml` as before (brief #1907)
