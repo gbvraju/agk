@@ -33,8 +33,8 @@ word (2026-11-24, the steward chat, quoted as data): "Yes, draft the test briefs
    `["test_*.py"]` (`Q-AN-2`), `package.json` the twelve web patterns, both give both, and neither gives
    `test_patterns = []` with `test_dirs = ["tests"]`. Adopt then prints that `test_patterns` is empty, naming the setting.
 4. `init.py` writes `test_patterns = [...]` after its `test_dirs` line, and prints it, when a test file or a manifest is
-   found and the patterns are not today's default; an empty or Python-only tree renders the template byte for byte
-   (`Q-AN-4`). A re-run reuses the existing file's `test_patterns` list.
+   found and the patterns are not all Python names; an empty tree, or one whose patterns are all Python names
+   (`test_*.py`, `*_test.py` or both), renders the template byte for byte (`Q-AN-4`). A re-run reuses the existing file's `test_patterns` list.
 5. Adopt refuses, before any write, a stamped `test_dirs` or `test_patterns` that is not a list of strings, naming the
    setting; a stamp is never rewritten or widened.
 6. A web file under a `__tests__/` folder, or under a `test/` folder beside a `package.json`, that no written pattern

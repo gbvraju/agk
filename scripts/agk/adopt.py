@@ -181,16 +181,20 @@ def unreached(scan: Scan, patterns: list[str]) -> int:
     return sum(1 for n in scan.candidates if not any(fnmatch.fnmatchcase(n, p) for p in patterns))
 
 
-def detection_lines(scan: Scan, patterns: list[str]) -> list[str]:
-    """The information lines of answers 3 and 6, for adopt and init."""
-    lines = [EMPTY_LINE] if not patterns else []
+def unreached_lines(scan: Scan, patterns: list[str]) -> list[str]:
+    """Answer 6's line, for adopt and init: the web files no entry of PATTERNS reaches."""
     count = unreached(scan, patterns)
-    if count:
-        lines.append(
-            f"tests: {count} files in __tests__ or test folders match no test_patterns entry "
-            "(setting: test_patterns)"
-        )
-    return lines
+    if not count:
+        return []
+    return [
+        f"tests: {count} files in __tests__ or test folders match no test_patterns entry "
+        "(setting: test_patterns)"
+    ]
+
+
+def detection_lines(scan: Scan, patterns: list[str]) -> list[str]:
+    """The information lines of answers 3 and 6 for adopt."""
+    return ([EMPTY_LINE] if not patterns else []) + unreached_lines(scan, patterns)
 
 
 def stamped_lists(stamp: dict) -> None:

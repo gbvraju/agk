@@ -18,12 +18,13 @@ no test and no known stack an empty list, never the Python default."
    `.cjs`, `.ts` and `.tsx` (twelve patterns), matched with case on every system". Keep "Its output for a project with
    none of them is unchanged" for a Python-only project (amendment 231).
 2. **SPEC-0002 rule 9, "with no match the defaults apply".** Replace with: "with no match, the stacks whose manifests of
-   the kit's `config/stack-signals.toml` the tree holds give the patterns: a Python manifest `[\"test_*.py\"]`, a
+   the kit's `config/stack-signals.toml` the tree holds give the patterns: a Python manifest `["test_*.py"]`, a
    `package.json` the web patterns of SPEC-0044 rule 10, both give both, and neither gives `test_patterns = []` with
-   `test_dirs = [\"tests\"]`, which adopt names in one line (setting: `test_patterns`). A stamped `test_dirs` or
+   `test_dirs = ["tests"]`, which adopt names in one line (setting: `test_patterns`). A stamped `test_dirs` or
    `test_patterns` that is not a list of strings is refused before any write, naming the setting" (amendment 231).
-3. **SPEC-0001 rule 14, after "`test_dirs = [\"tests\"]`".** Add: "and, when the target holds a test file or a stack
-   manifest whose patterns are not `[\"test_*.py\"]`, a `test_patterns` line with the patterns adopt would detect
-   (SPEC-0002 rule 9); an empty or Python-only repository gets no such line" (amendment 231).
+3. **SPEC-0001 rule 14, after "`test_dirs = ["tests"]`".** Add: "and, when the target holds a test file or a stack
+   manifest whose patterns are not all Python names, a `test_patterns` line with the patterns adopt would detect
+   (SPEC-0002 rule 9); an empty repository, or one whose patterns are all Python names (`test_*.py`, `*_test.py`),
+   gets no such line" (amendment 231).
 
 No other rule changes.

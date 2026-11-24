@@ -93,6 +93,10 @@ FRONT_END_TEST_DIRS = (
     "cypress",
 )
 TEST_DIRS_LINE = 'test_dirs = ["tests"]'
+PYTHON_TEST_NAMES = (
+    "*_test.py",
+    "test_*.py",
+)  # adopt.TEST_PATTERNS; init keeps its default for them
 # SPEC-0062 rules 2 and 11 (brief #1599, ADR-0679): what the steward's setup writes in the install.
 LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
 LOGIN_ENV = "AGK_SETUP_LOGIN"  # set by the steward from `gh api user`; init runs no command
@@ -215,7 +219,8 @@ def with_test_dirs(rendered: str, added: list[str]) -> str:
 def found_test_patterns(target: Path):
     """Brief #1891 answer 4 (ADR-0785): (patterns to write after `test_dirs`, or None to keep the
     template's bytes; the detection's scan). A re-run reuses a stamped `test_patterns` list, so it
-    compares against the same rendered file; an empty or Python-only tree keeps the template."""
+    compares against the same rendered file; an empty tree, or one whose patterns are all Python
+    names (`test_*.py`, `*_test.py`), keeps the template byte for byte."""
     from adopt import scan_tests  # adopt imports this module; kit-only, as this file is
 
     scan = scan_tests(target)
@@ -228,22 +233,17 @@ def found_test_patterns(target: Path):
         if isinstance(value, list) and all(isinstance(i, str) for i in value):
             return value, scan
         return None, scan
-    if not (scan.found or scan.stacks) or scan.patterns == ["test_*.py"]:
-        return None, scan
+    python_only = bool(scan.patterns) and all(p in PYTHON_TEST_NAMES for p in scan.patterns)
+    if not (scan.found or scan.stacks) or python_only:
+        return None, scan  # an empty or Python-only tree keeps the template (Q-AN-4)
     return scan.patterns, scan
 
 
 def test_notes(scan, patterns: list[str] | None) -> list[str]:
     """Answer 6's line for init, against the patterns init writes (or the default it keeps)."""
-    from adopt import unreached
+    from adopt import unreached_lines
 
-    count = unreached(scan, ["test_*.py"] if patterns is None else patterns)
-    if not count:
-        return []
-    return [
-        f"tests: {count} files in __tests__ or test folders match no test_patterns entry "
-        "(setting: test_patterns)"
-    ]
+    return unreached_lines(scan, ["test_*.py"] if patterns is None else patterns)
 
 
 def with_test_patterns(rendered: str, patterns: list[str] | None) -> str:

@@ -231,8 +231,14 @@ def test_req051_init_on_a_manifest_only_tree_writes_the_stack(tmp_path, capsys):
 
 @pytest.mark.parametrize(
     "files",
-    [(), ("README.md",), ("requirements.txt", "tests/test_a.py")],
-    ids=["empty", "plain", "python"],
+    [
+        (),
+        ("README.md",),
+        ("requirements.txt", "tests/test_a.py"),
+        ("requirements.txt", "pkg/tests/a_test.py"),
+        ("tests/test_a.py", "pkg/b_test.py"),
+    ],
+    ids=["empty", "plain", "python", "python-suffix", "python-both"],
 )
 def test_req051_init_on_an_empty_or_python_tree_renders_as_before(tmp_path, capsys, files):
     """REQ-051 AC6: answer 4, Q-AN-4 (byte for byte the template, no `test_patterns` line)."""
@@ -359,3 +365,28 @@ def test_req051_an_empty_list_is_read_without_error(tmp_path, repo):
         "tests: test_dirs and test_patterns match no test file; 1 files match the "
         "front-end test patterns (setting: test_dirs)"
     ]
+
+
+def test_req051_an_unreadable_stack_table_is_refused_before_any_write(
+    tmp_path, capsys, monkeypatch
+):
+    """REQ-051 AC6: answer 3 (the kit's own table cannot be read: adopt writes nothing, exit 3)."""
+    root = git_dir(tree(tmp_path / "p", "package.json"))
+    monkeypatch.setattr(adopt, "SIGNALS", tmp_path / "missing" / "stack-signals.toml")
+    assert adopt.main([str(root), "--unreleased"]) == 3
+    assert "error: cannot read the kit sources (FileNotFoundError)" in capsys.readouterr().out
+    assert sorted(p.name for p in root.iterdir()) == [".git", "package.json"]
+
+
+def test_req051_a_test_folder_beside_a_nested_package_json_is_counted(tmp_path):
+    """REQ-051 AC6: answer 6 (mocha's `test/` beside a workspace's own `package.json`)."""
+    root = tree(
+        tmp_path / "p",
+        "packages/api/package.json",
+        "packages/api/test/route.js",
+        "packages/web/test/page.js",
+        "tests/cart.test.js",
+    )
+    scan = adopt.scan_tests(root)
+    assert scan.candidates == ["route.js"]
+    assert adopt.unreached(scan, scan.patterns) == 1
