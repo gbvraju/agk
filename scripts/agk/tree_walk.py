@@ -15,7 +15,10 @@ from pathlib import Path
 
 # Front-end test runners' file names (SPEC-0044 rule 10); their topmost folders are found the same
 # way, `__tests__/`, `e2e/` and `cypress/` among them, always as folder prefixes, never as globs.
-FRONTEND_PATTERNS = ("*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx")
+# The jest and vitest names (verify) over the six extensions the Node pack lints (brief #1891,
+# ADR-0785); `.mts` and `.cts` are not among them (Q-AN-5).
+WEB_EXTENSIONS = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx")
+FRONTEND_PATTERNS = tuple(f"*.{kind}{ext}" for ext in WEB_EXTENSIONS for kind in ("test", "spec"))
 SKIP_DIRS = {
     "node_modules",
     "__pycache__",

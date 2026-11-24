@@ -366,6 +366,8 @@ def test_ac1_test_detection_unittest_layout_and_topmost_dirs(tmp_path):
     assert adopt_mod.detect_tests(rootlevel) == (["."], ["test_*.py"])
     empty = tmp_path / "e"
     empty.mkdir()
+    assert adopt_mod.detect_tests(empty) == (["tests"], [])  # no test, no stack (brief #1891)
+    (empty / "pyproject.toml").write_text("")
     assert adopt_mod.detect_tests(empty) == (["tests"], ["test_*.py"])
 
 
@@ -753,12 +755,14 @@ def test_req051_python_and_front_end_tests_give_both_sets_sorted(tmp_path):
 
 
 def test_req051_a_project_without_front_end_tests_reads_as_today(tmp_path):
-    """REQ-051: SPEC-0044 rule 10 (no front-end file: today's answer, byte for byte)."""
+    """REQ-051: SPEC-0044 rule 10 (no front-end file: today's answer, byte for byte); a `.test.js`
+    file is a front-end test (brief #1891, ADR-0785), and no test and no stack give no pattern."""
     assert _detect(tmp_path / "p", "tests/test_a.py", "src/app.ts", "src/a.test.js") == (
-        ["tests"],
-        ["test_*.py"],
+        ["src", "tests"],
+        ["*.test.js", "test_*.py"],
     )
-    assert _detect(tmp_path / "e", "src/app.ts") == (["tests"], ["test_*.py"])
+    assert _detect(tmp_path / "q", "tests/test_a.py", "src/app.ts") == (["tests"], ["test_*.py"])
+    assert _detect(tmp_path / "e", "src/app.ts") == (["tests"], [])
 
 
 def test_req051_front_end_tests_in_skipped_folders_are_not_found(tmp_path):
@@ -769,6 +773,7 @@ def test_req051_front_end_tests_in_skipped_folders_are_not_found(tmp_path):
         "node_modules/lib/e2e/y.spec.tsx",
         ".cache/z.test.tsx",
         "scripts/agk/w.spec.ts",
+        "requirements.txt",
     )
     assert found == (["tests"], ["test_*.py"])
 
