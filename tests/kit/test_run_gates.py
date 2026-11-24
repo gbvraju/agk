@@ -124,21 +124,27 @@ def test_a_step_with_no_module_is_refused_naming_the_gate_id(
 
 
 @pytest.mark.parametrize(
-    ("work_type", "gate", "pair"),
+    ("work_type", "gate", "pair", "swap"),
     [
-        ("cloud-migration", "cut-over-order", '["cut-over", "wave-plan"]'),
-        ("data-pipeline", "rollback-order", '["cut-over", "rollback"]'),
+        # brief #1908: a kind of `brief_order`, so the playbook passes its check and the gate runs
+        ("cloud-migration", "cut-over-order", '["cut-over", "wave-plan"]', '["cut-over", "inventory"]'),
+        ("data-pipeline", "rollback-order", '["cut-over", "rollback"]', '["cut-over", "build"]'),
     ],
 )
 def test_a_split_that_drops_the_order_fails_naming_gate_rule_and_path_class(
-    work_type: str, gate: str, pair: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    work_type: str,
+    gate: str,
+    pair: str,
+    swap: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """REQ-079 AC2."""
     root = _project(tmp_path, work_type)
     path = root / "config" / "playbooks" / f"{work_type}.toml"
     text = path.read_text(encoding="utf-8")
     assert pair in text
-    path.write_text(text.replace(pair, '["cut-over", "build"]'), encoding="utf-8")
+    path.write_text(text.replace(pair, swap), encoding="utf-8")
     assert run_gates.main(["--root", str(root)]) == 1
     out = capsys.readouterr().out
     assert f"FAIL gates: {gate}: " in out
