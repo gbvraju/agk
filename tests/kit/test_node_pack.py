@@ -100,15 +100,16 @@ sys.exit(1 if any(bad(n) for n in names) else 0)
 # folder that holds `: number = "`, and TS7027 for one that holds `return 1;` then more code when
 # the config sets `"allowUnreachableCode": false`, as `tsc --pretty false` prints it, relative to
 # the cwd. `--listFilesOnly -p <config>` (brief #1890) prints the absolute path of each `.ts` file
-# under the config's folder, or under its `include` folders, and fails when `tsc-list-fails`
-# exists.
+# under the config's folder, or under its `include` folders (none for `"files": []`), and fails
+# when `tsc-list-fails` exists.
 TSC = """
 import os, re, sys
 conf = sys.argv[sys.argv.index("-p") + 1]
 base, bad = os.path.dirname(conf) or ".", []
 text = open(conf).read()
 found = re.search(r'"include"\\s*:\\s*\\[([^\\]]*)\\]', text)
-dirs = re.findall(r'"([^"]+)"', found.group(1)) if found else ["."]
+none = re.search(r'"files"\\s*:\\s*\\[\\s*\\]', text) is not None
+dirs = re.findall(r'"([^"]+)"', found.group(1)) if found else [] if none else ["."]
 tops = [os.path.join(base, d) for d in dirs]
 listing = "--listFilesOnly" in sys.argv
 if listing and os.path.exists("tsc-list-fails"):
@@ -692,7 +693,7 @@ def test_an_adopted_stock_config_lowers_the_held_floor(
     (base / "standards-node-floor.txt").write_text("package.json 19\n", encoding="utf-8")
     code, out = gates(root, capsys)
     assert code == 0, out
-    assert "baseline standards-node-floor: a count fell" in out
+    assert "baseline standards node floor: a count fell in 1 file" in out
     (base / "standards-node-floor.txt").write_text("package.json 1\n", encoding="utf-8")
     (root / "eslint-rules.json").write_text(
         json.dumps({"rules": stock(**{TS_RULE: "off"})}), encoding="utf-8"
