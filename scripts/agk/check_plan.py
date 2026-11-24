@@ -742,10 +742,11 @@ def first_milestone_problems(
     if len(found) != 1:
         return [("many-foundations" if found else "no-foundation", None)]
     key, home = found[0][0], found[0][1]
+    out: list[tuple[str, str | None]] = []
     if first is not None and home != first:
-        out = [("not-first", key)]
+        out.append(("not-first", key))
     else:
-        out = [
+        out += [
             ("before-foundation", k)
             for k, m, _, d in briefs
             if k != key and m == home and key not in d
