@@ -17,12 +17,12 @@ a missing part and a line that is not a field of the inventory. On the path from
 requirement's, with `- Sources:` in place of `- Specs:`. An inventory with no screen fails, naming
 SPEC-0037 rule 3 and the path class `docs/design/`, when a discovery document of `docs/discovery/`
 says `- Screens: yes` or `open` outside its quoted blocks (brief #1756), read by `screens_line`,
-the one reader of that line, past a quoted problem with its own `## ` lines (brief #1889). A screen section may carry
-`- Sources:`, the page it was written from on the prototype path, and `all_out_problems(root)`,
-run by `check_design.py`, fails each imported version whose `map.md` rows are all `out:` while the
-inventory lists no screen or is absent, naming SPEC-0037 rule 15 and the path class
-`docs/design/imported/` (amendment 219, brief #1779). It names the rule and the
-screen, never a value. Files only: no network, no model, nothing written.
+the one reader of that line, past a quoted problem with its own `## ` lines (brief #1889).
+A screen section may carry `- Sources:`, the page it was written from on the prototype path,
+and `all_out_problems(root)`, run by `check_design.py`, fails each imported version whose
+`map.md` rows are all `out:` while the inventory lists no screen or is absent, naming SPEC-0037
+rule 15 and the path class `docs/design/imported/` (amendment 219, brief #1779). It names the
+rule and the screen, never a value. Files only: no network, no model, nothing written.
 """
 
 from __future__ import annotations
