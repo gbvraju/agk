@@ -127,7 +127,12 @@ def test_a_step_with_no_module_is_refused_naming_the_gate_id(
     ("work_type", "gate", "pair", "swap"),
     [
         # brief #1908: a kind of `brief_order`, so the playbook passes its check and the gate runs
-        ("cloud-migration", "cut-over-order", '["cut-over", "wave-plan"]', '["cut-over", "inventory"]'),
+        (
+            "cloud-migration",
+            "cut-over-order",
+            '["cut-over", "wave-plan"]',
+            '["cut-over", "inventory"]',
+        ),
         ("data-pipeline", "rollback-order", '["cut-over", "rollback"]', '["cut-over", "build"]'),
     ],
 )

@@ -756,7 +756,8 @@ def _declared(root: Path) -> tuple[str | None, str | None]:
     if not isinstance(value, str):
         # Q-S0038-1: one work type per project; a list of two is refused like any other type.
         return None, f"{where} `{WORK_TYPE}` is not one work type (setting: {WORK_TYPE})"
-    if value not in WORK_TYPES and not is_derived(value, root):  # brief #1908: the test `problems` uses
+    # brief #1908 (ADR-0790): a derived playbook's slug, by the one test `problems` uses
+    if value not in WORK_TYPES and not is_derived(value, root):
         return None, f"{where} `{WORK_TYPE}` is not one of the work types (setting: {WORK_TYPE})"
     try:
         found = folder(root, value) / f"{value}.toml"

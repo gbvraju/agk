@@ -96,7 +96,9 @@ PACKS = ("python_pack", "node_pack")  # pack modules of the registry, imported b
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
 # brief #1908 (ADR-0790): a declared playbook that fails its check runs no gate (Q-DP-4)
-DECLARED_FAILS = "SPEC-0038 rule 5: the declared playbook fails check_playbooks.py (setting: work_type)"
+DECLARED_FAILS = (
+    "SPEC-0038 rule 5: the declared playbook fails check_playbooks.py (setting: work_type)"
+)
 UNFOUND = "REQ-078: no playbook is found in the project or the plugin"  # brief #1666
 MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts/agk/gates/)"
 UNCOUNTED = "tool did not run"  # brief #1837: a failure that counts no file is never held

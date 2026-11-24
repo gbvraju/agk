@@ -464,10 +464,14 @@ def test_ac8_the_check_and_the_selection_accept_the_same_names(tmp_path, plugin_
         text = (books / f"{name if name != 'web-ap' else 'web-app'}.toml").read_text("utf-8")
         target = books / f"{name}.toml"
         if name == "web-ap":
-            target.write_text(text.replace('work_type = "web-app"', 'work_type = "web-ap"'), "utf-8")
+            target.write_text(
+                text.replace('work_type = "web-app"', 'work_type = "web-ap"'), "utf-8"
+            )
         agk = (root / "agk.toml").read_text(encoding="utf-8").split("\n[delivery]")[0]
         (root / "agk.toml").write_text(agk + f'\n[delivery]\nwork_type = "{name}"\n', "utf-8")
-        checked = not any("is not one of the work types" in p for p in playbook_format.problems(target, root))
+        checked = not any(
+            "is not one of the work types" in p for p in playbook_format.problems(target, root)
+        )
         selected = playbook_format.declaration(root)[0] == name
         assert checked == selected or name == "default", name
         assert selected == (name in ("web-app", DERIVED)), name
