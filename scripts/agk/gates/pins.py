@@ -12,7 +12,9 @@ The step reads them, offline, and fails on a direct dependency not pinned exactl
 lock, on a missing lock, and on a part of the record whose version differs from the lock's; each
 line names the rule and the component class, never a name or a version (principle 8). With no
 `[delivery] work_type`, no Accepted record or no runtime it knows, it prints `not run: no stack
-chosen`. Lock line ends are normalised. The lock is made by the stack's own tool on the builder's
+chosen`; in a project not adopted, while `docs/architecture.md`, the lock and every declared
+dependency are absent, it prints `not run: no foundation yet` (brief #1909, ADR-0791, amendment
+234), never `ok`. Lock line ends are normalised. The lock is made by the stack's own tool on the builder's
 machine, never here; the build file comes from `kit/templates/stacks/<folder>/` by
 `engines.py stack-files`. The runner's interface (`RULE`, `check(root, playbook)`) is that of
 `scripts/agk/gates/` (brief #1586); `run_gates.py` runs it where a work type is declared
@@ -35,6 +37,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
 from common import utf8_output  # noqa: E402
+from gates import baseline  # noqa: E402
 from playbook_format import declaration  # noqa: E402
 
 RULE = "SPEC-0072 rule 4: the stack's build file and lock are not pinned and in step"
@@ -61,6 +64,9 @@ PARTS_ENDS = ("Why:", "External services:", "Practices:")
 VERIFY = "(verify)"
 NO_STACK = "no stack chosen"
 NOT_RUN = f"not run: {NO_STACK}"
+# brief #1909 (ADR-0791, amendment 234): in a project not adopted, before the foundation.
+NO_FOUNDATION = "no foundation yet"
+ARCHITECTURE = "docs/architecture.md"  # `layers.RECORD`; layers imports this module, so not imported
 USAGE = "usage: python3 scripts/agk/gates/pins.py [--root DIR]"
 PEP508 = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*?)\s*(;.*)?$")
 EXACT_PY = re.compile(r"^==\s*([0-9][0-9A-Za-z.+!-]*)$")
@@ -266,11 +272,32 @@ def locked(reader: str, text: str) -> dict[str, str]:
     return {norm(m.group(1)): m.group(2) for ln in text.split("\n") if (m := LOCKED_PY.match(ln))}
 
 
+def waiting(root: Path) -> bool:
+    """Brief #1909 answer 2: True only in a project not adopted, with a stack chosen, while the
+    architecture record and the lock are absent and the build file is absent or declares no
+    direct dependency. A build file that cannot be read never waits; any one dependency, a lock
+    or the record ends the wait (answer 3)."""
+    root = Path(root)
+    found = chosen(root)
+    if found is None or baseline.adopted(root) or (root / ARCHITECTURE).exists():
+        return False
+    _, build_file, lock_file, reader = found[0]
+    if (root / lock_file).exists():
+        return False
+    if not (root / build_file).exists():
+        return reader == "npm" or not (root / REQUIREMENTS).exists()
+    try:
+        return not declared(root, reader, build_file)
+    except (Unreadable, OSError, UnicodeDecodeError, ValueError, AttributeError):
+        return False
+
+
 def findings(root: Path) -> list[tuple[str, str, str]] | None:
     """(the rule's line, the component class, the file it is held to) of each failure, one per
-    dependency or part (brief #1776: the baseline counts them); None when no stack is chosen."""
+    dependency or part (brief #1776: the baseline counts them); None when no stack is chosen or
+    the project waits for its foundation (brief #1909)."""
     found = chosen(Path(root))
-    if found is None:
+    if found is None or waiting(Path(root)):
         return None
     (_, build_file, lock_file, reader), parts = found
     lock = Path(root) / lock_file
@@ -313,8 +340,11 @@ def applies(root: Path) -> bool:
 
 
 def skipped(root: Path) -> str | None:
-    """Brief #1776 answer 2: with no stack chosen the runner prints a not-run row, never `ok`."""
-    return NO_STACK if chosen(Path(root)) is None else None
+    """Brief #1776 answer 2: with no stack chosen the runner prints a not-run row, never `ok`;
+    brief #1909: so does a new project that waits for its foundation."""
+    if chosen(Path(root)) is None:
+        return NO_STACK
+    return NO_FOUNDATION if waiting(Path(root)) else None
 
 
 def check(root: Path, playbook: dict[str, Any]) -> list[tuple[str, str]]:
@@ -339,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args[1]) if args else Path.cwd()
     found = problems(root)
     if found is None:
-        print(f"pins: {NOT_RUN}")
+        print(f"pins: not run: {skipped(root) or NO_STACK}")
         return 0
     for item in found:
         print(item)
