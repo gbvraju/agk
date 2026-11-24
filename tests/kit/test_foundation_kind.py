@@ -84,7 +84,9 @@ def foundation_plan() -> dict:
     data = good()
     first = dict(BRIEF, key="B1", title="Foundation for example.com", foundation=True)
     second = dict(BRIEF, key="B2", depends_on=["B1"])
-    data["briefs"] = [first, second]
+    # brief #1910: a work-type plan's first milestone ends with one slice brief after the foundation
+    third = dict(BRIEF, key="B3", depends_on=["B1"], slice=True)
+    data["briefs"] = [first, second, third]
     return data
 
 

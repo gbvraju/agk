@@ -246,6 +246,9 @@ def sliced_file(root: Path) -> Path:
 
     data = sliced()
     data["briefs"][0]["foundation"] = True  # SPEC-0072 rule 4: a work-type plan's foundation
+    # brief #1910: the first milestone ends with one slice brief after the foundation
+    cut = {k: v for k, v in data["briefs"][1].items() if k != "screens"}
+    data["briefs"].append(cut | {"key": "B3", "milestone": "M1", "depends_on": ["B1"], "slice": True})
     path = root.parent / "proposals-example.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
