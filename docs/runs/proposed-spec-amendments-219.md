@@ -36,3 +36,5 @@ of 0 headings: none of the customer's page text reached the plan.
 
 No other rule changes. `docs/guides/planning.md` step 1 says that on a new project the inventory may come from the
 import.
+
+2026-11-24 (from `date -u`), brief #1900: items 1 (to rule 3, after amendment 217's sentence) and 2 (to rule 15, as its last bullet) applied to `docs/specs/0037-a-project-s-design-phase-delivers-a-click-through-prototype.md` word for word, on the maintainer's answer on #1781 (comment 7088872297).

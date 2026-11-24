@@ -33,3 +33,5 @@ so the skeleton has no slot to fill, every section reads `no screen: a rule of t
    (amendment 217)."
 
 No other rule changes.
+
+2026-11-24 (from `date -u`), brief #1900: items 1 and 2 (to rule 3) applied to `docs/specs/0037-a-project-s-design-phase-delivers-a-click-through-prototype.md` word for word, on the maintainer's answer on #1761 (comment 7083861965).

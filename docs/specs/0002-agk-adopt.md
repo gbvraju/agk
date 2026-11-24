@@ -82,7 +82,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    `["test_*.py"]`); adopt detects `*_test.py` and `test_*.py` files and writes the directories that contain them
    (for the survey target: `colorama/tests`, `*_test.py`): the topmost directories holding matching files, `["."]` when a
    matching file is at the repository root; hidden directories, `node_modules`, `__pycache__`, `venv`, `env`, `build`,
-   `dist`, `site-packages`, `tox`, `tests/kit` and `scripts/agk` are skipped; with no match the defaults apply. A second
+   `dist`, `site-packages`, `tox`, `tests/kit` and `scripts/agk` are skipped; with no match, the stacks whose manifests of the kit's `config/stack-signals.toml` the tree holds give the patterns: a Python manifest `["test_*.py"]`, a `package.json` the web patterns of SPEC-0044 rule 10, both give both, and neither gives `test_patterns = []` with `test_dirs = ["tests"]`, which adopt names in one line (setting: `test_patterns`). A stamped `test_dirs` or `test_patterns` that is not a list of strings is refused before any write, naming the setting (amendment 231). A second
    run reuses the stamped `test_dirs` and `test_patterns`. Markers are `REQ-nnn` strings in matching files (docstring
    or comment), so unittest-style projects work. Kit tests live in `tests/kit/`, which is excluded from the project's
    marker search in adopt mode unless a listed directory is inside it.
@@ -161,3 +161,11 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 - 2026-10-14: no upgrade path between kit versions or between init and adopt (K3).
 - 2026-10-14: Python 3.11 is required to run the checks even where the project supports 3.9.
 - 2026-10-14: no JSON merge for an existing `.claude/settings.json`.
+
+## Contexts
+
+- kit: `python3 scripts/agk/adopt.py TARGET [--dry-run]`, standard library only, installs the kit's files into an existing git work tree and refuses before any write (rules 1 and 2)
+- github: the installed `governance.yml` workflow runs on `pull_request` and on every `push`, and the printed ruleset instructions name the detected branch, with the one-line pointer to `/agk:ruleset` (rule 8)
+- local: no network, no `git` or `gh` calls, no commits and no writes outside TARGET (rule 2)
+- personal: not applicable: no rule here names personal mode; adopt writes the files of a governed repository (rules 1 and 12)
+- stacks: the stacks whose manifests of the kit's `config/stack-signals.toml` the tree holds give the test patterns when no test file matches, and target code is never imported, run or parsed (rules 3 and 9)

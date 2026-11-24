@@ -21,3 +21,5 @@ event: no fix job, no `nothing to change` Report, and the conductor merges it in
    a SPEC-0021 rule 3a fix list, starts no builder job, extending `Q-1391-1`)".
 
 No other rule changes.
+
+2026-11-24 (from `date -u`), brief #1900: items 1 and 2 (to rules 2 and 9) applied to `docs/specs/0039-the-conductor-merges-a-cleared-pull-request-through-one-guarded-command.md` and item 3 (to rule 4) applied to `docs/specs/0064-an-autopilot-supervisor-per-machine-runs-every-ai-session-as-a-short-job.md` word for word, on the maintainer's answer on #1883 (comment 7122692233).

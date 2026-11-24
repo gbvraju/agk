@@ -67,7 +67,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     reviewer model, and the ruleset (rule 19). Its Status is `Proposed`; maintainers flip it to `Accepted` in the live-proof PR (rule 24). Its text contains every entry of the
     installed `config/protected-paths.txt`, so the target's first pull request is covered by an ADR that names every changed class.
 14. **Version stamp and dates.** The installed `agk.toml` carries `mode = "init"`, `version`, `installed` (a
-    `YYYY-MM-DD` date), `default_branch`, `test_dirs = ["tests"]`, `lint_paths` and `project_tests`; the installed
+    `YYYY-MM-DD` date), `default_branch`, `test_dirs = ["tests"]` and, when the target holds a test file or a stack manifest whose patterns are not all Python names, a `test_patterns` line with the patterns adopt would detect (SPEC-0002 rule 9); an empty repository, or one whose patterns are all Python names (`test_*.py`, `*_test.py`), gets no such line (amendment 231), `lint_paths` and `project_tests`; the installed
     `pyproject.toml` carries no `[tool.agk]` table. The first run takes the date from the UTC clock; a later run reads
     `installed` (and `default_branch`) from the existing `agk.toml`, or from `[tool.agk]` in the `pyproject.toml` of an
     older install, and renders the same values, so output stays identical.
@@ -158,3 +158,11 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
   pinning is at K1 exit.
 - 2026-10-14: a target that already has `pyproject.toml`, `Makefile`, `CLAUDE.md` or `.gitignore` is refused until
   K2 `agk adopt`.
+
+## Contexts
+
+- kit: `python3 scripts/agk/init.py TARGET [--dry-run]`, standard library only, writes the kit's files into TARGET, and the installed `agk.toml` carries the version stamp and dates (rules 1 and 14)
+- github: the verbatim set installs `.github/workflows/governance.yml`, and the branch-rule instructions are printed for the user to apply by hand, with the pointer to `/agk:ruleset` (rules 7 and 19)
+- local: no network, no `git` or `gh` calls, no `git push`, no commits and no writes outside TARGET (rule 3)
+- personal: not applicable: no rule here names personal mode; init writes the files of a governed repository (rules 1 and 14)
+- stacks: a target that holds a test file or a stack manifest whose patterns are not all Python names gets the `test_patterns` line adopt would detect (rule 14, SPEC-0002 rule 9)
