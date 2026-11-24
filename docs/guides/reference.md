@@ -769,6 +769,17 @@ A private repository short of minutes can run its own heavy jobs on an ephemeral
 secret beyond the job's own, never for forks, while governance and proof stay on GitHub-hosted runners:
 [self-hosted-runner.md](self-hosted-runner.md) (ADR-0217).
 
+## GitHub calls of a job
+
+A kit script that calls GitHub inside GitHub Actions (`GITHUB_ACTIONS=true`), such as the router's `route.py` and the
+merger's `merge_cleared.py`, ends with one line in its log and its job summary (`GITHUB_STEP_SUMMARY`):
+`github calls: <workflow> / <job>: <n> calls (<c> cached, <w> writes, <k> waits, <s> s waited); limit <r> of <l> left,
+resets <HH:MM>Z`. The limit figures are the last `x-ratelimit-*` headers a call saw, else one free `GET rate_limit`; a
+figure that cannot be read is `unknown`, never 0. A script that made no call, or runs outside Actions, prints nothing. The
+line names counts and times only, never changes the exit code, and a summary that cannot be written prints
+`github calls: the job summary cannot be written (setting: GITHUB_STEP_SUMMARY)`. The reads that the workflow files make
+themselves (governance's fetch steps) are not counted (brief #1877, ADR-0776).
+
 ## Where checks run
 
     python3 scripts/agk/execution.py [--json] [--repo OWNER/REPO] [--api-dir DIR]

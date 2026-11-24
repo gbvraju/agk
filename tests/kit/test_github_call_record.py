@@ -7,7 +7,7 @@ in GitHub Actions (`GITHUB_ACTIONS=true`) and made at least one call:
 limit <r> of <l> left, resets <HH:MM>Z`. The limit figures are the last `x-ratelimit-*` headers a
 call saw, else one free `GET rate_limit`, else `unknown`. The router's own writes and searches and
 the merger's direct `gh api` calls are counted through `session.count_call`. A double of `gh`
-(`subprocess.run` or `session.RUN`) answers with invented headers and bodies: no network, no `gh`."""
+(`subprocess.run` or `session.RUN`) answers with invented headers and bodies: no network."""
 
 from __future__ import annotations
 
@@ -132,19 +132,22 @@ def test_a_primary_wait_counts_one_wait_and_its_seconds(monkeypatch, fresh):
     assert (session.CALLS, session.WAITS, session.WAITED) == (2, 1, 99.0 + session.RESET_SLACK)
     session.call_record()
     assert "2 calls (0 cached, 0 writes, 1 waits, 100 s waited); limit 4999 of 5000" in (
-        fresh.read_text(encoding="utf-8"))
+        fresh.read_text(encoding="utf-8")
+    )
 
 
 def test_no_headers_reads_rate_limit_once(monkeypatch, fresh):
     """REQ-039"""
     asked = []
-    monkeypatch.setattr(session, "rate_state",
-                        lambda limit=False: asked.append(limit) or (12.0, 60.0, float(RESET)))
+    monkeypatch.setattr(
+        session, "rate_state", lambda limit=False: asked.append(limit) or (12.0, 60.0, float(RESET))
+    )
     session.count_call("GET")
     session.call_record()
     assert asked == [True]
     assert fresh.read_text(encoding="utf-8").endswith(
-        "1 calls (0 cached, 0 writes, 0 waits, 0 s waited); limit 12 of 60 left, resets 17:46Z\n")
+        "1 calls (0 cached, 0 writes, 0 waits, 0 s waited); limit 12 of 60 left, resets 17:46Z\n"
+    )
 
 
 def test_a_figure_that_cannot_be_read_is_unknown_never_zero(fresh):
@@ -153,7 +156,8 @@ def test_a_figure_that_cannot_be_read_is_unknown_never_zero(fresh):
     session.call_record()
     assert fresh.read_text(encoding="utf-8").endswith(
         "1 calls (0 cached, 1 writes, 0 waits, 0 s waited);"
-        " limit unknown of unknown left, resets unknown\n")
+        " limit unknown of unknown left, resets unknown\n"
+    )
 
 
 def test_rate_state_returns_the_limit_when_asked(monkeypatch):
