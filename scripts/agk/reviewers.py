@@ -703,8 +703,8 @@ def solo_problems(data: dict, mode: str) -> list[str]:
         ]
     if len(people) > 1:
         return [
-            f"solo mode allows one person in {VERDICTS} and {APPROVERS} together, and more than one "
-            f"is listed: use team mode {SOLO_SETTING}"
+            f"solo mode allows one person in {VERDICTS} and {APPROVERS} together, and more than "
+            f"one is listed: use team mode {SOLO_SETTING}"
         ]
     return []
 

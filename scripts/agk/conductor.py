@@ -2793,9 +2793,10 @@ def escalate(root, adapter: str, name: str, repo: str, found: list) -> bool:
 
 
 def job_running(root, repo: str, name: str, state: dict, now: datetime) -> bool:
-    """Whether the last job may still run (fix list comment 6889113783 item 2): within its first lease
-    window, or while the lease under its name was renewed since the script's own last take (the job
-    renews it as it works and never releases it; it lapses `LEASE_MINUTES` after the job ends)."""
+    """Whether the last job may still run (fix list comment 6889113783 item 2): within its first
+    lease window, or while the lease under its name was renewed since the script's own last take
+    (the job renews it as it works and never releases it; it lapses `LEASE_MINUTES` after the job
+    ends)."""
     start = when(str(state.get("job_at") or ""))
     if start is None:
         return False
