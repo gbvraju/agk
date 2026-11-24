@@ -45,8 +45,9 @@ USAGE = (
     " | sbom.py findings RESULT --bom FILE"
 )
 SPEC_VERSION = "1.6"  # ruled in Q-S0054-1; the newest version when this was built is 1.7 (Q-787-2)
-PYPROJECT, AGK_TOML, MANIFEST, WORKFLOWS = (
+PYPROJECT, PACKAGE, AGK_TOML, MANIFEST, WORKFLOWS = (
     "pyproject.toml",
+    "package.json",
     "agk.toml",
     "kit/manifest.json",
     ".github/workflows/",
@@ -279,14 +280,19 @@ def kit_file_components(root: Path, commit: str) -> list[dict]:
     return items
 
 
-def lock_components(root: Path, commit: str, config: dict) -> list[dict]:
-    """Amendment 206 (rule 2): with a declared work type and one Accepted stack record, each
-    package of the chosen stack's committed lock, with its licence (`licences.components`)."""
+def chosen_at(root: Path, commit: str, config: dict) -> tuple | None:
+    """The chosen stack at the commit (`pins.pick`): with a declared work type and one Accepted
+    stack record, (its `STACKS` row, its parts), else None (brief #1907, ADR-0789)."""
     delivery = config.get("delivery")
     if not isinstance(delivery, dict) or not isinstance(delivery.get("work_type"), str):
-        return []  # the kit's own repository: rule 2's reading unchanged
+        return None  # the kit's own repository: rule 2's reading unchanged
     names = git(root, "ls-tree", "--name-only", commit, "docs/adr/", check=False).split()
-    found = pins.pick([read_text(root, commit, n) for n in names if pins.RECORD.match(n)])
+    return pins.pick([read_text(root, commit, n) for n in names if pins.RECORD.match(n)])
+
+
+def lock_components(root: Path, commit: str, found: tuple | None) -> list[dict]:
+    """Amendment 206 (rule 2): with a declared work type and one Accepted stack record, each
+    package of the chosen stack's committed lock, with its licence (`licences.components`)."""
     if found is None:
         return []
     (_, _, lock_file, reader), parts = found
@@ -323,19 +329,44 @@ def clean(config: dict) -> bool:
     return value == "plugin"
 
 
+def pyproject_name(root: Path, commit: str) -> tuple[dict | None, str]:
+    data = read_toml(root, commit, PYPROJECT)
+    project = data.get("project")
+    name = project.get("name") if isinstance(project, dict) else None
+    if not isinstance(name, str):
+        raise not_parsed(PYPROJECT)
+    return data, name
+
+
+def package_name(root: Path, commit: str) -> tuple[None, str]:
+    """Amendment 232 (rule 3): a `node` product's name, the `name` of `package.json` as written."""
+    try:
+        data = json.loads(read_text(root, commit, PACKAGE))
+    except ValueError:  # not JSON, or a byte order mark (Q-SB-6)
+        raise not_parsed(PACKAGE) from None
+    name = data.get("name") if isinstance(data, dict) else None
+    if not isinstance(name, str) or not name.strip():
+        raise not_parsed(PACKAGE)
+    return None, name
+
+
+# brief #1907 answer 8: each `STACKS` build file -> the reader of the product's name from it
+NAMERS = {PYPROJECT: pyproject_name, PACKAGE: package_name}
+
+
 def build(root: Path, commit: str) -> dict:
-    pyproject = read_toml(root, commit, PYPROJECT)
     config = read_toml(root, commit, AGK_TOML)
     product_only = clean(config)
     version = config.get("version")
-    project = pyproject.get("project")
-    name = project.get("name") if isinstance(project, dict) else None
     if not isinstance(version, str):
         raise not_parsed(AGK_TOML)
-    if not isinstance(name, str):
-        raise not_parsed(PYPROJECT)
+    stack = chosen_at(root, commit, config)
+    build_file = stack[0][1] if stack else PYPROJECT
+    if show(root, commit, PYPROJECT) is not None:
+        build_file = PYPROJECT  # present, it is read as today (amendment 232)
+    pyproject, name = NAMERS[build_file](root, commit)
     found = [
-        *python_components(pyproject),
+        *([] if pyproject is None else python_components(pyproject)),
         *([] if product_only else ci_tool_components(read_text(root, commit, PIN_FILE))),
         *workflow_components(root, commit),
         *([] if product_only else kit_file_components(root, commit)),
@@ -344,7 +375,7 @@ def build(root: Path, commit: str) -> dict:
     for item in found:
         if unique.setdefault(item["bom-ref"], item) != item:
             raise not_parsed(WORKFLOWS)
-    unique.update((item["bom-ref"], item) for item in lock_components(root, commit, config))
+    unique.update((item["bom-ref"], item) for item in lock_components(root, commit, stack))
     moment = datetime.fromtimestamp(int(git(root, "show", "-s", "--format=%ct", commit)), UTC)
     return {
         "bomFormat": "CycloneDX",
