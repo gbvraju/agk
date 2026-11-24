@@ -75,7 +75,7 @@ def test_req014_the_strict_odd_form_raises_like_the_slice():
 def test_req014_strict_is_a_keyword():
     """REQ-014 brief #1886 answer 3a: a call names `strict`, so no site reads as the other."""
     with pytest.raises(TypeError):
-        common.option_pairs(["--a", "1"], True)  # type: ignore[misc]
+        common.option_pairs(["--a", "1"], True)
 
 
 def test_req014_no_shipped_script_steps_a_slice_by_two():

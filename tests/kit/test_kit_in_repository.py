@@ -384,3 +384,14 @@ def test_req078_the_kit_only_folders_of_the_kits_own_manifest():
         "skills/",
         "tests/kit/",
     ]
+
+
+def test_req014_the_kit_tests_folder_stays_kit_only_when_the_snapshot_drops_it():
+    """REQ-014 brief #1886 (ADR-0780): `tests/kit/` left the ship list, and the steward guard
+    still reads it as a kit-only folder from `kit_tests`, so a product never holds it."""
+    guard = load_guard()
+    manifest = {"snapshot": ["kit/", "scripts/agk/"], "kit_tests": "tests/kit"}
+    assert guard.kit_only_folders(manifest) == ("kit/", "scripts/agk/", "tests/kit/")
+    listed = {"snapshot": ["kit/", "tests/kit/"], "kit_tests": "tests/kit"}
+    assert guard.kit_only_folders(listed) == ("kit/", "tests/kit/")
+    assert guard.kit_only_folders({"snapshot": ["kit/"]}) == ("kit/",)

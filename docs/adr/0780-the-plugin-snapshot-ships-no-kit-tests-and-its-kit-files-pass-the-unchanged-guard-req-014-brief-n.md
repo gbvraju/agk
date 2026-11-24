@@ -29,7 +29,9 @@ the runs".
    allowance, ignore entry, per-file exemption or `[guard] allow_paths` read is added, and gitleaks does not replace
    the guard.
 2. **`tests/kit/` leaves the ship list.** `kit/manifest.json` `snapshot` drops `tests/kit/`; `kit_tests` stays
-   `tests/kit`, so doctor's `kit-in-repository` warning and `check_kit_tests.py` are unchanged. This amends ADR-0627
+   `tests/kit`, so doctor's `kit-in-repository` warning and `check_kit_tests.py` are unchanged, and the steward guard's
+   `kit_only_folders`, the one other reader of `snapshot`, adds the `kit_tests` folder so a clean product is still
+   denied a write under `tests/kit/` or a recursive one over `tests/`. This amends ADR-0627
    decision 1 ("The list is ... `tests/kit/` ..."), and amendment 226 proposes the same change to SPEC-0071 rule 2:
    fewer files reach customers (1,167 fewer at v0.65.0), nothing unscanned ships, and no guard test is rewritten to
    hide its own vectors.
@@ -47,10 +49,12 @@ the runs".
    printing path classes only, and asserts that `tests/kit/` is not listed and that `secret_problems` holds no
    exemption. A shipped file that the guard reads as data now fails its own pull request, not the release.
 5. **Path classes changed:** `agk.toml` (`test_common_option_pairs.py` joins the `scripts/agk/common.py` map entry),
-   `scripts/agk/` (`common.py` and the 28 rewritten scripts), `.claude/` (`hooks/steward_guard.py`), `config/`
+   `scripts/agk/` (`common.py` and the 28 rewritten scripts), `.claude/` (`hooks/steward_guard.py`: one comparison
+   reordered and `kit_only_folders` reading `kit_tests`), `config/`
    (`playbooks/mobile.toml`, `playbooks/web-app.toml`), `kit/` (`manifest.json`,
    `templates/design-prototype/fixtures.json`, `hashes.json` by `kit_hashes.py`) and `tests/kit/`
-   (`test_plugin_snapshot.py`, `test_check_design_prototype.py`, the new `test_common_option_pairs.py`).
+   (`test_plugin_snapshot.py`, `test_check_design_prototype.py`, `test_kit_in_repository.py`, the new
+   `test_common_option_pairs.py`).
 
 ## Consequences
 
