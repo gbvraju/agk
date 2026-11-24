@@ -47,8 +47,8 @@ from common import (
     CheckError,
     detect_default_branch,
     experimental_enabled,
-    load_config,
     lf,
+    load_config,
     matches,
     read_list,
     router_names,
@@ -213,7 +213,7 @@ def existing_test_dirs(target: Path) -> list[str] | None:
     """Brief #1899 (ADR-0787): the `test_dirs` list of TARGET's existing agk.toml, which a re-run
     renders back as `stamped` does `installed` (SPEC-0001 rule 14), read by `load_config` as one
     folder per entry (ADR-0769); None when there is no file, it is not TOML, or the value is not a
-    list of strings. With an agk.toml present, `load_config` reads no `pyproject.toml` (Q-1898-1)."""
+    list of strings. With an agk.toml present, `load_config` reads no pyproject.toml (Q-1898-1)."""
     if not (target / "agk.toml").is_file():
         return None
     try:

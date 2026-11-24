@@ -11,10 +11,9 @@ import subprocess  # nosec B404 - a fixed `git init`, no shell
 import tomllib
 from pathlib import Path
 
-import pytest
-
 import doctor
 import init
+import pytest
 
 WARNING = "doctor: warning: test files outside test_dirs: "
 
@@ -109,7 +108,7 @@ def test_a_name_that_matches_test_patterns_is_not_warned(tmp_path):
     assert doctor.outside_test_dirs_lines(root) == []
 
 
-# Brief #1899 (ADR-0787): a second init run reads `test_dirs` back from agk.toml (SPEC-0001 rule 14).
+# Brief #1899 (ADR-0787): a second init run reads `test_dirs` back (SPEC-0001 rule 14).
 CONFLICT = "conflict agk.toml (path class agk.toml: differs)"
 CLEAN = ["--layout", "plugin", "--rehearsal"]
 
