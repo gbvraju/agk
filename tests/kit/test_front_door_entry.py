@@ -492,3 +492,21 @@ def test_ac4_rule_8_asks_for_the_artifact_the_written_answer_names(tmp_path, scr
     assert [p for p in found if why in p], found
     other = "has no prototype version" if screens == "no" else "no `Demo:` line"
     assert not [p for p in found if other in p], found
+
+
+@pytest.mark.parametrize("screens,given", [("no", True), ("yes", False), ("open", False)])
+def test_ac4_rule_9_judges_the_go_on_the_file_the_written_answer_names(
+    tmp_path, monkeypatch, screens, given
+):
+    """REQ-055 AC4: SPEC-0048 rule 9 (brief #1889 answer 4: with `no` the design file carries
+    the go and no `Approve: design` line is needed; `yes` and `open` need the prototype's)."""
+    import front_door
+
+    doc = vision_document(tmp_path, screens)
+    api = tmp_path / "api"
+    api.mkdir()
+    rel = f"docs/design/architecture/{doc.stem}.md"
+    (api / "pr-9-files.json").write_text(json.dumps([{"filename": rel}]), encoding="utf-8")
+    (api / "pr-9-comments.json").write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(front_door, "go_lines", lambda *_a: ["Approve: SPEC-0099"])
+    assert front_door.go_given(api, "9", doc.stem, tmp_path, None) is given
