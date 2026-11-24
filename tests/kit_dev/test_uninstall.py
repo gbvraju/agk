@@ -617,7 +617,6 @@ def test_a_real_install_leaves_only_the_projects_own_files(
     }
     assert left == {
         "README.md",
-        "config/reviewers.yaml",  # the handle was set: a changed kit file, listed
         "constitution/vision.md",
         "docs/adr/0001-adopt-agk.md",
         "docs/build-state.md",
@@ -627,7 +626,9 @@ def test_a_real_install_leaves_only_the_projects_own_files(
         "docs/runs/residuals.md",
         "pyproject.toml",
     }, out
-    assert paths_of(out, "changed") == ["config/reviewers.yaml"]
+    # the template with its one handle set is what the kit wrote (brief #1892 answer 4, ADR-0786)
+    assert "delete config/reviewers.yaml (unchanged kit file)" in out
+    assert paths_of(out, "changed") == []
     assert paths_of(out, "kept") == ["pyproject.toml"]
     doctor = subprocess.run(
         [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "doctor.py"), str(target)],

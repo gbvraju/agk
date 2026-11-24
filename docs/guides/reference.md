@@ -676,7 +676,10 @@ settings to tidy by hand first, then records, which stay as written.
 
 - **Deleted:** every kit file whose content (CRLF read as LF) equals a copy that some release row of the kit's
   `kit/hashes.json` lists for its path, whatever release the project was installed at; `agk.toml` when it holds only the kit's
-  settings; `.github/CODEOWNERS` when it is what the kit generates from `config/reviewers.yaml`.
+  settings; `.github/CODEOWNERS` when it is what the kit generates from `config/reviewers.yaml`. The kit's settings are the one
+  list `config.KIT_SETTINGS` (ADR-0786); a key of your own, also one inside a kit table, keeps `agk.toml`, named by key, never a
+  value. `config/reviewers.yaml` goes when it is a released template with its one maintainers handle filled in.
+- **Named, never deleted:** `config/agk-baseline/`, the gates' and the history scan's records of your project.
 - **Edited:** a file that holds the project's own lines and an agk block a release shipped (`.gitignore`, `.gitattributes`,
   `CLAUDE.md`, the pull request template, `CODEOWNERS`) loses the block only; the project's `Makefile` loses the line
   `include agk.mk` when `agk.mk` goes (targets that call `agk-*` are yours to change).

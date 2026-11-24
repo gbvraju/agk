@@ -1,0 +1,1 @@
+- `/agk:uninstall` now knows every `agk.toml` setting the kit reads (one list in `config.py`, kept whole by a test), names a key of your own inside a kit table, deletes `config/reviewers.yaml` when it is the kit's template with your one handle filled in, and names `config/agk-baseline/`, which it never deletes (brief #1892, ADR-0786)
