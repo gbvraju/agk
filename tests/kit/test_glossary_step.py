@@ -191,8 +191,8 @@ def test_the_runner_runs_the_step_after_the_product_steps_only_where_the_file_ex
 
 
 def test_checklist_item_one_asks_for_a_term_within_its_word_count() -> None:
-    """REQ-080 AC6: item 1 keeps its kind and at most its 19 words; item 3 unchanged here."""
+    """REQ-080 AC6: item 1 keeps its kind and at most its 18 words (the brief said 19); item 3 unchanged here."""
     lines = (KIT_ROOT / "config" / "review-checklist.md").read_text(encoding="utf-8").splitlines()
     item = next(line for line in lines if line.startswith("1. "))
     assert item.startswith("1. `wrong-assumption`:") and "docs/glossary.md" in item
-    assert len(item[3:].split()) <= 19
+    assert len(item[3:].split()) <= 18
