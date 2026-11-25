@@ -33,6 +33,9 @@ def test_ac1_agk_governance_runs_every_check():
             continue  # kit-only: the workflow step `Release check` runs it where kit/agk-kit.mk is
         if script.name == "check_tag.py":
             continue  # kit-only: the workflow `agk-tag.yml` runs it on a pushed tag
+        if script.name == "check_domains.py":  # SPEC-0074 rule 2, Q-S0074-8 (ADR-0804)
+            assert "scripts/agk/check_playbooks.py" in out  # it runs inside the playbooks step
+            continue
         assert f"scripts/agk/{script.name}" in out, script.name
     assert "reviewers.py --check" in out and "reviewers.py --check-codeowners" in out
 
