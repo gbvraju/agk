@@ -6,7 +6,7 @@
 - Related: SPEC-0073, SPEC-0038, SPEC-0048, ADR-0793, ADR-0527, ADR-0786, brief #1933, brief #1715, plan #661
 - Requirements: REQ-080
 
-Protected classes: `scripts/agk/`, `config/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `config/`, `tests/kit/`, `agk.toml`, `kit/`
 
 ## Context
 
@@ -39,7 +39,8 @@ exist. Amendment 237 item 1 (SPEC-0038 rule 2, the two keys) was approved by the
 5. `scripts/agk/grill.py questions [--depth D] [--playbook KIND] [--answers FILE] [--root DIR]` prints the items to ask
    in order: `default.toml`'s at or below the depth, then the work type's own (`Q-73A-3`), then `success`; never an id
    the answers file holds; one `Recommended: <steward fills>` line after each item and a last `budget: <n>` line (5, 12
-   or 20). Standard library, `common.py`, `config.py` and `playbook_format.py`; no network, no model.
+   or 20). Standard library, `common.py`, `config.py` and `playbook_format.py`; no network, no model. It is installed
+   (one `kit/manifest.json` row) and named in `docs/guides/reference.md`.
 6. `doctor.py` prints `quality-settings`: the five values in the kit's own words, or the refusal naming the key.
 
 ## Consequences
@@ -51,4 +52,4 @@ Builds (b), (c), (e), (g) and (h) read their keys from `quality_settings`. No wo
 
 ## Residual
 
-- 2026-11-25: `grill.py record` and `ready`, the `/agk:grill` skill and the install manifest entry are build (b)'s.
+- 2026-11-25: `grill.py record` and `ready` and the `/agk:grill` skill are build (b)'s.
