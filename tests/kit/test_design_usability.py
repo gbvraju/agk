@@ -44,7 +44,7 @@ TEN = (
     "error-recovery",
     "help",
 )
-SECRET = "the-checkout-button-hides-under-the-fold-example"
+FINDING = "the-checkout-button-hides-under-the-fold-example"
 
 INVENTORY = """# Design inventory
 
@@ -83,7 +83,7 @@ def record(sections: dict[str, dict[str, str]], version: str = "v1") -> str:
     return f"# Usability\n\n## {version}\n\n{body}\n"
 
 
-FULL = record({"books": lines(), "book-detail": lines({"help": f"finding: {SECRET}"})})
+FULL = record({"books": lines(), "book-detail": lines({"help": f"finding: {FINDING}"})})
 
 
 def project(root: Path, work_type: str | None = "web-app", usability: str | None = FULL) -> Path:
@@ -162,7 +162,7 @@ def test_ac5_a_missing_screen_fails(tmp_path):
 
 
 def test_ac5_a_missing_or_twice_heuristic_fails(tmp_path):
-    """REQ-080 AC5: a heuristic missing, twice, or one the ten do not hold fails naming the screen."""
+    """REQ-080 AC5: a heuristic missing, twice or not one of the ten fails naming the screen."""
     missing = record({"books": lines({"help": "-"}), "book-detail": lines()})
     assert problems(project(tmp_path / "a", usability=missing)) == [
         f"SPEC-0038 rule 10: {RECORD}: v1: books: the heuristic help is missing"
@@ -253,11 +253,11 @@ def test_ac5_the_newest_version_is_the_kit_version_over_an_import(tmp_path):
 def test_ac5_the_design_check_fails_and_never_prints_a_finding(tmp_path):
     """REQ-080 AC5: `check_design.py` runs the check in its inventory branch; no line holds a
     finding's text (principle 8)."""
-    missing = record({"books": lines(), "book-detail": lines({"help": f"finding: {SECRET}"})})
+    missing = record({"books": lines(), "book-detail": lines({"help": f"finding: {FINDING}"})})
     root = project(tmp_path, usability=missing.replace("### books", "### basket"))
     result = run_check(root)
     assert result.returncode == 1
     assert f"FAIL design: SPEC-0038 rule 10: {RECORD}: v1: books: the screen has no section" in (
         result.stdout
     )
-    assert SECRET not in result.stdout + result.stderr
+    assert FINDING not in result.stdout + result.stderr

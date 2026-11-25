@@ -62,7 +62,8 @@ def newest(root: Path) -> str | None:
     """The version the record must cover: the last kit version, else the last imported one."""
     kit = design_prototype_check.versions(root)
     imported = design_import.versions(root)
-    return (kit or imported or [None])[-1]
+    found = kit or imported
+    return found[-1] if found else None
 
 
 def _applies(root: Path) -> tuple[bool, list[str]]:
