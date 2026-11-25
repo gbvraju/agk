@@ -257,3 +257,182 @@ def test_req039_1735_5k_a_persons_own_park_still_holds_the_owners_merge(tmp_path
     proc, put = owner_run(tmp_path, [{"name": "agk:owner-merge"}, {"name": "agk:parked"}])
     held(proc, "hold label (rule 5)")
     assert put == []
+
+
+# --- brief #1931 answers 1, 5, 6 and 8 (ADR-0799): a design sign-off row waits for its line -----
+
+SIGNOFFS = "docs/design/signoffs.md"
+TABLE = "| kind | version | digest | head | date | comment |\n|---|---|---|---|---|---|\n"
+LINK = "https://example.com/pull/7#issuecomment-1"
+
+
+def row(kind: str = "inventory", version: str = "-", head: str = HEAD) -> str:
+    return f"| {kind} | {version} | {'a' * 64} | {head} | 2026-11-25 | {LINK} |"
+
+
+def signoff_file(*rows: str, status: str = "modified", patch: bool = True) -> dict:
+    """The sign-off record as GitHub lists it: each row of ROWS an added (`+`) line."""
+    item = {"filename": SIGNOFFS, "status": status}
+    if patch:
+        item["patch"] = (
+            "@@ -1,2 +1,4 @@\n " + "\n ".join(TABLE.splitlines()) + "".join(f"\n+{r}" for r in rows)
+        )
+    return item
+
+
+def design_run(tmp_path, files, later=(), main=None, yaml=APPROVERS):
+    return merge_cleared_run(
+        tmp_path,
+        main or toml(ON),
+        [bare(), *later],
+        reviewers_yaml=yaml,
+        files=[*files, CODE_FILE],
+    )
+
+
+def test_req046_1931_an_added_inventory_row_without_the_line_is_held(tmp_path):
+    """REQ-046: brief #1931 answer 7 (red on main 2e13c32b: it merged)."""
+    proc, made = design_run(tmp_path, [signoff_file(row())])
+    held(proc, "design approval (rule 5)")
+    no_merge(made)
+
+
+def test_req046_1931_the_listed_approvers_line_naming_the_head_merges_it(tmp_path):
+    """REQ-046: brief #1931 answer 7: `Approve: inventory <head>` by a spec approver."""
+    proc, _ = design_run(tmp_path, [signoff_file(row())], [comment(f"Approve: inventory {HEAD}")])
+    assert one_line(proc) == MERGED
+
+
+@pytest.mark.parametrize(
+    ("name", "later", "rows"),
+    [
+        ("an unlisted account", [comment(f"Approve: inventory {HEAD}", BUILDER, 7)], [row()]),
+        ("another head", [comment(f"Approve: inventory {OLD}", OWNER, 7)], [row()]),
+        (
+            "two rows, one approved",
+            [comment(f"Approve: inventory {HEAD}", OWNER, 7)],
+            [row(), row("design", "v2")],
+        ),
+        (
+            "a design row, another version",
+            [comment(f"Approve: design v1 {HEAD}")],
+            [row("design", "v2")],
+        ),
+    ],
+)
+def test_req046_1931_a_row_without_its_own_line_holds(tmp_path, name, later, rows):
+    """REQ-046: brief #1931 answers 6 and 7."""
+    proc, made = design_run(tmp_path, [signoff_file(*rows)], later)
+    held(proc, "design approval (rule 5)")
+    no_merge(made)
+
+
+def test_req046_1931_an_imported_design_row_counts_with_its_i_version_line(tmp_path):
+    """REQ-046: brief #1931 answer 6: an `i<n>` row is read as today's reader reads it."""
+    later = [comment(f"Approve: design i3 {HEAD}")]
+    proc, _ = design_run(tmp_path, [signoff_file(row("design", "i3"))], later)
+    assert one_line(proc) == MERGED
+
+
+def test_req046_1931_a_line_posted_through_an_agent_app_never_counts(tmp_path):
+    """REQ-046: brief #1931 answers 5 and 7 (`agent_apps`, default `claude`)."""
+    line = {**comment(f"Approve: inventory {HEAD}"), "performed_via_github_app": {"slug": "claude"}}
+    proc, made = design_run(tmp_path, [signoff_file(row())], [line])
+    held(proc, "design approval (rule 5)")
+    no_merge(made)
+
+
+def test_req046_1931_with_no_approver_listed_a_row_holds(tmp_path):
+    """REQ-046: brief #1931 answer 5: `spec_approvers` empty, so no line can count."""
+    yaml = f'version: 1\nverdict_authors: ["@{OWNER}"]\nspec_approvers: []\n'
+    later = [comment(f"Approve: inventory {HEAD}")]
+    proc, made = design_run(tmp_path, [signoff_file(row())], later, yaml=yaml)
+    held(proc, "design approval (rule 5)")
+    no_merge(made)
+
+
+def solo_confirmation(sha: str = HEAD) -> dict:
+    lines = [f"Confirmed: {sha}", f"Verdict: cleared {sha}", f"Approve: inventory {sha}", "Shown:"]
+    lines += ["one", "two", "three", f"confirmed by {OWNER} in a session at 2026-11-25T08:00:00Z"]
+    return comment("\n".join(lines) + "\n", OWNER, 8)
+
+
+def test_req046_1931_a_solo_confirmation_counts_as_the_line(tmp_path):
+    """REQ-046: brief #1931 answer 5: `review_mode = "solo"`, the one person's confirmation."""
+    main = 'default_branch = "main"\npr_mode = "strict"\nreview_mode = "solo"\n[flow]\n' + ON
+    proc, _ = design_run(tmp_path, [signoff_file(row())], [solo_confirmation()], main=main)
+    assert one_line(proc) == MERGED
+
+
+def test_req046_1931_in_team_mode_a_confirmation_is_not_the_line(tmp_path):
+    """REQ-046: brief #1931 answer 5: `"team"`: only an approver's own `Approve:` line."""
+    proc, made = design_run(tmp_path, [signoff_file(row())], [solo_confirmation()])
+    held(proc, "design approval (rule 5)")
+    no_merge(made)
+
+
+def test_req046_1931_a_row_whose_patch_github_does_not_show_holds(tmp_path):
+    """REQ-046: brief #1931 answer 5 (fail closed): the rows cannot be read."""
+    proc, made = design_run(tmp_path, [signoff_file(patch=False)])
+    held(proc, "design approval (rule 5)")
+    no_merge(made)
+
+
+def test_req046_1931_no_added_row_is_not_held_by_this_rule(tmp_path):
+    """REQ-046: brief #1931 answer 1 (`Q-MH-1`): an inventory change without a row merges."""
+    files = [{"filename": "docs/design/inventory.md", "status": "modified", "patch": "+x"}]
+    proc, _ = design_run(tmp_path, files)
+    assert one_line(proc) == MERGED
+
+
+def test_req046_1931_the_owner_merge_never_lifts_the_design_hold(tmp_path):
+    """REQ-046: brief #1931 answer 5: `--owner` lifts the licence hold only."""
+    import json
+
+    from test_merge_cleared_owner import checkout, merges
+    from test_merge_cleared_owner import run as owner
+
+    root, bin_dir, log = checkout(tmp_path, files=[signoff_file(row())])
+    proc = owner(root, bin_dir, "--pr", "7", "--owner")
+    held(proc, "design approval (rule 5)")
+    assert merges(calls(log)) == []
+    assert json  # the module's import style of owner_run
+
+
+def test_req046_1931_the_rows_are_read_by_the_one_reader():
+    """REQ-046: brief #1931 answer 1: a row moved in the file is not added; a header is no row."""
+    item = signoff_file(row())
+    assert merge_cleared.rows_added(item) == [
+        {
+            "row": 1,
+            "kind": "inventory",
+            "version": "-",
+            "digest": "a" * 64,
+            "head": HEAD,
+            "date": "2026-11-25",
+            "comment": LINK,
+        }
+    ]
+    moved = {**item, "patch": item["patch"] + f"\n-{row()}"}
+    assert merge_cleared.rows_added(moved) == []
+    new = {
+        "filename": SIGNOFFS,
+        "status": "added",
+        "patch": "@@ -0,0 +1,3 @@\n+" + "\n+".join([*TABLE.splitlines(), row()]),
+    }
+    assert [r["kind"] for r in merge_cleared.rows_added(new)] == ["inventory"]
+    assert merge_cleared.rows_added({**item, "patch": "@@\n+| bad | row |"}) is None
+
+
+def test_req046_1931_the_merger_requires_every_line_the_governance_step_requires():
+    """REQ-046: brief #1931 answer 8: one judge of an added row, shared by the merger and
+    `check_final_clearance.py`, so a line kind added to one is added to both."""
+    import check_final_clearance
+
+    assert merge_cleared.rows_unapproved is check_final_clearance.rows_unapproved
+    source = Path(check_final_clearance.__file__).read_text(encoding="utf-8")
+    assert source.count("design_approvals(") == 1, "signoff_problems reads rows_unapproved only"
+    rows = [{"kind": "design", "version": "v1", "head": HEAD}]
+    given = [comment(f"Approve: design v1 {HEAD}")]
+    assert not merge_cleared.rows_unapproved(rows, given, [OWNER], [])
+    assert merge_cleared.rows_unapproved(rows, given, [], [])
