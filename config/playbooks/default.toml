@@ -148,3 +148,78 @@ text = "Which environments must it run in, from a developer's machine to product
 [[discovery]]
 id = "non-functional"
 text = "Beyond the busiest hour, the downtime and the cost already asked: how soon must it recover after a failure, what must be logged, and which needs of speed and security must it meet?"
+
+# SPEC-0073 rule 3 (amendment 237 item 1, brief #1933): the seed grill items, in the rule's order.
+# `depth` is the smallest depth that asks it; `success` above is the fifth critical item.
+
+[[discovery]]
+id = "problem"
+text = "What problem does it solve, for whom, in one sentence?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "evidence"
+text = "What have you seen or measured that shows the problem is real?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "who-hurts"
+text = "Who feels the problem most, and how often?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "job"
+text = "What job are those people trying to get done when they meet the problem?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "today"
+text = "What do users do now instead, and what does it cost them?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "why-now"
+text = "Why does it need solving now rather than later?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "guardrails"
+text = "Which numbers must not get worse while it is built?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "non-goals"
+text = "What will it deliberately not do?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "riskiest"
+text = "Which assumption sinks the product if it is wrong?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "pre-mortem"
+text = "Imagine it failed six months from now: what is the most likely reason?"
+depth = "deep"
+critical = false
+
+[[discovery]]
+id = "stop"
+text = "What result would make you stop or change course?"
+depth = "deep"
+critical = false
+
+[[discovery]]
+id = "first-slice"
+text = "What is the smallest thing you could build that tests the riskiest assumption?"
+depth = "standard"
+critical = false

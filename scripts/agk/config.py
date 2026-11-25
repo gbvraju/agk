@@ -789,6 +789,53 @@ def steward_settings(root: Path) -> dict:
     return {**STEWARD_DEFAULTS, **table}
 
 
+# --- the [quality] table (SPEC-0073 rule 11, brief #1933, ADR-0801) -----------------------------
+
+QUALITY_DEFAULTS = {
+    "grill": "standard",
+    "grill_hold": True,
+    "glossary_terms": 40,
+    "designs": 2,
+    "survey_days": 7,
+}
+GRILL_DEPTHS = ("light", "standard", "deep")
+QUALITY_NUMBERS = {"glossary_terms": (10, 200), "designs": (1, 2), "survey_days": (0, 30)}
+
+
+class QualitySettingError(CheckError):
+    """The `[quality]` table is refused, naming the setting and never the value."""
+
+
+def _quality_ok(key: str, value: object) -> bool:
+    if key == "grill":
+        return value in GRILL_DEPTHS and isinstance(value, str)
+    if key == "grill_hold":
+        return isinstance(value, bool)
+    low, high = QUALITY_NUMBERS[key]
+    return type(value) is int and low <= value <= high
+
+
+def quality_settings(root: Path) -> dict:
+    """SPEC-0073 rule 11: the five keys of `[quality]` with their defaults; a declared `[delivery]
+    work_type = "pilot"` makes the unset `grill` light and the unset `designs` 1. A `bool` is never
+    taken as a number; a refusal names `quality.<key>`, never the value."""
+    try:
+        source = config_source(root)
+    except (OSError, ValueError):
+        raise QualitySettingError("the [quality] table is refused (setting: quality)") from None
+    table = source.get("quality", {})
+    if not isinstance(table, dict):
+        raise QualitySettingError("the [quality] table is refused (setting: quality)")
+    for key, value in table.items():
+        if key not in QUALITY_DEFAULTS or not _quality_ok(key, value):
+            raise QualitySettingError(f"the [quality] table is refused (setting: quality.{key})")
+    delivery = source.get("delivery")
+    found = dict(QUALITY_DEFAULTS)
+    if isinstance(delivery, dict) and delivery.get("work_type") == "pilot":
+        found |= {"grill": "light", "designs": 1}
+    return found | table
+
+
 # --- the [autopilot] table (SPEC-0064 rules 7 and 8, brief #1390, ADR-0587) ---------------------
 
 AUTOPILOT_MODES = ("off", "assist", "on")
@@ -950,6 +997,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
     "design": frozenset({"pixel_tolerance", "render", "ui_paths"}),
     "delivery": frozenset({"work_type"}),
     "steward": frozenset(STEWARD_DEFAULTS),
+    "quality": frozenset(QUALITY_DEFAULTS),  # brief #1933 (ADR-0801)
     "kit": frozenset({"layout", "plugin_version"}),
 }
 TOP_LEVEL = "top level"

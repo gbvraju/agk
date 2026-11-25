@@ -110,6 +110,7 @@ DIR = "docs/discovery"
 # front_door.py is installed and `engines.py` and `playbook.py` are not, so the ten common topic ids
 # of `engines.py questions` and `/agk:vision`'s limit are mirrored here, never their questions;
 # a kit test pins both equal to their source.
+# `playbook_format.TOPIC_IDS` is the same tuple (brief #1933); a test pins all three equal.
 TOPICS = (
     "users",
     "existing",
@@ -1226,7 +1227,7 @@ def skeleton(name: str, modules: list[str], base: dict, layers: list[str] | None
     lines.append(f"batch_by = {_toml(milestones['batch_by'])}")
     if layers:
         lines += ["", *[ln for ln in layers[:cut] if ln]]
-    for row in base["discovery"]:
+    for row in (r for r in base["discovery"] if "depth" not in r):  # brief #1933: no grill item
         lines += ["", "[[discovery]]", f"id = {_toml(row['id'])}", f"text = {_toml(row['text'])}"]
     return "\n".join(lines) + "\n"
 

@@ -547,6 +547,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "move each named setting into the table it belongs to (a change to agk.toml needs an ADR "
         "in the same pull request)",
     ),
+    "quality-settings": (  # brief #1933 (ADR-0801): the [quality] table, SPEC-0073 rule 11
+        "warn",
+        "",
+        "agk.toml: ",
+        "set each [quality] key to a value of its form, or remove it to keep the default (a "
+        "change to agk.toml needs an ADR in the same pull request)",
+    ),
     "autopilot-settings": (  # brief #1390 (ADR-0587): read for one release, then [autopilot] only
         "warn",
         "no setting that [autopilot] replaces is set",
@@ -1638,6 +1645,24 @@ def misplaced_settings_result(config: dict) -> Result:
     return Result("fail", message="; ".join(parts))
 
 
+def quality_settings_result(root: Path) -> Result:
+    """Brief #1933 (ADR-0801): the `[quality]` settings in the kit's own words, or the refusal
+    naming the key, never a value."""
+    try:
+        found = models.quality_settings(root)
+    except CheckError as exc:
+        return Result("fail", message=str(exc))
+    days = found["survey_days"]
+    return Result(
+        "ok",
+        message=(
+            f"grill {found['grill']}, hold {'on' if found['grill_hold'] else 'off'}, "
+            f"glossary {found['glossary_terms']}, designs {found['designs']}, "
+            f"survey {f'{days} days' if days else 'off'}"
+        ),
+    )
+
+
 def autopilot_settings_result(root: Path) -> Result:
     """Brief #1390 (ADR-0587): the old settings `[autopilot]` replaces, by name, never a value."""
     try:
@@ -2553,6 +2578,7 @@ def run_checks(
     results["model-names"] = model_names_result(root)
     results["misplaced-settings"] = misplaced_settings_result(config)
     results["autopilot-settings"] = autopilot_settings_result(root)
+    results["quality-settings"] = quality_settings_result(root)
     results["local-mode-switch"] = local_switch_result(reads, config)
     results["merger-variable"] = merger_variable_result(root, reads, config)
     report = []

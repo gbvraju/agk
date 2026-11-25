@@ -1,0 +1,1 @@
+- Planning: the optional `[quality]` table (`grill`, `grill_hold`, `glossary_terms`, `designs`, `survey_days`), shown by `doctor.py`; playbook `[[discovery]]` entries may be grill items with `depth` and `critical`; `default.toml` carries the twelve seed grill items; `grill.py questions` prints the items to ask for a depth (brief #1933, ADR-0801, amendment 237 item 1)
