@@ -27,7 +27,14 @@ payments and field-service`).
    `[[discovery]]` id may not reuse a topic id, a fixed id or any `[[discovery]]` id of the playbooks, grill ids
    included. A line that `guard.scan_text` flags with the shipped patterns fails naming the class and the key. An
    `as_of` older than `[domain] stale_months` is a `warn domains:` line and never fails. It reads files only and
-   imports `common.py`, `guard.py` and `playbook_format.py`, all standard library (no network, no model).
+   imports `common.py`, `guard.py` and `playbook_format.py`, and `config.py` inside one function for
+   `stale_months`, all standard library (no network, no model). A list or table where a key wants text is the
+   wrong-type line naming the key, never a traceback.
+6. Three kit tests learn the new data: `test_agk_mk.py` accepts `check_domains.py` as run by `check_playbooks.py`
+   inside `agk-governance`; `test_no_literal_dates.py` accepts a pack's whole `as_of = "YYYY-MM-DD"` line, the
+   pack's data by rule 2, whose age is a warning by rule 14 and never a failure; `test_kit_paths_resolved.py`
+   holds one row for `check_domains.folders`, which reads the project's own pack first (rule 15) and the kit's
+   by `kit_root.kit_file`. `kit/templates/gitattributes` pins `config/domains/**` to LF.
 3. `check_playbooks.findings` adds the packs' problems when it checks every playbook, so they print as
    `FAIL playbooks:` lines in the existing `playbooks` step; a call for named playbooks alone (a derive, a gate run)
    reads no pack. `governance_map.CHECKS`, `agk.mk` and every workflow are unchanged (`Q-S0074-8`).

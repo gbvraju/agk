@@ -86,14 +86,16 @@ def _date(value: Any) -> datetime.date | None:
 
 
 def folders(root: Path) -> list[Path]:
-    """The folders packs are read from, the project's first; the plugin's in a clean layout."""
+    """The folders packs are read from: the project's own first (a project's pack, rule 15), then
+    the kit's by `kit_root.kit_file`, the same folder in the installed layout."""
     own = Path(root) / FOLDER
-    if not playbook_format.clean(root) or playbook_format.kit_root is None:
+    if playbook_format.kit_root is None:
         return [own]
     try:
-        return [own, playbook_format.kit_root.plugin_root(Path(root)) / FOLDER]
+        kit = playbook_format.kit_root.kit_file(Path(root), FOLDER)
     except playbook_format.Refused:
         return [own]
+    return [own] if kit == own else [own, kit]
 
 
 def packs(root: Path) -> list[Path]:
@@ -132,18 +134,17 @@ def kit_ids(root: Path) -> set[str]:
     """The question ids a pack's `[[discovery]]` never reuses: the topics, the fixed ids and every
     playbook's `[[discovery]]` ids, its grill ids among them."""
     ids = set(playbook_format.TOPIC_IDS) | set(playbook_format.DISCOVERY_IDS)
-    places = [Path(root) / playbook_format.FOLDER]
+    places = list(playbook_format.playbooks(root))
     try:
-        places.append(playbook_format.folder(root, playbook_format.BASE))
+        base = playbook_format.folder(root, playbook_format.BASE)
+        places += sorted(base.glob("*.toml")) if base.is_dir() else []
     except playbook_format.Refused:
         pass
-    for where in places:
-        for path in sorted(where.glob("*.toml")) if where.is_dir() else []:
-            data = load(path) or {}
-            rows = data.get("discovery")
-            for row in rows if isinstance(rows, list) else []:
-                if isinstance(row, dict) and isinstance(row.get("id"), str):
-                    ids.add(row["id"])
+    for path in dict.fromkeys(places):
+        rows = (load(path) or {}).get("discovery")
+        for row in rows if isinstance(rows, list) else []:
+            if isinstance(row, dict) and isinstance(row.get("id"), str):
+                ids.add(row["id"])
     return ids
 
 
@@ -176,20 +177,26 @@ def _sources(name: str, entry: dict) -> list[str]:
     return []
 
 
+def _text(entry: dict, key: str) -> str | None:
+    """The string at `key`, or None: a value of another type is `_keys`'s wrong-type line."""
+    value = entry.get(key)
+    return value if isinstance(value, str) else None
+
+
 def _references(rows: dict[str, list[dict]]) -> list[str]:
-    regs = {e.get("id"): e for e in rows.get("regulations", [])}
-    cons = {e.get("id") for e in rows.get("constraints", [])}
+    regs = {_text(e, "id"): e for e in rows.get("regulations", [])}
+    cons = {_text(e, "id") for e in rows.get("constraints", [])}
     out = []
     for name in ("constraints", "acceptance", "gates"):
         for entry in rows.get(name, []):
-            if "regulation" in entry and entry["regulation"] not in regs:
+            if "regulation" in entry and _text(entry, "regulation") not in regs.keys() - {None}:
                 out.append(f"a `[[{name}]]` `regulation` names no regulation (key: regulation)")
-            if "constraint" in entry and entry["constraint"] not in cons:
+            if "constraint" in entry and _text(entry, "constraint") not in cons - {None}:
                 out.append(f"a `[[{name}]]` `constraint` names no constraint (key: constraint)")
     for entry in rows.get("gates", []):
         if entry.get("kind") not in playbook_format.GATE_KINDS:
             out.append("a `[[gates]]` `kind` is not check or judgement (key: kind)")
-        held = regs.get(entry.get("regulation"), {})
+        held = regs.get(_text(entry, "regulation"), {})
         if entry.get("kind") == "judgement" and held.get("critical") is not True:
             out.append("a judgement gate names no critical regulation (key: regulation)")
     return out
@@ -206,7 +213,7 @@ def _values(rows: dict[str, list[dict]], kit: set[str]) -> list[str]:
     for entry in rows.get("discovery", []):
         if entry.get("depth") not in playbook_format.GRILL_DEPTHS:
             out.append("a `[[discovery]]` `depth` is not light, standard or deep (key: depth)")
-        if entry.get("id") in kit:
+        if _text(entry, "id") in kit:
             out.append("a `[[discovery]]` id reuses a kit question id (key: id)")
     for name in ("regulations", "constraints", "gates"):
         for entry in rows.get(name, []):

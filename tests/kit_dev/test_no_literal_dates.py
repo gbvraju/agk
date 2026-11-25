@@ -41,9 +41,30 @@ def test_the_scan_finds_a_literal_date_and_not_a_placeholder_or_a_week(tmp_path)
     assert literal_dates(tmp_path, ["a.md", "b.md", "missing.md"]) == ["a.md:1"]
 
 
+PACK_DATE = re.compile(r'^as_of = "\d{4}-\d{2}-\d{2}"$')
+
+
+def pack_date(found: str) -> bool:
+    """ADR-0804: a domain pack's `as_of` line is the pack's data (SPEC-0074 rule 2); its age is a
+    `warn domains:` line and never a failure (rule 14), so it cannot age into one."""
+    rel, number = found.rsplit(":", 1)
+    if not rel.startswith("config/domains/"):
+        return False
+    line = (KIT_ROOT / rel).read_text(encoding="utf-8").splitlines()[int(number) - 1]
+    return bool(PACK_DATE.match(line))
+
+
 def test_no_installed_file_holds_a_literal_date():
     """ADR-0112 (brief #185 answer 3): a role file or a guide cannot age into a failure again."""
-    assert literal_dates(KIT_ROOT, installed_files()) == []
+    found = literal_dates(KIT_ROOT, installed_files())
+    assert [f for f in found if not pack_date(f)] == []
+
+
+def test_a_pack_date_is_only_an_as_of_line(tmp_path):
+    """ADR-0804: only a pack's whole `as_of` line is the pack's data; any other date still fails."""
+    assert pack_date("config/domains/payments.toml:12")
+    assert not pack_date("config/domains/payments.toml:1")
+    assert not pack_date("config/playbooks/default.toml:1")
 
 
 def test_the_conductor_role_keeps_its_documentation_address():

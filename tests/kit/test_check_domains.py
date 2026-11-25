@@ -147,6 +147,37 @@ def test_ac1_each_malformed_pack_fails_naming_the_rule_file_and_key(tmp_path, ol
         assert all(value not in line.split("(key:")[0] for line in lines), lines
 
 
+@pytest.mark.parametrize(
+    ("old", "new", "key"),
+    [
+        ('id = "zz-returns"', 'id = ["zz-returns"]', "id"),
+        ('id = "zz-rule"', "id = { zz = 1 }", "id"),
+        ('regulation = "zz-rule"\nbasis', 'regulation = ["zz-rule"]\nbasis', "regulation"),
+        ('constraint = "zz-keep"', "constraint = { zz = 1 }", "constraint"),
+        ('owner_only = false\nregulation = "zz-rule"', 'owner_only = false\nregulation = ["zz"]',
+         "regulation"),
+    ],
+)  # fmt: skip
+def test_ac1_a_list_or_table_for_a_text_key_fails_naming_it(tmp_path, old, new, key):
+    """REQ-081 AC1: SPEC-0074 rule 2 (a wrong type for an id or a reference, never a traceback,
+    in the check and in `config.domain_settings`)."""
+    assert old in GOOD
+    lines = found(tmp_path, GOOD.replace(old, new, 1))
+    assert any(line.endswith(f"wrong type (key: {key})") for line in lines), lines
+    (tmp_path / "agk.toml").write_text('[domain]\npacks = ["zz-shop"]\n', encoding="utf-8")
+    import config
+
+    with pytest.raises(config.DomainSettingError):
+        config.domain_settings(tmp_path)
+
+
+def test_ac1_a_phone_shaped_source_fails_naming_the_class(tmp_path):
+    """REQ-081 AC1: SPEC-0074 rule 14 (a phone-number-shaped `source`; no value printed)."""
+    lines = found(tmp_path, GOOD.replace("https://example.com/zz-rule", "call +44 20 7946 0958"))
+    assert any("data guard flags PHONE" in line and "(key: source)" in line for line in lines)
+    assert all("7946" not in line for line in lines)
+
+
 def test_ac1_a_reused_playbook_or_grill_id_fails(tmp_path):
     """REQ-081 AC1: SPEC-0074 rule 2 (a `[[discovery]]` id of a playbook, its grill ids too)."""
     write(
