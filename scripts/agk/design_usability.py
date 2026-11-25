@@ -2,25 +2,25 @@
 # SPDX-License-Identifier: LicenseRef-AGK-Proprietary
 # AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
-"""The usability record (SPEC-0073 rule 8; SPEC-0038 rule 10 and SPEC-0037 rule 7 by amendment
-237; brief #1953, ADR-0809). Installed: `kit/manifest.json` lists it in `verbatim`, and
-`check_design.py` imports it inside its inventory branch.
+"""The usability record (SPEC-0073 rule 8; SPEC-0038 rule 10 and SPEC-0037 rule 7 by amendment 237;
+brief #1953, ADR-0809). Installed: `kit/manifest.json` lists it in `verbatim`, and `check_design.py`
+imports it inside its inventory branch.
 
 `docs/design/usability.md` holds one `## <version>` section per prototype or imported version
 (`v<n>` or `i<n>`), and in it one `### <screen id>` per screen of `docs/design/inventory.md`, each
-with one line `- <heuristic>: pass | finding: <text> | not applicable: <reason>` for each of the
-ten `HEURISTICS`; the form is `kit/templates/usability.md` (`template(root)`: the plugin's in the
-clean layout). `problems(root)` checks it only when the declared `[delivery] work_type` is one
-of `SCREEN_WORK_TYPES`: it fails a missing record, a missing section for the newest version (`newest`: the last kit version, else the last imported
-one), a screen of the inventory with no section, a heuristic missing, twice or not one of the
-ten, a value outside the three forms or with no text, a screen the inventory does not hold, and a
-record that is not UTF-8 text (naming the path class).
-An older version's section is read for its form only (`Q-73I-1`), and no version folder is read.
-A refused declaration fails as `playbook_format.declaration` refuses it, naming the setting.
-`note(root)` prints `design: usability not applicable (work type)` for any other work type or
-none, and `design: usability waits for a prototype version` before the first version. Each
-failure names `SPEC-0038 rule 10`, the path, the version and the screen, never a finding's text
-(principle 8). Files only: no network, no model, nothing written.
+with one line `- <heuristic>: pass | finding: <text> | not applicable: <reason>` for each of the ten
+`HEURISTICS`; the form is `kit/templates/usability.md` (`template(root)`: the plugin's in the clean
+layout). `problems(root)` checks it only when the declared `[delivery] work_type` is one of
+`SCREEN_WORK_TYPES`: it fails a missing record, a missing section for the newest version (`newest`:
+the last kit version, else the last imported one), a screen of the inventory with no section, a
+heuristic missing, twice or not one of the ten, a value outside the three forms or with no text, a
+screen the inventory does not hold, and a record that is not UTF-8 text (naming the path class). An
+older version's section is read for its form only (`Q-73I-1`), and no version folder is read. A
+refused declaration fails as `playbook_format.declaration` refuses it, naming the setting.
+`note(root)` prints `design: usability not applicable (work type)` for any other work type or none,
+and `design: usability waits for a prototype version` before the first version. Each failure names
+`SPEC-0038 rule 10`, the path, the version and the screen, never a finding's text (principle 8).
+Files only: no network, no model, nothing written.
 """
 
 from __future__ import annotations
