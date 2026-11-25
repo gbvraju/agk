@@ -1,0 +1,1 @@
+- Planning: domain packs, `config/domains/<slug>.toml`, checked by `check_domains.py` inside the `playbooks` governance step; two seed packs, `payments` and `field-service`; the optional `[domain]` table (`packs`, `stale_months`), shown by `doctor.py` (brief #1935, ADR-0804)

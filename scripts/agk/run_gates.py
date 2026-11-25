@@ -28,6 +28,10 @@ The product steps (`PRODUCT_STEPS`): `pins` (SPEC-0072 rule 4; brief #1776, ADR-
 work type is declared, not run without a chosen stack, then `bom` and `licences` where a lock is
 read.
 
+The quality step (`QUALITY_STEPS`: `glossary`; SPEC-0073 rule 8, brief #1951, ADR-0812) runs after
+them only where `docs/glossary.md` exists: one table, one row per term, no term twice, at most
+`[quality] glossary_terms` rows.
+
 The standards packs (SPEC-0072 rule 6; brief #1589, ADR-0669): after the gates, each composed
 `[[standards]]` entry whose stack a pack module of `PACKS` serves is run once per module, only when
 that module is `on` (its stack chosen in the Accepted stack record). Its steps print `ok standards
@@ -92,6 +96,8 @@ ARCHITECTURE_STEPS = ("layers", "architecture-record")  # brief #1595 (ADR-0675)
 # only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
 # brief #1776 (ADR-0742): `pins` first, where a work type is declared; no stack chosen is not run.
 PRODUCT_STEPS = ("pins", "bom", "licences")
+# brief #1951 (ADR-0812): SPEC-0073 rule 8's glossary form check, only where docs/glossary.md exists
+QUALITY_STEPS = ("glossary",)
 PACKS = ("python_pack", "node_pack")  # pack modules of the registry, imported by name
 STEP_KEYS = ("lint", "format", "type")
 NO_PACK_STEP = "SPEC-0072 rule 6: a pack step has no implementation (key: standards)"
@@ -222,7 +228,7 @@ def results(root: Path, write: bool = False) -> list[Row]:
     data = playbook_format.load(path)
     out: list[Row] = []
     checks = [g for g in gates if g.get("kind") == check_playbooks.CHECK]
-    for step in ARCHITECTURE_STEPS + PRODUCT_STEPS:
+    for step in ARCHITECTURE_STEPS + PRODUCT_STEPS + QUALITY_STEPS:
         module = step_module(step)
         if module is not None and module.applies(root):
             checks.append({"id": step, "step": step})

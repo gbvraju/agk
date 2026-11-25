@@ -537,6 +537,16 @@ The line is read by the conductor and by a person, never by a check: `check_pr_b
 read it (Q-S0038-10). A missing item, or a missing line, on a project with a declared work type is a fix item, never a clearing
 verdict, so nothing merges on a missing line; without a declaration no verdict carries the line and nothing changes.
 
+## Domain packs
+
+    python3 scripts/agk/check_domains.py [--root DIR]
+
+Checks each domain pack, `config/domains/<slug>.toml` (SPEC-0074 rule 2, brief #1935, ADR-0804): the format, the ids, the
+references, a source or `basis = "expected"` on each regulation, constraint and gate, and the data guard on every line. Each
+problem is one `FAIL domains: rule 2: <file>: <what> (key: <key>)` line, never a value; `check_playbooks.py` prints the same
+lines as `FAIL playbooks:`, so the `playbooks` step runs it. An `as_of` older than `[domain] stale_months` is a `warn domains:`
+line and never fails. Prints `ok domains (<n> packs)` or `ok domains (none)`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
+
 ## Playbook gates
 
 `python3 scripts/agk/run_gates.py [--baseline] [--root DIR]` runs, from `check_playbooks.py` once the playbooks pass (so inside
@@ -607,6 +617,14 @@ playbook through `front_door.py derive-write --layers FILE`. The record check fa
 
 The `architecture-record` step (brief #1595, amendment 204) is a module of the runner, never run by itself: where
 `docs/architecture.md` exists `run_gates.py` runs `front_door.py`'s record check through it (see "Front door").
+
+    python3 scripts/agk/gates/glossary.py [--root DIR] [--write]
+
+The `glossary` step (SPEC-0073 rule 8; brief #1951, ADR-0812) of `run_gates.py`'s `QUALITY_STEPS`, run after the
+product steps only where `docs/glossary.md` exists: one table `| Term | Meaning | In code | Synonyms |`, a term and a
+meaning in each row, no term twice (case-folded, against every synonym of another row), at most `[quality]
+glossary_terms` rows (40; several `In code` names are one row). Each failure names the rule, `docs/glossary.md` and the
+row number, never a term. `--write` writes the glossary from `kit/templates/glossary.md` once, never over one.
 A build brief of a work-type project other than its foundation carries one line `Layer: <layer>, ...` naming every layer
 its `Touches:` meets; `check_brief.py --root` refuses one without it or with an unknown layer (SPEC-0072 rule 8).
 

@@ -14,9 +14,12 @@ repository's head commit by `git`.
     front_door.py discovery-write (--issue FILE | --vision FILE) --answers FILE [--root DIR]
         writes `docs/discovery/<slug>.md` from the problem and a JSON file of the person's answers,
         never over an existing one, and refuses a write in which the guard finds anything (rules 5
-        and 14)
+        and 14); with a non-empty `grill` list it appends `## Assumptions`, `## Risks` (from the
+        `risks` list) and `## Readiness` (the line `grill.py ready` prints), and each open critical
+        grill item is a `D-<n>` point (SPEC-0073 rule 7, brief #1938)
     front_door.py check-discovery [FILE ...] [--root DIR]
-        checks each discovery document (by default every `docs/discovery/*.md`) (rules 5 and 14)
+        checks each discovery document (by default every `docs/discovery/*.md`) (rules 5 and 14),
+        and the three grill sections only when one is present (`quality_problems`, SPEC-0073 rule 7)
     front_door.py check-research --date YYYY-MM-DD [FILE ...] [--root DIR]
         checks each research record (by default every `docs/research/*.md`): at least two
         `## Option: <name>` sections each with a `- Source: <URL> (accessed YYYY-MM-DD)` line, a
@@ -36,7 +39,9 @@ repository's head commit by `git`.
     front_door.py status --date YYYY-MM-DD [SLUG ...] [--root DIR]
         prints one line per problem (by default each `docs/discovery/*.md`), the phase of rule 1
         it is in and what it waits for, from the files only, and writes nothing; past the design
-        it prints `waits for the go`, which only `--issue` reads (rule 9)
+        it prints `waits for the go`, which only `--issue` reads (rule 9); under a document with
+        `## Readiness`, `  readiness: <line>` and, while `[quality] grill_hold` is true and a
+        critical item is open, `  held at the design: <ids>` (SPEC-0073 rule 6)
     front_door.py status --date YYYY-MM-DD --issue N --api-dir DIR [--pr K] [--root DIR]
         one line for one problem issue, from the saved GETs `issue-<N>.json` and
         `issue-<N>-comments.json` and the files: the phase and what it waits for, the auto-pilot
@@ -64,7 +69,9 @@ repository's head commit by `git`.
 
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
-"open": true}], "points": [{"text": "<words>", "where": "..."}]}`; `screens` defaults to `open`
+"open": true}], "points": [{"text": "<words>", "where": "..."}], "grill": [<rows of `grill.py
+record`>], "risks": [{"id": "<id>", "risk": "...", "sign": "...", "owner": "..."}]}`; `screens`
+defaults to `open`
 and `work_type` to the issue's `Kind:` line, else `pilot`. Each answer is written as given, line
 endings made `\n`, between `<!-- agk:answer sha256=… -->` and `<!-- agk:answer-end -->` under its
 bullet `- <id>: (given: <where>)`, as the problem is under its digest. Every refusal names the rule
@@ -137,6 +144,18 @@ ANSWER_END = "<!-- agk:answer-end -->"
 MARK = "<!-- agk:"
 ANSWER_ID = re.compile(r"^- ([a-z0-9-]+):")
 OPEN_POINT = re.compile(r"^- D-\d+: `([a-z0-9-]+)` is open$")
+# SPEC-0073 rule 7 (brief #1938, ADR-0803): the three grill sections after `## Open points`.
+GRILL_SECTIONS = ("Assumptions", "Risks", "Readiness")
+A_LINE = re.compile(r'^- A-(\d+): ([a-z0-9-]+): (?:"(.*)" )?\((stated|assumption|open)\)$')
+A_MORE = re.compile(
+    r"^  (?:(?:Test|Source): \S.*|accepted recommendation \(.+\)"
+    r"|Risk accepted: ([a-z0-9-]+) \(.+\))$"
+)
+R_LINE = re.compile(r"^- R-(\d+): \S.*; first sign: \S.*; owner: \S.*$")
+READY = re.compile(
+    r"^critical (\d+)/(\d+); risk accepted: (none|[a-z0-9-]+(?:, [a-z0-9-]+)*);"
+    r" questions \d+/\d+; accepted recommendations \d+$"
+)
 
 
 class Refusal(Exception):
@@ -331,6 +350,14 @@ def discovery_write(args: dict[str, str], root: Path) -> int:
             problems.append(f"rule 5: {answers_path.name}: a point is not marked with where given")
             continue
         points.append(f'- D-{len(points) + 1}: "{one_line(row["text"])}" (given: {where})')
+    grilled, held = grill_sections(answers_path, data, root)
+    if held:  # rule 6: an open critical item is a D-<n> point, after the open answers' points
+        mine = [f"- D-{n}: `{qid}` is open" for n, qid in enumerate(held, len(open_ids) + 1)]
+        theirs = [
+            f"- D-{n}:{ln.split(':', 1)[1]}"
+            for n, ln in enumerate(points[len(open_ids) :], len(open_ids) + len(held) + 1)
+        ]
+        points = points[: len(open_ids)] + mine + theirs
     if problems:
         raise Refusal(problems)
     text = "\n".join(
@@ -352,6 +379,7 @@ def discovery_write(args: dict[str, str], root: Path) -> int:
             "",
             *(points or ["- none"]),
             "",
+            *grilled,
         ]
     )
     found = guard_problems(14, rel, text)
@@ -465,10 +493,311 @@ def check_discovery(files: list[str], root: Path) -> int:
             problems.append(f"rule 5: {rel}: not readable")
             continue
         problems += document_problems(rel, text)
+        problems += quality_problems(rel, text, root)
     if problems:
         raise Refusal(problems)
     print(f"ok {NAME}: check-discovery ({len(paths)} documents)")
     return 0
+
+
+# --- the grill's three sections, readiness and the hold (SPEC-0073 rules 6 and 7, ADR-0803) -------
+
+
+def composed_items(root: Path) -> list[tuple[str, str, str, bool]]:
+    """The project's grill items, as `grill.py ready` reads them by default: the declared work
+    type's playbook, else `default.toml` alone (`Q-73C-3`). Imported here, so the script runs
+    copied without `grill.py` until a grill section is read."""
+    from common import CheckError
+    from grill import composed
+
+    try:
+        return composed(root, None)
+    except CheckError as err:
+        raise Refusal([f"rule 7: the grill items cannot be composed: {err}"]) from None
+
+
+def _risk_ok(row: object) -> bool:
+    return isinstance(row, dict) and all(
+        isinstance(row.get(k), str) and row[k].strip() and "\n" not in row[k] and "\r" not in row[k]
+        for k in ("risk", "sign", "owner")
+    )
+
+
+def grill_sections(path: Path, data: dict, root: Path) -> tuple[list[str], list[str]]:
+    """Rule 7's three sections from the answers file's `grill` and `risks` lists, and the critical
+    ids left open with no accepted risk (each a `D-<n>`); nothing without a `grill` list."""
+    rows = data.get("grill")
+    if not rows:
+        return [], []
+    rel = path.name
+    risks = data.get("risks", [])
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        raise Refusal([f"rule 7: {rel}: `grill` is not a list of rows"])
+    if not isinstance(risks, list) or not all(_risk_ok(r) for r in risks):
+        raise Refusal([f"rule 7: {rel}: a risk is not one line each of risk, first sign and owner"])
+    items = composed_items(root)
+    order = [i[0] for i in items]
+    last: dict[str, dict] = {}
+    accepted: dict[str, str] = {}
+    problems = []
+    for row in rows:
+        item = row.get("id")
+        if item not in order:
+            problems.append(f"rule 7: {rel}: a grill row names no grill item of the playbook")
+        elif "risk" in row:
+            text = one_line(row["risk"])
+            if not text.startswith(f"Risk accepted: {item} (") or not text.endswith(")"):
+                problems.append(f"rule 7: {rel}: an accepted risk is not of rule 6's form")
+            accepted.setdefault(item, text)
+        elif row.get("status") in ("stated", "assumption", "open"):
+            last[item] = row
+        else:
+            problems.append(f"rule 7: {rel}: a grill row is not stated, assumption or open")
+    lines = ["## Assumptions", ""]
+    for item in [i for i in order if i in last or i in accepted]:
+        row = last.get(item, {"status": "open"})
+        claim, status = one_line(row.get("claim", "")), row["status"]
+        number = (len([ln for ln in lines if A_LINE.match(ln)])) + 1
+        lines.append(
+            f'- A-{number}: {item}: "{claim}" ({status})'
+            if claim
+            else f"- A-{number}: {item}: ({status})"
+        )
+        test = one_line(row.get("test", ""))
+        if status == "assumption" and not test:
+            problems.append(f"rule 7: {rel}: an assumption carries no test")
+        lines += [f"  Test: {test}"] if status == "assumption" and test else []
+        lines += [f"  Source: {one_line(row['source'])}"] if one_line(row.get("source", "")) else []
+        if row.get("accepted"):
+            yes = one_line(row["accepted"])
+            if not yes.startswith("accepted recommendation (") or not yes.endswith(")"):
+                problems.append(f"rule 7: {rel}: a recorded yes is not of rule 7's form")
+            lines.append(f"  {yes}")
+        lines += [f"  {accepted[item]}"] if item in accepted else []
+    if problems:
+        raise Refusal(problems)
+    from common import CheckError
+    from grill import readiness
+
+    try:
+        line, _ = readiness(root, str(path), None, None)
+    except CheckError as err:
+        raise Refusal([f"rule 7: {rel}: {err}"]) from None
+    told = [
+        f"- R-{n}: {one_line(r['risk'])}; first sign: {one_line(r['sign'])};"
+        f" owner: {one_line(r['owner'])}"
+        for n, r in enumerate(risks, 1)
+    ]
+    lines += ["", "## Risks", "", *(told or ["- none"]), "", "## Readiness", "", line, ""]
+
+    def settled(item: str) -> bool:
+        row = last.get(item, {})
+        return (
+            item in accepted
+            or row.get("status") == "stated"
+            or (row.get("status") == "assumption" and bool(one_line(row.get("test", ""))))
+        )
+
+    # `success` with no grill row is read from `## Answers`, where an open one is already a point.
+    held = [
+        i[0] for i in items if i[3] and not settled(i[0]) and (i[0] in last or i[0] != "success")
+    ]
+    return lines, held
+
+
+def body_sections(text: str) -> dict[str, list[str]]:
+    """The `## ` sections of a discovery document, the quoted problem left out."""
+    lines = text.split("\n")
+    starts = [i for i, ln in enumerate(lines) if START.match(ln)]
+    ends = [i for i, ln in enumerate(lines) if ln == END]
+    if len(starts) == 1 and len(ends) == 1 and ends[0] > starts[0]:
+        lines = lines[: starts[0]] + lines[ends[0] + 1 :]
+    sections: dict[str, list[str]] = {}
+    current = None
+    for ln in lines:
+        if ln.startswith("## "):
+            current = ln[3:].strip()
+            sections.setdefault(current, [])
+        elif current is not None:
+            sections[current].append(ln)
+    return sections
+
+
+def assumption_rows(rows: list[str]) -> tuple[list[tuple[int, str, str, list[str]]], bool]:
+    """The `A-<n>` bullets with their indented lines, and whether a line is out of form."""
+    found: list[tuple[int, str, str, list[str]]] = []
+    bad = False
+    for ln in rows:
+        m = A_LINE.match(ln)
+        if m:
+            found.append((int(m.group(1)), m.group(2), m.group(4), []))
+        elif found and A_MORE.match(ln):
+            found[-1][3].append(ln)
+        elif ln.strip():
+            bad = True
+    return found, bad
+
+
+def readiness_of(sections: dict[str, list[str]]) -> re.Match | None:
+    lines = [ln for ln in sections.get("Readiness", []) if ln.strip()]
+    return READY.match(lines[0]) if len(lines) == 1 else None
+
+
+def accepted_ids(rows: list[tuple[int, str, str, list[str]]]) -> set[str]:
+    return {m.group(1) for row in rows for ln in row[3] if (m := A_MORE.match(ln)) and m.group(1)}
+
+
+def quality_problems(rel: str, text: str, root: Path) -> list[str]:
+    """Rule 7's three sections, read only when one is present; never by `document_problems`."""
+    sections = body_sections(text)
+    if not any(s in sections for s in GRILL_SECTIONS):
+        return []
+    out = [
+        f"rule 7: {rel}: the `## {s}` section is missing"
+        for s in GRILL_SECTIONS
+        if s not in sections
+    ]
+    try:
+        items = composed_items(root)
+    except Refusal as refusal:
+        return out + [f"rule 7: {rel}: {p.split(': ', 1)[1]}" for p in refusal.problems]
+    critical = [i[0] for i in items if i[3]]
+    rows, bad = assumption_rows(sections.get("Assumptions", []))
+    section = f"rule 7: {rel}: the `## Assumptions` section"
+    if bad:
+        out.append(f"{section} has a line not of rule 7's form")
+    if [r[0] for r in rows] != list(range(1, len(rows) + 1)):
+        out.append(f"{section}'s numbers are not 1, 2, 3 ... in order")
+    if any(r[1] not in {i[0] for i in items} for r in rows):
+        out.append(f"{section} names an id that is not a grill item")
+    if any(r[2] == "assumption" and not any(m.startswith("  Test: ") for m in r[3]) for r in rows):
+        out.append(f"{section} has an assumption with no `Test:`")
+    risked = accepted_ids(rows)
+    pointed = {m.group(1) for ln in sections.get("Open points", []) if (m := OPEN_POINT.match(ln))}
+    if any(r[2] == "open" and r[1] in critical and r[1] not in risked | pointed for r in rows):
+        out.append(f"{section} has an open critical item with no D-<n> point")
+    told = [ln for ln in sections.get("Risks", []) if ln.strip()]
+    if "Risks" in sections and told != ["- none"]:
+        numbers = [int(m.group(1)) for ln in told if (m := R_LINE.match(ln))]
+        if not told or len(numbers) != len(told):
+            out.append(f"rule 7: {rel}: the `## Risks` section has a line not of rule 7's form")
+        elif numbers != list(range(1, len(numbers) + 1)):
+            out.append(
+                f"rule 7: {rel}: the `## Risks` section's numbers are not 1, 2, 3 ... in order"
+            )
+    ready = readiness_of(sections)
+    if "Readiness" in sections and ready is None:
+        out.append(f"rule 7: {rel}: the `## Readiness` section is not one line of rule 7's form")
+    elif ready is not None:
+        if int(ready.group(2)) != len(critical) or int(ready.group(1)) > int(ready.group(2)):
+            out.append(
+                f"rule 7: {rel}: the `## Readiness` critical total is not the composed playbook's"
+            )
+        open_ids = held_ids(root, sections)
+        if int(ready.group(1)) != len(critical) - len(open_ids):
+            out.append(
+                f"rule 7: {rel}: the `## Readiness` settled count is not that of `## Assumptions`"
+            )
+        named = {r[1] for r in rows}
+        if ready.group(3) != "none" and any(i not in named for i in ready.group(3).split(", ")):
+            out.append(
+                f"rule 7: {rel}: the `## Readiness` section names an accepted risk with no A-<n>"
+                " or R-<n> behind it"
+            )
+    return out
+
+
+def held_ids(root: Path, sections: dict[str, list[str]]) -> list[str]:
+    """The critical ids neither settled nor risk-accepted in a document's `## Assumptions`."""
+    rows, _ = assumption_rows(sections.get("Assumptions", []))
+    risked = accepted_ids(rows)
+    status = {r[1]: (r[2], any(m.startswith("  Test: ") for m in r[3])) for r in rows}
+    answers = {
+        m.group(1): m.group(2) for ln in sections.get("Answers", []) if (m := ANSWER.match(ln))
+    }
+    out = []
+    for item, _text, _depth, critical in composed_items(root):
+        if not critical or item in risked:
+            continue
+        found, tested = status.get(item, (None, False))
+        if found is None and item == "success" and "success" in answers:
+            found = "open" if answers["success"] else "stated"
+        if found != "stated" and not (found == "assumption" and tested):
+            out.append(item)
+    return out
+
+
+def grill_hold(root: Path) -> bool:
+    """`[quality] grill_hold`; a refused table fails naming the setting, never read as clear."""
+    from config import quality_settings
+
+    return quality_settings(root)["grill_hold"] is True
+
+
+def readiness_lines(root: Path, name: str) -> list[str]:
+    """Rule 6's status lines for one problem: its readiness and, held, the open critical ids."""
+    try:
+        text = (root / DIR / f"{name}.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    sections = body_sections(text)
+    ready = readiness_of(sections)
+    if ready is None:
+        return []
+    lines = [f"  readiness: {ready.group(0)}"]
+    if held_why(root, sections) is not None:
+        from common import CheckError
+
+        try:
+            hold = grill_hold(root)
+        except CheckError as err:
+            raise Refusal([f"rule 6: {err}"]) from None
+        ids = held_ids(root, sections) if hold else []
+        lines += [f"  held at the design: {', '.join(ids or ['a critical item'])}"] if hold else []
+    return lines
+
+
+def design_holds(root: Path) -> list[str]:
+    """SPEC-0073 rule 6, for `check_design.py`: each design whose discovery document of its slug
+    has a `## Readiness` section with a critical item open and no accepted risk, while
+    `[quality] grill_hold` is true; the setting is read only when such a design exists. The open
+    items are read from `## Assumptions` (`held_ids`) as well as from the readiness numbers, so a
+    hand-edited count clears nothing, and a readiness line out of form or grill items that cannot
+    be composed hold the design too (fail closed)."""
+    out = []
+    hold = None
+    for path in sorted((root / DESIGN).glob("*.md")):
+        try:
+            text = (root / DIR / f"{path.stem}.md").read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        sections = body_sections(text)
+        if "Readiness" not in sections:
+            continue
+        why = held_why(root, sections)
+        if why is None:
+            continue
+        hold = grill_hold(root) if hold is None else hold
+        if hold:
+            out.append(
+                f"SPEC-0073 rule 6: {DESIGN}/{path.name} is held: {why}"
+                " (setting: quality.grill_hold)"
+            )
+    return out
+
+
+def held_why(root: Path, sections: dict[str, list[str]]) -> str | None:
+    """Why a document with `## Readiness` holds its design; None when nothing critical is open."""
+    ready = readiness_of(sections)
+    if ready is None:
+        return "its discovery's `## Readiness` is not of rule 7's form"
+    try:
+        open_ids = held_ids(root, sections)
+    except Refusal:
+        return "its discovery's grill items cannot be composed"
+    if open_ids or int(ready.group(1)) < int(ready.group(2)):
+        return "its discovery has an open critical item"
+    return None
 
 
 # --- the research record (rule 6) and the design (rule 7) ----------------------------------------
@@ -925,6 +1254,8 @@ def status(names: list[str], root: Path, today: datetime.date) -> int:
         print(f"ok {NAME}: no discovery document")
     for name in names:
         print(f"{name}: {phase_of(root, name, today)}")
+        for line in readiness_lines(root, name):
+            print(line)
     return 0
 
 

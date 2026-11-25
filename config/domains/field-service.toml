@@ -1,0 +1,159 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The operational seed pack (SPEC-0074 rule 3, Q-D74A-1; brief #1935, ADR-0804). Public, general
+# knowledge of field service only: no regulation, so each constraint is `basis = "expected"`.
+format = 1
+domain = "field-service"
+title = "Sending technicians to install, repair and maintain equipment at customers' sites"
+as_of = "2026-11-25"
+
+[[terms]]
+term = "work order"
+meaning = "One job to be done at a site, with its asset, its steps and its status"
+synonyms = ["job", "ticket", "service call"]
+
+[[terms]]
+term = "dispatch"
+meaning = "Choosing a technician and a time for a work order and sending it to them"
+synonyms = ["scheduling", "assignment"]
+
+[[terms]]
+term = "first-time fix"
+meaning = "A work order completed on the first visit, with no return trip"
+synonyms = ["first-visit fix"]
+
+[[terms]]
+term = "service level agreement"
+meaning = "The promised response and repair times for a customer or an asset"
+synonyms = ["SLA", "service level"]
+
+[[terms]]
+term = "preventive maintenance"
+meaning = "Planned visits that service an asset before it fails"
+synonyms = ["planned maintenance", "PM"]
+
+[[terms]]
+term = "asset"
+meaning = "A piece of equipment at a customer's site that the service looks after"
+synonyms = ["equipment", "installed base"]
+
+[[actors]]
+id = "dispatcher"
+text = "Plans the day and assigns work orders to technicians"
+
+[[actors]]
+id = "technician"
+text = "Travels to the site and does the work"
+
+[[actors]]
+id = "site-contact"
+text = "The customer's person who lets the technician in and signs the work off"
+
+[[entities]]
+id = "work-order"
+text = "The job, its asset, its window, its status and its notes"
+
+[[entities]]
+id = "visit"
+text = "One trip of one technician to one site"
+
+[[entities]]
+id = "part"
+text = "A spare used on a job, from a van or a warehouse"
+
+[[workflows]]
+id = "reactive-repair"
+text = "A fault is reported, a work order raised, dispatched, visited and closed"
+
+[[workflows]]
+id = "planned-service"
+text = "Preventive visits are generated from a plan per asset and dispatched in advance"
+
+[[kpis]]
+id = "first-time-fix-rate"
+text = "Share of work orders completed on the first visit"
+unit = "percent"
+
+[[kpis]]
+id = "mean-time-to-repair"
+text = "Average time from a fault report to the asset working again"
+unit = "hours"
+
+[[kpis]]
+id = "sla-attainment"
+text = "Share of work orders that meet their promised response and repair times"
+unit = "percent"
+
+[[constraints]]
+id = "technician-app-available"
+attribute = "availability"
+scenario = "stimulus: a technician opens a work order in service hours; response: it opens; measure: 99.5 percent of service hours in a month"
+hard = false
+basis = "expected"
+
+[[constraints]]
+id = "dispatch-reaches-device"
+attribute = "latency"
+scenario = "stimulus: a work order is dispatched; response: it shows on the technician's device; measure: within 30 seconds when the device is online"
+hard = false
+basis = "expected"
+
+[[constraints]]
+id = "status-changes-recorded"
+attribute = "audit"
+scenario = "stimulus: a work order changes status; response: who and when are recorded; measure: every change"
+hard = false
+basis = "expected"
+
+[[discovery]]
+id = "service-hours"
+text = "When are technicians working, and are there night or weekend call-outs?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "offline-work"
+text = "Do technicians work where there is no mobile signal, so the app must work offline?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "service-levels"
+text = "What response and repair times are promised, and to whom?"
+depth = "standard"
+critical = true
+
+[[discovery]]
+id = "parts-stock"
+text = "Where do parts come from, and must the app show what is in each van?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "dispatch-rules"
+text = "How is a technician chosen: skills, distance, the customer's preference?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "site-sign-off"
+text = "Must the site contact sign the work off, and in what form?"
+depth = "deep"
+critical = false
+
+[[acceptance]]
+id = "offline-notes-kept"
+text = "Notes a technician writes with no signal are sent when the device is online again, none lost"
+constraint = "technician-app-available"
+
+[[data_shapes]]
+id = "work-order-shape"
+field = "work_order_id"
+format = "the letters WO, a hyphen and a whole number"
+
+[[data_shapes]]
+id = "window-shape"
+field = "appointment_window"
+format = "a start and an end time with the site's time zone"

@@ -47,7 +47,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/grill.py" record --answers ANSWERS --
 ```
 
    When the data guard refuses an answer, ask for general words; the answer is never written. A risk the person accepts
-   in one yes is recorded with `--risk-accepted`, in solo mode only.
+   in one yes is recorded with `--risk-accepted`, in solo mode only. Record each pre-mortem risk with
+   `record --id pre-mortem --risk TEXT --sign TEXT --owner WHO` and as one `Risk:` memory entry; the discovery
+   document is the source of truth.
 6. Show the readiness line. It exits 1 while a critical item is open with no accepted risk; say which, in plain words,
    and stop when the question budget is spent, listing what was not asked:
 
