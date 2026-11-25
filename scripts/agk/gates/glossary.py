@@ -6,18 +6,19 @@
 
     python3 scripts/agk/gates/glossary.py [--root DIR] [--write]
 
-The product's one glossary, `docs/glossary.md`, is one table `| Term | Meaning | In code | Synonyms |`.
-The step fails a table missing, a second table or other columns; a row with an empty `Term` or
-`Meaning` or other cells; a term twice (case-folded and trimmed, against every term and synonym of
-an earlier row); and more rows than `[quality] glossary_terms` (10 to 200, 40), whose refusal names
-`quality.glossary_terms` as `config.quality_settings` does. The other `[quality]` keys are not read.
-Several names in `In code` (an adopted codebase's aliases) are one row. Each failure names the rule,
-the path class and the row number, never a term (principle 8). A `\\|` inside a cell is text; a
-fenced block is not read. `--write` writes the glossary from `kit/templates/glossary.md`, read from
-the kit root as `layers.py` reads the architecture template, once and never over a glossary
-(`Q-73E-1`); seeding it from the grill and the steward's `Term:` notes is the steward's, by hand
-(`Q-73E-2`). It runs only where the glossary exists. Files only: no network. Installed; it imports
-only installed modules; the runner's interface of `scripts/agk/gates/` (`RULE`, `check`, `applies`).
+The product's one glossary, `docs/glossary.md`, is one table of the columns `Term`, `Meaning`,
+`In code` and `Synonyms`. The step fails a table missing, a second table or other columns; a row
+with an empty `Term` or `Meaning` or other cells; a term twice (case-folded and trimmed, against
+every term and synonym of an earlier row); and more rows than `[quality] glossary_terms` (10 to
+200, 40), whose refusal names `quality.glossary_terms` as `config.quality_settings` does. The other
+`[quality]` keys are not read. Several names in `In code` (an adopted codebase's aliases) are one
+row. Each failure names the rule, the path class and the row number, never a term (principle 8). A
+`\\|` inside a cell is text; a fenced block is not read. `--write` writes the glossary from
+`kit/templates/glossary.md`, read from the kit root as `layers.py` reads the architecture template,
+once and never over a glossary (`Q-73E-1`); seeding it from the grill and the steward's `Term:`
+notes is the steward's, by hand (`Q-73E-2`). It runs only where the glossary exists. Files only:
+no network. Installed; it imports only installed modules; the runner's interface of
+`scripts/agk/gates/` (`RULE`, `check`, `applies`).
 """
 
 from __future__ import annotations
@@ -29,8 +30,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
-import config  # noqa: E402
 from common import config_source, utf8_output  # noqa: E402
+
+import config  # noqa: E402
 
 RECORD = "docs/glossary.md"
 TEMPLATE = Path(__file__).resolve().parents[3] / "kit" / "templates" / "glossary.md"
@@ -41,7 +43,7 @@ FORM = "SPEC-0073 rule 8: the glossary needs one table of Term, Meaning, In code
 EMPTY = "SPEC-0073 rule 8: a glossary row lacks its term or meaning"
 CELLS = "SPEC-0073 rule 8: a glossary row has other cells than the four columns"
 TWICE = "SPEC-0073 rule 8: a glossary term is in the glossary twice"
-CAP = "SPEC-0073 rule 8: the glossary holds more rows than its cap (setting: quality.glossary_terms)"
+CAP = "SPEC-0073 rule 8: the glossary is over its cap (setting: quality.glossary_terms)"
 REFUSED = "the [quality] table is refused (setting: quality.glossary_terms)"
 USAGE = "usage: python3 scripts/agk/gates/glossary.py [--root DIR] [--write]"
 SPLIT = re.compile(r"(?<!\\)\|")
@@ -129,7 +131,7 @@ def write(root: Path) -> int:
         print(f"FAIL glossary: the glossary exists (path class: {RECORD})")
         return 1
     if not TEMPLATE.is_file():
-        print("FAIL glossary: SPEC-0073 rule 8: the template is missing (path class: kit/templates/)")
+        print("FAIL glossary: SPEC-0073 rule 8: no template (path class: kit/templates/)")
         return 1
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")

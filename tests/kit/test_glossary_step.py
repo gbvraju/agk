@@ -73,7 +73,8 @@ def test_the_template_is_one_empty_table_that_passes(tmp_path: Path) -> None:
 
 def test_distinct_rows_with_empty_code_and_synonym_cells_pass(tmp_path: Path) -> None:
     """REQ-080 AC5."""
-    body = HEAD + "| order | a request of example.com | | |\n| basket | items held | `Cart` | trolley |\n"
+    body = HEAD + "| order | a request of example.com | | |\n"
+    body += "| basket | items held | `Cart` | trolley |\n"
     assert _failures(_root(tmp_path, body)) == []
 
 
