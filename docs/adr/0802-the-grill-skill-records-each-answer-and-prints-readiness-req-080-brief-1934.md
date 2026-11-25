@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-25
 - Deciders: maintainers
-- Related: SPEC-0073, SPEC-0048, SPEC-0062, SPEC-0059, ADR-0801, ADR-0793, ADR-0664, amendment 235, brief #1934, brief #1933, plan #661
+- Related: SPEC-0073, SPEC-0048, SPEC-0062, SPEC-0059, ADR-0801, ADR-0793, ADR-0664, amendment 235, amendment 246, brief #1934, brief #1933, plan #661
 - Requirements: REQ-080
 
 Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`, `tests/kit_dev/`
@@ -33,7 +33,10 @@ by build (c).
    and the person's words (the earlier row stays; the new one is added after it with `revised: true`), and an answer in
    which the data guard finds anything, naming the class. `--accepted` (a plain yes, `accepted recommendation (<where>,
    <UTC time>)`) and `--risk-accepted` are refused with `review_mode = "team"`, naming `review_mode`. `record` never
-   writes `answers`, so `discovery-write` reads the file as before.
+   writes `answers`, so `discovery-write` reads the file as before. Empty words, `--accepted` with `--open` or
+   `--risk-accepted`, a `grill` row whose id is not text, and a value of `--test`, `--source` or `--accepted` the data
+   guard flags are refused too. `grill.py` imports `guard.py` for this, and the readiness command reads `--answers`, not
+   rule 6's `--discovery` (amendment 246, proposed).
 3. `grill.py ready --answers FILE [--depth D] [--playbook KIND] [--root DIR]` prints `critical <settled>/<total>; risk
    accepted: <ids or none>; questions <asked>/<budget>; accepted recommendations <n>` and exits 1 while a critical item
    is open with no accepted risk. Settled is an id's last row `stated`, or `assumption` with a test, or a risk row for

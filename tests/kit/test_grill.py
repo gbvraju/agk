@@ -499,15 +499,83 @@ def test_ac1_the_grill_ids_are_the_composed_items_and_success(tmp_path):
 
 
 def test_ac2_an_answers_file_with_a_grill_list_passes_discovery_write(tmp_path):
-    """REQ-080 AC2: SPEC-0073 rule 4 (`answers` stays ORDER only; `grill` is ignored)."""
-    sys.path.insert(0, str(SCRIPT.parent))
-    import front_door
-
+    """REQ-080 AC2: SPEC-0073 rule 4 (`answers` stays ORDER only; the real `discovery-write`
+    reads a file with a `grill` list as before)."""
     root = project(tmp_path, SOLO)
-    path = answers_file(
-        root, {"answers": [{"id": "users", "answer": "x", "where": "in session 2026-11-01"}]}
-    )
+    where = "https://example.com/issues/1#c1"
+    path = answers_file(root, {"answers": [{"id": "users", "answer": "Owners.", "where": where}]})
     assert record(root, path, "problem", "--open").returncode == 0
-    data = front_door.load_answers(path)
-    _, _, problems = front_door.answer_lines("answers.json", data["answers"])
-    assert problems == []
+    issue = root / "issue.json"
+    issue.write_text(
+        json.dumps(
+            {
+                "title": "Example bookings",
+                "html_url": "https://example.com/issues/1",
+                "labels": [{"name": "agk-problem"}],
+                "body": "Problem: invented bookings at example.com are lost",
+            }
+        ),
+        encoding="utf-8",
+    )
+    done = subprocess.run(  # nosec B603 - fixed argument list
+        [sys.executable, str(SCRIPT.parent / "front_door.py"), "discovery-write"]
+        + ["--issue", str(issue), "--answers", str(path), "--root", str(root)],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    written = (root / "docs" / "discovery" / "example-bookings.md").read_text(encoding="utf-8")
+    assert "- users: (given: https://example.com/issues/1#c1)" in written
+    assert "problem" not in written.split("## Answers", 1)[1].split("##", 1)[0]
+
+
+def test_ac3_empty_words_are_refused_naming_the_words_file(tmp_path):
+    """REQ-080 AC3: fix list 7170304873 item 1 (an empty answer is never `stated`)."""
+    root = project(tmp_path, SOLO)
+    path = answers_file(root)
+    for kind in (["--stated"], ["--assumption"]):
+        extra = ["--test", "slice 1"] if kind == ["--assumption"] else []
+        found = record(root, path, "problem", *kind, words(root, " \n\n"), *extra)
+        assert found.returncode == 1
+        assert "the answer is empty (setting: the words file)" in found.stdout
+    assert "grill" not in json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("flag", ["--test", "--source", "--accepted"])
+def test_ac3_the_data_guard_reads_every_value_written(tmp_path, flag):
+    """REQ-080 AC3: fix list 7170304873 item 2 (`--test`, `--source`, `--accepted`)."""
+    root = project(tmp_path, SOLO)
+    path = answers_file(root)
+    secret = "ghp_" + "Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4zAb7c"
+    values = {"--test": "slice 1", "--source": "day zero", "--accepted": "chat", flag: secret}
+    args = [a for k, v in values.items() for a in (k, v)]
+    found = record(root, path, "problem", "--assumption", words(root, "Owners."), *args)
+    assert found.returncode == 1
+    assert "the data guard finds" in found.stdout and f"in the value of {flag}" in found.stdout
+    assert secret not in found.stdout
+    assert "grill" not in json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("kind", ["--open", "--risk-accepted"])
+def test_ac3_a_plain_yes_with_no_words_is_refused_naming_the_flag(tmp_path, kind):
+    """REQ-080 AC3: fix list 7170304873 item 3 (`--accepted` with `--open` or a risk)."""
+    root = project(tmp_path, SOLO)
+    path = answers_file(root)
+    found = record(root, path, "riskiest", kind, "--accepted", "chat")
+    assert found.returncode == 1
+    assert "(setting: --accepted)" in found.stdout
+    assert "grill" not in json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("bad", [["riskiest"], 5, None])
+def test_ac3_a_grill_row_whose_id_is_not_text_is_refused(tmp_path, bad):
+    """REQ-080 AC3: fix list 7170304873 item 4 (refused naming `--answers`, never a traceback)."""
+    root = project(tmp_path, SOLO)
+    path = answers_file(root, {"answers": [], "grill": [{"id": bad, "status": "stated"}]})
+    for found in (ready(root, path), record(root, path, "problem", "--open")):
+        out = found.stdout + found.stderr
+        assert found.returncode == 1, out
+        assert "the answers file is not an object of lists (setting: --answers)" in out
+        assert "Traceback" not in out

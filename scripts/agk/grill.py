@@ -92,7 +92,11 @@ def answered(path: str | None) -> set[str]:
         raise CheckError("rule 2: the answers file cannot be read (setting: --answers)") from None
     lists = [data.get(k, []) for k in ("answers", "grill")] if isinstance(data, dict) else [None]
     rows = [r for found in lists if isinstance(found, list) for r in found]
+    kept = lists[-1] if isinstance(lists[-1], list) else []
+    bad_id = any(isinstance(r, dict) and not isinstance(r.get("id"), str) for r in kept)
     if any(not isinstance(f, list) for f in lists) or any(not isinstance(r, dict) for r in rows):
+        bad_id = True
+    if bad_id:
         raise CheckError("rule 2: the answers file is not an object of lists (setting: --answers)")
     return {r["id"] for r in rows if isinstance(r.get("id"), str)}
 
@@ -139,20 +143,25 @@ def _load(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def _words(path: str) -> str:
+def _guarded(text: str, what: str) -> str:
+    """Rule 14: the data guard on every value written; refused by class, never the value."""
     from guard import scan_text
 
+    found = scan_text(text)
+    if found:
+        kinds = ", ".join(sorted({f.kind for f in found}))
+        raise CheckError(f"rule 14: the data guard finds {kinds} in {what}; ask for general words")
+    return text
+
+
+def _words(path: str) -> str:
     try:
         text = Path(path).read_text(encoding="utf-8").replace("\r\n", "\n").rstrip("\n")
     except (OSError, UnicodeDecodeError):
         raise CheckError("rule 5: the answer cannot be read (setting: the words file)") from None
-    found = scan_text(text)
-    if found:
-        kinds = ", ".join(sorted({f.kind for f in found}))
-        raise CheckError(
-            f"rule 14: the data guard finds {kinds} in the answer; ask for general words"
-        )
-    return text
+    if not text.strip():
+        raise CheckError("rule 5: the answer is empty (setting: the words file)")
+    return _guarded(text, "the answer")
 
 
 def record(root: Path, opts: dict[str, str], switches: set[str]) -> dict[str, str | bool]:
@@ -167,6 +176,14 @@ def record(root: Path, opts: dict[str, str], switches: set[str]) -> dict[str, st
         raise CheckError("rule 12: a plain yes never holds in team mode (setting: review_mode)")
     data = _load(opts["--answers"])
     kept = data.get("grill", [])
+    if "--accepted" in opts and ("--open" in switches or "--risk-accepted" in switches):
+        raise CheckError(
+            "rule 5: a plain yes is recorded with words, never with --open or --risk-accepted"
+            " (setting: --accepted)"
+        )
+    for flag in ("--test", "--source", "--accepted"):
+        if flag in opts:
+            _guarded(opts[flag], f"the value of {flag}")
     if "--risk-accepted" in switches:
         return {"id": item, "risk": f"Risk accepted: {item} ({_now()})"}
     if "--assumption" in opts and not opts.get("--test", "").strip():
