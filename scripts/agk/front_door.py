@@ -763,7 +763,7 @@ def design_holds(root: Path) -> list[str]:
     `[quality] grill_hold` is true; the setting is read only when such a design exists. The open
     items are read from `## Assumptions` (`held_ids`) as well as from the readiness numbers, so a
     hand-edited count clears nothing, and a readiness line out of form or grill items that cannot
-    be composed hold the design too (fail closed; fix list 7172312072 items 1 and 2)."""
+    be composed hold the design too (fail closed)."""
     out = []
     hold = None
     for path in sorted((root / DESIGN).glob("*.md")):
