@@ -197,11 +197,11 @@ def test_ac5_a_screen_the_inventory_does_not_hold_fails(tmp_path):
 
 def test_ac5_an_older_section_is_read_for_its_form_only(tmp_path):
     """REQ-080 AC5: Q-73I-1 (an older section missing a screen passes; a bad line in it fails)."""
-    older = "## v0\n\n### books\n\n" + lines() + "\n\n"
+    older = "## i1\n\n### books\n\n" + lines() + "\n\n"
     assert problems(project(tmp_path / "a", usability=FULL + "\n" + older)) == []
-    bad = "## v0\n\n### books\n\n" + lines({"status": "fine"}) + "\n"
+    bad = "## i1\n\n### books\n\n" + lines({"status": "fine"}) + "\n"
     assert problems(project(tmp_path / "b", usability=FULL + "\n" + bad)) == [
-        f"SPEC-0038 rule 10: {RECORD}: v0: books: status is not pass, finding: <text> or"
+        f"SPEC-0038 rule 10: {RECORD}: i1: books: status is not pass, finding: <text> or"
         " not applicable: <reason>"
     ]
 

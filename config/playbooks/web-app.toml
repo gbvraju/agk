@@ -102,7 +102,7 @@ owner_only = false
 [[gates]]
 id = "accessibility"
 kind = "judgement"
-text = "Accessibility, with the checks of SPEC-0037 where a prototype exists."
+text = "Accessibility to WCAG 2.2 level AA, unless the discovery's accessibility answer names another standard, with the checks of SPEC-0037 where a prototype exists."
 owner_only = false
 reason = "No step reads the rendered screens yet; a reviewer reads them against the prototype."
 

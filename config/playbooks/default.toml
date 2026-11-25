@@ -114,7 +114,7 @@ reason = "No step can yet tell which project files hold stored data or its migra
 [[gates]]
 id = "accessibility"
 kind = "judgement"
-text = "Every screen can be used with a keyboard and a screen reader, to the level the project names."
+text = "Every screen can be used with a keyboard and a screen reader, to WCAG 2.2 level AA, unless the discovery's accessibility answer names another standard."
 owner_only = false
 reason = "No screen paths are named for the project, so no step can read its screens."
 
