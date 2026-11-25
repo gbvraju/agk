@@ -309,6 +309,8 @@ def cmd_check(root: Path) -> int:
         problems += mockup_problems(root, folder, pairs)
     if inventory:
         problems += design_inventory.inventory_problems(root)
+        for req in design_inventory.waiting_requirements(root):  # amendment 243
+            print(f"design: rule 3: {req} waits for an inventory pull request")
     for version in versions:
         problems += design_prototype_check.version_problems(root, version)
         if design_prototype_check.reflow_not_run(root, version):

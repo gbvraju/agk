@@ -21,7 +21,10 @@ the one reader of that line, past a quoted problem with its own `## ` lines (bri
 A screen section may carry `- Sources:`, the page it was written from on the prototype path,
 and `all_out_problems(root)`, run by `check_design.py`, fails each imported version whose
 `map.md` rows are all `out:` while the inventory lists no screen or is absent, naming SPEC-0037
-rule 15 and the path class `docs/design/imported/` (amendment 219, brief #1779). It names the
+rule 15 and the path class `docs/design/imported/` (amendment 219, brief #1779). While the
+inventory's digest has its `inventory` sign-off row, a product requirement with no section waits
+for an inventory pull request and is no problem (`waiting_requirements`, amendment 243, brief
+#1930); a changed or unsigned inventory is checked in full. It names the
 rule and the screen, never a value. Files only: no network, no model, nothing written.
 """
 
@@ -33,8 +36,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_signoff
 import design_standard
-from common import parse_requirements
+from common import PROJECT_FIRST_REQ, load_config, parse_requirements
 
 INVENTORY = "docs/design/inventory.md"
 REQUIREMENTS = "docs/requirements.md"
@@ -92,7 +96,11 @@ def _names(text: str) -> list[str]:
 
 
 def _requirement_problems(
-    sections: list[tuple[str, list[str]]], known: list[str], screens: set[str], out: list[str]
+    sections: list[tuple[str, list[str]]],
+    known: list[str],
+    screens: set[str],
+    out: list[str],
+    waiting: frozenset[str] = frozenset(),
 ) -> None:
     seen: set[str] = set()
     for heading, lines in sections:
@@ -126,7 +134,7 @@ def _requirement_problems(
         elif any(name not in screens for name in _names(text)):
             out.append(f"{req}: a screen it names has no section")
     for req in known:
-        if req not in seen:
+        if req not in seen and req not in waiting:
             out.append(f"{req}: the requirement has no section")
 
 
@@ -224,19 +232,47 @@ def discovery_screens(root: Path) -> list[tuple[str, str]]:
     return found
 
 
-def inventory_problems(root: Path) -> list[str]:
-    """The rule 3 problems of `docs/design/inventory.md`; an empty list when it passes."""
-    text = (root / INVENTORY).read_text(encoding="utf-8")
+def _known(root: Path) -> list[str]:
     req_path = root / REQUIREMENTS
     reqs = req_path.read_text(encoding="utf-8") if req_path.is_file() else ""
-    known = [r["id"] for r in parse_requirements(reqs)]
+    return [r["id"] for r in parse_requirements(reqs)]
+
+
+def waiting_requirements(root: Path) -> list[str]:
+    """Amendment 243 (brief #1930): the product requirements with no section while the inventory's
+    digest has its `inventory` row in `docs/design/signoffs.md`; [] when it has none.
+
+    A product requirement is REQ-101 up in a project (`mode` init or adopt) and every requirement
+    in the kit's own tree. A malformed sign-off table is refused (`design_signoff.parse_rows`).
+    """
+    digest = design_signoff.inventory_digest(root)
+    rows = design_signoff.rows(root)
+    if not any(r["kind"] == "inventory" and r["digest"] == digest for r in rows):
+        return []
+    text = (root / INVENTORY).read_text(encoding="utf-8")
+    sectioned = sectioned_requirements(text) or set()
+    project = load_config(root)["mode"] in ("init", "adopt")
+    return [
+        req
+        for req in _known(root)
+        if req not in sectioned and (not project or int(req[4:]) >= PROJECT_FIRST_REQ)
+    ]
+
+
+def inventory_problems(root: Path) -> list[str]:
+    """The rule 3 problems of `docs/design/inventory.md`; an empty list when it passes. A product
+    requirement that waits for an inventory pull request (`waiting_requirements`) is none."""
+    text = (root / INVENTORY).read_text(encoding="utf-8")
+    known = _known(root)
+    waiting = frozenset(waiting_requirements(root))
     parts = _parts(text)
     out: list[str] = []
     for part in PARTS:
         if part not in parts:
             out.append(f"the inventory has no {part} part")
     screens = parts.get("Screens", [])
-    _requirement_problems(parts.get("Requirements", []), known, {h for h, _ in screens}, out)
+    names = {h for h, _ in screens}
+    _requirement_problems(parts.get("Requirements", []), known, names, out, waiting)
     _screen_problems(screens, out)
     found = [f"rule 3: {INVENTORY}: {problem}" for problem in out]
     if not screens and {"yes", "open"} & {value for _, value in discovery_screens(root)}:
