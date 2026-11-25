@@ -549,12 +549,13 @@ line and never fails. Prints `ok domains (<n> packs)` or `ok domains (none)`. Re
 
 ## Settled amendments
 
-    python3 scripts/agk/check_amendments.py settle --amendment N --evidence E --agreed yes|no [--intake]
+    python3 scripts/agk/check_amendments.py settle --amendment N --evidence E --agreed yes|no --comments FILE [--intake]
 
 Prints the steward's settled line for amendment N (brief #1957, ADR-0813): `Answer: amendment <n> settled (evidence: <e>;
-class: <class>; rule: <spec and rule>)` ending `Who: AGK steward`, when `[steward] settle_amendments = true`, the fresh
+class: <class>; rule: <spec and rule>)`, a `Text:` digest of the amendment as it reads, and `Who: AGK steward`, when `[steward] settle_amendments = true`, the fresh
 reviewer agreed (`--agreed yes`) and every item of `docs/runs/proposed-spec-amendments-<n>.md` is `Class: correction` or
-`Class: implementation`; otherwise `owner: amendment <n> ...` and exit 1. It posts nothing: the steward posts the line with
+`Class: implementation` and two owner overrides of its class in seven days in `--comments` (a saved JSON list of comments)
+have not stopped it; otherwise `owner: amendment <n> ...` and exit 1. It posts nothing: the steward posts the line with
 `steward_evidence.py answer`, and in personal mode the developer does. The `numbers` governance step fails an amendment file
 from 251 on whose item has no `Class:` line, or a class its text contradicts. Exit 0 settled, 1 the owner's, 2 usage.
 

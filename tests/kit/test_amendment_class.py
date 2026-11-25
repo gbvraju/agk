@@ -8,6 +8,7 @@ Files only; invented data, no network.
 
 from __future__ import annotations
 
+import json
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from datetime import UTC, datetime, timedelta
@@ -101,6 +102,7 @@ def test_req066_with_the_setting_on_and_agreement_a_settled_line(tmp_path):
     found = ca.settle(900, amendment(CORRECTION, IMPLEMENTATION), root, "pins.py:41", True, now=NOW)
     first = found.splitlines()[0]
     assert ca.SETTLED.fullmatch(first), first
+    assert found.splitlines()[1] == f"Text: {ca.digest(amendment(CORRECTION, IMPLEMENTATION))}"
     assert first.startswith("Answer: amendment 900 settled (evidence: pins.py:41; class: ")
     assert "rule: SPEC-0072 rule 4)" in first and found.rstrip().endswith(ca.WHO)
 
@@ -160,6 +162,8 @@ def test_req066_an_owner_answer_after_a_settled_line_is_an_override():
 
 
 def test_req066_the_setting_is_read_and_refused_naming_it(tmp_path):
+    from config import settle_refusal
+
     root = project(tmp_path)
     assert steward_settings(root)["settle_amendments"] is False
     assert steward_settings(project(tmp_path, on=True))["settle_amendments"] is True
@@ -170,9 +174,14 @@ def test_req066_the_setting_is_read_and_refused_naming_it(tmp_path):
         assert "setting: steward.settle_amendments" in str(caught.value)
         assert "yes" not in str(caught.value)
     project(tmp_path, on=True, principle=False)
-    with pytest.raises(StewardSettingError) as caught:
-        steward_settings(root)
-    assert "principle 6" in str(caught.value)
+    with (root / "agk.toml").open("a", encoding="utf-8") as handle:
+        handle.write("auto_file = 2\nfix_briefs = true\n")
+    found = steward_settings(root)  # fix list item 5: only settle_amendments is refused
+    assert found == {"auto_file": 2, "fix_briefs": True, "settle_amendments": False}
+    assert "principle 6" in (settle_refusal(root) or "")
+    assert "steward.settle_amendments" in (settle_refusal(root) or "")
+    assert settle_refusal(project(tmp_path, on=True)) is None
+    project(tmp_path, on=True, principle=False)
     assert ca.settle_on(root) is False
 
 
@@ -184,51 +193,98 @@ def test_req066_a_team_without_spec_approvers_reads_the_setting_off(tmp_path):
     assert ca.settle_on(root) is False
 
 
-def test_req066_the_command_prints_and_posts_nothing(tmp_path):
+def run_settle(root: Path, *extra: str) -> subprocess.CompletedProcess:
+    argv = [sys.executable, str(SCRIPTS / "check_amendments.py"), "settle", *extra]
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        argv, cwd=root, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"}, check=False
+    )
+
+
+def command_project(tmp_path: Path, comments: object = ()) -> tuple[Path, str]:
     root = project(tmp_path, on=True)
     path = root / "docs" / "runs" / "proposed-spec-amendments-900.md"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(amendment(CORRECTION), encoding="utf-8")
     subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed list
-    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [
-            sys.executable,
-            str(SCRIPTS / "check_amendments.py"),
-            "settle",
-            "--amendment",
-            "900",
-            "--evidence",
-            "pins.py:41",
-            "--agreed",
-            "yes",
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        env={"PATH": "/usr/bin:/bin"},
-        check=False,
+    saved = tmp_path / "comments.json"
+    saved.write_text(
+        json.dumps(list(comments) if isinstance(comments, tuple) else comments), "utf-8"
     )
-    assert proc.returncode == 0, proc.stderr
+    return root, str(saved)
+
+
+def test_req066_the_command_prints_and_posts_nothing(tmp_path):
+    root, saved = command_project(tmp_path)
+    args = ("--amendment", "900", "--evidence", "pins.py:41", "--comments", saved, "--agreed")
+    proc = run_settle(root, *args, "yes")
+    assert proc.returncode == 0, proc.stdout
     assert proc.stdout.startswith("Answer: amendment 900 settled (evidence: pins.py:41;")
-    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [
-            sys.executable,
-            str(SCRIPTS / "check_amendments.py"),
-            "settle",
-            "--amendment",
-            "900",
-            "--evidence",
-            "pins.py:41",
-            "--agreed",
-            "no",
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        env={"PATH": "/usr/bin:/bin"},
-        check=False,
-    )
+    text = (root / "docs/runs/proposed-spec-amendments-900.md").read_text(encoding="utf-8")
+    assert f"\nText: {ca.digest(text)}\n" in proc.stdout
+    proc = run_settle(root, *args, "no")
     assert proc.returncode == 1 and proc.stdout.startswith("owner: amendment 900")
+    for bad in ("\u00b2", "9x"):  # fix list item 6: ASCII digits only, never a traceback
+        proc = run_settle(root, "--amendment", bad, *args[2:], "yes")
+        assert proc.returncode == 2 and proc.stdout.startswith("usage:"), bad
+    assert run_settle(root, *args[:4], "--agreed", "yes").returncode == 2  # no --comments
+
+
+def test_req066_the_command_reads_the_overrides_from_the_comments(tmp_path):
+    settled = ca.SETTLED_FORM.format(800, "e", "correction", "SPEC-0072 rule 4")
+    now = datetime.now(UTC)
+    stamp = [(now - timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ") for h in (3, 2, 1)]
+    comments = [
+        {"user": {"login": "owner"}, "body": f"{settled}\n\n{ca.WHO}", "created_at": stamp[0]},
+        {"user": {"login": "owner"}, "body": "Correction: amendment 800", "created_at": stamp[1]},
+        {
+            "user": {"login": "owner"},
+            "body": "Maintainer answer: amendment 800 no",
+            "created_at": stamp[2],
+        },
+    ]
+    root, saved = command_project(tmp_path, comments)
+    args = ("--amendment", "900", "--evidence", "e", "--comments", saved, "--agreed", "yes")
+    proc = run_settle(root, *args)
+    assert proc.returncode == 1 and proc.stdout.startswith("owner: amendment 900"), proc.stdout
+    for broken in ([{"body": "x"}], {"not": "a list"}, [1]):  # fix list item 3: refused, named
+        root, saved = command_project(tmp_path, broken)
+        proc = run_settle(
+            root, "--amendment", "900", "--evidence", "e", "--comments", saved, "--agreed", "yes"
+        )
+        assert proc.returncode == 1 and proc.stdout.startswith("FAIL amendments:"), proc.stdout
+        assert "Traceback" not in proc.stdout + proc.stderr
+
+
+def test_req066_the_command_names_principle_6_until_it_is_applied(tmp_path):
+    root, saved = command_project(tmp_path)
+    project(root, on=True, principle=False)
+    proc = run_settle(
+        root, "--amendment", "900", "--evidence", "e", "--comments", saved, "--agreed", "yes"
+    )
+    assert proc.returncode == 1 and "principle 6" in proc.stdout
+
+
+def test_req066_a_file_that_is_not_utf8_is_named_never_a_traceback(tmp_path):
+    root, saved = command_project(tmp_path)
+    path = "docs/runs/proposed-spec-amendments-900.md"
+    (root / path).write_bytes(b"1. \xff\xfe Class: correction\n")
+    assert ca.added_problems(root, [(900, path)]) == [
+        f"{path}: not readable UTF-8 text (ADR-0813 answer 1)"
+    ]
+    proc = run_settle(
+        root, "--amendment", "900", "--evidence", "e", "--comments", saved, "--agreed", "yes"
+    )
+    assert proc.returncode == 1 and "path class docs/runs/" in proc.stdout
+    assert "Traceback" not in proc.stdout + proc.stderr
+
+
+def test_req066_settleable_and_digests_read_the_text_at_hand(tmp_path):
+    root = project(tmp_path, on=True)
+    good, bad = amendment(CORRECTION), amendment(CORRECTION, "Adds a step.\n   Class: behaviour")
+    found = ca.digests({"amendment 1": good, "amendment 2": bad, "amendment 3": None}, root)
+    assert found == {"amendment 1": ca.digest(good)}
+    owner = amendment("Changes principle 6 as SPEC-0072 rule 4 says.\n   Class: correction")
+    assert not ca.settleable(owner, root)
 
 
 def test_req066_the_shipped_amendments_carry_their_class():
@@ -240,8 +296,6 @@ def test_req066_the_shipped_amendments_carry_their_class():
 
 
 def test_req066_the_guard_allows_the_settled_line_only_with_the_setting_on(tmp_path):
-    import json
-
     hook = SCRIPTS.parents[1] / ".claude" / "hooks" / "steward_guard.py"
     line = ca.SETTLED_FORM.format(900, "pins.py:41", "correction", "SPEC-0072 rule 4")
 
@@ -260,9 +314,13 @@ def test_req066_the_guard_allows_the_settled_line_only_with_the_setting_on(tmp_p
         assert proc.returncode == 0, proc.stderr
         return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
 
-    root = project(tmp_path, on=True)
-    assert decide(root, f"{line}\n\n{ca.WHO}\n") is None
+    root, _ = command_project(tmp_path)
+    path = root / "docs/runs/proposed-spec-amendments-900.md"
+    good = f"{line}\nText: {ca.digest(path.read_text(encoding='utf-8'))}\n\n{ca.WHO}\n"
+    assert decide(root, good) is None
     for bad in (
+        f"{line}\n\n{ca.WHO}\n",  # no Text line
+        f"{line}\nText: {'0' * 16}\n\n{ca.WHO}\n",  # another text
         f"{line}\n",
         "Answer: amendment 900 settled\n\nWho: AGK steward\n",
         "Approve: SPEC-0072\n",
@@ -270,6 +328,10 @@ def test_req066_the_guard_allows_the_settled_line_only_with_the_setting_on(tmp_p
     ):
         found = decide(root, bad)
         assert found is not None and found["permissionDecision"] == "deny", bad
-    project(tmp_path, on=False)
-    found = decide(root, f"{line}\n\n{ca.WHO}\n")
+    path.write_text(amendment("Adds a step.\n   Class: behaviour"), encoding="utf-8")
+    behaviour = f"{line}\nText: {ca.digest(path.read_text(encoding='utf-8'))}\n\n{ca.WHO}\n"
+    assert decide(root, behaviour)["permissionDecision"] == "deny"  # fix list item 2
+    path.write_text(amendment(CORRECTION), encoding="utf-8")
+    project(root, on=False)
+    found = decide(root, good)
     assert found is not None and "steward.settle_amendments" in found["permissionDecisionReason"]

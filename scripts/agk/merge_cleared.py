@@ -1230,14 +1230,22 @@ def spec_unapproved(
     return not any(same_text(root, sha, spec, s) for s in shas)
 
 
-def settled_asks(comments: list[dict], approvers: list[str], root: Path | None) -> bool:
+def settled_asks(
+    comments: list[dict], approvers: list[str], root: Path | None, sha: str = ""
+) -> bool:
     """Brief #1957 answer 3 (ADR-0813, amendment 252): with `[steward] settle_amendments` on at
     ROOT, every approval the `Owner needed:` comments ask is an amendment that a steward's settled
-    line by an account in APPROVERS settles after its ask; a spec approval ask never is."""
+    line by an account in APPROVERS settles after its ask, for the amendment's text at the head SHA
+    (`git show`), which must be settleable (fix list items 2 and 4); a spec approval ask, or an ask
+    that is more than approvals (`plain_ask`), never is."""
     asked = check_amendments.asked_keys(comments)
-    if not asked or not check_amendments.settle_on(root):
+    if root is None or not sha or not asked or not check_amendments.settle_on(root):
         return False
-    return asked <= check_amendments.settled_keys(comments, approvers)
+    if check_amendments.plain_ask(comments) or any(k.startswith("SPEC-") for k in asked):
+        return False
+    texts = {k: show(root, sha, check_amendments.amendment_path(k)) for k in asked}
+    settles = check_amendments.digests(texts, root)
+    return asked <= check_amendments.settled_keys(comments, approvers, settles)
 
 
 def unapproved(
@@ -1253,7 +1261,7 @@ def unapproved(
     `spec_approvers` for the head SHA, or for an earlier commit of its history whose spec text
     the head keeps apart from the status flip (amendment 124, brief 628). The router's
     `agk:approve` label holds unless `settled_asks` (brief #1957)."""
-    if APPROVE_LABEL in labels_of(pull) and not settled_asks(comments, approvers, root):
+    if APPROVE_LABEL in labels_of(pull) and not settled_asks(comments, approvers, root, sha):
         return True
     asked = asked_specs(pull, comments, sha)
     if not asked:

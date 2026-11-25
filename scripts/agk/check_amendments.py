@@ -5,7 +5,7 @@
 """The class of each amendment item, and the steward's settled line (brief #1957, ADR-0813).
 
     python3 scripts/agk/check_amendments.py settle --amendment N --evidence E --agreed yes|no
-        [--intake]
+        --comments FILE [--intake]
 
 Each item of an amendment file from `FIRST_CLASSED` on carries one line `Class: correction`,
 `Class: implementation` or `Class: behaviour` (answer 1). An item with no such line, one that
@@ -14,18 +14,23 @@ Each item of an amendment file from `FIRST_CLASSED` on carries one line `Class: 
 `file_problems` fails a mismatch naming the file, the item and ADR-0813, never the item's text,
 and `check_numbers.py` runs it on each amendment file a pull request adds (answer 9).
 
-`settle` prints the settled line (answer 2) only when `[steward] settle_amendments` is on
+`settle` prints the settled line (answer 2), with a `Text:` digest of the amendment as it reads
+(answer 7: a changed text needs a new line), only when `[steward] settle_amendments` is on
 (`settle_on`), the kit is not paused, the fresh reviewer agreed, every item is `correction` or
 `implementation`, the amendment changes no principle, constitution or `spec_approvers` rule, it
-is not an intake's and two owner overrides of a class in seven days have not stopped it
-(answer 4); otherwise it prints `owner: amendment <n> (<rule>)` and exits 1. It posts nothing:
-the steward posts the line with `steward_evidence.py answer`, and in personal mode the developer
-does. `settled_keys` and `asked_keys` are the readings `route.py` and `merge_cleared.py` share
-(answer 3). Files only: no network, no model.
+is not an intake's and two owner overrides of a class in seven days, read from `--comments` (a
+saved JSON list), have not stopped it (answer 4); otherwise it prints `owner: amendment <n> ...`
+and exits 1. It posts nothing: the steward posts the line with `steward_evidence.py answer`, and
+in personal mode the developer does. `settled_key`, `settled_keys`, `asked_keys`, `plain_ask` and
+`digests` are the readings `route.py`, `merge_cleared.py` and the steward guard share (answer 3):
+a settled line counts only for an amendment that is `settleable` at the head and whose text there
+has the line's `Text:` digest. Files only: no network, no model.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
 from datetime import UTC, datetime, timedelta
@@ -33,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, paused, repo_root, run, utf8_output  # noqa: E402
+from common import AMENDMENT, CheckError, paused, repo_root, run, utf8_output  # noqa: E402
 
 NAME = "amendments"
 FIRST_CLASSED = 251  # the first amendment file written with `Class:` lines (ADR-0813)
@@ -57,6 +62,8 @@ SETTLED = re.compile(
     r"Answer: amendment (\d+) settled \(evidence: [^;()\n]+; class: (correction|implementation);"
     r" rule: SPEC-\d{4} rules? \d+\)"
 )
+TEXT_LINE = re.compile(r"^Text: ([0-9a-f]{16})$", re.MULTILINE)  # fix list item 4: the text settled
+NUMBER = re.compile(r"[0-9]+")  # ASCII digits only (fix list item 6)
 ASKED = re.compile(r"Maintainer answer: amendment (\d+) approved|Approve: (?:\S+ )?SPEC-(\d{4})")
 OVERRIDE = ("Maintainer answer:", "Correction:")
 OVERRIDE_DAYS, OVERRIDE_LIMIT = 7, 2  # SPEC-0059 rule 13's share, per class
@@ -64,7 +71,10 @@ PRINCIPLE_CLAUSE = (
     "the steward may settle an amendment of class correction or implementation that a fresh "
     "reviewer agrees with, where the owner turns it on"
 )
-USAGE = "usage: check_amendments.py settle --amendment N --evidence E --agreed yes|no [--intake]"
+USAGE = (
+    "usage: check_amendments.py settle --amendment N --evidence E --agreed yes|no"
+    " --comments FILE [--intake]"
+)
 
 
 def items(text: str) -> list[tuple[int, str]]:
@@ -121,8 +131,43 @@ def added_problems(root: Path, added: list[tuple[int, str]]) -> list[str]:
     found = []
     for number, path in added:
         if number >= FIRST_CLASSED and (root / path).is_file():
-            found += file_problems(path, (root / path).read_text(encoding="utf-8"), root)
+            try:
+                text = (root / path).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                found.append(f"{path}: not readable UTF-8 text (ADR-0813 answer 1)")
+                continue
+            found += file_problems(path, text, root)
     return found
+
+
+def digest(text: str) -> str:
+    """The short digest of an amendment's text that a settled line records (answer 7)."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def settleable(text: str, root: Path) -> bool:
+    """Whether every item of TEXT is `correction` or `implementation` and none names a principle,
+    `constitution/` or `spec_approvers` (answer 2); the header, which names principle 6 in
+    every amendment, is not read."""
+    listed = items(text)
+    if not listed or any(OWNER_ONLY.search(body) for _, body in listed):
+        return False
+    return all(item_class(body, root)[0] in SETTLED_CLASSES for _, body in listed)
+
+
+def digests(texts: dict[str, str | None], root: Path) -> dict[str, str]:
+    """{`amendment <n>`: digest} of each of TEXTS (the amendment files at the head) that is
+    `settleable`; a text that could not be read settles nothing (fix list item 2)."""
+    return {k: digest(t) for k, t in texts.items() if t is not None and settleable(t, root)}
+
+
+def amendment_key(path: str) -> str | None:
+    found = AMENDMENT.fullmatch(path)
+    return f"amendment {int(found.group(1))}" if found else None
+
+
+def amendment_path(key: str) -> str:
+    return f"docs/runs/proposed-spec-amendments-{key.split()[1]}.md"
 
 
 def settle_on(root: Path | None) -> bool:
@@ -133,8 +178,10 @@ def settle_on(root: Path | None) -> bool:
     try:
         from reviewers import spec_approvers
 
-        from config import steward_settings
+        from config import settle_refusal, steward_settings
 
+        if settle_refusal(root) is not None:
+            return False
         return steward_settings(root)["settle_amendments"] is True and bool(spec_approvers(root))
     except (CheckError, OSError, ValueError):
         return False
@@ -157,12 +204,10 @@ def settle(
     now: datetime | None = None,
 ) -> str | None:
     """The settled comment for amendment NUMBER of TEXT, or None when it is the owner's."""
-    listed = items(text)  # the header names principle 6 as every amendment does: items only
-    owner_only = any(OWNER_ONLY.search(body) for _, body in listed)
-    if not (agreed and listed and settle_on(root)) or paused(root) or owner_only:
+    listed = items(text)
+    if not (agreed and settle_on(root)) or paused(root) or not settleable(text, root):
         return None
-    classes = [item_class(body, root, intake) for _, body in listed]
-    kinds = {cls for cls, _ in classes}
+    kinds = {item_class(body, root, intake)[0] for _, body in listed}
     if not kinds <= set(SETTLED_CLASSES):
         return None
     if any(stopped(k, overrides or [], now or datetime.now(UTC)) for k in kinds):
@@ -171,7 +216,8 @@ def settle(
     if rule is None or not re.fullmatch(r"[^;()\n]+", evidence or ""):
         return None
     cls = "correction" if "correction" in kinds else "implementation"
-    return f"{SETTLED_FORM.format(number, evidence, cls, rule)}\n\n{WHO}\n"
+    first_line = SETTLED_FORM.format(number, evidence, cls, rule)
+    return f"{first_line}\nText: {digest(text)}\n\n{WHO}\n"
 
 
 def first(comment: dict) -> tuple[str, str, str]:
@@ -180,10 +226,24 @@ def first(comment: dict) -> tuple[str, str, str]:
     return (body.splitlines() or [""])[0].strip(), body, login
 
 
-def settled_key(line: str, body: str) -> str | None:
-    """`amendment <n>` of a settled first LINE whose BODY carries the steward's marker."""
+def settled_key(line: str, body: str, settles: dict[str, str]) -> str | None:
+    """`amendment <n>` of a settled first LINE whose BODY carries the steward's marker and the
+    `Text:` digest SETTLES holds for that amendment at the head (fix list items 2 and 4)."""
     found = SETTLED.fullmatch(line)
-    return f"amendment {int(found.group(1))}" if found and WHO in body else None
+    if not found or WHO not in body:
+        return None
+    key = f"amendment {int(found.group(1))}"
+    text = TEXT_LINE.search(body)
+    return key if text is not None and settles.get(key) == text.group(1) else None
+
+
+def plain_ask(comments: list[dict]) -> bool:
+    """Whether an `Owner needed:` asks more than approvals: none offered, or a Q id named."""
+    return any(
+        first(c)[0].startswith("Owner needed:")
+        and (not asked_keys([c]) or re.search(r"\bQ-[\w-]+-\d+\b", first(c)[1]))
+        for c in comments
+    )
 
 
 def asked_keys(comments: list[dict]) -> set[str]:
@@ -204,15 +264,16 @@ def asked_keys(comments: list[dict]) -> set[str]:
     return keys
 
 
-def settled_keys(comments: list[dict], approvers: list[str]) -> set[str]:
-    """The amendments a settled line by an account in APPROVERS settles after its newest ask."""
+def settled_keys(comments: list[dict], approvers: list[str], settles: dict[str, str]) -> set[str]:
+    """The amendments a settled line by an account in APPROVERS settles after its newest ask,
+    for the text SETTLES holds at the head."""
     allowed = {str(a).lstrip("@").lower() for a in approvers}
     done: set[str] = set()
     for c in comments:
         line, body, login = first(c)
         if line.startswith("Owner needed:"):
             done -= asked_keys([c])
-        elif login in allowed and (key := settled_key(line, body)):
+        elif login in allowed and (key := settled_key(line, body, settles)):
             done.add(key)
     return done
 
@@ -223,8 +284,17 @@ def overrides(comments: list[dict]) -> list[tuple[str, datetime]]:
     classes: dict[str, str] = {}
     found = []
     for c in comments:
+        if not isinstance(c, dict):
+            raise CheckError("a comment record is not an object (ADR-0813 answer 4)")
         line, body, _ = first(c)
-        when = datetime.fromisoformat(str(c.get("created_at") or "").replace("Z", "+00:00"))
+        try:
+            when = datetime.fromisoformat(str(c["created_at"]).replace("Z", "+00:00"))
+        except (KeyError, ValueError):
+            raise CheckError(
+                "a comment record has no readable created_at (ADR-0813 answer 4)"
+            ) from None
+        if when.tzinfo is None:
+            raise CheckError("a comment record has no readable created_at (ADR-0813 answer 4)")
         if (m := SETTLED.fullmatch(line)) and WHO in body:
             classes.setdefault(m.group(1), m.group(2))
         elif line.startswith(OVERRIDE):
@@ -234,24 +304,45 @@ def overrides(comments: list[dict]) -> list[tuple[str, datetime]]:
     return found
 
 
+def comment_records(path: Path) -> list[dict]:
+    """The saved comments (a JSON list) the override share reads; unreadable is a refusal."""
+    try:
+        records = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise CheckError("the comments file cannot be read (setting: --comments)") from None
+    if not isinstance(records, list):
+        raise CheckError("the comments file is not a list (setting: --comments)")
+    return records
+
+
 def command(args: list[str]) -> int:
-    opts = dict(zip(args[1::2], args[2::2], strict=False)) if args[:1] == ["settle"] else {}
     intake = "--intake" in args
-    if intake:
-        args = [a for a in args if a != "--intake"]
-        opts = dict(zip(args[1::2], args[2::2], strict=False))
-    if set(opts) != {"--amendment", "--evidence", "--agreed"} or len(args) != 7:
+    rest = [a for a in args if a != "--intake"]
+    opts = dict(zip(rest[1::2], rest[2::2], strict=False)) if rest[:1] == ["settle"] else {}
+    keys = {"--amendment", "--evidence", "--agreed", "--comments"}
+    if set(opts) != keys or len(rest) != 9:
         print(USAGE)
         return 2
-    if not opts["--amendment"].isdigit() or opts["--agreed"] not in ("yes", "no"):
+    if not NUMBER.fullmatch(opts["--amendment"]) or opts["--agreed"] not in ("yes", "no"):
         print(USAGE)
         return 2
     number, root = int(opts["--amendment"]), repo_root()
+    from config import settle_refusal
+
+    if (refused := settle_refusal(root)) is not None:
+        raise CheckError(refused)
+    records = overrides(comment_records(Path(opts["--comments"])))
     path = root / "docs" / "runs" / f"proposed-spec-amendments-{number}.md"
     if not path.is_file():
         raise CheckError(f"amendment {number} is not in docs/runs/ (ADR-0813 answer 2)")
-    text = path.read_text(encoding="utf-8")
-    line = settle(number, text, root, opts["--evidence"], opts["--agreed"] == "yes", intake)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise CheckError(
+            f"amendment {number} is not readable UTF-8 text (path class docs/runs/)"
+        ) from None
+    agreed = opts["--agreed"] == "yes"
+    line = settle(number, text, root, opts["--evidence"], agreed, intake, records)
     if line is None:
         print(f"owner: amendment {number} (ADR-0813 answer 2; setting: steward.settle_amendments)")
         return 1

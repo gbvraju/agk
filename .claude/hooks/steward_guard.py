@@ -362,19 +362,26 @@ def approval_problem(text: str, inline: bool, project: Path | None) -> str | Non
 
 def settled_problem(text: str, project: Path | None) -> str | None:
     """Brief #1957 (ADR-0813, amendment 251): a settled line passes only in its full form, with
-    `Who: AGK steward`, while `[steward] settle_amendments` is on."""
+    `Who: AGK steward` and the `Text:` digest of its amendment as the checkout reads it, for an
+    amendment that is settleable, while `[steward] settle_amendments` is on."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
     try:
-        from check_amendments import SETTLED, WHO, settle_on
+        from check_amendments import SETTLED, amendment_path, digests, settle_on, settled_key
 
-        first = text.splitlines()[0].strip()
-        if not SETTLED.fullmatch(first) or WHO not in text:
-            return reason("a settled line not in its form", "comment first line")
-        on = settle_on(project or Path("."))
-    except Exception:  # noqa: BLE001 - an unreadable setting fails closed
-        on = False
+        root = project or Path(".")
+        found = SETTLED.fullmatch(text.splitlines()[0].strip())
+        key = f"amendment {int(found.group(1))}" if found else ""
+        on = settle_on(root)
+        path = root / amendment_path(key) if key else None
+        texts = {key: path.read_text(encoding="utf-8")} if path and path.is_file() else {}
+        settles = digests(texts, root) if on else {}
+        settled = settled_key(text.splitlines()[0].strip(), text, settles)
+    except Exception:  # noqa: BLE001 - an unreadable setting or amendment fails closed
+        on, settled = False, None
     if not on:
         return f"steward guard: {RULE} denies a settled line (setting: steward.settle_amendments)"
+    if settled is None:  # fix list item 2: the form, the marker and the amendment as it reads
+        return reason("a settled line not in its form or for its amendment", "docs/runs/")
     return None
 
 

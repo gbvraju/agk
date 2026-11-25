@@ -777,8 +777,8 @@ def steward_settings(root: Path) -> dict:
     number from 0 to 3, or `false` for none; 0 when unset or with no table. `fix_briefs`: whether
     `steward_owner.py fix-brief` writes a brief's mechanical lines (brief #1715), `false` unset.
     `settle_amendments`: whether the steward settles a correction or implementation amendment
-    (brief #1957, ADR-0813), `false` unset, and `true` refused naming principle 6 until it holds
-    ADR-0813's clause."""
+    (brief #1957, ADR-0813), `false` unset, and read as `false` until principle 6 holds ADR-0813's
+    clause (`settle_refusal` names principle 6)."""
     try:
         table = config_source(root).get("steward", {})
     except (OSError, ValueError):
@@ -790,11 +790,23 @@ def steward_settings(root: Path) -> dict:
         ok = isinstance(value, bool) if key in STEWARD_SWITCHES else number or value is False
         if key not in STEWARD_DEFAULTS or not ok:
             raise StewardSettingError(f"the [steward] table is refused (setting: steward.{key})")
-    if table.get("settle_amendments") is True and not principle_six_applied(root):
-        raise StewardSettingError(  # brief #1957 answer 5 (ADR-0813): until principle 6 is applied
-            "the [steward] table is refused (setting: steward.settle_amendments; principle 6)"
-        )
-    return {**STEWARD_DEFAULTS, **table}
+    found = {**STEWARD_DEFAULTS, **table}
+    if found["settle_amendments"] is True and not principle_six_applied(root):
+        found["settle_amendments"] = False  # refused alone (`settle_refusal`); the rest still read
+    return found
+
+
+def settle_refusal(root: Path) -> str | None:
+    """Brief #1957 answer 5 (ADR-0813): `settle_amendments = true` is refused, naming principle 6,
+    until principle 6 holds ADR-0813's clause; `auto_file` and `fix_briefs` stay read."""
+    try:
+        table = config_source(root).get("steward", {})
+    except (OSError, ValueError):
+        return None  # `steward_settings` refuses the table itself
+    if isinstance(table, dict) and table.get("settle_amendments") is True:
+        if not principle_six_applied(root):
+            return "settle_amendments is refused (setting: steward.settle_amendments; principle 6)"
+    return None
 
 
 def principle_six_applied(root: Path) -> bool:

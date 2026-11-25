@@ -6,7 +6,7 @@
 - Related: SPEC-0059, SPEC-0039, ADR-0430, ADR-0714, ADR-0723, ADR-0595, ADR-0690, ADR-0763, amendment 251, amendment 252, brief #1957, plan #661
 - Requirements: REQ-066
 
-Protected classes: `scripts/agk/`, `.claude/hooks/`, `tests/kit/`, `docs/runs/`, `agk.toml`
+Protected classes: `scripts/agk/`, `.claude/hooks/`, `tests/kit/`, `docs/runs/`, `agk.toml`, `kit/`
 
 ## Context
 
@@ -22,22 +22,32 @@ amendments 212 to 247, 31 only made the kit do what its Approved spec already sa
    `correction` naming no rule of an Approved spec are `behaviour`; `check_numbers.py` fails a mismatch in an amendment
    file a pull request adds, naming the file, the item and this ADR, never the text.
 2. **The steward settles only the first two.** `check_amendments.py settle` prints `Answer: amendment <n> settled
-   (evidence: <e>; class: <class>; rule: <spec and rule>)` with `Who: AGK steward` only when the setting is on, the kit
+   (evidence: <e>; class: <class>; rule: <spec and rule>)`, a second line `Text: <digest>` (the first 16 hex digits
+   of the SHA-256 of the amendment file as it reads) and `Who: AGK steward` only when the setting is on, the kit
    is not paused, the fresh reviewer (ADR-0430's form) agreed, every item is `correction` or `implementation`, the
-   amendment names no principle, `constitution/` or `spec_approvers`, and it is not an intake's; else `owner:` and
-   exit 1. It posts nothing; the steward posts the line with `steward_evidence.py answer` (`Q-ES-5`).
-3. **The readers.** `route.py` (the `settle` fact) and `merge_cleared.py` (`settled_asks`) read the line, by an account
-   in `spec_approvers` and with the marker, as the approval of its amendment only when the setting is on in the checkout
-   they read; a line before the newest ask settles nothing. `.claude/hooks/steward_guard.py` denies a settled first line
-   unless it is in the form, with the marker, and the setting is on. `Maintainer answer: amendment <n> approved` works
-   as before.
+   amendment's items name no principle, `constitution/` or `spec_approvers`, it is not an intake's, and the override
+   share read from `--comments` (a saved JSON list of comments) has not stopped its class; else `owner:` and exit 1.
+   It posts nothing; the steward posts the line with `steward_evidence.py answer` (`Q-ES-5`).
+3. **The readers.** `route.py` (the `settle` and `settles` facts) and `merge_cleared.py` (`settled_asks`) read the
+   line, by an account in `spec_approvers` and with the marker, as the approval of its amendment only when the setting
+   is on in the checkout they read, and only when the amendment file at the head (one contents GET in the router,
+   `git show` in the merger) is still settleable and has the line's `Text:` digest, so an edited or `behaviour` text
+   needs a new line; a line before the newest ask settles nothing. The router closes only that amendment's approval,
+   and the `Owner needed:` with it only when no other approval, no ask without an approval line and no ask naming a Q id
+   is open; questions stay open. The merger lifts `agk:approve` only when every ask is such an approval.
+   `.claude/hooks/steward_guard.py` denies a settled first line unless it is in the form, with the marker and the
+   digest of the amendment as the checkout reads it, for a settleable amendment, and the setting is on. In solo mode
+   every session posts as the owner, so the account alone cannot tell the steward's line from another session's
+   (`Q-1957-3`); the guard, the marker and the re-check at the head are what hold it. `Maintainer answer: amendment
+   <n> approved` works as before.
 4. **The owner keeps the last word.** An owner `Maintainer answer:` or `Correction:` naming a settled amendment is an
    override (`check_amendments.overrides`); two of one class in seven days stop `settle` for that class.
 5. **The text.** Amendment 251 (SPEC-0059 rules 4, 11, 12 and 13) and amendment 252 (SPEC-0039 rule 5) propose the
    spec text. Principle 6's proposed clause, applied by the maintainers in its own commit and never by a build
    (`Q-ES-1`), is: append to principle 6 "; the steward may settle an amendment of class correction or
    implementation that a fresh reviewer agrees with, where the owner turns it on". Until principle 6 holds it,
-   `settle_amendments = true` is refused naming principle 6.
+   `settle_amendments = true` is read as `false` and `config.settle_refusal` names principle 6 (the `settle` command
+   fails with it); `auto_file` and `fix_briefs` are still read.
 6. **The setting.** `[steward] settle_amendments`, `true` or `false`, default `false`; another value is refused naming
    `steward.settle_amendments`; `misplaced_settings` reports it in another table through `TABLE_KEYS`. It is read as
    off while `config/reviewers.yaml` lists no `spec_approvers` login, in solo and team mode alike (`Q-ES-2`).
