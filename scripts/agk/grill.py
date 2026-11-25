@@ -46,8 +46,10 @@ from config import quality_settings  # noqa: E402
 NAME = "grill"
 USAGE = __doc__.split("\n\n", 2)[1]
 FLAGS = ("--depth", "--playbook", "--answers", "--root")
-RECORD_FLAGS = ("--answers", "--id", "--stated", "--assumption", "--test", "--accepted", "--source")
-RECORD_FLAGS += ("--playbook", "--root")
+RECORD_FLAGS = (
+    *("--answers", "--id", "--stated", "--assumption", "--test", "--accepted", "--source"),
+    *("--playbook", "--root"),
+)
 SWITCHES = ("--open", "--risk-accepted", "--replace")
 KINDS = ("--stated", "--assumption", "--open", "--risk-accepted")
 READY_FLAGS = ("--answers", "--depth", "--playbook", "--root")
@@ -153,7 +155,7 @@ def _words(path: str) -> str:
     return text
 
 
-def record(root: Path, opts: dict[str, str], switches: set[str]) -> dict:
+def record(root: Path, opts: dict[str, str], switches: set[str]) -> dict[str, str | bool]:
     """The one row `record` appends (rule 5); refusals name the setting, never the words."""
     item = opts["--id"]
     if item not in {i[0] for i in composed(root, opts.get("--playbook"))}:
@@ -175,6 +177,7 @@ def record(root: Path, opts: dict[str, str], switches: set[str]) -> dict:
         raise CheckError(
             "rule 5: the id is recorded; a revision needs the person's words (setting: --replace)"
         )
+    row: dict[str, str | bool]
     if "--stated" in opts:
         row = {"id": item, "claim": _words(opts["--stated"]), "status": "stated"}
     elif "--assumption" in opts:
