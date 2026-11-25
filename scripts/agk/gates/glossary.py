@@ -44,6 +44,7 @@ EMPTY = "SPEC-0073 rule 8: a glossary row lacks its term or meaning"
 CELLS = "SPEC-0073 rule 8: a glossary row has other cells than the four columns"
 TWICE = "SPEC-0073 rule 8: a glossary term is in the glossary twice"
 CAP = "SPEC-0073 rule 8: the glossary is over its cap (setting: quality.glossary_terms)"
+UNREAD = "SPEC-0073 rule 8: the glossary cannot be read"
 REFUSED = "the [quality] table is refused (setting: quality.glossary_terms)"
 USAGE = "usage: python3 scripts/agk/gates/glossary.py [--root DIR] [--write]"
 SPLIT = re.compile(r"(?<!\\)\|")
@@ -100,7 +101,10 @@ def check(root: Path, playbook: dict[str, Any]) -> list[tuple[str, str]]:
     limit = cap(root)
     if limit is None:
         return [(REFUSED, RECORD)]
-    found = tables((root / RECORD).read_text(encoding="utf-8"))
+    try:
+        found = tables((root / RECORD).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return [(UNREAD, RECORD)]
     if len(found) != 1 or len(found[0]) < 2:
         return [(FORM, RECORD)]
     head, rule, *rows = (cells(line) for line in found[0])

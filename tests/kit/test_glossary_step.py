@@ -132,6 +132,18 @@ def test_escaped_pipes_crlf_and_aliases_are_text_not_rows(tmp_path: Path) -> Non
     assert _failures(root) == []
 
 
+def test_a_glossary_that_is_not_utf8_is_refused_never_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-080 AC5: the verdict's fix list item 1 on 57f96dfc."""
+    root = _root(tmp_path, HEAD)
+    (root / "docs" / "glossary.md").write_bytes(HEAD.encode() + b"| \xff\xfe | one | | |\n")
+    assert _failures(root) == [(glossary.UNREAD, glossary.RECORD)]
+    assert glossary.main(["--root", str(root)]) == 1
+    out = capsys.readouterr().out
+    assert out == f"FAIL glossary: {glossary.UNREAD} (path class: docs/glossary.md)\n"
+
+
 def test_the_cap_is_forty_by_default(tmp_path: Path) -> None:
     """REQ-080 AC5: 40 rows pass, 41 fail naming the setting."""
     assert _failures(_root(tmp_path, HEAD + _rows(40))) == []
