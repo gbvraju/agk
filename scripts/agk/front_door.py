@@ -934,6 +934,7 @@ AUTO_PILOT = "Auto-pilot: on"
 ROUND = re.compile(r"^Discovery: round ([1-9]\d*)$")
 QUESTION = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
 MAX_ROUND = 3
+NAMED = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+([a-z0-9][a-z0-9-]*):")  # a round's `- <id>:` question
 NOT_ANSWERS = ("Auto-pilot:", "Discovery:", "Approve:", "Confirmed:", "Verdict:")
 DESIGN_GO = re.compile(r"^Approve: design v[1-9]\d* [0-9a-f]{40}$")
 NUMBER = re.compile(r"^[1-9][0-9]*$")
@@ -1012,14 +1013,41 @@ def auto_pilot_wait(comments: list[dict], root: Path, people: People, doc: str) 
             out_of_form = True
     if out_of_form:
         return f"the conductor to post round {rounds + 1} with one to three questions"
+    named = {
+        m.group(1)
+        for c in comments[start + 1 : last + 1]
+        if ROUND.match(first_line(c)) and login_of(c) in people.conductors
+        for m in map(NAMED.match, str(c.get("body")).splitlines()[1:])
+        if m
+    }
     if not rounds:
-        return "the conductor's `Discovery: round 1`"
+        return "the conductor's `Discovery: round 1`" + grill_next(root, named)
     if any(
         people.person(c) and first_line(c) and not first_line(c).startswith(NOT_ANSWERS)
         for c in comments[last + 1 :]
     ):
-        return f"the conductor's round {rounds + 1} or the brief of {doc}"
+        return f"the conductor's round {rounds + 1} or the brief of {doc}" + grill_next(root, named)
     return f"the person's answer to round {rounds}"
+
+
+def grill_next(root: Path, named: set[str]) -> str:
+    """SPEC-0073 rule 2: the next grill items for a round, never one a round named as `- <id>:`;
+    nothing without a default playbook, so a project without one reads as before."""
+    import playbook_format
+    from common import CheckError
+    from grill import grill_ids, questions
+
+    if playbook_format.default_playbook(root) is None:
+        return ""
+    try:
+        lines = questions(root, None, None, None)
+    except CheckError as err:
+        raise Refusal([f"rule 13: {err}"]) from None
+    ids = [ln.split(" ", 1)[0] for ln in lines[:-1:2]]
+    budget = int(lines[-1].rsplit(" ", 1)[1])
+    room = min(MAX_ROUND, budget - len(named & grill_ids(root)))
+    left = [i for i in ids if i not in named][: max(0, room)]
+    return f"; grill items: {', '.join(left)}" if left else ""
 
 
 def go_lines(comments: list[dict], root: Path, people: People) -> list[str]:

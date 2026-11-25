@@ -231,6 +231,32 @@ def test_ac7_the_rounds_go_question_answer_question(tmp_path, capsys):
     assert line_of(tmp_path, capsys) == f"{head} the person's answer to round 2"
 
 
+def test_ac3_the_round_wait_line_names_the_next_grill_items(tmp_path, capsys):
+    """REQ-080 AC3: SPEC-0073 rule 2, brief #1934 answer 4 (auto-pilot rounds carry the grill
+    items, at most three a round; an item a round already asked is never named again)."""
+    configure(tmp_path)
+    write(
+        tmp_path,
+        "config/playbooks/default.toml",
+        (KIT_ROOT / "config/playbooks/default.toml").read_text(encoding="utf-8"),
+    )
+    write(tmp_path, "agk.toml", '[flow]\nassign = "conductor"\n\n[quality]\ngrill = "light"\n')
+    head = f"{PHASE_2}; auto-pilot on; waits for"
+    save(tmp_path, [PILOT])
+    assert line_of(tmp_path, capsys) == (
+        f"{head} the conductor's `Discovery: round 1`; grill items: problem, who-hurts, non-goals"
+    )
+    asked = "\n- problem: what hurts?\n- who-hurts: who?\n- non-goals: what not?"
+    save(tmp_path, [PILOT, round_of(1, asked), comment(OWNER, "words")])
+    line = line_of(tmp_path, capsys)
+    assert line == (
+        f"{head} the conductor's round 2 or the brief of docs/discovery/{SLUG}.md"
+        "; grill items: riskiest, success"
+    )
+    save(tmp_path, [PILOT, round_of(1, asked)])
+    assert line_of(tmp_path, capsys) == f"{head} the person's answer to round 1"
+
+
 @pytest.mark.parametrize(
     "item",
     [

@@ -23,6 +23,7 @@ COMMANDS = [
     "confirm",
     "design",
     "doctor",
+    "grill",
     "init",
     "issue",
     "launch",
@@ -49,6 +50,7 @@ USER_ONLY = [
     "brief",
     "confirm",
     "design",
+    "grill",
     "init",
     "issue",
     "launch",
@@ -148,6 +150,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "init": {"init"},
         "adopt": {"adopt", "history_scan"},  # the one whole-history scan, brief #1835
         "doctor": {"doctor"},
+        "grill": {"grill"},  # brief #1934
         "upgrade": {"upgrade", "kit_root"},  # the resolver's gate, brief #1759
         "uninstall": {"uninstall"},
         "spec": {"new_spec", "intake"},

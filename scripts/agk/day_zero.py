@@ -17,10 +17,11 @@
         an exit of 0
     day_zero.py write --root DIR [--folder DIR] [--answers FILE]
         writes the kept answers to `docs/sources/day-zero.md` of DIR (SPEC-0043 rule 1, `Kind:
-        other`), and with `--answers` the `vision` skill's answers file, then removes the kept file;
+        other`), and with `--answers` the `vision` skill's answers file (its `answers` on rule 4's
+        ids, its `grill` list on the grill ids, SPEC-0073 rule 4), then removes the kept file;
         never overwrites a source (exit 1)
 
-ADR-0664. Refusals name the setting, never a value. Exit 0 ok, 1 refused, 2 usage.
+ADR-0664, ADR-0802. Refusals name the setting, never a value. Exit 0 ok, 1 refused, 2 usage.
 """
 
 from __future__ import annotations
@@ -133,12 +134,27 @@ def write(root: Path, folder: Path, answers: Path | None) -> tuple[int, str]:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(source_text(rows, datetime.now(UTC).date().isoformat()), encoding="utf-8")
     if answers is not None:
+        from grill import grill_ids
+
+        dated = [r for r in rows if re.fullmatch(r"\d{4}-\d{2}-\d{2}T.*", r.get("at", ""))]
         known = [
-            {"id": r["id"], "answer": r["answer"], "where": f"in session {r.get('at', '')[:10]}"}
-            for r in rows
-            if r.get("id") in ORDER and re.fullmatch(r"\d{4}-\d{2}-\d{2}T.*", r.get("at", ""))
+            {"id": r["id"], "answer": r["answer"], "where": f"in session {r['at'][:10]}"}
+            for r in dated
+            if r.get("id") in ORDER
         ]
-        answers.write_text(json.dumps({"answers": known}, indent=2) + "\n", encoding="utf-8")
+        ids = grill_ids(root) - set(ORDER)  # SPEC-0073 rule 4: `ORDER | GRILL_IDS`
+        grill = [
+            {
+                "id": r["id"],
+                "claim": r["answer"],
+                "status": "stated",
+                "where": f"in session {r['at'][:10]}",
+            }
+            for r in dated
+            if r.get("id") in ids
+        ]
+        data = {"answers": known, **({"grill": grill} if grill else {})}
+        answers.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     path.unlink()
     return 0, f"wrote: {SOURCE}"
 

@@ -211,3 +211,43 @@ def test_write_with_nothing_kept_writes_nothing(tmp_path, home, empty, capsys):
     assert day_zero.main(["write", "--root", str(empty), "--folder", str(empty)]) == 0
     assert capsys.readouterr().out.strip() == "write: nothing kept"
     assert all_files(empty) == []
+
+
+# --- brief #1934 answer 5: grill answers are kept beside the answers (SPEC-0073 rule 4) ----------
+
+
+def test_write_keeps_grill_rows_in_grill_order_rows_in_answers_and_drops_an_unknown(
+    tmp_path, home, empty
+):
+    """REQ-080 AC2: SPEC-0073 rule 4 (the filter is `ORDER | GRILL_IDS`; `answers` stays ORDER)."""
+    folder = empty / "config" / "playbooks"
+    folder.mkdir(parents=True)
+    kit = Path(day_zero.__file__).resolve().parents[2]
+    folder.joinpath("default.toml").write_bytes(
+        (kit / "config/playbooks/default.toml").read_bytes()
+    )
+    args = ["keep", "--folder", str(empty), "--yes"]
+    for item, words in (
+        ("users", "Studio owners."),
+        ("riskiest", "Owners will pay."),
+        ("zz-x", "no"),
+    ):
+        path = answer(tmp_path, words)
+        assert day_zero.main([*args, "--id", item, "--answer-file", str(path)]) == 0
+    git("init", "-q", "-b", "main", cwd=empty)
+    out = tmp_path / "answers.json"
+    code = day_zero.main(
+        ["write", "--root", str(empty), "--folder", str(empty), "--answers", str(out)]
+    )
+    assert code == 0
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert [r["id"] for r in data["answers"]] == ["users"]
+    assert len(data["grill"]) == 1
+    row = data["grill"][0]
+    assert {k: row[k] for k in ("id", "claim", "status")} == {
+        "id": "riskiest",
+        "claim": "Owners will pay.",
+        "status": "stated",
+    }
+    assert row["where"].startswith("in session 20")
+    assert front_door.answer_lines("answers.json", data["answers"])[2] == []
