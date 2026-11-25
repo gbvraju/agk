@@ -152,7 +152,7 @@ def test_ac7_doctor_prints_the_quality_settings_in_the_kit_s_own_words(tmp_path)
     found = doctor.quality_settings_result(tmp_path)
     assert found.message == "grill standard, hold off, glossary 40, designs 2, survey off"
     severity, ok_text, fail_text, fix = doctor.CHECKS["quality-settings"]
-    assert severity == "warn" and "agk.toml" in fail_text and fix
+    assert severity == "warn" and ok_text == "quality: " and "agk.toml" in fail_text and fix
 
 
 def test_ac7_doctor_names_the_refused_key_never_the_value(tmp_path):

@@ -549,7 +549,7 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
     ),
     "quality-settings": (  # brief #1933 (ADR-0801): the [quality] table, SPEC-0073 rule 11
         "warn",
-        "",
+        "quality: ",
         "agk.toml: ",
         "set each [quality] key to a value of its form, or remove it to keep the default (a "
         "change to agk.toml needs an ADR in the same pull request)",
