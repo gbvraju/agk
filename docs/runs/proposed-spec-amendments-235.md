@@ -7,6 +7,11 @@ word, on the owner's `Maintainer answer: amendment 235 approved`; no session pos
 
 The sentence (brief #1918), quoted as data: "Intake for Day-1 quality: a grill interview tests every idea before its vision, and the same path then holds the product, design, architecture and build to industry practice, in solo and team, with no slower path and no new CI job."
 
+Applied (2026-11-25, from `date -u`): items 1 to 5 to
+`docs/specs/0048-a-problem-in-a-person-s-words-takes-one-guided-path-to-the-builds.md`, word for word, by SPEC-0073
+build (c) (brief #1938, ADR-0803), on the owner's `Maintainer answer: amendment 235 approved` (#1920, 2026-11-25 10:25
+UTC).
+
 ## Items
 
 1. **SPEC-0048 rule 4, the grill.** After "`not known yet` is an allowed answer." add: "Before the vision's draft, the
