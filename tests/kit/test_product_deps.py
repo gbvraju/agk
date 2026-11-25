@@ -637,3 +637,42 @@ def test_each_stack_has_a_name_reader() -> None:
     from gates import pins
 
     assert {row[1] for row in pins.STACKS.values()} == set(sbom.NAMERS)
+
+
+# REQ-079 AC5, brief #1932 (ADR-0800): two runtimes, each lock in its own folder, one list.
+
+TWO_RECORD = RECORD.replace(
+    "tiny-util 2.1.0 ISC", "tiny-util 2.1.0 ISC, python 3.12.7 PSF-2.0, examplelib 1.2.3 MIT"
+)
+TWO_FILES = {
+    "docs/adr/0003-stack-options.md": TWO_RECORD,
+    "pyproject.toml": None,
+    "service/requirements.txt": "examplelib==1.2.3\n",
+    "service/requirements.lock": "examplelib==1.2.3\n",
+}
+
+
+def test_req079_ac5_both_locks_are_checked_against_one_list(product, capsys) -> None:
+    product.commit(dict(TWO_FILES))
+    assert licences.main(["--root", str(product.root)]) == 0
+    assert capsys.readouterr().out == "ok licences\n"
+    product.commit({"service/requirements.lock": "examplelib==1.2.3\nodd-py==0.1.0\n"})
+    assert licences.main(["--root", str(product.root)]) == 1
+    out = capsys.readouterr().out
+    assert out == f"FAIL licences: {licences.UNKNOWN} (component class: python)\n", out
+    assert licences.counts(product.root, {}) == {"service/requirements.lock": 1}
+    odd = {"odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"}}
+    product.commit({"package-lock.json": lock(**odd)})
+    assert licences.counts(product.root, {}) == {
+        "package-lock.json": 1,
+        "service/requirements.lock": 1,
+    }
+
+
+def test_req079_ac5_a_missing_lock_of_one_runtime_skips_that_lock(product, capsys) -> None:
+    product.commit(dict(TWO_FILES, **{"service/requirements.lock": None}))
+    assert licences.main(["--root", str(product.root)]) == 0
+    assert capsys.readouterr().out == "ok licences\n"
+    product.commit({"package-lock.json": None})
+    assert licences.main(["--root", str(product.root)]) == 0
+    assert capsys.readouterr().out == f"licences: {licences.NOT_RUN}\n"

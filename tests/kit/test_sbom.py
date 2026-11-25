@@ -748,3 +748,40 @@ def test_a_bad_layout_names_the_setting_before_the_build_file(repo, tmp_path: Pa
     assert capsys.readouterr().out == (
         "FAIL bom: [kit] layout is neither installed nor plugin (setting: layout)\n"
     )
+
+
+# REQ-079 AC5, brief #1932 (ADR-0800): the bill at a commit holds both runtimes' locks.
+
+TWO_RECORD = (
+    "# ADR-0003: Stack options\n\n- Status: Accepted\n\n"
+    "1. **Options**:\n   - Option A — web. Parts: Node.js 22.11.0 MIT, tiny-util 2.1.0 ISC,"
+    " Python 3.12.7 PSF-2.0, examplelib 1.2.3 MIT (verify). Why: invented.\n"
+    "3. **Chosen**: Option A\n"
+)
+TWO_LOCK = json.dumps(
+    {
+        "name": "shop",
+        "lockfileVersion": 3,
+        "packages": {"": {"name": "shop"}, "node_modules/tiny-util": {"version": "2.1.0"}},
+    }
+)
+
+
+def test_req079_ac5_the_bill_holds_both_locks(repo, tmp_path: Path) -> None:
+    repo.commit(
+        {
+            "agk.toml": 'version = "1.2.0"\n\n[delivery]\nwork_type = "web-app"\n',
+            "pyproject.toml": None,
+            "package.json": json.dumps({"name": "shop", "private": True}),
+            "package-lock.json": TWO_LOCK,
+            "service/requirements.txt": "examplelib==1.2.3\n",
+            "service/requirements.lock": "examplelib==1.2.3\n",
+            "docs/adr/0003-stack-options.md": TWO_RECORD,
+        }
+    )
+    doc, _ = bill(tmp_path)
+    refs = {c["bom-ref"] for c in doc["components"]}
+    assert {"node:tiny-util@2.1.0", "python:examplelib@1.2.3"} <= refs, refs
+    assert doc["metadata"]["component"]["name"] == "shop"
+    assert by_ref(doc, "python:examplelib@1.2.3")["licenses"] == [{"expression": "MIT"}]
+    assert len([c for c in doc["components"] if c["bom-ref"] == "python:examplelib@1.2.3"]) == 1
