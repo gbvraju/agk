@@ -185,10 +185,18 @@ def test_req066_the_steward_setting_is_read_and_a_bad_value_refused(tmp_path):
     sys.path.insert(0, str(HOOK.parents[2] / "scripts" / "agk"))
     from config import StewardSettingError, steward_settings
 
-    assert steward_settings(project(tmp_path, "")) == {"auto_file": 0, "fix_briefs": False}
+    assert steward_settings(project(tmp_path, "")) == {
+        "auto_file": 0,
+        "fix_briefs": False,
+        "settle_amendments": False,
+    }
     for value, want in (("false", False), ("3", 3), ("0", 0)):
         root = project(tmp_path, f"[steward]\nauto_file = {value}\n")
-        assert steward_settings(root) == {"auto_file": want, "fix_briefs": False}
+        assert steward_settings(root) == {
+            "auto_file": want,
+            "fix_briefs": False,
+            "settle_amendments": False,
+        }
     for table in ("auto_file = 4", "auto_file = true", "auto_file = '1'", "other = 1", "x = -1"):
         root = project(tmp_path, f"[steward]\n{table}\n")
         with pytest.raises(StewardSettingError) as caught:

@@ -13,6 +13,7 @@ A spec amendment (`docs/runs/proposed-spec-amendments-<n>.md`) that the pull req
 the merge base with the base ref, fails when the base ref already has that number, and, with a saved
 open-pull-requests file and the pull request's own number, when another open pull request's record
 lists the same path in its `files` (ADR-0275). A record without a file list is never guessed at.
+Each such file from amendment 251 on must carry its items' `Class:` lines (brief #1957, ADR-0813).
 With a saved list of open briefs and the pull request's own brief, a number the pull request adds
 that another open brief reserves fails, naming both (amendment 141 item 5); the governance step
 passes no list, so a clash between two briefs never turns an unrelated pull request red.
@@ -28,7 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import (
+import check_amendments  # noqa: E402
+from common import (  # noqa: E402
     AMENDMENT,
     NUM_FILE,
     CheckError,
@@ -81,7 +83,7 @@ def amendment_clashes(root: Path, opened: list[dict] | None, own: int | None) ->
         for path in files:
             if isinstance(path, str):
                 others.setdefault(path, []).append(number)
-    found = []
+    found = check_amendments.added_problems(root, added)  # brief #1957 answer 9 (ADR-0813)
     for number, path in added:
         if show(root, base, path) is not None:
             found.append(f"amendment {number} is on the default branch")

@@ -114,6 +114,7 @@ from merge_cleared import (
     max_behind_setting,
     records_specs,
 )
+from check_amendments import settle_on, settled_key
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
 from merge_cleared import Refused as EvidenceRefused
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
@@ -557,7 +558,10 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     `question`), and an `Answer:` of `ANSWER_LINE` naming that id by an answerer of
     `session.owner_people` (the listed verdict authors and the spec approvers), after it, closes
     that question only, as the owner wait does; it closes no `Owner needed:`, approval or merge
-    ask. None when no ask is open."""
+    ask. None when no ask is open.
+    Brief #1957 (ADR-0813): with `settle` (`[steward] settle_amendments` on), the steward's
+    settled line (`check_amendments.settled_key`) by a spec approver closes the open approval ask
+    of its amendment as that amendment's `Maintainer answer:` would; otherwise it is an `Answer:`."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
@@ -572,6 +576,9 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     for c in comments:
         line = first_line(c)
         body = str(c.get("body") or "")
+        key = settled_key(line, body) if f.get("settle") is True else None
+        if key in pending and login_of(c) in approvers:  # brief #1957 answer 3 (ADR-0813)
+            line = f"Maintainer answer: {key} approved"
         if line.startswith("Owner needed:") and login_of(c) in listed:
             asked = approval_ask(body, files)
             if merge_ask(body, f.get("number")) and not asked:
@@ -942,6 +949,11 @@ def draft_specs_of(repo: str, files: list[dict], head: str) -> set[str]:
     return found
 
 
+def settle_setting(root: Path) -> bool:
+    """Whether the checkout sets `[steward] settle_amendments = true` (brief #1957, ADR-0813)."""
+    return settle_on(root)
+
+
 def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
     """(the pull request, its facts); None when a fact that must be known cannot be read."""
     pr = gh(f"repos/{repo}/pulls/{n}")
@@ -976,6 +988,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "files": files,
         "draft_specs": draft_specs_of(repo, files, head),
         "merger": records_specs(checkout_settings(root)),
+        "settle": settle_setting(root),  # brief #1957 (ADR-0813)
         "commit": commit if isinstance(commit, dict) else {},
         "local": record_open(repo, root),
     }

@@ -236,6 +236,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import check_amendments  # noqa: E402
 import design_signoff  # noqa: E402
 import impact  # noqa: E402
 import kit_root  # noqa: E402
@@ -1229,6 +1230,16 @@ def spec_unapproved(
     return not any(same_text(root, sha, spec, s) for s in shas)
 
 
+def settled_asks(comments: list[dict], approvers: list[str], root: Path | None) -> bool:
+    """Brief #1957 answer 3 (ADR-0813, amendment 252): with `[steward] settle_amendments` on at
+    ROOT, every approval the `Owner needed:` comments ask is an amendment that a steward's settled
+    line by an account in APPROVERS settles after its ask; a spec approval ask never is."""
+    asked = check_amendments.asked_keys(comments)
+    if not asked or not check_amendments.settle_on(root):
+        return False
+    return asked <= check_amendments.settled_keys(comments, approvers)
+
+
 def unapproved(
     pull: dict,
     comments: list[dict],
@@ -1240,8 +1251,9 @@ def unapproved(
     """SPEC-0039 rule 5 (`spec approval`): an `Approval:` line of the body or of the clearing
     verdict (amendment 170, brief #1134) whose spec has no approval by an account in
     `spec_approvers` for the head SHA, or for an earlier commit of its history whose spec text
-    the head keeps apart from the status flip (amendment 124, brief 628)."""
-    if APPROVE_LABEL in labels_of(pull):
+    the head keeps apart from the status flip (amendment 124, brief 628). The router's
+    `agk:approve` label holds unless `settled_asks` (brief #1957)."""
+    if APPROVE_LABEL in labels_of(pull) and not settled_asks(comments, approvers, root):
         return True
     asked = asked_specs(pull, comments, sha)
     if not asked:
