@@ -1276,14 +1276,14 @@ def check_design(files: list[str], root: Path, today: datetime.date) -> int:
     problems: list[str] = []
     paths, designs = read_files(files, root, DESIGN, 7, problems)
     if (root / RECORD).is_file():
-        text = (root / RECORD).read_text(encoding="utf-8")
-        if record_held(text):
+        whole = (root / RECORD).read_text(encoding="utf-8")
+        if record_held(whole):
             print(f"note {NAME}: {RULE_5}: {RECORD}: held until its next edit (no new section)")
-            found = quality_record_problems(dict(sections_of(text.split("\n"))))
-            problems += [f"{rule} (path class: {cls})" for rule, cls in found]
+            held = quality_record_problems(dict(sections_of(whole.split("\n"))))
+            problems += [f"{rule} (path class: {cls})" for rule, cls in held]
         else:
             problems += [f"{rule} (path class: {cls})" for rule, cls in record_problems(root)]
-            if quality_held((root / RECORD).read_text(encoding="utf-8")):
+            if quality_held(whole):
                 print(f"note {NAME}: {RULE_5}: {RECORD}: {QUALITY_HELD}")
     if not paths:
         if problems:

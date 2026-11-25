@@ -551,7 +551,8 @@ def test_req_080_ac5_a_held_record_with_a_quality_section_has_it_checked(tmp_pat
     assert architecture_record.skipped(root) == architecture_record.HELD
     assert architecture_quality.applies(root) and architecture_quality.skipped(root) is None
     lack = "SPEC-0072 rule 5: the record lacks a required section"
-    want = [(lack, f"docs/architecture.md; section: {s}") for s in ("Quality scenarios", "Operations")]
+    missing = ("Quality scenarios", "Operations")
+    want = [(lack, f"docs/architecture.md; section: {s}") for s in missing]
     assert architecture_quality.check(root, {}) == want
     assert run_gates.main(["--root", str(root)]) == 1
     out = capsys.readouterr().out
