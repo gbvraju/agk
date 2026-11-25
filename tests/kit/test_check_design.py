@@ -527,3 +527,83 @@ def test_ac6_pb05_colour_still_fails_contrast_alone_with_an_imported_evidence_li
         "FAIL design: rule 7: docs/design/theme.md: contrast below 4.5:1 in light for accent "
         "on surface"
     ], proc.stdout
+
+
+# --- the hold at the design (SPEC-0073 rule 6; REQ-080 AC4; brief #1938, ADR-0803) -------------
+
+HELD_DESIGN = "docs/design/architecture/shop.md"
+
+
+def readiness_tree(
+    root,
+    line="critical 4/5; risk accepted: none; questions 4/12; accepted recommendations 0",
+    agk="",
+):
+    """A tree with only a design and its discovery's `## Readiness` (no theme, no mockup)."""
+    put(root, HELD_DESIGN, "# Design: shop\n")
+    section = f"\n## Readiness\n\n{line}\n" if line else ""
+    put(root, "docs/discovery/shop.md", f"# Discovery: shop\n\n## Open points\n\n- none\n{section}")
+    if agk:
+        put(root, "agk.toml", agk)
+    return root
+
+
+def test_ac4_a_design_whose_discovery_has_an_open_critical_item_is_held(tmp_path):
+    """REQ-080 AC4: SPEC-0073 rule 6 (held naming the rule, the file and the setting, never a
+    value; it fires with no theme or mockups present)."""
+    proc = check(readiness_tree(tmp_path))
+    assert proc.returncode == 1, proc.stdout
+    assert proc.stdout == (
+        f"FAIL design: SPEC-0073 rule 6: {HELD_DESIGN} is held: its discovery has an open"
+        " critical item (setting: quality.grill_hold)\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "line,agk,discovery",
+    [
+        (
+            "critical 5/5; risk accepted: riskiest; questions 4/12; accepted recommendations 0",
+            "",
+            True,
+        ),
+        ("critical 5/5; risk accepted: none; questions 5/12; accepted recommendations 2", "", True),
+        (
+            "critical 4/5; risk accepted: none; questions 4/12; accepted recommendations 0",
+            "[quality]\ngrill_hold = false\n",
+            True,
+        ),
+        ("", "", True),
+        (
+            "critical 4/5; risk accepted: none; questions 4/12; accepted recommendations 0",
+            "",
+            False,
+        ),
+    ],
+    ids=["risk-accepted", "all-settled", "grill-hold-false", "no-readiness", "no-discovery"],
+)
+def test_ac4_a_design_is_not_held_when_nothing_critical_is_open(tmp_path, line, agk, discovery):
+    """REQ-080 AC4: SPEC-0073 rules 6 and 14 (an accepted risk, `grill_hold = false`, no
+    `## Readiness` and no discovery document of the slug hold nothing)."""
+    readiness_tree(tmp_path, line, agk)
+    if not discovery:
+        (tmp_path / "docs/discovery/shop.md").rename(tmp_path / "docs/discovery/other.md")
+    proc = check(tmp_path)
+    assert (proc.returncode, proc.stdout) == (0, "ok design (no design record)\n")
+
+
+def test_ac4_the_hold_joins_the_other_design_failures(tmp_path):
+    """REQ-080 AC4: SPEC-0073 rule 6 (the hold is one failure among the design step's)."""
+    project(tmp_path)
+    readiness_tree(tmp_path)
+    proc = check(tmp_path)
+    assert proc.returncode == 1
+    assert "SPEC-0073 rule 6" in proc.stdout and "ok design" not in proc.stdout
+
+
+def test_ac7_a_grill_hold_out_of_form_fails_naming_the_setting(tmp_path):
+    """REQ-080 AC7: SPEC-0073 rule 11 (never read as held or clear; the setting, not the value)."""
+    proc = check(readiness_tree(tmp_path, agk='[quality]\ngrill_hold = "maybe"\n'))
+    assert proc.returncode == 1, proc.stdout
+    assert "quality.grill_hold" in proc.stdout and "maybe" not in proc.stdout
+    assert "is held" not in proc.stdout and "ok design" not in proc.stdout

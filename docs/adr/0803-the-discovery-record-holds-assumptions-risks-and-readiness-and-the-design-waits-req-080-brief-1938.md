@@ -6,7 +6,7 @@
 - Related: SPEC-0073, SPEC-0048, SPEC-0037, SPEC-0059, ADR-0801, ADR-0802, ADR-0793, amendment 235, brief #1938, brief #1934, plan #661
 - Requirements: REQ-080
 
-Protected classes: `scripts/agk/`, `skills/`, `docs/specs/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `skills/`, `docs/specs/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -55,7 +55,8 @@ amendment 235 approved`, 2026-11-25 10:25 UTC); its five items are SPEC-0048's s
    owner}` to the answers file's `risks` list; each value is one line, non-empty and passed by the data guard. The grill
    skill records each pre-mortem risk this way and as one `Risk:` steward memory entry; the document is the source of
    truth.
-6. **The amendment.** Amendment 235 items 1 to 5 are applied word for word to SPEC-0048 rules 4 to 7 and 13.
+6. **The amendment and the map.** Amendment 235 items 1 to 5 are applied word for word to SPEC-0048 rules 4 to 7 and
+   13. `agk.toml`'s `[[testing.map]]` entry of `front_door.py` gains `tests/kit/test_front_door_quality.py`.
 
 ## Consequences
 
