@@ -754,7 +754,7 @@ def test_ac2_a_changed_signed_inventory_is_checked_in_full(tmp_path):
 
 def test_ac2_a_signed_inventory_with_an_empty_slot_still_fails(tmp_path):
     """REQ-044 AC2: rule 3 (every other problem fails a signed inventory as today)."""
-    project(tmp_path, INVENTORY_TEXT.replace("- Flow: keep a list", "- Flow:"))
+    project(tmp_path, INVENTORY_TEXT.replace("- Flow: keep a list", "- Flow:", 1))
     sign(tmp_path)
     add_requirement(tmp_path)
     assert problems(tmp_path) == [f"{WHERE}: books: the slot Flow is empty"]
