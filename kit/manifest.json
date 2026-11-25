@@ -126,6 +126,7 @@
     "scripts/agk/gates/rollback_order.py",
     "scripts/agk/gates/tests_floor.py",
     "scripts/agk/governance_map.py",
+    "scripts/agk/grill.py",
     "scripts/agk/guard.py",
     "scripts/agk/guard_logs.py",
     "scripts/agk/guard_rules.json",

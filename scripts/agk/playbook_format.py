@@ -157,6 +157,24 @@ OWNER_ACTION = re.compile(
 STR, INT, BOOL, STRS, PAIRS, TABLES = "str", "int", "bool", "strs", "pairs", "tables"
 # SPEC-0048 rule 4: the ids every playbook's `[[discovery]]` holds (amendment 130, item 2).
 DISCOVERY_IDS = ("constraints", "success", "data-rules", "environments", "non-functional")
+# Brief #1933 (ADR-0801): the ten common topic ids, which `front_door.TOPICS` and `engines.TOPICS`
+# mirror (a test pins all three equal); a grill id never reuses one.
+TOPIC_IDS = (
+    "users",
+    "existing",
+    "runs",
+    "data",
+    "scale",
+    "compliance",
+    "devices",
+    "accessibility",
+    "languages",
+    "brand",
+)
+# SPEC-0073 rule 3 (amendment 237 item 1): a `[[discovery]]` entry with `depth` and `critical` is a
+# grill item; the depths in order, each asking the items of the ones before it.
+GRILL_DEPTHS = ("light", "standard", "deep")
+GRILL_KEYS = ("depth", "critical")
 SLUG = re.compile(r"^[a-z][a-z0-9-]*$")
 NEUTRALITY = "config/neutrality.txt"  # SPEC-0048 rule 12, Q-S0048-16
 
@@ -195,7 +213,7 @@ SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
     "milestones": ({"shape": STR, "batch_by": STR}, {}),
     # `basis` is required by rule 3 and `record` by rule 3 for a measured claim
     "claims": ({"text": STR}, {"basis": STR, "record": STR}),
-    "discovery": ({"id": STR, "text": STR}, {}),
+    "discovery": ({"id": STR, "text": STR}, {"depth": STR, "critical": BOOL}),
 }
 MAP_KEYS = {"code": STR, "tests": STR}
 # SPEC-0072 rule 2: the eight enterprise gates, fixed ids of the kit, so a refusal may name them.
@@ -455,11 +473,53 @@ def _discovery(rel: str, entries: list[dict]) -> list[str]:
     return out
 
 
+def _grill(rel: str, entries: list[dict], base: set[str]) -> list[str]:
+    """SPEC-0073 rule 3, amendment 237 item 1: each grill item's two keys and its id, which reuses
+    no topic, fixed or other `[[discovery]]` id, nor (BASE) a grill id of `default.toml`; each
+    refusal names the playbook and the key, never a value."""
+    out = []
+    found = [e.get("id") for e in entries]
+    items = [e for e in entries if any(k in e for k in GRILL_KEYS)]
+    where = f"rule 2: {rel}: a grill item"
+    for key in GRILL_KEYS:
+        if any(key not in e for e in items):
+            out.append(f"{where} has one of `depth` and `critical` only (key: {key})")
+    if any("depth" in e and e["depth"] not in GRILL_DEPTHS for e in items):
+        out.append(f"{where}'s depth is not light, standard or deep (key: depth)")
+    if any("critical" in e and not isinstance(e["critical"], bool) for e in items):
+        out.append(f"{where}'s critical is not a boolean (key: critical)")
+    ids = [e.get("id") for e in items]
+    if any(i in TOPIC_IDS or i in DISCOVERY_IDS or found.count(i) > 1 for i in ids):
+        out.append(f"{where}'s id reuses a topic, fixed or other `[[discovery]]` id (key: id)")
+    if any(i in base for i in ids):
+        out.append(f"{where}'s id reuses a grill id of {BASE}.toml (key: id)")
+    return out
+
+
+def _base_grill_ids(root: Path) -> set[str]:
+    """The grill ids of `default.toml` (by `folder`); none when it is missing or does not parse."""
+    found = default_playbook(root)
+    if found is None:
+        return set()
+    try:
+        return {i for i, *_ in grill_items(found)}
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, KeyError, TypeError):
+        return set()
+
+
 def discovery(path: Path) -> list[tuple[str, str]]:
-    """The `(id, text)` pairs of a playbook's `[[discovery]]`, in its order; call on a playbook that
-    `problems` passes."""
+    """The `(id, text)` pairs of a playbook's `[[discovery]]` questions, in its order, leaving out
+    its grill items (brief #1933); call on a playbook that `problems` passes."""
     data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
-    return [(entry["id"], entry["text"]) for entry in data["discovery"]]
+    return [(e["id"], e["text"]) for e in data["discovery"] if "depth" not in e]
+
+
+def grill_items(path: Path) -> list[tuple[str, str, str, bool]]:
+    """SPEC-0073 rule 3: the `(id, text, depth, critical)` of a playbook's grill items, in its
+    order; call on a playbook that `problems` passes."""
+    data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    rows = data.get("discovery", [])
+    return [(e["id"], e["text"], e["depth"], e["critical"]) for e in rows if "depth" in e]
 
 
 def _tokens(root: Path) -> list[str]:
@@ -714,6 +774,8 @@ def problems(path: Path, root: Path) -> list[str]:
         out += _claims(rel, data["claims"], root)
     if _is(data.get("discovery"), TABLES):
         out += _discovery(rel, data["discovery"])
+        base = set() if work_type == BASE else _base_grill_ids(root)
+        out += _grill(rel, data["discovery"], base)
     if _is(data.get("skills"), STRS):
         out += _skills(rel, data["skills"], root)
     if _is(data.get("modules"), STRS):

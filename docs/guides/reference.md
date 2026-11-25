@@ -883,6 +883,15 @@ message, then the leaked-secret page. `--write` records the run in `config/agk-b
 last line, the adopt skill runs it, and doctor's `history-scan` line reports the record. Exit 0 clean or nothing to scan,
 1 otherwise (findings, incomplete, gitleaks missing or failed).
 
+## The grill's questions
+
+    python3 scripts/agk/grill.py questions [--depth light|standard|deep] [--playbook KIND] [--answers FILE] [--root DIR]
+
+The items the grill asks before a vision (SPEC-0073, brief #1933, ADR-0801), in order: the grill items of
+`config/playbooks/default.toml` at or below the depth, then the work type's own, then `success`; each as
+`<id> (critical|-) <text>` with a `Recommended:` line, never an id the answers file holds, and a last `budget: <n>` line
+(5, 12 or 20). Without `--depth` the depth is `[quality] grill`. Reads files only. Exit 0 ok, 1 refused, 2 usage.
+
 ## Reading a log
 
     python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-|--refusals

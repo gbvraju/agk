@@ -113,3 +113,134 @@ def test_ac2_each_shipped_playbook_carries_the_five_ids_once(name):
 def test_ac2_the_fixture_relative_path_is_the_web_app_playbook():
     """The shared fixture is the web-app playbook path (guards the imports above)."""
     assert REL == "config/playbooks/web-app.toml"
+
+
+# --- SPEC-0073 rule 3 and amendment 237 item 1: the grill keys (REQ-080 AC1; brief #1933) -------
+
+GRILL = (
+    '[[discovery]]\nid = "zz-grill"\ntext = "What sinks it?"\ndepth = "light"\ncritical = true\n\n'
+)
+SEED = (
+    "problem",
+    "evidence",
+    "who-hurts",
+    "job",
+    "today",
+    "why-now",
+    "guardrails",
+    "non-goals",
+    "riskiest",
+    "pre-mortem",
+    "stop",
+    "first-slice",
+)
+CRITICAL = ("problem", "who-hurts", "non-goals", "riskiest")
+
+
+def grilled(item: str) -> str:
+    return replace(SUCCESS, SUCCESS + item)
+
+
+def test_ac1_a_grill_item_with_both_keys_passes(tmp_path):
+    """REQ-080 AC1: SPEC-0073 rule 3 (`depth` and `critical` make an entry a grill item)."""
+    write(tmp_path, grilled(GRILL))
+    result = check(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("item", "key", "value"),
+    [
+        (GRILL.replace('"light"', '"zz-extreme"'), "depth", "zz-extreme"),
+        (GRILL.replace('depth = "light"', "depth = 1"), "depth", None),
+        (GRILL.replace("critical = true", 'critical = "zz-yes"'), "critical", "zz-yes"),
+        (GRILL.replace("critical = true", "critical = 1"), "critical", None),
+        (GRILL.replace("critical = true\n", ""), "critical", None),
+        (GRILL.replace('depth = "light"\n', ""), "depth", None),
+        (GRILL.replace('"zz-grill"', '"users"'), "id", None),
+        (GRILL.replace('"zz-grill"', '"brand"'), "id", None),
+        (GRILL.replace('"zz-grill"', '"constraints"'), "id", None),
+    ],
+    ids=[
+        "depth-unknown",
+        "depth-not-a-string",
+        "critical-a-string",
+        "critical-a-number",
+        "critical-missing",
+        "depth-missing",
+        "id-a-topic",
+        "id-another-topic",
+        "id-a-fixed-id",
+    ],
+)
+def test_ac1_a_bad_grill_item_is_refused_naming_the_key_never_the_value(tmp_path, item, key, value):
+    """REQ-080 AC1: SPEC-0073 rule 3, amendment 237 item 1 (each refusal names the playbook and
+    the key, never a value)."""
+    write(tmp_path, grilled(item))
+    out = assert_fails(tmp_path, 2, value)
+    assert any(f"(key: {key})" in ln and "grill item" in ln for ln in out.splitlines()), out
+    assert "What sinks it" not in out
+
+
+def test_ac1_a_grill_id_that_repeats_a_discovery_id_of_the_file_is_refused(tmp_path):
+    """REQ-080 AC1: SPEC-0073 rule 3 (a grill id reuses another `[[discovery]]` id)."""
+    plain = '[[discovery]]\nid = "zz-grill"\ntext = "Asked as today?"\n\n'
+    write(tmp_path, grilled(plain + GRILL))
+    out = assert_fails(tmp_path, 2)
+    assert "(key: id)" in out
+
+
+def default_with(root: Path, extra: str) -> None:
+    text = (KIT_ROOT / "config" / "playbooks" / "default.toml").read_text(encoding="utf-8")
+    (root / "config" / "playbooks" / "default.toml").write_text(text + "\n" + extra, "utf-8")
+
+
+def test_ac1_a_work_type_grill_id_equal_to_a_default_grill_id_is_refused(tmp_path):
+    """REQ-080 AC1: SPEC-0073 rule 3 (a work type may add items, never one of the default's ids)."""
+    write(tmp_path, grilled(GRILL.replace('"zz-grill"', '"riskiest"')))
+    default_with(tmp_path, "")
+    out = assert_fails(tmp_path, 2)
+    assert "(key: id)" in out and "default.toml" in out
+    write(tmp_path, grilled(GRILL))
+    assert check(tmp_path).returncode == 0
+
+
+def test_ac1_discovery_leaves_grill_items_out_and_grill_items_reads_them(tmp_path):
+    """REQ-080 AC1: brief #1933 answer 3 (grill items are never asked as discovery questions)."""
+    path = write(tmp_path, grilled(GRILL))
+    assert "zz-grill" not in [i for i, _ in playbook_format.discovery(path)]
+    assert playbook_format.grill_items(path) == [("zz-grill", "What sinks it?", "light", True)]
+
+
+def test_ac1_the_seed_grill_items_of_default_and_the_critical_ids_are_pinned():
+    """REQ-080 AC1: SPEC-0073 rule 3 (a kit test pins the seed critical ids)."""
+    path = KIT_ROOT / "config" / "playbooks" / "default.toml"
+    items = playbook_format.grill_items(path)
+    assert tuple(i for i, *_ in items) == SEED
+    assert tuple(i for i, _, depth, crit in items if crit) == CRITICAL
+    assert all(depth == "light" for i, _, depth, crit in items if crit)
+    depths = {i: depth for i, _, depth, _ in items}
+    assert {i for i, d in depths.items() if d == "deep"} == {"pre-mortem", "stop"}
+    assert "success" in playbook_format.DISCOVERY_IDS and "success" not in depths
+    assert tuple(i for i, _ in playbook_format.discovery(path)) == playbook_format.DISCOVERY_IDS
+    assert all(text.endswith("?") and "\n" not in text for _, text, *_ in items)
+    assert playbook_format.problems(path, KIT_ROOT) == []
+
+
+def test_ac1_the_topic_ids_are_one_tuple_equal_to_both_mirrors():
+    """REQ-080 AC1: brief #1933 answer 3 (the ten topic ids, asserted equal, never rewritten)."""
+    import engines
+    import front_door
+
+    assert playbook_format.TOPIC_IDS == front_door.TOPICS == engines.TOPICS
+    assert len(playbook_format.TOPIC_IDS) == 10
+
+
+def test_ac1_the_derived_skeleton_copies_no_grill_item():
+    """REQ-080 AC1: brief #1933 answer 3 (a derived playbook asks what it asked before)."""
+    import front_door
+
+    base = tomllib.loads((KIT_ROOT / "config/playbooks/default.toml").read_text(encoding="utf-8"))
+    text = front_door.skeleton("zz-derived", [], base)
+    ids = [row["id"] for row in tomllib.loads(text)["discovery"]]
+    assert tuple(ids) == playbook_format.DISCOVERY_IDS
