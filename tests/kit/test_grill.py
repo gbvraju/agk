@@ -579,3 +579,52 @@ def test_ac3_a_grill_row_whose_id_is_not_text_is_refused(tmp_path, bad):
         assert found.returncode == 1, out
         assert "the answers file is not an object of lists (setting: --answers)" in out
         assert "Traceback" not in out
+
+
+# --- the pre-mortem's risks (SPEC-0073 rule 7; brief #1938 answer 1, ADR-0803) -----------------
+
+RISK = ("--risk", "Payments fail at the busiest hour", "--sign", "timeouts rise", "--owner", "ops")
+
+
+def test_ac4_a_risk_is_appended_to_the_risks_list_and_never_to_grill(tmp_path):
+    """REQ-080 AC4: SPEC-0073 rule 7 (`record --risk --sign --owner` keeps one `risks` row)."""
+    root = project(tmp_path, SOLO)
+    path = answers_file(root)
+    found = record(root, path, "pre-mortem", *RISK)
+    assert found.returncode == 0, found.stdout + found.stderr
+    assert found.stdout == "recorded: pre-mortem risk\n"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert "grill" not in data
+    assert data["risks"] == [
+        {
+            "id": "pre-mortem",
+            "risk": "Payments fail at the busiest hour",
+            "sign": "timeouts rise",
+            "owner": "ops",
+        }
+    ]
+    assert record(root, path, "pre-mortem", *RISK).returncode == 0
+    assert len(json.loads(path.read_text(encoding="utf-8"))["risks"]) == 2
+
+
+@pytest.mark.parametrize(
+    "args,setting",
+    [
+        (RISK[:4], None),
+        (("--risk", "", "--sign", "s", "--owner", "o"), "--risk"),
+        (("--risk", "two\nlines", "--sign", "s", "--owner", "o"), "--risk"),
+        (("--risk", "r", "--sign", "s", "--owner", "10.1.2.3"), None),
+        ((*RISK, "--open"), None),
+    ],
+    ids=["no-owner", "empty", "two-lines", "guarded", "with-open"],
+)
+def test_ac4_a_risk_out_of_form_is_refused_and_nothing_is_written(tmp_path, args, setting):
+    """REQ-080 AC4: SPEC-0073 rules 7 and 14 (one line each, the data guard, one kind)."""
+    root = project(tmp_path, SOLO)
+    path = answers_file(root)
+    found = record(root, path, "pre-mortem", *args)
+    assert found.returncode in (1, 2), found.stdout
+    if setting:
+        assert f"(setting: {setting})" in found.stdout
+    assert "10.1.2.3" not in found.stdout + found.stderr
+    assert json.loads(path.read_text(encoding="utf-8")) == {"answers": []}

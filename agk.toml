@@ -649,7 +649,7 @@ tests = ["tests/kit/test_forge.py"]
 code = "scripts/agk/front_door.py"
 tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
-  "tests/kit/test_front_door_derive.py",
+  "tests/kit/test_front_door_derive.py", "tests/kit/test_front_door_quality.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
