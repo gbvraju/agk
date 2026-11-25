@@ -101,7 +101,7 @@ def test_ac1_a_good_pack_and_a_terms_only_pack_pass(tmp_path):
 def test_ac1_no_folder_is_ok_none(tmp_path):
     """REQ-081 AC1: SPEC-0074 rule 2 (no `config/domains/`: nothing to check)."""
     assert check_domains.findings(tmp_path) == []
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list
         [sys.executable, str(SCRIPT), "--root", str(tmp_path)],
         capture_output=True,
         text=True,
@@ -172,7 +172,7 @@ def test_ac1_two_packs_with_one_domain_fail_naming_both_files(tmp_path):
     write(tmp_path, GOOD, "config/domains/zz-copy.toml")
     lines = check_domains.findings(tmp_path)
     assert (
-        "rule 2: config/domains/zz-copy.toml: the domain of config/domains/zz-shop.toml "
+        "rule 2: config/domains/zz-shop.toml: the domain of config/domains/zz-copy.toml "
         "(key: domain)"
     ) in lines
 
@@ -204,7 +204,7 @@ def test_ac1_the_seed_packs_pass_and_the_kit_check_prints_two_packs():
     names = [p.name for p in check_domains.packs(KIT_ROOT)]
     assert names == ["field-service.toml", "payments.toml"]
     assert check_domains.findings(KIT_ROOT) == []
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list
         [sys.executable, str(SCRIPT), "--root", str(KIT_ROOT)],
         capture_output=True,
         text=True,
@@ -226,7 +226,7 @@ def test_ac1_the_playbooks_step_carries_a_pack_problem(tmp_path):
     lines = check_playbooks.findings(tmp_path)
     assert f"rule 2: {REL}: the key has the wrong value (key: format)" in lines
     assert check_playbooks.findings(tmp_path, []) == []  # a named playbook alone reads no pack
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list
         [sys.executable, str(KIT_ROOT / "scripts/agk/check_playbooks.py"), "--root", str(tmp_path)],
         capture_output=True,
         text=True,

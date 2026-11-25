@@ -1,0 +1,221 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The regulated seed pack (SPEC-0074 rule 3, Q-D74A-1; brief #1935, ADR-0804). Public knowledge
+# only: each regulation is cited by the standard's or the act's number and title and its public
+# page, never its text. The building session could not open these pages, so each citation is
+# marked (verify) until a person checks it, and each constraint and gate is `basis = "expected"`.
+format = 1
+domain = "payments"
+title = "Taking, refunding and settling payments by card and bank transfer"
+as_of = "2026-11-25"
+
+[[terms]]
+term = "authorisation"
+meaning = "The card issuer's approval to take an amount from the payer's account"
+synonyms = ["auth", "approval"]
+
+[[terms]]
+term = "capture"
+meaning = "Asking for an authorised amount to be paid, after the goods or service are ready"
+synonyms = []
+
+[[terms]]
+term = "settlement"
+meaning = "The money moving from the issuer to the acquirer and on to the payee"
+synonyms = ["payout", "clearing"]
+
+[[terms]]
+term = "chargeback"
+meaning = "A payment reversed by the issuer after the payer disputes it"
+synonyms = ["dispute"]
+
+[[terms]]
+term = "primary account number"
+meaning = "The number on a payment card that identifies the card account"
+synonyms = ["PAN", "card number"]
+
+[[terms]]
+term = "tokenisation"
+meaning = "Replacing a card number with a token that is useless outside the payment provider"
+synonyms = ["token"]
+
+[[terms]]
+term = "strong customer authentication"
+meaning = "Checking a payer with two independent factors, such as something they have and know"
+synonyms = ["SCA", "two-factor check"]
+
+[[actors]]
+id = "payer"
+text = "The person or business paying"
+
+[[actors]]
+id = "payee"
+text = "The business being paid, often called the merchant"
+
+[[actors]]
+id = "acquirer"
+text = "The bank or provider that accepts card payments for the payee"
+
+[[actors]]
+id = "issuer"
+text = "The bank that issued the payer's card"
+
+[[entities]]
+id = "payment"
+text = "One attempt to take an amount from a payer, with its status"
+
+[[entities]]
+id = "refund"
+text = "Money returned to a payer against an earlier payment"
+
+[[workflows]]
+id = "card-payment"
+text = "Authorise, then capture, then settle"
+
+[[workflows]]
+id = "refund-flow"
+text = "A refund is asked for, checked, sent and matched to its payment"
+
+[[kpis]]
+id = "authorisation-rate"
+text = "Share of payment attempts the issuer approves"
+unit = "percent"
+
+[[kpis]]
+id = "chargeback-rate"
+text = "Share of settled payments later disputed"
+unit = "percent"
+
+[[regulations]]
+id = "pci-dss"
+title = "PCI DSS v4.0.1, Payment Card Industry Data Security Standard (verify)"
+jurisdiction = "global"
+source = "https://www.pcisecuritystandards.org/standards/pci-dss/"
+as_of = "2026-11-25"
+critical = true
+
+[[regulations]]
+id = "psd2"
+title = "Directive (EU) 2015/2366 on payment services in the internal market, PSD2 (verify)"
+jurisdiction = "eu"
+source = "https://eur-lex.europa.eu/eli/dir/2015/2366/oj"
+as_of = "2026-11-25"
+critical = true
+
+[[regulations]]
+id = "fatf-recommendations"
+title = "The FATF Recommendations, the international anti-money-laundering standards (verify)"
+jurisdiction = "global"
+source = "https://www.fatf-gafi.org/en/publications/Fatfrecommendations/Fatf-recommendations.html"
+as_of = "2026-11-25"
+critical = true
+
+[[constraints]]
+id = "card-data-encrypted"
+attribute = "encryption"
+scenario = "stimulus: a stored card number is read without the key; response: it is unreadable; measure: every stored card number (PCI DSS requirement 3.5, verify)"
+hard = true
+regulation = "pci-dss"
+basis = "expected"
+
+[[constraints]]
+id = "card-access-logged"
+attribute = "audit"
+scenario = "stimulus: a person or service reads card data; response: who, what and when are logged; measure: every access (PCI DSS requirement 10.2, verify)"
+hard = true
+regulation = "pci-dss"
+basis = "expected"
+
+[[constraints]]
+id = "audit-log-kept"
+attribute = "retention"
+scenario = "stimulus: an audit log entry is written; response: it is kept, the last three months at hand; measure: at least 12 months (PCI DSS requirement 10.5.1, verify)"
+hard = true
+regulation = "pci-dss"
+basis = "expected"
+
+[[constraints]]
+id = "transaction-records-kept"
+attribute = "retention"
+scenario = "stimulus: a transaction completes; response: its record is kept; measure: at least five years (FATF Recommendation 11, verify)"
+hard = true
+regulation = "fatf-recommendations"
+basis = "expected"
+
+[[constraints]]
+id = "payment-api-available"
+attribute = "availability"
+scenario = "stimulus: a payment request arrives; response: it is accepted or declined; measure: 99.9 percent of minutes in a month"
+hard = false
+basis = "expected"
+
+[[discovery]]
+id = "card-storage"
+text = "Will the product store, process or pass on card numbers, or leave them all to a payment provider?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "payment-regions"
+text = "In which countries or regions are the payers and the businesses being paid?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "money-movement"
+text = "Does the product hold customer money or move it between people, so that customer checks and transaction monitoring apply?"
+depth = "light"
+critical = true
+
+[[discovery]]
+id = "payment-methods"
+text = "Which ways to pay must work first: cards, bank transfers, wallets?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "refunds-disputes"
+text = "Who may refund a payment, and who answers a dispute?"
+depth = "standard"
+critical = false
+
+[[discovery]]
+id = "settlement-timing"
+text = "How soon must the business being paid see its money?"
+depth = "deep"
+critical = false
+
+[[references]]
+id = "hosted-card-fields"
+text = "Card numbers entered in a payment provider's hosted fields or tokens keep most of the product's own systems out of card data scope"
+source = "PCI DSS v4.0.1 scoping guidance (verify)"
+
+[[acceptance]]
+id = "card-number-masked"
+text = "A card number shown on a screen shows at most its first six and last four digits"
+regulation = "pci-dss"
+
+[[acceptance]]
+id = "payer-strongly-authenticated"
+text = "A payer starting an electronic payment in the EU passes strong customer authentication unless an exemption applies"
+regulation = "psd2"
+
+[[data_shapes]]
+id = "card-number-shape"
+field = "card_number"
+format = "13 to 19 digits passing the Luhn check; tests use a payment provider's published test numbers, never a real card"
+
+[[data_shapes]]
+id = "amount-shape"
+field = "amount_minor"
+format = "a whole number of the currency's minor units, with an ISO 4217 currency code"
+
+[[gates]]
+id = "card-data-scope"
+kind = "judgement"
+text = "A person confirms which systems store, process or pass on card data before the design is agreed"
+owner_only = false
+regulation = "pci-dss"
+basis = "expected"
