@@ -311,3 +311,58 @@ def test_req066_the_command_is_a_subcommand_of_steward(root, monkeypatch, capsys
     )
     assert steward.main(["onboard", "--again"]) == 0
     assert seen == {"again": True} and capsys.readouterr().out == "ok\n"
+
+
+# --- the domain model (SPEC-0074 rules 7 and 9; REQ-081 AC4; brief #1954, ADR-0810) -----------
+
+
+def domain(root: Path, inferred: int = 1) -> None:
+    folder = root / "docs" / "domain"
+    folder.mkdir(parents=True)
+    rules = "- BR-1: an order over 100 needs a check; source: interview, notes; owner: sales; confirmed\n"
+    rules += "".join(
+        f"- BR-{n}: rule {n}; source: code, src/a.py:{n}; owner: finance; inferred\n"
+        for n in range(2, 2 + inferred)
+    )
+    (folder / "rules-orders.md").write_text("# Rules\n\n" + rules, encoding="utf-8")
+    (folder / "data.md").write_text("# Data\n\n- buyer e-mail: personal\n", encoding="utf-8")
+
+
+def test_req081_confirmed_rules_and_classes_are_decisions_inferred_ones_questions(root):
+    """REQ-081 AC4: answer 5, a `confirmed` rule and a classified data item become `harvested`
+    `Decision:` lines citing their file and id; an `inferred` rule is one `Owner question:`."""
+    executing(root)
+    domain(root)
+    gh = GitHub(labels=merged_work())
+    steward_onboard.onboard(root, gh, NOW)
+    posted = "\n".join(gh.posted())
+    assert "- BR-1 an order over 100 needs a check (source: docs/domain/rules-orders.md BR-1)" in posted
+    assert "- buyer e-mail is personal (source: docs/domain/data.md buyer e-mail)" in posted
+    assert (
+        "Owner question: harvested BR-2 is inferred: confirm or correct it "
+        "(source: docs/domain/rules-orders.md BR-2)"
+    ) in posted
+    first = len(gh.posted())
+    steward_onboard.onboard(root, gh, NOW, again=True)
+    assert len(gh.posted()) == first + 1  # `--again` adds only the `Onboarded:` entry
+
+
+def test_req081_inferred_rules_ask_at_most_twenty_then_a_count(root):
+    """REQ-081 AC4: answer 5 with rule 18's budget, at most 20 questions, then one count line."""
+    executing(root)
+    domain(root, inferred=23)
+    gh = GitHub(labels=merged_work())
+    steward_onboard.onboard(root, gh, NOW)
+    asked = [b for b in gh.posted() if b.startswith("Owner question: harvested BR-")]
+    assert len(asked) == 20
+    assert any("3 more inferred rules wait for a yes" in b for b in gh.posted())
+
+
+def test_req081_an_unreadable_domain_file_is_a_gap(root):
+    """REQ-081 AC4: answer 5, a file the reader cannot read is a `Gap:`."""
+    executing(root)
+    domain(root)
+    (root / "docs" / "domain" / "rules-stock.md").write_bytes(b"\xff\xfe- BR-9\n")
+    gh = GitHub(labels=merged_work())
+    steward_onboard.onboard(root, gh, NOW)
+    assert "- docs/domain/rules-stock.md cannot be read" in "\n".join(gh.posted())

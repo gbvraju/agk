@@ -209,3 +209,48 @@ def test_checklist_item_one_asks_for_a_term_within_its_word_count() -> None:
     item = next(line for line in lines if line.startswith("1. "))
     assert item.startswith("1. `wrong-assumption`:") and "docs/glossary.md" in item
     assert len(item[3:].split()) <= 18
+
+
+# --- the packs line (SPEC-0074 rule 7; REQ-081 AC4; brief #1954, ADR-0810) -------------------
+
+PACK = """format = 1
+domain = "zz-shop"
+title = "An invented shop for the tests"
+as_of = "2026-11-25"
+
+[[terms]]
+term = "basket"
+meaning = "The items a buyer holds before paying"
+synonyms = ["cart", "bag"]
+"""
+PACKS = '[domain]\npacks = ["zz-shop"]\n'
+
+
+def _packed(tmp_path: Path, body: str) -> Path:
+    (tmp_path / "config" / "domains").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "domains" / "zz-shop.toml").write_text(PACK, encoding="utf-8")
+    return _root(tmp_path, body, PACKS)
+
+
+def test_ac4_the_packs_line_names_domain_packs(tmp_path: Path) -> None:
+    """REQ-081 AC4: SPEC-0074 rule 7 (one `Packs:` line naming `[domain] packs`; none without)."""
+    assert _failures(_packed(tmp_path, "Packs: zz-shop\n\n" + HEAD + _rows(2))) == []
+    assert _failures(_packed(tmp_path, HEAD + _rows(2))) == [(glossary.PACKS, glossary.RECORD)]
+    wrong = _failures(_packed(tmp_path, "Packs: zz-other\n\n" + HEAD + _rows(2)))
+    assert wrong == [(glossary.PACKS, glossary.RECORD)]
+    unpacked = _failures(_root(tmp_path, "Packs: zz-shop\n\n" + HEAD + _rows(2)))
+    assert unpacked == [(glossary.PACKS, glossary.RECORD)]
+    assert "setting: domain.packs" in glossary.PACKS and "zz-shop" not in glossary.PACKS
+
+
+def test_ac4_pack_synonyms_are_outside_the_cap_and_a_row_wins(tmp_path: Path) -> None:
+    """REQ-081 AC4: SPEC-0074 rule 7 (a pack's synonyms are by reference, never rows, not counted
+    against `[quality] glossary_terms`; a term both a row and a pack term is one term)."""
+    body = "Packs: zz-shop\n\n" + HEAD + _rows(39) + "| basket | what a buyer holds | `Basket` | cart |\n"
+    assert _failures(_packed(tmp_path, body)) == []
+
+
+def test_ac4_a_refused_domain_table_fails_naming_the_setting(tmp_path: Path) -> None:
+    """REQ-081 AC4: a refused `[domain]` table names the setting, never the value."""
+    root = _root(tmp_path, "Packs: zz-none\n\n" + HEAD + _rows(1), '[domain]\npacks = ["zz-none"]\n')
+    assert _failures(root) == [(glossary.DOMAIN_REFUSED, glossary.RECORD)]
