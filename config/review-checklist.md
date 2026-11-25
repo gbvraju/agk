@@ -10,7 +10,7 @@ most fifteen. This file changes only by a pull request whose decision record cit
 
 The last pull request of a brief without `Closes #<brief>` or `Finishes:` is a fix item.
 
-1. `wrong-assumption`: which assumption of the change did you check against the record, and what did the record say?
+1. `wrong-assumption`: which assumption, or term (against docs/glossary.md), did you check against the record, and what did it say?
 2. `false-declaration`: does every declaration (`Behaviour: unchanged`, a count, a status) match the change? Show the line and the evidence.
 3. `test-proves-less`: for each criterion, what would a passing test still allow? Name the uncovered case.
 4. `stale-claim`: does any text or output claim something the current head no longer does? Quote the claim and the head.

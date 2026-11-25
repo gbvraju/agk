@@ -1,0 +1,1 @@
+- Quality: a project's own words get one checked glossary, `docs/glossary.md`, written once by `glossary.py --write` from a new template; the gates fail it with a term twice or over `[quality] glossary_terms` rows, and review checklist item 1 asks for a term against it (brief #1951, ADR-0812)
