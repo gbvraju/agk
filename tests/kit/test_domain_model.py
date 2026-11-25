@@ -144,8 +144,11 @@ def test_ac4_a_file_over_200_rules_and_a_bad_file_name_fail(tmp_path):
     ]
     found = changed(tmp_path / "b", "rules-Big Area.md", "# Rules\n")
     assert found == [
-        "rule 7: docs/domain/rules-Big Area.md: a rules file is not rules-<area>.md (id: file)"
+        f"rule 7: docs/domain/rules-Big Area.md: {domain_model.NOT_A_MODEL_FILE} (id: file)"
     ]
+    for name in ("business-rules.md", "rule-orders.md"):
+        found = changed(tmp_path / name, name, "# Rules\n")
+        assert found == [f"rule 7: docs/domain/{name}: {domain_model.NOT_A_MODEL_FILE} (id: file)"]
 
 
 @pytest.mark.parametrize(
@@ -307,3 +310,79 @@ def test_ac4_the_forms_live_in_domain_model_only():
         text = (AGK / name).read_text(encoding="utf-8")
         assert "domain_model" in text, name
         assert "BR-" not in text, name
+
+
+# --- the fix list on 2e2ca311 (items 1, 2, 4 and 5) -------------------------------------------
+
+CUSTOM = '[guard]\npatterns = [{ name = "l", regex = "ZZPLANT[0-9]" }]\n'
+
+
+def settings(root: Path, extra: str) -> None:
+    path = root / "agk.toml"
+    path.write_text(path.read_text(encoding="utf-8") + extra, encoding="utf-8")
+
+
+def test_ac4_a_missing_template_is_refused_naming_the_path_class(tmp_path, monkeypatch, capsys):
+    """REQ-081 AC4: answer 2 and 7 (an install without the templates refuses, never a traceback;
+    `init` writes nothing then)."""
+    model(tmp_path, {})
+    monkeypatch.setattr(domain_model, "TEMPLATES", tmp_path / "no-templates")
+    assert run(tmp_path, "init", "--area", "orders") == 1
+    assert "(path class: kit/templates/)" in capsys.readouterr().out
+    assert list((tmp_path / "docs" / "domain").iterdir()) == []
+    assert run(tmp_path, "classify", "--item", "order total", "--class", "public") == 1
+    assert run(tmp_path, "entity", "--name", "Order", "--meaning", "m") == 1
+    args = ["--text", "t", "--source", "interview", "--where", "w", "--owner", "o"]
+    assert run(tmp_path, "rule", "--area", "orders", *args) == 1
+    assert "(path class: kit/templates/)" in capsys.readouterr().out
+
+
+def test_ac4_guard_patterns_reach_the_writer_and_the_check(tmp_path, capsys):
+    """REQ-081 AC4: answer 7, `[guard] patterns` are added to the shipped detectors."""
+    model(tmp_path)
+    settings(tmp_path, CUSTOM)
+    assert run(tmp_path, "classify", "--item", "code ZZPLANT7", "--class", "public") == 1
+    out = capsys.readouterr().out
+    assert "CUSTOM-l" in out and "ZZPLANT7" not in out
+    (tmp_path / "docs" / "domain" / "data.md").write_text("- code ZZPLANT7: public\n", "utf-8")
+    found = domain_model.findings(tmp_path)
+    assert found == [
+        "rule 7: docs/domain/data.md: line 1 holds what the data guard flags CUSTOM-l (id: line 1)"
+    ]
+
+
+def test_ac4_a_refused_guard_table_is_refused_naming_the_setting(tmp_path, capsys):
+    """REQ-081 AC4: answer 2 (a refused `[guard]` table never drops the project's patterns
+    silently: the writer refuses and the check fails, naming the setting)."""
+    model(tmp_path)
+    settings(tmp_path, '[guard]\npatterns = [{ name = "x", regex = "(" }]\n')
+    assert run(tmp_path, "classify", "--item", "order total", "--class", "public") == 1
+    assert "the [guard] table is refused (setting: guard)" in capsys.readouterr().out
+    assert domain_model.findings(tmp_path) == [
+        "rule 7: docs/domain/: the [guard] table is refused (setting: guard) (id: guard)"
+    ]
+
+
+def test_ac4_the_plugin_layout_reads_the_templates_from_the_kit_root(tmp_path):
+    """REQ-081 AC4: answer 7, `[kit] layout = "plugin"`: the project holds no `kit/templates/`;
+    the templates come from the kit root beside the script, and the check reads the same."""
+    model(tmp_path, {})
+    settings(tmp_path, '[kit]\nlayout = "plugin"\n')
+    assert not (tmp_path / "kit").exists()
+    assert domain_model.TEMPLATES == AGK.parents[1] / "kit" / "templates"
+    assert run(tmp_path, "init", "--area", "orders") == 0
+    assert domain_model.findings(tmp_path) == []
+
+
+@pytest.mark.parametrize("mode", ["solo", "team"])
+def test_ac4_review_mode_never_changes_what_confirm_writes(tmp_path, mode):
+    """REQ-081 AC4: answer 7, `review_mode` solo or team: who says yes differs (rule 9); either
+    way only the status word changes."""
+    model(tmp_path)
+    path = tmp_path / "agk.toml"
+    path.write_text(f'review_mode = "{mode}"\n' + path.read_text("utf-8"), encoding="utf-8")
+    rules = tmp_path / "docs" / "domain" / "rules-orders.md"
+    before = rules.read_text(encoding="utf-8")
+    assert run(tmp_path, "confirm", "--id", "BR-2") == 0
+    after = before.replace("finance lead; inferred", "finance lead; confirmed")
+    assert rules.read_text(encoding="utf-8") == after

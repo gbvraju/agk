@@ -59,6 +59,8 @@ CLASSES = ("personal", "health", "payment", "confidential", "public")
 SCOPES = ("in scope", "out of scope")
 SCOPE_WORDS = {"in": "in scope", "out": "out of scope"}
 MAX_RULES = 200
+NOT_A_MODEL_FILE = "a file is not entities.md, data.md, regulations.md or rules-<area>.md"
+GUARD_REFUSED = "the [guard] table is refused (setting: guard)"
 
 
 @dataclass
@@ -90,8 +92,10 @@ def read(path: Path) -> str | None:
 
 
 def rule_files(root: Path) -> list[Path]:
+    """Every `.md` file of the folder but the three named ones: each must be `rules-<area>.md`."""
     where = folder(root)
-    return sorted(where.glob("rules*.md")) if where.is_dir() else []
+    named = {ENTITIES, DATA, REGULATIONS}
+    return sorted(p for p in where.glob("*.md") if p.name not in named) if where.is_dir() else []
 
 
 def parse_rule(rest: str) -> tuple[dict, str | None]:
@@ -116,12 +120,13 @@ def parse_rule(rest: str) -> tuple[dict, str | None]:
 
 
 def _patterns(root: Path) -> list:
+    """The project's `[guard] patterns`; a refused `[guard]` table raises Refused, naming it."""
     import config
 
     try:
         return config.guard_patterns(Path(root))
     except config.CheckError:
-        return []
+        raise Refused(GUARD_REFUSED) from None
 
 
 def _guarded(text: str, patterns: list) -> dict[int, str]:
@@ -138,6 +143,8 @@ def rules(root: Path) -> list[Rule]:
     """Every well-formed rule of the folder, in file and line order."""
     out = []
     for path in rule_files(root):
+        if not RULES_FILE.match(path.name):
+            continue
         for number, line in _items(read(path) or "", {}):
             found = RULE_LINE.match(line)
             if found and RULE_ID.match(found[1]):
@@ -175,7 +182,7 @@ def _check_rules(paths: list[Path], texts: dict, patterns: list) -> list[tuple[s
     for path in paths:
         name, text = path.name, texts[path.name]
         if not RULES_FILE.match(name):
-            out.append((name, "a rules file is not rules-<area>.md", "file"))
+            out.append((name, NOT_A_MODEL_FILE, "file"))
             continue
         count = 0
         for number, line in _items(text, _guarded(text, patterns)):
@@ -266,8 +273,12 @@ def findings(root: Path) -> list[str]:
     where = folder(root)
     if not where.is_dir():
         return []
-    patterns = _patterns(root)
     found: list[tuple[str, str, str]] = []
+    try:
+        patterns = _patterns(root)
+    except Refused:  # the shipped detectors still run; the refusal is a failure of its own
+        patterns = []
+        found.append(("", GUARD_REFUSED, "guard"))
     names = [ENTITIES] + [p.name for p in rule_files(root)] + [DATA, REGULATIONS]
     texts: dict[str, str] = {}
     for name in names:
@@ -285,6 +296,14 @@ def findings(root: Path) -> list[str]:
     found += _check_data(texts[DATA], patterns)
     found += _check_regulations(texts[REGULATIONS], patterns, pack_regulations(root))
     return list(dict.fromkeys(f"{RULE}: {FOLDER}/{f}: {what} (id: {i})" for f, what, i in found))
+
+
+def _template(name: str) -> str:
+    """A kit template's text; a missing one is refused naming the path class."""
+    path = TEMPLATES / name
+    if not path.is_file():
+        raise Refused("no domain model template (path class: kit/templates/)")
+    return path.read_text(encoding="utf-8")
 
 
 # --- the writer (answer 2) --------------------------------------------------------------------
@@ -306,7 +325,7 @@ def _append(root: Path, name: str, template: str, text: str) -> None:
     path = folder(root) / name
     if not path.is_file():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text((TEMPLATES / template).read_text(encoding="utf-8"), encoding="utf-8")
+        path.write_text(_template(template), encoding="utf-8")
     old = read(path)
     if old is None:
         raise Refused(f"{FOLDER}/{name} cannot be read (path class: {FOLDER}/)")
@@ -323,11 +342,10 @@ def cmd_init(root: Path, area: str) -> str:
         DATA: "domain-data.md",
         REGULATIONS: "domain-regulations.md",
     }
+    texts = {name: _template(template) for name, template in targets.items()}  # all, or none
     where.mkdir(parents=True, exist_ok=True)
-    for name, template in targets.items():
-        (where / name).write_text(
-            (TEMPLATES / template).read_text(encoding="utf-8"), encoding="utf-8"
-        )
+    for name, text in texts.items():
+        (where / name).write_text(text, encoding="utf-8")
     return f"wrote {len(targets)} files under {FOLDER}/"
 
 

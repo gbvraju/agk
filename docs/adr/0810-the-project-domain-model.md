@@ -18,8 +18,9 @@ the data classification or the regulations (`Q-D74D-2`).
 
 ## Decision
 
-1. One module, `scripts/agk/domain_model.py` (standard library, `common.py`, `guard.py` and `config.py`; no network, no
-   model), holds the four forms of `docs/domain/` and their readers, so `check_domains.py`, the harvest and the next
+1. One module, `scripts/agk/domain_model.py` (standard library, `common.py`, `guard.py`, and `config.py` and
+   `check_domains.py` imported inside functions for `[domain] packs`, `[guard] patterns` and the packs' regulations;
+   no network, no model), holds the four forms of `docs/domain/` and their readers, so `check_domains.py`, the harvest and the next
    reader (#1948) import one pattern of each:
    - `entities.md`: one `## <Entity>` section per entity, its meaning in one line, then lines
      `- relates to <Entity>: <one|many> to <one|many>, <plain reason>`.
@@ -33,24 +34,29 @@ the data classification or the regulations (`Q-D74D-2`).
 2. `domain_model.findings(root)`, called by `check_domains.findings` and so run in the `playbooks` governance step,
    fails, only where `docs/domain/` exists, each breach of those forms and each line `guard.scan_text` flags with
    `[guard] patterns`, as `rule 7: docs/domain/<file>: <what> (id: <BR-n|item|entity|file|line n>)`, never a rule's
-   text or a value. A refused `[domain]` table is not read here (doctor and the pack reader name it).
+   text or a value. A `.md` file of the folder that is not `entities.md`, `data.md`, `regulations.md` or
+   `rules-<area>.md` fails naming the file. A refused `[guard]` table fails `the [guard] table is refused (setting:
+   guard)` and the shipped detectors still run. A refused `[domain]` table is not read here (doctor and the pack reader
+   name it).
 3. The writer, `domain_model.py init --area A | rule | classify | entity | regulation | confirm`, writes only under
    `docs/domain/`, never commits, refuses to overwrite a model, a 201st rule in a file ("split by area"), a value
-   outside a form and a value the data guard flags (naming the class), and numbers a new rule with the next free
+   outside a form, a value the data guard flags (naming the class), a refused `[guard]` table (naming the setting) and a
+   missing template (naming `kit/templates/`), and numbers a new rule with the next free
    `BR-<n>` across the folder. `init` writes the four files from `kit/templates/domain-*.md`, read from the kit root
    as `gates/glossary.py` reads its template. `confirm --id BR-<n>` changes only an `inferred` status word to
    `confirmed`, after the steward has recorded the person's yes as a `Decision:` (rule 9); the check does not read the
    memory (`Q-D74D-1`). The builder prompt is unchanged: the steward or the architect runs it in planning.
 4. The steward's harvest (`steward_onboard.from_domain`) reads `docs/domain/`: each `confirmed` rule and each
-   classified data item is a `harvested` `Decision:` citing its file and id; each `inferred` rule is one `Owner
+   classified data item is a `harvested` `Decision:` citing its file and id, never a rule's text, which stays in
+   `docs/domain/` (rule 14); each `inferred` rule is one `Owner
    question:`, at most 20, then one line with the count; an unreadable file is a `Gap:`. `--again` adds only new lines.
 5. The glossary step (`scripts/agk/gates/glossary.py`, `Q-D74D-3`) reads `[domain] packs`: with packs, the glossary
    holds one line `Packs: <id>, <id>` naming them in order; with none, no such line; a refused table fails naming
    `domain`. A pack's synonyms are included by reference, never as rows, so the cap counts rows only, and a row that
    is also a pack term is one term.
 6. `domain_model.py` joins `kit/manifest.json` `verbatim` and the reference guide; the templates live in
-   `kit/templates/` beside `glossary.md`; `kit/hashes.json` waits for the release (session rule 14). One
-   `[[testing.map]]` entry in `agk.toml` maps the module to its tests.
+   `kit/templates/` beside `glossary.md`; `kit/hashes.json` waits for the release (session rule 14). Two
+   `[[testing.map]]` entries in `agk.toml` map the module and the templates to their tests.
 
 ## Consequences
 

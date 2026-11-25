@@ -337,10 +337,8 @@ def test_req081_confirmed_rules_and_classes_are_decisions_inferred_ones_question
     gh = GitHub(labels=merged_work())
     steward_onboard.onboard(root, gh, NOW)
     posted = "\n".join(gh.posted())
-    assert (
-        "- BR-1 an order over 100 needs a check (source: docs/domain/rules-orders.md BR-1)"
-        in posted
-    )
+    assert "- BR-1 is confirmed (source: docs/domain/rules-orders.md BR-1)" in posted
+    assert "an order over 100" not in posted  # a rule's text stays in docs/domain/ (rule 14)
     assert "- buyer e-mail is personal (source: docs/domain/data.md buyer e-mail)" in posted
     assert (
         "Owner question: harvested BR-2 is inferred: confirm or correct it "
@@ -370,3 +368,18 @@ def test_req081_an_unreadable_domain_file_is_a_gap(root):
     gh = GitHub(labels=merged_work())
     steward_onboard.onboard(root, gh, NOW)
     assert "- docs/domain/rules-stock.md cannot be read" in "\n".join(gh.posted())
+
+
+def test_req081_a_personal_sidecar_harvests_the_model_and_posts_nothing(root):
+    """REQ-081 AC4: answer 7, `[personal]`: the harvest reads the files and writes the sidecar
+    memory; nothing is posted, and no rule's text is written."""
+    executing(root)
+    domain(root)
+    (root / "agk.toml").write_text('[personal]\nforge = "files"\n', encoding="utf-8")
+    calls: list = []
+    code, _ = steward_onboard.onboard(root, lambda *a: calls.append(a), NOW)
+    assert code == 0 and calls == []
+    memory = (root / steward.PERSONAL_FILE).read_text(encoding="utf-8")
+    assert "- BR-1 is confirmed (source: docs/domain/rules-orders.md BR-1)" in memory
+    assert "Owner question: harvested BR-2 is inferred" in memory
+    assert "an order over 100" not in memory

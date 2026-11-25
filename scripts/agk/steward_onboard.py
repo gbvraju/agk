@@ -194,8 +194,9 @@ def from_files(root: Path, gaps: list) -> list:
 
 
 def from_domain(root: Path, gaps: list) -> tuple[list, list]:
-    """SPEC-0074 rules 7 and 9 (brief #1954, ADR-0810): each `confirmed` rule and each classified
-    data item of `docs/domain/` is a decision citing its file and id; each `inferred` rule is one
+    """SPEC-0074 rules 7, 9 and 14 (brief #1954, ADR-0810): each `confirmed` rule and each
+    classified data item of `docs/domain/` is a decision citing its file and id, never a rule's
+    text (confidential domain knowledge stays in the folder); each `inferred` rule is one
     owner question, at most `ASKED`, then one line with the count; an unreadable file is a gap."""
     import domain_model
 
@@ -209,7 +210,7 @@ def from_domain(root: Path, gaps: list) -> tuple[list, list]:
     for rule in domain_model.rules(root):
         cite = f"(source: {domain_model.FOLDER}/{rule.file} {rule.id})"
         if rule.status == "confirmed":
-            decisions.append(f"{rule.id} {short(rule.text)} {cite}")
+            decisions.append(f"{rule.id} is confirmed {cite}")  # the text stays in docs/domain/
         else:
             inferred.append(f"{rule.id} is inferred: confirm or correct it {cite}")
     data = domain_model.read(where / domain_model.DATA) or ""
