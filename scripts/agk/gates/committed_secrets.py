@@ -14,7 +14,9 @@ values are not empty or `<placeholder>`. A secret shape of only letters and sepa
 word, not a key, and is not counted. Names compare case-folded. Each failure is one path class,
 never a path or a value (principle 8); no pattern list grows (principle 9). `counts` gives the
 findings per file, so the runner's baseline holds an adopted project's existing ones, named and
-counted on every run, while a new one fails as rule 7 (brief #1777, ADR-0743).
+counted on every run, while a new one fails as rule 7 (brief #1777, ADR-0743). In a dependency
+file (`DEPENDENCY_FILES`) an exact version after a package name is a pin, not a secret, and is
+not counted; every other shape there counts (brief #1928, ADR-0796).
 """
 
 from __future__ import annotations
@@ -37,6 +39,15 @@ SHAPES = ("SECRET", "TOKEN", "JWT")
 MAX_BYTES = 1_000_000
 PLACEHOLDER = re.compile(r'^(?:|""|\'\'|<[^<>]+>)$')
 SETTING = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$")
+# Brief #1928 (ADR-0796): the dependency files, by last path part case-folded, whose keys are
+# package names; an exact version after one is no secret. It skips no file and no other shape.
+DEPENDENCY_FILES = (
+    "package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock",
+    "composer.json", "composer.lock", "pipfile.lock", "poetry.lock", "uv.lock", "cargo.lock",
+    "gemfile.lock", "pyproject.toml", "requirements.lock", "requirements.txt",
+)  # fmt: skip
+SETTING_WORDS = ("token", "secret", "password", "passwd", "pwd", "auth", "credential", "api_key")
+KEY_BEFORE = re.compile(r"""['"]?([^\s'"=:]+)['"]?[ \t]*(?:=>|=|:)[ \t]*['"]?\Z""")
 
 
 def files(root: Path, *extra: str) -> list[str]:
@@ -63,11 +74,30 @@ def example_values(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def shapes(text: str, patterns: list) -> int:
-    """The secret shapes of TEXT: a custom pattern's, or a key shape holding a digit."""
+def pinned(text: str, start: int, value: str) -> bool:
+    """Brief #1928: VALUE at START is an exact version after a package name, not a setting word."""
+    if not guard.VERSION.fullmatch(value):
+        return False
+    m = KEY_BEFORE.search(text, text.rfind("\n", 0, start) + 1, start)
+    key = m.group(1) if m else ""
+    return bool(key) and ("/" in key or "@" in key or key.casefold() not in SETTING_WORDS)
+
+
+def shapes(text: str, patterns: list, rel: str = "") -> int:
+    """The secret shapes of TEXT: a custom pattern's, or a key shape holding a digit; in a
+    dependency file REL, not an exact version after a package name (brief #1928)."""
     n = 0
+    deps = rel.rsplit("/", 1)[-1].casefold() in DEPENDENCY_FILES
     for f in guard.scan_text(text, patterns):
         value = text[f.start : f.start + f.length]
+        if f.kind == "SECRET" and deps and pinned(text, f.start, value):
+            end = f.start + f.length  # a custom pattern ranks below SECRET in `scan_text`
+            n += any(
+                m.start() < end and m.end() > f.start
+                for _, rx in patterns
+                for m in re.finditer(rx, text)
+            )
+            continue
         n += f.kind.startswith("CUSTOM-") or (f.kind in SHAPES and bool(re.search(r"\d", value)))
     return n
 
@@ -84,7 +114,7 @@ def findings(root: Path) -> list[tuple[str, str, int]]:
         if rel.casefold() == EXAMPLE or not path.is_file() or path.stat().st_size > MAX_BYTES:
             continue
         data = path.read_bytes()
-        n = 0 if b"\0" in data[:8192] else shapes(data.decode("utf-8", "replace"), patterns)
+        n = 0 if b"\0" in data[:8192] else shapes(data.decode("utf-8", "replace"), patterns, rel)
         out += [("tracked files (a secret shape)", rel, n)] if n else []
     example = root / EXAMPLE
     if example.is_file():
