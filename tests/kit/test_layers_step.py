@@ -171,6 +171,12 @@ def test_the_foundation_writes_the_record_from_the_template_once(tmp_path: Path,
     text = (root / "docs/architecture.md").read_text(encoding="utf-8")
     assert "| `api` | `api/**` |" in text and "- `domain` may import `data`" in text
     assert "ADR-0003" in text and "{{" not in text
+    # brief #1952 (SPEC-0073 rule 8, REQ-080 AC5): the three quality sections, each marked
+    import front_door  # noqa: PLC0415
+
+    body = dict(front_door.sections_of(text.split("\n")))
+    for name in front_door.QUALITY_SECTIONS:
+        assert any(front_door.MARKER in ln for ln in body.get(name, [])), name
     capsys.readouterr()
     (root / "docs/architecture.md").write_text("kept\n", encoding="utf-8")
     assert layers.main(["--root", str(root), "--write-record"]) == 1
