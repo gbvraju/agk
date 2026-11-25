@@ -1,0 +1,1 @@
+- Design: `check_design.py` passes a signed screen list (`docs/design/inventory.md` with its `inventory` sign-off row) beside a new requirement that has no section yet, printing `design: rule 3: <REQ id> waits for an inventory pull request`; an unsigned or changed inventory is checked in full as before (brief #1930, ADR-0798)
