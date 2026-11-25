@@ -203,3 +203,51 @@ def test_ac1_no_command_is_a_usage_error():
             check=False,
         )
         assert result.returncode == 2
+
+
+@pytest.mark.parametrize(
+    "text",
+    ['{"answers": 5}', '{"answers": null}', '{"grill": "zz-x"}', '{"answers": [5]}', "[]"],
+    ids=["a-number", "null", "a-string", "a-row-not-an-object", "a-list"],
+)
+def test_ac1_an_answers_file_of_another_shape_is_refused_without_a_traceback(tmp_path, text):
+    """REQ-080 AC1: brief #1933 answer 9 (refused naming `--answers`, never a traceback)."""
+    bad = tmp_path / "answers.json"
+    bad.write_text(text, encoding="utf-8")
+    result = run(project(tmp_path / "p"), "--answers", str(bad))
+    out = result.stdout + result.stderr
+    assert result.returncode == 1, out
+    assert "the answers file is not an object of lists (setting: --answers)" in out
+    assert "Traceback" not in out and "zz-x" not in out
+
+
+def test_ac7_the_plugin_layout_reads_the_plugin_s_playbooks_and_installed_the_project_s(tmp_path):
+    """REQ-080 AC7: brief #1933 answer 8 (`[kit] layout = "plugin"`: the playbooks from the plugin
+    root, as `engines.py` reads them; installed: from the project)."""
+    env = {**clean_env(), "CLAUDE_PLUGIN_ROOT": str(KIT_ROOT)}
+    clean = tmp_path / "clean"
+    clean.mkdir()
+    (clean / "agk.toml").write_text('mode = "init"\n\n[kit]\nlayout = "plugin"\n', "utf-8")
+    assert not (clean / "config" / "playbooks").exists()
+    found = subprocess.run(  # nosec B603 - fixed argument list
+        [sys.executable, str(SCRIPT), "questions", "--root", str(clean), "--depth", "light"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert asked(found)[0] == [*LIGHT, "success"]
+    installed = project(tmp_path / "installed", '[kit]\nlayout = "installed"\n')
+    own = installed / "config" / "playbooks" / "default.toml"
+    text = own.read_text(encoding="utf-8")
+    cut = text.index('[[discovery]]\nid = "riskiest"')
+    end = text.index("[[discovery]]", cut + 1)
+    own.write_text(text[:cut] + text[end:], encoding="utf-8")
+    found = subprocess.run(  # nosec B603 - fixed argument list
+        [sys.executable, str(SCRIPT), "questions", "--root", str(installed), "--depth", "light"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert asked(found)[0] == ["problem", "who-hurts", "non-goals", "success"]

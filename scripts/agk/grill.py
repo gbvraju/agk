@@ -69,8 +69,9 @@ def answered(path: str | None) -> set[str]:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         raise CheckError("rule 2: the answers file cannot be read (setting: --answers)") from None
-    rows = [*data.get("answers", []), *data.get("grill", [])] if isinstance(data, dict) else None
-    if rows is None or any(not isinstance(r, dict) for r in rows):
+    lists = [data.get(k, []) for k in ("answers", "grill")] if isinstance(data, dict) else [None]
+    rows = [r for found in lists if isinstance(found, list) for r in found]
+    if any(not isinstance(f, list) for f in lists) or any(not isinstance(r, dict) for r in rows):
         raise CheckError("rule 2: the answers file is not an object of lists (setting: --answers)")
     return {r["id"] for r in rows if isinstance(r.get("id"), str)}
 

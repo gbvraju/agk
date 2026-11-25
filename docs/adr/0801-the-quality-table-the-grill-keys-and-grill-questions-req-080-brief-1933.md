@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-25
 - Deciders: maintainers
-- Related: SPEC-0073, SPEC-0038, SPEC-0048, ADR-0793, ADR-0527, ADR-0786, brief #1933, brief #1715, plan #661
+- Related: SPEC-0073, SPEC-0038, SPEC-0048, ADR-0793, ADR-0527, ADR-0786, amendment 237, amendment 245, brief #1933, brief #1715, plan #661
 - Requirements: REQ-080
 
 Protected classes: `scripts/agk/`, `config/`, `tests/kit/`, `agk.toml`, `kit/`
@@ -28,7 +28,8 @@ exist. Amendment 237 item 1 (SPEC-0038 rule 2, the two keys) was approved by the
    with both it is a grill item. `playbook_format.problems` refuses a depth outside the three, a non-boolean critical,
    one key without the other, and a grill id that reuses a topic id, a fixed id, another `[[discovery]]` id of the file
    or, in a work type's playbook, a grill id of `default.toml`, each naming the playbook and the key, never a value. The
-   checks live in `playbook_format._discovery`, which `check_playbooks.py` runs (`Q-73A-2`).
+   checks live in `playbook_format._grill`, which `playbook_format.problems` runs and `check_playbooks.py` runs through
+   it (`Q-73A-2`).
 3. `playbook_format.discovery()` returns only entries without `depth`, so no grill item is asked as a discovery question;
    `playbook_format.grill_items()` returns the grill items; the derived playbook's skeleton copies only `default.toml`'s
    discovery questions. The ten topic ids are one tuple, `playbook_format.TOPIC_IDS`, which a test pins equal to
