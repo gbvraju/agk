@@ -246,11 +246,18 @@ def test_ac4_the_packs_line_names_domain_packs(tmp_path: Path) -> None:
 def test_ac4_pack_synonyms_are_outside_the_cap_and_a_row_wins(tmp_path: Path) -> None:
     """REQ-081 AC4: SPEC-0074 rule 7 (a pack's synonyms are by reference, never rows, not counted
     against `[quality] glossary_terms`; a term both a row and a pack term is one term)."""
-    body = "Packs: zz-shop\n\n" + HEAD + _rows(39) + "| basket | what a buyer holds | `Basket` | cart |\n"
+    body = (
+        "Packs: zz-shop\n\n"
+        + HEAD
+        + _rows(39)
+        + "| basket | what a buyer holds | `Basket` | cart |\n"
+    )
     assert _failures(_packed(tmp_path, body)) == []
 
 
 def test_ac4_a_refused_domain_table_fails_naming_the_setting(tmp_path: Path) -> None:
     """REQ-081 AC4: a refused `[domain]` table names the setting, never the value."""
-    root = _root(tmp_path, "Packs: zz-none\n\n" + HEAD + _rows(1), '[domain]\npacks = ["zz-none"]\n')
+    root = _root(
+        tmp_path, "Packs: zz-none\n\n" + HEAD + _rows(1), '[domain]\npacks = ["zz-none"]\n'
+    )
     assert _failures(root) == [(glossary.DOMAIN_REFUSED, glossary.RECORD)]

@@ -319,7 +319,8 @@ def test_req066_the_command_is_a_subcommand_of_steward(root, monkeypatch, capsys
 def domain(root: Path, inferred: int = 1) -> None:
     folder = root / "docs" / "domain"
     folder.mkdir(parents=True)
-    rules = "- BR-1: an order over 100 needs a check; source: interview, notes; owner: sales; confirmed\n"
+    rules = "- BR-1: an order over 100 needs a check; source: interview, notes; owner: sales; "
+    rules += "confirmed\n"
     rules += "".join(
         f"- BR-{n}: rule {n}; source: code, src/a.py:{n}; owner: finance; inferred\n"
         for n in range(2, 2 + inferred)
@@ -336,7 +337,10 @@ def test_req081_confirmed_rules_and_classes_are_decisions_inferred_ones_question
     gh = GitHub(labels=merged_work())
     steward_onboard.onboard(root, gh, NOW)
     posted = "\n".join(gh.posted())
-    assert "- BR-1 an order over 100 needs a check (source: docs/domain/rules-orders.md BR-1)" in posted
+    assert (
+        "- BR-1 an order over 100 needs a check (source: docs/domain/rules-orders.md BR-1)"
+        in posted
+    )
     assert "- buyer e-mail is personal (source: docs/domain/data.md buyer e-mail)" in posted
     assert (
         "Owner question: harvested BR-2 is inferred: confirm or correct it "

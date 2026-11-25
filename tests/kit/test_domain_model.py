@@ -41,7 +41,7 @@ source = "https://example.com/zz-rule"
 as_of = "2026-11-25"
 critical = true
 """
-SECRET_TEXT = "INVENTEDRULETEXT"
+PLANTED = "INVENTEDRULETEXT"
 CARD = "4111 1111 1111 1111"  # the well-known test card number, invented data
 
 GOOD = {
@@ -52,7 +52,7 @@ GOOD = {
     ),
     "rules-orders.md": (
         "# Rules: orders\n\n"
-        f"- BR-1: {SECRET_TEXT} an order over 100 needs a check; with care; "
+        f"- BR-1: {PLANTED} an order over 100 needs a check; with care; "
         "source: interview, kickoff notes; owner: sales lead; confirmed\n"
         "- BR-2: a refund goes to the card that paid; source: code, src/refund.py:12; "
         "owner: finance lead; inferred\n"
@@ -82,7 +82,7 @@ def changed(root: Path, name: str, text: str) -> list[str]:
 
 def no_value(lines: list[str]) -> None:
     for line in lines:
-        assert SECRET_TEXT not in line and "sales lead" not in line and CARD not in line
+        assert PLANTED not in line and "sales lead" not in line and CARD not in line
 
 
 def test_ac4_a_good_model_passes_and_no_folder_checks_nothing(tmp_path):
@@ -139,9 +139,13 @@ def test_ac4_a_file_over_200_rules_and_a_bad_file_name_fail(tmp_path):
         f"- BR-{n}: rule {n}; source: interview, x; owner: y; confirmed\n" for n in range(3, 204)
     )
     found = changed(tmp_path, "rules-stock.md", "# Rules\n\n" + lines)
-    assert found == ["rule 7: docs/domain/rules-stock.md: the file holds over 200 rules (id: BR-203)"]
+    assert found == [
+        "rule 7: docs/domain/rules-stock.md: the file holds over 200 rules (id: BR-203)"
+    ]
     found = changed(tmp_path / "b", "rules-Big Area.md", "# Rules\n")
-    assert found == ["rule 7: docs/domain/rules-Big Area.md: a rules file is not rules-<area>.md (id: file)"]
+    assert found == [
+        "rule 7: docs/domain/rules-Big Area.md: a rules file is not rules-<area>.md (id: file)"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -240,7 +244,9 @@ def test_ac4_rule_numbers_across_areas_and_refuses_the_201st(tmp_path, capsys):
     assert "- BR-3: stock is counted daily; source: interview, notes; owner: ops; inferred" in text
     assert run(tmp_path, "rule", "--area", "new-area", *args, "--owner", "ops") == 0
     assert "- BR-4: " in (tmp_path / "docs" / "domain" / "rules-new-area.md").read_text("utf-8")
-    full = "".join(f"- BR-{n}: r; source: code, a.py:1; owner: o; inferred\n" for n in range(5, 205))
+    full = "".join(
+        f"- BR-{n}: r; source: code, a.py:1; owner: o; inferred\n" for n in range(5, 205)
+    )
     (tmp_path / "docs" / "domain" / "rules-full.md").write_text(full, encoding="utf-8")
     assert run(tmp_path, "rule", "--area", "full", *args, "--owner", "ops") == 1
     assert "split by area" in capsys.readouterr().out
@@ -265,9 +271,18 @@ def test_ac4_classify_entity_and_regulation_write_checked_lines(tmp_path):
     assert run(tmp_path, "classify", "--item", "x", "--class", "secret") == 1
     assert run(tmp_path, "entity", "--name", "Parcel", "--meaning", "What ships",
                "--relates", "Order:many-one:an order ships in parcels") == 0  # fmt: skip
-    assert run(tmp_path, "entity", "--name", "Box", "--meaning", "m", "--relates", "Nope:one-one:r") == 1
-    assert run(tmp_path, "regulation", "--id", "zz-shop.zz-rule", "--scope", "out", "--reason", "r") == 1
-    assert run(tmp_path, "regulation", "--id", "zz-shop.zz-none", "--scope", "in", "--reason", "r") == 1
+    assert (
+        run(tmp_path, "entity", "--name", "Box", "--meaning", "m", "--relates", "Nope:one-one:r")
+        == 1
+    )
+    assert (
+        run(tmp_path, "regulation", "--id", "zz-shop.zz-rule", "--scope", "out", "--reason", "r")
+        == 1
+    )
+    assert (
+        run(tmp_path, "regulation", "--id", "zz-shop.zz-none", "--scope", "in", "--reason", "r")
+        == 1
+    )
     assert domain_model.findings(tmp_path) == []
     text = (tmp_path / "docs" / "domain" / "entities.md").read_text(encoding="utf-8")
     assert "## Parcel\n\nWhat ships\n\n- relates to Order: many to one, an order ships" in text
@@ -279,7 +294,9 @@ def test_ac4_confirm_changes_only_the_status_word(tmp_path):
     path = tmp_path / "docs" / "domain" / "rules-orders.md"
     before = path.read_text(encoding="utf-8")
     assert run(tmp_path, "confirm", "--id", "BR-2") == 0
-    assert path.read_text(encoding="utf-8") == before.replace("owner: finance lead; inferred", "owner: finance lead; confirmed")
+    assert path.read_text(encoding="utf-8") == before.replace(
+        "owner: finance lead; inferred", "owner: finance lead; confirmed"
+    )
     assert run(tmp_path, "confirm", "--id", "BR-2") == 1  # already confirmed
     assert run(tmp_path, "confirm", "--id", "BR-9") == 1
 

@@ -1,0 +1,1 @@
+- Domain: a project keeps one checked domain model under `docs/domain/` (entities, numbered business rules with a source, an owner and a status, the data classification and the regulations in scope), written by `domain_model.py` in planning, checked inside the `playbooks` step, harvested by the steward, with the glossary naming its packs (brief #1954, ADR-0810)

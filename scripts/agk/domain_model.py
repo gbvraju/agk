@@ -9,7 +9,8 @@ ADR-0810). Installed: `kit/manifest.json` lists it in `verbatim`.
     python3 scripts/agk/domain_model.py [--root DIR] rule --area A --text T --source S --where W
         --owner O [--inferred]
     python3 scripts/agk/domain_model.py [--root DIR] classify --item I --class C
-    python3 scripts/agk/domain_model.py [--root DIR] entity --name N --meaning M [--relates E:one-many:R]
+    python3 scripts/agk/domain_model.py [--root DIR] entity --name N --meaning M
+        [--relates E:one-many:R]
     python3 scripts/agk/domain_model.py [--root DIR] regulation --id P.R --scope in|out --reason R
     python3 scripts/agk/domain_model.py [--root DIR] confirm --id BR-<n>
 
@@ -147,12 +148,13 @@ def rules(root: Path) -> list[Rule]:
 
 
 def data_items(text: str) -> list[tuple[str, str]]:
-    return [(m[1].strip(), m[2].strip()) for _, l in _items(text, {}) if (m := ITEM_LINE.match(l))]
+    return [(m[1].strip(), m[2].strip()) for _, x in _items(text, {}) if (m := ITEM_LINE.match(x))]
 
 
 def pack_regulations(root: Path) -> set[str] | None:
     """`<pack>.<regulation>` of each pack in `[domain] packs`, or None when the table is refused."""
     import check_domains
+
     import config
 
     try:
@@ -168,7 +170,8 @@ def pack_regulations(root: Path) -> set[str] | None:
 
 
 def _check_rules(paths: list[Path], texts: dict, patterns: list) -> list[tuple[str, str, str]]:
-    out, seen = [], {}
+    out: list[tuple[str, str, str]] = []
+    seen: dict[str, str] = {}
     for path in paths:
         name, text = path.name, texts[path.name]
         if not RULES_FILE.match(name):
@@ -241,11 +244,15 @@ def _check_regulations(text: str, patterns: list, known: set | None) -> list:
     for number, line in _items(text, _guarded(text, patterns)):
         found = REG_LINE.match(line)
         if not found:
-            out.append((REGULATIONS, "a line is not <pack>.<regulation>: <decision>", f"line {number}"))
+            out.append(
+                (REGULATIONS, "a line is not <pack>.<regulation>: <decision>", f"line {number}")
+            )
             continue
         rid, (scope, _, reason) = found[1], found[2].partition(",")
         if scope.strip() not in SCOPES or not reason.strip():
-            out.append((REGULATIONS, "the decision is not in scope or out of scope with a reason", rid))
+            out.append(
+                (REGULATIONS, "the decision is not in scope or out of scope with a reason", rid)
+            )
         if known is not None and rid not in known:
             out.append((REGULATIONS, "the regulation is of no pack in [domain] packs", rid))
         if rid in seen:
@@ -262,15 +269,17 @@ def findings(root: Path) -> list[str]:
     patterns = _patterns(root)
     found: list[tuple[str, str, str]] = []
     names = [ENTITIES] + [p.name for p in rule_files(root)] + [DATA, REGULATIONS]
-    texts = {}
+    texts: dict[str, str] = {}
     for name in names:
         path = where / name
-        texts[name] = read(path) if path.is_file() else ""
-        if texts[name] is None:
+        text = read(path) if path.is_file() else ""
+        if text is None:
             found.append((name, "the file cannot be read", "file"))
-            texts[name] = ""
+        texts[name] = text or ""
         for line, kind in sorted(_guarded(texts[name], patterns).items()):
-            found.append((name, f"line {line} holds what the data guard flags {kind}", f"line {line}"))
+            found.append(
+                (name, f"line {line} holds what the data guard flags {kind}", f"line {line}")
+            )
     found += _check_entities(texts[ENTITIES], patterns)
     found += _check_rules(rule_files(root), texts, patterns)
     found += _check_data(texts[DATA], patterns)
@@ -288,7 +297,9 @@ def _scan(root: Path, *values: str) -> None:
         hits = scan_text(value, _patterns(root))
         if hits:
             kinds = ", ".join(sorted({h.kind for h in hits}))
-            raise Refused(f"a value holds what the data guard flags ({kinds}) (setting: [guard] patterns)")
+            raise Refused(
+                f"a value holds what the data guard flags ({kinds}) (setting: [guard] patterns)"
+            )
 
 
 def _append(root: Path, name: str, template: str, text: str) -> None:
@@ -314,25 +325,39 @@ def cmd_init(root: Path, area: str) -> str:
     }
     where.mkdir(parents=True, exist_ok=True)
     for name, template in targets.items():
-        (where / name).write_text((TEMPLATES / template).read_text(encoding="utf-8"), encoding="utf-8")
+        (where / name).write_text(
+            (TEMPLATES / template).read_text(encoding="utf-8"), encoding="utf-8"
+        )
     return f"wrote {len(targets)} files under {FOLDER}/"
 
 
 def cmd_rule(root: Path, opts: argparse.Namespace) -> str:
     _scan(root, opts.text, opts.where, opts.owner)
     if opts.source not in SOURCES:
-        raise Refused("the source kind is not customer material, interview or code (setting: --source)")
-    if ";" in opts.where + opts.owner or not (opts.text.strip() and opts.where.strip() and opts.owner.strip()):
-        raise Refused("a rule needs text, a place and an owner without ; (setting: --where, --owner)")
+        raise Refused(
+            "the source kind is not customer material, interview or code (setting: --source)"
+        )
+    if ";" in opts.where + opts.owner or not (
+        opts.text.strip() and opts.where.strip() and opts.owner.strip()
+    ):
+        raise Refused(
+            "a rule needs text, a place and an owner without ; (setting: --where, --owner)"
+        )
     name = f"rules-{opts.area}.md"
-    held = [r for p in rule_files(root) for _, l in _items(read(p) or "", {}) if (r := RULE_LINE.match(l))]
+    held = [
+        r
+        for p in rule_files(root)
+        for _, x in _items(read(p) or "", {})
+        if (r := RULE_LINE.match(x))
+    ]
     numbers = [int(m[1][3:]) for m in held if RULE_ID.match(m[1])]
     path = folder(root) / name
     if path.is_file() and sum(1 for _ in _items(read(path) or "", {})) >= MAX_RULES:
         raise Refused(f"{FOLDER}/{name} holds {MAX_RULES} rules: split by area (setting: --area)")
     rid = f"BR-{max(numbers, default=0) + 1}"
     status = "inferred" if opts.inferred else "confirmed"
-    line = f"- {rid}: {opts.text.strip()}; source: {opts.source}, {opts.where.strip()}; owner: {opts.owner.strip()}; {status}\n"
+    source = f"source: {opts.source}, {opts.where.strip()}"
+    line = f"- {rid}: {opts.text.strip()}; {source}; owner: {opts.owner.strip()}; {status}\n"
     _append(root, name, "domain-rules.md", line)
     return f"wrote {rid} to {FOLDER}/{name}"
 
@@ -358,7 +383,9 @@ def cmd_entity(root: Path, name: str, meaning: str, relates: list[str]) -> str:
         other, cards, reason = (spec.split(":", 2) + ["", ""])[:3]
         left, _, right = cards.partition("-")
         relation = f"- relates to {other.strip()}: {left} to {right}, {reason.strip()}"
-        if other.strip() not in names | {name.strip()} or not CARDINALITY.match(relation.split(": ", 1)[1]):
+        if other.strip() not in names | {name.strip()} or not CARDINALITY.match(
+            relation.split(": ", 1)[1]
+        ):
             raise Refused("a relation names no entity or no <one|many> pair (setting: --relates)")
         lines.append(relation + "\n")
     block = f"\n## {name.strip()}\n\n{meaning.strip()}\n" + ("\n" + "".join(lines) if lines else "")
@@ -372,11 +399,16 @@ def cmd_regulation(root: Path, rid: str, scope: str, reason: str) -> str:
     if known is None or rid not in known:
         raise Refused("the regulation is of no pack in [domain] packs (setting: domain.packs)")
     text = read(folder(root) / REGULATIONS) or ""
-    if any(m and m[1] == rid for _, l in _items(text, {}) for m in [REG_LINE.match(l)]):
+    if any(m and m[1] == rid for _, x in _items(text, {}) for m in [REG_LINE.match(x)]):
         raise Refused("the regulation is named already (setting: --id)")
     if not reason.strip():
         raise Refused("a decision needs a reason (setting: --reason)")
-    _append(root, REGULATIONS, "domain-regulations.md", f"- {rid}: {SCOPE_WORDS[scope]}, {reason.strip()}\n")
+    _append(
+        root,
+        REGULATIONS,
+        "domain-regulations.md",
+        f"- {rid}: {SCOPE_WORDS[scope]}, {reason.strip()}\n",
+    )
     return f"recorded one regulation in {FOLDER}/{REGULATIONS}"
 
 

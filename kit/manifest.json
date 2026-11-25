@@ -102,6 +102,7 @@
     "scripts/agk/design_signoff.py",
     "scripts/agk/design_standard.py",
     "scripts/agk/doctor.py",
+    "scripts/agk/domain_model.py",
     "scripts/agk/drift_audit.py",
     "scripts/agk/evidence.py",
     "scripts/agk/execution.py",
