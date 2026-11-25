@@ -38,7 +38,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import AMENDMENT, CheckError, paused, repo_root, run, utf8_output  # noqa: E402
+from common import (  # noqa: E402
+    AMENDMENT,
+    CheckError,
+    option_pairs,
+    paused,
+    repo_root,
+    run,
+    utf8_output,
+)
 
 NAME = "amendments"
 FIRST_CLASSED = 251  # the first amendment file written with `Class:` lines (ADR-0813)
@@ -318,7 +326,7 @@ def comment_records(path: Path) -> list[dict]:
 def command(args: list[str]) -> int:
     intake = "--intake" in args
     rest = [a for a in args if a != "--intake"]
-    opts = dict(zip(rest[1::2], rest[2::2], strict=False)) if rest[:1] == ["settle"] else {}
+    opts = dict(option_pairs(rest[1:], strict=False)) if rest[:1] == ["settle"] else {}
     keys = {"--amendment", "--evidence", "--agreed", "--comments"}
     if set(opts) != keys or len(rest) != 9:
         print(USAGE)

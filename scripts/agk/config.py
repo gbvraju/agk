@@ -812,10 +812,11 @@ def settle_refusal(root: Path) -> str | None:
 def principle_six_applied(root: Path) -> bool:
     """Whether `constitution/principles.md` at ROOT holds ADR-0813's clause in principle 6."""
     from check_amendments import PRINCIPLE_CLAUSE
+    from kit_root import kit_file
 
-    try:
-        text = (root / "constitution" / "principles.md").read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    try:  # the kit's own constitution, read where the layout puts it (ADR-0759)
+        text = kit_file(root, "constitution/principles.md").read_text(encoding="utf-8")
+    except (CheckError, OSError, UnicodeDecodeError):
         return False
     six = next((x for x in text.splitlines() if x.startswith("6. ")), "")
     return PRINCIPLE_CLAUSE in six
