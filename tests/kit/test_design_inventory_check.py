@@ -835,7 +835,7 @@ def test_ac2_a_requirement_intake_passes_beside_a_signed_inventory(repo):
     repo.write("docs/specs/0001-books.md", "# SPEC-0001: Books\n")
     repo.write("docs/specs/0002-tidy.md", "# SPEC-0002: Tidy\n")
     repo.write("docs/adr/0001-books.md", "# ADR-0001: Books\n")
-    repo.write("docs/runs/decisions-log.md", "# Decisions log\n\n| Date | Decision |\n| --- | --- |\n")
+    repo.write("docs/runs/decisions-log.md", "# Decisions log\n\n| Date | Decision |\n|---|---|\n")
     repo.write("docs/runs/residuals.md", "# Residuals\n\n## Open\n\n## Closed (not findings)\n")
     sign(root)
     repo.commit({}, "base")
@@ -848,7 +848,9 @@ def test_ac2_a_requirement_intake_passes_beside_a_signed_inventory(repo):
         "--date", "2026-11-25",
     )  # fmt: skip
     assert stub.returncode == 0, stub.stdout + stub.stderr
-    intake = repo.run("intake.py", "check", "--base", "main", "--root", str(root), "--date", "2026-11-25")
+    intake = repo.run(
+        "intake.py", "check", "--base", "main", "--root", str(root), "--date", "2026-11-25"
+    )
     assert intake.returncode == 0, intake.stdout
     design = check(root)
     assert design.returncode == 0, design.stdout
