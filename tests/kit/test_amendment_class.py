@@ -19,6 +19,7 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 
 import check_amendments as ca  # noqa: E402
+
 from config import StewardSettingError, steward_settings  # noqa: E402
 
 SPEC = "docs/specs/0072-example-spec.md"

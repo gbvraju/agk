@@ -4,7 +4,8 @@
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The class of each amendment item, and the steward's settled line (brief #1957, ADR-0813).
 
-    python3 scripts/agk/check_amendments.py settle --amendment N --evidence E --agreed yes|no [--intake]
+    python3 scripts/agk/check_amendments.py settle --amendment N --evidence E --agreed yes|no
+        [--intake]
 
 Each item of an amendment file from `FIRST_CLASSED` on carries one line `Class: correction`,
 `Class: implementation` or `Class: behaviour` (answer 1). An item with no such line, one that
@@ -129,8 +130,9 @@ def settle_on(root: Path | None) -> bool:
     if root is None:
         return False
     try:
-        from config import steward_settings
         from reviewers import spec_approvers
+
+        from config import steward_settings
 
         return steward_settings(root)["settle_amendments"] is True and bool(spec_approvers(root))
     except (CheckError, OSError, ValueError):

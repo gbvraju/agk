@@ -73,6 +73,7 @@
     "scripts/agk/caps.py",
     "scripts/agk/check_acceptance.py",
     "scripts/agk/check_adrs.py",
+    "scripts/agk/check_amendments.py",
     "scripts/agk/check_brief.py",
     "scripts/agk/check_build_state.py",
     "scripts/agk/check_design.py",

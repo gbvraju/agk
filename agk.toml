@@ -342,6 +342,12 @@ tests = [
 code = "scripts/agk/check_neutrality.py"
 tests = ["tests/kit/test_check_neutrality.py", "tests/kit/test_core_rules_page.py"]
 [[testing.map]]
+code = "scripts/agk/check_amendments.py"
+tests = [
+  "tests/kit/test_amendment_class.py", "tests/kit/test_route_settled_amendment.py",
+  "tests/kit/test_merge_cleared_settled.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_numbers.py"
 tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.py"]
 [[testing.map]]

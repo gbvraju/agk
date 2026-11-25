@@ -82,6 +82,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from check_amendments import settle_on, settled_key
 from common import (
     BRIEF_NUMBER,
     PAUSED_LINE,
@@ -114,7 +115,6 @@ from merge_cleared import (
     max_behind_setting,
     records_specs,
 )
-from check_amendments import settle_on, settled_key
 from merge_cleared import Held as EvidenceHeld  # route.py has a Held of its own
 from merge_cleared import Refused as EvidenceRefused
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
@@ -561,7 +561,7 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     ask. None when no ask is open.
     Brief #1957 (ADR-0813): with `settle` (`[steward] settle_amendments` on), the steward's
     settled line (`check_amendments.settled_key`) by a spec approver closes the open approval ask
-    of its amendment as that amendment's `Maintainer answer:` would; otherwise it is an `Answer:`."""
+    of its amendment as that amendment's `Maintainer answer:` would; else it is an `Answer:`."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
