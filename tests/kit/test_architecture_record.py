@@ -29,7 +29,7 @@ sys.path.insert(0, str(AGK))
 import engines  # noqa: E402
 import front_door  # noqa: E402
 import run_gates  # noqa: E402
-from gates import architecture_record  # noqa: E402
+from gates import architecture_quality, architecture_record  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("no_network")
 
@@ -540,3 +540,26 @@ def test_req_080_ac5_the_template_carries_the_quality_sections_with_markers():
     assert heads.index("Diagram") < heads.index("Quality scenarios")
     for name in front_door.QUALITY_SECTIONS:
         assert any(front_door.MARKER in ln for ln in body[name]), name
+
+
+def test_req_080_ac5_a_held_record_with_a_quality_section_has_it_checked(tmp_path, capsys):
+    """Fix list on a9780186 item 1: none of the six sections but `## Threats`: the quality
+    sections are still checked, by the `architecture-quality` step and by `check-design`."""
+    root = project(tmp_path)
+    text = f"# Architecture\n\n## Threats\n\n{QUALITY['Threats']}\n\n## Layers\n\n| a | b |\n"
+    write(root, "docs/architecture.md", text)
+    assert architecture_record.skipped(root) == architecture_record.HELD
+    assert architecture_quality.applies(root) and architecture_quality.skipped(root) is None
+    lack = "SPEC-0072 rule 5: the record lacks a required section"
+    want = [(lack, f"docs/architecture.md; section: {s}") for s in ("Quality scenarios", "Operations")]
+    assert architecture_quality.check(root, {}) == want
+    assert run_gates.main(["--root", str(root)]) == 1
+    out = capsys.readouterr().out
+    assert "FAIL gates: architecture-quality: SPEC-0072 rule 5" in out
+    assert "section: Operations" in out and "not run architecture-record:" in out
+    with pytest.raises(front_door.Refusal) as caught:
+        front_door.check_design([], root, front_door.iso_date(TODAY))
+    assert any("section: Quality scenarios" in p for p in caught.value.problems)
+    write(root, "docs/architecture.md", text.replace("S, T, I", "S, X"))
+    form = "SPEC-0072 rule 5: a line of the section is not of its form"
+    assert (form, "docs/architecture.md; section: Threats") in architecture_quality.check(root, {})

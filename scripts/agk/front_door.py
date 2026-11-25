@@ -1154,6 +1154,15 @@ def record_quality_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]
     return out
 
 
+def quality_record_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """(rule, path class) of each failure of the quality sections alone, read whether or not the
+    record is held (fix list on a9780186 item 1: a held record with a quality section)."""
+    return [
+        (f"{RULE_5}: {what}", f"{RECORD}; section: {section}")
+        for what, section in record_quality_problems(body)
+    ]
+
+
 def record_problems(root: Path) -> list[tuple[str, str]]:
     """Amendment 204: (rule, path class) of each failure of the record; never a value."""
     text = (root / RECORD).read_text(encoding="utf-8")
@@ -1181,8 +1190,7 @@ def record_problems(root: Path) -> list[tuple[str, str]]:
         m = re.match(r"^\s*[-*]\s+([^:]+?)\s*(?::.*)?$", ln)
         if m and diagram is not None and m.group(1).lower() not in drawn:
             fail("an outside service is missing from the diagram", "Diagram")
-    for what, section in record_quality_problems(body):
-        fail(what, section)
+    out += quality_record_problems(body)
     needs = body.get("Needs")
     if needs is None:
         return sorted(set(out))
@@ -1268,8 +1276,11 @@ def check_design(files: list[str], root: Path, today: datetime.date) -> int:
     problems: list[str] = []
     paths, designs = read_files(files, root, DESIGN, 7, problems)
     if (root / RECORD).is_file():
-        if record_held((root / RECORD).read_text(encoding="utf-8")):
+        text = (root / RECORD).read_text(encoding="utf-8")
+        if record_held(text):
             print(f"note {NAME}: {RULE_5}: {RECORD}: held until its next edit (no new section)")
+            found = quality_record_problems(dict(sections_of(text.split("\n"))))
+            problems += [f"{rule} (path class: {cls})" for rule, cls in found]
         else:
             problems += [f"{rule} (path class: {cls})" for rule, cls in record_problems(root)]
             if quality_held((root / RECORD).read_text(encoding="utf-8")):
