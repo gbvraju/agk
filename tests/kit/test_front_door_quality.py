@@ -217,6 +217,7 @@ LINE = "\n- R-1: Payments fail at the busiest hour; first sign: timeouts over on
         ("critical 4/5;", "critical 4/6;", "critical total is not the composed playbook's"),
         ("critical 4/5;", "critical 6/5;", "critical total is not the composed playbook's"),
         ("risk accepted: none;", "risk accepted: stop;", "an accepted risk with no A-<n> or R-<n>"),
+        ("critical 4/5;", "critical 5/5;", "settled count is not that of `## Assumptions`"),
         (
             "critical 4/5;",
             "nearly ready;",
@@ -235,6 +236,7 @@ LINE = "\n- R-1: Payments fail at the busiest hour; first sign: timeouts over on
         "total-wrong",
         "settled-over-total",
         "risk-id-unbacked",
+        "settled-hand-edited",
         "readiness-form",
     ],
 )

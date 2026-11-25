@@ -693,6 +693,11 @@ def quality_problems(rel: str, text: str, root: Path) -> list[str]:
             out.append(
                 f"rule 7: {rel}: the `## Readiness` critical total is not the composed playbook's"
             )
+        open_ids = held_ids(root, sections)
+        if int(ready.group(1)) != len(critical) - len(open_ids):
+            out.append(
+                f"rule 7: {rel}: the `## Readiness` settled count is not that of `## Assumptions`"
+            )
         named = {r[1] for r in rows}
         if ready.group(3) != "none" and any(i not in named for i in ready.group(3).split(", ")):
             out.append(
@@ -740,7 +745,7 @@ def readiness_lines(root: Path, name: str) -> list[str]:
     if ready is None:
         return []
     lines = [f"  readiness: {ready.group(0)}"]
-    if int(ready.group(1)) < int(ready.group(2)):
+    if held_why(root, sections) is not None:
         from common import CheckError
 
         try:
@@ -754,8 +759,11 @@ def readiness_lines(root: Path, name: str) -> list[str]:
 
 def design_holds(root: Path) -> list[str]:
     """SPEC-0073 rule 6, for `check_design.py`: each design whose discovery document of its slug
-    has a `## Readiness` line with a critical item open and no accepted risk, while
-    `[quality] grill_hold` is true; the setting is read only when such a design exists."""
+    has a `## Readiness` section with a critical item open and no accepted risk, while
+    `[quality] grill_hold` is true; the setting is read only when such a design exists. The open
+    items are read from `## Assumptions` (`held_ids`) as well as from the readiness numbers, so a
+    hand-edited count clears nothing, and a readiness line out of form or grill items that cannot
+    be composed hold the design too (fail closed; fix list 7172312072 items 1 and 2)."""
     out = []
     hold = None
     for path in sorted((root / DESIGN).glob("*.md")):
@@ -763,16 +771,33 @@ def design_holds(root: Path) -> list[str]:
             text = (root / DIR / f"{path.stem}.md").read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        ready = readiness_of(body_sections(text))
-        if ready is None or int(ready.group(1)) >= int(ready.group(2)):
+        sections = body_sections(text)
+        if "Readiness" not in sections:
+            continue
+        why = held_why(root, sections)
+        if why is None:
             continue
         hold = grill_hold(root) if hold is None else hold
         if hold:
             out.append(
-                f"SPEC-0073 rule 6: {DESIGN}/{path.name} is held: its discovery has an open"
-                " critical item (setting: quality.grill_hold)"
+                f"SPEC-0073 rule 6: {DESIGN}/{path.name} is held: {why}"
+                " (setting: quality.grill_hold)"
             )
     return out
+
+
+def held_why(root: Path, sections: dict[str, list[str]]) -> str | None:
+    """Why a document with `## Readiness` holds its design; None when nothing critical is open."""
+    ready = readiness_of(sections)
+    if ready is None:
+        return "its discovery's `## Readiness` is not of rule 7's form"
+    try:
+        open_ids = held_ids(root, sections)
+    except Refusal:
+        return "its discovery's grill items cannot be composed"
+    if open_ids or int(ready.group(1)) < int(ready.group(2)):
+        return "its discovery has an open critical item"
+    return None
 
 
 # --- the research record (rule 6) and the design (rule 7) ----------------------------------------

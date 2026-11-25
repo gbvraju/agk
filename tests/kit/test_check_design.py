@@ -532,60 +532,121 @@ def test_ac6_pb05_colour_still_fails_contrast_alone_with_an_imported_evidence_li
 # --- the hold at the design (SPEC-0073 rule 6; REQ-080 AC4; brief #1938, ADR-0803) -------------
 
 HELD_DESIGN = "docs/design/architecture/shop.md"
+CRITICAL = ("problem", "who-hurts", "non-goals", "riskiest", "success")
+OPEN = "critical 4/5; risk accepted: none; questions 5/12; accepted recommendations 0"
+RISKED = "critical 5/5; risk accepted: riskiest; questions 5/12; accepted recommendations 0"
+SETTLED = "critical 5/5; risk accepted: none; questions 5/12; accepted recommendations 2"
+HOLD_OFF = "[quality]\ngrill_hold = false\n"
 
 
-def readiness_tree(
-    root,
-    line="critical 4/5; risk accepted: none; questions 4/12; accepted recommendations 0",
-    agk="",
-):
-    """A tree with only a design and its discovery's `## Readiness` (no theme, no mockup)."""
+def readiness_tree(root, line=OPEN, agk="", open_ids=("riskiest",), risk=None):
+    """A tree with only a design, the default playbook and its discovery's `## Assumptions` and
+    `## Readiness` (no theme, no mockup); `line=None` leaves the grill sections out."""
     put(root, HELD_DESIGN, "# Design: shop\n")
-    section = f"\n## Readiness\n\n{line}\n" if line else ""
-    put(root, "docs/discovery/shop.md", f"# Discovery: shop\n\n## Open points\n\n- none\n{section}")
+    default = KIT_ROOT / "config" / "playbooks" / "default.toml"
+    put(root, "config/playbooks/default.toml", default.read_text(encoding="utf-8"))
+    rows = []
+    for n, item in enumerate(CRITICAL, 1):
+        rows.append(
+            f"- A-{n}: {item}: (open)" if item in open_ids else f'- A-{n}: {item}: "x" (stated)'
+        )
+        rows += [f"  Risk accepted: {item} (2026-11-25T11:00:00Z)"] if item == risk else []
+    points = "".join(f"- D-{n}: `{i}` is open\n" for n, i in enumerate(open_ids, 1)) or "- none\n"
+    grill = "\n".join(
+        [
+            "## Assumptions",
+            "",
+            *rows,
+            "",
+            "## Risks",
+            "",
+            "- none",
+            "",
+            "## Readiness",
+            "",
+            line or "",
+        ]
+    )
+    text = (
+        f"# Discovery: shop\n\n## Open points\n\n{points}\n{grill}\n"
+        if line is not None
+        else ("# Discovery: shop\n\n## Open points\n\n- none\n")
+    )
+    put(root, "docs/discovery/shop.md", text)
     if agk:
         put(root, "agk.toml", agk)
     return root
 
 
-def test_ac4_a_design_whose_discovery_has_an_open_critical_item_is_held(tmp_path):
-    """REQ-080 AC4: SPEC-0073 rule 6 (held naming the rule, the file and the setting, never a
-    value; it fires with no theme or mockups present)."""
-    proc = check(readiness_tree(tmp_path))
+def held(proc, why="its discovery has an open critical item"):
     assert proc.returncode == 1, proc.stdout
     assert proc.stdout == (
-        f"FAIL design: SPEC-0073 rule 6: {HELD_DESIGN} is held: its discovery has an open"
-        " critical item (setting: quality.grill_hold)\n"
+        f"FAIL design: SPEC-0073 rule 6: {HELD_DESIGN} is held: {why}"
+        " (setting: quality.grill_hold)\n"
     )
 
 
+def test_ac4_a_design_whose_discovery_has_an_open_critical_item_is_held(tmp_path):
+    """REQ-080 AC4: SPEC-0073 rule 6 (held naming the rule, the file and the setting, never a
+    value; it fires with no theme or mockups present)."""
+    held(check(readiness_tree(tmp_path)))
+
+
+def test_ac4_a_hand_edited_count_does_not_clear_the_hold(tmp_path):
+    """REQ-080 AC4: fix list 7172312072 item 1 (`critical 5/5` over an `## Assumptions` item
+    still open with no accepted risk holds; `check-discovery` fails the count too)."""
+    readiness_tree(tmp_path, line=SETTLED)
+    held(check(tmp_path))
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import front_door
+
+    text = (tmp_path / "docs/discovery/shop.md").read_text(encoding="utf-8")
+    found = front_door.quality_problems("docs/discovery/shop.md", text, tmp_path)
+    assert any("settled count is not that of `## Assumptions`" in p for p in found), found
+
+
+@pytest.mark.parametrize("line", ["nearly ready", "", OPEN + "\n" + OPEN])
+def test_ac4_a_readiness_out_of_form_holds_the_design(tmp_path, line):
+    """REQ-080 AC4: fix list 7172312072 item 2 (fail closed: a `## Readiness` section whose line
+    is out of form, empty or doubled holds the design)."""
+    held(
+        check(readiness_tree(tmp_path, line=line)),
+        "its discovery's `## Readiness` is not of rule 7's form",
+    )
+
+
+def test_ac4_grill_items_that_cannot_be_composed_hold_the_design(tmp_path):
+    """REQ-080 AC4: fix list 7172312072 item 2 (fail closed: no playbook to read the items)."""
+    readiness_tree(tmp_path, line=SETTLED, open_ids=())
+    (tmp_path / "config/playbooks/default.toml").unlink()
+    held(check(tmp_path), "its discovery's grill items cannot be composed")
+
+
 @pytest.mark.parametrize(
-    "line,agk,discovery",
+    "line,agk,open_ids,risk,discovery",
     [
-        (
-            "critical 5/5; risk accepted: riskiest; questions 4/12; accepted recommendations 0",
-            "",
-            True,
-        ),
-        ("critical 5/5; risk accepted: none; questions 5/12; accepted recommendations 2", "", True),
-        (
-            "critical 4/5; risk accepted: none; questions 4/12; accepted recommendations 0",
-            "[quality]\ngrill_hold = false\n",
-            True,
-        ),
-        ("", "", True),
-        (
-            "critical 4/5; risk accepted: none; questions 4/12; accepted recommendations 0",
-            "",
-            False,
-        ),
+        (RISKED, "", ("riskiest",), "riskiest", True),
+        (SETTLED, "", (), None, True),
+        (OPEN, HOLD_OFF, ("riskiest",), None, True),
+        ("nearly ready", HOLD_OFF, ("riskiest",), None, True),
+        (None, "", (), None, True),
+        (OPEN, "", ("riskiest",), None, False),
     ],
-    ids=["risk-accepted", "all-settled", "grill-hold-false", "no-readiness", "no-discovery"],
+    ids=[
+        "risk-accepted",
+        "all-settled",
+        "grill-hold-false",
+        "malformed-hold-false",
+        "no-readiness",
+        "no-discovery",
+    ],
 )
-def test_ac4_a_design_is_not_held_when_nothing_critical_is_open(tmp_path, line, agk, discovery):
+def test_ac4_a_design_is_not_held_when_nothing_critical_is_open(
+    tmp_path, line, agk, open_ids, risk, discovery
+):
     """REQ-080 AC4: SPEC-0073 rules 6 and 14 (an accepted risk, `grill_hold = false`, no
     `## Readiness` and no discovery document of the slug hold nothing)."""
-    readiness_tree(tmp_path, line, agk)
+    readiness_tree(tmp_path, line, agk, open_ids, risk)
     if not discovery:
         (tmp_path / "docs/discovery/shop.md").rename(tmp_path / "docs/discovery/other.md")
     proc = check(tmp_path)
@@ -599,6 +660,16 @@ def test_ac4_the_hold_joins_the_other_design_failures(tmp_path):
     proc = check(tmp_path)
     assert proc.returncode == 1
     assert "SPEC-0073 rule 6" in proc.stdout and "ok design" not in proc.stdout
+
+
+def test_ac4_two_designs_are_each_held_or_cleared_alone(tmp_path):
+    """REQ-080 AC4: SPEC-0073 rule 14 (two discovery documents: each read alone)."""
+    readiness_tree(tmp_path)
+    put(tmp_path, "docs/design/architecture/cafe.md", "# Design: cafe\n")
+    settled = (tmp_path / "docs/discovery/shop.md").read_text(encoding="utf-8")
+    settled = settled.replace("- A-4: riskiest: (open)", '- A-4: riskiest: "x" (stated)')
+    put(tmp_path, "docs/discovery/cafe.md", settled.replace(OPEN, SETTLED))
+    held(check(tmp_path))
 
 
 def test_ac7_a_grill_hold_out_of_form_fails_naming_the_setting(tmp_path):
