@@ -1,0 +1,1 @@
+- Secrets gate: an exact dependency version after a package name in a lock or manifest file (`package-lock.json`, `yarn.lock`, `poetry.lock` and the rest of one closed list) is no longer counted as a secret, so pinning dependencies keeps the gate green; every other secret shape in those files still fails (brief #1928, ADR-0796)

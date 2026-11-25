@@ -307,7 +307,11 @@ def test_a_baseline_of_false_findings_reads_lower_and_passes(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """REQ-079 AC4: brief #1928 answer 4: a held count of 1 reads 0; a new real finding fails."""
-    files = {"package-lock.json": LOCK.replace("{V}", V), "app/main.py": APP, BASE: "package-lock.json 1\n"}
+    files = {
+        "package-lock.json": LOCK.replace("{V}", V),
+        "app/main.py": APP,
+        BASE: "package-lock.json 1\n",
+    }
     root = _project(tmp_path, files, mode="adopt")
     code, out = _run(root, capsys)
     assert code == 0 and "baseline secrets: a count fell in 1" in out, out
