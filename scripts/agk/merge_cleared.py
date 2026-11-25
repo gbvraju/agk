@@ -236,11 +236,13 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_signoff  # noqa: E402
 import impact  # noqa: E402
 import kit_root  # noqa: E402
 import lock  # noqa: E402
 import session  # noqa: E402
 import session_plan  # noqa: E402
+from check_final_clearance import rows_unapproved  # noqa: E402
 from common import (  # noqa: E402
     CHECKOUT,
     DEFAULT_CONFIG,
@@ -260,6 +262,7 @@ from common import (  # noqa: E402
     utf8_output,
     who_argv,
 )
+from gates.licences import DEFAULT as LICENCE_DEFAULT  # noqa: E402
 from reviewers import (  # noqa: E402
     APPROVE,
     APPROVE_SHORT,
@@ -267,6 +270,7 @@ from reviewers import (  # noqa: E402
     approval_shas,
     approvers_of,
     authors_of,
+    confirmed_comments,
     head_before_comment,
     parse,
     specs_named_approved,
@@ -361,7 +365,21 @@ ENDED = ("success", *RED)  # a commit status that is no longer `pending`
 STATUS_CONTEXT = "agk/verdict"  # the commit status of a verdict (brief #853)
 STATUS_LIMIT = 140  # characters GitHub takes in a status description (verify)
 OWNER_MERGE = "owner merge"
-OWNER_HOLDS = ("release", "protected class", "outside author")  # the owner's (#1358, #1709)
+OWNER_HOLDS = (
+    "release",
+    "protected class",
+    "outside author",
+    "licence widening",
+)  # #1358, #1709, #1931
+DESIGN_HOLD = "design approval (rule 5)"  # brief #1931 answer 1 (ADR-0799)
+LICENCE_HOLD = "licence widening (rule 5)"  # brief #1931 answer 2, owner-only (ADR-0799)
+LICENCES = "config/licences.toml"  # the setting `allowed` (gates/licences.py)
+LIST_LINE = re.compile(r"""\s*(?:allowed\s*=\s*\[)?\s*(?:(?:"[^"\\]*"|'[^']*')\s*,?\s*)*\]?\s*""")
+QUOTED = re.compile(r""""([^"\\]*)"|'([^']*)'""")
+TABLE_HEAD = (
+    "| " + " | ".join(design_signoff.COLUMNS) + " |\n|" + "---|" * len(design_signoff.COLUMNS)
+)
+SEPARATOR = re.compile(r"\s*\|[\s|:-]*")
 NO_AUTHOR = "no listed verdict author (rule 3; setting: verdict_authors in config/reviewers.yaml)"
 WRITERS = ("write", "maintain", "admin")  # an author's permission that is not outside (#1709)
 INSIDE_ASSOCIATIONS = ("OWNER",)  # inside when the permission cannot be read (Q-1729-1)
@@ -443,6 +461,27 @@ class Rules(NamedTuple):
     pre: dict | None = None  # [testing] pre_merge_tests, checked (brief #667)
     behind: int | None = None  # [flow] max_behind_merges, checked (brief #727)
     queue: bool = False  # [flow] merge_queue, checked (brief #853)
+
+
+class Signers(NamedTuple):
+    """Who gives a design sign-off's line (brief #1931 answer 5): `agent_apps` (None when that
+    setting is malformed: no line counts), solo mode, and the one listed person of solo mode."""
+
+    apps: list[str] | None
+    solo: bool
+    person: str | None
+
+
+def signers_of(rules: Rules) -> Signers:
+    """The signers of the default branch's agk.toml and reviewers file (`reviewers.solo_person`'s
+    reading, from the RULES already read)."""
+    apps = rules.data.get("agent_apps", DEFAULT_CONFIG["agent_apps"])
+    if not isinstance(apps, list) or not all(isinstance(a, str) and a.strip() for a in apps):
+        apps = None
+    solo = rules.data.get("review_mode", "team") == "solo"
+    people = set(authors_of(rules.people)) | set(approvers_of(rules.people))
+    person = people.pop() if solo and len(people) == 1 else None
+    return Signers(None if apps is None else [a.strip().lower() for a in apps], solo, person)
 
 
 class Stopped(Exception):
@@ -1031,6 +1070,96 @@ def protected_class(files: list[dict]) -> str | None:
     return None
 
 
+def changed_lines(item: dict) -> tuple[list[str], list[str]] | None:
+    """(the added lines, the removed lines) of one file's PATCH, None when GitHub shows none."""
+    text = item.get("patch")
+    if not isinstance(text, str):
+        return None
+    lines = text.splitlines()
+    return [x[1:] for x in lines if x[:1] == "+"], [x[1:] for x in lines if x[:1] == "-"]
+
+
+def rows_added(item: dict) -> list[dict] | None:
+    """The sign-off rows the pull request adds to `docs/design/signoffs.md` (brief #1931 answer
+    1): the patch's added rows absent from its removed ones (the merge base's), read by the one
+    reader `design_signoff.parse_rows`; None when the patch is missing or a row is of another
+    shape (fail closed)."""
+    found = changed_lines(item)
+    if found is None:
+        return None
+
+    def rows(lines: list[str]) -> list[dict] | None:
+        kept = [x for x in lines if x.strip().startswith("|") and not SEPARATOR.fullmatch(x)]
+        head = "| " + " | ".join(design_signoff.COLUMNS) + " |"
+        kept = [x for x in kept if " ".join(x.split()) != head]
+        try:
+            return design_signoff.parse_rows(TABLE_HEAD + "\n" + "\n".join(kept))
+        except CheckError:
+            return None
+
+    added, removed = rows(found[0]), rows(found[1])
+    if added is None or removed is None:
+        return None
+    columns = design_signoff.COLUMNS
+    gone = {tuple(r[c] for c in columns) for r in removed}
+    return [r for r in added if tuple(r[c] for c in columns) not in gone]
+
+
+def design_unapproved(
+    files: list[dict], comments: list[dict], approvers: list[str], signers: Signers
+) -> bool:
+    """SPEC-0039 rule 5 as amendment 244 proposes (`design approval`): a row the pull request
+    adds to the sign-off record without its `Approve: design|inventory` line, judged by
+    `check_final_clearance.rows_unapproved`, the governance step's own judge (answer 8)."""
+    for item in files:
+        if design_signoff.SIGNOFFS not in (item.get("filename"), item.get("previous_filename")):
+            continue
+        rows = rows_added(item)
+        if rows is None or signers.apps is None:
+            return True
+        if not rows:
+            continue
+        items = confirmed_comments(comments, signers.apps, signers.person)
+        if rows_unapproved(rows, items, approvers, signers.apps, signers.solo):
+            return True
+    return False
+
+
+def licence_ids(lines: list[str]) -> set[str] | None:
+    """The ids, case-folded as `licences.ids` compares them, of LINES of the `allowed` list; None
+    when a line is of another form (another key, a table, a bare string)."""
+    found: set[str] = set()
+    for line in lines:
+        text = line.split("#", 1)[0]
+        if not LIST_LINE.fullmatch(text):
+            return None
+        found |= {(a or b).strip().casefold() for a, b in QUOTED.findall(text)}
+    return found
+
+
+def licence_widened(files: list[dict]) -> bool:
+    """SPEC-0039 rule 5 as amendment 244 proposes (`licence widening`, owner-only): the pull
+    request adds an id to `allowed` of `config/licences.toml`, adds the file with an id outside the
+    kit's `DEFAULT`, or removes it (absent is `DEFAULT`) over a list without every default id. A
+    rename, another status, a missing patch or a line of another form holds (fail closed);
+    removing ids only does not (brief #1931 answers 2 and 6)."""
+    default = {x.casefold() for x in LICENCE_DEFAULT}
+    for item in files:
+        if LICENCES not in (item.get("filename"), item.get("previous_filename")):
+            continue
+        status, found = item.get("status"), changed_lines(item)
+        if status not in ("added", "modified", "removed") or found is None:
+            return True
+        added, removed = licence_ids(found[0]), licence_ids(found[1])
+        if added is None or removed is None:
+            return True
+        if status == "removed":
+            return bool(default - removed)
+        if added - removed - (default if status == "added" else set()):
+            return True
+    return False
+
+
 def git_bytes(root: Path, *args: str) -> bytes | None:
     """The output of one local `git` read as bytes, or None when it fails."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
@@ -1249,6 +1378,7 @@ def hold_list(
     lift: bool = False,
     report: bool = False,
     records: list[str] | None = None,
+    signers: Signers | None = None,
 ) -> str | None:
     """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order; first,
     each ADR a Final line ACCEPTS must be one the pull request adds or changes (rule 3). The first
@@ -1287,10 +1417,14 @@ def hold_list(
         hold("release (rule 5)", True)
     if unapproved(pull, comments, sha, approvers, root, number):
         hold("spec approval (rule 5)")
+    if design_unapproved(files, comments, approvers, signers or Signers([], False, None)):
+        hold(DESIGN_HOLD)  # brief #1931: never lifted by --owner
     if approved_still_draft(repo, files, comments, approvers, sha, records, pull, root):
         hold(DRAFT_HOLD)
     if (klass := protected_class(files)) is not None:
         hold(f"protected class {klass} (rule 5)", True)
+    if licence_widened(files):
+        hold(LICENCE_HOLD, True)
     if outside_author(repo, pull):  # brief #1709 answer 2: the owner reads it first
         hold("outside author (rule 5)", True)
     if held_label(pull):
@@ -2691,7 +2825,17 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
     accepts = accepted_adrs(latest_verdict(comments) or {}, named) or []
     try:
         records: list[str] | None = [] if records_specs(rules.data) else None
-        hold_list(repo, number, pull, comments, rules.approvers, accepts, root, records=records)
+        hold_list(
+            repo,
+            number,
+            pull,
+            comments,
+            rules.approvers,
+            accepts,
+            root,
+            records=records,
+            signers=signers_of(rules),
+        )
     except Held as err:
         text = str(err)
         if owner_only(text):
@@ -2923,7 +3067,17 @@ def holds(
     accepts = accepted_adrs(verdict, named) or []
     records: list[str] | None = [] if records_specs(rules.data) else None
     owner = hold_list(
-        repo, number, pull, comments, rules.approvers, accepts, root, lift, report, records
+        repo,
+        number,
+        pull,
+        comments,
+        rules.approvers,
+        accepts,
+        root,
+        lift,
+        report,
+        records,
+        signers_of(rules),
     )
     if records:  # brief #1520: the spec records beside the ADR lines, then MERGED_BY
         accepted = [ln for ln in accepted if ln != MERGED_BY] + records + [MERGED_BY]

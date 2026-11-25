@@ -1,0 +1,1 @@
+- Guarded merge: a pull request that adds a design sign-off row without the listed approver's `Approve: inventory|design` line now holds as `design approval (rule 5)`, and one that widens the licence list in `config/licences.toml` holds for the owner's `--owner` merge as `licence widening (rule 5)` (brief #1931, ADR-0799)

@@ -215,14 +215,28 @@ def _row_key(row: dict) -> tuple[str, ...]:
     return tuple(row[c] for c in design_signoff.COLUMNS)
 
 
+def rows_unapproved(
+    rows: list[dict],
+    items: list[dict],
+    approvers: list[str],
+    apps: list[str] | tuple[str, ...],
+    solo: bool | None = None,
+) -> bool:
+    """Whether a sign-off row of ROWS has no `Approve: design|inventory` line of a listed approver
+    naming its kind, version and head, never through an app of APPS: the one judge of an added row,
+    which the guarded merge's `design approval` hold reads too (brief #1931 answer 8, ADR-0799).
+    Pass `confirmed_comments` output as ITEMS so a solo confirmation counts."""
+    given = design_approvals(items, approvers, apps, solo)
+    return any((r["kind"], r["version"], r["head"]) not in given for r in rows)
+
+
 def signoff_problems(root: Path, commit: str, items: list[dict]) -> None:
     """SPEC-0037 rules 3 and 9: a row the pull request adds needs the person's line on its head, and
     each commit adding a row changes only the sign-off record (compared with its first parent)."""
     added, mb = signoff_rows_added(root, commit)
     if not added:
         return
-    given = design_approvals(items, spec_approvers(root), agent_apps(root))
-    if any((r["kind"], r["version"], r["head"]) not in given for r in added):
+    if rows_unapproved(added, items, spec_approvers(root), agent_apps(root)):
         raise CheckError(SIGNOFF_NO_LINE)
     for sha, parents in signoff_commits(root, mb, commit):
         if not parents:

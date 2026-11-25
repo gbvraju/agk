@@ -400,3 +400,95 @@ def test_the_conductor_and_the_guide_name_the_owner_command():
         text = (root / name).read_text(encoding="utf-8")
         assert command in text, name
         assert "would-be merge: pass" in text, name
+
+
+# --- brief #1931 answers 2, 5 and 6 (ADR-0799): a wider licence list waits for the owner --------
+
+LICENCES = "config/licences.toml"
+LICENCE_HOLD = f"{HELD}licence widening (rule 5)"
+
+
+def licences(patch: str | None, status: str = "modified", **more: str) -> list[dict]:
+    item = {"filename": LICENCES, "status": status, **more}
+    if patch is not None:
+        item["patch"] = patch
+    return [item]
+
+
+WIDER = '@@ -1,3 +1,3 @@\n # The licences.\n-allowed = ["MIT"]\n+allowed = ["MIT", "LGPL-3.0-only"]'
+
+
+def test_req046_1931_a_wider_licence_list_is_held_for_the_owner(tmp_path):
+    """REQ-046: brief #1931 answer 7 (red on main 2e13c32b: IB-11, it merged)."""
+    root, bin_dir, log = checkout(tmp_path, files=licences(WIDER))
+    proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
+    assert one_line(proc) == f"{LICENCE_HOLD}; would-be merge: pass" and proc.returncode == 3
+    assert "LGPL" not in proc.stdout + proc.stderr, "a hold names the class, never an id"
+    assert merges(calls(log)) == []
+
+
+def test_req046_1931_the_owner_merge_lifts_the_licence_hold(tmp_path):
+    """REQ-046: brief #1931 answers 2 and 7: `--owner` lands it (`Q-MH-2`: no new line)."""
+    root, bin_dir, log = checkout(tmp_path, files=licences(WIDER))
+    proc = run(root, bin_dir, "--pr", "7", "--owner")
+    assert one_line(proc) == MERGED and proc.returncode == 0
+    assert merges(calls(log)) == [merge_call()]
+
+
+@pytest.mark.parametrize(
+    ("name", "files"),
+    [
+        ("a narrowing", licences('@@ -1 +1 @@\n-allowed = ["MIT", "ISC"]\n+allowed = ["MIT"]')),
+        ("another case", licences('@@ -1 +1 @@\n-allowed = ["MIT"]\n+allowed = ["mit"]')),
+        ("a comment only", licences("@@ -1 +1 @@\n-# old words\n+# new words")),
+        (
+            "a new file of default ids",
+            licences('@@ -0,0 +1 @@\n+allowed = ["MIT", "ISC"]', "added"),
+        ),
+    ],
+)
+def test_req046_1931_a_list_that_does_not_widen_merges(tmp_path, name, files):
+    """REQ-046: brief #1931 answers 2 and 6 (ids compared case-folded)."""
+    root, bin_dir, log = checkout(tmp_path, files=files)
+    proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
+    assert one_line(proc) == MERGED, name
+
+
+@pytest.mark.parametrize(
+    ("name", "files"),
+    [
+        ("a missing patch", licences(None)),
+        (
+            "a new file beyond the default",
+            licences('@@ -0,0 +1 @@\n+allowed = ["GPL-3.0-only"]', "added"),
+        ),
+        ("a rename", licences("", "renamed", previous_filename="config/old-licences.toml")),
+        (
+            "a rename away",
+            [
+                {
+                    "filename": "config/x.toml",
+                    "status": "renamed",
+                    "previous_filename": LICENCES,
+                    "patch": "",
+                }
+            ],
+        ),
+        ("a removal", licences('@@ -1 +0,0 @@\n-allowed = ["MIT"]', "removed")),
+        ("another form", licences('@@ -1 +1 @@\n-allowed = ["MIT"]\n+allowed = "MIT"')),
+        ("another key", licences('@@ -1 +1 @@\n+extra = ["MIT"]')),
+    ],
+)
+def test_req046_1931_a_list_the_merger_cannot_read_as_narrower_holds(tmp_path, name, files):
+    """REQ-046: brief #1931 answers 2, 5 and 6 (fail closed)."""
+    root, bin_dir, log = checkout(tmp_path, files=files)
+    proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
+    assert one_line(proc).startswith(LICENCE_HOLD), name
+    assert merges(calls(log)) == []
+
+
+def test_req046_1931_the_licence_reader_unit_by_unit(tmp_path):
+    """REQ-046: brief #1931 answer 2: the reader and the owner-only class, unit by unit."""
+    assert merge_cleared.licence_widened(licences(WIDER))
+    assert merge_cleared.owner_only("licence widening (rule 5)")
+    assert not merge_cleared.licence_widened([{"filename": "docs/x.md", "status": "added"}])
