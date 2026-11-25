@@ -843,3 +843,87 @@ def test_ac1_c2_other_files_under_docs_runs_still_fail(repo):
     draft(repo)
     write(repo, "docs/runs/residuals.md", "more\n", "a")
     failed(repo, "C2")
+
+
+# --- brief #1923: proposed spec amendment files beside an intake (SPEC-0012 rule 11 C2) ---------
+
+AMEND = "docs/runs/proposed-spec-amendments-{}.md"
+
+
+def test_ac1_c2_a_new_amendment_file_beside_the_intake_passes(repo):
+    """REQ-019 AC1: brief #1923 answer 1; an intake whose brief asks for an amendment."""
+    draft(repo)
+    write(repo, AMEND.format(240), "# Proposed amendments 240\n")
+    proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok intake\n"), proc.stdout
+
+
+def test_ac1_c2_two_new_amendment_files_beside_the_intake_pass(repo):
+    """REQ-019 AC1: brief #1923 answer 5 (as #1922: two amendment files)."""
+    draft(repo)
+    write(repo, AMEND.format(240), "# Proposed amendments 240\n")
+    write(repo, AMEND.format(241), "# Proposed amendments 241\n")
+    proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok intake\n"), proc.stdout
+
+
+def test_ac1_c2_a_modified_existing_amendment_file_fails(repo):
+    """REQ-019 AC1: brief #1923 answers 1 and 4 (--base): an amendment on the base is `M`."""
+    write(repo, AMEND.format(239), "# Proposed amendments 239\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "amendment 239")
+    git(repo, "branch", "-f", "main", "HEAD")
+    draft(repo)
+    write(repo, AMEND.format(239), "more\n", "a")
+    failed(repo, "C2")
+
+
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "docs/runs/proposed-spec-amendments-240.md.bak",
+        "docs/runs/sub/proposed-spec-amendments-240.md",
+        "docs/runs/proposed-spec-amendments-.md",
+        "docs/proposed-spec-amendments-240.md",
+    ],
+)
+def test_ac1_c2_an_amendment_like_file_of_another_name_or_folder_fails(repo, rel):
+    """REQ-019 AC1: brief #1923 answer 5; not the pattern, so C2 fails as today."""
+    draft(repo)
+    write(repo, rel, "x\n")
+    out = failed(repo, "C2")
+    assert "240" not in out and "sub" not in out
+
+
+def test_ac1_c2_an_amendment_beside_a_fourth_unrelated_file_fails(repo):
+    """REQ-019 AC1: brief #1923 answer 5."""
+    draft(repo)
+    write(repo, AMEND.format(240), "# Proposed amendments 240\n")
+    write(repo, "docs/runs/spec-0014-notes.md", "notes\n")
+    failed(repo, "C2")
+
+
+def test_ac1_c2_accepts_each_document_kind_a_spec_only_pull_request_may_carry(repo):
+    """REQ-019 AC1: brief #1923 answer 7; every docs/runs/ pattern of check_pr_body.NONE_SHARED
+    but the frozen old log is accepted by C2, so the two lists cannot drift apart."""
+    import check_pr_body
+    import common
+    import intake
+
+    assert common.AMENDMENT in intake.INTAKE_EXTRAS
+    kinds = [
+        p
+        for p in check_pr_body.NONE_SHARED
+        if p.startswith("docs/runs/") and p != "docs/runs/decisions-log.md"
+    ]
+    assert kinds
+    draft(repo)
+    for pattern in kinds:
+        rel = (
+            pattern + "2026-10-25-q-s0014-1.md"
+            if pattern.endswith("/")
+            else pattern.replace("*", "240")
+        )
+        write(repo, rel, "| 2026-10-25 | Q-S0014-1 ruled |\n")
+    proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok intake\n"), (kinds, proc.stdout)
