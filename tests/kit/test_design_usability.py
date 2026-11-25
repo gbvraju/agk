@@ -125,13 +125,13 @@ def test_ac5_the_ten_heuristics_are_one_tuple_the_template_lists():
 
 def test_ac5_the_screen_work_types_are_the_playbooks_that_hold_a_design():
     """REQ-080 AC5: brief #1953 answer 9 (a new screen work type without the record fails here):
-    the work types whose playbook names the screen inventory or SPEC-0037's design checks."""
+    the work types whose playbook names the screen inventory or the checks of SPEC-0037."""
     assert du is not None
     found = []
     for path in sorted((KIT_ROOT / "config" / "playbooks").glob("*.toml")):
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         text = " ".join([*data.get("evidence", [])] + [g["text"] for g in data.get("gates", [])])
-        if "screen inventory" in text or "SPEC-0037" in text:
+        if "screen inventory" in text or "checks of SPEC-0037" in text:
             found.append(data["work_type"])
     assert sorted(found) == sorted(du.SCREEN_WORK_TYPES) == ["mobile", "web-app"]
 
