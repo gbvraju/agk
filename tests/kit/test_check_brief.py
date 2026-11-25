@@ -22,6 +22,7 @@ STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
     "Prior: none: a test brief\nClass: a test brief; seen 0 (searched nothing)\n"
 )
 
+
 def check(tmp_path: Path, body: str | None, *extra: str):
     args = [str(tmp_path / "brief.md")] if body is not None else [str(tmp_path / "none.md")]
     if body is not None and "--root" in extra and "Impact:" not in body:
@@ -344,8 +345,11 @@ def test_rule4b_the_classes_are_read_from_the_roots_protected_paths(tmp_path, to
     out = check(tmp_path, body, "--root", str(protected_root(tmp_path)))
     assert out.returncode == 0, out.stdout
     warns = [ln for ln in out.stdout.splitlines() if WARN_4B in ln]
-    assert warns == ([] if named is None else [f"warning: {WARN_4B} ({named}) and the brief "
-                                               "reserves no ADR and names no Covered-by"])
+    assert warns == (
+        []
+        if named is None
+        else [f"warning: {WARN_4B} ({named}) and the brief reserves no ADR and names no Covered-by"]
+    )
 
 
 def test_rule4b_without_root_or_without_the_file_nothing_is_warned(tmp_path):
@@ -367,8 +371,14 @@ def test_rule4b_a_failing_brief_still_fails_and_the_event_carries_the_warning(tm
     }
     (tmp_path / "event.json").write_text(json.dumps(event), encoding="utf-8")
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(SCRIPTS / "check_brief.py"), "--event", str(tmp_path / "event.json"),
-         "--root", str(root)],
+        [
+            sys.executable,
+            str(SCRIPTS / "check_brief.py"),
+            "--event",
+            str(tmp_path / "event.json"),
+            "--root",
+            str(root),
+        ],
         cwd=tmp_path,
         capture_output=True,
         text=True,

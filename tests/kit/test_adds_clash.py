@@ -21,7 +21,7 @@ STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
 BODY = (
     'Sentence: "A team can run a thing."\n'
     "Answers (the maintainers'):\n1. one\n"
-    "Size: M\nAdvances: new\nTouches: src/app.py\n{adds}"
+    "Size: M\nAdvances: REQ-001\nTouches: src/app.py\n{adds}"
     "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n" + STUDY
 )
 

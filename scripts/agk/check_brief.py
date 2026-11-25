@@ -9,10 +9,11 @@
 The body has one line `Sentence:` with the sentence in quotation marks (1 to 300 characters), one
 line that starts `Answers` and ends with a colon followed by numbered items without a gap, zero or
 more lines `Depends-on: #n`, one line `Size: S`, `Size: M` or `Size: L`, and (SPEC-0034 rule 2) one
-line `Advances:` (REQ ids or `new`), one line `Touches:` (globs) and at most one `Priority:`
-(0 to 3; SPEC-0032 rule 9: a `Priority: 0` brief needs one line `Measured:` with the command and the
-output before and after a change that turns it green, except the red-branch brief of the
-router). The
+line `Advances:` (REQ ids or `new`; brief #1929: `new` only beside a `Touches:` entry that is
+exactly `docs/requirements.md`, an intake brief), one line `Touches:` (globs) and at most one
+`Priority:` (0 to 3; SPEC-0032 rule 9: a `Priority: 0` brief needs one line `Measured:` with the
+command and the output before and after a change that turns it green, except the red-branch
+brief of the router). The
 shape is the function `brief_problems` of `session.py`, which `session.py next` applies to the body
 it reads. With `--root DIR` an `Advances:` that names a requirement that is not a `### REQ-n`
 section of `DIR/docs/requirements.md` also fails, and (SPEC-0037 rule 10) a UI brief, one whose
@@ -434,6 +435,21 @@ def open_holders(root: Path, path: str | None) -> plan_names.Holders:
     return plan_names.Holders(briefs=keep, pulls=[x for x in pulls if isinstance(x, dict)])
 
 
+INTAKE_ONLY = (
+    f"rule 2: Advances: new is only for an intake brief, whose Touches names {REQUIREMENTS}"
+    " (SPEC-0034 rule 2)"
+)
+
+
+def intake_problems(body: str) -> list[str]:
+    """Brief #1929 (ADR-0797): `Advances: new` only beside a `Touches:` entry that is exactly the
+    requirements file; a glob over it does not count. Reads no root."""
+    lines = [x.rstrip() for x in body.splitlines()]
+    if "Advances: new" not in lines or REQUIREMENTS in line_entries(body, TOUCHES):
+        return []
+    return [INTAKE_ONLY]
+
+
 def body_problems(
     body: str, root: Path | None, waves: set[int] | None, opened: dict | None = None
 ) -> list[str]:
@@ -445,7 +461,7 @@ def body_problems(
     problems = [
         p for p in brief_problems(body, limits) if not any(p.startswith(SHAPE_OF[k]) for k in keys)
     ]
-    problems = twice + problems + contexts_line_problems(body)
+    problems = twice + problems + intake_problems(body) + contexts_line_problems(body)
     if root is None or problems:
         return problems
     opened = opened or {}

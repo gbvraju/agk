@@ -20,7 +20,7 @@ LINE = (
     "Contexts: kit (the check runs here); github, local and personal (the same check runs in each "
     "mode; read from files); stacks (not applicable: no test step changes).\n"
 )
-BODY = 'Sentence: "A thing."\nAnswers:\n1. one\nSize: M\nAdvances: new\nTouches: src/a.py\n'
+BODY = 'Sentence: "A thing."\nAnswers:\n1. one\nSize: M\nAdvances: REQ-001\nTouches: src/a.py\n'
 SPEC = "docs/specs/0001-thing.md"
 SECTION = (
     "\n## Contexts\n\n- kit: the check runs here\n- github, local and personal: the same check\n"

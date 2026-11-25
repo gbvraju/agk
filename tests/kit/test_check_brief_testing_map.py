@@ -308,7 +308,7 @@ def test_req037_the_kit_warns_an_open_brief_of_1835s_shape():
             "Touches: scripts/agk/check_brief.py, scripts/agk/example_scan.py,"
             " docs/x.md\nAdds: scripts/agk/example_scan.py\n",
         )  # fmt: skip
-        .replace("Advances: new", "Advances: REQ-037")
+        .replace("Advances: REQ-001", "Advances: REQ-037")
         .replace("Priority: 1\n", "Priority: 1\nWave: 4\n")
     )
     failures, warnings = check_brief.brief_result(text, KIT_ROOT, today="2026-11-24")

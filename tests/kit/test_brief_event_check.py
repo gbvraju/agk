@@ -25,7 +25,7 @@ STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
 GOOD = (
     f'Sentence: "{WORDS}"\n'
     "Answers:\n1. one\n2. two\n"
-    "Size: S\nAdvances: new\nTouches: docs/**\nPriority: 1\n"
+    "Size: S\nAdvances: REQ-001\nTouches: docs/**\nPriority: 1\n"
     "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n" + STUDY
 )
 WAVED = GOOD + "Wave: 2\n"
