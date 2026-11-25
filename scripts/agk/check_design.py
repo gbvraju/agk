@@ -4,7 +4,12 @@
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The design check (SPEC-0029 rule 7; SPEC-0037 rules 2, 3). Installed: `kit/manifest.json` lists
 it in `verbatim`, with the modules it imports, `design_standard.py`, `design_inventory.py`,
-`design_prototype_check.py`, `design_signoff.py` and `design_import.py`.
+`design_prototype_check.py`, `design_signoff.py`, `design_import.py` and `front_door.py`.
+
+First, while `[quality] grill_hold` is true, a design `docs/design/architecture/<slug>.md` whose
+`docs/discovery/<slug>.md` has a `## Readiness` line with a critical item open and no accepted risk
+is held, naming SPEC-0073 rule 6, the file and the setting (`front_door.design_holds`, brief #1938,
+ADR-0803); a refused `[quality]` table fails naming the setting, never read as held or clear.
 
 Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails, naming the rule
 and the path and never a value, on: a script or an event handler in a mockup, an external request
@@ -54,6 +59,7 @@ import design_inventory
 import design_prototype_check
 import design_signoff
 import design_standard
+import front_door
 from common import repo_root, run, utf8_output
 
 NAME = "design"
@@ -290,10 +296,11 @@ def cmd_check(root: Path) -> int:
     versions = design_prototype_check.versions(root)
     signoffs = (root / design_signoff.SIGNOFFS).is_file()
     imported = design_import.versions(root)
-    if not (theme.is_file() or folders or inventory or versions or signoffs or imported):
+    held = front_door.design_holds(root)  # SPEC-0073 rule 6, before the no-record return
+    if not (theme.is_file() or folders or inventory or versions or signoffs or imported or held):
         print("ok design (no design record)")
         return 0
-    problems: list[str] = []
+    problems: list[str] = list(held)
     pairs = DEFAULT_PAIRS
     notes: list[str] = []
     if theme.is_file():
