@@ -629,6 +629,14 @@ playbook through `front_door.py derive-write --layers FILE`. The record check fa
 
 The `architecture-record` step (brief #1595, amendment 204) is a module of the runner, never run by itself: where
 `docs/architecture.md` exists `run_gates.py` runs `front_door.py`'s record check through it (see "Front door").
+
+    python3 scripts/agk/gates/glossary.py [--root DIR] [--write]
+
+The `glossary` step (SPEC-0073 rule 8; brief #1951, ADR-0812) of `run_gates.py`'s `QUALITY_STEPS`, run after the
+product steps only where `docs/glossary.md` exists: one table `| Term | Meaning | In code | Synonyms |`, a term and a
+meaning in each row, no term twice (case-folded, against every synonym of another row), at most `[quality]
+glossary_terms` rows (40; several `In code` names are one row). Each failure names the rule, `docs/glossary.md` and the
+row number, never a term. `--write` writes the glossary from `kit/templates/glossary.md` once, never over one.
 A build brief of a work-type project other than its foundation carries one line `Layer: <layer>, ...` naming every layer
 its `Touches:` meets; `check_brief.py --root` refuses one without it or with an unknown layer (SPEC-0072 rule 8).
 
