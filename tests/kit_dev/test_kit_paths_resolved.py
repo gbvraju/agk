@@ -69,6 +69,7 @@ PLAYBOOKS = "config/playbooks/"
 # whose own brief fixes it. Remove a row with its site; never add one to go green.
 ALLOWED: tuple[tuple[str, ...], ...] = (
     (".claude/hooks/plugin_hooks.py", "project_runs_own", INSTALLED),
+    ("scripts/agk/check_domains.py", "folders", OWN),  # a project's own pack, read first (ADR-0804)
     ("scripts/agk/check_licence_notice.py", "annotated", INSTALLED),
     ("scripts/agk/check_runbooks.py", "cmd_check", INSTALLED),
     ("scripts/agk/ci_tools.py", "read_pins", CI),

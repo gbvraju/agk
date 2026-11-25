@@ -34,6 +34,10 @@ The gate runner (SPEC-0072 rule 3; REQ-079 AC2; brief #1586, ADR-0666): once the
 the check runs `run_gates.py` in the same process, so every check gate's step runs in the step
 `check_playbooks` of the `governance` job and in `make governance` with no workflow change
 (Q-1586-3), and its exit code is the runner's; with no check gate it adds no line.
+
+The domain packs (SPEC-0074 rule 2; REQ-081 AC1; brief #1935, ADR-0804): `findings` of every
+playbook adds `check_domains.findings`, so a pack's problem is one more `FAIL playbooks:` line and
+`ok playbooks` is unchanged when there is none; a stale `as_of` is a `warn domains:` line on stderr.
 """
 
 from __future__ import annotations
@@ -169,8 +173,11 @@ def standard(path: Path, root: Path) -> tuple[dict[str, Any], list[dict[str, Any
     return architecture, list(packs.values()), problems
 
 
-def findings(root: Path, files: list[Path] | None = None) -> list[str]:
-    """The problems of the check: the given playbooks, or all of them, and the declaration."""
+def findings(
+    root: Path, files: list[Path] | None = None, domains: bool | None = None
+) -> list[str]:
+    """The problems of the check: the given playbooks, or all of them, and the declaration; with
+    all of them, or `domains`, the domain packs' too (SPEC-0074 rule 2, brief #1935, ADR-0804)."""
     paths = playbook_format.playbooks(root) if files is None else files
     found = [
         line
@@ -179,7 +186,12 @@ def findings(root: Path, files: list[Path] | None = None) -> list[str]:
         + composed(path, root)[2]
         + standard(path, root)[2]
     ]
-    return found + playbook_format.declaration(root)[1]
+    found += playbook_format.declaration(root)[1]
+    if files is None and domains is None or domains:
+        import check_domains  # here: a named playbook alone (a derive, a gate run) reads no pack
+
+        found += check_domains.findings(root)
+    return found
 
 
 def cmd_check(root: Path) -> int:
@@ -187,7 +199,7 @@ def cmd_check(root: Path) -> int:
     chosen = playbook_format.selected(root)  # brief #1666: a clean project selects the plugin's
     if chosen is not None and chosen not in files:
         files.append(chosen)
-    found = findings(root, files)
+    found = findings(root, files, domains=True)
     for line in found:
         print(f"FAIL {NAME}: {line}")
     if found:
@@ -201,6 +213,10 @@ def cmd_check(root: Path) -> int:
             "no pack for them yet (SPEC-0072 rule 2)",
             file=sys.stderr,
         )
+    import check_domains
+
+    for line in check_domains.stale(root):
+        print(line, file=sys.stderr)
     print(f"ok {NAME} ({len(files)} playbooks)" if files else f"ok {NAME} (none)")
     import run_gates  # here: the runner imports this module
 

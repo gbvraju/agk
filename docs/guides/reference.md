@@ -537,6 +537,16 @@ The line is read by the conductor and by a person, never by a check: `check_pr_b
 read it (Q-S0038-10). A missing item, or a missing line, on a project with a declared work type is a fix item, never a clearing
 verdict, so nothing merges on a missing line; without a declaration no verdict carries the line and nothing changes.
 
+## Domain packs
+
+    python3 scripts/agk/check_domains.py [--root DIR]
+
+Checks each domain pack, `config/domains/<slug>.toml` (SPEC-0074 rule 2, brief #1935, ADR-0804): the format, the ids, the
+references, a source or `basis = "expected"` on each regulation, constraint and gate, and the data guard on every line. Each
+problem is one `FAIL domains: rule 2: <file>: <what> (key: <key>)` line, never a value; `check_playbooks.py` prints the same
+lines as `FAIL playbooks:`, so the `playbooks` step runs it. An `as_of` older than `[domain] stale_months` is a `warn domains:`
+line and never fails. Prints `ok domains (<n> packs)` or `ok domains (none)`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
+
 ## Playbook gates
 
 `python3 scripts/agk/run_gates.py [--baseline] [--root DIR]` runs, from `check_playbooks.py` once the playbooks pass (so inside

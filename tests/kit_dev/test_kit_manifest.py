@@ -64,6 +64,8 @@ SINGLES = {
     "docs/runbooks/leaked-secret.md",
     "docs/runbooks/red-default-branch.md",
     "config/ci-tools.txt",
+    "config/domains/field-service.toml",  # brief #1935 (ADR-0804)
+    "config/domains/payments.toml",
     "config/core-rules.md",
     "config/playbooks/api-service.toml",
     "config/playbooks/cloud-migration.toml",
