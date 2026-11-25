@@ -20,9 +20,10 @@ import pytest
 KIT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
-import config  # noqa: E402
 import front_door  # noqa: E402
 from gates import pins  # noqa: E402
+
+import config  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("no_network")
 
@@ -114,7 +115,8 @@ def test_req_080_ac5_the_number_of_designs_is_the_quality_setting(tmp_path, toml
 
 
 def test_req_080_ac5_a_refused_designs_value_names_the_setting(tmp_path):
-    (tmp_path / "agk.toml").write_text('mode = "init"\n\n[quality]\ndesigns = 7\n', encoding="utf-8")
+    toml = 'mode = "init"\n\n[quality]\ndesigns = 7\n'
+    (tmp_path / "agk.toml").write_text(toml, encoding="utf-8")
     with pytest.raises(config.QualitySettingError) as caught:
         config.quality_settings(tmp_path)
     assert "quality.designs" in str(caught.value) and "7" not in str(caught.value)

@@ -360,7 +360,8 @@ def test_req_079_ac1_the_vision_skill_asks_it_in_plain_words():
 
 QUALITY = {
     "Quality scenarios": (
-        "- performance efficiency: 300 people order at once -> each page answers (under 2 seconds)\n"
+        "- performance efficiency: 300 people order at once -> each page answers"
+        " (under 2 seconds)\n"
         "- reliability: the orders store fails -> the shop is back (within 4 hours)\n"
         "- security: a stranger calls the order api -> it is refused (100 percent of calls)\n"
         "- maintainability: the month's bill comes -> it stays in budget (under 80 dollars)"
@@ -369,7 +370,9 @@ QUALITY = {
         "- web to api: S, T, I: signed sessions and TLS on every call\n"
         "- api to Mailrelay Example: I: accepted: the receipts hold no card number"
     ),
-    "Operations": "- traced: each order call, end to end\n- alerted: the order api down for 5 minutes",
+    "Operations": (
+        "- traced: each order call, end to end\n- alerted: the order api down for 5 minutes"
+    ),
 }
 QUALITY_HELD = "the record predates its quality sections; held until its next edit"
 

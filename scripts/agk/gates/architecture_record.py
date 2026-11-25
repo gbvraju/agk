@@ -13,7 +13,8 @@ which `check-design` runs too; each failure names the rule and the section, neve
 (principle 8). A record with none of the new sections was written before this change and is
 `not run` until its next edit (principle 11). The quality sections (`front_door.QUALITY_SECTIONS`,
 amendment 236, brief #1952) are checked here too once any of them is present; a record with none of
-them is the `architecture-quality` step's `not run` line. It runs only where the record exists. Files only:
+them is the `architecture-quality` step's `not run` line. It runs only where the record exists.
+Files only:
 no network. Installed; it imports only installed modules; the runner's interface of
 `scripts/agk/gates/` (`RULE`, `check`, `skipped`, `applies`).
 """

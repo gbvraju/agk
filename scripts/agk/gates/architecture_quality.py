@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: LicenseRef-AGK-Proprietary
 # AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
-"""The `architecture-quality` step (SPEC-0073 rule 8, amendment 236; brief #1952, ADR-0808; REQ-080).
+"""The `architecture-quality` step (SPEC-0073 rule 8, amendment 236; brief #1952, ADR-0808).
+
+REQ-080.
 
 The hold of the record's quality sections, `front_door.QUALITY_SECTIONS` (`## Quality scenarios`,
 `## Threats`, `## Operations`): a `docs/architecture.md` that holds none of them is a note until its

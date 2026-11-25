@@ -1113,7 +1113,7 @@ def quality_line_ok(section: str, line: str) -> bool:
     """The form of one `- ` line of a quality section (brief #1952 answer 2); form only."""
     if section == "Quality scenarios":
         m = SCENARIO.match(line)
-        return bool(m) and m.group(1) in QUALITY_ATTRIBUTES
+        return m is not None and m.group(1) in QUALITY_ATTRIBUTES
     if section == "Threats":
         m = THREAT.match(line)
         if not m:
@@ -1129,7 +1129,7 @@ def quality_line_ok(section: str, line: str) -> bool:
     return bool(OPERATION.match(line))
 
 
-def quality_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]:
+def record_quality_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]:
     """(what, section) of each failure of the quality sections; nothing when none is present."""
     if not set(body) & set(QUALITY_SECTIONS):
         return []
@@ -1147,7 +1147,8 @@ def quality_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]:
         elif not all(quality_line_ok(name, ln) for ln in lines):
             out.append(("a line of the section is not of its form", name))
         elif name == "Quality scenarios":
-            numbered = [ln for ln in body.get("Needs", []) if ln.startswith("- ") and AMOUNT.search(ln)]
+            needs = body.get("Needs", [])
+            numbered = [ln for ln in needs if ln.startswith("- ") and AMOUNT.search(ln)]
             if len(lines) < len(numbered):
                 out.append(("the section has fewer scenarios than numbered needs", name))
     return out
@@ -1180,7 +1181,7 @@ def record_problems(root: Path) -> list[tuple[str, str]]:
         m = re.match(r"^\s*[-*]\s+([^:]+?)\s*(?::.*)?$", ln)
         if m and diagram is not None and m.group(1).lower() not in drawn:
             fail("an outside service is missing from the diagram", "Diagram")
-    for what, section in quality_problems(body):
+    for what, section in record_quality_problems(body):
         fail(what, section)
     needs = body.get("Needs")
     if needs is None:
