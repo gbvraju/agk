@@ -9,11 +9,12 @@
 `docs/design/usability.md` holds one `## <version>` section per prototype or imported version
 (`v<n>` or `i<n>`), and in it one `### <screen id>` per screen of `docs/design/inventory.md`, each
 with one line `- <heuristic>: pass | finding: <text> | not applicable: <reason>` for each of the
-ten `HEURISTICS`; the form is `kit/templates/usability.md`. `problems(root)` checks it only when
-the declared `[delivery] work_type` is one of `SCREEN_WORK_TYPES`: it fails a missing record, a
-missing section for the newest version (`newest`: the last kit version, else the last imported
+ten `HEURISTICS`; the form is `kit/templates/usability.md` (`template(root)`: the plugin's in the
+clean layout). `problems(root)` checks it only when the declared `[delivery] work_type` is one
+of `SCREEN_WORK_TYPES`: it fails a missing record, a missing section for the newest version (`newest`: the last kit version, else the last imported
 one), a screen of the inventory with no section, a heuristic missing, twice or not one of the
-ten, a value outside the three forms or with no text, and a screen the inventory does not hold.
+ten, a value outside the three forms or with no text, a screen the inventory does not hold, and a
+record that is not UTF-8 text (naming the path class).
 An older version's section is read for its form only (`Q-73I-1`), and no version folder is read.
 A refused declaration fails as `playbook_format.declaration` refuses it, naming the setting.
 `note(root)` prints `design: usability not applicable (work type)` for any other work type or
@@ -33,10 +34,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import design_import
 import design_inventory
 import design_prototype_check
+import kit_root
 import playbook_format
 
 RECORD = "docs/design/usability.md"
-TEMPLATE = Path(__file__).resolve().parents[2] / "kit" / "templates" / "usability.md"
+TEMPLATE_REL = "kit/templates/usability.md"
+TEMPLATE = Path(__file__).resolve().parents[2] / TEMPLATE_REL
 WHERE = f"SPEC-0038 rule 10: {RECORD}"
 HEURISTICS = (
     "status",
@@ -64,6 +67,12 @@ def newest(root: Path) -> str | None:
     imported = design_import.versions(root)
     found = kit or imported
     return found[-1] if found else None
+
+
+def template(root: Path) -> Path:
+    """The form's file for `root` (`kit_root.kit_file`): the project's in the installed layout,
+    the plugin's with `[kit] layout = "plugin"`; refuses naming the setting."""
+    return kit_root.kit_file(Path(root), TEMPLATE_REL)
 
 
 def _applies(root: Path) -> tuple[bool, list[str]]:
@@ -143,7 +152,10 @@ def problems(root: Path) -> list[str]:
         (root / design_inventory.INVENTORY).read_text(encoding="utf-8")
     )
     screens = [h for h, _ in inventory.get("Screens", []) if design_inventory.SLUG.match(h)]
-    sections, stray = _sections(path.read_text(encoding="utf-8"))
+    try:
+        sections, stray = _sections(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return [f"{WHERE}: the record cannot be read as UTF-8 text (path class: docs/design/)"]
     out: list[str] = []
     if stray:
         out.append(f"{WHERE}: a section is not headed by a version")

@@ -261,3 +261,87 @@ def test_ac5_the_design_check_fails_and_never_prints_a_finding(tmp_path):
         result.stdout
     )
     assert FINDING not in result.stdout + result.stderr
+
+
+# --- fix list 7175465393 (items 1 to 3) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("work_type", ["web-app", "mobile"])
+def test_ac5_each_screen_type_fails_a_missing_screen_heuristic_or_finding(tmp_path, work_type):
+    """REQ-080 AC5: brief #1953 answer 8 (the mobile fixture as the web-app one): a missing
+    screen, a missing heuristic and an empty `finding:` each fail naming the screen."""
+    where = f"SPEC-0038 rule 10: {RECORD}: v1"
+    cases = (
+        (record({"books": lines()}), f"{where}: book-detail: the screen has no section"),
+        (
+            record({"books": lines({"help": "-"}), "book-detail": lines()}),
+            f"{where}: books: the heuristic help is missing",
+        ),
+        (
+            record({"books": lines({"status": "finding:"}), "book-detail": lines()}),
+            f"{where}: books: status is not pass, finding: <text> or not applicable: <reason>",
+        ),
+    )
+    for n, (text, line) in enumerate(cases):
+        assert problems(project(tmp_path / str(n), work_type, usability=text)) == [line]
+
+
+def test_ac5_a_record_that_is_not_utf8_fails_naming_the_path_class(tmp_path):
+    """REQ-080 AC5: fix list item 1 (no traceback: the rule and the path class, never a value)."""
+    root = project(tmp_path, usability=None)
+    (root / RECORD).write_bytes(b"# Usability\n\n## v1\n\n\xff\xfe broken\n")
+    assert problems(root) == [
+        f"SPEC-0038 rule 10: {RECORD}: the record cannot be read as UTF-8 text"
+        " (path class: docs/design/)"
+    ]
+    result = run_check(root)
+    assert result.returncode == 1 and "Traceback" not in result.stderr, result.stderr
+    assert "the record cannot be read as UTF-8 text" in result.stdout
+
+
+def test_ac5_a_derived_playbook_is_not_applicable(tmp_path):
+    """REQ-080 AC5: brief #1953 answer 6 (a derived playbook, SPEC-0048 rule 22, is not checked)."""
+    root = project(tmp_path, "web-app", usability=None)
+    (root / "agk.toml").write_text('[delivery]\nwork_type = "shop-pilot"\n', "utf-8")
+    (root / "docs" / "research").mkdir(parents=True)
+    (root / "docs" / "research" / "shop-pilot.md").write_text("# Research\n", "utf-8")
+    shutil.copy(
+        root / "config" / "playbooks" / "web-app.toml",
+        root / "config" / "playbooks" / "shop-pilot.toml",
+    )
+    assert problems(root) == []
+    assert du.note(root) == "design: usability not applicable (work type)"
+
+
+def test_ac5_the_plugin_layout_reads_the_kit_roots_template(tmp_path, monkeypatch):
+    """REQ-080 AC5: brief #1953 answer 6 (`[kit] layout = "plugin"`: the template from the kit
+    root, the playbook from the plugin; installed: the project's own path), the check the same."""
+    assert du is not None
+    installed = project(tmp_path / "installed", usability=None)
+    assert du.template(installed) == installed / "kit" / "templates" / "usability.md"
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(KIT_ROOT))
+    root = project(tmp_path / "plugin", usability=None)
+    shutil.rmtree(root / "config")
+    (root / "agk.toml").write_text(
+        '[kit]\nlayout = "plugin"\n\n[delivery]\nwork_type = "web-app"\n', "utf-8"
+    )
+    assert du.template(root) == TEMPLATE.resolve()
+    assert problems(root) == [f"SPEC-0038 rule 10: {RECORD}: v1: the usability record is missing"]
+    (root / RECORD).write_text(FULL, encoding="utf-8")
+    assert problems(root) == []
+
+
+def test_ac5_the_settings_it_does_not_read_change_nothing(tmp_path):
+    """REQ-080 AC5: brief #1953 answer 6 (`execution`, `review_mode`, `pr_mode`, `[flow]`,
+    `[steward]`, `[personal]` and `[quality]` are not read: the same result either way)."""
+    plain = project(tmp_path / "plain", usability=record({"books": lines()}))
+    other = project(tmp_path / "other", usability=record({"books": lines()}))
+    (other / "agk.toml").write_text(
+        'execution = "local"\nreview_mode = "solo"\npr_mode = "flow"\n\n'
+        '[delivery]\nwork_type = "web-app"\n\n[flow]\nassign = "conductor"\n\n'
+        "[steward]\nauto_file = 0\n\n[personal]\nforge = \"files\"\n\n"
+        "[quality]\ngrill_hold = false\n",
+        "utf-8",
+    )
+    assert problems(other) == problems(plain) != []
+    assert du.note(other) == du.note(plain) is None
