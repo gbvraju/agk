@@ -6,7 +6,7 @@
 - Related: SPEC-0074, SPEC-0073, SPEC-0072, SPEC-0059, SPEC-0048, SPEC-0038, ADR-0794, ADR-0801, ADR-0259, ADR-0527, brief #1935, brief #1933, plan #661
 - Requirements: REQ-081
 
-Protected classes: `scripts/agk/`, `config/`, `kit/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `config/`, `kit/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`
 
 ## Context
 
