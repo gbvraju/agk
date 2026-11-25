@@ -282,7 +282,8 @@ class Draft:
         """A new file an intake may carry beside its three (rule 11 C2): a one-row file of the
         decisions folder, the rulings recorded before the spec flips (SPEC-0034 build (e); SPEC-0009
         rule 13 as amended, brief 557), or a proposed amendment of an Approved spec (brief #1923,
-        ADR-0795). Only an added file counts; the old log is frozen, so a row added there fails C2."""
+        ADR-0795). Only an added file counts; the old log is frozen, so a row added there
+        fails C2."""
         return self.changed.get(rel) == "A" and any(p.fullmatch(rel) for p in INTAKE_EXTRAS)
 
     def names(self, spec: list[str], adr: list[str]) -> None:

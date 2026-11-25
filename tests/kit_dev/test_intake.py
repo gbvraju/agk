@@ -920,7 +920,9 @@ def test_ac1_c2_accepts_each_document_kind_a_spec_only_pull_request_may_carry(re
     draft(repo)
     for pattern in kinds:
         rel = (
-            pattern + "2026-10-25-q-s0014-1.md" if pattern.endswith("/") else pattern.replace("*", "240")
+            pattern + "2026-10-25-q-s0014-1.md"
+            if pattern.endswith("/")
+            else pattern.replace("*", "240")
         )
         write(repo, rel, "| 2026-10-25 | Q-S0014-1 ruled |\n")
     proc = check(repo)
