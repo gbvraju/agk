@@ -1,6 +1,6 @@
 # SPEC-0074: The Day-1 quality path knows the customer's domain
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-081
 
