@@ -157,8 +157,9 @@ def settle(
     now: datetime | None = None,
 ) -> str | None:
     """The settled comment for amendment NUMBER of TEXT, or None when it is the owner's."""
-    listed = items(text)
-    if not (agreed and listed and settle_on(root)) or paused(root) or OWNER_ONLY.search(text):
+    listed = items(text)  # the header names principle 6 as every amendment does: items only
+    owner_only = any(OWNER_ONLY.search(body) for _, body in listed)
+    if not (agreed and listed and settle_on(root)) or paused(root) or owner_only:
         return None
     classes = [item_class(body, root, intake) for _, body in listed]
     kinds = {cls for cls, _ in classes}

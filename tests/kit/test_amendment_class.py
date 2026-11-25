@@ -46,7 +46,8 @@ def project(root: Path, on: bool | None = None, principle: bool = True) -> Path:
 
 def amendment(*items: str) -> str:
     body = "\n".join(f"{i}. **SPEC-0072 rule 4.** {text}" for i, text in enumerate(items, 1))
-    return f"# Proposed spec amendments 900 (SPEC-0072; REQ-079)\n\n## Items\n\n{body}\n"
+    head = "# Proposed spec amendments 900 (SPEC-0072; REQ-079)\n\nVia a proposal (principle 6)."
+    return f"{head}\n\n## Items\n\n{body}\n"
 
 
 CORRECTION = "The pins step reads each lock as rule 4 says.\n   Class: correction"
