@@ -224,3 +224,21 @@ def test_ac11_without_briefs_the_check_is_unchanged(repo):
 def test_ac11_the_two_flags_come_together(repo, args):
     """REQ-057 AC11: a usage error, exit 2."""
     assert repo.run("check_numbers.py", *args).returncode == 2
+
+
+def test_ac1_the_amendment_pattern_is_the_one_of_common_and_reads_the_same_numbers():
+    """REQ-032 AC1: brief #1923 answer 1; check_numbers reads common.AMENDMENT."""
+    import check_numbers
+    import common
+
+    assert check_numbers.AMENDMENT is common.AMENDMENT
+    cases = {
+        "docs/runs/proposed-spec-amendments-108.md": "108",
+        "docs/runs/proposed-spec-amendments-7.md": "7",
+        "docs/runs/proposed-spec-amendments-.md": None,
+        "docs/runs/proposed-spec-amendments-108.md.bak": None,
+        "docs/runs/sub/proposed-spec-amendments-108.md": None,
+    }
+    for path, number in cases.items():
+        m = common.AMENDMENT.fullmatch(path)
+        assert (m.group(1) if m else None) == number, path
