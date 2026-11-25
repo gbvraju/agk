@@ -11,7 +11,9 @@ numbers are those of the quoted needs answer), `## Diagram` (a fenced Mermaid or
 draws each outside service) and `## Layers`. The check is `front_door.py`'s (`record_problems`),
 which `check-design` runs too; each failure names the rule and the section, never a value
 (principle 8). A record with none of the new sections was written before this change and is
-`not run` until its next edit (principle 11). It runs only where the record exists. Files only:
+`not run` until its next edit (principle 11). The quality sections (`front_door.QUALITY_SECTIONS`,
+amendment 236, brief #1952) are checked here too once any of them is present; a record with none of
+them is the `architecture-quality` step's `not run` line. It runs only where the record exists. Files only:
 no network. Installed; it imports only installed modules; the runner's interface of
 `scripts/agk/gates/` (`RULE`, `check`, `skipped`, `applies`).
 """
