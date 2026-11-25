@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from check_adrs import status_of as adr_status
 from check_specs import status_of as spec_status
 from common import (
+    AMENDMENT,
     DECISION_FILE,
     DECISIONS_DIR,
     NUM_FILE,
@@ -221,6 +222,14 @@ def changed_between(root: Path, first: str, second: str) -> dict[str, str]:
     return result
 
 
+# The kinds of new file an intake may add beside its three (rule 11 C2), each a full-path pattern;
+# check_pr_body.NONE_SHARED's docs/runs/ kinds must each be here (tests/kit_dev/test_intake.py).
+INTAKE_EXTRAS = (
+    re.compile(re.escape(DECISIONS_DIR) + "/" + DECISION_FILE.pattern),
+    AMENDMENT,
+)
+
+
 class Draft:
     """What the work tree (or the commit `rev`) adds to the base: the requirement, spec and ADR."""
 
@@ -254,7 +263,7 @@ class Draft:
     def files(self) -> tuple[str | None, str | None]:
         spec, adr = self.added("docs/specs/"), self.added("docs/adr/")
         expect = {REQ_FILE} | set(spec[:1]) | set(adr[:1])
-        changed = {p for p in self.changed if not self.decision_file(p)}
+        changed = {p for p in self.changed if not self.extra_file(p)}
         if changed != expect or len(spec) != 1 or len(adr) != 1:
             self.fail(
                 "C2", "the difference is not the requirements file, one new spec and one new ADR"
@@ -269,16 +278,12 @@ class Draft:
                 self.fail("C1", f"the {label} number is not the next free one")
         return (spec[0] if len(spec) == 1 else None, adr[0] if len(adr) == 1 else None)
 
-    def decision_file(self, rel: str) -> bool:
-        """A new one-row file of the decisions folder: the rulings of the questions are recorded
-        before the spec flips (SPEC-0034 build (e)), one file each (SPEC-0009 rule 13 as amended,
-        brief 557); the old log is frozen, so a row added there fails C2."""
-        folder, _, name = rel.rpartition("/")
-        return (
-            folder == DECISIONS_DIR
-            and self.changed.get(rel) == "A"
-            and DECISION_FILE.fullmatch(name) is not None
-        )
+    def extra_file(self, rel: str) -> bool:
+        """A new file an intake may carry beside its three (rule 11 C2): a one-row file of the
+        decisions folder, the rulings recorded before the spec flips (SPEC-0034 build (e); SPEC-0009
+        rule 13 as amended, brief 557), or a proposed amendment of an Approved spec (brief #1923,
+        ADR-0795). Only an added file counts; the old log is frozen, so a row added there fails C2."""
+        return self.changed.get(rel) == "A" and any(p.fullmatch(rel) for p in INTAKE_EXTRAS)
 
     def names(self, spec: list[str], adr: list[str]) -> None:
         """Rule 4: the file names, directly in their folders; the message names no part of one."""

@@ -1,0 +1,1 @@
+- Intake: `intake.py check` now accepts new proposed spec amendment files beside an intake's requirements file, spec and ADR, so an intake that carries amendments passes C2; any other extra file still fails it. The amendment file pattern is shared from `common.py` (brief #1923, ADR-0795)

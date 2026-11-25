@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    AMENDMENT,
     NUM_FILE,
     CheckError,
     changed_files,
@@ -47,7 +48,6 @@ from session import reservations
 
 NAME = "numbers"
 USAGE = "usage: check_numbers.py [--open FILE --number N] [--briefs FILE --brief N]"
-AMENDMENT = re.compile(r"docs/runs/proposed-spec-amendments-(\d+)\.md")
 NUMBERED = re.compile(r"docs/(adr|specs)/(\d{4})-[^/]+\.md")
 
 

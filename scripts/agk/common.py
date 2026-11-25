@@ -822,6 +822,8 @@ def open_section_ids(text: str, heading: str = "Open") -> set[str]:
 
 DECISIONS_DIR = "docs/runs/decisions"
 DECISION_FILE = re.compile(r"\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*\.md")
+# A proposed amendment of an Approved spec, one file per number (check_numbers.py, intake.py C2).
+AMENDMENT = re.compile(r"docs/runs/proposed-spec-amendments-(\d+)\.md")
 TABLE_ROW = re.compile(r"\|.*\|")
 
 
