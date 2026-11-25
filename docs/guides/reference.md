@@ -618,6 +618,16 @@ playbook through `front_door.py derive-write --layers FILE`. The record check fa
 The `architecture-record` step (brief #1595, amendment 204) is a module of the runner, never run by itself: where
 `docs/architecture.md` exists `run_gates.py` runs `front_door.py`'s record check through it (see "Front door").
 
+    python3 scripts/agk/gates/architecture_quality.py
+
+The `architecture-quality` step (SPEC-0073 rule 8, amendment 236; brief #1952, ADR-0808) is a module of the runner,
+never run by itself: a `docs/architecture.md` that holds none of `## Quality scenarios`, `## Threats` and
+`## Operations` prints `not run architecture-quality: the record predates its quality sections; held until its next
+edit`, never `ok`. A record that holds any of them is checked whole by the `architecture-record` step: a missing one, a
+`TODO(architect)` marker, an empty one, a line out of its form (`- <attribute>: <stimulus> -> <response> (<number>)`
+with one of the eight ISO/IEC 25010 characteristics; `- <flow>: <STRIDE letters>: <mitigation or accepted: <reason>>`;
+`- traced: ...` or `- alerted: ...`) or fewer scenarios than numbered `## Needs` lines fails naming the section.
+
     python3 scripts/agk/gates/glossary.py [--root DIR] [--write]
 
 The `glossary` step (SPEC-0073 rule 8; brief #1951, ADR-0812) of `run_gates.py`'s `QUALITY_STEPS`, run after the

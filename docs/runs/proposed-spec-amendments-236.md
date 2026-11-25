@@ -22,3 +22,5 @@ The sentence (brief #1918), quoted as data: "Intake for Day-1 quality: a grill i
    parse (amendment 236)."
 
 No other rule changes.
+
+2026-11-25 (from `date -u`), brief #1952: items 1 and 2 (to rule 5) applied to `docs/specs/0072-each-work-type-playbook-carries-its-architecture-a-stack-sta.md` word for word, on the maintainer's answer on #1920 (comment 7172944626).

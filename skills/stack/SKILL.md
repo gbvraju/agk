@@ -61,7 +61,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
    project with an inventory) the Context holds a `Screens to build` line; fill each option's `Build speed:` phrase with how it
    builds those screens (server-rendered pages, a client framework, a component library), from the inventory and the signed-off
    version, and from nothing the owner did not give, and keep the line in the Context. Never set `Status: Accepted` and never name an option as chosen: that is the
-   architect's, in a later change.
+   architect's, in a later change. When `[architecture] layers` in `agk.toml` has more than the single default layer `src`,
+   compare `[quality] designs` interface designs for each layer (two by default; with `designs = 1`, write one design and
+   say so): keep the chosen one in the option and the rejected one in the `## Designs compared` section after
+   `## Decision`, one line `- <layer> layer: chosen: <design>; rejected: <design> (<why>)` each, outside the `- Option`
+   bullets; with the single default layer `src` (or no `[architecture] layers`) leave that section empty. When the
+   `quality-settings` line of `python3 scripts/agk/doctor.py` refuses the `[quality]` table (`setting: quality.designs`),
+   stop on that line (amendment 236, SPEC-0072 rule 5).
 3. Check, and correct the file on a failure, at most three rounds, then stop and report:
 
 ```

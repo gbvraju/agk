@@ -5,7 +5,8 @@ The architecture record of this project (SPEC-0072 rule 5). The foundation build
 step of the governance gate (`python3 <plugin>/scripts/agk/kit_root.py governance` (`<plugin>` the plugin's folder); `make governance` in an installed project) fails an import from one layer into another that the allowed directions below do not list.
 
 Its required parts (amendment 204, brief #1595): the `architecture-record` step of the same gate fails a missing
-section, an outside service missing from the diagram, and a `Needs` number other than the quoted needs answer. A
+section, an outside service missing from the diagram, and a `Needs` number other than the quoted needs answer, and
+the quality sections (amendment 236) a missing one, a marker or a line out of its form. A
 front-door design under `docs/design/architecture/` is a slice of this record: it carries one line
 `Architecture: docs/architecture.md` and adds only what its problem changes; a change to a layer, a store or a service
 goes through this record's ADR.
@@ -42,6 +43,18 @@ The numbers are the person's quoted answer to the needs question, word for word.
 TODO(architect): the parts, the data stores and each outside service above, and the data flow between them
 {{drawn}}
 ```
+
+## Quality scenarios
+
+TODO(architect): one or more lines `- <attribute>: <stimulus> -> <response> (<number>)` for each need above, the attribute one of the eight quality characteristics of ISO/IEC 25010 (functional suitability, performance efficiency, compatibility, usability, reliability, security, maintainability, portability).
+
+## Threats
+
+TODO(architect): one line `- <flow>: <STRIDE letters>: <mitigation>` (or `accepted: <reason>` for an accepted risk) for each data flow of the diagram.
+
+## Operations
+
+TODO(architect): what is traced and what is alerted beyond the needs, one line `- traced: <what>` or `- alerted: <when>` each.
 
 ## Layers
 
