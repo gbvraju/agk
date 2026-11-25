@@ -97,9 +97,10 @@ def item_class(text: str, root: Path, intake: bool = False) -> tuple[str, str | 
     if declared == "behaviour":
         return "behaviour", None
     found = MARKED.search(CLASS_LINE.sub("", text))
-    if intake or found:
-        what = "an intake" if intake or found.group(2) else f"a {found.group(1).lower()}"
-        return "behaviour", f"Class: {declared} but it adds {what}"
+    if found is not None and not found.group(2):
+        return "behaviour", f"Class: {declared} but it adds a {found.group(1).lower()}"
+    if intake or found is not None:
+        return "behaviour", f"Class: {declared} but it adds an intake"
     if rule is None and declared == "correction":
         return "behaviour", "Class: correction but it names no rule of an Approved spec"
     return declared, None
