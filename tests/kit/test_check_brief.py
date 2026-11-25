@@ -22,6 +22,7 @@ STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
     "Prior: none: a test brief\nClass: a test brief; seen 0 (searched nothing)\n"
 )
 
+
 def check(tmp_path: Path, body: str | None, *extra: str):
     args = [str(tmp_path / "brief.md")] if body is not None else [str(tmp_path / "none.md")]
     if body is not None and "--root" in extra and "Impact:" not in body:
@@ -45,7 +46,7 @@ def test_ac4_a_good_body_passes(tmp_path):
 def test_ac4_depends_on_lines_are_optional_and_answers_may_be_plain(tmp_path):
     """REQ-037 AC4"""
     body = (
-        'Sentence: "x"\nAnswers:\n1. a\nSize: S\nAdvances: new\nTouches: docs/x.md\n'
+        'Sentence: "x"\nAnswers:\n1. a\nSize: S\nAdvances: new\nTouches: docs/requirements.md\n'
         "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
     )
     assert check(tmp_path, body).stdout.strip() == "ok brief"
@@ -142,7 +143,72 @@ def test_rule2_a_missing_line_names_the_rule_and_what_is_missing(tmp_path):
 def test_rule2_priority_is_optional_and_advances_new_passes(tmp_path):
     """REQ-041 AC2"""
     body = GOOD.replace("Priority: 1\n", "").replace("REQ-001, REQ-002", "new")
+    body = body.replace("Touches: ", "Touches: docs/requirements.md, ")
     assert check(tmp_path, body).stdout.strip() == "ok brief"
+
+
+INTAKE_ONLY = "rule 2: Advances: new is only for an intake brief, whose Touches names"
+
+
+@pytest.mark.parametrize(
+    ("touches", "passes"),
+    [
+        ("src/ui/cart.ts", False),
+        ("docs/requirements.md, docs/specs/*", True),
+        ("docs/*", False),
+        ("docs/requirements.md.bak", False),
+    ],
+)
+def test_rule2_advances_new_passes_only_when_touches_names_the_requirements_file(
+    tmp_path, touches, passes
+):
+    """REQ-041 AC2: brief #1929 answers 1 and 5, `new` is for an intake (SPEC-0034 rule 2)."""
+    body = GOOD.replace("REQ-001, REQ-002", "new").replace("scripts/agk/*.py, docs/**", touches)
+    out = check(tmp_path, body)
+    if passes:
+        assert out.returncode == 0 and out.stdout.strip() == "ok brief"
+    else:
+        assert out.returncode == 1 and out.stdout.startswith(f"FAIL brief: {INTAKE_ONLY}")
+        assert "docs/requirements.md (SPEC-0034 rule 2)" in out.stdout
+        assert "A team can run a thing" not in out.stdout
+
+
+def test_rule2_a_requirement_id_needs_no_requirements_touch(tmp_path):
+    """REQ-041 AC2: brief #1929 answer 1, `Advances: REQ-n` passes as today."""
+    assert check(tmp_path, GOOD.replace("docs/**", "src/ui/cart.ts")).returncode == 0
+
+
+def test_rule2_the_steward_is_refused_before_filing_a_build_brief_with_new(tmp_path):
+    """REQ-041 AC2: brief #1929 answer 2, `file-brief` refuses in its brief check, so nothing is
+    filed (the refusal returns before the post)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import steward_owner
+
+    body = GOOD.replace("REQ-001, REQ-002", "new").replace("scripts/agk/*.py, docs/**", "app/x.py")
+    refusal = steward_owner.brief_refusal(tmp_path, body, None)
+    assert refusal is not None and refusal.startswith("refused: the body fails the brief check")
+    assert INTAKE_ONLY in refusal
+
+
+def test_rule2_every_guide_or_template_brief_with_new_is_an_intake(tmp_path):
+    """REQ-041 AC2: brief #1929 answer 7, a template or guide brief that teaches `Advances: new`
+    names `docs/requirements.md` in its `Touches:`, so it passes the check."""
+    sys.path.insert(0, str(SCRIPTS))
+    import check_brief
+
+    base = SCRIPTS.parents[1]
+    for top in ("kit/templates", "skills", "docs/guides"):
+        assert (base / top).is_dir()
+        for path in sorted((base / top).rglob("*")):
+            if not path.is_file() or path.suffix not in {".md", ".txt", ".toml", ".j2", ""}:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            lines = [x.strip() for x in text.splitlines()]
+            if "Advances: new" not in lines:
+                continue
+            assert check_brief.intake_problems(text) == [], path
+    assert check_brief.intake_problems("Advances: new\nTouches: docs/requirements.md\n") == []
+    assert check_brief.intake_problems("Advances: new\nTouches: app/x.py\n") != []
 
 
 def test_rule2_root_fails_an_absent_requirement_and_never_prints_it(tmp_path):
@@ -157,7 +223,7 @@ def test_rule2_root_passes_existing_requirements_and_new(tmp_path):
     """REQ-041 AC2"""
     root = requirements(tmp_path, "REQ-001", "REQ-002")
     assert check(tmp_path, GOOD, "--root", str(root)).stdout.strip() == "ok brief"
-    new = GOOD.replace("REQ-001, REQ-002", "new")
+    new = GOOD.replace("REQ-001, REQ-002", "new").replace("docs/**", "docs/requirements.md")
     assert check(tmp_path, new, "--root", str(requirements(tmp_path / "e"))).returncode == 0
 
 
@@ -279,8 +345,11 @@ def test_rule4b_the_classes_are_read_from_the_roots_protected_paths(tmp_path, to
     out = check(tmp_path, body, "--root", str(protected_root(tmp_path)))
     assert out.returncode == 0, out.stdout
     warns = [ln for ln in out.stdout.splitlines() if WARN_4B in ln]
-    assert warns == ([] if named is None else [f"warning: {WARN_4B} ({named}) and the brief "
-                                               "reserves no ADR and names no Covered-by"])
+    assert warns == (
+        []
+        if named is None
+        else [f"warning: {WARN_4B} ({named}) and the brief reserves no ADR and names no Covered-by"]
+    )
 
 
 def test_rule4b_without_root_or_without_the_file_nothing_is_warned(tmp_path):
@@ -302,8 +371,14 @@ def test_rule4b_a_failing_brief_still_fails_and_the_event_carries_the_warning(tm
     }
     (tmp_path / "event.json").write_text(json.dumps(event), encoding="utf-8")
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(SCRIPTS / "check_brief.py"), "--event", str(tmp_path / "event.json"),
-         "--root", str(root)],
+        [
+            sys.executable,
+            str(SCRIPTS / "check_brief.py"),
+            "--event",
+            str(tmp_path / "event.json"),
+            "--root",
+            str(root),
+        ],
         cwd=tmp_path,
         capture_output=True,
         text=True,

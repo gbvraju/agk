@@ -16,7 +16,7 @@ import brief_study  # noqa: E402
 
 SHAPE = (
     'Sentence: "A team can run a thing."\nAnswers:\n1. one\n2. two\nSize: M\n'
-    "Advances: new\nTouches: scripts/agk/tool.py, docs/x.md\nPriority: 1\n"
+    "Advances: REQ-001\nTouches: scripts/agk/tool.py, docs/x.md\nPriority: 1\n"
     "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
 )
 IMPACT = (
@@ -199,7 +199,9 @@ def test_ac4_a_red_branch_brief_is_held_only_to_class_and_prior(tmp_path):
 
 def test_ac4_the_routers_pair_is_held_to_class_and_prior(tmp_path):
     """REQ-037 AC4 (brief #1815 answer 5: held as any `Priority: 0` brief)"""
-    body = SHAPE.replace("Advances: new", "Advances: none").replace("Priority: 1", "Priority: 0")
+    body = SHAPE.replace("Advances: REQ-001", "Advances: none").replace(
+        "Priority: 1", "Priority: 0"
+    )
     root = tree(tmp_path)
     failed, _ = result(body, root)
     assert len(failed) == 2 and "Prior:" in failed[0] and "Class:" in failed[1], failed

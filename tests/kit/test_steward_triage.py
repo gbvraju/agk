@@ -25,7 +25,7 @@ Answers:
 Contexts: kit (not applicable: project only); github (the same); local (the same); personal (the \
 same); stacks (not applicable: no stack change).
 Modes: github the same; local the same; personal printed for the developer
-Advances: new
+Advances: REQ-001
 Priority: {priority}
 Measured: before: `make export` fails (1 failed); after: 1 passed.
 Size: S
@@ -40,7 +40,9 @@ def project(tmp_path):
     (tmp_path / "config" / "neutrality.txt").write_text("widgetcorp\n", encoding="utf-8")
     (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
     (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
+    (tmp_path / "docs" / "requirements.md").write_text(
+        "# Requirements\n\n### REQ-001 export\n", encoding="utf-8"
+    )
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "export.py").write_text("", encoding="utf-8")
     return tmp_path
