@@ -311,6 +311,12 @@ tests = [
   "tests/kit_dev/test_design_write.py", "tests/kit/test_design_signoff.py", "tests/kit/test_design_import.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_domains.py"
+tests = [
+  "tests/kit/test_check_domains.py", "tests/kit/test_domain_settings.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_installed_imports.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_final_clearance.py"
 tests = [
   "tests/kit/test_clearance_lateness.py", "tests/kit/test_core_contradictions.py",
@@ -347,7 +353,9 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
-tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
+tests = [
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py", "tests/kit/test_check_domains.py",
+]
 [[testing.map]]
 code = "scripts/agk/check_pr_body.py"
 tests = [
@@ -455,6 +463,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
+  "tests/kit/test_domain_settings.py",
   "tests/kit_dev/test_uninstall_settings.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_python_pack.py",
@@ -545,6 +554,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/doctor.py"
 tests = [
+  "tests/kit/test_domain_settings.py",
   "tests/kit/test_personal_lifecycle.py",
   "tests/kit/test_governance_level.py",
   "tests/kit/test_kit_defect_report.py", "tests/kit/test_kit_in_repository.py", "tests/kit/test_kit_repo_local_mode.py",

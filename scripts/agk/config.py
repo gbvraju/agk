@@ -836,6 +836,51 @@ def quality_settings(root: Path) -> dict:
     return found | table
 
 
+# --- the [domain] table (SPEC-0074 rule 12, brief #1935, ADR-0804) ------------------------------
+
+DOMAIN_DEFAULTS: dict = {"packs": [], "stale_months": 12}
+STALE_MONTHS = (1, 60)
+
+
+class DomainSettingError(CheckError):
+    """The `[domain]` table is refused, naming the setting and never the value."""
+
+
+def _refuse_domain(key: str = "") -> DomainSettingError:
+    named = f"domain.{key}" if key else "domain"
+    return DomainSettingError(f"the [domain] table is refused (setting: {named})")
+
+
+def domain_settings(root: Path) -> dict:
+    """SPEC-0074 rule 12: `packs`, the domain packs in order, each a pack under `config/domains/`
+    that passes `check_domains.py` (`[]`, none, when unset); `stale_months`, a whole number from 1
+    to 60 (12). A `bool` is never taken as a number; a refusal names `domain.<key>`, never a
+    value. The kit's own repository has no table."""
+    try:
+        table = config_source(root).get("domain", {})
+    except (OSError, ValueError):
+        raise _refuse_domain() from None
+    if not isinstance(table, dict):
+        raise _refuse_domain()
+    for key in sorted(table):
+        if key not in DOMAIN_DEFAULTS:
+            raise _refuse_domain(key)
+    months = table.get("stale_months", DOMAIN_DEFAULTS["stale_months"])
+    low, high = STALE_MONTHS
+    if type(months) is not int or not low <= months <= high:
+        raise _refuse_domain("stale_months")
+    names = table.get("packs", [])
+    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+        raise _refuse_domain("packs")
+    import check_domains  # here: the check imports this module for `stale_months`
+
+    for name in names:
+        path = check_domains.pack_path(root, name)
+        if path is None or check_domains.problems(path, root):
+            raise _refuse_domain("packs")
+    return {"packs": list(names), "stale_months": months}
+
+
 # --- the [autopilot] table (SPEC-0064 rules 7 and 8, brief #1390, ADR-0587) ---------------------
 
 AUTOPILOT_MODES = ("off", "assist", "on")
@@ -998,6 +1043,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
     "delivery": frozenset({"work_type"}),
     "steward": frozenset(STEWARD_DEFAULTS),
     "quality": frozenset(QUALITY_DEFAULTS),  # brief #1933 (ADR-0801)
+    "domain": frozenset(DOMAIN_DEFAULTS),  # brief #1935 (ADR-0804)
     "kit": frozenset({"layout", "plugin_version"}),
 }
 TOP_LEVEL = "top level"

@@ -554,6 +554,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "set each [quality] key to a value of its form, or remove it to keep the default (a "
         "change to agk.toml needs an ADR in the same pull request)",
     ),
+    "domain-settings": (  # brief #1935 (ADR-0804): the [domain] table, SPEC-0074 rule 12
+        "warn",
+        "domain: ",
+        "agk.toml: ",
+        "set each [domain] key to a value of its form, or remove it to keep the default (a "
+        "change to agk.toml needs an ADR in the same pull request)",
+    ),
     "autopilot-settings": (  # brief #1390 (ADR-0587): read for one release, then [autopilot] only
         "warn",
         "no setting that [autopilot] replaces is set",
@@ -1645,6 +1652,17 @@ def misplaced_settings_result(config: dict) -> Result:
     return Result("fail", message="; ".join(parts))
 
 
+def domain_settings_result(root: Path) -> Result:
+    """Brief #1935 (ADR-0804): the `[domain]` settings, or the refusal naming the key, never a
+    value."""
+    try:
+        found = models.domain_settings(root)
+    except CheckError as exc:
+        return Result("fail", message=str(exc))
+    packs = ", ".join(found["packs"]) or "none"
+    return Result("ok", message=f"packs {packs}, stale after {found['stale_months']} months")
+
+
 def quality_settings_result(root: Path) -> Result:
     """Brief #1933 (ADR-0801): the `[quality]` settings in the kit's own words, or the refusal
     naming the key, never a value."""
@@ -2579,6 +2597,7 @@ def run_checks(
     results["misplaced-settings"] = misplaced_settings_result(config)
     results["autopilot-settings"] = autopilot_settings_result(root)
     results["quality-settings"] = quality_settings_result(root)
+    results["domain-settings"] = domain_settings_result(root)
     results["local-mode-switch"] = local_switch_result(reads, config)
     results["merger-variable"] = merger_variable_result(root, reads, config)
     report = []
