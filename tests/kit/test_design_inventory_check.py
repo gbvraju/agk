@@ -671,3 +671,185 @@ def test_ac2_the_discovery_screens_line_has_one_reader():
         if pattern.search(path.read_text(encoding="utf-8"))
     }
     assert found == {"design_inventory.py": 1, "front_door.py": 1}, found
+
+
+# --- a signed inventory waits for its own pull request (brief #1930, ADR-0798, amendment 243) ---
+
+LINK = "https://example.com/review/1"
+SIGNOFF_HEAD = "a" * 40
+NEW_REQ = "\n### REQ-003 — A reader exports the list\n\n- Acceptance: AC1 x\n- Status: planned\n"
+WAITING = "design: rule 3: REQ-003 waits for an inventory pull request"
+
+
+def sign(root: Path, digest: str | None = None) -> None:
+    """An `inventory` row for DIGEST (the inventory's current digest when None)."""
+    import design_signoff
+
+    digest = digest or design_signoff.inventory_digest(root)
+    (root / "docs/design/signoffs.md").write_text(
+        "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+        "| --- | --- | --- | --- | --- | --- |\n"
+        f"| inventory | - | {digest} | {SIGNOFF_HEAD} | 2026-11-25 | {LINK} |\n",
+        encoding="utf-8",
+    )
+
+
+def add_requirement(root: Path, text: str = NEW_REQ) -> None:
+    with open(root / "docs/requirements.md", "a", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+def test_ac2_a_signed_inventory_lists_a_new_requirement_as_waiting(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3, amendment 243 (a signed inventory waits, it does not fail)."""
+    project(tmp_path)
+    sign(tmp_path)
+    add_requirement(tmp_path)
+    assert problems(tmp_path) == []
+    assert di.waiting_requirements(tmp_path) == ["REQ-003"]
+    proc = check(tmp_path)
+    assert proc.returncode == 0, proc.stdout
+    assert proc.stdout.splitlines() == [WAITING, "ok design"]
+
+
+def test_ac2_two_new_requirements_give_two_waiting_lines(tmp_path):
+    """REQ-044 AC2: amendment 243 (one line per waiting requirement)."""
+    project(tmp_path)
+    sign(tmp_path)
+    add_requirement(tmp_path)
+    add_requirement(tmp_path, NEW_REQ.replace("REQ-003", "REQ-004"))
+    proc = check(tmp_path)
+    assert proc.returncode == 0, proc.stdout
+    assert [ln for ln in proc.stdout.splitlines() if "waits" in ln] == [
+        WAITING,
+        WAITING.replace("REQ-003", "REQ-004"),
+    ]
+
+
+@pytest.mark.parametrize("row", ["none", "other digest"])
+def test_ac2_an_unsigned_inventory_is_checked_in_full(tmp_path, row):
+    """REQ-044 AC2: rule 3 (no row, or a row for another digest: every requirement needs one)."""
+    project(tmp_path)
+    if row == "other digest":
+        sign(tmp_path, "b" * 64)
+    add_requirement(tmp_path)
+    assert problems(tmp_path) == [f"{WHERE}: REQ-003: the requirement has no section"]
+    assert di.waiting_requirements(tmp_path) == []
+    proc = check(tmp_path)
+    assert proc.returncode == 1
+    assert "waits" not in proc.stdout
+
+
+def test_ac2_a_changed_signed_inventory_is_checked_in_full(tmp_path):
+    """REQ-044 AC2: rule 3 (the inventory changed since its sign-off: the digest has no row)."""
+    project(tmp_path)
+    sign(tmp_path)
+    add_requirement(tmp_path, NEW_REQ.replace("REQ-003", "REQ-004") + NEW_REQ)
+    path = tmp_path / INVENTORY
+    text = path.read_text(encoding="utf-8").replace(
+        "## Screens", "### REQ-003\n\n- Specs: SPEC-0003\n- Screens: no screen: x\n\n## Screens"
+    )
+    path.write_text(text, encoding="utf-8")
+    assert problems(tmp_path) == [f"{WHERE}: REQ-004: the requirement has no section"]
+
+
+def test_ac2_a_signed_inventory_with_an_empty_slot_still_fails(tmp_path):
+    """REQ-044 AC2: rule 3 (every other problem fails a signed inventory as today)."""
+    project(tmp_path, INVENTORY_TEXT.replace("- Flow: keep a list", "- Flow:"))
+    sign(tmp_path)
+    add_requirement(tmp_path)
+    assert problems(tmp_path) == [f"{WHERE}: books: the slot Flow is empty"]
+    assert check(tmp_path).returncode == 1
+
+
+def test_ac2_a_malformed_signoffs_table_is_refused_never_read_as_signed(tmp_path):
+    """REQ-044 AC2: rule 9 (a table of another shape is refused, as `parse_rows` does)."""
+    project(tmp_path)
+    (tmp_path / "docs/design/signoffs.md").write_text("# Design sign-offs\n", encoding="utf-8")
+    add_requirement(tmp_path)
+    proc = check(tmp_path)
+    assert proc.returncode != 0
+    assert "rule 9: docs/design/signoffs.md" in proc.stdout + proc.stderr
+    assert "waits" not in proc.stdout
+
+
+def test_ac2_only_a_product_requirement_waits_in_a_project(tmp_path):
+    """REQ-044 AC2: amendment 243 (in a project only REQ-101 up waits; a kit one still fails)."""
+    project(tmp_path)
+    (tmp_path / "agk.toml").write_text('mode = "init"\n', encoding="utf-8")
+    sign(tmp_path)
+    add_requirement(tmp_path)
+    add_requirement(tmp_path, NEW_REQ.replace("REQ-003", "REQ-101"))
+    assert problems(tmp_path) == [f"{WHERE}: REQ-003: the requirement has no section"]
+    assert di.waiting_requirements(tmp_path) == ["REQ-101"]
+
+
+def test_ac2_the_prototype_draws_from_a_signed_inventory_with_a_waiting_requirement(tmp_path):
+    """REQ-044 AC2: rule 3 (`design_prototype.agreed` calls `inventory_problems`, unchanged)."""
+    import design_prototype
+
+    project(tmp_path)
+    sign(tmp_path)
+    add_requirement(tmp_path)
+    design_prototype.agreed(tmp_path)  # raises CheckError when it refuses
+
+
+SPEC = """# SPEC-0003: Export
+
+- Status: Draft
+- Owner: reviewer group
+- Requirements: REQ-003
+
+## Rules
+
+1. The export lists every item.
+2. An empty list exports no file.
+
+## Tests
+
+- Rule 1: test, marker REQ@3 AC1.
+- Rule 2: test, marker REQ@3 AC2.
+
+## Proof
+
+Rules 1 to 2.
+
+## Residual
+
+- 2026-11-25: later (due 2027-01-31).
+
+## Open questions
+
+none
+""".replace("@", "-00")
+
+INTAKE_REQ = (
+    "\n### REQ-003 — Export\n\n- Acceptance: AC1 Given a saved list, when the reader exports it,"
+    " then a file with every book is downloaded; AC2 Given an empty list, when the reader exports"
+    " it, then the export is no file and shows an error message\n- Status: planned\n"
+)
+
+
+def test_ac2_a_requirement_intake_passes_beside_a_signed_inventory(repo):
+    """REQ-044 AC2: SPEC-0037 rule 3 with SPEC-0012 rule 11 C2 (one change passes both checks)."""
+    root = project(repo.root)
+    repo.write("docs/specs/0001-books.md", "# SPEC-0001: Books\n")
+    repo.write("docs/specs/0002-tidy.md", "# SPEC-0002: Tidy\n")
+    repo.write("docs/adr/0001-books.md", "# ADR-0001: Books\n")
+    repo.write("docs/runs/decisions-log.md", "# Decisions log\n\n| Date | Decision |\n| --- | --- |\n")
+    repo.write("docs/runs/residuals.md", "# Residuals\n\n## Open\n\n## Closed (not findings)\n")
+    sign(root)
+    repo.commit({}, "base")
+    repo.branch("intake/req-003-export")
+    add_requirement(root, INTAKE_REQ)
+    repo.write("docs/specs/0003-export.md", SPEC)
+    stub = repo.run(
+        "intake.py", "stub", "--req", "REQ-003", "--title", "Export", "--sentence",
+        "Let a reader export the list as a file.", "--ref", "main", "--root", str(root),
+        "--date", "2026-11-25",
+    )  # fmt: skip
+    assert stub.returncode == 0, stub.stdout + stub.stderr
+    intake = repo.run("intake.py", "check", "--base", "main", "--root", str(root), "--date", "2026-11-25")
+    assert intake.returncode == 0, intake.stdout
+    design = check(root)
+    assert design.returncode == 0, design.stdout
+    assert WAITING in design.stdout.splitlines()
