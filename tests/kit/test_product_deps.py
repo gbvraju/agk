@@ -678,3 +678,11 @@ def test_req079_ac5_a_missing_lock_of_one_runtime_skips_that_lock(product, capsy
     product.commit({"package-lock.json": None})
     assert licences.main(["--root", str(product.root)]) == 0
     assert capsys.readouterr().out == f"licences: {licences.NOT_RUN}\n"
+
+
+def test_req079_ac5_a_malformed_list_is_refused_for_two_runtimes(product, capsys) -> None:
+    """Answer 6: one `config/licences.toml` for every runtime; another form names the setting."""
+    product.commit(dict(TWO_FILES, **{"config/licences.toml": 'allowed = "MIT"\n'}))
+    assert licences.main(["--root", str(product.root)]) == 1
+    out = capsys.readouterr().out
+    assert out == f"FAIL licences: {licences.FORM} (setting: config/licences.toml)\n"

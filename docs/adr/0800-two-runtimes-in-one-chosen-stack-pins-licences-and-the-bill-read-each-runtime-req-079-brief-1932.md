@@ -4,7 +4,7 @@
 - Date: 2026-11-25
 - Deciders: maintainers (the owner's word, quoted below)
 - Related: brief #1932, v1 acceptance plan 3 (#1771, AD-03 and AD-06), ADR-0672 (pins), ADR-0768 (Python dependency
-  files), ADR-0789 (the bill at a commit), ADR-0791 (the foundation wait), ADR-0742 (the baseline counts), ADR-0676
+  files), ADR-0789 (the bill at a commit; decision 1 as amended here, decision 6 below), ADR-0791 (the foundation wait), ADR-0742 (the baseline counts), ADR-0676
   and ADR-0748 (the licences step), ADR-0370 (the bill of materials), SPEC-0072 rule 4, amendment 247, plan #661
 - Requirements: REQ-079
 
@@ -41,7 +41,13 @@ SPEC-0074".
    at the commit, `lock_components` adds the packages of every runtime's lock, each `bom-ref` once, and the product's
    name is read from the build file of the runtime at the root, else of the first runtime.
 5. SPEC-0072 rule 4 is not edited here: `docs/runs/proposed-spec-amendments-247.md` proposes its words (`Q-MR-1`).
-6. Single-runtime readers: `scripts/agk/basics.py`, `scripts/agk/engines.py`, `scripts/agk/gates/layers.py`,
+6. This amends ADR-0789 decision 1 (Accepted), which accepts a missing root `pyproject.toml` only when the chosen
+   stack is `node`. `sbom.py make` now also accepts it with a declared work type and an Accepted option of two
+   runtimes whose first runtime at the root is not Python: the build file of the first runtime at the root (else of
+   the first runtime) names the product. A Python runtime that names the product still needs `pyproject.toml`, and
+   every other case of a missing `pyproject.toml` is refused as before. The `both-parts` refusal case of
+   `test_elsewhere_a_missing_pyproject_is_refused_as_today` is removed with this item.
+7. Single-runtime readers: `scripts/agk/basics.py`, `scripts/agk/engines.py`, `scripts/agk/gates/layers.py`,
    `scripts/agk/gates/node_pack.py`, `scripts/agk/gates/python_pack.py`, `scripts/agk/gates/tests_floor.py` and
    `scripts/agk/run_gates.py` (its no-pack row) still read `pins.chosen` or `pins.pick`, one runtime only, and stay
    `not run` with two runtimes (`Q-MR-2`). A test lists every module that reads either and fails on one not named in

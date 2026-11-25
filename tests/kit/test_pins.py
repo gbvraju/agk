@@ -847,3 +847,39 @@ def test_req079_ac5_every_single_runtime_reader_is_named_in_its_adr() -> None:
     )
     assert found, "no reader found: the pattern no longer matches"
     assert [f for f in found if f"`{f}`" not in listed] == []
+
+
+def test_req079_ac5_a_baseline_without_the_new_paths_counts_them_as_new(tmp_path: Path) -> None:
+    """Answer 6: an adopted gate file that lacks a runtime's paths counts them as new findings;
+    `--baseline` lowers a line it holds and never adds or raises one."""
+    root = two_runtimes(tmp_path, toml='mode = "adopt"\n[delivery]\nwork_type = "web-app"\n')
+    node_files(root, spec="^4")
+    py_files(root / "service", req="examplelib>=1\n")
+    gate = root / "config" / "agk-baseline" / "pins.txt"
+    gate.parent.mkdir(parents=True)
+    gate.write_text("package.json 1\n", encoding="utf-8")
+    rows = gate_rows(root)
+    assert any(p is False and "SPEC-0072 rule 7" in line for p, line in rows), rows
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import run_gates  # noqa: PLC0415 - the gate runner itself
+
+    run_gates.results(root, write=True)
+    assert gate.read_text(encoding="utf-8") == "package.json 1\n"
+    assert any(p is False for p, _ in gate_rows(root))
+    node_files(root)
+    run_gates.results(root, write=True)
+    assert "package.json 1" not in gate.read_text(encoding="utf-8")
+
+
+def test_req079_ac5_the_plugin_layout_reads_the_same_files(tmp_path: Path) -> None:
+    """Answer 6: `[kit] layout` installed or `plugin`, the steps read `--root`'s files alike."""
+    pins = pins_module()
+    plugin = (
+        '[kit]\nlayout = "plugin"\nplugin_version = "0.1.0"\n[delivery]\nwork_type = "web-app"\n'
+    )
+    roots = [two_runtimes(tmp_path / "a"), two_runtimes(tmp_path / "b", toml=plugin)]
+    for root in roots:
+        node_files(root, spec="^4")
+        py_files(root / "service", req="examplelib>=1\n")
+    assert check(roots[0]).stdout == check(roots[1]).stdout
+    assert pins.counts(roots[1], {}) == {"package.json": 1, "service/requirements.txt": 1}
