@@ -22,17 +22,23 @@ builder's machine, never here; the build file comes from `kit/templates/stacks/<
 per-file `counts` to the baseline (brief #1776, ADR-0742). With a Python runtime the dependency
 files are `python_files` (brief #1838, ADR-0768): `pyproject.toml`, the root requirements file, the
 files of `[tool.setuptools.dynamic]` and each file a `-r` line names, each read once; a finding is
-held to the file it is in. Installed; it imports only installed modules.
+held to the file it is in. With two runtimes in the chosen option (brief #1932, ADR-0800,
+amendment 247), `runtimes` gives each its own folder, the one tracked folder that holds its build
+file (the root wins), and the step reads each runtime's build file and lock there, each finding
+held to its path from the root; `pick` and `chosen` still read one runtime only. Installed; it
+imports only installed modules.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import subprocess  # nosec B404 - fixed argument list only, no shell
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
@@ -80,6 +86,25 @@ REQUIREMENTS = "requirements.txt"  # brief #1838: the one name of the root requi
 INCLUDES = ("--requirement", "-r")
 EDITABLE = ("-e", "--editable")
 COMMENT = re.compile(r"(^|\s)#.*$")
+# brief #1932 answer 2: the build files that place a runtime in a folder, the first name first.
+PLACES = {"node": ("package.json",), "python": ("pyproject.toml", REQUIREMENTS)}
+SPLIT = "a runtime's build file is in more than one folder"
+
+
+class Runtime(NamedTuple):
+    """Brief #1932 answer 1: one runtime of the chosen option, its folder ('' for the root), the
+    build file read there, the parts compared with its lock (the runtime part and those after it),
+    whether it is in two folders, and every part of the option (the licences' names)."""
+
+    row: tuple[str, str, str, str]
+    folder: str
+    build: str
+    parts: list[tuple[str, str, str]]
+    split: bool = False
+    option: list[tuple[str, str, str]] = []
+
+    def at(self, rel: str) -> str:
+        return f"{self.folder}/{rel}" if self.folder else rel
 
 
 class Unreadable(Exception):
@@ -116,16 +141,22 @@ def option_parts(body: str) -> list[tuple[str, str, str]] | None:
     return out
 
 
-def chosen(root: Path) -> tuple[tuple[str, str, str, str], list[tuple[str, str, str]]] | None:
-    """(the stack's STACKS row, the chosen option's parts) when a stack is chosen, else None."""
+def records(root: Path) -> list[str] | None:
+    """The texts of the stack records, None with no declared work type."""
     if declaration(root)[0] is None:
         return None
     files = [p for p in root.glob("docs/adr/*.md") if RECORD.match(p.relative_to(root).as_posix())]
-    return pick([p.read_text(encoding="utf-8") for p in files])
+    return [p.read_text(encoding="utf-8") for p in files]
 
 
-def pick(texts: list[str]) -> tuple[tuple[str, str, str, str], list[tuple[str, str, str]]] | None:
-    """`chosen` on the texts of the stack records, so a reader of a commit (`sbom.py`) shares it."""
+def chosen(root: Path) -> tuple[tuple[str, str, str, str], list[tuple[str, str, str]]] | None:
+    """(the stack's STACKS row, the chosen option's parts) when one runtime is chosen, else None."""
+    texts = records(root)
+    return None if texts is None else pick(texts)
+
+
+def chosen_parts(texts: list[str]) -> list[tuple[str, str, str]] | None:
+    """The parts of the one Accepted record's chosen option; None with no such option."""
     if len(texts) != 1:
         return None
     text = texts[0]
@@ -134,9 +165,71 @@ def pick(texts: list[str]) -> tuple[tuple[str, str, str, str], list[tuple[str, s
         return None
     options = [m for ln in text.splitlines() if (m := OPTION.match(ln))]
     body = next((m.group(2) for m in options if m.group(1) == letter.group(1)), "")
-    parts = option_parts(body) or []
-    rows = [STACKS[p[0]] for p in parts if p[0] in STACKS]
-    return (rows[0], parts) if len(rows) == 1 else None
+    return option_parts(body) or []
+
+
+def pick(texts: list[str]) -> tuple[tuple[str, str, str, str], list[tuple[str, str, str]]] | None:
+    """`chosen` on the texts of the stack records, so a reader of a commit (`sbom.py`) shares it."""
+    parts = chosen_parts(texts)
+    rows = [STACKS[p[0]] for p in parts or [] if p[0] in STACKS]
+    return (rows[0], parts or []) if len(rows) == 1 else None
+
+
+def tracked(root: Path) -> list[str]:
+    """The tracked files under the root (`git ls-files`), else every file there (no git)."""
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, check=False
+    )
+    if proc.returncode == 0:
+        return [f for f in proc.stdout.split("\0") if f]
+    base = Path(root)
+    return [
+        p.relative_to(base).as_posix()
+        for p in base.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(base).parts
+    ]
+
+
+def place(key: str, files: list[str]) -> tuple[str, str, bool]:
+    """Brief #1932 answer 2: (folder, build file, in two folders) of a runtime among the files."""
+    split = [f.rpartition("/") for f in files]
+    for name in PLACES[key]:
+        found = {d for d, _, n in split if n == name}
+        folders = sorted(d for d in found if "node_modules" not in d.split("/"))
+        if "" in folders:
+            return "", name, False
+        if folders:
+            return folders[0], name, len(folders) > 1
+    return "", STACKS[key][1], False
+
+
+def runtimes(texts: list[str], files: Callable[[], list[str]]) -> list[Runtime] | None:
+    """Brief #1932 answer 1: one entry per runtime part of the chosen option, in the record's
+    order, each part held to the runtime it follows; one runtime keeps the root and every part.
+    `files` (the tracked paths) is read only for two runtimes. None exactly as `pick` gives None
+    for any reason but two runtimes."""
+    parts = chosen_parts(texts)
+    keys = list(dict.fromkeys(p[0] for p in parts or [] if p[0] in STACKS))
+    if not keys or parts is None:
+        return None
+    if len(keys) == 1:
+        return [Runtime(STACKS[keys[0]], "", STACKS[keys[0]][1], parts, False, parts)]
+    groups: dict[str, list[tuple[str, str, str]]] = {k: [] for k in keys}
+    owner = keys[0]
+    for part in parts:
+        owner = part[0] if part[0] in STACKS else owner
+        groups[owner].append(part)
+    listed = files()
+    out = []
+    for key in keys:
+        folder, build, split = place(key, listed)
+        out.append(Runtime(STACKS[key], folder, build, groups[key], split, parts))
+    return out
+
+
+def runtimes_of(root: Path) -> list[Runtime] | None:
+    texts = records(Path(root))
+    return None if texts is None else runtimes(texts, lambda: tracked(Path(root)))
 
 
 def direct(reader: str, text: str) -> list[tuple[str, str | None]]:
@@ -200,21 +293,25 @@ def dynamic_files(data: dict[str, Any]) -> list[str]:
     return out
 
 
-def python_files(root: Path) -> list[tuple[str, str]]:
+def python_files(root: Path, build: str = STACKS["python"][1]) -> list[tuple[str, str]]:
     """Brief #1838 answer 4: (path from the root, text) of each Python dependency file, the build
-    file first, each once; raises `Unreadable` with the file that names one it cannot read."""
+    file first, each once; raises `Unreadable` with the file that names one it cannot read. A
+    folder placed by its `requirements.txt` alone (brief #1932 answer 2) starts there."""
     root = Path(root).resolve()
-    build = STACKS["python"][1]
-    try:
-        text = (root / build).read_text(encoding="utf-8")
-        named = dynamic_files(tomllib.loads(text))
-    except (OSError, UnicodeDecodeError, ValueError, AttributeError) as exc:
-        raise Unreadable(build) from exc
-    out = [(build, text)]
-    queue = [(root / f, build) for f in named]
-    if (root / REQUIREMENTS).is_file():
-        queue.insert(0, (root / REQUIREMENTS, build))
-    seen = {(root / build).resolve()}
+    out: list[tuple[str, str]] = []
+    queue: list[tuple[Path, str]] = [(root / REQUIREMENTS, REQUIREMENTS)]
+    seen: set[Path] = set()
+    if build != REQUIREMENTS:
+        try:
+            text = (root / build).read_text(encoding="utf-8")
+            named = dynamic_files(tomllib.loads(text))
+        except (OSError, UnicodeDecodeError, ValueError, AttributeError) as exc:
+            raise Unreadable(build) from exc
+        out = [(build, text)]
+        queue = [(root / f, build) for f in named]
+        if (root / REQUIREMENTS).is_file():
+            queue.insert(0, (root / REQUIREMENTS, build))
+        seen = {(root / build).resolve()}
     while queue:
         path, held = queue.pop(0)
         path = Path(path).resolve()
@@ -244,8 +341,9 @@ def declared(root: Path, reader: str, build_file: str) -> list[tuple[str, str | 
         text = (Path(root) / build_file).read_text(encoding="utf-8")
         return [(n, v, build_file) for n, v in direct(reader, text)]
     rows: list[tuple[str, str | None, str]] = []
-    for rel, text in python_files(root):
-        found = direct(reader, text) if rel == build_file else requirement_lines(text)[0]
+    for rel, text in python_files(root, build_file):
+        toml = rel == build_file != REQUIREMENTS
+        found = direct(reader, text) if toml else requirement_lines(text)[0]
         rows += [(n, v, rel) for n, v in found]
     floats: dict[str, str] = {}
     for name, version, rel in rows:
@@ -279,16 +377,20 @@ def waiting(root: Path) -> bool:
     direct dependency. A build file that cannot be read never waits; any one dependency, a lock
     or the record ends the wait (answer 3)."""
     root = Path(root)
-    found = chosen(root)
+    found = runtimes_of(root)
     if found is None or baseline.adopted(root) or (root / ARCHITECTURE).exists():
         return False
-    _, build_file, lock_file, reader = found[0]
-    if (root / lock_file).exists():
+    return all(waits(root / one.folder, one) for one in found)  # brief #1932: every runtime
+
+
+def waits(base: Path, one: Runtime) -> bool:
+    _, build_file, lock_file, reader = one.row
+    if one.split or (base / lock_file).exists():
         return False
-    if not (root / build_file).exists():
-        return reader == "npm" or not (root / REQUIREMENTS).exists()
+    if not (base / one.build).exists():
+        return reader == "npm" or not (base / REQUIREMENTS).exists()
     try:
-        return not declared(root, reader, build_file)
+        return not declared(base, reader, one.build)
     except (Unreadable, OSError, UnicodeDecodeError, ValueError, AttributeError):
         return False
 
@@ -297,19 +399,29 @@ def findings(root: Path) -> list[tuple[str, str, str]] | None:
     """(the rule's line, the component class, the file it is held to) of each failure, one per
     dependency or part (brief #1776: the baseline counts them); None when no stack is chosen or
     the project waits for its foundation (brief #1909)."""
-    found = chosen(Path(root))
+    found = runtimes_of(Path(root))
     if found is None or waiting(Path(root)):
         return None
-    (_, build_file, lock_file, reader), parts = found
-    lock = Path(root) / lock_file
+    return [f for one in found for f in runtime_findings(Path(root), one)]
+
+
+def runtime_findings(root: Path, one: Runtime) -> list[tuple[str, str, str]]:
+    """Brief #1932 answer 3: today's reading of one runtime, in its folder, held from the root."""
+    (_, _, lock_file, reader), build_file, parts = one.row, one.build, one.parts
+    if one.split:
+        return [(f"{RULE}: {SPLIT}", "build file", one.at(build_file))]
+    base = root / one.folder
     try:
-        deps = declared(Path(root), reader, build_file)
+        deps = [(n, v, one.at(h)) for n, v, h in declared(base, reader, build_file)]
     except Unreadable as exc:
-        return [(f"{RULE}: the build file is missing or unreadable", "build file", exc.held)]
+        held = one.at(exc.held)
+        return [(f"{RULE}: the build file is missing or unreadable", "build file", held)]
     except (OSError, UnicodeDecodeError, ValueError, AttributeError):
-        return [(f"{RULE}: the build file is missing or unreadable", "build file", build_file)]
+        held = one.at(build_file)
+        return [(f"{RULE}: the build file is missing or unreadable", "build file", held)]
+    lock_file = one.at(lock_file)
     try:
-        have = locked(reader, lock.read_text(encoding="utf-8"))
+        have = locked(reader, (root / lock_file).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return [(f"{RULE}: the lock file is missing", "lock file", lock_file)]
     except (OSError, UnicodeDecodeError, ValueError, AttributeError):
@@ -343,7 +455,7 @@ def applies(root: Path) -> bool:
 def skipped(root: Path) -> str | None:
     """Brief #1776 answer 2: with no stack chosen the runner prints a not-run row, never `ok`;
     brief #1909: so does a new project that waits for its foundation."""
-    if chosen(Path(root)) is None:
+    if runtimes_of(Path(root)) is None:
         return NO_STACK
     return NO_FOUNDATION if waiting(Path(root)) else None
 

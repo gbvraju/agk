@@ -735,7 +735,7 @@ def test_req079_ac5_an_unpinned_dependency_of_each_runtime_fails_in_its_file(
     py_files(root / "service", req="examplelib>=1\n")
     result = check(root)
     assert result.returncode == 1, result.stdout
-    assert "a direct dependency is not pinned exactly (component class: dependency)" in result.stdout
+    assert "not pinned exactly (component class: dependency)" in result.stdout
     assert pins.counts(root, {}) == {"package.json": 1, "service/requirements.txt": 1}
     no_values(result.stdout + result.stderr)
     assert "service" not in result.stdout

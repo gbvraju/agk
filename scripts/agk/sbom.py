@@ -280,29 +280,30 @@ def kit_file_components(root: Path, commit: str) -> list[dict]:
     return items
 
 
-def chosen_at(root: Path, commit: str, config: dict) -> tuple | None:
-    """The chosen stack at the commit (`pins.pick`): with a declared work type and one Accepted
-    stack record, (its `STACKS` row, its parts), else None (brief #1907, ADR-0789)."""
+def chosen_at(root: Path, commit: str, config: dict) -> list | None:
+    """The chosen runtimes at the commit (`pins.runtimes`, brief #1932): with a declared work type
+    and one Accepted stack record, one per runtime with its folder, else None (brief #1907)."""
     delivery = config.get("delivery")
     if not isinstance(delivery, dict) or not isinstance(delivery.get("work_type"), str):
         return None  # the kit's own repository: rule 2's reading unchanged
     names = git(root, "ls-tree", "--name-only", commit, "docs/adr/", check=False).split()
-    return pins.pick([read_text(root, commit, n) for n in names if pins.RECORD.match(n)])
+    texts = [read_text(root, commit, n) for n in names if pins.RECORD.match(n)]
+    tree = lambda: git(root, "ls-tree", "-r", "--name-only", commit, check=False).splitlines()  # noqa: E731
+    return pins.runtimes(texts, tree)
 
 
-def lock_components(root: Path, commit: str, found: tuple | None) -> list[dict]:
+def lock_components(root: Path, commit: str, found: list | None) -> list[dict]:
     """Amendment 206 (rule 2): with a declared work type and one Accepted stack record, each
-    package of the chosen stack's committed lock, with its licence (`licences.components`)."""
-    if found is None:
-        return []
-    (_, _, lock_file, reader), parts = found
-    data = show(root, commit, lock_file)
-    if data is None:
-        return []
-    try:
-        items = licences.components(reader, data.decode("utf-8"), parts)
-    except (AttributeError, UnicodeDecodeError, ValueError):
-        raise not_parsed("the lock file") from None
+    package of each chosen runtime's committed lock, with its licence (`licences.components`)."""
+    items = []
+    for one in found or []:
+        data = None if one.split else show(root, commit, one.at(one.row[2]))
+        if data is None:
+            continue
+        try:
+            items += licences.components(one.row[3], data.decode("utf-8"), one.option)
+        except (AttributeError, UnicodeDecodeError, ValueError):
+            raise not_parsed("the lock file") from None
     out = []
     for kind, name, version, licence in items:
         purl = (
@@ -361,7 +362,9 @@ def build(root: Path, commit: str) -> dict:
     if not isinstance(version, str):
         raise not_parsed(AGK_TOML)
     stack = chosen_at(root, commit, config)
-    build_file = stack[0][1] if stack else PYPROJECT
+    build_file = PYPROJECT
+    if stack:  # brief #1932: the runtime at the root names the product, else the first one
+        build_file = next((r.row[1] for r in stack if not r.folder), stack[0].row[1])
     if show(root, commit, PYPROJECT) is not None:
         build_file = PYPROJECT  # present, it is read as today (amendment 232)
     pyproject, name = NAMERS[build_file](root, commit)

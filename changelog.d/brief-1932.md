@@ -1,0 +1,1 @@
+- Gates: a chosen stack with two runtimes (Node at the root, Python in `service/`) is now read per runtime: `pins`, `licences` and the bill of materials read each runtime's build file and lock in its own folder, instead of `not run: no stack chosen`; one runtime reads as before (brief #1932, ADR-0800, amendment 247)
