@@ -1,0 +1,1 @@
+- Briefs: `check_brief.py` now refuses `Advances: new` on a brief whose `Touches:` does not name `docs/requirements.md`, so a build brief that names no requirement is refused when it is filed instead of failing its pull request body check after the build (brief #1929, ADR-0797)
