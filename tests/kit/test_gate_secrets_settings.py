@@ -248,3 +248,79 @@ def test_the_kits_own_tree_is_green() -> None:
     for step in ("committed-secrets", "environment-settings"):
         module = run_gates.step_module(step)
         assert module is not None and module.check(KIT_ROOT, {}) == [], step
+
+
+# Brief #1928 (ADR-0796): an exact dependency version after a package name in a dependency file.
+LOCK = (
+    '{\n  "packages": {\n    "node_modules/@typescript-eslint/visitor-keys": {\n'
+    '      "version": "{V}"\n    }\n  },\n  "dependencies": {\n'
+    '    "@typescript-eslint/visitor-keys": "{V}",\n    "left-pad": "^3.4.3"\n  }\n}\n'
+)
+PIN = '    "@typescript-eslint/visitor-keys": "{V}",\n'
+# Versions built here, so that no tracked file holds a version after a key-like name.
+V, W = ".".join(("8", "74", "0")), ".".join("123")
+SHAPE = "tracked files (a secret shape)"
+
+
+def _secrets(tmp_path: Path, files: dict[str, str]) -> list[tuple[str, str, int]]:
+    from gates import committed_secrets  # noqa: PLC0415
+
+    files = {k: v.replace("{V}", V).replace("{W}", W) for k, v in files.items()}
+    return [f for f in committed_secrets.findings(_project(tmp_path, files)) if f[0] == SHAPE]
+
+
+@pytest.mark.parametrize(
+    ("rel", "text", "want"),
+    [
+        ("package-lock.json", LOCK, []),
+        ("sub/Package-Lock.JSON", LOCK.replace("\n", "\r\n"), []),
+        ("package.json", '{"dependencies": {"api-keys": "{W}", "x-keys": "{V}-rc.1"}}\n', []),
+        ("yarn.lock", '"@scope/visitor-keys@^1.0.0":\n  "@scope/visitor-keys": "{W}"\n', []),
+        ("config/app.json", PIN, [(SHAPE, "config/app.json", 1)]),
+        ("package-lock.json.bak", PIN, [(SHAPE, "package-lock.json.bak", 1)]),
+        ("package.json", '{"token": "{W}"}\n', [(SHAPE, "package.json", 1)]),
+        ("package.json", '{"API_KEY": "{W}"}\n', [(SHAPE, "package.json", 1)]),
+        ("composer.lock", 'api_key = "{W}"\n', [(SHAPE, "composer.lock", 1)]),
+        (
+            "package-lock.json",
+            '    "@scope/visitor-keys": "' + "9f3c2a7b1e" * 4 + '",\n',
+            [(SHAPE, "package-lock.json", 1)],
+        ),
+    ],
+)
+def test_an_exact_pin_in_a_dependency_file_is_no_secret(
+    tmp_path: Path, rel: str, text: str, want: list[tuple[str, str, int]]
+) -> None:
+    """REQ-079 AC4: brief #1928 answers 1 and 5: only a version after a package name in a
+    dependency file is not counted; the same line elsewhere and every other shape count."""
+    assert _secrets(tmp_path, {rel: text, "app/main.py": APP}) == want
+
+
+def test_a_custom_pattern_in_a_dependency_file_still_counts(tmp_path: Path) -> None:
+    """REQ-079 AC4: brief #1928 answer 4: a `[guard] patterns` match counts, version-shaped."""
+    toml = 'mode = "init"\n[guard]\npatterns = [{ name = "shop", regex = "8\\\\.74\\\\.0" }]\n'
+    files = {"agk.toml": toml, "yarn.lock": PIN, "app/main.py": APP}
+    assert _secrets(tmp_path, files) == [(SHAPE, "yarn.lock", 1)]
+
+
+def test_a_baseline_of_false_findings_reads_lower_and_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-079 AC4: brief #1928 answer 4: a held count of 1 reads 0; a new real finding fails."""
+    files = {"package-lock.json": LOCK.replace("{V}", V), "app/main.py": APP, BASE: "package-lock.json 1\n"}
+    root = _project(tmp_path, files, mode="adopt")
+    code, out = _run(root, capsys)
+    assert code == 0 and "baseline secrets: a count fell in 1" in out, out
+    (root / "config" / "key.py").write_text(f'TOKEN = "{FAKE}"\n', encoding="utf-8")
+    subprocess.run([*GIT, "-C", str(root), "add", "-A"], check=True)  # nosec B603 - fixed
+    code, out = _run(root, capsys)
+    assert code == 1 and "FAIL gates: secrets: SPEC-0072 rule 7" in out, out
+
+
+def test_every_file_the_pins_gate_reads_is_a_dependency_file() -> None:
+    """REQ-079 AC4: brief #1928 answer 7: the class stays closed."""
+    from gates import committed_secrets, pins  # noqa: PLC0415
+
+    for _, build_file, lock_file, _ in pins.STACKS.values():
+        for name in (build_file, lock_file, pins.REQUIREMENTS):
+            assert name.casefold() in committed_secrets.DEPENDENCY_FILES, name
