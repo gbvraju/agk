@@ -670,3 +670,216 @@ def test_req079_after_stack_accept_the_runner_holds_no_failed_pins_row(tmp_path:
     assert "Accepted" in (root / STACK).read_text(encoding="utf-8")
     rows = gate_rows(root)
     assert rows == [(None, "pins: no foundation yet")], rows
+
+
+# REQ-079 AC5, brief #1932 (ADR-0800, amendment 247): a chosen option with two runtimes (Node at
+# the root, Python in `service/`) is read per runtime, each build file and lock in its own folder.
+
+TWO_PARTS = (
+    "Parts: Node.js 22.11.0 MIT, example-web 4.21.1 MIT, "
+    "Python 3.12.7 PSF-2.0, examplelib 1.2.3 MIT (verify)."
+)
+PY_LOCK = f"examplelib==1.2.3 \\\n    {HASH}\n"
+
+
+def node_files(base: Path, spec: str = "4.21.1", extra: dict | None = None) -> None:
+    base.mkdir(parents=True, exist_ok=True)
+    pkg = {"name": "sample", "version": "0.0.0", "dependencies": {"example-web": spec}}
+    (base / "package.json").write_text(json.dumps(pkg), encoding="utf-8")
+    packages = {"": {"name": "sample"}, "node_modules/example-web": {"version": "4.21.1"}}
+    packages.update(extra or {})
+    lock = {"lockfileVersion": 3, "packages": packages}
+    (base / "package-lock.json").write_text(json.dumps(lock), encoding="utf-8")
+
+
+def py_files(base: Path, req: str = "examplelib==1.2.3\n", lock: str | None = PY_LOCK) -> None:
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "requirements.txt").write_text(req, encoding="utf-8")
+    if lock is not None:
+        (base / "requirements.lock").write_text(lock, encoding="utf-8")
+
+
+def two_runtimes(tmp: Path, parts: str = TWO_PARTS, toml: str | None = None) -> Path:
+    text = record(a_parts=parts, status="Accepted", chosen="Option A")
+    root = project(tmp, text) if toml is None else project(tmp, text, toml=toml)
+    node_files(root)
+    py_files(root / "service")
+    return root
+
+
+def test_req079_ac5_two_pinned_runtimes_pass(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = two_runtimes(tmp_path)
+    result = check(root)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == "ok pins\n"
+    found = pins.runtimes([(root / STACK).read_text(encoding="utf-8")], lambda: pins.tracked(root))
+    assert [(r.row[0], r.folder) for r in found] == [("node", ""), ("python-pyproject", "service")]
+
+
+def test_req079_ac5_pick_still_reads_two_runtimes_as_none(tmp_path: Path) -> None:
+    """Answer 1: the single-runtime readers (ADR-0800's list) stay `not run`, never moved."""
+    pins = pins_module()
+    root = two_runtimes(tmp_path)
+    assert pins.pick([(root / STACK).read_text(encoding="utf-8")]) is None
+    assert pins.chosen(root) is None
+    assert pins.skipped(root) is None
+
+
+def test_req079_ac5_an_unpinned_dependency_of_each_runtime_fails_in_its_file(
+    tmp_path: Path,
+) -> None:
+    pins = pins_module()
+    root = two_runtimes(tmp_path)
+    node_files(root, spec="^4.21.1")
+    py_files(root / "service", req="examplelib>=1\n")
+    result = check(root)
+    assert result.returncode == 1, result.stdout
+    assert "not pinned exactly (component class: dependency)" in result.stdout
+    assert pins.counts(root, {}) == {"package.json": 1, "service/requirements.txt": 1}
+    no_values(result.stdout + result.stderr)
+    assert "service" not in result.stdout
+
+
+def test_req079_ac5_a_missing_lock_of_one_runtime_is_that_lock_only(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = two_runtimes(tmp_path)
+    (root / "service" / "requirements.lock").unlink()
+    node_files(root, spec="^4")
+    assert pins.counts(root, {}) == {"package.json": 1, "service/requirements.lock": 1}
+    assert "the lock file is missing (component class: lock file)" in check(root).stdout
+
+
+def test_req079_ac5_a_runtime_in_two_folders_is_one_finding(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = two_runtimes(tmp_path)
+    py_files(root / "worker", req="examplelib>=1\n")
+    node_files(root, spec="^4")
+    result = check(root)
+    assert result.returncode == 1
+    assert (
+        "a runtime's build file is in more than one folder (component class: build file)"
+        in result.stdout
+    )
+    assert pins.counts(root, {}) == {"package.json": 1, "service/requirements.txt": 1}
+
+
+def test_req079_ac5_both_runtimes_at_the_root_are_both_read(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = project(tmp_path, record(a_parts=TWO_PARTS, status="Accepted", chosen="Option A"))
+    node_files(root)
+    py_files(root, req="examplelib\n")
+    assert pins.counts(root, {}) == {"requirements.txt": 1}
+    py_files(root)
+    assert check(root).stdout == "ok pins\n"
+
+
+def test_req079_ac5_a_tracked_node_modules_build_file_is_ignored(tmp_path: Path) -> None:
+    root = two_runtimes(tmp_path)
+    node_files(root / "node_modules" / "example-dep", spec="^1")
+    assert check(root).stdout == "ok pins\n"
+
+
+def test_req079_ac5_only_tracked_files_place_a_runtime(tmp_path: Path) -> None:
+    root = two_runtimes(tmp_path)
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", "-A")
+    py_files(root / "worker", req="examplelib>=1\n")  # not tracked: not a second folder
+    assert check(root).stdout == "ok pins\n"
+
+
+def test_req079_ac5_a_part_is_compared_with_its_own_runtimes_lock(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = two_runtimes(tmp_path)
+    node_files(root, extra={"node_modules/examplelib": {"version": "9.9.9"}})
+    assert check(root).stdout == "ok pins\n"
+    py_files(root / "service", lock=f"examplelib==1.2.4 \\\n    {HASH}\n")
+    assert {f for _, f in pins.check(root, {})} == {"service/requirements.lock"}
+
+
+def test_req079_ac5_a_third_runtime_with_no_reader_is_not_checked(tmp_path: Path) -> None:
+    root = two_runtimes(tmp_path, parts=TWO_PARTS.replace(" (verify)", ", Go 1.23.2 BSD-3-Clause"))
+    assert check(root).stdout == "ok pins\n"
+
+
+@pytest.mark.parametrize(("status", "chosen"), [("Proposed", "none yet"), ("Accepted", "none yet")])
+def test_req079_ac5_a_record_not_accepted_is_still_no_stack(
+    tmp_path: Path, status: str, chosen: str
+) -> None:
+    root = project(tmp_path, record(a_parts=TWO_PARTS, status=status, chosen=chosen))
+    node_files(root)
+    assert check(root).stdout == "pins: not run: no stack chosen\n"
+
+
+def test_req079_ac5_no_work_type_is_still_no_stack(tmp_path: Path) -> None:
+    assert check(two_runtimes(tmp_path, toml="")).stdout == "pins: not run: no stack chosen\n"
+
+
+def test_req079_ac5_the_wait_holds_only_while_every_runtime_waits(tmp_path: Path) -> None:
+    pins = pins_module()
+    root = project(tmp_path, record(a_parts=TWO_PARTS, status="Accepted", chosen="Option A"), INIT)
+    (root / "package.json").write_text('{"name": "sample"}', encoding="utf-8")
+    assert pins.waiting(root) is True
+    node_files(root, spec="4.21.1")
+    assert pins.waiting(root) is False
+    assert "the build file is missing or unreadable" in check(root).stdout
+
+
+def test_req079_ac5_the_runner_runs_pins_for_two_runtimes(tmp_path: Path) -> None:
+    root = two_runtimes(tmp_path)
+    node_files(root, spec="^4")
+    rows = gate_rows(root)
+    assert (None, "pins: no stack chosen") not in rows, rows
+    assert any(ok is False and "pins" in str(name) for ok, name in rows), rows
+
+
+def test_req079_ac5_every_single_runtime_reader_is_named_in_its_adr() -> None:
+    """Answer 9: a module that reads `pins.chosen` or `pins.pick` is named in ADR-0800's list."""
+    import re  # noqa: PLC0415
+
+    adr = next((KIT_ROOT / "docs" / "adr").glob("0800-*.md")).read_text(encoding="utf-8")
+    listed = adr.split("Single-runtime readers:", 1)[1].split("\n\n", 1)[0]
+    reads = re.compile(r"\bpins\.(chosen|pick)\(|from gates\.pins import [^\n]*\b(chosen|pick)\b")
+    found = sorted(
+        p.relative_to(KIT_ROOT).as_posix()
+        for p in (KIT_ROOT / "scripts" / "agk").rglob("*.py")
+        if p.name != "pins.py" and reads.search(p.read_text(encoding="utf-8"))
+    )
+    assert found, "no reader found: the pattern no longer matches"
+    assert [f for f in found if f"`{f}`" not in listed] == []
+
+
+def test_req079_ac5_a_baseline_without_the_new_paths_counts_them_as_new(tmp_path: Path) -> None:
+    """Answer 6: an adopted gate file that lacks a runtime's paths counts them as new findings;
+    `--baseline` lowers a line it holds and never adds or raises one."""
+    root = two_runtimes(tmp_path, toml='mode = "adopt"\n[delivery]\nwork_type = "web-app"\n')
+    node_files(root, spec="^4")
+    py_files(root / "service", req="examplelib>=1\n")
+    gate = root / "config" / "agk-baseline" / "pins.txt"
+    gate.parent.mkdir(parents=True)
+    gate.write_text("package.json 1\n", encoding="utf-8")
+    rows = gate_rows(root)
+    assert any(p is False and "SPEC-0072 rule 7" in line for p, line in rows), rows
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import run_gates  # noqa: PLC0415 - the gate runner itself
+
+    run_gates.results(root, write=True)
+    assert gate.read_text(encoding="utf-8") == "package.json 1\n"
+    assert any(p is False for p, _ in gate_rows(root))
+    node_files(root)
+    run_gates.results(root, write=True)
+    assert "package.json 1" not in gate.read_text(encoding="utf-8")
+
+
+def test_req079_ac5_the_plugin_layout_reads_the_same_files(tmp_path: Path) -> None:
+    """Answer 6: `[kit] layout` installed or `plugin`, the steps read `--root`'s files alike."""
+    pins = pins_module()
+    plugin = (
+        '[kit]\nlayout = "plugin"\nplugin_version = "0.1.0"\n[delivery]\nwork_type = "web-app"\n'
+    )
+    roots = [two_runtimes(tmp_path / "a"), two_runtimes(tmp_path / "b", toml=plugin)]
+    for root in roots:
+        node_files(root, spec="^4")
+        py_files(root / "service", req="examplelib>=1\n")
+    assert check(roots[0]).stdout == check(roots[1]).stdout
+    assert pins.counts(roots[1], {}) == {"package.json": 1, "service/requirements.txt": 1}

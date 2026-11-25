@@ -16,7 +16,9 @@ clean. An SPDX expression passes when one `OR` side has every `AND` id on the li
 case-folded; `expression` and `ids` are the kit's one reader of a licence (brief #1785, ADR-0748),
 which `engines.py` uses for the stack record. Each line names the rule and the component class
 (`python`, `node`), never a name, a version or an id (principle 8); a list of another form is
-refused naming the setting. With no stack chosen or no lock it prints `not run: no lock`. `counts`
+refused naming the setting. With no stack chosen or no lock it prints `not run: no lock`. With
+two runtimes (brief #1932, ADR-0800) each runtime's lock in its own folder (`pins.runtimes`) is
+read with its own reader and class against the one list; a runtime with no lock is skipped. `counts`
 gives the findings per file (the lock's failing packages, the setting's form), so the runner's
 baseline holds an adopted project's existing ones, counted on every run (brief #1777, ADR-0743).
 Offline, files only; widening the list is a project ADR (principle 11). The runner calls it, as
@@ -68,16 +70,20 @@ def components(reader: str, text: str, parts: list[tuple[str, str, str]]) -> lis
     return sorted((cls, n, v, stated.get(n) or named.get(n, "")) for n, v in have.items())
 
 
-def lock_of(root: Path) -> tuple[str, str, list[tuple[str, str, str]]] | None:
-    """(reader, lock text, record parts) of the chosen stack's lock, None with no stack or lock."""
-    found = pins.chosen(Path(root))
-    if found is None:
-        return None
-    (_, _, lock_file, reader), parts = found
-    try:
-        return reader, (Path(root) / lock_file).read_text(encoding="utf-8"), parts
-    except (OSError, UnicodeDecodeError):
-        return None
+def locks_of(root: Path) -> list[tuple[str, str, list[tuple[str, str, str]], str]] | None:
+    """(reader, lock text, record parts, lock path) of each chosen runtime's readable lock (brief
+    #1932 answer 4), None with no stack or no lock; a runtime in two folders is not read."""
+    found = pins.runtimes_of(Path(root))
+    out = []
+    for one in found or []:
+        lock_file = one.at(one.row[2])
+        try:
+            text = (Path(root) / lock_file).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not one.split:
+            out.append((one.row[3], text, one.option, lock_file))
+    return out or None
 
 
 def allowed_from(text: str) -> frozenset[str] | None:
@@ -193,23 +199,24 @@ def tally(root: Path) -> list[tuple[str, str, str]] | None:
 def failing(root: Path) -> list[tuple[str, str, str, str, str]] | None:
     """`tally` with each failing package's name and licence ('' for the setting or an unreadable
     lock); None with no lock. The names reach only `--names` (brief #1838 answer 3)."""
-    found = lock_of(root)
+    found = locks_of(root)
     if found is None:
         return None
     allowed = allowed_list(root)
     if allowed is None:
         return [(FORM, f"setting: {SETTING}", SETTING, "", "")]
-    lock = pins.chosen(Path(root))[0][2]  # type: ignore[index]  # lock_of read it
-    try:
-        items = components(*found)
-    except (AttributeError, ValueError):
-        return [(UNKNOWN, f"component class: {CLASSES[found[0]]}", lock, "", "")]
     out = []
-    for cls, name, _, licence in items:
-        if not licence:
-            out.append((UNKNOWN, f"component class: {cls}", lock, name, "unknown"))
-        elif not passes(licence, allowed):
-            out.append((RULE, f"component class: {cls}", lock, name, licence))
+    for reader, text, parts, lock in found:
+        try:
+            items = components(reader, text, parts)
+        except (AttributeError, ValueError):
+            out.append((UNKNOWN, f"component class: {CLASSES[reader]}", lock, "", ""))
+            continue
+        for cls, name, _, licence in items:
+            if not licence:
+                out.append((UNKNOWN, f"component class: {cls}", lock, name, "unknown"))
+            elif not passes(licence, allowed):
+                out.append((RULE, f"component class: {cls}", lock, name, licence))
     return out
 
 
@@ -244,7 +251,7 @@ def names(root: Path) -> int:
 
 def applies(root: Path) -> bool:
     """The runner runs the step only where a stack is chosen and its lock is read."""
-    return lock_of(root) is not None
+    return locks_of(root) is not None
 
 
 HELD = True  # brief #1777: a pass on a baseline that holds findings prints `held`, never `ok`

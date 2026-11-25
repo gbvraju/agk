@@ -594,9 +594,8 @@ def test_a_kept_pyproject_still_names_and_lists_python(product, monkeypatch, cap
         {"docs/adr/0003-stack-options.md": RECORD.replace("Accepted", "Proposed")},
         {"docs/adr/0003-stack-options.md": None},
         {"docs/adr/0004-stack-options.md": RECORD},
-        {"docs/adr/0003-stack-options.md": RECORD.replace("MIT,", "MIT, python 3.12.7 PSF-2.0,")},
     ],
-    ids=["python-stack", "no-work-type", "proposed", "no-record", "two-records", "both-parts"],
+    ids=["python-stack", "no-work-type", "proposed", "no-record", "two-records"],
 )
 def test_elsewhere_a_missing_pyproject_is_refused_as_today(product, monkeypatch, capsys, files):
     """REQ-061: brief #1907 answers 1 and 5 (no `node` stack chosen: today's line)."""
@@ -611,12 +610,15 @@ def test_elsewhere_a_missing_pyproject_is_refused_as_today(product, monkeypatch,
     )
 
 
-def test_with_both_parts_and_no_pyproject_bom_does_not_run(product, capsys) -> None:
-    """REQ-061: brief #1907 answer 5 (no stack chosen: no lock read, `bom` not run)."""
+def test_with_both_parts_and_no_pyproject_bom_runs(product, capsys) -> None:
+    """REQ-061: brief #1907 answer 5 as brief #1932 changes it (ADR-0800): two runtimes are a
+    chosen stack, so `bom` runs, named by the root's `package.json`, and pins fails the Python
+    runtime's missing build file."""
     both = RECORD.replace("MIT,", "MIT, python 3.12.7 PSF-2.0,")
     no_pyproject(product, **{"docs/adr/0003-stack-options.md": both})
     code, out = gates(product.root, capsys)
-    assert "bom" not in out, out
+    assert "ok bom\n" in out and "ok licences\n" in out, out
+    assert "the build file is missing or unreadable" in out and code == 1
 
 
 def test_package_json_is_read_at_the_ref(product, monkeypatch, capsys) -> None:
@@ -637,3 +639,50 @@ def test_each_stack_has_a_name_reader() -> None:
     from gates import pins
 
     assert {row[1] for row in pins.STACKS.values()} == set(sbom.NAMERS)
+
+
+# REQ-079 AC5, brief #1932 (ADR-0800): two runtimes, each lock in its own folder, one list.
+
+TWO_RECORD = RECORD.replace(
+    "tiny-util 2.1.0 ISC", "tiny-util 2.1.0 ISC, python 3.12.7 PSF-2.0, examplelib 1.2.3 MIT"
+)
+TWO_FILES = {
+    "docs/adr/0003-stack-options.md": TWO_RECORD,
+    "pyproject.toml": None,
+    "service/requirements.txt": "examplelib==1.2.3\n",
+    "service/requirements.lock": "examplelib==1.2.3\n",
+}
+
+
+def test_req079_ac5_both_locks_are_checked_against_one_list(product, capsys) -> None:
+    product.commit(dict(TWO_FILES))
+    assert licences.main(["--root", str(product.root)]) == 0
+    assert capsys.readouterr().out == "ok licences\n"
+    product.commit({"service/requirements.lock": "examplelib==1.2.3\nodd-py==0.1.0\n"})
+    assert licences.main(["--root", str(product.root)]) == 1
+    out = capsys.readouterr().out
+    assert out == f"FAIL licences: {licences.UNKNOWN} (component class: python)\n", out
+    assert licences.counts(product.root, {}) == {"service/requirements.lock": 1}
+    odd = {"odd-pkg": {"version": "0.0.1", "license": "LicenseRef-Invented-1"}}
+    product.commit({"package-lock.json": lock(**odd)})
+    assert licences.counts(product.root, {}) == {
+        "package-lock.json": 1,
+        "service/requirements.lock": 1,
+    }
+
+
+def test_req079_ac5_a_missing_lock_of_one_runtime_skips_that_lock(product, capsys) -> None:
+    product.commit({k: v for k, v in TWO_FILES.items() if k != "service/requirements.lock"})
+    assert licences.main(["--root", str(product.root)]) == 0
+    assert capsys.readouterr().out == "ok licences\n"
+    product.commit({"package-lock.json": None})
+    assert licences.main(["--root", str(product.root)]) == 0
+    assert capsys.readouterr().out == f"licences: {licences.NOT_RUN}\n"
+
+
+def test_req079_ac5_a_malformed_list_is_refused_for_two_runtimes(product, capsys) -> None:
+    """Answer 6: one `config/licences.toml` for every runtime; another form names the setting."""
+    product.commit(dict(TWO_FILES, **{"config/licences.toml": 'allowed = "MIT"\n'}))
+    assert licences.main(["--root", str(product.root)]) == 1
+    out = capsys.readouterr().out
+    assert out == f"FAIL licences: {licences.FORM} (setting: config/licences.toml)\n"
