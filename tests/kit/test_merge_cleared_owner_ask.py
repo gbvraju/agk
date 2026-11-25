@@ -426,12 +426,12 @@ def test_req046_1931_the_rows_are_read_by_the_one_reader():
 
 def test_req046_1931_the_merger_requires_every_line_the_governance_step_requires():
     """REQ-046: brief #1931 answer 8: one judge of an added row, shared by the merger and
-    `check_final_clearance.py`, so a line kind added to one is added to both."""
-    import check_final_clearance
-
-    assert merge_cleared.rows_unapproved is check_final_clearance.rows_unapproved
-    source = Path(check_final_clearance.__file__).read_text(encoding="utf-8")
+    `check_final_clearance`, so a line kind added to one is added to both."""
+    judge = sys.modules[merge_cleared.rows_unapproved.__module__]  # the governance step's module
+    assert judge.__name__ == "check_final_clearance"
+    source = Path(judge.__file__).read_text(encoding="utf-8")
     assert source.count("design_approvals(") == 1, "signoff_problems reads rows_unapproved only"
+    assert "rows_unapproved(added, items" in source
     rows = [{"kind": "design", "version": "v1", "head": HEAD}]
     given = [comment(f"Approve: design v1 {HEAD}")]
     assert not merge_cleared.rows_unapproved(rows, given, [OWNER], [])
