@@ -1,6 +1,6 @@
 # SPEC-0073: Every idea is grilled before its vision and held to industry practice from day 1
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-080
 
