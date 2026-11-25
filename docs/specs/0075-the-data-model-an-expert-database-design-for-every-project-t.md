@@ -1,6 +1,6 @@
 # SPEC-0075: The data model: an expert database design for every project that keeps data
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-082
 
