@@ -50,7 +50,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/front_door.py" detect
    in the answers file's `work_type`; `detect` passes nothing to `discovery-write`, which has no option for it. Where the proposal is
    `default` and the person leaves it, leave `work_type` out, and the document says `pilot (proposed)`. A repository that already
    declares a work type is proposed for as any other, and a difference is an open point of discovery.
-4. Ask the owner the discovery questions the script prints, each once, at most three per round, only for a topic the idea leaves open:
+4. First run the grill: follow `${CLAUDE_PLUGIN_ROOT}/skills/grill/SKILL.md` (`/agk:grill`) and keep its answers in the answers
+   file's `grill` list. Then ask the owner the discovery questions the script prints, each once, at most three per round, only for a
+   topic the idea leaves open:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" questions [--work-type KIND]

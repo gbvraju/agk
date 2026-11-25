@@ -292,7 +292,9 @@ def record(root: Path, path: Path, item: str, *args: str) -> subprocess.Complete
 def test_ac3_a_stated_answer_is_kept_as_given(tmp_path):
     """REQ-080 AC3: SPEC-0073 rule 5 (the answer is the person's, quoted as given)."""
     root = project(tmp_path, SOLO)
-    path = answers_file(root, {"answers": [{"id": "users", "answer": "x", "where": "in chat"}]})
+    path = answers_file(
+        root, {"answers": [{"id": "users", "answer": "x", "where": "in session 2026-11-01"}]}
+    )
     claim = "Studio owners at example.com\nlose bookings."
     found = record(
         root, path, "problem", "--stated", words(root, claim + "\n"), "--source", "day zero"
@@ -502,7 +504,9 @@ def test_ac2_an_answers_file_with_a_grill_list_passes_discovery_write(tmp_path):
     import front_door
 
     root = project(tmp_path, SOLO)
-    path = answers_file(root, {"answers": [{"id": "users", "answer": "x", "where": "in chat"}]})
+    path = answers_file(
+        root, {"answers": [{"id": "users", "answer": "x", "where": "in session 2026-11-01"}]}
+    )
     assert record(root, path, "problem", "--open").returncode == 0
     data = front_door.load_answers(path)
     _, _, problems = front_door.answer_lines("answers.json", data["answers"])

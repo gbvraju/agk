@@ -892,6 +892,15 @@ The items the grill asks before a vision (SPEC-0073, brief #1933, ADR-0801), in 
 `<id> (critical|-) <text>` with a `Recommended:` line, never an id the answers file holds, and a last `budget: <n>` line
 (5, 12 or 20). Without `--depth` the depth is `[quality] grill`. Reads files only. Exit 0 ok, 1 refused, 2 usage.
 
+    python3 scripts/agk/grill.py record --answers FILE --id ID (--stated WORDS-FILE | --assumption WORDS-FILE --test TEXT | --open | --risk-accepted) [--accepted WHERE] [--source TEXT] [--replace] [--playbook KIND] [--root DIR]
+    python3 scripts/agk/grill.py ready --answers FILE [--depth D] [--playbook KIND] [--root DIR]
+
+`record` appends one row to the answers file's `grill` list, the claim quoted as given (brief #1934, ADR-0802), and never
+writes `answers`. It refuses an id that is not a grill item, an assumption with no test, a second row for one id without
+`--replace` and the person's words, an answer the data guard flags, and a plain yes (`--accepted`, `--risk-accepted`) in
+team mode, naming `review_mode`. `ready` prints `critical <settled>/<total>; risk accepted: <ids or none>; questions
+<asked>/<budget>; accepted recommendations <n>` and exits 1 while a critical item is open with no accepted risk.
+
 ## Reading a log
 
     python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-|--refusals
