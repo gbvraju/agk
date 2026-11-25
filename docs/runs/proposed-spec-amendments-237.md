@@ -23,3 +23,5 @@ The sentence (brief #1918), quoted as data: "Intake for Day-1 quality: a grill i
    so a signed-off version stays frozen (amendment 237)."
 
 No other rule changes.
+
+2026-11-25 (from `date -u`), brief #1933: item 1 (to rule 2) applied to `docs/specs/0038-a-project-s-work-type-selects-a-delivery-playbook-that-never-weakens-a-gate.md` word for word, its last full stop made a comma so the sentence goes on, on the maintainer's answer on #1920 (comment 7159666133); items 2 and 3 are build (i)'s.

@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import playbook_format  # noqa: E402
 from common import CheckError, run, utf8_output  # noqa: E402
+
 from config import quality_settings  # noqa: E402
 
 NAME = "grill"
@@ -39,8 +40,9 @@ WORK_TYPE = "(setting: work-type)"
 
 def _checked(path: Path, root: Path) -> Path:
     if not path.is_file():
-        raise CheckError(f"rule 3: the work type has no playbook under {playbook_format.FOLDER}/ "
-                         f"{WORK_TYPE}")
+        raise CheckError(
+            f"rule 3: the work type has no playbook under {playbook_format.FOLDER}/ {WORK_TYPE}"
+        )
     if playbook_format.problems(path, root):
         raise CheckError(f"rule 3: the playbook fails check_playbooks.py {WORK_TYPE}")
     return path
@@ -100,7 +102,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args or args[0] != "questions" or len(args) % 2 == 0:
         print(USAGE, file=sys.stderr)
         return 2
-    opts = dict(zip(args[1::2], args[2::2], strict=True))
+    words = iter(args[1:])
+    opts = dict(zip(words, words, strict=True))
     depth = opts.get("--depth")
     if any(flag not in FLAGS for flag in opts) or (depth is not None and depth not in BUDGET):
         print(USAGE, file=sys.stderr)

@@ -38,7 +38,10 @@ STANDARD = [
     "first-slice",
 ]
 DEEP = [*STANDARD[:9], "pre-mortem", "stop", "first-slice"]
-OWN = '[[discovery]]\nid = "zz-offline"\ntext = "Must it work offline?"\ndepth = "light"\ncritical = false\n\n'
+OWN = (
+    '[[discovery]]\nid = "zz-offline"\ntext = "Must it work offline?"\ndepth = "light"\n'
+    "critical = false\n\n"
+)
 SUCCESS = '[[discovery]]\nid = "success"\ntext = "How will we know the work succeeded?"\n\n'
 
 
@@ -72,7 +75,8 @@ def asked(result: subprocess.CompletedProcess[str]) -> tuple[list[str], list[str
     assert result.returncode == 0, result.stdout + result.stderr
     lines = result.stdout.splitlines()
     budget = lines.pop()
-    items, recs = lines[0::2], lines[1::2]
+    items = [ln for n, ln in enumerate(lines) if n % 2 == 0]
+    recs = [ln for n, ln in enumerate(lines) if n % 2 == 1]
     assert recs == [RECOMMENDED] * len(items), result.stdout
     ids = [ln.split(" ", 1)[0] for ln in items]
     marks = [ln.split(" ", 2)[1] for ln in items]

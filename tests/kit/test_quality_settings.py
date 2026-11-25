@@ -1,10 +1,12 @@
-"""Tests of the optional `[quality]` table of `agk.toml` (SPEC-0073 rule 11; REQ-080 AC7; brief #1933).
+"""Tests of the optional `[quality]` table of `agk.toml` (SPEC-0073 rule 11; REQ-080 AC7; brief
+#1933).
 
-`config.quality_settings` reads five keys in the form of `steward_settings`: each set, absent, out of
-form, or a `bool` given for a number. A refusal names `quality.<key>` and never the value. A declared
-`pilot` makes `grill` light and `designs` 1. A `[quality]` key in another table is reported by
-`misplaced_settings` and never read. `uninstall.py` removes the table through `KIT_SETTINGS`, and
-`doctor.py` prints the line. Fixtures in `tmp_path` only: invented data, no network.
+`config.quality_settings` reads five keys in the form of `steward_settings`: each set, absent, out
+of form, or a `bool` given for a number. A refusal names `quality.<key>` and never the value. A
+declared `pilot` makes `grill` light and `designs` 1. A `[quality]` key in another table is
+reported by `misplaced_settings` and never read. `uninstall.py` removes the table through
+`KIT_SETTINGS`, and `doctor.py` prints the line. Fixtures in `tmp_path` only: invented data, no
+network.
 """
 
 from __future__ import annotations
@@ -17,9 +19,10 @@ import pytest
 KIT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
-import config  # noqa: E402
 import doctor  # noqa: E402
 import uninstall  # noqa: E402
+
+import config  # noqa: E402
 
 DEFAULTS = {
     "grill": "standard",
@@ -45,7 +48,7 @@ def refused(root: Path, text: str) -> str:
 def test_ac7_no_agk_toml_and_no_table_hold_every_default(tmp_path):
     """REQ-080 AC7: SPEC-0073 rule 11 (with no table every default holds)."""
     assert config.quality_settings(tmp_path) == DEFAULTS
-    assert settings(tmp_path, "[flow]\nassign = \"next\"\n") == DEFAULTS
+    assert settings(tmp_path, '[flow]\nassign = "next"\n') == DEFAULTS
 
 
 @pytest.mark.parametrize(

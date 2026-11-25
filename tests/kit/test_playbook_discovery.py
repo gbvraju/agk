@@ -117,7 +117,9 @@ def test_ac2_the_fixture_relative_path_is_the_web_app_playbook():
 
 # --- SPEC-0073 rule 3 and amendment 237 item 1: the grill keys (REQ-080 AC1; brief #1933) -------
 
-GRILL = '[[discovery]]\nid = "zz-grill"\ntext = "What sinks it?"\ndepth = "light"\ncritical = true\n\n'
+GRILL = (
+    '[[discovery]]\nid = "zz-grill"\ntext = "What sinks it?"\ndepth = "light"\ncritical = true\n\n'
+)
 SEED = (
     "problem",
     "evidence",
