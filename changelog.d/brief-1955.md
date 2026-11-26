@@ -1,0 +1,1 @@
+- Quality: with `[domain] packs` set, each domain constraint is a cited row of the architecture record's quality scenarios, each threat flow names the data class of `docs/domain/data.md`, and each stack option carries its `Domain fit:` line (SPEC-0074 rule 8, amendment 241; brief #1955, ADR-0811)

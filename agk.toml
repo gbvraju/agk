@@ -283,7 +283,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/check_brief.py"
 tests = [
-  "tests/kit/test_brief_refuse_day.py",
+  "tests/kit/test_brief_refuse_day.py", "tests/kit/test_import_ruling.py",
   "tests/kit/test_layers_step.py",
   "tests/kit/test_agk_mk.py", "tests/kit/test_check_brief.py", "tests/kit/test_conductor_guard_issue.py",
   "tests/kit/test_isolated_mode.py", "tests/kit/test_session.py", "tests/kit_dev/test_conductor_role.py",
@@ -323,6 +323,7 @@ code = "scripts/agk/check_domains.py"
 tests = [
   "tests/kit/test_check_domains.py", "tests/kit/test_domain_settings.py", "tests/kit/test_check_playbooks.py",
   "tests/kit/test_installed_imports.py", "tests/kit/test_domain_model.py", "tests/kit/test_domain_compose.py",
+  "tests/kit/test_domain_architecture.py", "tests/kit/test_stack_choice.py",
 ]
 [[testing.map]]
 code = "scripts/agk/domain_model.py"
@@ -483,6 +484,7 @@ tests = [
   "tests/kit/test_wait_until_event.py",
   "tests/kit/test_conductor_start_wake.py",
   "tests/kit/test_light_reprove.py",
+  "tests/kit/test_conductor_tells.py",
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"
@@ -608,7 +610,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/engines.py"
 tests = [
-  "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py", "tests/kit/test_stack_choice.py",
   "tests/kit/test_stack_testing_match.py", "tests/kit_dev/test_engines_local_profile.py",
   "tests/kit_dev/test_engines_stack.py", "tests/kit_dev/test_engines_vision.py", "tests/kit_dev/test_guide_fixes.py",
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
@@ -675,6 +677,7 @@ tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
   "tests/kit/test_front_door_derive.py", "tests/kit/test_front_door_quality.py",
   "tests/kit/test_architecture_record.py", "tests/kit/test_stack_designs.py", "tests/kit/test_domain_signals.py",
+  "tests/kit/test_domain_architecture.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
@@ -988,7 +991,7 @@ tests = ["tests/kit/test_req_status.py"]
 [[testing.map]]
 code = "scripts/agk/rules.py"
 tests = [
-  "tests/kit/test_fix_list_tags.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_consolidate.py",
+  "tests/kit/test_import_ruling.py", "tests/kit/test_fix_list_tags.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_consolidate.py",
   "tests/kit/test_rules_dropped.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
@@ -1000,6 +1003,12 @@ tests = [
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_stack_choice.py",
   "tests/kit/test_standards_stack.py",
 ]
+[[testing.map]]
+code = "scripts/agk/gates/domain_scenarios.py"
+tests = ["tests/kit/test_domain_architecture.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/gates/domain_threats.py"
+tests = ["tests/kit/test_domain_architecture.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/architecture_quality.py"
 tests = ["tests/kit/test_architecture_record.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1030,7 +1039,7 @@ tests = [
   "tests/kit/test_stack_choice.py", "tests/kit/test_layers_draft.py", "tests/kit/test_run_gates_touched.py",
   "tests/kit/test_standards_stack.py",
   "tests/kit/test_run_gates.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_tests_floor.py",
-  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_gate_runner_map.py",
+  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_gate_runner_map.py", "tests/kit/test_domain_architecture.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/baseline.py"
@@ -1070,7 +1079,10 @@ code = "kit/templates/data-model.md"
 tests = ["tests/kit/test_contracts.py"]
 [[testing.map]]
 code = "kit/templates/architecture.md"
-tests = ["tests/kit/test_layers_step.py", "tests/kit/test_contracts.py", "tests/kit/test_architecture_record.py"]
+tests = [
+  "tests/kit/test_layers_step.py", "tests/kit/test_contracts.py", "tests/kit/test_architecture_record.py",
+  "tests/kit/test_domain_architecture.py",
+]
 [[testing.map]]
 code = "kit/templates/stack-adr.md"
 tests = ["tests/kit/test_stack_designs.py", "tests/kit_dev/test_stack_playbook.py"]
@@ -1143,7 +1155,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/rules.py"
 tests = [
-  "tests/kit/test_fix_list_tags.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_dropped.py",
+  "tests/kit/test_import_ruling.py", "tests/kit/test_fix_list_tags.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_dropped.py",
   "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]

@@ -471,6 +471,11 @@ branch `claude/brief-<n>`, no pull request and no `Progress:`, `Report:` or `Que
 `Report: ... escalate` never is (brief #669, ADR-0322). The poll interval is
 `conductor_poll_seconds` (60 by default), all of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
 nothing; the conductor guard allows exactly these forms.
+Both also read the Tells to the conductor's id (its lease name, else `AGK_SESSION` with `AGK_ROLE=conductor`) on the
+open `agk-conductor` issue (brief #1970, ADR-0823): `watch` ends on a new one with `<issue> Tell: <id> <message>`, and `sweep`
+prints each unread one once as `TELL <comment id> reply-to <steward session|none>: <line>` (the steward's session only for a
+Tell signed `Who: AGK steward`), moving the `inbox` mark in the git directory after it printed them; with no id, no listed author or a failed
+read it prints one `TELL:` line naming what is missing; with no `agk-conductor` issue it prints none.
 
 `merge-queue` (brief #643 build (b), ADR-0329) is the batched merge: with `auto_merge` on, it judges every open pull request by
 `merge_cleared.py`'s own holds (a cleared head, green required checks, every hold of SPEC-0039 rule 5, the clearing verdict by a
@@ -519,6 +524,15 @@ the brief's reserved numbers (its `Reserved:` lines and the `reserves` of its ta
 read first, the secret-scan deferral line of `prepush.py`, the body lines of CLAUDE.md item 7 read from `config/core-rules.md`, and
 the session rules that bind a builder quoted from `config/session-rules.md`; `--follow-up TEXT` (one line, never a verdict)
 replaces the stop on an existing pull request with the follow-up for it. The guard allows exactly these forms.
+
+## Kit script imports
+
+Where an Approved spec or a brief says a new kit script uses the "standard library and `common.py` only", the words
+read, once ADR-0824 is Accepted, as the standard library less its network modules plus the kit's offline set (ADR-0824): `common`, `guard`,
+`config`, `playbook_format`, `kit_root`, `tree_walk` and every `check_*.py` whose module-level imports stay within that
+set. `python3 scripts/agk/rules.py imports scripts/agk/<script>.py` prints `Imports: <script> within the standing
+ruling (ADR-0824)` (exit 0) or one `outside ... : ask the owner` line per module (exit 1); with the ADR not Accepted,
+or withdrawn, it prints `no standing ruling: ask the owner`. `check_brief.py` warns on a brief that names the phrase.
 
 ## Playbook evidence
 
@@ -654,6 +668,18 @@ edit`, never `ok`. A record that holds any of them is checked whole by the `arch
 `TODO(architect)` marker, an empty one, a line out of its form (`- <attribute>: <stimulus> -> <response> (<number>)`
 with one of the eight ISO/IEC 25010 characteristics; `- <flow>: <STRIDE letters>: <mitigation or accepted: <reason>>`;
 `- traced: ...` or `- alerted: ...`) or fewer scenarios than numbered `## Needs` lines fails naming the section.
+
+    python3 scripts/agk/gates/domain_scenarios.py
+    python3 scripts/agk/gates/domain_threats.py
+
+The `domain-scenarios` and `domain-threats` steps (SPEC-0074 rule 8, amendment 241; brief #1955, ADR-0811) are modules
+of the runner, never run by themselves, and apply only where `docs/architecture.md` holds its quality sections. With
+`[domain] packs` set, each composed constraint is one `## Quality scenarios` line naming its own attribute and ending
+` [<pack>.<constraint>]`; a constraint with no line, or a line citing none or naming another attribute, fails naming the
+id. Where `docs/domain/data.md` exists, each `## Threats`
+flow naming a classified data item ends `(class: <class>)`; without it `domain-threats` prints `not run domain-threats:
+no data classification`. With packs set, `engines.py stack-check` also requires an indented `Domain fit: meets` or
+`Domain fit: cannot meet: <pack>.<constraint>, ...` line after each option bullet.
 
     python3 scripts/agk/gates/glossary.py [--root DIR] [--write]
 

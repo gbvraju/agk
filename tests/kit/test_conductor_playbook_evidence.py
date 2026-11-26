@@ -217,5 +217,7 @@ def test_ac3_the_role_file_stays_within_its_rule_budget():
     listed = [ln.split() for ln in budget.splitlines() if ln.startswith(role_line)]
     assert listed and (words, rules) == (int(listed[0][1]), int(listed[0][2]))
     # Raised from 4538 by the standing rule-budget ruling, no new rule line (brief #1385, ADR-0583),
-    # and from 4663 for the Governance: line (brief #1841, Q-1841-2, ADR-0583 standing ruling 2).
-    assert words < 4717 and rules <= 37, "the budget only goes down (brief #666)"
+    # and from 4663 for the Governance: line (brief #1841, Q-1841-2, ADR-0583 standing ruling 2),
+    # and from 4716 for the Tells paragraph (brief #1970 answer 4, ADR-0583 standing ruling 2),
+    # and from 4862 for the kit-imports clause (brief #1972, ADR-0824, ADR-0583 standing ruling 2).
+    assert words < 4896 and rules <= 37, "the budget only goes down (brief #666)"
