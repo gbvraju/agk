@@ -56,6 +56,7 @@
     "config/session-rules.md",
     "config/stack-defaults.toml",
     "config/stack-signals.toml",
+    "config/standards.toml",
     "constitution/principles.md",
     "docs/adr/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",

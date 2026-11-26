@@ -43,6 +43,9 @@ that module is `on` (its stack chosen in the Accepted stack record). Its steps p
 that no pack module serves prints `not run standards: no pack for <stack>` (the stack class of
 `config/stack-signals.toml`, `unknown` outside it, never a version) and names `standards` in the
 last line; the exit code is unchanged (brief #1685, ADR-0702).
+A pack module that is on while no composed entry is a stack it serves prints `not run standards
+<stack>: no standards entry composed (path class: config/standards.toml)`, the exit code again
+unchanged (brief #1974, ADR-0817): the entries of that file compose for every work type.
 
 The baseline (SPEC-0072 rule 7; brief #1600, ADR-0680): a step that reports per-file counts (a
 module's `counts(root, playbook)`, or a pack's tally) is held to `config/agk-baseline/<gate id>.txt`
@@ -119,6 +122,8 @@ MISSING = "SPEC-0072 rule 3: the step has no implementation (path class: scripts
 UNCOUNTED = "tool did not run"  # brief #1837: a failure that counts no file is never held
 FLOORS = {"floor": "setting: standards.config", "type-floor": "path class: tsconfig.json"}
 NO_FILE = "no product file in scope"
+# brief #1974 (ADR-0817): a pack that is on while no composed entry is a stack it serves
+NONE_COMPOSED = f"no standards entry composed (path class: {check_playbooks.STANDARDS})"
 TOUCHED = (
     f"SPEC-0072 rule 7: a file this change touches must meet the pack (setting: {TOUCHED_SETTING})"
 )
@@ -260,7 +265,7 @@ def results(root: Path, write: bool = False) -> list[Row]:
             held = f"path class: {classes}" if getattr(module, "HELD", 0) else ""
             rows = ratchet(root, gate["id"], module.counts(root, data), rows, write, held)
         out += rows or [(True, gate["id"])]
-    return out + pack_results(path, root, write) + no_pack_rows(root)
+    return out + pack_results(path, root, write) + no_pack_rows(root, path)
 
 
 def no_pack(root: Path) -> str | None:
@@ -275,9 +280,21 @@ def no_pack(root: Path) -> str | None:
     return picked[0][0] if picked[0][0] in known else "unknown"
 
 
-def no_pack_rows(root: Path) -> list[Row]:
+def no_pack_rows(root: Path, path: Path | None = None) -> list[Row]:
+    """Brief #1685's no-pack line; else, with the playbook at `path`, brief #1974's line for a pack
+    module that is on while no composed entry is a stack it serves (ADR-0817)."""
     stack = no_pack(root)
-    return [(None, f"standards: no pack for {stack}")] if stack else []
+    if stack:
+        return [(None, f"standards: no pack for {stack}")]
+    picked = pins.chosen(Path(root)) if path is not None else None
+    if picked is None or path is None:
+        return []
+    composed = {e.get("stack") for e in check_playbooks.standard(path, root)[1]}
+    for name in PACKS:
+        module = importlib.import_module(f"gates.{name}")
+        if module.on(root) and not composed & set(module.STACKS):
+            return [(None, f"standards {picked[0][0]}: {NONE_COMPOSED}")]
+    return []
 
 
 def touched(root: Path) -> frozenset[str] | None:

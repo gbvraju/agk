@@ -697,6 +697,14 @@ CRLF checkout passes as CI's LF one does, unless the project's prettier configur
 (brief #1839, ADR-0769). A missing tool names the tool,
 the setting and `npm ci`; a finding names the rule id and the path class. The type step is a later build.
 
+The packs' entries come from the chosen stack, not the work type (ADR-0817; brief #1974): `config/standards.toml`
+holds the `python-pyproject`, `python-pip` and `node` entries of `[[standards]]`, each with its `runtime` (`python` or
+`node`), read from the project's copy or, in a clean project, the plugin's. Every work type, a derived playbook too,
+composes the entries of the runtime the Accepted stack record chose, before its playbook's own; a playbook entry for the
+same stack replaces one only with the same or more `rules` codes. A pack that is on while no entry is composed for its
+stack prints `not run standards <stack>: no standards entry composed (path class: config/standards.toml)`, exit
+unchanged. `check_playbooks.py` checks the file's form, naming the key (`standards.<key>`), never a value.
+
 The baseline of an adopted project (SPEC-0072 rule 7, ADR-0680; brief #1600): `scripts/agk/gates/baseline.py` keeps
 `config/agk-baseline/<gate id>.txt`, one line `<path> <count>` per file with findings (forward slashes, sorted bytewise),
 for each step that reports per-file counts (`layers`, and the pack's `lint`, `format` and `type`). With the file, the step
