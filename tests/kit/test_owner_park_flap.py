@@ -155,7 +155,7 @@ def test_1968_1949_a_label_only_park_holds_until_an_approval_line_after_it():
     ],
 )
 def test_1968_1949_the_lines_that_end_a_label_only_park(line, closes):
-    """REQ-066: brief #1968 answer 3: the approval lines, accept of the head, or a general answer."""
+    """REQ-066: brief #1968 answer 3: approval lines, the head's accept, a general answer."""
     said = [VERDICT_1949, LATER, PARKED_APPROVE, at(5, OWNER, line, 10)]
     assert step(pull(("agk:parked",)), said) == (("unpark", "approve") if closes else None)
 
@@ -287,7 +287,9 @@ def test_1968_a_settled_line_closes_the_amendment_in_the_wait_only_with_the_sett
     on = pull(("agk:parked",), [AMENDMENT], settles={"amendment 245": digest}, settlers=[OWNER])
     assert step(on, said) == ("unpark", "owner-needed")
     assert step(pull(("agk:parked",), [AMENDMENT]), said) is None  # the setting off
-    other = pull(("agk:parked",), [AMENDMENT], settles={"amendment 245": "f" * 16}, settlers=[OWNER])
+    other = pull(
+        ("agk:parked",), [AMENDMENT], settles={"amendment 245": "f" * 16}, settlers=[OWNER]
+    )
     assert step(other, said) is None  # another text was settled
     stranger = pull(("agk:parked",), [AMENDMENT], settles={"amendment 245": digest}, settlers=[])
     assert step(stranger, said) is None

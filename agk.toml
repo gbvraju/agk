@@ -1220,6 +1220,7 @@ tests = [
   "tests/kit/test_owner_answer_carries.py",
   "tests/kit/test_owner_ask_lines.py",
   "tests/kit/test_owner_wait.py", "tests/kit/test_plan_names.py",
+  "tests/kit/test_owner_park_flap.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
