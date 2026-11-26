@@ -143,6 +143,7 @@ def data(shown: Plan, base: str, head: str, found: Impact, levels=None) -> dict:
     return {
         **level_data(levels),
         "regression": found.data(),
+        **({"quick_whole": list(found.whole)} if found.whole else {}),
         "base": base,
         "head": head,
         "proof_table": shown.table,
@@ -215,7 +216,18 @@ def text(shown: Plan, base: str, head: str, found: Impact, levels=None) -> list[
     )
     lines.extend(level_text(levels))
     lines.extend(regression_text(found))
+    lines.extend(quick_line(found))
     return lines
+
+
+def quick_line(found: Impact) -> list[str]:
+    """The one line naming the whole tests that `prepush.py --quick` runs (brief #1971), after the
+    `whole:` lines; none when no whole test is selected or the selection is full, which prints no
+    `whole:` line (fix list item 2)."""
+    count = len(found.whole)
+    if not count or found.full:
+        return []
+    return [f"quick: prepush --quick runs these {count} whole {'test' if count == 1 else 'tests'}"]
 
 
 def main(argv: list[str] | None = None) -> int:

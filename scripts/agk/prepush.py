@@ -23,11 +23,13 @@ with that step's own output:
    fails the step, naming the tool and the version the governance workflow pins (`GITLEAKS_PIN`),
    and is never `not run`, in any mode and also with `--quick` (brief #632, ADR-0306);
 5. `tests`: each run of `test_plan.py` (the plan proof runs), its command in its folder; `--quick`
-   skips this step. With a `[testing]` table (brief #417, ADR-0227) it then runs the regression
-   set of `impact.py`: `project_tests` once when the set is full (or when no `[proof]` table can
-   take the selected files), otherwise each selected file through the command of the `[proof]`
-   area it lies in, with `{files}` filled in as proof fills it; a selected file in no area is
-   listed as `not run (in no [proof] area)`. Each run prints
+   runs only the `[testing] whole_tests` files that `impact` selects, one run named `whole` per
+   `[proof]` area, under the lock, and is `skipped`, naming the reason, when it selects none
+   (brief #1971, ADR-0825). With a `[testing]` table (brief #417, ADR-0227) it then runs the
+   regression set of `impact.py`: `project_tests` once when the set is full (or when no `[proof]`
+   table can take the selected files), otherwise each selected file through the command of the
+   `[proof]` area it lies in, with `{files}` filled in as proof fills it; a selected file in no
+   area is listed as `not run (in no [proof] area)`. Each run prints
    `prepush: tests <area or full> ok|FAIL (<s>s): <reason>`. The whole step holds the heavy-step
    lock (`lock.py`, name `heavy`), with lock.py's wait lines; `--no-lock` leaves it out (for CI),
    and a run whose caller already holds it (`lock.py run --name heavy -- prepush.py`, session
@@ -187,6 +189,7 @@ from guard import scan_text
 from impact import (
     NAMED,
     WHOLE,
+    WHOLE_KEY,
     Impact,
     Selected,
     full_when_share,
@@ -202,6 +205,7 @@ from impact import (
     report_of,
     run_folder_deprecation,
     run_timing,
+    testing_table,
     tools_file,
     unmapped_lines,
     workers_line,
@@ -211,6 +215,7 @@ from proof import area_command, execute, is_test_file, timeout_note
 from test_map import refresh
 
 HERE = Path(__file__).resolve().parent
+QUICK = "--quick"  # the step text of the quick run (brief #1971)
 USAGE = (
     "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record [FILE]] [--queue]"
 )
@@ -281,6 +286,7 @@ class Step:
         ran: Ran | None = None,
         runs: list[dict] | None = None,
         notes: list[str] | None = None,
+        quick: bool = False,
     ) -> None:
         self.outcome = outcome
         self.text = text
@@ -288,6 +294,7 @@ class Step:
         self.ran = ran
         self.runs = runs
         self.notes = list(notes or [])  # warnings that do not change the outcome (brief #509)
+        self.quick = quick  # the tests step of `--quick` ran the whole tests only (brief #1971)
 
 
 class Ran:
@@ -582,7 +589,7 @@ def secret_scan(root: Path, mb: str, body: Path | None = None) -> Step:
 
 def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
     if quick:
-        return Step("skipped", "--quick")
+        return quick_tests(root, mb, use_lock)
     plan = HERE / "test_plan.py"
     if not plan.is_file():
         return Step("skipped", "test_plan.py is not installed; no tests run")
@@ -600,6 +607,67 @@ def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
             return locked(root, ran, use_lock, lambda: proof_runs(root, own, ran, notes))
         return proof_runs(root, own, ran, notes)  # as before (brief #417 answer 4)
     return regression_step(root, mb, own, notes, ran, use_lock)
+
+
+def quick_tests(root: Path, mb: str, use_lock: bool) -> Step:
+    """The tests step of `--quick` (brief #1971, ADR-0825): the plan as today, then only the
+    `whole_tests` files that `impact` selects, as one run named `whole` per `[proof]` area, under
+    the heavy-step lock; `skipped`, naming the reason, when no whole file is selected."""
+    try:
+        table = testing_table(root)  # a bad whole_tests is refused before anything runs
+    except CheckError as exc:
+        return Step("FAIL", str(exc))
+    if table is None:
+        return Step("skipped", f"{QUICK}: no [testing] table")
+    if WHOLE_KEY not in table:
+        return Step("skipped", f"{QUICK}: testing.whole_tests is not set")
+    plan = HERE / "test_plan.py"
+    if not plan.is_file():
+        return Step("skipped", "test_plan.py is not installed; no tests run")
+    cmd = [sys.executable, str(plan), "--json", "--base", mb, "--head", "HEAD"]
+    code, out = run(cmd, root)
+    ran = Ran(cmd, root, code, out)
+    if code != 0:
+        return Step("FAIL", out, ran=ran)
+    try:
+        limit = proof_timeout(root)
+        refresh(root)
+        found = impact(root, mb, "HEAD")
+        areas = proof_areas(root)
+    except CheckError as exc:
+        return Step("FAIL", str(exc), ran=ran)
+    if found.docs_only:
+        return Step("skipped", f"{QUICK}: only documentation changed")
+    if not found.whole:
+        return Step("skipped", f"{QUICK}: no whole test is selected")
+    return locked(root, ran, use_lock, lambda: gate(root, [], found, areas, limit, ran, quick=True))
+
+
+def quick_sets(
+    root: Path, found: Impact, areas: list[dict] | None
+) -> tuple[list[tuple[str, str, str, str]], list[str]]:
+    """The runs of `--quick` (name, command, folder, reason): the files of `found.whole`, each
+    through the first `[proof]` area it lies in, one run per area named `whole` (`whole-<area>`
+    when more than one area holds them), and the lines of the files in no area (brief #1971)."""
+    groups: dict[str, tuple[dict, list[str]]] = {}
+    notes: list[str] = []
+    for test in found.whole:
+        area = next((a for a in areas or [] if is_test_file(test, a["dirs"], a["patterns"])), None)
+        if area is None:
+            notes.append(f"tests: not run (in no [proof] area): {test}")
+            continue
+        groups.setdefault(area["name"], (area, []))[1].append(test)
+    single = len(groups) == 1
+    sets = [
+        (
+            "whole" if single else f"whole-{name}",
+            area_command(area, files),
+            area["cwd"],
+            rule(Selected(files[0], "", WHOLE, [])),
+        )
+        for name, (area, files) in groups.items()
+    ]
+    return sets, notes
 
 
 def regression_step(
@@ -1065,23 +1133,30 @@ def gate(
     limit: int,
     ran: Ran,
     own_notes: tuple[str, ...] | list[str] = (),
+    quick: bool = False,
 ) -> Step:
     """Proof's runs, then the regression set (brief #417 answers 1 and 2), each run with its line
-    printed when it ends; what is not run is printed before the regression runs."""
+    printed when it ends; what is not run is printed before the regression runs. With QUICK the
+    regression set is the whole tests alone, recorded as the set `whole` (brief #1971)."""
     made: list[dict] = []
     warnings: list[str] = []
-    found, left = left_to_ci(root, found, areas)
+    if quick:
+        left, run_set = None, "whole"
+        sets, notes = quick_sets(root, found, areas)
+    else:
+        found, left = left_to_ci(root, found, areas)
+        run_set = "regression"
+        sets, notes = regression_sets(root, found, areas)
     left_run = left is not None and left != RUNS_HERE  # only a selection is left to CI
-    sets, notes = regression_sets(root, found, areas)
     sets, single = selected_workers(root, sets)
     notes = [*([left] if left else []), *workers_notes(root, sets), *notes, *single, *own_notes]
     notes = list(dict.fromkeys(notes))
     junit = junit_setting(root)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
-    planned.extend((*item, "regression") for item in sets)
+    planned.extend((*item, run_set) for item in sets)
     shown = False
     for name, command, cwd, reason, kind in planned:
-        if kind == "regression" and not shown:
+        if kind != "proof" and not shown:
             say(notes)
             shown = True
         folder = root / cwd
@@ -1112,13 +1187,16 @@ def gate(
                 print(warning, flush=True)
                 warnings.append(warning)
         if code is None:
-            return Step("FAIL", timeout_note(limit), ran=ran, runs=made, notes=warnings)
+            return Step(
+                "FAIL", timeout_note(limit), ran=ran, runs=made, notes=warnings, quick=quick
+            )
         if code != 0:
-            return Step("FAIL", out.rstrip("\n"), ran=ran, runs=made, notes=warnings)
+            return Step("FAIL", out.rstrip("\n"), ran=ran, runs=made, notes=warnings, quick=quick)
     if not shown:
         say(notes)
     not_run = any("not run" in n for n in notes)
-    return Step("ok", "", not_run=not_run, ran=ran, runs=made, notes=warnings)
+    text = f"{QUICK}: the whole tests only" if quick else ""
+    return Step("ok", text, not_run=not_run, ran=ran, runs=made, notes=warnings, quick=quick)
 
 
 def wall_clock() -> float:
@@ -1210,6 +1288,8 @@ def step_record(name: str, result: Step, seconds: float, root: Path) -> dict:
     }
     if result.runs is not None:
         entry["runs"] = result.runs
+    if result.quick:  # a quick run is never read as a full one (brief #1971 fix list item 1)
+        entry["quick"] = True
     return entry
 
 

@@ -466,6 +466,7 @@ def test_a_record_of_a_selected_run_with_workers_agrees(monkeypatch, tmp_path):
     monkeypatch.setattr(evidence, "impact", lambda tree, mb, head: None)
     monkeypatch.setattr(evidence, "proof_areas", lambda tree: [])
     monkeypatch.setattr(evidence, "regression_sets", lambda tree, found, areas: (sets, []))
+    monkeypatch.setattr(evidence, "quick_sets", lambda tree, found, areas: ([], []))  # brief #1971
     recorded, _ = prepush.selected_workers(tmp_path, sets)  # what gate runs and records
     planned = evidence.planned_runs(tmp_path, ["test_plan"], {}, "mb", 10)
     for name, command, cwd, _reason in recorded:
