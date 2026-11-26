@@ -41,7 +41,7 @@ A record that chooses two runtimes still turns on neither pack (Q-19I-3). The pl
 companion build 19I-b moves them out.
 
 Protected path classes changed: `config/` (`config/standards.toml`), `scripts/agk/` (`check_playbooks.py`,
-`run_gates.py`), `kit/` (`kit/manifest.json`, `kit/hashes.json`), `agk.toml` (its `[[testing.map]]` entries) and
+`run_gates.py`), `kit/` (`kit/manifest.json`), `agk.toml` (its `[[testing.map]]` entries) and
 `tests/kit/` (`test_standards_stack.py`).
 
 ## Consequences
