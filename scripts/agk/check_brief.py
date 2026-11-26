@@ -93,6 +93,7 @@ from common import (
 )
 from gates.layers import architecture
 from impact import is_test_file, matches, testing_table
+from rules import IMPORTS_PHRASE, IMPORTS_WARNING
 from session import (
     ADDS,
     TOUCHES,
@@ -108,7 +109,6 @@ from session import (
 from session_plan import touch_problems, touch_rules
 
 from config import brief_code_paths
-from rules import IMPORTS_PHRASE, IMPORTS_WARNING
 
 NAME = "brief"
 USAGE = (

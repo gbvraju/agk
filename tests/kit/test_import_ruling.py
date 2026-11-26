@@ -56,7 +56,10 @@ def test_req037_the_three_built_scripts_on_main_read_as_the_brief_says(tmp_path,
     root = tree(tmp_path)
     for name in ("grill.py", "check_runbooks.py"):
         code, out = run(capsys, str(KIT / name), "--root", str(root))
-        assert (code, out) == (0, [f"Imports: scripts/agk/{name} within the standing ruling (ADR-0824)"])
+        assert (code, out) == (
+            0,
+            [f"Imports: scripts/agk/{name} within the standing ruling (ADR-0824)"],
+        )
     code, out = run(capsys, str(KIT / "check_domains.py"), "--root", str(root))
     assert code == 1
     assert out == [
@@ -78,7 +81,9 @@ def test_req037_the_three_built_scripts_on_main_read_as_the_brief_says(tmp_path,
 def test_req037_each_import_outside_gets_one_line(tmp_path, capsys, text, module):
     """REQ-037: brief #1972 answers 2, 3 and 6 (a kit module outside the set, a network module, a
     third-party name, a dynamic import and a function-level import each get one line)."""
-    root = tree(tmp_path, files={"example_kit.py": "import json\n", "new_tool.py": "import guard\n" + text})
+    root = tree(
+        tmp_path, files={"example_kit.py": "import json\n", "new_tool.py": "import guard\n" + text}
+    )
     code, out = run(capsys, "scripts/agk/new_tool.py", "--root", str(root))
     assert code == 1
     assert out == [
@@ -88,8 +93,9 @@ def test_req037_each_import_outside_gets_one_line(tmp_path, capsys, text, module
 
 
 def test_req037_a_check_leaves_or_joins_the_set_by_its_own_walk(tmp_path):
-    """REQ-037: brief #1972 answer 6 (a check that imports a network module of the kit leaves the set, one that
-    imports `guard` joins it, one through an outside check leaves too; a cycle is walked once)."""
+    """REQ-037: brief #1972 answer 6 (a check that imports a kit module with a network import
+    leaves the set, one that imports `guard` joins it, one through an outside check leaves too;
+    a cycle is walked once)."""
     from rules import kit_imports
 
     root = tree(
@@ -124,7 +130,10 @@ def test_req037_without_the_accepted_adr_there_is_no_standing_ruling(tmp_path, c
     files = {"new_tool.py": "import guard\n", "plain.py": "import json\nimport common\n"}
     proposed = tree(tmp_path / "a", PROPOSED, files)
     code, out = run(capsys, "scripts/agk/new_tool.py", "--root", str(proposed))
-    assert (code, out) == (1, ["Imports: scripts/agk/new_tool.py, no standing ruling: ask the owner"])
+    assert (code, out) == (
+        1,
+        ["Imports: scripts/agk/new_tool.py, no standing ruling: ask the owner"],
+    )
     code, out = run(capsys, "scripts/agk/plain.py", "--root", str(proposed))
     assert code == 0 and out == [
         "Imports: scripts/agk/plain.py within the standard library and common.py"
@@ -134,7 +143,10 @@ def test_req037_without_the_accepted_adr_there_is_no_standing_ruling(tmp_path, c
         "- Status: Accepted\n- Withdraws: ADR-0824\n", encoding="utf-8"
     )
     code, out = run(capsys, "scripts/agk/new_tool.py", "--root", str(withdrawn))
-    assert (code, out) == (1, ["Imports: scripts/agk/new_tool.py, no standing ruling: ask the owner"])
+    assert (code, out) == (
+        1,
+        ["Imports: scripts/agk/new_tool.py, no standing ruling: ask the owner"],
+    )
 
 
 def test_req037_a_path_outside_scripts_agk_or_a_broken_file_is_refused(tmp_path, capsys):

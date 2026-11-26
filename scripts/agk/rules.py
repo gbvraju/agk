@@ -329,7 +329,11 @@ def _imported(tree: ast.Module, every: bool) -> set[str]:
         if isinstance(node, ast.Import):
             found |= {a.name.split(".")[0] for a in node.names}
         elif isinstance(node, ast.ImportFrom):
-            found.add(("." * node.level) + (node.module or "") if node.level else str(node.module).split(".")[0])
+            found.add(
+                ("." * node.level) + (node.module or "")
+                if node.level
+                else str(node.module).split(".")[0]
+            )
         elif every and isinstance(node, ast.Call):
             func = node.func
             name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
@@ -423,7 +427,10 @@ def imports(root: Path, script: str) -> int:
     members = set(kit_imports(path.parent) - {path.stem})
     outside = sorted(n for n in used if not _allowed(n, members))
     for name in outside:
-        print(f"Imports: {shown} imports {name} outside the standing ruling ({IMPORTS_ADR}): ask the owner")
+        print(
+            f"Imports: {shown} imports {name} outside the standing ruling "
+            f"({IMPORTS_ADR}): ask the owner"
+        )
     if not outside:
         print(f"Imports: {shown} within the standing ruling ({IMPORTS_ADR})")
     return 1 if outside else 0
