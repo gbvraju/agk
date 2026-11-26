@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import playbook_format  # noqa: E402
 from common import CheckError, review_mode, run, utf8_output  # noqa: E402
 
-from config import domain_discovery, quality_settings  # noqa: E402
+from config import quality_settings  # noqa: E402
 
 NAME = "grill"
 USAGE = __doc__.split("\n\n", 2)[1]
@@ -117,10 +117,17 @@ def pack_items(
     in their composed order, and the ids asked past the budget. A regulated pack (a `critical`
     `[[regulations]]` entry) asks its critical items at `light` and its others at `standard` at
     the least; any other pack's items keep their depth."""
-    entries, regulated = domain_discovery(root)  # config: the imports stay within ADR-0824's set
+    import check_domains  # here: a project without packs reads no pack
+
+    regulated = set()
+    for name in check_domains.order(root, check_domains._listed(root)):
+        path = check_domains.pack_path(root, name)
+        rows = (check_domains.load(path) or {}).get("regulations") if path else None
+        if any(isinstance(r, dict) and r.get("critical") is True for r in rows or []):
+            regulated.add(name)
     depths = playbook_format.GRILL_DEPTHS
     items, always = [], set()
-    for entry in entries:
+    for entry in check_domains.items(root)["discovery"]:
         if entry.get("depth") not in depths or not isinstance(entry.get("critical"), bool):
             continue
         if entry.get("id") in held:  # the playbook's item keeps its place (fix list item 6)
