@@ -111,7 +111,7 @@ def answered(path: str | None) -> set[str]:
 
 
 def pack_items(
-    root: Path, held: set[str] = frozenset()
+    root: Path, held: frozenset[str] | set[str] = frozenset()
 ) -> tuple[list[tuple[str, str, str, bool]], set[str]]:
     """SPEC-0074 rule 6 (brief #1937, ADR-0806): the grill items of the packs of `[domain] packs`
     in their composed order, and the ids asked past the budget. A regulated pack (a `critical`

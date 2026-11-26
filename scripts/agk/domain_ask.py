@@ -157,19 +157,19 @@ def with_packs(text: str, names: list[str]) -> str:
     found = TABLE.search(text) if "domain" in tomllib.loads(text) else None
     if found is None:
         return f"{text.rstrip(chr(10))}\n\n[domain]\n{line}\n"
-    end = re.search(r"^\[", text[found.end() :], re.M)
-    stop = found.end() + (end.start() if end else len(text) - found.end())
+    after = re.search(r"^\[", text[found.end() :], re.M)
+    stop = found.end() + (after.start() if after else len(text) - found.end())
     lines = text[found.end() : stop].split("\n")
     at = next((n for n, x in enumerate(lines) if PACKS.match(x)), None)
     if at is None:
         lines.insert(1, line)
     else:  # the whole value, over as many lines as its brackets take (fix list item 4)
-        end, depth = at, 0
-        for end in range(at, len(lines)):
-            depth += lines[end].split("#")[0].count("[") - lines[end].split("#")[0].count("]")
+        last, depth = at, 0
+        for last in range(at, len(lines)):
+            depth += lines[last].split("#")[0].count("[") - lines[last].split("#")[0].count("]")
             if depth <= 0:
                 break
-        lines[at : end + 1] = [line]
+        lines[at : last + 1] = [line]
     out = text[: found.end()] + "\n".join(lines) + text[stop:]
     if tomllib.loads(out).get("domain", {}).get("packs") != names:
         raise CheckError(f"the [domain] table cannot be rewritten (setting: domain.packs, {RULE})")
