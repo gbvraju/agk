@@ -610,6 +610,7 @@ def test_the_sweep_prints_the_stall_lines(monkeypatch, tmp_path, capsys):
     answers.table[f"repos/{REPO}/pulls?state=open"] = []
     answers.table[f"repos/{REPO}"] = {"default_branch": "main"}
     answers.table[f"repos/{REPO}/issues?state=open"] = []
+    answers.table[f"repos/{REPO}/issues?state=open&labels=agk-conductor"] = []  # brief #1970
     monkeypatch.setattr(conductor, "proof_lines", lambda *a: [])
     monkeypatch.setattr(conductor.caps, "over_lines", lambda *a: [])
     monkeypatch.setattr(conductor, "branch_line", lambda *a: "main: success at abc")
