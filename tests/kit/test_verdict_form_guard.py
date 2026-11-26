@@ -33,7 +33,6 @@ import conductor  # noqa: E402
 HEAD = "a1b2c3d4e5f6" + "0" * 28
 ADR = "docs/adr/0001-the-adr.md"
 DOUBLED = f"Verdict: fix list {HEAD}\n\nFinal: docs/adr/{ADR} Proposed -> Accepted\n"  # as on #800
-GOOD = f"Verdict: fix list {HEAD}\n\nFinal: {ADR} Proposed -> Accepted\n"
 NO_ITEMS = f"Verdict: fix list {HEAD}\nRead: all files.\nRules:\n- Rule 8: holds.\n"  # as on #810
 ITEMS = f"Verdict: fix list {HEAD}\n\n1. Fix it. (rule: none)\n"
 CLEARED = f"Verdict: cleared {HEAD}\nRead: all files.\n"
@@ -76,9 +75,10 @@ def test_a_fix_list_with_no_items_on_a_covered_pull_request_must_be_cleared(proj
     assert out.returncode == 1 and out.stdout.strip() == conductor.NO_ITEMS
 
 
-def test_a_fix_list_with_no_items_is_allowed_beside_a_proposed_adr(proj, stub):  # noqa: F811
+def test_a_fix_list_with_no_items_is_refused_beside_a_proposed_adr_too(proj, stub):  # noqa: F811
+    """Brief #2001 answer 4 (ADR-0827): an acceptance is `Verdict: cleared` with its Final lines."""
     serve(stub, [{"filename": ADR, "status": "added"}])
-    assert check(proj, stub, NO_ITEMS, "--pr", "7").stdout.strip() == "ok"
+    assert check(proj, stub, NO_ITEMS, "--pr", "7").stdout.strip() == conductor.FIX_LIST_EMPTY
 
 
 def test_a_fix_list_beside_an_accepted_adr_only_must_be_cleared(proj, stub):  # noqa: F811
@@ -93,7 +93,9 @@ def test_a_verdict_on_another_head_is_refused(proj, stub):  # noqa: F811
     assert out.returncode == 1 and out.stdout.strip() == conductor.OTHER_HEAD
 
 
-@pytest.mark.parametrize("text", [GOOD, ITEMS, CLEARED, CLEARED.replace(HEAD, HEAD[:7])])
+# the old acceptance form (a fix list of Final lines) is refused since brief #2001: see
+# test_verdict_form_cleared.py
+@pytest.mark.parametrize("text", [ITEMS, CLEARED, CLEARED.replace(HEAD, HEAD[:7])])
 def test_a_good_verdict_passes(proj, stub, text):  # noqa: F811
     serve(stub)
     out = check(proj, stub, text, "--pr", "7")
@@ -191,7 +193,7 @@ def test_the_guard_refuses_each_wrong_form_by_name(project, tmp_path, text, rule
 
 
 def test_the_guard_allows_a_good_verdict_and_other_comments(project, tmp_path):
-    for text in (GOOD, ITEMS, CLEARED, "Correction: x; y stands\n", "Question: Q-1 why\n"):
+    for text in (ITEMS, CLEARED, "Correction: x; y stands\n", "Question: Q-1 why\n"):
         assert hook(project, tmp_path, text) is None, text
 
 

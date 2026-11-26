@@ -320,9 +320,13 @@ import session
 import session_plan
 import steward
 from common import (
+    CLEARED_FULL,
     FINAL_LINE,
     NOT_FIX_LIST,
     CheckError,
+    cleared_items,
+    covered_fix_list,
+    final_accepts,
     fix_items,
     option_pairs,
     repo_root,
@@ -2038,6 +2042,22 @@ NO_ITEMS = (
     "with no Proposed ADR gives the builder nothing to do; the verdict is `cleared`"
 )
 OTHER_HEAD = "session rule 1: the verdict names a head that is not the pull request's current head"
+FINAL_OUTSIDE = (  # brief #2001 answer 3
+    "SPEC-0021 rule 3a: a cleared verdict's Final: line accepts an ADR this pull request does not "
+    "add or change"
+)
+FIX_LIST_EMPTY = (  # brief #2001 answer 4
+    "SPEC-0021 rule 1: a fix list with no numbered item and no Final: line gives the builder "
+    "nothing to do; post `Verdict: cleared <head>`"
+)
+CLEARED_ITEMS = (
+    "SPEC-0021 rule 9: a cleared verdict carries no numbered item; post them as "
+    "`Verdict: fix list <head>`, or leave them out"
+)
+FIX_LIST_ACCEPTS = (
+    "SPEC-0021 rule 1: a fix list whose only content is ADR acceptance Final: lines gives the "
+    "builder nothing to do; post `Verdict: cleared <head>` with the same `Final:` lines"
+)
 PLAN_ISSUE = "plan_issue"
 LEASE_SETTING = f"(setting: {PLAN_ISSUE} in the flow table of agk.toml)"
 LEASE_OFF = f"lease: off {LEASE_SETTING}"
@@ -2388,7 +2408,15 @@ def head_problem(
         if not isinstance(listed, list) or tree.get("truncated"):
             raise CheckError("the files of the head cannot be read")
         have = {str(x.get("path")) for x in listed if isinstance(x, dict)}
-        return FINAL_PATH if any(path not in have for path in finals) else None
+        if any(path not in have for path in finals):
+            return FINAL_PATH
+        if CLEARED_FULL.fullmatch(text.splitlines()[0].strip()) is None:
+            return None
+        if files is None:
+            files = read(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
+        changed = ("added", "modified")
+        touched = {str(f.get("filename")) for f in files if f.get("status") in changed}
+        return FINAL_OUTSIDE if any(path not in touched for path in finals) else None
     if not text.startswith("Verdict: fix list") or fix_items(text):
         return None
     if files is None:
@@ -2421,9 +2449,25 @@ def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
         return OTHER_HEAD
     return (
         head_problem(repo, number, body, head)
+        or form_problem(body)
         or size_problem(repo, number, pull, body, root)
         or gate_problem(root, repo, number, head, body)
     )
+
+
+def form_problem(body: str) -> str | None:
+    """Brief #2001 answer 4, before a post only: a `Verdict: fix list` that gives the builder
+    nothing to do, with no numbered item and no `Final:` line, or with only ADR acceptance lines
+    (post `Verdict: cleared <head>` with them). A posted one is still read (`verdict_problem`)."""
+    text = body.strip()
+    if cleared_items(text):  # the fix list on 12129d1, item 2
+        return CLEARED_ITEMS
+    if not text.startswith("Verdict: fix list") or fix_items(text):
+        return None
+    if not any(line.startswith("Final:") for line in text.splitlines()):
+        return FIX_LIST_EMPTY
+    covered = covered_fix_list(text)
+    return FIX_LIST_ACCEPTS if covered is not None and final_accepts(covered[1]) else None
 
 
 SIZE_LENS = re.compile(r"(?m)^\s*(?:-\s*)?Size:\s*(.*)$")

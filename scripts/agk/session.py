@@ -1238,12 +1238,35 @@ def builder_verdicts(comments: list, head: str, authors: list[str] | None) -> li
 
     allowed = {a.lstrip("@").lower() for a in authors or []}
     listed = [c for c in comments if author_of(c) in allowed and VERDICT.fullmatch(first_line(c))]
-    quiet = [c for c in listed if merge_cleared.accepted_adrs(c, head) is not None]
+    quiet = [
+        c
+        for c in listed
+        if first_line(c).startswith("Verdict: fix list")  # a cleared one ends it (brief #2001)
+        and merge_cleared.accepted_adrs(c, head) is not None
+    ]
     if not quiet:
         return comments
     latest = max(listed, key=lambda c: c.get("id", 0))
     gone = listed if latest in quiet else quiet
     return [c for c in comments if c not in gone]
+
+
+CLEARED_LABELS = ("agk:merge-ready", "agk:owner-merge")
+
+
+def cleared_label(now: str, comments: list | None, pr: dict, root) -> bool:
+    """Brief #2001 answer 5: the label NOW is the router's cleared state and the newest listed
+    verdict clears the head (`merge_cleared.clears_head`), so it owes the builder nothing."""
+    import merge_cleared  # merge_cleared imports this module
+
+    if now not in CLEARED_LABELS or not comments:
+        return False
+    authors = counted_authors(verdict_authors(root), (pr.get("user") or {}).get("login"))
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    listed = [c for c in comments if author_of(c) in allowed and VERDICT.fullmatch(first_line(c))]
+    head = str((pr.get("head") or {}).get("sha") or "")
+    latest = max(listed, key=lambda c: c.get("id", 0)) if listed else None
+    return latest is not None and bool(head) and merge_cleared.clears_head(latest, head)
 
 
 def label_of(pr: dict) -> str:
@@ -1600,9 +1623,10 @@ def watch(root, args: dict[str, str]) -> int:
                 now = label_of(pr)
                 if label is UNSET:
                     label = now
-                elif now != label:
+                elif now != label and not cleared_label(now, comments, pr, root):
                     print(f"label {now}")
                     return 0
+                label = now
         if told is not None and (code := told.poll()) is not None:
             return code
         if late():

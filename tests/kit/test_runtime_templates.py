@@ -302,13 +302,14 @@ def test_1713_d_the_edge_cases_each_have_their_line():
 def test_1879_a_final_only_fix_list_is_no_event_in_the_builder_and_conductor_texts():
     """REQ-046: brief #1879 answers 3 and 4 (no job for a Final-only fix list on the head; a
     job started on one anyway pushes nothing and ends at its no-op Report; the conductor merges
-    in the same act as posting it)."""
+    in the same act as posting it). Brief #2001 (ADR-0827): the acceptance is posted as
+    `Verdict: cleared <head>`, which is no work; the older fix-list form is still no event."""
     body = text("builder.txt")
     final = body.split("FINAL LINES:", 1)[1].split("\n", 1)[0]
-    assert "on your head is no event: no job is started for it" in final
-    assert "the merger accepts the ADR as it merges" in final
+    assert "A `Verdict: cleared` on your head is no work" in final
+    assert "A fix list in the older form, only such lines, is no event either" in final
     assert "push nothing and post `Report: <head> fix list applied: nothing to change`" in final
     role = (ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     merge = next(ln for ln in role.splitlines() if ln.startswith("The guarded merge"))
-    assert "or a covered fix list on `<sha>` whose every `Final:` line accepts an ADR" in merge
+    assert "`Verdict: cleared <sha>` with the full 40-character head (with its ADR" in merge
     assert "SPEC-0021 rule 3a" in merge

@@ -253,6 +253,7 @@ from common import (  # noqa: E402
     SPEC_RECORD,
     STATUS_LINE,
     CheckError,
+    cleared_items,
     covered_fix_list,
     final_accepts,
     final_records,
@@ -261,6 +262,7 @@ from common import (  # noqa: E402
     show,
     status_flip_only,
     utf8_output,
+    verdict_problem,
     who_argv,
 )
 from gates.licences import DEFAULT as LICENCE_DEFAULT  # noqa: E402
@@ -739,6 +741,12 @@ def trusted(comments: list[dict], allowed: list[str]) -> list[dict]:
     return [c for c in comments if not first_line(c).startswith("Verdict:") or login(c) in names]
 
 
+UNREADABLE_FINAL = (
+    "the latest cleared verdict carries a Final: line that cannot be read or a numbered item "
+    "(rule 3; SPEC-0021 rules 1 and 9)"
+)
+
+
 def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]:
     """(`cleared`, "") or (`held`, reason) for the latest verdict by a trusted author in ALLOWED
     (SPEC-0039 rule 3); an empty ALLOWED is nobody, never anyone (brief #1709 answer 1)."""
@@ -748,6 +756,9 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
     if verdict is None:
         return "held", "no verdict (rule 3)"
     if not clears_head(verdict, sha):
+        named = first_line(verdict).removesuffix(FALLBACK) == f"Verdict: cleared {sha}"
+        if named and not readable_cleared(verdict):
+            return "held", UNREADABLE_FINAL
         return "held", "the latest verdict does not clear this head (rule 3)"
     if login(verdict) not in {a.lstrip("@").lower() for a in allowed}:
         return "held", (
@@ -769,6 +780,8 @@ def carried_from(
     if verdict is None:
         return None
     found = CLEARED_LINE.fullmatch(first_line(verdict).removesuffix(FALLBACK))
+    if found and not readable_cleared(verdict):  # the fix list on 12129d1, item 1
+        return None
     old = found.group(1) if found else None
     covered = None if found else covered_fix_list(str(verdict.get("body") or ""))
     if covered is not None and accepted_adrs(verdict, covered[0]) is not None:
@@ -833,11 +846,20 @@ def judge_head(
     return state, reason
 
 
+def readable_cleared(verdict: dict) -> bool:
+    """Brief #2001: a cleared VERDICT whose `Final:` lines `verdict_problem` reads and which has no
+    numbered item (`cleared_items`); the merger clears or carries no other."""
+    body = str(verdict.get("body") or "")
+    return verdict_problem(body) is None and not cleared_items(body)
+
+
 def clears_head(verdict: dict, sha: str) -> bool:
     """VERDICT clears exactly SHA (rule 3): `Verdict: cleared <sha>` (a ` (conductor fallback)`
-    ending read as the same, ADR-0431 decision 3) or a rule 3a fix list on SHA (`accepted_adrs`)."""
+    ending read as the same, ADR-0431 decision 3) whose `Final:` lines `verdict_problem` reads
+    (brief #2001), or a rule 3a fix list on SHA (`accepted_adrs`)."""
     first = first_line(verdict).removesuffix(FALLBACK)
-    return first == f"Verdict: cleared {sha}" or accepted_adrs(verdict, sha) is not None
+    cleared = first == f"Verdict: cleared {sha}" and readable_cleared(verdict)
+    return cleared or accepted_adrs(verdict, sha) is not None
 
 
 def no_builder_event(comment: dict, sha: str) -> bool:
