@@ -1266,7 +1266,7 @@ def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, ...]:
     top = sorted(paths.items(), key=lambda kv: (-kv[1], kv[0]))[:FULL_PATHS_SHOWN]
     classes = sorted(unknown.items(), key=lambda kv: (-kv[1], kv[0]))
     missed = f" ({', '.join(f'{c} {n}' for c, n in classes)})" if classes else ""
-    lines = (
+    lines: tuple[str, ...] = (
         f"pr tests: {pulls} pull requests; selected {selected} of {pulls} ({share}); "
         f"test step {tenths(Decimal(seconds) / 60)} minutes; full: {fulls}; "
         f"unknown: {sum(unknown.values())}{missed}",
