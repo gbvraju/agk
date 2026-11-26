@@ -68,7 +68,7 @@ def test_req037_the_three_built_scripts_on_main_read_as_the_brief_says(tmp_path,
 @pytest.mark.parametrize(
     ("text", "module"),
     [
-        ("import route\n", "route"),
+        ("import example_kit\n", "example_kit"),
         ("import urllib.request\n", "urllib"),
         ("import examplepkg\n", "examplepkg"),
         ("import importlib\nm = importlib.import_module('guard')\n", "importlib.import_module"),
@@ -78,7 +78,7 @@ def test_req037_the_three_built_scripts_on_main_read_as_the_brief_says(tmp_path,
 def test_req037_each_import_outside_gets_one_line(tmp_path, capsys, text, module):
     """REQ-037: brief #1972 answers 2, 3 and 6 (a kit module outside the set, a network module, a
     third-party name, a dynamic import and a function-level import each get one line)."""
-    root = tree(tmp_path, files={"route.py": "import json\n", "new_tool.py": "import guard\n" + text})
+    root = tree(tmp_path, files={"example_kit.py": "import json\n", "new_tool.py": "import guard\n" + text})
     code, out = run(capsys, "scripts/agk/new_tool.py", "--root", str(root))
     assert code == 1
     assert out == [
@@ -88,15 +88,15 @@ def test_req037_each_import_outside_gets_one_line(tmp_path, capsys, text, module
 
 
 def test_req037_a_check_leaves_or_joins_the_set_by_its_own_walk(tmp_path):
-    """REQ-037: brief #1972 answer 6 (a check that imports `session` leaves the set, one that
+    """REQ-037: brief #1972 answer 6 (a check that imports a network module of the kit leaves the set, one that
     imports `guard` joins it, one through an outside check leaves too; a cycle is walked once)."""
     from rules import kit_imports
 
     root = tree(
         tmp_path,
         files={
-            "session.py": "import urllib.request\n",
-            "check_net.py": "import session\n",
+            "example_net.py": "import urllib.request\n",
+            "check_net.py": "import example_net\n",
             "check_ok.py": "import guard\nimport check_loop\n",
             "check_loop.py": "import check_ok\n",
             "check_via.py": "import check_net\n",
@@ -105,7 +105,7 @@ def test_req037_a_check_leaves_or_joins_the_set_by_its_own_walk(tmp_path):
     )
     found = kit_imports(root / "scripts" / "agk")
     assert {"check_ok", "check_loop", "guard", "common"} <= found
-    assert not {"check_net", "check_via", "check_bad", "session"} & found
+    assert not {"check_net", "check_via", "check_bad", "example_net"} & found
 
 
 def test_req037_the_offline_checks_and_the_base_modules_walk_clean_on_main():
