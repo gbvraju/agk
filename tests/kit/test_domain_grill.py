@@ -44,7 +44,10 @@ REG = (
     '\n[[regulations]]\nid = "{name}-law"\ntitle = "An invented rule"\njurisdiction = "global"\n'
     'source = "https://example.com/law"\nas_of = "2026-11-25"\ncritical = true\n'
 )
-ITEM = '\n[[discovery]]\nid = "{id}"\ntext = "An invented question {id}?"\ndepth = "{depth}"\ncritical = {crit}\n'
+ITEM = (
+    '\n[[discovery]]\nid = "{id}"\ntext = "An invented question {id}?"\ndepth = "{depth}"\n'
+    "critical = {crit}\n"
+)
 LINE = "A few more questions are needed for the rules of this business."
 
 
@@ -78,7 +81,9 @@ def grill_project(tmp: Path, listed: list[str] | None, extra: str = "") -> Path:
 
 
 def ids(lines: list[str]) -> list[str]:
-    return [x.split(" ", 1)[0] for x in lines if not x.startswith(("Recommended:", "budget:", "A "))]
+    return [
+        x.split(" ", 1)[0] for x in lines if not x.startswith(("Recommended:", "budget:", "A "))
+    ]
 
 
 # --- rule 6: discovery is the grill ------------------------------------------------------------
@@ -184,7 +189,9 @@ def test_ac3_detect_proposes_a_domain_from_a_file(tmp_path):
 
 def test_ac3_detect_says_none_and_mixed(tmp_path):
     """REQ-081 AC3: rule 5, no signal, and two packs as one mixed line."""
-    assert "domain: none (proposed; no signal of a domain)" in detect(saved_tree(tmp_path / "a", {}))
+    assert "domain: none (proposed; no signal of a domain)" in detect(
+        saved_tree(tmp_path / "a", {})
+    )
     out = detect(saved_tree(tmp_path / "b", {"payments.py": "\n", "dispatch.py": "\n"}))
     assert "domain: mixed (2 candidates)" in out
     assert not [x for x in out if "(proposed) file" in x and x.startswith("domain: ")]
@@ -272,10 +279,8 @@ def test_ac3_mixed_signals_give_one_choice_of_at_most_three_with_none_of_these(e
     assert sentence.endswith("I recommend the first.")
 
 
-def test_ac3_more_than_three_candidates_offer_the_three_with_most_signals(env):
+def test_ac3_more_than_three_candidates_offer_the_three_with_most_signals():
     """REQ-081 AC3: rule 5, at most three."""
-    tmp, _ = env
-    root = project(tmp)
     counts = {"a": 3, "b": 1, "c": 4, "d": 2}
     assert domain_ask.offered(counts) == ["c", "a", "d"]
 
