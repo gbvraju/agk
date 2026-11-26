@@ -180,9 +180,29 @@ def test_req079_every_work_type_composes_the_node_entry(work_type: str, tmp_path
 def test_req079_no_chosen_runtime_composes_nothing_of_the_file(
     work_type: str | None, runtime: str | None, status: str, tmp_path: Path
 ) -> None:
-    """Answer 5: no work type, a Proposed record, no record or another runtime: as today."""
+    """Answer 5: no work type, a Proposed record, no record or a name outside the stack table."""
     root = project(tmp_path, work_type, runtime, status)
+    assert pins.chosen(root) is None
     assert stacks(root, work_type or "default") == []
+
+
+@pytest.mark.parametrize("work_type", ["data-pipeline", "web-app"])
+def test_req079_another_runtime_composes_none_and_prints_no_pack(
+    work_type: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Answer 5: a runtime of the stack table that the file holds no entry for (here an invented
+    `go` row, as brief #1685's tests invent one) composes none, and the line is `no pack for
+    <stack>` as today, never this build's `no standards entry composed`."""
+    monkeypatch.setitem(pins.STACKS, "go", ("go-modules", "go.mod", "go.sum", "go"))
+    root = project(tmp_path, work_type, "go")
+    assert pins.chosen(root) is not None and pins.chosen(root)[0][0] == "go-modules"
+    assert stacks(root, work_type) == own(work_type)
+    _, out = gates(root, capsys)
+    assert "not run standards: no pack for go-modules" in out, out
+    assert "no standards entry composed" not in out and "ok standards" not in out
 
 
 def test_req079_two_records_compose_nothing(tmp_path: Path) -> None:
