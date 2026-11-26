@@ -286,6 +286,7 @@ class Step:
         ran: Ran | None = None,
         runs: list[dict] | None = None,
         notes: list[str] | None = None,
+        quick: bool = False,
     ) -> None:
         self.outcome = outcome
         self.text = text
@@ -293,6 +294,7 @@ class Step:
         self.ran = ran
         self.runs = runs
         self.notes = list(notes or [])  # warnings that do not change the outcome (brief #509)
+        self.quick = quick  # the tests step of `--quick` ran the whole tests only (brief #1971)
 
 
 class Ran:
@@ -1185,14 +1187,16 @@ def gate(
                 print(warning, flush=True)
                 warnings.append(warning)
         if code is None:
-            return Step("FAIL", timeout_note(limit), ran=ran, runs=made, notes=warnings)
+            return Step(
+                "FAIL", timeout_note(limit), ran=ran, runs=made, notes=warnings, quick=quick
+            )
         if code != 0:
-            return Step("FAIL", out.rstrip("\n"), ran=ran, runs=made, notes=warnings)
+            return Step("FAIL", out.rstrip("\n"), ran=ran, runs=made, notes=warnings, quick=quick)
     if not shown:
         say(notes)
     not_run = any("not run" in n for n in notes)
     text = f"{QUICK}: the whole tests only" if quick else ""
-    return Step("ok", text, not_run=not_run, ran=ran, runs=made, notes=warnings)
+    return Step("ok", text, not_run=not_run, ran=ran, runs=made, notes=warnings, quick=quick)
 
 
 def wall_clock() -> float:
@@ -1284,6 +1288,8 @@ def step_record(name: str, result: Step, seconds: float, root: Path) -> dict:
     }
     if result.runs is not None:
         entry["runs"] = result.runs
+    if result.quick:  # a quick run is never read as a full one (brief #1971 fix list item 1)
+        entry["quick"] = True
     return entry
 
 

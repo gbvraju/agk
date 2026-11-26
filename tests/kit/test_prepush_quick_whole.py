@@ -215,3 +215,173 @@ def test_a_quick_record_agrees_and_a_changed_whole_run_differs(repo, outside):
     found = EVIDENCE.search(proc.stdout)
     assert found and found.group(1) == "differs", proc.stdout + proc.stderr
     assert "not what prepush runs: tests/whole/whole (field: command)" in proc.stdout
+
+
+# Fix list 7185562347 on 72de963 (brief #1971).
+
+
+def quick_record(repo, outside: Path) -> tuple[Path, dict, Path]:
+    record = outside / "record.json"
+    scan = scanner(outside / "bin", 0)
+    made = repo.run("prepush.py", "--quick", "--record", str(record), PATH=path_with(scan))
+    assert made.returncode == 0, made.stdout + made.stderr
+    return record, json.loads(record.read_text(encoding="utf-8")), scan
+
+
+def test_a_quick_record_is_marked_and_the_check_says_so(repo, outside):
+    """REQ-062: fix list item 1 (a quick record never reads as a full one)."""
+    wide_project(repo, toml(outside, testing='profile = "fast"\n' + WHOLE + MAP))
+    record, data, scan = quick_record(repo, outside)
+    tests = next(s for s in data["steps"] if s["name"] == "tests")
+    assert tests["quick"] is True
+    proc = check(repo, outside, record, scan)
+    assert "evidence: quick record: its tests step ran the whole tests only" in proc.stdout
+    assert EVIDENCE.search(proc.stdout).group(1) == "agrees", proc.stdout
+
+
+def test_a_whole_run_without_the_quick_mark_differs(repo, outside):
+    """REQ-062: fix list item 1 (a whole run in a record not marked quick is not prepush's)."""
+    wide_project(repo, toml(outside, testing='profile = "fast"\n' + WHOLE + MAP))
+    record, data, scan = quick_record(repo, outside)
+    tests = next(s for s in data["steps"] if s["name"] == "tests")
+    del tests["quick"]
+    record.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    proc = check(repo, outside, record, scan)
+    assert EVIDENCE.search(proc.stdout).group(1) == "differs", proc.stdout
+    assert "not what prepush runs: tests/whole/whole (field: set)" in proc.stdout
+    assert "quick record:" not in proc.stdout
+
+
+def test_a_full_run_record_carries_no_quick_mark(repo, outside):
+    """REQ-062: fix list item 1 (only `--quick` marks the step)."""
+    wide_project(repo, toml(outside, testing='profile = "fast"\n' + WHOLE + MAP))
+    record = outside / "record.json"
+    scan = scanner(outside / "bin", 0)
+    made = repo.run("prepush.py", "--record", str(record), PATH=path_with(scan))
+    assert made.returncode == 0, made.stdout + made.stderr
+    data = json.loads(record.read_text(encoding="utf-8"))
+    assert "quick" not in next(s for s in data["steps"] if s["name"] == "tests")
+
+
+def test_a_full_selection_prints_no_quick_line(repo, outside):
+    """REQ-062: fix list item 2 (no `quick:` line where no `whole:` line is printed)."""
+    wide_project(repo, toml(outside, testing='profile = "thorough"\n' + WHOLE + MAP))
+    text = repo.run("test_plan.py", "--base", "main")
+    assert text.returncode == 0, text.stdout + text.stderr
+    assert "whole: " not in text.stdout and "quick:" not in text.stdout
+
+
+ALWAYS = 'always_full = ["src/other.py"]\n'
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [ALWAYS, ALWAYS + 'local_full = "ci"\n', 'map_source = "generated"\n'],
+    ids=["always_full", "local_full", "map_source"],
+)
+def test_the_settings_that_shape_a_selection_leave_the_quick_list_alone(repo, outside, extra):
+    """REQ-062: fix list item 3 (`always_full`, `local_full`, `map_source`: the same list)."""
+    text = toml(outside, testing='profile = "fast"\n' + extra + WHOLE + MAP)
+    wide_project(repo, text, {"src/other.py": "change\n", "src/billing/pay.py": "change\n"})
+    proc = prepush(repo, outside, "--quick")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["kit tests/test_a.py"]
+    assert [r[0] for r in RUN_LINE.findall(proc.stdout)] == ["whole"]
+
+
+def fake_python(outside: Path) -> Path:
+    python = outside / "fake" / "python3"
+    python.parent.mkdir(exist_ok=True)
+    python.write_text(FAKE_PYTHON.replace("{log}", str(outside / "ran.log")), encoding="utf-8")
+    python.chmod(0o755)
+    return python
+
+
+def test_workers_auto_starts_the_whole_run_in_workers_or_one_process(repo, outside):
+    """REQ-062: fix list item 3 (`workers = "auto"`, as `selected_workers` reads it)."""
+    area = f"{fake_python(outside)} -m pytest {{files}}"
+    testing = 'profile = "fast"\nworkers = "auto"\n' + WHOLE + MAP
+    wide_project(repo, toml(outside, area_cmd=area, testing=testing))
+    proc = prepush(repo, outside, "--quick")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert re.fullmatch(r"-m pytest tests/test_a\.py( -n \d+)?", ran(outside)[0]), ran(outside)
+
+
+def test_agk_test_workers_sets_the_whole_runs_workers(repo, outside):
+    """REQ-062: fix list item 3 (`AGK_TEST_WORKERS` wins over the setting)."""
+    area = f"{fake_python(outside)} -m pytest {{files}}"
+    wide_project(repo, toml(outside, area_cmd=area, testing='profile = "fast"\n' + WHOLE + MAP))
+    proc = prepush(repo, outside, "--quick", AGK_TEST_WORKERS="3")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["-m pytest tests/test_a.py -n 3"]
+
+
+def test_a_bad_agk_test_workers_is_refused_naming_the_setting(repo, outside):
+    """REQ-062: fix list item 3 (a bad value refused naming the setting, as today)."""
+    wide_project(repo, toml(outside, testing='profile = "fast"\n' + WHOLE + MAP))
+    proc = prepush(repo, outside, "--quick", AGK_TEST_WORKERS="none")
+    assert proc.returncode != 0, proc.stdout + proc.stderr
+    assert "setting: AGK_TEST_WORKERS" in proc.stdout + proc.stderr
+    assert ran(outside) == []
+
+
+def test_proof_timeout_ends_a_whole_run_that_does_not_finish(repo, outside):
+    """REQ-062: fix list item 3 (`proof_timeout` holds the quick run as a selected one)."""
+    text = "proof_timeout = 1\n" + toml(
+        outside,
+        area_cmd="sleep 5; echo kit {files} >> LOG",
+        testing='profile = "fast"\n' + WHOLE + MAP,
+    )
+    wide_project(repo, text)
+    proc = prepush(repo, outside, "--quick")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "the limit set by `proof_timeout`" in proc.stdout
+    assert ran(outside) == []
+
+
+TWO_AREAS = (
+    'default_branch = "main"\ntest_dirs = ["tests"]\ntest_patterns = ["test_*.py"]\n'
+    "project_tests = 'echo full >> LOG'\nlock_dir = 'LOCKS'\n[proof]\n"
+    'kit = { dirs = ["tests/billing"], patterns = ["test_*.py"],'
+    " command = 'echo kit {files} >> LOG' }\n"
+    'base = { dirs = ["tests"], patterns = ["test_*.py"],'
+    " command = 'echo base {files} >> LOG' }\n"
+    '[testing]\nprofile = "fast"\nwhole_tests = ["tests/billing/test_pay.py", "tests/test_a.py"]\n'
+)
+
+
+def test_two_areas_give_two_named_whole_runs_that_the_check_replays(repo, outside):
+    """REQ-062: fix list item 4 (`whole-<area>`, each in the first area that holds it)."""
+    log = str(outside / "ran.log")
+    text = TWO_AREAS.replace("LOG", log).replace("LOCKS", str(outside / "locks")) + MAP
+    wide_project(repo, text, {"src/other.py": "change\n"})
+    proc = prepush(repo, outside, "--quick")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert [r[0] for r in RUN_LINE.findall(proc.stdout)] == ["whole-kit", "whole-base"]
+    assert ran(outside) == ["kit tests/billing/test_pay.py", "base tests/test_a.py"]
+    (outside / "ran.log").unlink()
+    record, data, scan = quick_record(repo, outside)
+    tests = next(s for s in data["steps"] if s["name"] == "tests")
+    assert [r["name"] for r in tests["runs"]] == ["whole-kit", "whole-base"]
+    replay = check(repo, outside, record, scan)
+    assert EVIDENCE.search(replay.stdout).group(1) == "agrees", replay.stdout
+    assert "tests/whole/whole-kit" in replay.stdout and "tests/whole/whole-base" in replay.stdout
+
+
+def test_a_change_of_only_a_protected_md_file_runs_the_list(repo, outside):
+    """REQ-062: brief #1971 answer 6 (an installed or protected `*.md` is not documentation)."""
+    repo.commit({"config/protected-paths.txt": "kit/\n"}, "the protected classes")
+    text = toml(outside, testing='profile = "fast"\n' + WHOLE + MAP)
+    wide_project(repo, text, {"kit/guide.md": "# invented\n"})
+    proc = prepush(repo, outside, "--quick")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["kit tests/test_a.py"]
+
+
+def test_a_whole_file_the_map_also_selects_runs_once(repo, outside):
+    """REQ-062: brief #1971 answer 1 (a whole test chosen for another reason still counts once)."""
+    whole = 'whole_tests = ["tests/billing/test_pay.py"]\n'
+    wide_project(repo, toml(outside, testing='profile = "fast"\n' + whole + MAP))
+    proc = prepush(repo, outside, "--quick")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["kit tests/billing/test_pay.py"]

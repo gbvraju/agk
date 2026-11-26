@@ -137,6 +137,10 @@ from prepush import (
 from proof import WINDOWS, kill_tree, popen_options
 
 HERE = Path(__file__).resolve().parent
+QUICK_NOTE = (
+    "quick record: its tests step ran the whole tests only (prepush --quick); proof's runs and "
+    "the regression set were not run"
+)
 USAGE = (
     "usage: evidence.py check RECORD [--head SHA] [--sample N] [--body FILE] [--json]"
     " | check --head SHA ..."
@@ -258,6 +262,8 @@ def valid_step(item) -> bool:
     if not isinstance(item.get("output_sha256"), str):
         return False
     if item.get("outcome") not in OUTCOMES:
+        return False
+    if "quick" in item and item["quick"] is not True:  # brief #1971: only ever `true`
         return False
     runs = item.get("runs")
     if runs is None:
@@ -584,8 +590,14 @@ def rebuild(
             argv = [sys.executable, kit_script(tree, "test_plan.py"), *want[2:]]
             units[name] = Unit(name, tree, item["exit"], item["output_sha256"], argv)
             planned = planned_runs(tree, argv, env, mb, limit)
+            quick = item.get("quick") is True
+            if quick:  # brief #1971 fix list item 1: said, never read as a full run
+                notes.append(QUICK_NOTE)
             for run in item.get("runs") or []:
                 key = (run.get("set") or "proof", run["name"])
+                if (key[0] == "whole") != quick:  # a whole run only in a quick record
+                    differ(f"tests/{key[0]}/{run['name']}", "set")
+                    continue
                 label = (
                     f"tests/{run['name']}" if key[0] == "proof" else f"tests/{key[0]}/{run['name']}"
                 )

@@ -222,9 +222,10 @@ def text(shown: Plan, base: str, head: str, found: Impact, levels=None) -> list[
 
 def quick_line(found: Impact) -> list[str]:
     """The one line naming the whole tests that `prepush.py --quick` runs (brief #1971), after the
-    `whole:` lines; none when no whole test is selected."""
+    `whole:` lines; none when no whole test is selected or the selection is full, which prints no
+    `whole:` line (fix list item 2)."""
     count = len(found.whole)
-    if not count:
+    if not count or found.full:
         return []
     return [f"quick: prepush --quick runs these {count} whole {'test' if count == 1 else 'tests'}"]
 

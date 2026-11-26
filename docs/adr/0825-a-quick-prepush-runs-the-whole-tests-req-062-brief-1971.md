@@ -29,10 +29,13 @@ steward chat, quoted as data): "Go ahead and prioritize the parked briefs and st
    `--quick: the whole tests only`. Proof's runs, the mapped and named tests and the full suite stay skipped.
 2. No `[testing]` table, no `whole_tests` key, a documentation-only change or no whole file in the head: the step is
    `skipped` with no command, its text naming the reason. A whole file in no area is `not run (in no [proof] area)`.
-3. The record holds the runs under the set `whole`; `evidence.py:planned_runs` rebuilds that set from
-   `prepush.quick_sets`, so a quick record is checked as any other run, and a skipped quick step is read as today.
+3. The record holds the runs under the set `whole`, and its tests step carries `"quick": true`;
+   `evidence.py:planned_runs` rebuilds that set from `prepush.quick_sets`, so a quick record is checked as any other
+   run, and `evidence.py check` prints one line saying the record is quick (proof's runs and the regression set were
+   not run). A `whole` run in a step without the mark, or another run in a step with it, differs (field: `set`). A
+   skipped quick step is read as today.
 4. `test_plan.py` prints `quick: prepush --quick runs these <k> whole tests` after the `whole:` lines and its JSON gains
-   `quick_whole`; with none, neither.
+   `quick_whole`; with none, neither, and under a full selection (no `whole:` lines) no `quick:` line.
 5. The kit's `whole_tests` gains `tests/kit/test_common_option_pairs.py` and `tests/kit/test_playbook_default.py`
    (Q-SG-1: listed); session rule 31 and the builder's runtime prompt say a quick prepush runs the whole tests.
 
