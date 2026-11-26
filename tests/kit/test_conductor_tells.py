@@ -18,7 +18,6 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import conductor  # noqa: E402
-from common import CheckError  # noqa: E402
 
 REPO = "example/kit"
 ISSUE = 204
@@ -51,6 +50,7 @@ def gh(monkeypatch, tmp_path):
         steward: list[dict] = []
         gets: list[str] = []
         broken = False
+        no_issue = False
         authors = ["@owner"]
         name: str | None = ME
 
@@ -58,6 +58,8 @@ def gh(monkeypatch, tmp_path):
         Gh.gets.append(endpoint)
         if endpoint.startswith(f"repos/{REPO}/issues/{ISSUE}/comments"):
             return None if Gh.broken else list(Gh.comments)
+        if endpoint.startswith(f"repos/{REPO}/issues?state=open&labels=agk-conductor"):
+            return [] if Gh.no_issue else [{"number": ISSUE, "labels": [{"name": "agk-conductor"}]}]
         if endpoint.startswith(f"repos/{REPO}/issues?labels=agk-steward"):
             return [{"number": STEWARD_ISSUE}]
         if endpoint.startswith(f"repos/{REPO}/issues/{STEWARD_ISSUE}/comments"):
@@ -65,7 +67,6 @@ def gh(monkeypatch, tmp_path):
         return []
 
     monkeypatch.setattr(conductor.session, "pages", pages)
-    monkeypatch.setattr(conductor.session, "conductor_issue", lambda repo: ISSUE)
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
     monkeypatch.setattr(conductor.session, "verdict_authors", lambda root: Gh.authors)
     monkeypatch.setattr(conductor.session, "inbox_mark", lambda root, me: tmp_path / f"in-{me}")
@@ -74,6 +75,7 @@ def gh(monkeypatch, tmp_path):
     monkeypatch.setattr(conductor, "tell_now", lambda: NOW)
     monkeypatch.delenv("AGK_ROLE", raising=False)
     monkeypatch.delenv("AGK_SESSION", raising=False)
+    monkeypatch.setattr(conductor, "TELL_ROOT", ["root"])
     conductor.TELL_ISSUE.clear()
     return Gh
 
@@ -168,17 +170,15 @@ def test_1970_no_listed_author_prints_the_author_line_never_a_login(gh):
     assert watch_tells(10) == []
 
 
-def test_1970_a_failed_read_prints_its_line_and_the_other_sweep_lines(gh, monkeypatch):
+def test_1970_a_failed_read_prints_its_line_and_the_other_sweep_lines(gh):
     """REQ-037: brief #1970 answer 3: a failed read is one line; the rest of sweep still prints."""
     gh.broken = True
     assert sweep_tells() == [f"TELL: the comments of #{ISSUE} cannot be read"]
     assert watch_tells(10) == []
 
-    def no_issue(repo):
-        raise CheckError("rule 12: an open issue labelled agk-conductor is needed")
-
-    monkeypatch.setattr(conductor.session, "conductor_issue", no_issue)
-    assert sweep_tells() == ["TELL: rule 12: an open issue labelled agk-conductor is needed"]
+    conductor.TELL_ISSUE.clear()
+    gh.no_issue = True  # no agk-conductor issue: no Tell to read, no line, the sweep unchanged
+    assert sweep_tells() == [] and watch_tells(10) == []
     source = Path(conductor.__file__).read_text(encoding="utf-8")
     sweep_body = source.split("\ndef sweep(root)", 1)[1].split("\ndef ", 1)[0]
     assert "lines += tell_lines(root, repo)" in sweep_body

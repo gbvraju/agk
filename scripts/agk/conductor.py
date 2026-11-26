@@ -425,11 +425,7 @@ READS = ["full"]  # `github_reads` of this run, set once by `watch` (brief #1314
 
 
 def new_lines(
-    repo: str,
-    since: datetime,
-    approvers: AbstractSet[str] = frozenset(),
-    reads: str = "",
-    root=None,
+    repo: str, since: datetime, approvers: AbstractSet[str] = frozenset(), reads: str = ""
 ) -> list[str]:
     """The waking lines of the open briefs and pull requests since `since`. With `reads` delta
     (brief #1314, ADR-0555 decision 2) one `changed_comments` read stands for every issue's pages:
@@ -458,14 +454,27 @@ def new_lines(
             first = session.first_line(c)
             if wakes(c, approvers) and session.moment(c.get("created_at")) > since:
                 lines.append(f"{number} {first}")
-    if root is not None:  # brief #1970 answer 2: the Tells to the conductor, from the same delta
-        lines += tell_lines(root, repo, since, delta)
+    if TELL_ROOT[0] is not None:  # brief #1970 answer 2: the Tells to the conductor, same delta
+        lines += tell_lines(TELL_ROOT[0], repo, since, delta)
     return lines
 
 
 # --- the Tells to the conductor (brief #1970, ADR-0823) ---------------------------------------
 
 TELL_ISSUE: dict[str, int] = {}  # the `agk-conductor` issue, read once per run of `watch`
+TELL_ROOT: list = [None]  # the checkout whose conductor `watch` reads the Tells of
+
+
+def tell_issue(repo: str) -> int | None:
+    """The newest open issue labelled `agk-conductor` (as `session.conductor_issue`), read once;
+    None when there is none or the list cannot be read: then there is no Tell to read."""
+    if repo not in TELL_ISSUE:
+        found = session.pages(f"repos/{repo}/issues?state=open&labels={session.ASSIGN_LABEL}")
+        numbers = [i["number"] for i in session.labelled(found or [], session.ASSIGN_LABEL)]
+        if not numbers:
+            return None
+        TELL_ISSUE[repo] = max(numbers)
+    return TELL_ISSUE[repo]
 
 
 def tell_now() -> datetime:
@@ -501,8 +510,8 @@ def tell_lines(root, repo: str, since: datetime | None = None, delta: list | Non
     `delta` when given, else one `since` GET; silent when nothing can be read. Without (`sweep`,
     answer 3): `TELL <comment id> reply-to <session>: <line>` for each unread one, oldest first,
     with the inbox mark, so each prints once; a name, author or read problem is one `TELL:` line."""
-    if common.personal_table(Path(root)) is not None:
-        return []  # answer 5: personal mode has no agk-conductor issue
+    if common.personal_table(Path(root)) is not None or (issue := tell_issue(repo)) is None:
+        return []  # answer 5: personal mode, or no agk-conductor issue, has no Tell to read
     me = conductor_id(root)
     allowed = {
         a.lstrip("@").lower()
@@ -512,9 +521,6 @@ def tell_lines(root, repo: str, since: datetime | None = None, delta: list | Non
         if not me or not allowed:
             return []
         try:
-            issue = TELL_ISSUE.get(repo) or TELL_ISSUE.setdefault(
-                repo, session.conductor_issue(repo)
-            )
             comments = (
                 [c for c in delta if session.issue_of(c) == issue]
                 if delta is not None
@@ -591,6 +597,15 @@ def sweep_late(root, repo: str) -> list[str]:
 
 
 def watch(root, since: datetime, once: bool) -> int:
+    TELL_ROOT[0] = root  # `new_lines` reads the Tells of this checkout's conductor (brief #1970)
+    try:
+        return watch_loop(root, since, once)
+    finally:
+        TELL_ROOT[0] = None
+        TELL_ISSUE.clear()
+
+
+def watch_loop(root, since: datetime, once: bool) -> int:
     repo = session.repo_name(root)
     interval = session.flow_int(root, POLL[0], POLL[1], 0)
     READS[0] = session.github_reads(root)
@@ -605,8 +620,7 @@ def watch(root, since: datetime, once: bool) -> int:
                     return code
                 renewed = time.monotonic()
             approvers = {a.lstrip("@").lower() for a in spec_approvers(Path(root))}
-            lines = new_lines(repo, since, approvers, root=root)
-            lines += green_lines(root, repo, since)
+            lines = new_lines(repo, since, approvers) + green_lines(root, repo, since)
             lines = lines or held_lines(root, repo)
             lines = lines + start_lines(root, repo)  # with every return (brief #1179, ADR-0500)
         except CheckError as exc:
