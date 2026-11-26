@@ -1,12 +1,13 @@
-"""The owner's accept carries over a light merge, and the conductor names its missing scanner (brief #2006).
+"""An owner's accept carries over a light merge; the conductor names a missing scanner (#2006).
 
-REQ-057. ADR-0830: `merge_cleared.answered` counts a `Maintainer answer: accept <old>` for the light
-re-prove's merge head when the head is the light merge of OLD, the accept follows a `differs` verdict
-on OLD, and the verdict on the head carries the same `Differs:` lines; any other difference, a
-builder push or a verdict with a numbered item between them needs a new accept. The conductor's
-check refuses a `differs` verdict without `Differs:` lines and the lines beside `agrees`, and its
-lease take in local mode without gitleaks prints one tools line and marks the lease. Git
-repositories in `tmp_path` and recorded responses; invented data only, no network.
+REQ-057. ADR-0830: `merge_cleared.answered` counts a `Maintainer answer: accept <old>` for the
+light re-prove's merge head when the head is the light merge of OLD, the accept follows a
+`differs` verdict on OLD, and the verdict on the head carries the same `Differs:` lines; any
+other difference, a builder push or a verdict with a numbered item between them needs a new
+accept. The conductor's check refuses a `differs` verdict without `Differs:` lines and the lines
+beside `agrees`, and its lease take in local mode without gitleaks prints one tools line and
+marks the lease. Git repositories in `tmp_path` and recorded responses; invented data only, no
+network.
 """
 
 from __future__ import annotations
@@ -38,14 +39,21 @@ THIRD = BOTTOM.replace("line 3", "main again")  # main's second change, its own 
 def verdict(cid: int, head: str, check: str = "differs", lines: tuple[str, ...] = (DIFF,),
             first: str = "cleared", extra: str = "") -> dict:  # fmt: skip
     body = "\n".join(
-        [f"Verdict: {first} {head}", f"Local evidence: {head[:12]} record", extra,
-         f"Evidence check: {check}, head {head[:12]}", *lines]  # fmt: skip
+        [
+            f"Verdict: {first} {head}",
+            f"Local evidence: {head[:12]} record",
+            extra,
+            f"Evidence check: {check}, head {head[:12]}",
+            *lines,
+        ]  # fmt: skip
     )
     return comment(cid, "boss", body, f"2026-11-26T10:{cid:02d}:00Z")
 
 
 def accept(cid: int, head: str) -> dict:
-    return comment(cid, "owner", f"Maintainer answer: accept {head}", f"2026-11-26T10:{cid:02d}:00Z")
+    return comment(
+        cid, "owner", f"Maintainer answer: accept {head}", f"2026-11-26T10:{cid:02d}:00Z"
+    )
 
 
 def light(root: Path):
@@ -112,7 +120,9 @@ def test_an_accept_by_another_account_is_not_counted(merged):
 
 def test_a_verdict_with_a_numbered_item_between_needs_a_new_accept(merged):
     root, old, new = merged
-    fix = comment(4, "boss", f"Verdict: fix list {new}\n\n1. Record the head again.", "2026-11-26T10:04:00Z")
+    fix = comment(
+        4, "boss", f"Verdict: fix list {new}\n\n1. Record the head again.", "2026-11-26T10:04:00Z"
+    )
     comments = [verdict(1, old), accept(2, old), fix, verdict(5, new)]
     assert evidence(root, comments, new) == "evidence differs (rule 4)"
 
@@ -166,7 +176,9 @@ def test_light_of_reads_the_fetched_default_branch_and_its_shared_indexes(merged
 
 def body(check: str, *lines: str) -> str:
     sha = "a" * 40
-    return "\n".join([f"Verdict: cleared {sha}", f"Evidence check: {check}, head {sha[:12]}", *lines])
+    return "\n".join(
+        [f"Verdict: cleared {sha}", f"Evidence check: {check}, head {sha[:12]}", *lines]
+    )
 
 
 def test_a_differs_verdict_without_its_lines_is_refused_before_a_post():
@@ -193,13 +205,19 @@ def test_the_lines_are_read_as_a_set():
 # answer 1: the lease take names the missing scanner
 
 
-TOOLS = "lease: tools: gitleaks is missing; a light re-prove asks the builder for its record (tool: gitleaks)"
+TOOLS = conductor.TOOLS_LINE
+assert TOOLS == (
+    "lease: tools: gitleaks is missing; a light re-prove asks the builder for its record "
+    "(tool: gitleaks)"
+)
 PLAN = f"repos/{REPO}/issues/61/comments"
 
 
 def lease_world(repo, stub, execution: str) -> None:
     repo.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
-    repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss]\nspec_approvers: [owner]\n")
+    repo.write(
+        "config/reviewers.yaml", "version: 1\nverdict_authors: [boss]\nspec_approvers: [owner]\n"
+    )
     repo.write("agk.toml", f'execution = "{execution}"\n[flow]\nplan_issue = 61\n')
     repo.git("add", "-A")
     repo.git("commit", "-q", "-m", "base")
@@ -235,38 +253,45 @@ def stub(tmp_path):
     return Stub(tmp_path)
 
 
-def test_a_fresh_take_in_local_mode_without_gitleaks_says_so_and_marks_the_lease(repo, stub, tmp_path):
+def test_a_fresh_take_in_local_mode_without_gitleaks_says_so_and_marks_the_lease(
+    repo, stub, tmp_path
+):
     lease_world(repo, stub, "local")
     stub.serve(PLAN, [])
     out = take(repo, stub, tmp_path, scanner=False)
     assert out.returncode == 0, out.stderr
     lines = out.stdout.strip().splitlines()
     assert lines[0].startswith("lease: taken by c2 until ") and lines[1:] == [TOOLS]
-    [text] = written(stub)
+    [text] = [w.splitlines()[0] for w in written(stub)]
     assert text.startswith("body=Conductor: active ") and text.endswith("; tools: gitleaks missing")
     marker = comment(5, "boss", text.removeprefix("body="))
     assert conductor.lease_comment([marker], ["boss"]) is not None
 
 
 @pytest.mark.parametrize(("execution", "scanner"), [("local", True), ("hosted", False)])
-def test_with_gitleaks_or_in_hosted_mode_the_take_is_as_before(repo, stub, tmp_path, execution, scanner):
+def test_with_gitleaks_or_in_hosted_mode_the_take_is_as_before(
+    repo, stub, tmp_path, execution, scanner
+):
     lease_world(repo, stub, execution)
     stub.serve(PLAN, [])
     out = take(repo, stub, tmp_path, scanner=scanner)
     assert out.returncode == 0, out.stderr
     assert len(out.stdout.strip().splitlines()) == 1
-    assert not written(stub)[0].endswith("missing")
+    assert not written(stub)[0].splitlines()[0].endswith("missing")
 
 
 def test_a_renew_prints_no_tools_line(repo, stub, tmp_path):
     lease_world(repo, stub, "local")
     stamp = (datetime.now(UTC) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    held = comment(5, "boss", f"Conductor: active {stamp} c2 since {stamp}; tools: gitleaks missing")
+    held = comment(
+        5, "boss", f"Conductor: active {stamp} c2 since {stamp}; tools: gitleaks missing"
+    )
     stub.serve(PLAN, [held])
     stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
     out = take(repo, stub, tmp_path, scanner=False)
     assert out.returncode == 0, out.stderr
     assert TOOLS not in out.stdout
+    assert written(stub)[0].splitlines()[0].endswith("; tools: gitleaks missing")  # the mark kept
 
 
 def test_a_malformed_execution_is_named_and_the_take_still_succeeds(repo, stub, tmp_path):
