@@ -128,7 +128,9 @@ def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], l
             weak.update((where or rel, f"{prefix}key: {key}") for key in keys)
             if not keys:
                 gates[gate["id"]] = gate
-    problems += [f"rule 21: {file}: a gate is restated weaker ({key})" for file, key in sorted(weak)]
+    problems += [
+        f"rule 21: {file}: a gate is restated weaker ({key})" for file, key in sorted(weak)
+    ]
     return list(gates.values()), list(evidence), problems
 
 
@@ -182,9 +184,7 @@ def standard(path: Path, root: Path) -> tuple[dict[str, Any], list[dict[str, Any
     return architecture, list(packs.values()), problems
 
 
-def findings(
-    root: Path, files: list[Path] | None = None, domains: bool | None = None
-) -> list[str]:
+def findings(root: Path, files: list[Path] | None = None, domains: bool | None = None) -> list[str]:
     """The problems of the check: the given playbooks, or all of them, and the declaration; with
     all of them, or `domains`, the domain packs' too (SPEC-0074 rule 2, brief #1935, ADR-0804)."""
     paths = playbook_format.playbooks(root) if files is None else files

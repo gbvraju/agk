@@ -358,8 +358,11 @@ def items(root: Path) -> dict[str, list[dict]]:
         for section in out:
             for entry in rows.get(section, []):
                 key = KEPT_ONCE.get(section)
-                mark = (section, entry.get(key)) if key else (section, *map(entry.get, (
-                    "id", "attribute", "scenario")))
+                mark = (
+                    (section, entry.get(key))
+                    if key
+                    else (section, *map(entry.get, ("id", "attribute", "scenario")))
+                )
                 if mark not in seen:
                     seen.add(mark)
                     out[section].append({**entry, "pack": name})

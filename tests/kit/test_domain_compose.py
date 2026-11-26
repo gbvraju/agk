@@ -70,8 +70,12 @@ def test_ac2_a_project_pack_composes_after_the_kits(tmp_path):
     root = project(
         tmp_path,
         {
-            "zz-own": pack("zz-own", body=GATE.format(id="zz-own-gate", kind="check",
-                                                     owner="false", extra='step = "lint"\n')),
+            "zz-own": pack(
+                "zz-own",
+                body=GATE.format(
+                    id="zz-own-gate", kind="check", owner="false", extra='step = "lint"\n'
+                ),
+            ),
             "payments": (KIT_ROOT / "config/domains/payments.toml").read_text(encoding="utf-8"),
         },
         ["zz-own", "payments"],
@@ -89,7 +93,9 @@ def test_ac2_a_pack_gate_restated_weaker_is_refused_naming_the_key(tmp_path):
     )
     root = project(tmp_path, {"zz-shop": pack("zz-shop", body=weak)}, ["zz-shop"])
     gates, _, problems = check_playbooks.composed(web(root), root)
-    assert problems == ["rule 21: config/domains/zz-shop.toml: a gate is restated weaker (key: kind)"]
+    assert problems == [
+        "rule 21: config/domains/zz-shop.toml: a gate is restated weaker (key: kind)"
+    ]
     assert next(g for g in gates if g["id"] == "tests-first")["kind"] == "check"
 
 
@@ -141,12 +147,16 @@ def test_ac2_a_jurisdiction_pack_without_its_domain_is_composed_and_warned(tmp_p
 
 def test_ac2_the_order_is_the_persons(tmp_path):
     """REQ-081 AC2: SPEC-0074 rule 4 (two orders of the same packs compose differently)."""
-    packs = {n: pack(n, body=GATE.format(id="zz-gate", kind="check", owner=o, extra='step = "lint"\n'))
-             for n, o in (("zz-shop", "false"), ("zz-bank", "true"))}
+    packs = {
+        n: pack(n, body=GATE.format(id="zz-gate", kind="check", owner=o, extra='step = "lint"\n'))
+        for n, o in (("zz-shop", "false"), ("zz-bank", "true"))
+    }
     first = project(tmp_path / "a", packs, ["zz-shop", "zz-bank"])
     second = project(tmp_path / "b", packs, ["zz-bank", "zz-shop"])
-    held = [next(g for g in check_playbooks.composed(web(r), r)[0] if g["id"] == "zz-gate")
-            for r in (first, second)]
+    held = [
+        next(g for g in check_playbooks.composed(web(r), r)[0] if g["id"] == "zz-gate")
+        for r in (first, second)
+    ]
     assert held[0]["owner_only"] is True  # the later, stronger one replaced the first
     assert check_playbooks.composed(web(second), second)[2] == [
         "rule 21: config/domains/zz-shop.toml: a gate is restated weaker (key: owner_only)"
@@ -161,12 +171,22 @@ def test_ac2_a_pack_listed_twice_is_refused_naming_the_setting(tmp_path):
 
 
 @pytest.mark.parametrize("listed", [None, []])
-def test_ac2_no_packs_give_todays_composition_for_every_shipped_playbook(tmp_path, monkeypatch, listed):
+def test_ac2_no_packs_give_todays_composition_for_every_shipped_playbook(
+    tmp_path, monkeypatch, listed
+):
     """REQ-081 AC2: SPEC-0074 rule 4 (`packs = []` or no table: exactly today's)."""
     root = project(tmp_path, {"zz-shop": pack("zz-shop")}, listed)
-    now = {p.name: check_playbooks.composed(p, root) for p in sorted((root / "config/playbooks").glob("*.toml"))}
-    monkeypatch.setattr(check_domains, "compose", lambda r, layers: ([(None, x) for x in layers], []))
-    before = {p.name: check_playbooks.composed(p, root) for p in sorted((root / "config/playbooks").glob("*.toml"))}
+    now = {
+        p.name: check_playbooks.composed(p, root)
+        for p in sorted((root / "config/playbooks").glob("*.toml"))
+    }
+    monkeypatch.setattr(
+        check_domains, "compose", lambda r, layers: ([(None, x) for x in layers], [])
+    )
+    before = {
+        p.name: check_playbooks.composed(p, root)
+        for p in sorted((root / "config/playbooks").glob("*.toml"))
+    }
     assert now == before and len(now) == 11
 
 
@@ -175,10 +195,13 @@ def test_ac2_every_layer_passes_through_the_one_judgement(tmp_path, monkeypatch)
     root = project(tmp_path, {}, None)
     seen: list[tuple] = []
     real = check_playbooks._weakened
-    monkeypatch.setattr(check_playbooks, "_weakened", lambda n, h: seen.append((n, h)) or real(n, h))
+    monkeypatch.setattr(
+        check_playbooks, "_weakened", lambda n, h: seen.append((n, h)) or real(n, h)
+    )
     planted = {"gates": [{"id": "tests-first", "kind": "judgement", "owner_only": False}]}
     monkeypatch.setattr(
-        check_domains, "compose",
+        check_domains,
+        "compose",
         lambda r, layers: ([(None, x) for x in layers] + [("config/domains/zz.toml", planted)], []),
     )
     problems = check_playbooks.composed(web(root), root)[2]

@@ -6,7 +6,7 @@
 - Related: SPEC-0074, SPEC-0057, SPEC-0048, SPEC-0038, ADR-0804, ADR-0794, ADR-0371, ADR-0259, brief #1936, brief #1935, plan #661
 - Requirements: REQ-081
 
-Protected classes: `scripts/agk/`, `config/`, `kit/`, `tests/kit/`, `docs/specs/`, `agk.toml`
+Protected classes: `scripts/agk/`, `config/`, `kit/`, `tests/kit/`, `tests/kit_dev/`, `docs/specs/`, `agk.toml`
 
 ## Context
 
@@ -39,7 +39,8 @@ modules and the playbook only, and no file named a domain's signals.
    `front_door.signal_problems` also checks it (`front_door.domain_signal_problems`), each line `rule 5:
    config/domain-signals.toml: [[domain]] row <n> ... (key: <key>)`, never a value; a kit copy without the file
    has nothing to check. It joins `kit/manifest.json` `verbatim`. Reading it to propose a domain is build (c).
-5. A project's own pack is never in the manifest, so the installer and `upgrade.py` (`installed_set`) never write it.
+5. `tests/kit_dev/test_kit_manifest.py` lists the table among the installed single files (SPEC-0074 rule 15), the
+   one change under `tests/kit_dev/`, a class the brief's reserved line did not name. A project's own pack is never in the manifest, so the installer and `upgrade.py` (`installed_set`) never write it.
 6. Amendment 240 is applied to SPEC-0048 rule 23 word for word; its proposal file records the application.
 7. The order of `default`, the modules and the playbook stays the code's (modules before the playbook, SPEC-0074 rule
    1), while rule 4 and amendment 240 read "the work type, its modules" (`Q-D74B-3`): the packs follow both either way,
