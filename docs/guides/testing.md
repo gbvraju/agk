@@ -212,8 +212,9 @@ capped at `--limit` names (20 by default) with its full count:
 - **wording-only tests**: a test that reads a `.md` file and only checks that phrases are in it, running no kit code and no
   command;
 - **brief-pinned names**: a test whose name holds `brief`, `adr` or `amendment` and a number;
-- **unselected files**: a test file that no `[[testing.map]]` entry, `whole_tests` entry or `always_full` glob names, so it
-  runs only in the full suite (`no testing map` without a `[testing]` table);
+- **unselected files**: a test file that no `[[testing.map]]` entry, `whole_tests` entry or `always_full` glob names, so no
+  map entry chooses it: it runs in the full suite, and under `balanced` also when it names a changed file (`no testing map`
+  without a `[testing]` table);
 - **slowest files**: the slowest files of the newest prepush record, or `per-file timing: unknown` without one.
 
 Each list is a candidate for a person to review, never a ruling: the command removes nothing, and a later clean-up names

@@ -19,15 +19,17 @@ equal tests, tests that only check a document's wording, or test files that no m
 ## Decision
 
 1. One new installed command, `python3 scripts/agk/test_audit.py [--json] [--since YYYY-MM-DD] [--limit N]`, reads the test
-   files of the `[proof]` areas (absent: `tests/` with `test_*.py`) with `ast`, never importing or running them, and prints
+   files of the `[proof]` areas (absent: `tests/` with `test_*.py`; patterns matched with `fnmatchcase`, as `impact.py` matches them) with `ast`, never importing or running them, and prints
    the files, the test functions, the test lines, the code lines of the `[[testing.map]]` `code` entries and their ratio;
    with `--since`, the `def test_` lines local git added and removed since that day (a shallow clone's boundary commits
    left out). It imports only `common` (ADR-0824's set), reads tracked files and local git, makes no network call, writes
-   nothing and exits 0; a malformed option exits 2 naming the option, a malformed `[testing]` table exits 2 naming the setting.
+   nothing and exits 0; a malformed option exits 2 naming the option, an unknown one exits 2 without echoing it, a malformed `[testing]`
+   table exits 2 naming the setting.
 2. It prints five lists, each capped at `--limit` names (default 20) with its full count, each a candidate and never a
-   verdict: (a) equal tests, bodies without docstrings equal as `ast.dump`; (b) wording-only tests, a test that names a
-   `.md` file (directly, through a module constant or through a helper of the same file) whose every assert is an `in` or
-   `not in` check, and that calls no kit module, no helper that runs code and no subprocess; (c) brief-pinned names, `brief`,
+   verdict: (a) equal tests, whose decorators, arguments and body without its docstring are equal as `ast.dump`, so
+   tests that differ only in their parametrize data stay apart; (b) wording-only tests, a test that names a `.md` file
+   (directly, through a module constant or through helpers of the same file, followed to the end) whose every assert is
+   an `in` or `not in` check, and that calls no kit module, no helper that runs code (at any depth) and no subprocess; (c) brief-pinned names, `brief`,
    `adr` or `amendment` followed by a number; (d) unselected files, named by no `[[testing.map]]` `tests`, `whole_tests` or
    `always_full` glob (`no testing map` without a `[testing]` table); (e) the slowest files of the newest prepush record in
    the clone's `agk-evidence` folder, or `per-file timing: unknown`.

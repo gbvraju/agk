@@ -18,6 +18,7 @@ Usage: python3 scripts/agk/test_audit.py [--json] [--since YYYY-MM-DD] [--limit 
 from __future__ import annotations
 
 import ast
+import fnmatch
 import functools
 import json
 import re
@@ -54,7 +55,7 @@ def is_test(path: str, area: dict) -> bool:
     inside = any(
         d.strip("/") in ("", ".") or path.startswith(d.strip("/") + "/") for d in area["dirs"]
     )
-    return inside and any(glob_rx(p.replace("/", "")).fullmatch(name) for p in area["patterns"])
+    return inside and any(fnmatch.fnmatchcase(name, p) for p in area["patterns"])  # as impact
 
 
 def testing_map(root: Path) -> list[str] | None:
@@ -90,11 +91,13 @@ def code_globs(root: Path) -> list[str]:
 
 
 def body_key(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """The decorators, the arguments and the body without its docstring, so two tests that differ
+    only in their parametrize data are not equal."""
     body = list(node.body)
     first = body[0].value if body and isinstance(body[0], ast.Expr) else None
     if isinstance(first, ast.Constant) and isinstance(first.value, str):
         body = body[1:]
-    return "\n".join(ast.dump(s) for s in body)
+    return "\n".join(ast.dump(s) for s in [*node.decorator_list, node.args, *body])
 
 
 def mentions_md(node: ast.AST, md_names: set[str], md_helpers: set[str]) -> bool:
@@ -144,10 +147,13 @@ def read_file(rel: str, tree: ast.Module, kit: set[str]) -> list[tuple[str, str,
     }
     funcs = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)]
     others = [f for f in funcs if not f.name.startswith("test")]
-    helpers = {f.name for f in others if mentions_md(f, md_names, set())}
-    kit_names |= {
-        f.name for f in others if runs_code(f, kit_names)
-    }  # a local helper that runs code
+    helpers: set[str] = set()
+    grown = True
+    while grown:  # follow the file's helpers to the end: a helper of a helper counts too
+        before = len(helpers) + len(kit_names)
+        helpers |= {f.name for f in others if mentions_md(f, md_names, helpers)}
+        kit_names |= {f.name for f in others if runs_code(f, kit_names)}
+        grown = len(helpers) + len(kit_names) > before
     rows = []
     for f in funcs:
         if not f.name.startswith("test"):
@@ -316,7 +322,9 @@ def parse(args: list[str]) -> dict | str:
         if flag == "--json":
             options["json"] = True
             continue
-        if flag not in ("--since", "--limit") or not args:
+        if flag not in ("--since", "--limit"):
+            return "unknown"  # never echoed as typed (principle 8)
+        if not args:
             return flag
         value = args.pop(0)
         if flag == "--limit":
@@ -338,7 +346,12 @@ def main(argv: list[str] | None = None) -> int:
     utf8_output()
     options = parse(list(sys.argv[1:] if argv is None else argv))
     if isinstance(options, str):
-        print(f"{USAGE}\n(refused: option {options} is missing or malformed)", file=sys.stderr)
+        what = (
+            "an unknown option"
+            if options == "unknown"
+            else f"option {options} is missing or malformed"
+        )
+        print(f"{USAGE}\n(refused: {what})", file=sys.stderr)
         return 2
     try:
         got = audit(repo_root(), options["since"], options["limit"])

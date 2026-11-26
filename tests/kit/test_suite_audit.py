@@ -7,9 +7,13 @@ with per-file timing. Invented data only (example.com); no network.
 
 from __future__ import annotations
 
+import ast
+import hashlib
 import json
+import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -114,6 +118,9 @@ def test_slowest_files_come_from_the_newest_prepush_record(repo):
     files = [{"path": "tests/test_a.py", "seconds": 1.5}, {"path": "tests/test_b.py", "seconds": 4}]
     run = {"timing": {"source": "durations", "total_seconds": 5.5, "files": files}}
     (folder / "x.json").write_text(json.dumps({"steps": [{"name": "tests", "runs": [run]}]}))
+    old = {"timing": {"files": [{"path": "tests/test_old.py", "seconds": 99}]}}
+    (folder / "old.json").write_text(json.dumps({"steps": [{"name": "tests", "runs": [old]}]}))
+    os.utime(folder / "old.json", (1_000_000_000, 1_000_000_000))  # the older of two records
     got = data(repo, "--limit", "1")
     assert got["slowest"]["count"] == 2
     assert got["slowest"]["files"] == [{"path": "tests/test_b.py", "seconds": 4}]
@@ -126,6 +133,55 @@ def test_since_counts_added_and_removed_test_lines(repo):
     got = data(repo, "--since", "2000-01-01")
     assert got["since"] == {"day": "2000-01-01", "added": 9, "removed": 1}
     assert data(repo, "--since", "2099-01-01")["since"]["added"] == 0
+
+
+HELPERS = """import subprocess
+
+import pytest
+
+def run_it():
+    return subprocess.run(["true"]).returncode
+
+def check():
+    return run_it()
+
+def where():
+    return "docs/guide.md"
+
+def read():
+    return open(where()).read()
+
+def test_runs_code_through_a_helpers_helper():
+    out = check()
+    assert "docs/guide.md" in str(out)
+
+def test_reads_through_a_helpers_helper():
+    assert "site" in read()
+
+@pytest.mark.parametrize("n", [1])
+def test_data_one(n):
+    assert n
+
+@pytest.mark.parametrize("n", [2])
+def test_data_two(n):
+    assert n
+"""
+
+
+def test_helpers_are_followed_and_data_keeps_tests_apart(repo):
+    """REQ-051: brief #2007 answer 2 (a) and (b) (fix list items 1 and 2 on #2009)."""
+    start(repo)
+    repo.commit({"tests/test_helpers.py": HELPERS})
+    got = data(repo)
+    assert "tests/test_helpers.py::test_data_one" not in json.dumps(got["equal"])
+    names = [n for n in got["wording"]["names"] if "test_helpers" in n]
+    assert names == ["tests/test_helpers.py::test_reads_through_a_helpers_helper"]
+
+
+def test_patterns_match_as_fnmatch_does(repo):
+    """REQ-051: brief #2007 answer 1 (`[proof]` patterns read as impact.py reads them)."""
+    start(repo, toml=PROOF.replace("test_*.py", "test_[ab].py") + MAP)
+    assert data(repo)["files"] == 2
 
 
 def test_no_testing_table_says_no_testing_map(repo):
@@ -152,7 +208,7 @@ def test_a_malformed_map_is_refused_naming_the_setting(repo):
 
 
 @pytest.mark.parametrize(
-    "args", [("--limit", "0"), ("--limit", "x"), ("--limit",), ("--since", "26-11"), ("--nope",)]
+    "args", [("--limit", "0"), ("--limit", "x"), ("--limit",), ("--since", "26-11")]
 )
 def test_a_bad_option_exits_2_naming_it(repo, args):
     """REQ-051: brief #2007 answer 1 (a malformed argument exits 2 naming the option)."""
@@ -162,12 +218,26 @@ def test_a_bad_option_exits_2_naming_it(repo, args):
     assert args[0] in proc.stderr
 
 
+def test_an_unknown_option_is_never_echoed(repo):
+    """REQ-051: brief #2007 answer 7 (principle 8: an unknown argument is not printed)."""
+    start(repo)
+    proc = audit(repo, "--some-secret-value")
+    assert proc.returncode == 2
+    assert "an unknown option" in proc.stderr and "some-secret-value" not in proc.stderr
+
+
+def contents(root) -> dict:
+    return {
+        str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob("*") if p.is_file()
+    }
+
+
 def test_it_writes_nothing_and_imports_no_network_module(repo):
     """REQ-051: brief #2007 answers 1 and 9 (reads only; the standing import ruling's set)."""
     start(repo)
-    before = sorted(p.relative_to(repo.root) for p in repo.root.rglob("*"))
+    before = contents(repo.root)  # every file, .git included, by its bytes
     assert audit(repo, "--since", "2000-01-01").returncode == 0
-    assert sorted(p.relative_to(repo.root) for p in repo.root.rglob("*")) == before
+    assert contents(repo.root) == before
     kit = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "rev-parse", "--show-toplevel"],
         cwd=__file__.rsplit("/", 1)[0],
@@ -182,3 +252,13 @@ def test_it_writes_nothing_and_imports_no_network_module(repo):
         text=True,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+    import rules
+
+    tree = ast.parse((Path(kit) / "scripts/agk/test_audit.py").read_text(encoding="utf-8"))
+    names = {
+        a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
+    }
+    names |= {
+        (n.module or "").split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+    }
+    assert names and not names & rules.NETWORK
