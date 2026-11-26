@@ -30,9 +30,8 @@ from test_pins import with_lock  # noqa: E402
 from config import project_lint_paths  # noqa: E402
 
 PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
-# The playbooks that hold the two Python entries, one entry each (brief #1638, the
-# conductor's ruling on brief #1589's `Broad:` line): the base `default.toml` names no tool
-# or version, and a playbook whose own test refuses a tool or a version holds none (Q-1638-1).
+# The playbooks that held their own copy of the two Python entries (brief #1638) until brief #1975
+# moved them to `config/standards.toml`; each composes them for a sample with a Python record.
 WORK_TYPES = ["api-service", "web-app"]
 CODES = ["E", "F", "I", "B", "UP"]
 VALUES = ("examplelib", "greeting", "app.py", "hello", "unused")
@@ -67,6 +66,7 @@ def _no_bill(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def sample(tmp: Path, code: str = CLEAN, toml: str = "", record: bool = True) -> Path:
     shutil.copytree(PLAYBOOKS, tmp / "config" / "playbooks")
+    shutil.copy(KIT_ROOT / "config" / "standards.toml", tmp / "config")  # brief #1975
     (tmp / "agk.toml").write_text(
         f'mode = "init"\n{toml}\n[delivery]\nwork_type = "api-service"\n', encoding="utf-8"
     )
@@ -94,10 +94,18 @@ def no_values(text: str) -> None:
         assert word not in text, word
 
 
+def composed(root: Path, work_type: str = "api-service") -> tuple[dict, list[dict], list[str]]:
+    """Brief #1975: the composed standard of a sample with the chosen Python record; no playbook
+    holds an entry, and the kit root chooses no stack."""
+    return check_playbooks.standard(root / "config" / "playbooks" / f"{work_type}.toml", root)
+
+
 @pytest.mark.parametrize("work_type", WORK_TYPES)
-def test_each_playbook_carries_the_python_pack_pinned_to_ci_tools(work_type: str) -> None:
+def test_each_playbook_carries_the_python_pack_pinned_to_ci_tools(
+    work_type: str, tmp_path: Path
+) -> None:
     """REQ-079 AC4: both Python stacks, the pinned ruff and its codes, the config file."""
-    _, packs, problems = check_playbooks.standard(PLAYBOOKS / f"{work_type}.toml", KIT_ROOT)
+    _, packs, problems = composed(sample(tmp_path), work_type)
     assert problems == []
     found = {e["stack"]: e for e in packs}
     for stack in python_pack.STACKS:
@@ -398,7 +406,7 @@ def test_the_floor_fills_the_tally(tmp_path: Path) -> None:
     path = root / "pyproject.toml"
     text = path.read_text(encoding="utf-8")
     path.write_text(text.replace('"E", "F", "I", ', '"F", '), encoding="utf-8")
-    entries = check_playbooks.standard(PLAYBOOKS / "api-service.toml", KIT_ROOT)[1]
+    entries = composed(root)[1]
     entry = next(e for e in entries if e["stack"] == "python-pyproject")
     tally: dict[str, dict[str, int]] = {}
     python_pack.run(root, entry, tally)
@@ -409,6 +417,6 @@ def test_no_file_in_scope_runs_no_step_not_even_the_floor(tmp_path: Path) -> Non
     """REQ-079: brief #1837 answer 3 (Q-1837-2)."""
     root = sample(tmp_path, toml='project_lint_paths = ["web/**"]')
     (root / "pyproject.toml").unlink()  # the floor would fail: it is not run
-    entries = check_playbooks.standard(PLAYBOOKS / "api-service.toml", KIT_ROOT)[1]
+    entries = composed(root)[1]
     entry = next(e for e in entries if e["stack"] == "python-pyproject")
     assert python_pack.run(root, entry, {}) == [(python_pack.NO_FILE, [])]

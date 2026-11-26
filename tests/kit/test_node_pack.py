@@ -20,6 +20,7 @@ import json
 import re
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -150,7 +151,21 @@ def floor_rules() -> dict[str, str]:
 
 
 def node_entries(work_type: str) -> list[dict]:
-    return check_playbooks.standard(PLAYBOOKS / f"{work_type}.toml", KIT_ROOT)[1]
+    return composed(work_type)[1]
+
+
+def composed(work_type: str) -> tuple[dict, list[dict], list[str]]:
+    """Brief #1975: the composed standard of a Node project of `work_type` (no playbook holds an
+    entry, and the kit root chooses no stack)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        shutil.copytree(PLAYBOOKS, root / "config" / "playbooks")
+        shutil.copy(KIT_ROOT / "config" / "standards.toml", root / "config")
+        (root / "agk.toml").write_text(f'[delivery]\nwork_type = "{work_type}"\n', encoding="utf-8")
+        (root / "package.json").write_text('{"devDependencies": {}}\n', encoding="utf-8")
+        (root / "docs" / "adr").mkdir(parents=True)
+        (root / "docs" / "adr" / "0002-stack-options.md").write_text(RECORD, encoding="utf-8")
+        return check_playbooks.standard(root / "config" / "playbooks" / f"{work_type}.toml", root)
 
 
 @pytest.fixture(autouse=True)
@@ -162,6 +177,7 @@ def _no_bill(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def sample(tmp: Path, code: str = CLEAN, rules: dict | None = None, **kw: object) -> Path:
     shutil.copytree(PLAYBOOKS, tmp / "config" / "playbooks")
+    shutil.copy(KIT_ROOT / "config" / "standards.toml", tmp / "config")  # brief #1975
     toml = kw.get("toml", "")
     (tmp / "agk.toml").write_text(
         f'mode = "init"\n{toml}\n[delivery]\nwork_type = "{kw.get("work_type", "web-app")}"\n',
@@ -206,7 +222,7 @@ def no_values(text: str) -> None:
 @pytest.mark.parametrize("work_type", ["web-app", "mobile"])
 def test_each_playbook_carries_the_node_entry(work_type: str) -> None:
     """REQ-079: brief #1764 answer 5 (no version: the product's own pins hold it)."""
-    _, packs, problems = check_playbooks.standard(PLAYBOOKS / f"{work_type}.toml", KIT_ROOT)
+    _, packs, problems = composed(work_type)
     assert problems == []
     entry = {e["stack"]: e for e in packs}["node"]
     assert (entry["lint"], entry["format"], entry["type"]) == node_pack.STEP_NAMES

@@ -1,0 +1,1 @@
+- Standards: the Python and Node standards entries moved out of the web-app, api-service and mobile playbooks; `config/standards.toml` is now their one source, and the same checks run for a chosen stack (brief #1975, ADR-0826)

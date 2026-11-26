@@ -675,7 +675,7 @@ that the pack's `config` file enables every pinned rule code (the `floor`, rule 
 `ok standards <stack>`. `lint_paths` and `agk-lint` are unchanged.
 
 A TypeScript or JavaScript product gets `scripts/agk/gates/node_pack.py` (ADR-0739; brief #1764), for the `node` entry
-of `[[standards]]` in the `web-app` and `mobile` playbooks, only when the Accepted stack record chose Node and the
+of `[[standards]]` in `config/standards.toml`, only when the Accepted stack record chose Node and the
 product has a `package.json`. Over its `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` files of the same
 `project_lint_paths` (less `node_modules/` and build folders) it runs the product's own pinned `node_modules/.bin/eslint`
 and `prettier`, never `npx`, a shell or a download: the `floor` (`eslint --print-config` shows every rule id of
@@ -691,7 +691,8 @@ holds the `python-pyproject`, `python-pip` and `node` entries of `[[standards]]`
 composes the entries of the runtime the Accepted stack record chose, before its playbook's own; a playbook entry for the
 same stack replaces one only with the same or more `rules` codes. A pack that is on while no entry is composed for its
 stack prints `not run standards <stack>: no standards entry composed (path class: config/standards.toml)`, exit
-unchanged. `check_playbooks.py` checks the file's form, naming the key (`standards.<key>`), never a value.
+unchanged. `check_playbooks.py` checks the file's form, naming the key (`standards.<key>`), never a value. The file is
+the one source: no shipped playbook holds a `[[standards]]` entry of its own (ADR-0826; brief #1975).
 
 The baseline of an adopted project (SPEC-0072 rule 7, ADR-0680; brief #1600): `scripts/agk/gates/baseline.py` keeps
 `config/agk-baseline/<gate id>.txt`, one line `<path> <count>` per file with findings (forward slashes, sorted bytewise),

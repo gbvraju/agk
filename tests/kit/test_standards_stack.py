@@ -262,8 +262,8 @@ def test_req079_a_playbook_entry_replaces_the_files_and_never_drops_a_code(
     root = project(tmp_path, "api-service")
     assert sorted(stacks(root, "api-service")) == sorted(python_pack.STACKS)
     book = root / "config/playbooks/api-service.toml"
-    text = book.read_text(encoding="utf-8")
-    book.write_text(text.replace('codes = ["E", "F", "I", "B", "UP"]', 'codes = ["E"]', 1))
+    weaker = entry(runtime=None, rules={"tool": "ruff", "version": "0.17.4", "codes": ["E"]})
+    book.write_text(book.read_text(encoding="utf-8") + "\n" + weaker, encoding="utf-8")
     found = check_playbooks.standard(book, root)[2]
     assert found == [
         "SPEC-0072 rule 2: config/playbooks/api-service.toml: a pack's `rules` drops a rule "
@@ -468,15 +468,18 @@ def test_req079_the_three_run_the_entries_main_runs(
 def test_req079_the_screen_claims_checks_only_for_a_chosen_stack(
     work_type: str, tmp_path: Path
 ) -> None:
-    """Q-19Ib-1: before a stack is chosen no pack is listed and the style bullet is gone; after a
-    Python record the screen lists the Python packs and says it again."""
+    """Q-19Ib-1: before a stack is chosen the team screen lists no pack and the solo screen has no
+    style bullet; after a Python record both say it again."""
     import steward_owner  # noqa: PLC0415
 
+    def screen(root: Path, mode: str) -> str:
+        text = (root / "agk.toml").read_text(encoding="utf-8")
+        (root / "agk.toml").write_text(f'review_mode = "{mode}"\n{text}', encoding="utf-8")
+        return "\n".join(steward_owner.standard_screen(root, None)[1])
+
     bullet = "checked for style and type mistakes"
-    root = project(tmp_path / "none", work_type, None)
-    (root / "agk.toml").write_text('review_mode = "team"\n' + (root / "agk.toml").read_text())
-    assert not [x for x in steward_owner.standard_screen(root, None)[1] if x.startswith("Pack")]
-    (root / "agk.toml").write_text((root / "agk.toml").read_text().replace("team", "solo"))
-    assert bullet not in "\n".join(steward_owner.standard_screen(root, None)[1])
-    root = project(tmp_path / "py", work_type, "python")
-    assert bullet in "\n".join(steward_owner.standard_screen(root, None)[1])
+    for runtime, say in ((None, False), ("python", True)):
+        team = screen(project(tmp_path / f"t{runtime}", work_type, runtime), "team")
+        solo = screen(project(tmp_path / f"s{runtime}", work_type, runtime), "solo")
+        assert ("Pack python-pyproject: lint python-lint" in team) is say, team
+        assert (bullet in solo) is say, solo
