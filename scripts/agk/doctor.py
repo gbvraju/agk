@@ -1279,8 +1279,8 @@ def amendment_result(
         tree = list((root / "docs" / "runs").glob("proposed-spec-amendments-*.md"))
         return Result("cannot-check", "no-default-branch") if tree else Result("ok")
     if git_read(root, "rev-parse", "--is-shallow-repository")[1] == "true":
-        code, tree = git_read(root, "ls-tree", "-r", "--name-only", ref, "--", "docs/runs/")
-        if any(AMENDMENT_FILE.fullmatch(name) for name in tree.splitlines()):
+        _, names = git_read(root, "ls-tree", "-r", "--name-only", ref, "--", "docs/runs/")
+        if any(AMENDMENT_FILE.fullmatch(name) for name in names.splitlines()):
             return Result("cannot-check", "shallow-clone")  # each file's add is the graft's
     since = now - datetime.timedelta(days=AMENDMENT_DAYS)
     open_files = []  # the AMENDMENT_FILES newest with no applied line: at most that many GETs
