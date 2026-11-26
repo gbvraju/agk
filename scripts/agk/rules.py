@@ -413,13 +413,17 @@ def imports(root: Path, script: str) -> int:
     path = Path(script) if Path(script).is_absolute() else root / script
     path = path.resolve()
     folders = {(root / "scripts" / "agk").resolve(), Path(__file__).resolve().parent}
-    if path.suffix != ".py" or path.parent not in folders or not path.is_file():
-        inner = any(f in path.parents for f in folders) and path.parent not in folders
-        print(
-            "Imports: refused: the script is in a package under scripts/agk/, not a script of it"
-            if inner
-            else "Imports: refused: the script is outside scripts/agk/"
-        )
+    refusal = None
+    if not any(f in path.parents for f in folders):
+        refusal = "the script is outside scripts/agk/"
+    elif path.parent not in folders:
+        refusal = "the script is in a package under scripts/agk/, not a script of it"
+    elif path.suffix != ".py":
+        refusal = "the script is not a .py file of scripts/agk/"
+    elif not path.is_file():
+        refusal = "no such script in scripts/agk/"
+    if refusal:
+        print(f"Imports: refused: {refusal}")
         return 2
     tree = _parsed(path)
     if tree is None:

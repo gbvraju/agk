@@ -165,6 +165,12 @@ def test_req037_a_path_outside_scripts_agk_or_a_broken_file_is_refused(tmp_path,
         2,
         ["Imports: refused: the script is in a package under scripts/agk/, not a script of it"],
     )
+    (root / "scripts" / "agk" / "notes.txt").write_text("invented\n", encoding="utf-8")
+    for given, cause in (
+        ("scripts/agk/grl.py", "no such script in scripts/agk/"),
+        ("scripts/agk/notes.txt", "the script is not a .py file of scripts/agk/"),
+    ):
+        assert run(capsys, given, "--root", str(root)) == (2, [f"Imports: refused: {cause}"])
     code, out = run(capsys, "scripts/agk/broken.py", "--root", str(root))
     assert (code, out) == (2, ["Imports: refused: a file of scripts/agk/ does not parse"])
     code, out = run(capsys, "--root", str(root))

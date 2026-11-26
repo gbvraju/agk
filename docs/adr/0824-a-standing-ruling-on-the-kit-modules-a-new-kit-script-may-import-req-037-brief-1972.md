@@ -21,8 +21,9 @@ brief for all pending on freeze . Go ahead and park them". The standing ruling i
 (quoted as data): "Maintainer answer: Q-KI-1 accept" (comment 7186056545, 2026-11-26T07:59:20Z: the reading of the
 four spec lines, no spec text changed) and "Maintainer answer: Q-KI-2 accept" (comment 7186058007,
 2026-11-26T07:59:25Z: the base set, exactly the six modules plus the offline checks).
-The walk depth of a member (Q-1972-2) is answered on #1985 (2026-11-26T07:35:10Z, from brief #1972 answers 1 and 3
-and Q-KI-4): the module-level walk decides the set.
+The walk depth of a member (Q-1972-2) is answered by the steward's `Answer:` on #1985 (comment 7185615482,
+2026-11-26T07:35:10Z), the evidence-settled reading of brief #1972 answers 1 and 3 and Q-KI-4 (SPEC-0059 rule 3): the
+module-level walk decides the set.
 
 ## Decision
 
