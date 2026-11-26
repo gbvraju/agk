@@ -125,6 +125,7 @@ from prepush import (
     covers,
     digest,
     fetch_record_comments,
+    quick_sets,
     regression_sets,
     safe_command,
     safe_cwd,
@@ -136,6 +137,10 @@ from prepush import (
 from proof import WINDOWS, kill_tree, popen_options
 
 HERE = Path(__file__).resolve().parent
+QUICK_NOTE = (
+    "quick record: its tests step ran the whole tests only (prepush --quick); proof's runs and "
+    "the regression set were not run"
+)
 USAGE = (
     "usage: evidence.py check RECORD [--head SHA] [--sample N] [--body FILE] [--json]"
     " | check --head SHA ..."
@@ -257,6 +262,8 @@ def valid_step(item) -> bool:
     if not isinstance(item.get("output_sha256"), str):
         return False
     if item.get("outcome") not in OUTCOMES:
+        return False
+    if "quick" in item and item["quick"] is not True:  # brief #1971: only ever `true`
         return False
     runs = item.get("runs")
     if runs is None:
@@ -583,8 +590,14 @@ def rebuild(
             argv = [sys.executable, kit_script(tree, "test_plan.py"), *want[2:]]
             units[name] = Unit(name, tree, item["exit"], item["output_sha256"], argv)
             planned = planned_runs(tree, argv, env, mb, limit)
+            quick = item.get("quick") is True
+            if quick:  # brief #1971 fix list item 1: said, never read as a full run
+                notes.append(QUICK_NOTE)
             for run in item.get("runs") or []:
                 key = (run.get("set") or "proof", run["name"])
+                if (key[0] == "whole") != quick:  # a whole run only in a quick record
+                    differ(f"tests/{key[0]}/{run['name']}", "set")
+                    continue
                 label = (
                     f"tests/{run['name']}" if key[0] == "proof" else f"tests/{key[0]}/{run['name']}"
                 )
@@ -609,7 +622,8 @@ def planned_runs(
     tree: Path, argv: list[str], env: dict, mb: str, limit: int
 ) -> dict[tuple[str, str], tuple[str, Path]]:
     """(set, name) -> (command, folder) of the test runs prepush makes on the head: the plan of
-    `test_plan.py`, then the regression set where the head has a `[testing]` table."""
+    `test_plan.py`, then the regression set where the head has a `[testing]` table, and the runs
+    of `--quick` (the set `whole`, from `prepush.quick_sets`; brief #1971, ADR-0825)."""
     code, out = spawn(argv, tree, env, limit)
     if code != 0:
         return {}
@@ -620,12 +634,16 @@ def planned_runs(
     planned = {("proof", r["name"]): (r["command"], tree / r["cwd"]) for r in shown.get("runs", [])}
     if (shown.get("regression") or {}).get("table"):
         try:
-            sets, _ = regression_sets(tree, impact(tree, mb, "HEAD"), proof_areas(tree))
+            found, areas = impact(tree, mb, "HEAD"), proof_areas(tree)
+            sets, _ = regression_sets(tree, found, areas)
         except CheckError:
             return planned
         sets, _ = selected_workers(tree, sets)  # as prepush.gate runs them (brief #980)
         for name, command, cwd, _reason in sets:
             planned[("regression", name)] = (command, tree / cwd)
+        whole, _ = selected_workers(tree, quick_sets(tree, found, areas)[0])
+        for name, command, cwd, _reason in whole:
+            planned[("whole", name)] = (command, tree / cwd)
     return planned
 
 
@@ -770,9 +788,7 @@ def governed(root: Path, tree: Path, base: str, env: dict) -> tuple[int, str]:
     return governance(tree, env)
 
 
-def in_worktree(
-    root: Path, record: dict, head: str, count: int, body: bytes | None = None
-) -> dict:
+def in_worktree(root: Path, record: dict, head: str, count: int, body: bytes | None = None) -> dict:
     """Governance and the sample, in a detached worktree of `head`, under the heavy-step lock;
     governance reads BODY from a copy in the temporary folder (brief #1566)."""
     try:

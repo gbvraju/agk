@@ -571,7 +571,8 @@ def test_the_listed_tests_are_added_with_a_whole_line_under_each_profile(repo, p
     assert found.unmapped == []  # the list covers no changed file
     out = plan(repo).stdout
     assert "regression: 3 test files selected\n" in out
-    assert out.endswith(WHOLE_LINES), out
+    # the `whole:` lines last, then the one `quick:` line of brief #1971 (ADR-0825)
+    assert out.endswith(WHOLE_LINES + "quick: prepush --quick runs these 2 whole tests\n"), out
     assert "  file: tests/test_smoke.py" not in out
     assert regression(repo)["whole"] == ["tests/auth/test_login.py", "tests/test_smoke.py"]
 

@@ -164,6 +164,8 @@ whole_tests = [
   "tests/kit_dev/test_intelligent_testing.py",  # whole: every test file and map entry of the kit
   "tests/kit/test_core_contradictions.py",  # whole: every core rule file of the kit (Q-F7-1)
   "tests/kit_dev/test_kit_paths_resolved.py",  # whole: every kit script and hook's kit-file lookups
+  "tests/kit/test_common_option_pairs.py",  # whole: every kit script's option pairs
+  "tests/kit/test_playbook_default.py",  # whole: the shipped default playbook's words
 ]
 # Install the pinned CI test tools once when xdist is missing, so builders run the tests in workers
 # as CI does; the full run takes parallel_command, since project_tests is compound (brief #1021, ADR-0436).
@@ -641,7 +643,7 @@ tests = ["tests/kit/test_pins.py"]
 code = "scripts/agk/evidence.py"
 tests = [
   "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py", "tests/kit/test_kit_root.py",
-  "tests/kit/test_long_temp_dir.py", "tests/kit/test_test_timing.py",
+  "tests/kit/test_long_temp_dir.py", "tests/kit/test_prepush_quick_whole.py", "tests/kit/test_test_timing.py",
 ]
 [[testing.map]]
 code = "scripts/agk/execution.py"
@@ -946,7 +948,7 @@ tests = [
   "tests/kit/test_kit_root.py", "tests/kit/test_kit_suite_selection.py", "tests/kit/test_lock.py", "tests/kit/test_lock_slots.py",
   "tests/kit/test_long_temp_dir.py", "tests/kit/test_prepush.py", "tests/kit/test_prepush_lint_missing_tool.py",
   "tests/kit/test_prepush_lock_inherited.py", "tests/kit/test_prepush_proof_timeout_warning.py",
-  "tests/kit/test_prepush_queue.py", "tests/kit/test_prepush_record.py", "tests/kit/test_prepush_regression.py",
+  "tests/kit/test_prepush_queue.py", "tests/kit/test_prepush_quick_whole.py", "tests/kit/test_prepush_record.py", "tests/kit/test_prepush_regression.py",
   "tests/kit/test_project_test_selection.py", "tests/kit/test_protected_changes_covered_by.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_test_timing.py", "tests/kit_dev/test_init.py",
   "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
@@ -1331,7 +1333,7 @@ tests = [
   "tests/kit/test_evidence.py", "tests/kit/test_guide_testing_map.py", "tests/kit/test_impact.py",
   "tests/kit/test_long_temp_dir.py",
   "tests/kit/test_prepush.py", "tests/kit/test_prepush_proof_timeout_warning.py", "tests/kit/test_prepush_record.py",
-  "tests/kit/test_test_plan.py", "tests/kit_dev/test_intelligent_testing.py",
+  "tests/kit/test_prepush_quick_whole.py", "tests/kit/test_test_plan.py", "tests/kit_dev/test_intelligent_testing.py",
   "tests/kit_dev/test_reference_commands.py",
 ]
 [[testing.map]]
@@ -1393,7 +1395,7 @@ tests = [
 [[testing.map]]
 code = "config/playbooks/*.toml"
 tests = [
-  "tests/kit/test_layers_step.py",
+  "tests/kit/test_layers_step.py", "tests/kit/test_playbook_default.py",
   "tests/kit/test_standards_stack.py",
   "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
   "tests/kit/test_impact_data_files.py", "tests/kit/test_playbook_cloud_migration.py",
