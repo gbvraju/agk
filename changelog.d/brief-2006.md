@@ -1,0 +1,1 @@
+- Merging: an owner's `Maintainer answer: accept <old>` of a differing local record carries to the light re-prove's merge head when the verdict there has the same `Differs:` lines; a `differs` verdict must carry those lines; `conductor.py lease --take` says at a fresh take in local mode when gitleaks is missing and marks the lease (brief #2006, ADR-0830)

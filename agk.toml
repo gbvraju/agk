@@ -1244,6 +1244,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
 tests = [
+  "tests/kit/test_reprove_accept_carry.py",
   "tests/kit_dev/test_shared_index_reference.py",
   "tests/kit/test_route_reprove.py",
   "tests/kit/test_steward_fix_brief.py",

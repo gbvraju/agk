@@ -203,10 +203,20 @@ def test_1616_every_caller_with_a_checkout_passes_the_check():
 
 
 def test_1616_the_merger_evidence_accept_stays_exact():
-    """REQ-066: answer 3 and the maintainer answer to Q-1616-1: no carry in the merger."""
+    """REQ-066: answer 3 and the maintainer answer to Q-1616-1: no carry in the merger, as
+    ADR-0830 narrows it (brief #2006): without the light-merge reader the accept names the head
+    exactly; the one carry, over a light merge with the same `Differs:` lines, is tested in
+    tests/kit/test_reprove_accept_carry.py."""
     import merge_cleared
 
-    assert "carried" not in inspect.getsource(merge_cleared.answered)
+    old, head = "b" * 40, "c" * 40
+    comments = [
+        {"id": 1, "created_at": "2026-11-26T10:01:00Z", "user": {"login": "owner"},
+         "body": f"Maintainer answer: accept {old}"},
+    ]  # fmt: skip
+    verdict = {"id": 2, "created_at": "2026-11-26T10:00:00Z", "body": f"Verdict: cleared {head}"}
+    assert not merge_cleared.answered(comments, verdict, head, ["owner"])
+    assert "light" in inspect.signature(merge_cleared.answered).parameters
 
 
 # --- the git-backed check -----------------------------------------------------------------------
