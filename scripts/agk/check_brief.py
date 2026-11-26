@@ -690,7 +690,7 @@ def spec_fit_problems(
             ]
         warns += limit_warnings(body, number, rules, stated.get(number, set()))
     if wrong or brief_study.enforced(root, today, filed):
-        return wrong + late, warns  # fix list 7202066567 item 2: the warnings stay
+        return wrong + late, warns  # fix list on b35375a item 2: the warnings stay
     return [], late + warns
 
 

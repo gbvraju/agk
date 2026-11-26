@@ -168,7 +168,7 @@ def quoted_items(lines: list[str], at: int) -> str:
 
 def items_digest(text: str) -> str | None:
     """Brief #2002 answers 5 and 6: the digest of the items alone, each whole (to the next item
-    or `## ` heading; fix list 7202066567 item 4) with its spaces and line breaks made one space,
+    or `## ` heading; fix list on b35375a item 4) with its spaces and line breaks made one space,
     so a brief's quoted items and the file a builder writes word for word from them have one
     digest whatever the wrapping; None when TEXT has no item."""
     listed = items(text)
@@ -409,7 +409,7 @@ def filing_approval(
     """Brief #2002 answer 6 (ADR-0828): `approval` of amendment N on a brief's COMMENTS, counting
     only an approval whose one `Text:` line is WANT, the digest of the items at the head. In solo
     mode it must be the relayed form (`Owner said` second, `Who: ProductOwner` last); in team mode
-    a relayed one never counts, only the approver's own (fix list 7202066567 item 3)."""
+    a relayed one never counts, only the approver's own (fix list on b35375a item 3)."""
     if want is None:
         return None
 

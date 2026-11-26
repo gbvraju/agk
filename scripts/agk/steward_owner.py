@@ -1253,7 +1253,7 @@ def filing_approvals(
         elif not able:
             lines.append(NOT_AT_FILING.format(number, "spec_approvers"))
         else:
-            text = [  # fix list 7202066567 item 5: the steward guard's order, `Owner said` second
+            text = [  # fix list on b35375a item 5: the steward guard's order, `Owner said` second
                 check_amendments.APPROVED_LINE.format(number),
                 *quotes,
                 f"Text: {check_amendments.items_digest(quoted)}",
@@ -1349,7 +1349,7 @@ def file_brief(
         body = with_owner_said(body, at, words)
         named = named_amendments(words, name) if name is not None else None
         granted, asked_line = set(named or []), f'Asked: "file the {title} brief"'
-        if not granted:  # fix list 7202066567 item 1: a plain yes, only to a recorded ask
+        if not granted:  # fix list on b35375a item 1: a plain yes, only to a recorded ask
             granted, asked_line = recorded_ask(root, at, now) or (set(), asked_line)
         quotes = [f'Owner said ({at}): "{words}"', asked_line]
     approvals, approval_lines = filing_approvals(root, body, granted, quotes, by)
