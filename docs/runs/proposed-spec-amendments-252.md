@@ -20,3 +20,5 @@ The merger holds a pull request labelled `agk:approve` until the owner's line; w
    Class: behaviour
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: item 1 (to rule 5) applied to `docs/specs/0039-the-conductor-merges-a-cleared-pull-request-through-one-guarded-command.md` word for word, on the maintainer's answer on #1959 (comment 7181601613).

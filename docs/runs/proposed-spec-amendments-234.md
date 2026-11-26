@@ -17,3 +17,5 @@ dependency, a lock or the architecture record makes pins strict."
    dependency, it prints `not run: no foundation yet`, never `ok`" (amendment 234).
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: item 1 (to rule 4) applied to `docs/specs/0072-each-work-type-playbook-carries-its-architecture-a-stack-sta.md` word for word, on the maintainer's answer on #1913 (comment 7132460424).
