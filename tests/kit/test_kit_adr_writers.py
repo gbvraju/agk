@@ -26,6 +26,7 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_adrs  # noqa: E402
+import domain_ask  # noqa: E402
 import init  # noqa: E402
 import intake  # noqa: E402
 import new_spec  # noqa: E402
@@ -76,6 +77,14 @@ def steward_work_type(tmp: Path) -> tuple[str, str]:
     }
     steward_owner.work_type_adr(root, ask, "Yes", "2026-11-23T09:05Z")
     return written(root, "*-work-type.md")
+
+
+def steward_domain(tmp: Path) -> tuple[str, str]:
+    """Brief #1937 (ADR-0806): the record of `domain --yes`."""
+    root = adr_project(tmp)
+    ask = {"at": "2026-11-23T09:00Z", "question": "This looks like a shop. Shall I use it?"}
+    domain_ask.adr(root, ask, ["payments"], "Yes", "2026-11-23T09:05Z")
+    return written(root, "*-domain.md")
 
 
 def steward_draft(tmp: Path) -> tuple[str, str]:
@@ -174,6 +183,7 @@ def personal_record(tmp: Path) -> tuple[str, str]:
 WRITERS: dict[str, object] = {
     "scripts/agk/steward_owner.py::work_type_adr": steward_work_type,
     "scripts/agk/steward_owner.py::draft": steward_draft,
+    "scripts/agk/domain_ask.py::adr": steward_domain,
     "kit/templates/adr-0001.md": init_template("kit/templates/adr-0001.md", solo=False),
     "kit/templates/adr-0001.md (solo)": init_template("kit/templates/adr-0001.md", solo=True),
     "kit/templates/adr-0001-adopt.md": init_template("kit/templates/adr-0001-adopt.md", False),
