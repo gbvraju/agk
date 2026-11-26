@@ -36,8 +36,9 @@ leaves them out.
    `no-usage-record` (no usage record, or none at or after `--since`). It never names a path, an id or a value
    (principle 8). One unreadable file gives `unreadable` for the whole line, so a short sum is never printed.
 4. The readers of the line accept the new ending: `metrics.usage_of` (`Report:` lines), `session.PROGRESS` and
-   `caps.PROGRESS_USAGE` (`Progress:` lines). Session rules 8, 17 and 32 name the ending, and amendment 261 proposes
-   the same lines for SPEC-0045 rule 8.
+   `caps.PROGRESS_USAGE` (`Progress:` lines). Session rule 17 names the ending (`split or classed`), rule 32 no longer
+   restates `Usage: not shown`, and rule 8 takes `usage.py`'s line as printed. `config/rule-budget.txt` is lowered to
+   the file's new count (3605). Amendment 261 proposes the same lines for SPEC-0045 rule 8.
 5. `steward.py end` without `--tokens` writes `tokens <n> (input <a>, ...)` or `tokens not shown (<class>)` from the
    same reader. A typed `--tokens` is used as before.
 
@@ -47,7 +48,7 @@ A report's figure says what kind of tokens it holds, a session that uses helper 
 missing figure says why. Protected path classes changed: `scripts/agk/` (`usage.py`, `metrics.py`, `session.py`,
 `steward.py`, `caps.py`), `tests/kit/` (`test_usage_split.py`, `test_usage_transcript.py`), `agk.toml` (the new test
 file in the `[[testing.map]]` entries of `usage.py`, `metrics.py`, `session.py` and `steward.py`) and `config/`
-(`config/session-rules.md` rules 8, 17 and 32).
+(`config/session-rules.md` rules 17 and 32, `config/rule-budget.txt`).
 
 ## Residual
 
