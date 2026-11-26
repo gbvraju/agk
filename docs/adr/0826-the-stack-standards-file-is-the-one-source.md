@@ -37,3 +37,8 @@ Protected path classes changed: `config/` (the three playbooks) and `tests/kit/`
 
 A raised ruff version or eslint code list reaches every work type at once. A new work type gets a stack's checks
 with no playbook edit. Before a stack is chosen, the three playbooks' screens no longer claim language checks.
+
+## Residual
+
+- None: a doctor line for an installed copy that still carries the old entries waits for drift the steward sees
+  (Q-19Ib-2).
