@@ -1244,7 +1244,7 @@ def added_amendments(root: Path, ref: str) -> list[tuple[int, str, datetime.date
 
 
 def git_text(root: Path, spec: str) -> str | None:
-    """The file SPEC (`<ref>:<path>`) as git holds it, unstripped (its digest is read), else None."""
+    """The file SPEC (`<ref>:<path>`) as git holds it, unstripped (a digest reads it), else None."""
     try:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, read-only git, no shell
             ["git", "-C", str(root), "show", spec], capture_output=True, text=True, encoding="utf-8"
@@ -1293,7 +1293,7 @@ def amendment_result(
     settle = amend.settle_on(root)
     listed: list[tuple[int, str]] = []
     unread = 0
-    for number, path, subject, text in open_files:
+    for number, _, subject, text in open_files:
         pr = ADDING_PR.search(subject)
         if pr is None:
             unread += 1
@@ -1302,8 +1302,8 @@ def amendment_result(
         if comments is None:
             return Result("cannot-check", comments_reason(reads, int(pr.group(1))))
         settles = amend.digests({f"amendment {number}": text}, root) if settle else None
-        when = amend.approval(comments, answerers, number, settles, exact)
-        if when is not None and now - when > FINISHED_AFTER:
+        approved_at = amend.approval(comments, answerers, number, settles, exact)
+        if approved_at is not None and now - approved_at > FINISHED_AFTER:
             listed.append((number, f"amendment {number} (#{pr.group(1)})"))
     tail = f" (unread {unread})" if unread else ""
     if not listed:

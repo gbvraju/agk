@@ -1,4 +1,4 @@
-"""The doctor warns about an approved spec amendment left unapplied (brief #1967; REQ-020, ADR-0814).
+"""Doctor warns about an approved spec amendment left unapplied (brief #1967; REQ-020, ADR-0814).
 
 `amendment-unapplied` lists `amendment <n> (#<pr>)` for each amendment file on the default branch,
 added in the last 30 days (the 20 newest), with no applied line, whose adding pull request holds an
@@ -48,7 +48,9 @@ def git(root: Path, *args: str, when: str | None = None) -> str:
 
 
 def text(number: int, tail: str = "") -> str:
-    head = f"# Proposed spec amendments {number} (SPEC-0072; REQ-079)\n\nVia a proposal (principle 6)."
+    head = (
+        f"# Proposed spec amendments {number} (SPEC-0072; REQ-079)\n\nVia a proposal (principle 6)."
+    )
     item = "1. **SPEC-0072 rule 4.** Reuse `config.py` for the read.\n   Class: implementation\n"
     return f"{head}\n\n## Items\n\n{item}\n{tail}"
 
@@ -63,7 +65,8 @@ def project(tmp_path: Path, toml: str = "", approvers: str = '["@owner"]') -> Pa
     (root / "config" / "reviewers.yaml").write_text(
         f'version: 1\nverdict_authors: ["@boss"]\nspec_approvers: {approvers}\n', encoding="utf-8"
     )
-    six = f"6. Approved specs are owned by a reviewer group; agents propose patches; {ca.PRINCIPLE_CLAUSE}.\n"
+    six = "6. Approved specs are owned by a reviewer group; agents propose patches"
+    six += f"; {ca.PRINCIPLE_CLAUSE}.\n"
     (root / "constitution" / "principles.md").write_text(f"# Principles\n\n{six}", "utf-8")
     (root / SPEC).write_text("# SPEC-0072: Example\n\n- Status: Approved\n", encoding="utf-8")
     git(root, "init", "-q", "-b", "main")
@@ -233,12 +236,14 @@ def test_1967_no_answerer_is_cannot_check_naming_the_setting(tmp_path, approvers
     """REQ-020: brief #1967 answer 3 (`config/reviewers.yaml`)."""
     root = project(tmp_path, approvers=approvers)
     (root / "config" / "reviewers.yaml").write_text(
-        f"version: 1\nverdict_authors: [\"@REPLACE-ME\"]\nspec_approvers: {approvers}\n", "utf-8"
+        f'version: 1\nverdict_authors: ["@REPLACE-ME"]\nspec_approvers: {approvers}\n', "utf-8"
     )
     add(root, 226)
     res = check(root, {"comments-7": [approved()]})
     assert (res.status, res.reason) == ("cannot-check", "no-answerer")
-    assert "spec_approvers" in doctor.HINTS["no-answerer"] and "@" not in doctor.HINTS["no-answerer"]
+    assert (
+        "spec_approvers" in doctor.HINTS["no-answerer"] and "@" not in doctor.HINTS["no-answerer"]
+    )
 
 
 @pytest.mark.parametrize("mode", ["team", "solo"])
