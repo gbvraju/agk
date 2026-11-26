@@ -82,6 +82,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from check_amendments import amendment_key, digests, settle_on, settled_key
 from common import (
     BRIEF_NUMBER,
     PAUSED_LINE,
@@ -557,7 +558,12 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     `question`), and an `Answer:` of `ANSWER_LINE` naming that id by an answerer of
     `session.owner_people` (the listed verdict authors and the spec approvers), after it, closes
     that question only, as the owner wait does; it closes no `Owner needed:`, approval or merge
-    ask. None when no ask is open."""
+    ask. None when no ask is open.
+    Brief #1957 (ADR-0813): with `settle` (`[steward] settle_amendments` on), the steward's
+    settled line (`check_amendments.settled_key`, for an amendment `settles` holds as settleable
+    at the head with the line's `Text:` digest) by a spec approver closes that amendment's open
+    approval only; the `Owner needed:` closes with it only when nothing else is open (no other
+    approval, and no ask with no approval line or with a Q id), and questions stay open."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
@@ -565,6 +571,7 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     )
     files = f.get("files")  # None: unread, today's reading (brief #1735 Q-1)
     owner_open = False  # an `Owner needed:`: only the owner's answer closes it (brief #1168)
+    plain_open = False  # an open `Owner needed:` asking more than approvals (brief #1957)
     pending: set[str] = set()  # the approvals open asks offer (brief #1656, brief #1735)
     questions: set[str] = set()  # open maintainers questions by Q id: an answer or a newer head
     answerers = approvers | {str(a).lstrip("@").lower() for a in f.get("authors") or []}
@@ -572,12 +579,19 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
     for c in comments:
         line = first_line(c)
         body = str(c.get("body") or "")
+        settles = f.get("settles") if f.get("settle") is True else None
+        key = settled_key(line, body, settles) if isinstance(settles, dict) else None
+        if key in pending and login_of(c) in approvers:  # brief #1957 answer 3 (ADR-0813)
+            pending.discard(key)  # its own approval only (fix list item 1)
+            owner_open = owner_open and bool(pending or plain_open)
+            continue
         if line.startswith("Owner needed:") and login_of(c) in listed:
             asked = approval_ask(body, files)
             if merge_ask(body, f.get("number")) and not asked:
                 merge_at = str(c.get("created_at") or "")
                 continue
             owner_open = True
+            plain_open = plain_open or not asked or QUESTION_ID.search(body) is not None
             pending |= asked
         elif for_maintainers(line):
             if not pushed or str(c.get("created_at") or "") >= pushed:
@@ -591,7 +605,7 @@ def owner_ask(f: dict, comments: list[dict], authors: list[str] | None) -> str |
                 continue  # misplaced, or one of several asked approvals (brief #1735)
             if not pending:
                 merge_at = None
-            owner_open = False
+            owner_open = plain_open = False
             questions, pending = set(), set()
     if owner_open and pending:
         return "agk:approve"
@@ -942,6 +956,28 @@ def draft_specs_of(repo: str, files: list[dict], head: str) -> set[str]:
     return found
 
 
+def settle_setting(root: Path) -> bool:
+    """Whether the checkout sets `[steward] settle_amendments = true` (brief #1957, ADR-0813)."""
+    return settle_on(root)
+
+
+def amendment_settles(repo: str, files: list[dict], head: str, root: Path) -> dict[str, str]:
+    """`check_amendments.digests` of the amendment files the pull request adds or changes, read at
+    the head (fix list item 2); one GET each, only with the setting on; unreadable is absent."""
+    texts: dict[str, str | None] = {}
+    for item in files if settle_setting(root) and head else []:
+        name = str(item.get("filename") or "")
+        key = amendment_key(name)
+        if key is None or item.get("status") not in ("added", "modified"):
+            continue
+        record = gh(f"repos/{repo}/contents/{quote(name)}?ref={head}")
+        try:
+            texts[key] = base64.b64decode(record["content"]).decode("utf-8")
+        except (KeyError, TypeError, ValueError):
+            texts[key] = None
+    return digests(texts, root)
+
+
 def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
     """(the pull request, its facts); None when a fact that must be known cannot be read."""
     pr = gh(f"repos/{repo}/pulls/{n}")
@@ -976,6 +1012,8 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "files": files,
         "draft_specs": draft_specs_of(repo, files, head),
         "merger": records_specs(checkout_settings(root)),
+        "settle": settle_setting(root),  # brief #1957 (ADR-0813)
+        "settles": amendment_settles(repo, files, head, root),
         "commit": commit if isinstance(commit, dict) else {},
         "local": record_open(repo, root),
     }

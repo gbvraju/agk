@@ -4,7 +4,13 @@
 # written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
 """The design check (SPEC-0029 rule 7; SPEC-0037 rules 2, 3). Installed: `kit/manifest.json` lists
 it in `verbatim`, with the modules it imports, `design_standard.py`, `design_inventory.py`,
-`design_prototype_check.py`, `design_signoff.py` and `design_import.py`.
+`design_prototype_check.py`, `design_signoff.py`, `design_import.py`, `design_usability.py` and
+`front_door.py`.
+
+First, while `[quality] grill_hold` is true, a design `docs/design/architecture/<slug>.md` whose
+`docs/discovery/<slug>.md` has a `## Readiness` line with a critical item open and no accepted risk
+is held, naming SPEC-0073 rule 6, the file and the setting (`front_door.design_holds`, brief #1938,
+ADR-0803); a refused `[quality]` table fails naming the setting, never read as held or clear.
 
 Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails, naming the rule
 and the path and never a value, on: a script or an event handler in a mockup, an external request
@@ -38,6 +44,10 @@ inventory must be covered by a row of an imported version or a page of a kit ver
 do not apply to an imported version, whose pages are read as text and never opened.
 A map whose rows are all `out:` while the inventory lists no screen fails, naming rule 15 and
 `docs/design/imported/` (`design_inventory.all_out_problems`, amendment 219, brief #1779).
+With an inventory and a declared `web-app` or `mobile` work type, `design_usability.py` checks
+`docs/design/usability.md` (SPEC-0038 rule 10 by amendment 237, brief #1953, ADR-0809): each screen
+lists the ten usability heuristics for the newest version; any other work type reads
+`design: usability not applicable (work type)`.
 Files only: no network, no model, nothing written.
 """
 
@@ -54,6 +64,8 @@ import design_inventory
 import design_prototype_check
 import design_signoff
 import design_standard
+import design_usability
+import front_door
 from common import repo_root, run, utf8_output
 
 NAME = "design"
@@ -290,10 +302,11 @@ def cmd_check(root: Path) -> int:
     versions = design_prototype_check.versions(root)
     signoffs = (root / design_signoff.SIGNOFFS).is_file()
     imported = design_import.versions(root)
-    if not (theme.is_file() or folders or inventory or versions or signoffs or imported):
+    held = front_door.design_holds(root)  # SPEC-0073 rule 6, before the no-record return
+    if not (theme.is_file() or folders or inventory or versions or signoffs or imported or held):
         print("ok design (no design record)")
         return 0
-    problems: list[str] = []
+    problems: list[str] = list(held)
     pairs = DEFAULT_PAIRS
     notes: list[str] = []
     if theme.is_file():
@@ -311,6 +324,9 @@ def cmd_check(root: Path) -> int:
         problems += design_inventory.inventory_problems(root)
         for req in design_inventory.waiting_requirements(root):  # amendment 243
             print(f"design: rule 3: {req} waits for an inventory pull request")
+        problems += design_usability.problems(root)  # SPEC-0038 rule 10, amendment 237
+        if usability := design_usability.note(root):
+            print(usability)
     for version in versions:
         problems += design_prototype_check.version_problems(root, version)
         if design_prototype_check.reflow_not_run(root, version):

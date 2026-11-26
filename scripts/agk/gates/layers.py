@@ -233,10 +233,18 @@ def write_record(root: Path) -> int:
     if not TEMPLATE.is_file():
         print("FAIL layers: SPEC-0072 rule 5: the template is missing (path class: kit/templates/)")
         return 1
+    text = TEMPLATE.read_text(encoding="utf-8")
+    import front_door  # noqa: PLC0415 - brief #1952: the one tuple the check reads
+
+    if any(f"\n## {name}\n" not in text for name in front_door.QUALITY_SECTIONS):
+        print(
+            "FAIL layers: SPEC-0072 rule 5: the template lacks a section"
+            " (path class: kit/templates/)"
+        )
+        return 1
     layers, allow = architecture(root)
     rows = "\n".join(f"| `{n}` | {', '.join(f'`{g}`' for g in gs)} |" for n, gs in layers)
     ends = "\n".join(f"- `{a}` may import `{b}`" for a, b in sorted(allow)) or "- none"
-    text = TEMPLATE.read_text(encoding="utf-8")
     for key, value in {
         "work_type": work_type,
         "layers": rows,

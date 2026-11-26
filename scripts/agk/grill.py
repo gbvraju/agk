@@ -10,6 +10,8 @@ Usage: python3 scripts/agk/grill.py questions [--depth light|standard|deep] [--p
        python3 scripts/agk/grill.py record --answers FILE --id ID (--stated WORDS-FILE |
            --assumption WORDS-FILE --test TEXT | --open | --risk-accepted) [--accepted WHERE]
            [--source TEXT] [--replace] [--playbook KIND] [--root DIR]
+       python3 scripts/agk/grill.py record --answers FILE --id ID --risk TEXT --sign TEXT
+           --owner WHO [--playbook KIND] [--root DIR]
        python3 scripts/agk/grill.py ready --answers FILE [--depth D] [--playbook KIND] [--root DIR]
 
 Prints the grill items to ask, in order: the items of `config/playbooks/default.toml` at or below
@@ -25,8 +27,10 @@ writes `answers`: `stated`, `assumption` (with its test), `open`, or a `Risk acc
 refuses an id that is not a grill item of the composed playbook, an assumption with no test, a
 second row for one id without `--replace` and the person's words (the earlier row stays), and an
 answer the data guard flags. A plain yes (`--accepted`) and `--risk-accepted` are refused in team
-mode, naming `review_mode`. `ready` prints the readiness line of rule 7 and exits 1 while a
-critical item is open with no accepted risk.
+mode, naming `review_mode`. `record --risk --sign --owner` appends one pre-mortem risk `{id, risk,
+sign, owner}` to the answers file's `risks` list instead (brief #1938, ADR-0803), each value one
+non-empty line the data guard passes. `ready` prints the readiness line of rule 7 and exits 1
+while a critical item is open with no accepted risk.
 """
 
 from __future__ import annotations
@@ -48,10 +52,11 @@ USAGE = __doc__.split("\n\n", 2)[1]
 FLAGS = ("--depth", "--playbook", "--answers", "--root")
 RECORD_FLAGS = (
     *("--answers", "--id", "--stated", "--assumption", "--test", "--accepted", "--source"),
-    *("--playbook", "--root"),
+    *("--playbook", "--root", "--risk", "--sign", "--owner"),
 )
+RISK_FLAGS = ("--risk", "--sign", "--owner")  # brief #1938: one pre-mortem risk, all three
 SWITCHES = ("--open", "--risk-accepted", "--replace")
-KINDS = ("--stated", "--assumption", "--open", "--risk-accepted")
+KINDS = ("--stated", "--assumption", "--open", "--risk-accepted", "--risk")
 READY_FLAGS = ("--answers", "--depth", "--playbook", "--root")
 BUDGET = {"light": 5, "standard": 12, "deep": 20}  # SPEC-0073 rule 11
 RECOMMENDED = "Recommended: <steward fills>"
@@ -211,9 +216,27 @@ def record(root: Path, opts: dict[str, str], switches: set[str]) -> dict[str, st
     return row
 
 
-def append(path: str, row: dict) -> None:
+def risk_row(root: Path, opts: dict[str, str]) -> dict[str, str]:
+    """Rule 7's `R-<n>` source: one pre-mortem risk, its first sign and its owner, one line each."""
+    if opts["--id"] not in {i[0] for i in composed(root, opts.get("--playbook"))}:
+        raise CheckError(
+            "rule 5: the id is not a grill item of the composed playbook (setting: --id)"
+        )
+    _load(opts["--answers"])
+    row = {"id": opts["--id"]}
+    for flag in RISK_FLAGS:
+        value = opts[flag]
+        if not value.strip() or "\n" in value or "\r" in value:
+            raise CheckError(f"rule 7: a risk is one line of words (setting: {flag})")
+        row[flag[2:]] = _guarded(value.strip(), f"the value of {flag}")
+    return row
+
+
+def append(path: str, row: dict, key: str = "grill") -> None:
     data = _load(path)
-    data["grill"] = [*data.get("grill", []), row]
+    if not isinstance(data.get(key, []), list):
+        raise CheckError("rule 2: the answers file is not an object of lists (setting: --answers)")
+    data[key] = [*data.get(key, []), row]
     Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
@@ -273,7 +296,12 @@ def main(argv: list[str] | None = None) -> int:
         if found is not None:
             opts, seen = found
             kinds = [k for k in KINDS if k in opts or k in seen]
+            given = [f for f in RISK_FLAGS if f in opts]
             if "--answers" not in opts or "--id" not in opts or len(kinds) != 1:
+                found = None
+            elif given and len(given) != len(RISK_FLAGS):
+                found = None
+            elif given and ({"--test", "--source", "--accepted"} & set(opts) or seen):
                 found = None
     elif command == "ready":
         found = parse(args[1:], READY_FLAGS, ())
@@ -287,6 +315,10 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(opts.get("--root", "."))
 
     def body() -> int:
+        if command == "record" and "--risk" in opts:
+            append(opts["--answers"], risk_row(root, opts), "risks")
+            print(f"recorded: {opts['--id']} risk")
+            return 0
         if command == "record":
             row = record(root, opts, seen)
             append(opts["--answers"], row)

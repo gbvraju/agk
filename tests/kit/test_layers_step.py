@@ -171,6 +171,12 @@ def test_the_foundation_writes_the_record_from_the_template_once(tmp_path: Path,
     text = (root / "docs/architecture.md").read_text(encoding="utf-8")
     assert "| `api` | `api/**` |" in text and "- `domain` may import `data`" in text
     assert "ADR-0003" in text and "{{" not in text
+    # brief #1952 (SPEC-0073 rule 8, REQ-080 AC5): the three quality sections, each marked
+    import front_door  # noqa: PLC0415
+
+    body = dict(front_door.sections_of(text.split("\n")))
+    for name in front_door.QUALITY_SECTIONS:
+        assert any(front_door.MARKER in ln for ln in body.get(name, [])), name
     capsys.readouterr()
     (root / "docs/architecture.md").write_text("kept\n", encoding="utf-8")
     assert layers.main(["--root", str(root), "--write-record"]) == 1
@@ -334,3 +340,20 @@ def test_req079_write_record_in_init_writes_as_today(tmp_path: Path, capsys) -> 
     root = _elsewhere(tmp_path, "init")
     assert layers.main(["--root", str(root), "--write-record"]) == 0
     assert (root / "docs/architecture.md").is_file()
+
+
+@pytest.mark.parametrize("section", ["Quality scenarios", "Threats", "Operations"])
+def test_req080_write_record_refuses_a_template_without_a_quality_section(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch, section: str
+) -> None:
+    """Fix list on a9780186 item 2 (brief #1952 answer 10): the writer reads the one tuple, so a
+    template that lacks one of the quality sections writes nothing and names the path class."""
+    template = (KIT_ROOT / "kit/templates/architecture.md").read_text(encoding="utf-8")
+    cut = tmp_path / "architecture.md"
+    cut.write_text(template.replace(f"\n## {section}\n", "\n## Other\n"), encoding="utf-8")
+    monkeypatch.setattr(layers, "TEMPLATE", cut)
+    root = _project(tmp_path / "project")
+    assert layers.main(["--root", str(root), "--write-record"]) == 1
+    out = capsys.readouterr().out
+    assert "the template lacks a section (path class: kit/templates/)" in out
+    assert not (root / "docs/architecture.md").exists()

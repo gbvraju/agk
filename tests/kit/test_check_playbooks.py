@@ -572,3 +572,31 @@ def test_ac4_the_workflow_runs_the_check_as_its_own_step():
     block = text[step:].split("\n      - ", 1)[0]
     assert "run: python scripts/agk/check_playbooks.py" in block
     assert "steps.paused.outputs.paused != 'true'" in block
+
+
+def test_ac5_the_accessibility_gates_name_wcag_2_2_level_aa():
+    """REQ-080 AC5: SPEC-0037 rule 7 by amendment 237 (brief #1953 answer 4): the `accessibility`
+    gate of `default.toml` and `web-app.toml` names the target; its kind and `owner_only` stay.
+    `default.toml` names no version number (test_playbook_default.py), so it names the target by
+    SPEC-0037 rule 7, which holds `WCAG 2.2 level AA`."""
+    import tomllib
+
+    targets = {
+        "default": "WCAG level AA target of SPEC-0037 rule 7",
+        "web-app": "WCAG 2.2 level AA",
+    }
+    spec = next((KIT_ROOT / "docs" / "specs").glob("0037-*.md")).read_text(encoding="utf-8")
+    assert "names WCAG 2.2 level AA as the target" in spec
+    for name, target in targets.items():
+        path = KIT_ROOT / "config" / "playbooks" / f"{name}.toml"
+        gates = tomllib.loads(path.read_text(encoding="utf-8"))["gates"]
+        gate = next(g for g in gates if g["id"] == "accessibility")
+        assert target in gate["text"], name
+        assert "unless the discovery's accessibility answer names another standard" in gate["text"]
+        assert (gate["kind"], gate["owner_only"]) == ("judgement", False), name
+
+
+def test_ac5_every_shipped_playbook_still_passes():
+    """REQ-080 AC5: brief #1953 answer 4 (no composition result is weakened)."""
+    result = check(KIT_ROOT)
+    assert result.returncode == 0, result.stdout + result.stderr

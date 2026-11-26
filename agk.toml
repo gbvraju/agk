@@ -311,6 +311,12 @@ tests = [
   "tests/kit_dev/test_design_write.py", "tests/kit/test_design_signoff.py", "tests/kit/test_design_import.py",
 ]
 [[testing.map]]
+code = "scripts/agk/design_usability.py"
+tests = [
+  "tests/kit/test_design_usability.py", "tests/kit/test_check_design.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_design_inventory_check.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_domains.py"
 tests = [
   "tests/kit/test_check_domains.py", "tests/kit/test_domain_settings.py", "tests/kit/test_check_playbooks.py",
@@ -350,6 +356,12 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/check_neutrality.py"
 tests = ["tests/kit/test_check_neutrality.py", "tests/kit/test_core_rules_page.py"]
+[[testing.map]]
+code = "scripts/agk/check_amendments.py"
+tests = [
+  "tests/kit/test_amendment_class.py", "tests/kit/test_route_settled_amendment.py",
+  "tests/kit/test_merge_cleared_settled.py",
+]
 [[testing.map]]
 code = "scripts/agk/check_numbers.py"
 tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.py"]
@@ -658,7 +670,8 @@ tests = ["tests/kit/test_forge.py"]
 code = "scripts/agk/front_door.py"
 tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
-  "tests/kit/test_front_door_derive.py",
+  "tests/kit/test_front_door_derive.py", "tests/kit/test_front_door_quality.py",
+  "tests/kit/test_architecture_record.py", "tests/kit/test_stack_designs.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
@@ -767,6 +780,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_merge_cleared_settled.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit_dev/test_shared_index_reference.py",
   "tests/kit/test_autopilot_modes.py",
@@ -983,6 +997,9 @@ tests = [
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_stack_choice.py",
 ]
 [[testing.map]]
+code = "scripts/agk/gates/architecture_quality.py"
+tests = ["tests/kit/test_architecture_record.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/gates/committed_secrets.py"
 tests = ["tests/kit/test_gate_secrets_settings.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
@@ -1048,7 +1065,10 @@ code = "kit/templates/data-model.md"
 tests = ["tests/kit/test_contracts.py"]
 [[testing.map]]
 code = "kit/templates/architecture.md"
-tests = ["tests/kit/test_layers_step.py", "tests/kit/test_contracts.py"]
+tests = ["tests/kit/test_layers_step.py", "tests/kit/test_contracts.py", "tests/kit/test_architecture_record.py"]
+[[testing.map]]
+code = "kit/templates/stack-adr.md"
+tests = ["tests/kit/test_stack_designs.py", "tests/kit_dev/test_stack_playbook.py"]
 [[testing.map]]
 code = "kit/templates/runtime/builder.txt"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py"]
@@ -1087,6 +1107,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_route_settled_amendment.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",

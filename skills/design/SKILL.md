@@ -60,7 +60,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" prototype
    browser is found, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" screenshots --version v<n>` writes one
    screenshot of each page at each breakpoint, in light and dark, and `screenshots/reflow.json` (`ok` or `sideways`);
    without one it says so and every entry reads `not run`, never passed.
-4. Check, and correct the theme on a failure, at most three rounds, then stop and report:
+4. For a `web-app` or `mobile` project, add the version's `## v<n>` section to `docs/design/usability.md` in the form of
+   `${CLAUDE_PLUGIN_ROOT}/kit/templates/usability.md`: one `### <screen id>` per screen of the inventory, each of the ten
+   heuristics `pass`, `finding: <text>` or `not applicable: <reason>`, judged on the pages (an imported version `i<n>`
+   the same). Keep older sections as they are. The accessibility target is WCAG 2.2 level AA unless the discovery's
+   `accessibility` answer names another standard. Check, and correct the theme or the record on a failure, at most
+   three rounds, then stop and report:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"
