@@ -363,3 +363,106 @@ def test_stack_accept_prints_a_failing_check_with_rc_1(tmp_path):
     assert proc.returncode == 1
     assert "FAIL protected-changes: protected path class 'CLAUDE.md'" in proc.stdout
     assert git(root, "status", "--porcelain") == ""
+
+
+# --- the stack's domain fit (SPEC-0074 rule 8, amendment 241; REQ-081 AC5; brief #1955) ---------
+
+PACK = (
+    'format = 1\ndomain = "zz-shop"\ntitle = "An invented pack"\nas_of = "2026-11-25"\n'
+    '\n[[terms]]\nterm = "zz-shop term"\nmeaning = "An invented term"\nsynonyms = []\n'
+    '\n[[constraints]]\nid = "orders-kept"\nattribute = "retention"\nscenario = "stimulus: an order'
+    ' is closed; response: it is kept; measure: 5 years"\nhard = true\nbasis = "expected"\n'
+    '\n[[constraints]]\nid = "logs-kept"\nattribute = "retention"\nscenario = "stimulus: a log is'
+    ' written; response: it is kept; measure: 1 year"\nhard = false\nbasis = "expected"\n'
+)
+PACKS = '\n[domain]\npacks = ["zz-shop"]\n'
+MEETS = "     Domain fit: meets\n"
+CANNOT = "     Domain fit: cannot meet: zz-shop.orders-kept\n"
+
+
+def fit_fails(tmp: Path, options: str, toml: str = PACKS, status: str = "Proposed") -> list[str]:
+    root = project(tmp, None, toml)
+    (root / "config" / "domains").mkdir()
+    (root / "config" / "domains" / "zz-shop.toml").write_text(PACK, encoding="utf-8")
+    chosen = "none yet" if status == "Proposed" else "Option B — kept on the person's yes."
+    (root / STACK).write_text(record(options, status, chosen), encoding="utf-8")
+    proc = engines(root, "stack-check")
+    return [ln for ln in proc.stdout.splitlines() if ln.startswith("FAIL")]
+
+
+def test_req_081_ac5_each_option_with_its_domain_fit_passes(tmp_path):
+    """REQ-081 AC5: an option that cannot meet a hard constraint is shown and kept, never dropped."""
+    assert fit_fails(tmp_path, OPTION_A + MEETS + OPTION_B + CANNOT) == []
+
+
+def test_req_081_ac5_an_option_that_cannot_meet_may_still_be_chosen(tmp_path):
+    options = OPTION_A + MEETS + OPTION_B + CANNOT
+    assert fit_fails(tmp_path, options, status="Accepted") == []
+
+
+def test_req_081_ac5_an_option_missing_its_domain_fit_fails_with_packs_only(tmp_path):
+    found = fit_fails(tmp_path / "packs", OPTION_A + MEETS + OPTION_B)
+    assert found == ["FAIL engines: SPEC-0074 rule 8: option B has no Domain fit line"]
+    assert fit_fails(tmp_path / "none", OPTION_A + OPTION_B, toml="") == []
+
+
+@pytest.mark.parametrize(
+    ("fit", "why"),
+    [
+        ("zz-shop.nothing-here", "names an unknown domain constraint (id: zz-shop.nothing-here)"),
+        ("zz-shop.logs-kept", "names a constraint that is not hard (id: zz-shop.logs-kept)"),
+        (
+            "Some Words",
+            "names an unknown domain constraint (id: not of the form <pack>.<constraint>)",
+        ),
+    ],
+)
+def test_req_081_ac5_an_unknown_or_soft_id_fails(tmp_path, fit, why):
+    line = f"     Domain fit: cannot meet: {fit}\n"
+    assert fit_fails(tmp_path, OPTION_A + MEETS + OPTION_B + line) == [
+        f"FAIL engines: SPEC-0074 rule 8: option B {why}"
+    ]
+
+
+@pytest.mark.parametrize("misplaced", ["before", "bullet"])
+def test_req_081_ac5_a_domain_fit_line_out_of_place_fails(tmp_path, misplaced):
+    options = (
+        MEETS + OPTION_A + OPTION_B + MEETS
+        if misplaced == "before"
+        else OPTION_A + "   - Domain fit: meets\n" + OPTION_B + MEETS
+    )
+    assert "FAIL engines: SPEC-0074 rule 8: option A has no Domain fit line" in fit_fails(
+        tmp_path, options
+    )
+
+
+def test_req_081_ac5_an_accepted_record_written_before_packs_is_held(tmp_path):
+    """An upgrade fails nothing: an Accepted record with no Domain fit line is held."""
+    assert fit_fails(tmp_path, OPTION_A + OPTION_B, status="Accepted") == []
+
+
+def test_req_081_ac5_the_option_parsers_read_every_option_with_the_lines():
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import engines as engines_module  # noqa: PLC0415
+    from gates import pins  # noqa: PLC0415
+
+    text = record(OPTION_A + MEETS + OPTION_B + CANNOT, "Accepted", "Option B — kept.")
+    for pattern in (pins.OPTION, engines_module.OPTION):
+        found = [m.group(1) for ln in text.splitlines() if (m := pattern.match(ln))]
+        assert found == ["A", "B"]
+    assert pins.chosen_parts(
+        [text.replace("3. **Chosen**: Option B — kept.", "3. **Chosen**: Option B")]
+    ) == [("a", "1.0", "MIT")]
+
+
+def test_req_081_ac5_stack_write_leaves_a_domain_fit_slot_with_packs_set(tmp_path):
+    root = project(tmp_path, None, PACKS)
+    (root / "config" / "domains").mkdir()
+    (root / "config" / "domains" / "zz-shop.toml").write_text(PACK, encoding="utf-8")
+    start(root)
+    proc = engines(root, "stack-write", "--ref", "main", "--date", "2026-11-20")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    (path,) = (root / "docs" / "adr").glob("*-stack-options.md")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    slots = [i for i, ln in enumerate(lines) if ln == "     Domain fit: TODO(architect)"]
+    assert [lines[i - 1].lstrip()[:10] for i in slots] == ["- Option A", "- Option B"]
