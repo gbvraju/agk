@@ -1098,7 +1098,7 @@ code = "kit/templates/stack-adr.md"
 tests = ["tests/kit/test_stack_designs.py", "tests/kit_dev/test_stack_playbook.py"]
 [[testing.map]]
 code = "kit/templates/runtime/builder.txt"
-tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py"]
+tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py", "tests/kit/test_usage_split.py"]
 [[testing.map]]
 code = "kit/templates/protected-paths*.txt"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_project_mk_protected.py"]

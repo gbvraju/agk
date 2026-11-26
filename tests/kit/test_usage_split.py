@@ -199,6 +199,17 @@ def test_req052_the_steward_end_reads_the_usage_line_when_no_figure_is_typed(tmp
     assert steward.main(["end", "--session", "s1"]) == 0
     split = "1342 (input 2, cache write 300, cache read 1000, output 40)"
     assert seen == [split, 77, "not shown (no-session-id)"]
+    helper = [entry("m9", "2026-11-10T08:05:00Z", 0, 0, 8, 0)]
+    write(home / "projects" / "-w" / SESSION / "subagents" / "agent-c3.jsonl", helper)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", SESSION)
+    assert steward.main(["end", "--session", "s1"]) == 0  # fix list 2 item 1: the steward's helpers
+    assert seen[-1] == "1350 (input 2, cache write 300, cache read 1008, output 40)"
     line = f"Ended: steward s1 calls 9; tokens {split}"
     assert steward_daily.ENDED.fullmatch(line).group(3) == split
     assert reader.tokens_figure({}) == "not shown (no-session-id)"
+
+
+def test_req052_the_builder_report_text_passes_helpers():
+    """REQ-052: fix list 2 item 1, the top-level builder's `Report:` text runs `usage.py --helpers`."""
+    text = (KIT / "kit" / "templates" / "runtime" / "builder.txt").read_text(encoding="utf-8")
+    assert "usage.py --helpers --since <the time of your previous Report:>" in text

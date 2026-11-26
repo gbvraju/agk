@@ -192,9 +192,10 @@ def session_line(
 
 
 def tokens_figure(env: dict) -> str:
-    """The running session's figure as a steward's `Ended:` note carries it (brief #2020 answer 5):
-    `<n> (input <a>, ...)` or `not shown (<class>)`."""
-    return session_line(env, [], None).removeprefix("Usage: ").replace(" tokens", "", 1)
+    """The running session's figure, with its own sub-agents, as a steward's `Ended:` note carries
+    it (brief #2020 answer 5): `<n> (input <a>, ...)` or `not shown (<class>)`."""
+    line = session_line(env, [], None, helpers=True)
+    return line.removeprefix("Usage: ").replace(" tokens", "", 1)
 
 
 def main(argv: list[str] | None = None) -> int:

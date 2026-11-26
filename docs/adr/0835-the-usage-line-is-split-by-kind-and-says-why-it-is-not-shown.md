@@ -6,7 +6,7 @@
 - Related: SPEC-0045 rule 8, ADR-0289, ADR-0419, ADR-0544, REQ-052, brief #798, brief #2020, plan #661
 - Requirements: REQ-052
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`, `config/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`, `config/`, `kit/`
 
 ## Context
 
@@ -25,8 +25,10 @@ leaves them out.
    `<folder>/<stem>/subagents/*.jsonl`. Across all of them each message id is counted once, at its first entry. A
    sub-agent's environment carries its parent's session id and no id of its own (measured 2026-11-26). So the sub-agent
    files are read only when the session asks for them, and only the top-level session does; a sibling's tokens never
-   enter another sub-agent's line, and each token is counted once (SPEC-0049 rule 4). This changes `Q-798-8` of
-   SPEC-0045 rule 8 (amendment 261).
+   enter another sub-agent's line, and each token is counted once (SPEC-0049 rule 4). The top-level builder's
+   prompt (`kit/templates/runtime/builder.txt`) ends its `Report:` with the line `usage.py --helpers --since
+   <previous Report:>` prints, and `steward.py end` reads with `--helpers`. This changes `Q-798-8` of SPEC-0045
+   rule 8 (amendment 261).
 2. Its line is `Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output <d>)`. `<n>` stays the sum, so a
    reader that takes `<n>` reads the same figure. A whole count of 0 or more under any other `*_tokens` key of a usage
    record whose key names no cache (so a flattened cache-creation count is never counted twice) is summed in `<n>` and
@@ -39,7 +41,7 @@ leaves them out.
    `caps.PROGRESS_USAGE` (`Progress:` lines). Session rule 17 names the ending (`split or classed`), rule 32 no longer
    restates `Usage: not shown`, and rule 8 takes `usage.py`'s line as printed. `config/rule-budget.txt` is lowered to
    the file's new count (3605). Amendment 261 proposes the same lines for SPEC-0045 rule 8.
-5. `steward.py end` without `--tokens` writes `tokens <n> (input <a>, ...)` or `tokens not shown (<class>)` from the
+5. `steward.py end` without `--tokens` writes, with its own sub-agents, `tokens <n> (input <a>, ...)` or `tokens not shown (<class>)` from the
    same reader. A typed `--tokens` is used as before.
 
 ## Consequences
@@ -48,7 +50,8 @@ A report's figure says what kind of tokens it holds, a session that uses helper 
 missing figure says why. Protected path classes changed: `scripts/agk/` (`usage.py`, `metrics.py`, `session.py`,
 `steward.py`, `caps.py`), `tests/kit/` (`test_usage_split.py`, `test_usage_transcript.py`), `agk.toml` (the new test
 file in the `[[testing.map]]` entries of `usage.py`, `metrics.py`, `session.py` and `steward.py`) and `config/`
-(`config/session-rules.md` rules 17 and 32, `config/rule-budget.txt`).
+(`config/session-rules.md` rules 17 and 32, `config/rule-budget.txt`) and `kit/` (`kit/templates/runtime/builder.txt`,
+the `Report:` line).
 
 ## Residual
 
@@ -57,6 +60,8 @@ file in the `[[testing.map]]` entries of `usage.py`, `metrics.py`, `session.py` 
   table and `metrics.py --cost`. They wait for the maintainers' ruling and are not built here.
 - 2026-11-26: a builder that itself runs as a sub-agent finds the parent's file through the parent's session id
   (measured: the runtime gives it no id of its own), so its line holds the parent's own figure, not its own; a way
-  for it to find its own file is left open.
+  for it to find its own file is left open. A steward or builder started as a sub-agent from the prompts that pass
+  `--helpers` would count the parent's and its siblings' tokens, so such a run should drop the flag (verify: no
+  launcher starts one today).
 - 2026-11-26: the conductor's `Conductor report` (answer 5) is written from `.claude/agents/conductor.md`, a path class
   the brief's `Touches:` does not name, and is not changed here.
