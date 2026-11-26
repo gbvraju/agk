@@ -916,6 +916,24 @@ def domain_settings(root: Path) -> dict:
     return {"packs": list(names), "stale_months": months}
 
 
+def domain_discovery(root: Path) -> tuple[list[dict], set[str]]:
+    """SPEC-0074 rule 6 (brief #1937, ADR-0806): the composed packs' `[[discovery]]` entries, each
+    with its `pack`, in `check_domains.order`, and the names of the regulated packs among them
+    (a `[[regulations]]` entry whose `critical` is true). `domain_settings` refuses a bad table
+    first, naming the setting. Read here, as `domain_settings` reads the packs, so the grill's own
+    imports stay within ADR-0824's set."""
+    names = domain_settings(root)["packs"]
+    import check_domains  # here: the check imports this module for `stale_months`
+
+    regulated = set()
+    for name in check_domains.order(root, names):
+        path = check_domains.pack_path(root, name)
+        rows = (check_domains.load(path) or {}).get("regulations") if path else None
+        if any(isinstance(r, dict) and r.get("critical") is True for r in rows or []):
+            regulated.add(name)
+    return check_domains.items(root)["discovery"], regulated
+
+
 # --- the [autopilot] table (SPEC-0064 rules 7 and 8, brief #1390, ADR-0587) ---------------------
 
 AUTOPILOT_MODES = ("off", "assist", "on")

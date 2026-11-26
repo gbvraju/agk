@@ -43,7 +43,8 @@ builds (a) and (b) (ADR-0801, ADR-0802) shipped `grill.py` and `/agk:grill`.
    `steward` is refused, naming `AGK_ROLE`. `agk.toml` is written only in `yes`, after the recorded ask is found.
 4. **The grill (rule 6, `Q-S0074-5`).** `grill.composed` appends the `[[discovery]]` items with a `depth` of the
    composed packs (`check_domains.items`, in `check_domains.order`) after the playbook's and the work type's, before
-   `success`; an id the playbook holds keeps its first place. A regulated pack (one with a `[[regulations]]` entry
+   `success`; an id the playbook holds keeps its first place. `grill.py` reads them through
+   `config.domain_discovery`, as `config.domain_settings` reads the packs, so its own imports stay within ADR-0824's set. A regulated pack (one with a `[[regulations]]` entry
    whose `critical` is true): its critical items are asked at `light`, its other items at `standard` at the least. A
    non-regulated pack's items keep their depth. They are records of the one answers file, count toward the one budget
    and, when critical, in the `ready` critical total. Once the answers file holds as many asked items as the depth's
