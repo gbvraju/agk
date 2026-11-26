@@ -592,7 +592,7 @@ tests = [
   "tests/kit/test_governance_level.py",
   "tests/kit/test_kit_defect_report.py", "tests/kit/test_kit_in_repository.py", "tests/kit/test_kit_repo_local_mode.py",
   "tests/kit/test_autopilot_settings.py", "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
-  "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
+  "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py", "tests/kit/test_minutes_budget.py",
   "tests/kit/test_doctor_amendments.py", "tests/kit/test_doctor_windows.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_wsl_setup.py", "tests/kit/test_wsl_docker.py", "tests/kit/test_wsl_gitleaks.py", "tests/kit/test_doctor_no_kit.py", "tests/kit/test_model_routes.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
@@ -660,7 +660,7 @@ tests = ["tests/kit/test_execution.py"]
 code = "scripts/agk/facts.py"
 tests = [
   "tests/kit/test_architect_guard.py", "tests/kit/test_checklist.py", "tests/kit/test_decision_files.py",
-  "tests/kit/test_facts.py",
+  "tests/kit/test_facts.py", "tests/kit/test_minutes_budget.py",
   "tests/kit/test_facts_done_on.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py",
   "tests/kit/test_head_cleared.py", "tests/kit/test_plan_estimate.py",
   "tests/kit/test_product_report_facts_artifact.py",
@@ -853,7 +853,7 @@ tests = [
 code = "scripts/agk/minutes.py"
 tests = [
   "tests/kit/test_doctor_ci.py", "tests/kit/test_execution.py", "tests/kit/test_metrics_minutes.py",
-  "tests/kit/test_minutes.py", "tests/kit/test_runbook_pointers.py", "tests/kit_dev/test_reference_commands.py",
+  "tests/kit/test_minutes.py", "tests/kit/test_minutes_budget.py", "tests/kit/test_runbook_pointers.py", "tests/kit_dev/test_reference_commands.py",
   "tests/kit_dev/test_self_hosted_pool.py", "tests/kit/test_kit_repo_local_mode.py",
 ]
 [[testing.map]]
@@ -1181,7 +1181,7 @@ code = "scripts/agk/sbom.py"
 tests = ["tests/kit/test_sbom.py", "tests/kit/test_product_deps.py"]
 [[testing.map]]
 code = "scripts/agk/scorecard.py"
-tests = ["tests/kit/test_scorecard.py"]
+tests = ["tests/kit/test_scorecard.py", "tests/kit/test_minutes_budget.py"]
 [[testing.map]]
 code = "scripts/agk/common.py"
 tests = [

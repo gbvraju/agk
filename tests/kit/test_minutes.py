@@ -479,11 +479,13 @@ class FakeGh:
     def __init__(self, answer):
         from minutes import Gh
 
-        self.gh = Gh("o/r")
+        self.gh = Gh("o/r", keep=None)  # no kept day (brief #2011) outside test_minutes_budget
         self.calls: list[str] = []
 
         def one(endpoint: str):
             self.calls.append(endpoint)
+            if endpoint == "/rate_limit":  # a full allowance (brief #2011 answer 4)
+                return 200, {"resources": {"core": {"remaining": 15000, "reset": 0}}}
             return answer(endpoint)
 
         self.gh.one = one
@@ -633,7 +635,8 @@ def test_no_use_does_not_run_out_this_month(repo, tmp_path):
 
 
 def test_included_minutes_unknown_have_no_level_and_no_day(repo, tmp_path):
-    """REQ-020: brief #370 answers 1 and 4 (included minutes unknown)."""
+    """REQ-020: brief #370 answers 1 and 4 (included minutes unknown); the line reads billing only
+    (brief #2011 answer 1, ADR-0832)."""
     api = case(tmp_path)
     refuse(api, "billing", 403)
     data = report(repo, api)
@@ -641,8 +644,8 @@ def test_included_minutes_unknown_have_no_level_and_no_day(repo, tmp_path):
     proc = minutes(repo, api, "--line")
     assert proc.returncode == 0
     assert proc.stdout == (
-        "actions minutes: 17 used this month (estimate from run history), included minutes "
-        "unknown (refused); level unknown\n"
+        "actions minutes: unknown (the token cannot read billing: refused); "
+        "run python3 scripts/agk/minutes.py for the estimate\n"
     )
 
 
@@ -663,15 +666,16 @@ def test_the_line_with_billing(repo, tmp_path):
 
 
 def test_the_line_with_nothing_known(repo, tmp_path):
-    """REQ-020: brief #370 answer 2 (`unknown` when billing and the run history cannot be read)."""
+    """REQ-020: brief #370 answer 2 (`unknown` when billing cannot be read; brief #2011 answer 1:
+    the run history is not read for the line)."""
     api = case(tmp_path)
     refuse(api, "billing", 403)
     refuse(api, "runs", 403)
     proc = minutes(repo, api, "--line")
     assert proc.returncode == 0
     assert proc.stdout == (
-        "actions minutes: unknown (the token cannot read billing: refused, nor the run "
-        "history: refused)\n"
+        "actions minutes: unknown (the token cannot read billing: refused); "
+        "run python3 scripts/agk/minutes.py for the estimate\n"
     )
 
 
