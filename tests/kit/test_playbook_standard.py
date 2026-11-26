@@ -50,6 +50,7 @@ def shipped() -> list[Path]:
 def kit_copy(tmp_path: Path) -> Path:
     shutil.copytree(KIT_ROOT / FOLDER, tmp_path / FOLDER)
     shutil.copy(KIT_ROOT / "config" / "stack-signals.toml", tmp_path / "config")
+    shutil.copy(KIT_ROOT / "config" / "standards.toml", tmp_path / "config")  # brief #1975
     return tmp_path
 
 
