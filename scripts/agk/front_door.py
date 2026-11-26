@@ -2043,7 +2043,13 @@ def detect_facts(root: Path, kit: Path) -> dict:
     kinds = {hit["name"] for hit in hits}
     stacks = stack_rows(table, texts)
     stack_names = {row["name"] for row in stacks}
+    globs = [glob for row in table["stack"] for glob in row["manifests"]]
+    named = {
+        p: t for p, t in texts.items() if any(fnmatch.fnmatchcase(base_of(p), g) for g in globs)
+    }
+    domain = domain_fact(kit, tree, named, table["ignore"])  # brief #1937 (ADR-0806)
     return {
+        **({"domain": domain} if domain is not None else {}),
         "not_detectable": sorted(table["no_signal"]),
         "notes": sorted(notes),
         "stack": {
@@ -2056,6 +2062,51 @@ def detect_facts(root: Path, kit: Path) -> dict:
             "state": "mixed" if len(kinds) > 1 else "proposed" if kinds else "default",
         },
     }
+
+
+def domain_rows(kit: Path) -> list[dict] | None:
+    """SPEC-0074 rule 5 (brief #1937, ADR-0806): the rows of the kit's domain signal table, or
+    None for a kit copy without it or with a row of another form (nothing is proposed then)."""
+    try:
+        rows = tomllib.loads((kit / DOMAIN_SIGNALS).read_text(encoding="utf-8")).get("domain")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None
+    good = isinstance(rows, list) and all(
+        isinstance(r, dict) and isinstance(r.get("name"), str)
+        and all(is_words(r.get(k)) for k in DOMAIN_ROW[1:])
+        for r in rows
+    )  # fmt: skip
+    return rows if good else None
+
+
+def domain_fact(
+    kit: Path, tree: list[tuple[str, str, str]], manifests: dict[str, str], ignore: list[str]
+) -> dict | None:
+    """Rule 5: each pack a head-tree file (by base name) or a stack manifest's dependency (a
+    word) suggests, in path order; None without the table. The repository only (Q-D74C-2)."""
+    rows = domain_rows(kit)
+    if rows is None:
+        return None
+    hits = set()
+    paths = [
+        path
+        for path, mode, _ in tree
+        if mode not in NOT_FILES and not set(path.split("/")[:-1]) & set(ignore)
+    ]
+    for row in rows:
+        hits |= {(p, row["name"], "file") for p in paths if base_of(p) in row["files"]}
+        for path, text in manifests.items():
+            found = [d for d in row["dependencies"] if re.search(WORD.format(re.escape(d)), text)]
+            hits |= {(path, row["name"], f"dependency {d}") for d in found}
+    out = [{"file": p, "name": n, "signal": s} for p, n, s in sorted(hits)]
+    names = {hit["name"] for hit in out}
+    state = "mixed" if len(names) > 1 else "proposed" if names else "none"
+    return {"candidates": out, "state": state}
+
+
+def domain_line(hit: dict) -> str:
+    where = f"file {quoted(hit['file'])}" if hit["signal"] == "file" else hit["signal"]
+    return f"{hit['name']} (proposed) {where}"
 
 
 def detect_lines(facts: dict) -> list[str]:
@@ -2094,6 +2145,15 @@ def detect_lines(facts: dict) -> list[str]:
         f" (from {tests['source']})"
         for row in tests["folders"]
     ]
+    domain = facts.get("domain") or {"state": None, "candidates": []}
+    if domain["state"] == "none":
+        out.append("domain: none (proposed; no signal of a domain)")
+    elif domain["state"] == "mixed":
+        names = {hit["name"] for hit in domain["candidates"]}
+        out.append(f"domain: mixed ({len(names)} candidates)")
+        out += [f"domain candidate: {domain_line(hit)}" for hit in domain["candidates"]]
+    else:
+        out += [f"domain: {domain_line(hit)}" for hit in domain["candidates"]]
     out += [f"not detectable from files: {name}" for name in facts["not_detectable"]]
     return out + [f"note: {note}" for note in facts["notes"]]
 

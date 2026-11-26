@@ -210,6 +210,7 @@ def project(tmp: Path, toml: str = SOLO, files: dict[str, str] | None = None) ->
     )
     (root / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
     shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
+    shutil.copytree(KIT_ROOT / "config" / "domains", root / "config" / "domains")  # installed
     (root / "config" / "reviewers.yaml").write_text(ONE, encoding="utf-8")
     shutil.copy(KIT_ROOT / "kit/templates/protected-paths.txt", root / "config/protected-paths.txt")
     (root / "agk.toml").write_text(toml, encoding="utf-8")

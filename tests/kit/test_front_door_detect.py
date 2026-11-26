@@ -26,7 +26,8 @@ import front_door  # noqa: E402
 FIRST = "detect: proposal only; a person confirms it in discovery"
 NO_KIND = "work type: default (proposed; no signal of a work type)"
 SOURCE = "(from survey.detect_test_files, head tree)"
-TAIL = ["not detectable from files: cloud-migration", "not detectable from files: pilot"]
+NO_DOMAIN = "domain: none (proposed; no signal of a domain)"  # brief #1937 (ADR-0806)
+TAIL = [NO_DOMAIN, "not detectable from files: cloud-migration", "not detectable from files: pilot"]
 REACT = '{"dependencies": {"react-dom": "1.0.0"}}\n'
 FLUTTER = "dependencies:\n  flutter:\n    sdk: flutter\n"
 GIT = [

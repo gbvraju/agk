@@ -18,7 +18,9 @@ This is design work: use the strongest model at high effort (SPEC-0045 rule 2). 
 may draft the wording of a question only; every answer is recorded by the script below.
 
 1. Read first, in this order: the person's sources (`docs/sources/`), day zero (`docs/sources/day-zero.md`), the
-   repository (`front_door.py detect`, in an existing one) and the playbook. Say in one line what you read.
+   repository (`front_door.py detect`, in an existing one) and the playbook. Say in one line what you read. When no
+   domain is set, run `steward_owner.py domain --propose` and ask its one question; the domain's questions join this
+   list only after the person's yes (SPEC-0074 rule 5).
 2. Print the items to ask; it never prints an item the answers file already holds, so a grill left halfway resumes at
    the next item:
 
@@ -51,7 +53,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/grill.py" record --answers ANSWERS --
    `record --id pre-mortem --risk TEXT --sign TEXT --owner WHO` and as one `Risk:` memory entry; the discovery
    document is the source of truth.
 6. Show the readiness line. It exits 1 while a critical item is open with no accepted risk; say which, in plain words,
-   and stop when the question budget is spent, listing what was not asked:
+   and when the question budget is spent print the items again: only the business rules' questions still needed are
+   listed, with one line saying so; ask them, then stop, listing what was not asked:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/grill.py" ready --answers ANSWERS

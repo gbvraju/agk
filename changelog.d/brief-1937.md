@@ -1,0 +1,1 @@
+- #1992 `front_door.py detect` proposes a domain from the repository, `steward_owner.py domain --propose` asks the person one plain question and `domain --yes` writes `[domain] packs` with its Proposed ADR on the yes; the composed packs' questions join `grill.py`, a regulated pack's critical ones at every depth and past the budget (brief #1937)
