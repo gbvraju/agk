@@ -66,6 +66,17 @@ STAGES = (
     "plan",
     "build",
 )
+# The pull request each stage before `build` is in with `[plan] stage_pulls = "stage"` (brief #2021,
+# ADR-0836): four, each merged before the next starts; `build` has its own pull requests.
+STAGE_PULLS = {
+    "start": "discovery",
+    "vision and discovery": "discovery",
+    "scope": "discovery",
+    "prototype and design": "design",
+    "stack and technical design": "technical design",
+    "plan": "plan",
+    "build": None,
+}
 TRIAGES = ("kit brief", "kit correction", "kit question", "project brief", "owner question")
 MODES = re.compile(r"^Modes: github \S.*; local \S.*; personal \S", re.M)
 OWNER_LINE = re.compile(r'^Owner said \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z\): ".+"', re.M)

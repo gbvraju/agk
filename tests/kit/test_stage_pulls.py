@@ -17,6 +17,7 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import common  # noqa: E402
 import config  # noqa: E402
 import design_signoff  # noqa: E402
 import steward_evidence  # noqa: E402
@@ -119,9 +120,14 @@ def test_another_value_is_refused_naming_the_setting(tmp_path, value):
     assert str(err.value) == "the setting is refused (setting: plan.stage_pulls)"
 
 
-def test_the_setting_is_a_known_plan_key():
-    """REQ-050"""
+def test_the_setting_is_a_known_plan_key(tmp_path):
+    """REQ-050: the [plan] table reader takes the key and refuses another value the same way."""
     assert "stage_pulls" in config.TABLE_KEYS["plan"]
+    root = write_toml(tmp_path, '[plan]\nstage_pulls = "stage"\n')
+    assert common.plan_settings(root)["stage_pulls"] == "stage"
+    write_toml(tmp_path, '[plan]\nstage_pulls = "all"\n')
+    with pytest.raises(common.CheckError, match=r"setting: plan\.stage_pulls\)$"):
+        common.plan_settings(root)
 
 
 def test_every_stage_before_build_names_one_of_four_pull_requests():
