@@ -25,8 +25,8 @@ edits a protected file by itself: `constitution/` is protected and changes only 
    `/agk:start` step 3 says (`--no-track`). When `docs/sources/day-zero.md` is in the work tree but not on `origin/<default branch>`:
    with `[plan] stage_pulls = "stage"` it joins this discovery pull request (ADR-0836): set it aside with
    `git stash push --include-untracked -- docs/sources/day-zero.md`, run the command and create the branch, then `git stash pop` and
-   commit it as the branch's first commit; with `"step"` (the default) stop, it is merged first (`docs/guides/steward-first-run.md`
-   step 6). The command refuses a work tree that is not clean:
+   commit it as the branch's first commit; with `"step"` (the default) stop: it goes in its own pull request, merged first
+   (`docs/guides/steward-first-run.md` step 6). The command refuses a work tree that is not clean:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" start-ids --statement "IDEA"
