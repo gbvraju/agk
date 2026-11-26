@@ -18,7 +18,7 @@ approver of `config/reviewers.yaml`), the open `agk:parked` issues, and the file
 `docs/runs/decisions/`, Approved specs, the statuses of `docs/requirements.md`, the signed-off
 prototype versions, the last line of `check_plan.py --trace` and the project domain model of
 `docs/domain/` (SPEC-0074 rule 7, ADR-0810: confirmed rules and data classes are decisions, inferred
-rules are owner questions, at most 20 and then a count). It writes them as memory notes
+rules are owner questions, at most five and then a count). It writes them as memory notes
 marked `harvested`, each line citing its source: `Decision:` notes of at most 50 lines, one `Owner
 question:` per open question and per question two answers contradict (never a decision), `Risk:` for
 parked work and `Gap:` for each source it could not read. A line the data guard matches is withheld,
@@ -52,7 +52,7 @@ ISSUES = "repos/{owner}/{repo}/issues"
 COMMENTS = ISSUES + "/comments?per_page=100&page=<page>"
 LABELLED = ISSUES + "?labels=<label>&state=<state>&per_page=100"
 CHUNK = 50
-ASKED = 20  # rule 18's budget: owner questions from inferred domain rules (ADR-0810)
+ASKED = 5  # SPEC-0074 rule 14, owner's answer Q-1954-B: inferred domain rules in batches of five (ADR-0810)
 FIRST = re.compile(r"^(Maintainer answer|Answer|Question): (Q-[\w-]+)\s*(.*)")
 STATUS = re.compile(r"^- Status: (\S+)", re.M)
 HEADING = re.compile(r"^# ((?:ADR|SPEC)-\d+): (.+)$", re.M)

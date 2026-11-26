@@ -349,15 +349,16 @@ def test_req081_confirmed_rules_and_classes_are_decisions_inferred_ones_question
     assert len(gh.posted()) == first + 1  # `--again` adds only the `Onboarded:` entry
 
 
-def test_req081_inferred_rules_ask_at_most_twenty_then_a_count(root):
-    """REQ-081 AC4: answer 5 with rule 18's budget, at most 20 questions, then one count line."""
+def test_req081_inferred_rules_ask_at_most_five_then_a_count(root):
+    """REQ-081 AC4: SPEC-0074 rule 14 and the owner's answer Q-1954-B, inferred rules are asked in
+    batches of at most five, then one count line."""
     executing(root)
     domain(root, inferred=23)
     gh = GitHub(labels=merged_work())
     steward_onboard.onboard(root, gh, NOW)
     asked = [b for b in gh.posted() if b.startswith("Owner question: harvested BR-")]
-    assert len(asked) == 20
-    assert any("3 more inferred rules wait for a yes" in b for b in gh.posted())
+    assert len(asked) == 5
+    assert any("18 more inferred rules wait for a yes" in b for b in gh.posted())
 
 
 def test_req081_an_unreadable_domain_file_is_a_gap(root):

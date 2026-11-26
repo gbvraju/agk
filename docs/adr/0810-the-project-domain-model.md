@@ -49,7 +49,7 @@ the data classification or the regulations (`Q-D74D-2`).
 4. The steward's harvest (`steward_onboard.from_domain`) reads `docs/domain/`: each `confirmed` rule and each
    classified data item is a `harvested` `Decision:` citing its file and id, never a rule's text, which stays in
    `docs/domain/` (rule 14); each `inferred` rule is one `Owner
-   question:`, at most 20, then one line with the count; an unreadable file is a `Gap:`. `--again` adds only new lines.
+   question:`, at most five (SPEC-0074 rule 14, Q-1954-B), then one line with the count; an unreadable file is a `Gap:`. `--again` adds only new lines.
 5. The glossary step (`scripts/agk/gates/glossary.py`, `Q-D74D-3`) reads `[domain] packs`: with packs, the glossary
    holds one line `Packs: <id>, <id>` naming them in order; with none, no such line; a refused table fails naming
    `domain`. A pack's synonyms are included by reference, never as rows, so the cap counts rows only, and a row that
