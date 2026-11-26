@@ -30,6 +30,15 @@ drops a held rule code is refused naming the key `standards.rules`. A stack of
 `config/stack-signals.toml` with no `[[standards]]` entry in any playbook is one `warn playbooks:`
 line on stderr, never a failure.
 
+The stack-keyed standards file (SPEC-0072 rules 2 and 6; REQ-079; brief #1974, ADR-0817):
+`config/standards.toml`, read by `kit_root.kit_file` (the project's copy, or the plugin's in a clean
+project), holds `[[standards]]` entries with one more key, `runtime`. `standard` composes first the
+entries of the runtime `pins.chosen` names, for every work type, then the playbook layers, so a
+playbook entry for the same stack replaces one and is held by the `standards.rules` refusal; with no
+runtime chosen it composes none of them. `standards_file` checks the file's form, each refusal
+`SPEC-0072 rule 2: config/standards.toml: <what> (key: standards.<key>)`, never a value; a missing
+file is no entries; `cmd_check` counts its stacks as packed in the warning.
+
 The gate runner (SPEC-0072 rule 3; REQ-079 AC2; brief #1586, ADR-0666): once the playbooks pass,
 the check runs `run_gates.py` in the same process, so every check gate's step runs in the step
 `check_playbooks` of the `governance` job and in `make governance` with no workflow change
@@ -51,9 +60,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import playbook_format
 from common import repo_root, run, utf8_output
+from gates import pins
 
 NAME = "playbooks"
 CHECK, JUDGEMENT = playbook_format.GATE_KINDS
+STANDARDS = "config/standards.toml"  # brief #1974 (ADR-0817): the stack-keyed entries
+FILE_KEYS = {**playbook_format.STANDARD_KEYS, "runtime": playbook_format.STR}
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -145,15 +157,96 @@ def _codes(entry: dict[str, Any]) -> set[str]:
     return {c for c in codes if isinstance(c, str)} if isinstance(codes, list) else set()
 
 
+def _served(runtime: str) -> tuple[str, ...]:
+    """The stacks of the pack module that serves the runtime's stack class, else none."""
+    import importlib
+
+    import run_gates  # here: the runner imports this module
+
+    stack = pins.STACKS[runtime][0]
+    modules = [importlib.import_module(f"gates.{name}") for name in run_gates.PACKS]
+    return next((tuple(m.STACKS) for m in modules if stack in m.STACKS), ())
+
+
+def _entry_problems(entry: dict[str, Any], known: list[str] | None) -> list[str]:
+    out = []
+    for key in entry:
+        if key not in FILE_KEYS:
+            out.append(f"an entry has a key outside the format (key: standards.{key})")
+    for key, kind in FILE_KEYS.items():
+        if key not in entry:
+            out.append(f"an entry is missing the key `{key}` (key: standards.{key})")
+        elif not playbook_format._is(entry[key], kind):
+            out.append(f"an entry's key `{key}` has the wrong type (key: standards.{key})")
+    rules = entry.get("rules")
+    if isinstance(rules, dict):
+        found = playbook_format._table_keys(
+            STANDARDS, "rules", rules, playbook_format.RULES_KEYS, playbook_format.RULES_OPTIONAL
+        )
+        out += ["a `rules` table is not in the format (key: standards.rules)"] if found else []
+    config = entry.get("config")
+    if isinstance(config, str) and not playbook_format._inside(config):
+        out.append("a `config` is not inside the project (key: standards.config)")
+    runtime, stack = entry.get("runtime"), entry.get("stack")
+    if isinstance(runtime, str) and runtime not in pins.STACKS:
+        out.append("a `runtime` is not a key of the stack table (key: standards.runtime)")
+    if not isinstance(stack, str) or not isinstance(runtime, str) or runtime not in pins.STACKS:
+        return out
+    if known is not None and stack not in known:
+        out.append(f"a `stack` is not a stack of {playbook_format.STACKS} (key: standards.stack)")
+    elif stack not in _served(runtime):
+        out.append("a `stack` is not one the runtime's pack serves (key: standards.stack)")
+    return out
+
+
+def standards_file(root: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    """Brief #1974 answer 4: the entries of `config/standards.toml` and the problems of its form,
+    each naming the key or the path class, never a value; a missing file is no entries. Raises
+    `kit_root.Refused` as `kit_file` does (a clean project with no plugin), naming the setting."""
+    root = Path(root)
+    kit = playbook_format.kit_root
+    path = root / STANDARDS if kit is None else kit.kit_file(root, STANDARDS)
+    where = f"{playbook_format.SPEC72}: {STANDARDS}:"
+    if not path.is_file():
+        return [], []
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return [], [f"{where} the file is not TOML (path class: {STANDARDS})"]
+    found = data.get("standards", [])
+    if not isinstance(found, list) or not all(isinstance(e, dict) for e in found):
+        return [], [f"{where} `standards` is not a list of tables (key: standards)"]
+    known = playbook_format.stacks(root)
+    out: dict[str, None] = {}
+    for entry in found:
+        out.update(dict.fromkeys(_entry_problems(entry, known)))
+    names = [e["stack"] for e in found if isinstance(e.get("stack"), str)]
+    if len(set(names)) != len(names):
+        out["a `stack` appears twice (key: standards.stack)"] = None
+    return found, [f"{where} {line}" for line in out]
+
+
+def stack_entries(root: Path) -> list[dict[str, Any]]:
+    """Brief #1974 answer 2: the file's entries of the runtime the one Accepted stack record chose,
+    or none (no work type, no record, a Proposed record, two records or two runtimes)."""
+    picked = pins.chosen(Path(root))
+    if picked is None:
+        return []
+    runtime = next((key for key, row in pins.STACKS.items() if row == picked[0]), None)
+    return [e for e in standards_file(root)[0] if e.get("runtime") == runtime]
+
+
 def standard(path: Path, root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     """SPEC-0072 rule 2: the composed `[architecture]` and `[[standards]]` of the playbook at
-    `path`, and the problems of their composition, naming the rule, the file and the key."""
+    `path`, and the problems of their composition, naming the rule, the file and the key; the
+    chosen runtime's entries of `config/standards.toml` come first (brief #1974, ADR-0817)."""
     path, root = Path(path), Path(root)
     layers, _ = _layers(path, root)
     rel = f"{playbook_format.FOLDER}/{path.name}"
     architecture: dict[str, Any] = {}
     packs: dict[str, dict[str, Any]] = {}
     keys: set[str] = set()
+    layers = [{"standards": stack_entries(root)}, *layers]
     for layer in layers:
         own = layer.get("architecture")
         if isinstance(own, dict):
@@ -187,6 +280,7 @@ def findings(
         + standard(path, root)[2]
     ]
     found += playbook_format.declaration(root)[1]
+    found += standards_file(root)[1]  # brief #1974 answer 4
     if files is None and domains is None or domains:
         import check_domains  # here: a named playbook alone (a derive, a gate run) reads no pack
 
@@ -206,6 +300,7 @@ def cmd_check(root: Path) -> int:
         return 1
     known = playbook_format.stacks(root) or []
     packed = {e.get("stack") for path in files for e in standard(path, root)[1]}
+    packed |= {e.get("stack") for e in standards_file(root)[0]}  # brief #1974 answer 3
     missing = [name for name in known if name not in packed]
     if missing:
         print(

@@ -375,7 +375,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
 tests = [
-  "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py", "tests/kit/test_check_domains.py",
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py", "tests/kit/test_check_domains.py",  "tests/kit/test_standards_stack.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_pr_body.py"
@@ -995,6 +995,7 @@ tests = [
   "tests/kit/test_python_pack.py", "tests/kit/test_gate_baseline.py", "tests/kit/test_node_pack.py",
   "tests/kit/test_adopt_first_run.py", "tests/kit/test_run_gates_touched.py",
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_stack_choice.py",
+  "tests/kit/test_standards_stack.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/architecture_quality.py"
@@ -1024,6 +1025,7 @@ tests = [
   "tests/kit/test_node_pack.py", "tests/kit/test_pins.py", "tests/kit/test_adopt_first_run.py",
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_glossary_step.py",
   "tests/kit/test_stack_choice.py", "tests/kit/test_layers_draft.py", "tests/kit/test_run_gates_touched.py",
+  "tests/kit/test_standards_stack.py",
   "tests/kit/test_run_gates.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_tests_floor.py",
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_gate_runner_map.py",
 ]
@@ -1078,6 +1080,11 @@ tests = ["tests/kit/test_layers_step.py", "tests/kit/test_reviewers_approvers_in
 [[testing.map]]
 code = "kit/templates/reviewers*.yaml"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_project_mk_protected.py"]
+[[testing.map]]
+code = "config/standards.toml"
+tests = [
+  "tests/kit/test_standards_stack.py", "tests/kit/test_python_pack.py", "tests/kit/test_node_pack.py",
+]
 [[testing.map]]
 code = "config/rule-plan.txt"
 tests = ["tests/kit/test_rules_consolidate.py"]
@@ -1372,6 +1379,7 @@ tests = [
 code = "config/playbooks/*.toml"
 tests = [
   "tests/kit/test_layers_step.py",
+  "tests/kit/test_standards_stack.py",
   "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
   "tests/kit/test_impact_data_files.py", "tests/kit/test_playbook_cloud_migration.py",
   "tests/kit/test_playbook_data_pipeline.py", "tests/kit/test_playbook_discovery.py",

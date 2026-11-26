@@ -25,6 +25,7 @@ sys.path.insert(0, str(AGK))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_playbooks  # noqa: E402
+import kit_root  # noqa: E402
 import playbook_format  # noqa: E402
 import run_gates  # noqa: E402
 from gates import bom, node_pack, pins, python_pack  # noqa: E402
@@ -76,7 +77,8 @@ def project(
     shutil.copy(KIT_ROOT / "config" / "stack-signals.toml", tmp / "config")
     if standards:
         shutil.copy(KIT_ROOT / FILE, tmp / FILE)
-    text = f'mode = "init"\n{toml}\n'
+    scope = "" if "project_lint_paths" in toml else 'project_lint_paths = ["src/**"]\n'
+    text = f'mode = "init"\n{scope}{toml}\n'
     if work_type:
         text += f'\n[delivery]\nwork_type = "{work_type}"\n'
     (tmp / "agk.toml").write_text(text, encoding="utf-8")
@@ -89,15 +91,20 @@ def project(
     (tmp / "pyproject.toml").write_text(
         template.read_text(encoding="utf-8").replace("{{project}}", "sample"), encoding="utf-8"
     )
-    for layer in ("api", "src"):
-        (tmp / layer).mkdir(exist_ok=True)
-        (tmp / layer / "app.py").write_text(CLEAN, encoding="utf-8")
+    (tmp / "src").mkdir()
+    (tmp / "src" / "app.py").write_text(CLEAN, encoding="utf-8")
     return with_lock(tmp, runtime if runtime == "node" else "python")
 
 
 def stacks(root: Path, name: str) -> list[str]:
     path = playbook_format.path(root, name)
     return [e["stack"] for e in check_playbooks.standard(path, root)[1]]
+
+
+def own(work_type: str) -> list[str]:
+    """The stacks a shipped playbook still carries itself (web-app, api-service, mobile: 19I-b)."""
+    found = playbook_format.load(BOOKS / f"{work_type}.toml").get("standards", [])
+    return [e["stack"] for e in found]
 
 
 def gates(root: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
@@ -153,8 +160,7 @@ def test_req079_every_work_type_composes_the_python_entries(work_type: str, tmp_
     """Answers 2 and 5, Q-19I-1: the stack decides, once per stack."""
     root = project(tmp_path, work_type)
     found = stacks(root, work_type)
-    assert sorted(s for s in found if s in python_pack.STACKS) == sorted(python_pack.STACKS)
-    assert len(found) == len(set(found)) and "node" not in found
+    assert sorted(found) == sorted({*python_pack.STACKS, *own(work_type)})
 
 
 @pytest.mark.parametrize("work_type", WORK_TYPES)
@@ -162,7 +168,7 @@ def test_req079_every_work_type_composes_the_node_entry(work_type: str, tmp_path
     """Answers 2 and 5: a Node record composes the Node entry and no Python one."""
     root = project(tmp_path, work_type, runtime="node")
     found = stacks(root, work_type)
-    assert found.count("node") == 1 and not set(found) & set(python_pack.STACKS)
+    assert sorted(found) == sorted({"node", *own(work_type)})
 
 
 @pytest.mark.parametrize(
@@ -317,8 +323,10 @@ def test_req079_a_clean_project_with_no_plugin_is_refused_naming_the_setting(
 ) -> None:
     """Answer 5: refused as `kit_root` refuses it, naming the setting."""
     elsewhere = tmp_path / "not-a-plugin"
-    elsewhere.mkdir()
+    (elsewhere / "a" / "b").mkdir(parents=True)
+    (tmp_path / "p").mkdir()
     root = _clean(tmp_path / "p", monkeypatch, elsewhere)
+    monkeypatch.setattr(kit_root, "HERE", elsewhere / "a" / "b")  # not the kit's own folder
     with pytest.raises(playbook_format.Refused, match=r"\(setting: CLAUDE_PLUGIN_ROOT\)"):
         check_playbooks.standards_file(root)
 
@@ -362,7 +370,7 @@ def test_req079_adopt_mode_holds_a_file_entry_in_the_baseline(
     (root / "src" / "app.py").write_text("import json\n", encoding="utf-8")
     code, out = gates(root, capsys)
     assert code == 0, out
-    assert (root / "config/agk-baseline/standards python-pyproject lint.txt").is_file()
+    assert (root / "config/agk-baseline/standards-python-pyproject-lint.txt").is_file()
 
 
 def test_req079_the_kit_itself_composes_nothing_of_the_file() -> None:
