@@ -20,7 +20,7 @@ fail on first, in order, and stops at the first failure with its message: the pu
 where the Makefile has the target, `make -f agk.mk agk-governance` (no network; `not run` without `make`), the secret scan over
 the branch's commits (a missing `gitleaks` fails the run, naming the tool and the pinned version, also with `--quick`;
 ADR-0306), and the tests that `test_plan.py` selects
-(`--quick` skips them). It prints `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one
+(`--quick` runs only the `[testing] whole_tests` files, as one run named `whole`; ADR-0825). It prints `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one
 did, 2 on a usage error (session rule 31, ADR-0186). `--no-lock` leaves the heavy-step lock (`lock.py`, name `heavy`) of the
 tests step out, for CI. In the kit, governance's `check_kit_tests.py` also holds the rules of the kit's own testing
 map (each test that runs the gate runner is in the `scripts/agk/gates/*.py` entry; each map test name matches a test

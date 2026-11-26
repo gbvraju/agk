@@ -1,0 +1,1 @@
+- Prepush: `--quick` now runs the `[testing] whole_tests` files (one run named `whole`, under the heavy-step lock) instead of skipping every test, and the record and `evidence.py check` hold that run; `test_plan.py` prints a `quick:` line and `quick_whole`; the kit's list gains the option-pairs and default-playbook tests (brief #1971, ADR-0825)
