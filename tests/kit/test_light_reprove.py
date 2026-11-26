@@ -481,16 +481,17 @@ BODY = "Brief: #70\nSummary: An example change.\n"
 class LocalStub(Stub):
     """Stub whose update-branch moves `refs/pull/7/head` of ORIGIN to the real merge commit."""
 
-    def __init__(self, origin: Path, head: str, new: str, body=BODY, issues=None, moved=None):
+    def __init__(self, origin: Path, head: str, new: str, body=BODY, issues=None):
         super().__init__(head, new)
-        self.origin, self.body, self.issues, self.moved = origin, body, issues or [], moved
-        self.reads = 0
+        self.origin, self.body, self.issues = origin, body, issues or []
+        self.after: str | None = None  # what the read after the record sees: a sha, or "lost"
 
     def __call__(self, endpoint: str, *extra: str, method: str = "GET"):
         if endpoint == f"repos/{REPO}/pulls/7" and method == "GET":
             self.calls.append((method, endpoint, *extra))
-            self.reads += 1
-            sha = self.moved if self.moved and self.reads > 2 else self.head
+            if self.after == "lost":
+                return None
+            sha = self.after or self.head
             return {"number": 7, "head": {"sha": sha}, "base": {"ref": "main"}, "body": self.body}
         if endpoint.endswith("/update-branch") and method == "PUT":
             git(self.origin, "update-ref", "refs/pull/7/head", self.new)
@@ -516,18 +517,25 @@ def local_world(tmp_path: Path, execution: str | None = "local", toml: str = "")
 
 
 class Runs:
-    """The stubbed prepush and evidence runs: each checks it runs in the scratch worktree of the
-    new head, and the prepush run writes the record to the clone's shared evidence folder."""
+    """The stubbed prepush and evidence runs (review item 1): the head's own prepush runs in the
+    scratch worktree of the new head under `env -i` with only PATH and a scratch HOME, and writes
+    the record to the clone's shared evidence folder; the check is the conductor's own
+    `evidence.py`, run in the conductor's checkout with its environment."""
 
-    def __init__(self, clone: Path, new: str, prepush: int = 0, check: str = "agrees"):
+    def __init__(self, clone: Path, new: str, prepush: int = 0, check: str = "agrees", digest=""):
         self.clone, self.new, self.prepush, self.check, self.argv = clone, new, prepush, check, []
         self.record = clone / ".git" / "agk-evidence" / f"{new}.json"
+        self.digest = digest or "0123456789ab"
 
     def __call__(self, argv: list[str], cwd: Path) -> tuple[int, str]:
         self.argv.append(argv)
-        assert git(cwd, "rev-parse", "HEAD") == self.new
-        assert Path(cwd).resolve() != self.clone.resolve()
-        if argv[1].endswith("prepush.py"):
+        if "prepush.py" in " ".join(argv):
+            assert git(cwd, "rev-parse", "HEAD") == self.new
+            assert Path(cwd).resolve() != self.clone.resolve()
+            home = self.clone / ".git" / "agk" / "reprove-7.home"
+            assert argv[:4] == ["env", "-i", f"PATH={os.environ.get('PATH', '')}", f"HOME={home}"]
+            argv = argv[4:]
+            assert Path(argv[1]) == Path(cwd) / "scripts" / "agk" / "prepush.py"
             assert argv[2:5] == ["--quick", "--record", "--body"]
             assert Path(argv[5]).read_text(encoding="utf-8").startswith("Brief: #70")
             self.record.parent.mkdir(parents=True, exist_ok=True)
@@ -535,8 +543,10 @@ class Runs:
             if self.prepush:
                 text = text.replace('"pr-body", "outcome": "ok"', '"governance", "outcome": "FAIL"')
             self.record.write_text(text, encoding="utf-8")
-            line = f"Evidence: prepush schema 1, head {self.new[:12]}, 1 steps ok, record ab12"
-            return self.prepush, line + " in the shared evidence folder\n"
+            line = f"Evidence: prepush schema 1, head {self.new[:12]}, 1 steps ok, record "
+            return self.prepush, line + f"{self.digest} in the shared evidence folder\n"
+        assert Path(cwd) == self.clone and argv[0] != "env"
+        assert Path(argv[1]) == self.clone / "scripts" / "agk" / "evidence.py"
         assert argv[2:4] == ["check", "--head"] and argv[4] == self.new
         line = EVIDENCE_LINE.format(self.new[:12]).replace("agrees", self.check)
         return (0 if self.check == "agrees" else 1), f"evidence: one note\n{line}\n"
@@ -552,9 +562,12 @@ def posted(stub) -> list[str]:
     return [c[-1] for c in stub.calls if c[0] == "POST"]
 
 
-def no_worktree(clone: Path) -> None:
+def no_worktree(clone: Path, body: bool = True) -> None:
     assert len(git(clone, "worktree", "list").splitlines()) == 1
     assert not (clone / ".git" / "agk" / "reprove-7").exists()
+    assert not (clone / ".git" / "agk" / "reprove-7.home").exists()
+    if body:  # review item 4: the body file goes with the worktree
+        assert not (clone / ".git" / "agk" / "reprove-7.body").exists()
 
 
 def test_local_mode_posts_the_record_and_the_local_evidence_line(tmp_path, monkeypatch, capsys):
@@ -569,7 +582,10 @@ def test_local_mode_posts_the_record_and_the_local_evidence_line(tmp_path, monke
     assert f"\n{local}\n" in body
     assert f"```json\n{RECORD_TEXT.format(new)}\n```" in body
     assert local in capsys.readouterr().out
-    assert [a[1].rsplit("/", 1)[-1] for a in runs.argv] == ["prepush.py", "evidence.py"]
+    assert [Path(a[5 if a[0] == "env" else 1]).name for a in runs.argv] == [
+        "prepush.py",
+        "evidence.py",
+    ]
     no_worktree(clone)
     verdict_ = {**verdict(new), "body": f"Verdict: cleared {new}\n\n{local}\n"}
     merge_cleared.local_evidence(verdict_, [verdict_], new, [])  # the copied line passes
@@ -604,6 +620,7 @@ def test_the_open_record_issue_takes_the_local_path_in_hosted_mode(tmp_path, mon
         ("gitleaks", "gitleaks"),
         ("deferred", "Secret-scan"),
         ("differs", "evidence differs"),
+        ("digest", "evidence differs"),
     ],
 )
 def test_a_failed_record_posts_none_and_exits_held(tmp_path, monkeypatch, capsys, case, reason):
@@ -611,7 +628,8 @@ def test_a_failed_record_posts_none_and_exits_held(tmp_path, monkeypatch, capsys
     body = BODY + ("Secret-scan: deferred to CI\n" if case == "deferred" else "")
     stub = LocalStub(origin, head, new, body=body)
     check = "differs" if case == "differs" else "agrees"
-    runs = Runs(clone, new, prepush=1 if case == "step" else 0, check=check)
+    digest = "fedcba987654" if case == "digest" else ""
+    runs = Runs(clone, new, prepush=1 if case == "step" else 0, check=check, digest=digest)
     local_stubbed(monkeypatch, stub, runs, gitleaks=case != "gitleaks")
     assert conductor.main(["reprove", "--pr", "7", "--apply"], clone) == 3
     [text] = posted(stub)
@@ -623,22 +641,59 @@ def test_a_failed_record_posts_none_and_exits_held(tmp_path, monkeypatch, capsys
     no_worktree(clone)
 
 
-def test_a_head_that_moves_again_posts_nothing(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize(("after", "said"), [("d" * 40, "head moved"), ("lost", "cannot be read")])
+def test_a_head_that_moves_again_or_cannot_be_read_posts_nothing(
+    tmp_path, monkeypatch, capsys, after, said
+):
     clone, origin, head, new = local_world(tmp_path)
-    stub = LocalStub(origin, head, new, moved="d" * 40)
-    local_stubbed(monkeypatch, stub, Runs(clone, new))
-    stub.reads = -10  # the update's own reads see NEW; the read after the record sees D
-    monkeypatch.setattr(conductor, "REPROVE_WAITS", 1)
+    stub, runs = LocalStub(origin, head, new), Runs(clone, new)
+    local_stubbed(monkeypatch, stub, runs)
 
-    def moved_after_record(argv, cwd):
-        stub.reads = 99
-        return Runs(clone, new)(argv, cwd)
+    def then_moved(argv, cwd):
+        stub.after = after  # the update's own reads saw NEW; the read after the record sees this
+        return runs(argv, cwd)
 
-    monkeypatch.setattr(conductor, "reprove_run", moved_after_record)
+    monkeypatch.setattr(conductor, "reprove_run", then_moved)
     assert conductor.main(["reprove", "--pr", "7", "--apply"], clone) == 3
     assert posted(stub) == []
-    assert "head moved" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert said in out and ("head moved" in out) is (after != "lost")
     no_worktree(clone)
+
+
+@pytest.mark.parametrize("case", ["git-dir", "folder", "body", "kit"])
+def test_a_failure_after_the_update_still_posts_the_none_line(tmp_path, monkeypatch, case):
+    """Review item 2: every failure after the PUT posts `Local evidence: none (...)`, exit 3."""
+    clone, origin, head, new = local_world(tmp_path)
+    stub, runs = LocalStub(origin, head, new), Runs(clone, new)
+    local_stubbed(monkeypatch, stub, runs)
+    agk = clone / ".git" / "agk"
+    if case == "git-dir":
+
+        def broken(root, *args):
+            raise conductor.CheckError("the clone's git folder cannot be read")
+
+        monkeypatch.setattr(conductor, "git_text", broken)
+    elif case == "folder":
+        agk.write_text("not a folder\n", encoding="utf-8")
+    elif case == "body":
+        (agk / "reprove-7.body").mkdir(parents=True)
+    else:
+
+        def refused(root, env=None):
+            raise conductor.kit_root.Refused(
+                "kit_root: no plugin root (setting: CLAUDE_PLUGIN_ROOT)"
+            )
+
+        monkeypatch.setattr(conductor.kit_root, "kit_dir", refused)
+    assert conductor.main(["reprove", "--pr", "7", "--apply"], clone) == 3
+    [text] = posted(stub)
+    assert text.startswith(f"body=Report: {new} {REPORT}\n") and "Local evidence: none (" in text
+    assert "```json" not in text and runs.argv == []
+    if case == "kit":
+        assert "(setting: CLAUDE_PLUGIN_ROOT)" in text and "no plugin root" not in text
+    if case != "folder":
+        no_worktree(clone, body=case != "body")
 
 
 def test_paused_updates_nothing(tmp_path, monkeypatch, capsys):

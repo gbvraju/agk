@@ -1996,7 +1996,10 @@ def reprove(root, number: int, apply: bool) -> int:
     if local:
         lines, line = reprove_record(root, number, new, str(pull.get("body") or ""))
         found = session.gh(f"repos/{repo}/pulls/{number}")
-        now = str(((found or {}).get("head") or {}).get("sha") or "") if found else ""
+        if not isinstance(found, dict):
+            print(f"{lead} the pull request cannot be read after the record; nothing posted")
+            return merge_cleared.EXIT_HELD
+        now = str((found.get("head") or {}).get("sha") or "")
         if now != new:
             print(f"{lead} head moved after the update; nothing posted")
             return merge_cleared.EXIT_HELD
@@ -2063,52 +2066,78 @@ def failed_step(path: Path) -> str:
 
 def reprove_record(root, number: int, new: str, body: str) -> tuple[str, str]:
     """Brief #1969 answers 1, 2 and 4: (the lines the Report gains, the `Local evidence:` value:
-    `<new> <Evidence check line> ...` on a passing record, else `none (<step or reason>)`)."""
+    `<new> <Evidence check line> ...` on a passing record, else `none (<step or reason>)`). Every
+    failure after the update, a folder, a write or the kit's resolution included, is a `none`."""
     if prepush_defer_line() in [x.strip() for x in body.splitlines()]:
         return none_line("Secret-scan deferred; not a ready record in local mode")
     if shutil.which("gitleaks") is None:
         return none_line("gitleaks is not installed (tool: gitleaks)")
-    git_dir = Path(git_text(root, "rev-parse", "--absolute-git-dir"))
-    common_dir = Path(git_text(root, "rev-parse", "--path-format=absolute", "--git-common-dir"))
-    scratch = git_dir / "agk" / f"reprove-{number}"
-    text = scratch.with_name(f"reprove-{number}.body")
-    fetch = ["fetch", "-q", "origin", f"refs/pull/{number}/head"]
     try:
-        scratch.parent.mkdir(parents=True, exist_ok=True)
-        git_code(root, "worktree", "remove", "--force", str(scratch))
-        if git_code(root, *fetch) or git_code(root, "worktree", "add", "-q", "--detach",
-                                              str(scratch), new):  # fmt: skip
-            return none_line("the scratch worktree of the head cannot be made")
-        text.write_text(body, encoding="utf-8")
-        kit = kit_root.kit_dir(scratch)
-        argv = [sys.executable, str(kit / "prepush.py"), "--quick", "--record", "--body", str(text)]
-        code, out = reprove_run(argv, scratch)
-        record = common_dir / "agk-evidence" / f"{new}.json"
-        evidence = [x for x in out.splitlines() if x.startswith("Evidence: ")]
-        if code != 0 or not evidence or not record.is_file():
-            return none_line(failed_step(record))
-        check = [
-            sys.executable,
-            str(kit / "evidence.py"),
-            "check",
-            "--head",
-            new,
-            "--body",
-            str(text),
-        ]
-        code, out = reprove_run(check, scratch)
-        agrees = [
-            x for x in out.splitlines() if x.startswith(f"Evidence check: agrees, head {new[:12]}")
-        ]
-        if code != 0 or not agrees:
-            return none_line("evidence differs")
-        line = f"{new} {agrees[-1].strip()} {RECORD_NOTE}"
-        data = record.read_text(encoding="utf-8").rstrip("\n")
-        return f"{evidence[-1].strip()}\nLocal evidence: {line}\n\n```json\n{data}\n```", line
+        git_dir = Path(git_text(root, "rev-parse", "--absolute-git-dir"))
+        common = Path(git_text(root, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    except CheckError:
+        return none_line("the clone's git folder cannot be read")
+    scratch = git_dir / "agk" / f"reprove-{number}"
+    text, home = (
+        scratch.with_name(f"reprove-{number}.body"),
+        scratch.with_name(f"reprove-{number}.home"),
+    )
+    try:
+        return record_in(root, scratch, text, home, common, number, new, body)
+    except OSError:
+        return none_line("the scratch folder or the body file cannot be written")
+    except (CheckError, kit_root.Refused) as exc:
+        return none_line(f"the kit cannot be resolved: {setting_of(str(exc))}")
     finally:
         git_code(root, "worktree", "remove", "--force", str(scratch))
         git_code(root, "worktree", "prune")
-        text.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            text.unlink(missing_ok=True)
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def setting_of(message: str) -> str:
+    """The `(setting: ...)` of a refusal, never the rest of its text."""
+    found = re.search(r"\(setting: [^)]*\)", message)
+    return found.group(0) if found else "(setting: layout)"
+
+
+def record_in(root, scratch, text, home, common, number, new, body) -> tuple[str, str]:
+    """The record step of answer 1 (review item 1): the head's own `prepush.py` runs in the scratch
+    worktree with only `PATH` and a scratch `HOME` (`env -i`, as the bounded governance run), and
+    the check is the conductor's own `evidence.py`, from the checkout of the default branch."""
+    scratch.parent.mkdir(parents=True, exist_ok=True)
+    git_code(root, "worktree", "remove", "--force", str(scratch))
+    fetch = ["fetch", "-q", "origin", f"refs/pull/{number}/head"]
+    made = ["worktree", "add", "-q", "--detach", str(scratch), new]
+    if git_code(root, *fetch) or git_code(root, *made):
+        return none_line("the scratch worktree of the head cannot be made")
+    text.write_text(body, encoding="utf-8")
+    home.mkdir(exist_ok=True)
+    sandbox = ["env", "-i", f"PATH={os.environ.get('PATH', '')}", f"HOME={home}"]
+    kit = kit_root.kit_dir(scratch)
+    run = [sys.executable, str(kit / "prepush.py"), "--quick", "--record", "--body", str(text)]
+    code, out = reprove_run([*sandbox, *run], scratch)
+    record = common / "agk-evidence" / f"{new}.json"
+    evidence = [x.strip() for x in out.splitlines() if x.startswith("Evidence: ")]
+    if code != 0 or not evidence or not record.is_file():
+        return none_line(failed_step(record))
+    own = kit_root.kit_dir(Path(root))
+    check = [sys.executable, str(own / "evidence.py"), "check", "--head", new, "--body", str(text)]
+    code, out = reprove_run(check, Path(root))
+    lead = f"Evidence check: agrees, head {new[:12]}"
+    agrees = [x.strip() for x in out.splitlines() if x.startswith(lead)]
+    if code != 0 or not agrees or digest(evidence[-1]) != digest(agrees[-1]):
+        return none_line("evidence differs")
+    line = f"{new} {agrees[-1]} {RECORD_NOTE}"
+    data = record.read_text(encoding="utf-8").rstrip("\n")
+    return f"{evidence[-1]}\nLocal evidence: {line}\n\n```json\n{data}\n```", line
+
+
+def digest(line: str) -> str | None:
+    """The `record <sha12>` of an `Evidence:` or `Evidence check:` line."""
+    found = re.search(r"\brecord ([0-9a-f]{12})", line)
+    return found.group(1) if found else None
 
 
 def none_line(reason: str) -> tuple[str, str]:

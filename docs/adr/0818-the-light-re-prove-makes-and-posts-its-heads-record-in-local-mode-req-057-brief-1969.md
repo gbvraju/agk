@@ -20,10 +20,13 @@ from 2026-11-18 to 2026-11-26, median 24 minutes each (brief #1969's measurement
 
 1. **The record step.** In local mode, as `merge_cleared.local_mode` reads the default branch as last fetched and the
    open issues, `reprove --apply`, after it reads the new head, fetches it, adds a detached scratch worktree at it under
-   `<git dir>/agk/reprove-<n>`, writes the pull request body to a file beside (not inside) it, runs
-   `prepush.py --quick --record --body <file>` there (the record goes to the clone's shared evidence folder; prepush
-   holds the heavy lock itself) and then `evidence.py check --head <new> --body <file>`, both from the kit folder that
-   `kit_root.kit_dir` resolves for the worktree, and removes the worktree and the body file in every case.
+   `<git dir>/agk/reprove-<n>`, writes the pull request body to a file beside (not inside) it, and runs the head's own
+   `prepush.py --quick --record --body <file>` there under `env -i` with only `PATH` and a scratch `HOME` beside the
+   worktree, as the bounded governance run does, so the head's code never sees the conductor's credentials (the record
+   goes to the clone's shared evidence folder; prepush holds the heavy lock itself). Then the conductor's own
+   `evidence.py check --head <new> --body <file>` (`kit_root.kit_dir` of its checkout of the default branch, ADR-0542)
+   checks it, and its `record` digest must equal the `Evidence:` line's. The worktree, the body file and the scratch
+   `HOME` are removed in every case.
 2. **The Report carries it.** On a passing run whose check agrees, the one `Report: <new head> merge of main (light
    re-prove, SPEC-0050 amendment 171)` comment gains the `Evidence:` line, one line `Local evidence: <new head>
    <the Evidence check line> (the conductor's light re-prove record)` and the record byte for byte in one fenced `json`
@@ -32,7 +35,8 @@ from 2026-11-18 to 2026-11-26, median 24 minutes each (brief #1969's measurement
 3. **The verdict reads it.** `.claude/agents/conductor.md` says that on a head the conductor's light re-prove made, the
    `Local evidence:` line of that `Report:` stands for the builder's line. `merge_cleared.local_evidence` is unchanged.
 4. **A failure goes back to a builder.** A failed prepush step, no gitleaks, a body line `Secret-scan: deferred to CI`
-   (Q-1713-2), `Evidence check: differs`, or a head or worktree that cannot be made: the Report is posted with one line
+   (Q-1713-2), `Evidence check: differs` or a different digest, or any failure after the update (the git folder,
+   the worktree, a write or the kit's resolution): the Report is posted with one line
    `Local evidence: none (<step or reason>)` and no record, and the command exits 3 so the sweep's re-prove handover
    (ADR-0725) restarts a builder. The reason names a step or a setting, never a value or an output.
 5. **Settings.** `hosted`, `hybrid` or `pool` with no record issue: today's Report, no prepush. Another `execution`
