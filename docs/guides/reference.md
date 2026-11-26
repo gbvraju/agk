@@ -474,7 +474,7 @@ nothing; the conductor guard allows exactly these forms.
 Both also read the Tells to the conductor's id (its lease name, else `AGK_SESSION` with `AGK_ROLE=conductor`) on the
 open `agk-conductor` issue (brief #1970, ADR-0823): `watch` ends on a new one with `<issue> Tell: <id> <message>`, and `sweep`
 prints each unread one once as `TELL <comment id> reply-to <steward session|none>: <line>` (the steward's session only for a
-Tell it signed), moving the `inbox` mark in the git directory after it printed them; with no id, no listed author or a failed
+Tell signed `Who: AGK steward`), moving the `inbox` mark in the git directory after it printed them; with no id, no listed author or a failed
 read it prints one `TELL:` line naming what is missing; with no `agk-conductor` issue it prints none.
 
 `merge-queue` (brief #643 build (b), ADR-0329) is the batched merge: with `auto_merge` on, it judges every open pull request by

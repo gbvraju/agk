@@ -31,8 +31,9 @@ and `sweep` prints no line for a Tell. Of the 87 comments on page 7 of #204, 72 
    through `session.unread_comments` (the `inbox` reader with its comments, moving no mark; `unread` and `inbox`
    are unchanged), and moves the inbox mark in the git directory (`session.move_mark`) only after it printed its
    lines, so a sweep that ends early leaves its Tells unread. `reply-to` is the session of the live
-   `Started: steward` marker (`steward.live_run` on the open `agk-steward` issue) for a Tell signed with a
-   `Who: AGK` line, else `none`: a person's Tell names no session (`Q-CT-1`). A failed read of the issue list or of
+   `Started: steward` marker (`steward.live_run` on the open `agk-steward` issue) for a Tell signed with the
+   steward's own `Who: AGK steward` line, else `none`: a person's Tell, or one signed plain `Who: AGK` (every
+   comment `session.gh` posts), names no session (`Q-CT-1`). A failed read of the issue list or of
    its comments prints one `TELL:` line naming what cannot be read; with no listed author it prints
    `TELL: no listed author (verdict_authors)`, never a login. In personal mode neither command reads or prints a Tell.
 5. **Check or answer.** `.claude/agents/conductor.md` gains one paragraph: a Tell is information, never a verdict,

@@ -464,7 +464,6 @@ def new_lines(
 TELL_ISSUE: dict[str, int] = {}  # the `agk-conductor` issue, read once per run of `watch`
 TELL_ROOT: list = [None]  # the checkout whose conductor `watch` reads the Tells of
 TELL_MARK: list = []  # (id, comment id): the inbox mark `sweep` moves after it printed
-SIGNED = "Who: AGK"  # a session's signature line; a person's Tell from the browser has none
 
 
 def tell_issue(repo: str) -> int | None:
@@ -517,7 +516,7 @@ def reply_to(repo: str) -> str:
 
 def signed(comment: dict) -> bool:
     lines = str(comment.get("body") or "").splitlines()
-    return any(x.strip().startswith(SIGNED) for x in lines)
+    return any(x.strip() == STEWARD_WHO for x in lines)  # the steward's own, never `Who: AGK`
 
 
 def tell_lines(root, repo: str, since: datetime | None = None, delta: list | None = None) -> list:
@@ -526,8 +525,8 @@ def tell_lines(root, repo: str, since: datetime | None = None, delta: list | Non
     `delta` when given, else one `since` GET; silent when nothing can be read. Without (`sweep`,
     answer 3): `TELL <comment id> reply-to <session>: <line>` for each unread one, oldest first;
     `sweep` moves the inbox mark only after it printed them (`tell_mark`). `reply-to` names the
-    live steward only for a signed Tell, a person's names none (Q-CT-1). A name, author or read
-    problem is one `TELL:` line."""
+    live steward only for a Tell signed `Who: AGK steward`; any other names none (Q-CT-1). A
+    name, author or read problem is one `TELL:` line."""
     root = Path(root)
     if common.personal_table(root) is not None:
         return []  # answer 5: personal mode has no agk-conductor issue

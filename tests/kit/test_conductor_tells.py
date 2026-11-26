@@ -222,14 +222,18 @@ def test_1970_sweep_prints_each_unread_tell_once_with_the_live_steward(gh):
 
 
 def test_1970_a_persons_tell_or_no_live_steward_says_reply_to_none(gh):
-    """REQ-037: brief #1970 answer 3 and Q-CT-1 (fix list item 5): a person's Tell carries no
-    session's signature and names no session; a stale steward marker names none either."""
+    """REQ-037: brief #1970 answer 3 and Q-CT-1 (fix list item 5, and item 1 on 66b79bc3): only a
+    Tell signed `Who: AGK steward` names the steward; a person's, or one signed plain `Who: AGK`,
+    names no session; a stale steward marker names none either."""
     gh.steward = [said(51, "Started: steward st-agk-day 2026-11-26T04:00Z", 30, issue=300)]
     gh.comments = [said(14, "Tell: conductor-long merge #21", 5)]
     assert sweep_tells(gh) == ["TELL 14 reply-to none: Tell: conductor-long merge #21"]
+    plain = "\n\nWho: AGK\n"  # every comment `session.gh` posts: a terminal or a builder (item 1)
+    gh.comments.append(said(23, "Tell: conductor-long merge #23", 4, sign=plain))
+    assert sweep_tells(gh) == ["TELL 23 reply-to none: Tell: conductor-long merge #23"]
     gh.steward = [said(52, "Started: steward st-old 2026-11-26T01:00Z", 200, issue=300)]
-    gh.comments.append(said(15, "Tell: conductor-long merge #22", 4, sign=STEWARD_SIGN))
-    assert sweep_tells(gh) == ["TELL 15 reply-to none: Tell: conductor-long merge #22"]
+    gh.comments.append(said(25, "Tell: conductor-long merge #22", 4, sign=STEWARD_SIGN))
+    assert sweep_tells(gh) == ["TELL 25 reply-to none: Tell: conductor-long merge #22"]
 
 
 def test_1970_the_conductor_id_is_the_lease_else_its_session(gh, monkeypatch):
