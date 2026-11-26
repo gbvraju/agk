@@ -1,0 +1,1 @@
+- Metrics: the weekly `pr tests:` lines read one job log per pull request (its last head's latest full governance run), count a `full_when_share` run as `share`, say the class of each read that failed (`rate-limited`, `refused`, `failed`) and read only the newest pull requests that fit the hourly limit, saying so (brief #2012, ADR-0833)
