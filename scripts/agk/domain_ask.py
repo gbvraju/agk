@@ -18,8 +18,8 @@ these" records a `Decision:` and writes nothing; a yes writes `[domain] packs` a
 project ADR on the branch `steward/domain` in solo mode with one person, and prints only
 otherwise. A plain yes is refused in team mode, naming `review_mode`. `agk.toml` is written only
 here, from a recorded ask, after a reply with a question, a condition or a no is refused; a
-number is a choice only as the whole reply. A session whose `AGK_ROLE` is not `steward`, or is
-unset, is refused. Reads files
+number is a choice only as the whole reply. A session whose `AGK_ROLE` is set to a role other
+than `steward` is refused; the person's own session sets none. Reads files
 and local git only: no network, no model.
 """
 
@@ -53,7 +53,8 @@ NEGATIVE = re.compile(r"\b(?:no|nope|never|don't|dont|do not|stop|wait)\b", re.I
 
 
 def _role() -> str | None:
-    if os.environ.get("AGK_ROLE") != "steward":  # an unset role is refused too (fix list item 3)
+    role = os.environ.get("AGK_ROLE")  # unset in the person's own session (/agk:grill step 1)
+    if role and role != "steward":
         return "refused: only the steward asks for the domain (setting: AGK_ROLE)"
     return None
 

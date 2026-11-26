@@ -148,7 +148,8 @@ def test_ac3_past_the_budget_a_playbook_held_id_is_not_asked_again(tmp_path, mon
 
     root = grill_project(tmp_path, ["zz-law"])
     own = [i[0] for i in grill.composed(root, None) if not i[0].startswith("zz-")]
-    taken = own[-2]  # a playbook item, not yet answered below
+    light = [i[0] for i in grill.composed(root, None) if i[2] == "light" and i[0] in own]
+    taken = light[-2]  # a light playbook item (the verdict on 16b0e66a), not answered below
     real = check_domains.items
 
     def items(r):
@@ -449,22 +450,30 @@ def test_ac3_a_declared_domain_is_kept(env):
     assert propose(project(tmp / "b", paid))[1] == ["domain: declared; nothing to propose"]
 
 
-@pytest.mark.parametrize("role", ["builder", None])
-def test_ac3_a_builder_or_unset_role_is_refused(env, monkeypatch, role):
-    """REQ-081 AC3: answer 2 (fix list item 3), only the steward asks or writes the domain."""
+def test_ac3_the_grills_own_call_with_no_role_passes(env, monkeypatch):
+    """REQ-081 AC3: answer 2 (the correction on 16b0e66a), `/agk:grill` step 1 in the person's
+    own session sets no `AGK_ROLE`; its `domain --propose` and the yes pass."""
     tmp, _ = env
     root = project(tmp)
-    if role is None:
-        propose(root)
-        monkeypatch.delenv("AGK_ROLE")
-        code, lines = yes(tmp, root)
-        assert code == 2 and "AGK_ROLE" in lines[0] and packs_of(root) is None
-        assert propose(root)[0] == 2
-        return
+    monkeypatch.delenv("AGK_ROLE")
+    assert propose(root)[0] == 0
+    code, lines = yes(tmp, root)
+    assert code == 0, lines
+    assert packs_of(root) == {"packs": ["payments"]}
+
+
+@pytest.mark.parametrize("role", ["builder", "conductor"])
+def test_ac3_a_builder_or_other_role_is_refused(env, monkeypatch, role):
+    """REQ-081 AC3: answer 2, only the steward, or the person's own session, asks."""
+    tmp, _ = env
+    root = project(tmp)
+    propose(root)
     monkeypatch.setenv("AGK_ROLE", role)
+    code, lines = yes(tmp, root)
+    assert code == 2 and "AGK_ROLE" in lines[0] and packs_of(root) is None
     code, lines = propose(root)
     assert code == 2 and "AGK_ROLE" in lines[0]
-    assert steward_owner.load_asks(root) == []
+    assert [a["open"] for a in steward_owner.load_asks(root)] == [True]  # the steward's ask stands
 
 
 def test_ac3_an_old_ask_is_refused_past_owner_wait(env):
