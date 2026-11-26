@@ -116,7 +116,8 @@ def test_req037_a_check_leaves_or_joins_the_set_by_its_own_walk(tmp_path):
 
 def test_req037_the_offline_checks_and_the_base_modules_walk_clean_on_main():
     """REQ-037: brief #1972 answer 7 (each base module and each offline check of main stays in
-    the set, so a later network import into `guard.py` fails here)."""
+    the set, so a later module-level network import into `guard.py` fails here; the walk of a
+    member leaves function bodies out, Q-1972-2)."""
     from rules import KIT_IMPORTS, kit_imports
 
     found = kit_imports(KIT)
@@ -156,6 +157,13 @@ def test_req037_a_path_outside_scripts_agk_or_a_broken_file_is_refused(tmp_path,
     code, out = run(capsys, "elsewhere.py", "--root", str(root))
     assert (code, out) == (2, ["Imports: refused: the script is outside scripts/agk/"])
     assert "elsewhere" not in out[0]
+    (root / "scripts" / "agk" / "gates").mkdir()
+    (root / "scripts" / "agk" / "gates" / "x.py").write_text("import json\n", encoding="utf-8")
+    code, out = run(capsys, "scripts/agk/gates/x.py", "--root", str(root))
+    assert (code, out) == (
+        2,
+        ["Imports: refused: the script is in a package under scripts/agk/, not a script of it"],
+    )
     code, out = run(capsys, "scripts/agk/broken.py", "--root", str(root))
     assert (code, out) == (2, ["Imports: refused: a file of scripts/agk/ does not parse"])
     code, out = run(capsys, "--root", str(root))
@@ -182,6 +190,9 @@ def test_req037_check_brief_warns_on_the_phrase_and_is_silent_without_it():
 
     assert phrase_warnings("Uses the standard library and `common.py` only.") == [IMPORTS_WARNING]
     assert phrase_warnings("Uses the standard library and common.py only.") == [IMPORTS_WARNING]
+    assert phrase_warnings("Uses only the standard library and common.py.") == [IMPORTS_WARNING]
+    assert phrase_warnings("Only standard library and `common.py`.") == [IMPORTS_WARNING]
+    assert phrase_warnings("STANDARD LIBRARY AND COMMON.PY ONLY") == [IMPORTS_WARNING]
     assert phrase_warnings("Uses the standard library only.") == []
     assert IMPORTS_WARNING.startswith("ADR-0824: ")
 

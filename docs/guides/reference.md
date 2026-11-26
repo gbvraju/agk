@@ -520,7 +520,7 @@ replaces the stop on an existing pull request with the follow-up for it. The gua
 ## Kit script imports
 
 Where an Approved spec or a brief says a new kit script uses the "standard library and `common.py` only", the words
-read as the standard library less its network modules plus the kit's offline set (ADR-0824): `common`, `guard`,
+read, once ADR-0824 is Accepted, as the standard library less its network modules plus the kit's offline set (ADR-0824): `common`, `guard`,
 `config`, `playbook_format`, `kit_root`, `tree_walk` and every `check_*.py` whose module-level imports stay within that
 set. `python3 scripts/agk/rules.py imports scripts/agk/<script>.py` prints `Imports: <script> within the standing
 ruling (ADR-0824)` (exit 0) or one `outside ... : ask the owner` line per module (exit 1); with the ADR not Accepted,

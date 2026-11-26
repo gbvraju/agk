@@ -312,7 +312,10 @@ NETWORK = frozenset(
     ("urllib", "http", "socket", "ssl", "ftplib", "smtplib", "poplib", "imaplib", "nntplib")
     + ("xmlrpc", "webbrowser")
 )
-IMPORTS_PHRASE = re.compile(r"standard library and `?common\.py`? only")
+IMPORTS_PHRASE = re.compile(  # either word order, any case
+    r"standard library and `?common\.py`? only|only (?:the )?standard library and `?common\.py`?",
+    re.I,
+)
 IMPORTS_WARNING = (
     f'{IMPORTS_ADR}: "standard library and common.py only" is read as the kit\'s offline set; '
     "name in Questions any other kit module the build needs"
@@ -411,7 +414,12 @@ def imports(root: Path, script: str) -> int:
     path = path.resolve()
     folders = {(root / "scripts" / "agk").resolve(), Path(__file__).resolve().parent}
     if path.suffix != ".py" or path.parent not in folders or not path.is_file():
-        print("Imports: refused: the script is outside scripts/agk/")
+        inner = any(f in path.parents for f in folders) and path.parent not in folders
+        print(
+            "Imports: refused: the script is in a package under scripts/agk/, not a script of it"
+            if inner
+            else "Imports: refused: the script is outside scripts/agk/"
+        )
         return 2
     tree = _parsed(path)
     if tree is None:

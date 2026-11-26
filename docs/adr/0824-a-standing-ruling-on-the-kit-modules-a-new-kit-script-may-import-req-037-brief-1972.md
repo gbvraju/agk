@@ -2,7 +2,7 @@
 
 - Status: Proposed
 - Date: 2026-11-26
-- Deciders: maintainers (the owner's standing decision)
+- Deciders: maintainers (waits for the owner's answers to Q-KI-1, Q-KI-2 and Q-1972-2)
 - Related: ADR-0583, ADR-0514, ADR-0749, ADR-0404, ADR-0310, ADR-0759, ADR-0372, SPEC-0056, SPEC-0073, SPEC-0074, SPEC-0075, amendment 245, amendment 246, brief #1972, brief #1954, plan #661
 - Requirements: REQ-037
 
@@ -14,9 +14,12 @@ Four Approved specs say a new installed script uses the "standard library and `c
 (`check_runbooks.py`), SPEC-0073 rule 2 (`grill.py`), SPEC-0074 rule 2 (`check_domains.py`) and SPEC-0075 rule 3
 (`check_data_patterns.py`). Each build imports the kit's offline readers too (`guard`, `config`, `playbook_format`,
 offline sibling checks), and on 2026-11-25 the same reading was ruled four times in about eight hours (Q-1935-2 on
-#1947, amendments 245 and 246, Q-1954-A on #1961). The owner's word (#1947, 2026-11-25T18:49:05Z, quoted as data):
-"Maintainer answer: Q-1935-2 accept the imports"; and on the freeze (2026-11-26T04:21Z): "File both and work on
-creating the brief for all pending on freeze . Go ahead and park them".
+#1947, amendments 245 and 246, Q-1954-A on #1961). The owner's answer on #1947 (comment 7171440802,
+2026-11-25T18:49:05Z, quoted as data): "Maintainer answer: Q-1935-2 accept the imports" was a one-off answer for
+`check_domains.py`, not a standing ruling; and on the freeze (2026-11-26T04:21Z): "File both and work on creating the
+brief for all pending on freeze . Go ahead and park them". No owner line grants this ruling yet: the decision below is
+proposed and waits for the owner's answers to Q-KI-1 (the reading of the four spec lines), Q-KI-2 (the base set) and
+Q-1972-2 (the walk depth of a member).
 
 ## Decision
 
@@ -55,5 +58,7 @@ level (Q-1972-1).
 
 - 2026-11-26: whether `domain_model` joins `KIT_IMPORTS` (it is neither a base module nor a check) is the owner's
   (Q-1972-1); until then `check_domains.py` and `domain_model.py` print an `outside` line.
+- 2026-11-26: a member's walk leaves function bodies out, so `check_pr_body` is a member though it imports `session`,
+  which imports `http.client` and `ssl` inside functions; whether the walk goes deeper is the owner's (Q-1972-2).
 - 2026-11-26: the command reads imports only; whether a script calls a network function of `common.py` is proved by
   that script's own tests (Q-KI-4).
