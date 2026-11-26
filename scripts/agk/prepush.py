@@ -967,6 +967,39 @@ def selected_workers(
     return made, list(dict.fromkeys(lines))
 
 
+TRAILING_WORKERS = re.compile(r" -n ([1-9][0-9]*)$")  # the one form `pytest_workers` writes
+
+
+def split_workers(command: str, root: Path) -> tuple[str, int]:
+    """COMMAND without its worker part and the worker count (1 when it has none; brief #2005,
+    ADR-0829): a trailing ` -n <n>` that `pytest_workers` adds, or ROOT's `parallel_command` with
+    `{workers}` filled, read as its template. Any other command is returned as it is."""
+    found = TRAILING_WORKERS.search(command)
+    if found:
+        return command[: found.start()], int(found.group(1))
+    try:
+        template = parallel_command(root)
+    except (CheckError, OSError, ValueError):
+        template = None
+    if isinstance(template, str) and "{workers}" in template:
+        parts = [re.escape(part) for part in template.split("{workers}")]
+        filled = re.fullmatch("([1-9][0-9]*)".join(parts), command)
+        if filled and len(set(filled.groups())) == 1:
+            return template, int(filled.group(1))
+    return command, 1
+
+
+def without_workers(command: str, root: Path) -> str:
+    """COMMAND with the worker part taken out (`split_workers`), so that a record made where the
+    worker count differs reads as the same run (brief #2005 answer 1)."""
+    return split_workers(command, root)[0]
+
+
+def worker_count(command: str, root: Path) -> int:
+    """The worker count of COMMAND (`split_workers`): 1 when it has no worker part."""
+    return split_workers(command, root)[1]
+
+
 def workers_notes(root: Path, sets: list[tuple[str, str, str, str]]) -> list[str]:
     """The one line `tests: <n> workers (...)` when a run of SETS starts in workers: a command
     that `pytest_workers` gave `-n <n>`, or the full run's filled `parallel_command` (brief

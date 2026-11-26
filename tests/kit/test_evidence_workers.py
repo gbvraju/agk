@@ -39,7 +39,8 @@ def tree(tmp_path: Path, parallel: str | None = None) -> Path:
 def record(runs: list[dict]) -> dict:
     argv = ["python3", "scripts/agk/test_plan.py", "--json", "--base", "mb", "--head", "HEAD"]
     step = {"name": "tests", "argv": argv, "cwd": ".", "exit": 0, "outcome": "ok"}
-    step.update({"output_sha256": "0" * 64, "quick": True, "runs": runs})
+    quick = all(item["set"] == "whole" for item in runs)  # a whole run only in a quick record
+    step.update({"output_sha256": "0" * 64, "quick": quick, "runs": runs})
     return {"head": "a" * 40, "base": "b" * 40, "steps": [step]}
 
 
@@ -97,14 +98,16 @@ def test_whole_and_regression_runs_with_four_agree_with_a_plan_of_two(tmp_path, 
     """REQ-051: answers 1, 2 and 9 (every planned set with another count; the replay is the
     plan's command and the note names the two counts)."""
     root = tree(tmp_path)
-    runs = [run("whole", f"{PY} -n 4"), run("app", f"{PY} -n 4", "regression")]
-    planned = {("whole", "whole"): f"{PY} -n 2", ("regression", "app"): f"{PY} -n 2"}
-    units, diffs, notes = rebuilt(root, runs, planned)
-    assert diffs == []
-    assert units["tests/whole/whole"].command == f"{PY} -n 2"
-    assert units["tests/regression/app"].command == f"{PY} -n 2"
-    assert "workers: tests/whole/whole recorded 4, replayed 2" in notes
-    assert "workers: tests/regression/app recorded 4, replayed 2" in notes
+    for name, set_, label in [
+        ("whole", "whole", "tests/whole/whole"),
+        ("app", "regression", "tests/regression/app"),
+        ("full", "proof", "tests/full"),
+    ]:
+        planned = {(set_, name): f"{PY} -n 2"}
+        units, diffs, notes = rebuilt(root, [run(name, f"{PY} -n 4", set_)], planned)
+        assert diffs == []
+        assert units[label].command == f"{PY} -n 2"
+        assert f"workers: {label} recorded 4, replayed 2" in notes
 
 
 def test_a_single_run_agrees_with_a_plan_in_workers_and_the_reverse(tmp_path, rebuilt):

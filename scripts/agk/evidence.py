@@ -35,7 +35,12 @@ different output digest is a note, never a failure, since outputs carry timings.
 `timing` object (SPEC-0044 rule 3) is accepted in its one form and never re-run or compared.
 The full run's command is rebuilt with `[testing] workers` as prepush builds it (SPEC-0044 rule
 4, `prepush.full_command`) and each selected run with `prepush.selected_workers` (brief #980,
-ADR-0422), so a record made with workers agrees on the same machine.
+ADR-0422), so a record made with workers agrees on the same machine. Brief #2005 (ADR-0829): the
+recorded and the planned command are compared through `prepush.without_workers`, which takes out a
+trailing ` -n <n>` or reads a filled `parallel_command` as its template; such a run is replayed
+with the planned command and noted `workers: <name> recorded <r>, replayed <p>`. Anything else
+(another file, option or interpreter, `-n auto`, `-n` not at the end) still differs by `command`,
+and a single run matches a planned run in workers and the reverse.
 Governance and the re-runs hold the heavy-step lock (`lock.py`, name `heavy`), unless the caller
 already holds it. Each command runs in its own process group, and on a timeout, a signal or an
 error its whole tree is killed before the lock is released and the worktree is removed, also on a
@@ -133,6 +138,8 @@ from prepush import (
     shared_record,
     stop_signals,
     take_lock,
+    without_workers,
+    worker_count,
 )
 from proof import WINDOWS, kill_tree, popen_options
 
@@ -605,11 +612,15 @@ def rebuild(
                     differ(label, "name")
                     continue
                 command, folder = planned[key]
-                if run["command"] != safe_command(command, tree):
+                wanted = safe_command(command, tree)
+                if without_workers(run["command"], tree) != without_workers(wanted, tree):
                     differ(label, "command")
                 elif run["cwd"] != safe_cwd(folder, tree):
                     differ(label, "cwd")
                 else:
+                    r, p = worker_count(run["command"], tree), worker_count(wanted, tree)
+                    if r != p:  # brief #2005 answer 2: replayed with the plan's own count
+                        notes.append(f"workers: {label} recorded {r}, replayed {p}")
                     units[label] = Unit(
                         label, folder, run["exit"], run.get("output_sha256"), command=command
                     )
