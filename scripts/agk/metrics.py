@@ -38,6 +38,7 @@ from common import (
     agent_apps,
     config_source,
     covered_fix_list,
+    execution,
     final_accepts,
     git,
     matches,
@@ -103,21 +104,43 @@ PAGE = 100
 
 # --- the sources ------------------------------------------------------------------------------
 
+ERROR_KEYS = {"message", "documentation_url", "status"}  # the body of a GitHub error answer
+HTTP_STATUS = re.compile(r"\(HTTP (\d{3})\)")  # `gh api`'s error line on stderr
+RATE_LIMITED = re.compile(r"rate limit", re.IGNORECASE)
+
+
+def failure_class(status: str, text: str) -> str:
+    """Brief #2012 answer 3: `rate-limited` for a 429, or a 403 that GitHub says is a rate limit,
+    `refused` for another 4xx, `failed` otherwise."""
+    if status == "429" or (status == "403" and RATE_LIMITED.search(text)):
+        return "rate-limited"
+    return "refused" if len(status) == 3 and status.startswith("4") else "failed"
+
+
 
 class ApiDir:
     """Recorded responses: one JSON file per request, named as in SPEC-0007 rule 20."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        self.failed: dict[str, str] = {}
 
     def get(self, name: str, endpoint: str, until: Any = None) -> Any:
         file = self.path / f"{name}.json"
         if not file.is_file():
             return None
         try:
-            return json.loads(file.read_text(encoding="utf-8"))
+            data = json.loads(file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             raise CheckError(f"{name}.json in --api-dir is not JSON (path class api-dir)") from None
+        if isinstance(data, dict) and "status" in data and set(data) <= ERROR_KEYS:
+            self.failed[name] = failure_class(str(data["status"]), str(data.get("message")))
+            return None  # a recorded error answer (brief #2012 answer 3)
+        return data
+
+    def why(self, name: str) -> str | None:
+        """The class of a recorded read that failed, or None."""
+        return self.failed.get(name)
 
 
 class Gh:
@@ -126,6 +149,8 @@ class Gh:
     def __init__(self, repo: str) -> None:
         self.repo = repo
         self.seen: dict[tuple[str, str], Any] = {}
+        self.failed: dict[str, str] = {}
+        self.last: str | None = None  # the class of the last failed call; None after an answer
 
     def raw(self, endpoint: str) -> str | None:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
@@ -135,7 +160,16 @@ class Gh:
             encoding="utf-8",
             errors="replace",
         )
-        return proc.stdout if proc.returncode == 0 else None
+        if proc.returncode == 0:
+            self.last = None
+            return proc.stdout
+        status = HTTP_STATUS.search(proc.stderr or "")
+        self.last = failure_class(status[1] if status else "", f"{proc.stdout} {proc.stderr}")
+        return None
+
+    def why(self, name: str) -> str | None:
+        """The class of a read that failed (brief #2012 answer 3), or None."""
+        return self.failed.get(name)
 
     def one(self, endpoint: str) -> Any:
         out = self.raw(endpoint)
@@ -150,7 +184,10 @@ class Gh:
         """One read per name and endpoint: the record and the testing lines read the same runs."""
         key = (name, endpoint)
         if key not in self.seen:
+            self.last = None
             self.seen[key] = self.read(name, endpoint, until)
+            if self.seen[key] is None:
+                self.failed[name] = self.last or "failed"
         return self.seen[key]
 
     def read(self, name: str, endpoint: str, until: Any = None) -> Any:
@@ -756,7 +793,7 @@ PROJECT_FULL = re.compile(r"project tests: full \((?P<reason>.*)\)")
 PROJECT_SELECTED = "project tests: pr_tests selected"
 LISTED = re.compile(r"unmapped \(no \[testing\] map entry covers it\): (?P<path>.+)")
 UNNAMED = re.compile(r"unmapped: (?P<path>.+) -> 0 tests that name it")
-FULL_KINDS = ("always_full", "unmapped", "thorough", "other")
+FULL_KINDS = ("always_full", "unmapped", "share", "thorough", "other")
 FULL_PATHS_SHOWN = 5
 SLOWEST_SHOWN = 10  # the weekly report's slowest test files (brief #878 answer 4)
 WORKERS_LINE = re.compile(r"(\d+) workers? \[\d+ items?\]")
@@ -1092,6 +1129,8 @@ def full_kind(reason: str | None) -> str:
         return "always_full"
     if text.startswith("profile balanced:"):
         return "unmapped"
+    if text.startswith("selection "):
+        return "share"  # `[testing] full_when_share` (ADR-0422 rule 3, brief #2012 answer 2)
     return "thorough" if text == "profile thorough" else "other"
 
 
@@ -1107,64 +1146,157 @@ def median_minutes(values: list[int]) -> str:
     return f"{tenths(Decimal(str(median(values))) / 60)} minutes" if values else UNKNOWN
 
 
-def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, str, str, str]:
-    """Brief #773 answer 4: of each governance run of a pull request's commits, the mode of its
-    tests, the minutes of its test step, the reason of a full run and the paths behind it; brief
-    #878 answer 5: the median minutes of each mode and each full run's reason."""
-    selected, seconds, unknown = 0, 0, 0
+class OutOfCalls(Exception):
+    """The hourly allowance ran out before a read (brief #2012 answer 3)."""
+
+
+class Metered:
+    """A source that counts each read as it is made and stops at the allowance (None: no limit)."""
+
+    def __init__(self, src: Any, left: int | None) -> None:
+        self.src, self.left = src, left
+
+    def get(self, name: str, endpoint: str, until: Any = None) -> Any:
+        if self.left is not None:
+            if self.left <= 0:
+                raise OutOfCalls
+            self.left -= 1
+        return self.src.get(name, endpoint, until)
+
+    def why(self, name: str) -> str | None:
+        return failed_as(self.src, name) if hasattr(self.src, "why") else None
+
+
+def failed_as(src: Any, name: str) -> str:
+    why = getattr(src, "why", None)
+    return (why(name) if callable(why) else None) or "failed"
+
+
+def tested_run(src: Any, sha: Any) -> tuple[str, Any]:
+    """Brief #2012 answer 1: the latest `governance` run of event `pull_request` of SHA that ran
+    its test step, other than an edited one, and that run's one log: (`ran`, (seconds, log)),
+    (`none`, None) when no such run ran tests, or (`unknown`, the class of what failed)."""
+    runs = runs_of(src, sha)
+    if runs is None:
+        return UNKNOWN, failed_as(src, f"runs-{sha}")
+    for run_ in newest_first(runs):
+        if not is_governance(run_) or run_.get("event") != "pull_request":
+            continue
+        if run_.get("name") == "governance edited":
+            continue  # its test step is skipped by rule (ADR-0359)
+        jobs = jobs_of(src, run_.get("id"))
+        if jobs is None:
+            return UNKNOWN, failed_as(src, f"run-jobs-{run_.get('id')}")
+        state, took, job = pr_test_step(jobs)
+        if state == "not-run":
+            continue
+        if state == UNKNOWN or job is None or took is None:
+            return UNKNOWN, "not ended"
+        name = f"job-log-{job.get('id')}"
+        log = src.get(name, f"repos/{{repo}}/actions/jobs/{job.get('id')}/logs")
+        return ("ran", (took, log)) if log is not None else (UNKNOWN, failed_as(src, name))
+    return "none", None
+
+
+def pull_tests(src: Any, detail: dict) -> tuple[str, Any]:
+    """The tested run of a pull request's last head, else of its latest earlier head that has
+    one (brief #2012 answer 6); the commits are read only when the last head has none."""
+    head = (detail.get("head") or {}).get("sha")
+    state, found = tested_run(src, head)
+    if state != "none":
+        return state, found
+    number = detail["number"]
+    commits = src.get(f"commits-{number}", f"repos/{{repo}}/pulls/{number}/commits")
+    if not isinstance(commits, list):
+        return UNKNOWN, failed_as(src, f"commits-{number}")
+    shas = [c.get("sha") for c in commits if isinstance(c, dict)]
+    for sha in reversed([x for x in shas if x and x != head]):
+        state, found = tested_run(src, sha)
+        if state != "none":
+            return state, found
+    return "none", None
+
+
+def hourly_room(src: Any) -> int | None:
+    """The core calls left this hour (`GET rate_limit`, which GitHub does not count), or None
+    when unknown or not recorded: read as unlimited (brief #2012 answer 3). Each read of the
+    section counts one call (a paged read may cost more; cached reads cost none)."""
+    data = src.get("rate_limit", "rate_limit")
+    core = data.get("resources", {}).get("core", {}) if isinstance(data, dict) else {}
+    left = core.get("remaining") if isinstance(core, dict) else None
+    return left if isinstance(left, int) and not isinstance(left, bool) else None
+
+
+def local_execution(root: Path) -> bool:
+    try:
+        return execution(root) == "local"
+    except CheckError:
+        return False  # the setting's own check refuses it; this report reads it as hosted
+
+
+def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, ...]:
+    """Brief #773 answer 4 and brief #878 answer 5: the mode of each pull request's tests, the
+    minutes of its test step, the reason of a full run and the paths behind it, the median of each
+    mode; brief #2012: one log per pull request, the `share` kind, the class of a failed read and
+    the hourly limit."""
+    selected, seconds = 0, 0
+    unknown: dict[str, int] = {}
     kinds = dict.fromkeys(FULL_KINDS, 0)
     paths: dict[str, int] = {}
     took_by_mode: dict[str, list[int]] = {"selected": [], "full": []}
     reasons: dict[str, int] = {}
-    seen: set[Any] = set()
-    for d in details:
-        commits = ctx.src.get(
-            f"commits-{d['number']}", f"repos/{{repo}}/pulls/{d['number']}/commits"
-        )
-        for commit in commits if isinstance(commits, list) else []:
-            for run_ in (
-                runs_of(ctx.src, commit.get("sha") if isinstance(commit, dict) else None) or []
-            ):
-                if not is_governance(run_) or run_.get("event") != "pull_request":
-                    continue
-                if run_.get("id") in seen:
-                    continue
-                seen.add(run_.get("id"))
-                jobs = jobs_of(ctx.src, run_.get("id"))
-                state, took, job = pr_test_step(jobs) if jobs is not None else (UNKNOWN, None, None)
-                if state == "not-run":
-                    continue
-                jid = job.get("id") if job else None
-                log = (
-                    ctx.src.get(f"job-log-{jid}", f"repos/{{repo}}/actions/jobs/{jid}/logs")
-                    if jid
-                    else None
-                )
-                mode, reason, named = run_mode(log)
-                if state == UNKNOWN or mode == UNKNOWN or took is None:
-                    unknown += 1
-                    continue
-                seconds += took
-                took_by_mode[mode].append(took)
-                if mode == "selected":
-                    selected += 1
-                    continue
-                kinds[full_kind(reason)] += 1
-                word = reason_word(reason)
-                reasons[word] = reasons.get(word, 0) + 1
-                for path in named:
-                    paths[path] = paths.get(path, 0) + 1
-    runs = selected + sum(kinds.values())
-    share = f"{round(100 * selected / runs)}%" if runs else NONE
+    merged = [d for d in details if d.get("merged_at")]  # answer 1: merged pull requests only
+    src = Metered(ctx.src, hourly_room(ctx.src))
+    local = local_execution(ctx.root)
+    read = 0
+
+    def newest(d: dict) -> tuple[str, int]:
+        return str(d.get("merged_at") or ""), int(d["number"])
+
+    for d in sorted(merged, key=newest, reverse=True):
+        try:
+            state, found = pull_tests(src, d)
+        except OutOfCalls:
+            break
+        read += 1
+        if state == "none":
+            if local:
+                unknown["no CI run"] = unknown.get("no CI run", 0) + 1
+            continue
+        if state == UNKNOWN:
+            unknown[found] = unknown.get(found, 0) + 1
+            continue
+        took, log = found
+        mode, reason, named = run_mode(log)
+        if mode == UNKNOWN:
+            unknown["no mode"] = unknown.get("no mode", 0) + 1
+            continue
+        seconds += took
+        took_by_mode[mode].append(took)
+        if mode == "selected":
+            selected += 1
+            continue
+        kinds[full_kind(reason)] += 1
+        word = reason_word(reason)
+        reasons[word] = reasons.get(word, 0) + 1
+        for path in named:
+            paths[path] = paths.get(path, 0) + 1
+    if read < len(merged):
+        unknown["hourly limit"] = len(merged) - read  # left unread: never a silent zero
+    pulls = selected + sum(kinds.values())
+    share = f"{round(100 * selected / pulls)}%" if pulls else NONE
     fulls = ", ".join(f"{k} {v}" for k, v in kinds.items())
     top = sorted(paths.items(), key=lambda kv: (-kv[1], kv[0]))[:FULL_PATHS_SHOWN]
-    return (
-        f"pr tests: {runs} runs; selected {selected} of {runs} ({share}); "
-        f"test step {tenths(Decimal(seconds) / 60)} minutes; full: {fulls}; unknown: {unknown}",
+    classes = sorted(unknown.items(), key=lambda kv: (-kv[1], kv[0]))
+    missed = f" ({', '.join(f'{c} {n}' for c, n in classes)})" if classes else ""
+    lines: tuple[str, ...] = (
+        f"pr tests: {pulls} pull requests; selected {selected} of {pulls} ({share}); "
+        f"test step {tenths(Decimal(seconds) / 60)} minutes; full: {fulls}; "
+        f"unknown: {sum(unknown.values())}{missed}",
         f"pr tests full most often: {', '.join(f'{p} ({n})' for p, n in top) or 'none'}",
         "pr tests median: "
         + "; ".join(
-            f"{mode} {median_minutes(took_by_mode[mode])} ({len(took_by_mode[mode])} runs)"
+            f"{mode} {median_minutes(took_by_mode[mode])} ({len(took_by_mode[mode])} pull requests)"
             for mode in ("selected", "full")
         ),
         "pr tests full reasons: "
@@ -1175,6 +1307,9 @@ def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, str, str, st
             or "none"
         ),
     )
+    if read < len(merged):
+        lines += (f"pr tests: {read} of {len(merged)} pull requests read (hourly limit)",)
+    return lines
 
 
 def default_branch_runs(ctx: Context, details: list[dict]) -> tuple[list[tuple], int]:
@@ -1530,6 +1665,7 @@ def window_tests(src: Any, root: Path, start: datetime, end: datetime) -> dict |
     return {
         "pr_tests": lines[0],
         "pr_tests_median": lines[2],
+        "pr_tests_limit": lines[4] if len(lines) > 4 else None,  # brief #2012 answer 8
         "full_suite": full_suite_line(ctx, details),
     }
 
