@@ -167,6 +167,8 @@ def test_req079_every_work_type_composes_the_python_entries(work_type: str, tmp_
 def test_req079_every_work_type_composes_the_node_entry(work_type: str, tmp_path: Path) -> None:
     """Answers 2 and 5: a Node record composes the Node entry and no Python one."""
     root = project(tmp_path, work_type, runtime="node")
+    assert stacks(root, work_type) == own(work_type)  # answer 6: no package.json, pack not on
+    (root / "package.json").write_text('{"name": "sample"}\n', encoding="utf-8")
     found = stacks(root, work_type)
     assert sorted(found) == sorted({"node", *own(work_type)})
 

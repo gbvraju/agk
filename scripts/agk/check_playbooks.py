@@ -58,6 +58,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import kit_root
 import playbook_format
 from common import repo_root, run, utf8_output
 from gates import pins
@@ -157,15 +158,21 @@ def _codes(entry: dict[str, Any]) -> set[str]:
     return {c for c in codes if isinstance(c, str)} if isinstance(codes, list) else set()
 
 
-def _served(runtime: str) -> tuple[str, ...]:
-    """The stacks of the pack module that serves the runtime's stack class, else none."""
+def _pack(runtime: str) -> Any:
+    """The pack module of `run_gates.PACKS` that serves the runtime's stack class, else None."""
     import importlib
 
     import run_gates  # here: the runner imports this module
 
     stack = pins.STACKS[runtime][0]
     modules = [importlib.import_module(f"gates.{name}") for name in run_gates.PACKS]
-    return next((tuple(m.STACKS) for m in modules if stack in m.STACKS), ())
+    return next((m for m in modules if stack in m.STACKS), None)
+
+
+def _served(runtime: str) -> tuple[str, ...]:
+    """The stacks of the pack module that serves the runtime's stack class, else none."""
+    module = _pack(runtime)
+    return tuple(module.STACKS) if module is not None else ()
 
 
 def _entry_problems(entry: dict[str, Any], known: list[str] | None) -> list[str]:
@@ -180,9 +187,9 @@ def _entry_problems(entry: dict[str, Any], known: list[str] | None) -> list[str]
             out.append(f"an entry's key `{key}` has the wrong type (key: standards.{key})")
     rules = entry.get("rules")
     if isinstance(rules, dict):
-        found = playbook_format._table_keys(
-            STANDARDS, "rules", rules, playbook_format.RULES_KEYS, playbook_format.RULES_OPTIONAL
-        )
+        required = playbook_format.RULES_KEYS
+        optional = playbook_format.RULES_OPTIONAL
+        found = playbook_format._table_keys(STANDARDS, "rules", rules, required, optional)
         out += ["a `rules` table is not in the format (key: standards.rules)"] if found else []
     config = entry.get("config")
     if isinstance(config, str) and not playbook_format._inside(config):
@@ -204,8 +211,7 @@ def standards_file(root: Path) -> tuple[list[dict[str, Any]], list[str]]:
     each naming the key or the path class, never a value; a missing file is no entries. Raises
     `kit_root.Refused` as `kit_file` does (a clean project with no plugin), naming the setting."""
     root = Path(root)
-    kit = playbook_format.kit_root
-    path = root / STANDARDS if kit is None else kit.kit_file(root, STANDARDS)
+    path = kit_root.kit_file(root, STANDARDS)
     where = f"{playbook_format.SPEC72}: {STANDARDS}:"
     if not path.is_file():
         return [], []
@@ -227,13 +233,18 @@ def standards_file(root: Path) -> tuple[list[dict[str, Any]], list[str]]:
 
 
 def stack_entries(root: Path) -> list[dict[str, Any]]:
-    """Brief #1974 answer 2: the file's entries of the runtime the one Accepted stack record chose,
-    or none (no work type, no record, a Proposed record, two records or two runtimes)."""
-    picked = pins.chosen(Path(root))
-    if picked is None:
+    """Brief #1974 answer 2: the file's entries of each runtime whose pack module is `on`, the one
+    the one Accepted stack record chose (the pack's own reading of `pins.chosen`), or none (no
+    work type, no record, a Proposed record, two records or two runtimes, a Node record with no
+    `package.json`)."""
+    root = Path(root)
+    on: dict[str, bool] = {}
+    for key in pins.STACKS:
+        module = _pack(key)
+        on[key] = module is not None and bool(module.on(root))
+    if not any(on.values()):
         return []
-    runtime = next((key for key, row in pins.STACKS.items() if row == picked[0]), None)
-    return [e for e in standards_file(root)[0] if e.get("runtime") == runtime]
+    return [e for e in standards_file(root)[0] if on.get(str(e.get("runtime")), False)]
 
 
 def standard(path: Path, root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
@@ -280,7 +291,10 @@ def findings(
         + standard(path, root)[2]
     ]
     found += playbook_format.declaration(root)[1]
-    found += standards_file(root)[1]  # brief #1974 answer 4
+    try:
+        found += standards_file(root)[1]  # brief #1974 answer 4
+    except kit_root.Refused:
+        pass  # the declaration above names the setting (`layout`, `CLAUDE_PLUGIN_ROOT`)
     if files is None and domains is None or domains:
         import check_domains  # here: a named playbook alone (a derive, a gate run) reads no pack
 
