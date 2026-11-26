@@ -24,6 +24,8 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
                                            [--said FILE --at TIME [--by LOGIN] [--name NAME]]
        python3 scripts/agk/steward_owner.py work-type --propose
        python3 scripts/agk/steward_owner.py work-type --yes --said FILE --at TIME [--by LOGIN]
+       python3 scripts/agk/steward_owner.py domain --propose
+       python3 scripts/agk/steward_owner.py domain --yes --said FILE --at TIME [--by LOGIN]
 
 `ask` takes one plain business sentence (FILE): one line, a question with its choices and `I
 recommend`, and no kit term (a file name, label, rule number, id or command); it records it as an
@@ -98,6 +100,9 @@ solo mode with one person listed, writes on a new branch from the default branch
 line and a Proposed ADR quoting the words, then prints the commit and push commands: it never
 commits or pushes, and the owner's merge approves it. In team mode, in personal mode or for one
 listed person short it prints the change only; `not yet` is recorded and writes nothing.
+
+Brief #1937 (ADR-0806, SPEC-0074 rule 5): `domain --propose` and `domain --yes` are
+`domain_ask.propose` and `domain_ask.yes`, the same ask and yes for `[domain] packs`.
 """
 
 from __future__ import annotations
@@ -1553,6 +1558,12 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--said", type=Path)
     t.add_argument("--at")
     t.add_argument("--by")
+    m = sub.add_parser("domain")  # brief #1937 (ADR-0806): domain_ask.py
+    m.add_argument("--propose", action="store_true")
+    m.add_argument("--yes", action="store_true")
+    m.add_argument("--said", type=Path)
+    m.add_argument("--at")
+    m.add_argument("--by")
     w = sub.add_parser("reads")
     w.add_argument("--session")
     w.add_argument("--refused", action="store_true")
@@ -1614,6 +1625,17 @@ def main(argv: list[str] | None = None) -> int:
                 code, lines = work_type_yes(root, opts.said, opts.at, opts.by, datetime.now(UTC))
         elif opts.command == "work-type":
             code, lines = 2, ["refused: one of --propose or --yes (setting: work-type)"]
+        elif opts.command == "domain" and opts.propose != opts.yes:
+            import domain_ask  # here: it imports this module
+
+            if opts.propose:
+                code, lines = domain_ask.propose(root, datetime.now(UTC))
+            elif opts.said is None or opts.at is None:
+                code, lines = 2, ["refused: --yes takes --said and --at (setting: --said)"]
+            else:
+                code, lines = domain_ask.yes(root, opts.said, opts.at, opts.by, datetime.now(UTC))
+        elif opts.command == "domain":
+            code, lines = 2, ["refused: one of --propose or --yes (setting: domain)"]
         elif opts.command == "reads":
             code, lines = reads(root, opts.session, opts.refused)
         else:
