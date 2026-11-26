@@ -1,0 +1,1 @@
+- Standards: a Python or Node product of any work type now gets the lint, format and type checks of its chosen stack, from one stack-keyed file `config/standards.toml`; a pack that is on with no entry composed prints a `not run` line (brief #1974, ADR-0817)
