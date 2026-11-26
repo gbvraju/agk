@@ -65,7 +65,7 @@ ASSIGN = re.compile(
 )
 REFUSED = re.compile(r"\bRefused \((\d+)\)")
 PR_TESTS = re.compile(
-    r"pr tests: (\d+) runs; selected (\d+) of (\d+) \([^)]*\); test step ([\d.]+) minutes"
+    r"pr tests: (\d+) (?:runs|pull requests); selected (\d+) of (\d+) \([^)]*\); test step ([\d.]+) minutes"
 )
 SELECTED_MEDIAN = re.compile(r"pr tests median: selected ([\d.]+) minutes")
 FULL_MEDIAN = re.compile(r"full suite: median (\d+)s")

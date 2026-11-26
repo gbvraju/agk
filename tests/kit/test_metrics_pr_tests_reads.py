@@ -198,6 +198,8 @@ def test_a_pull_request_with_no_ci_run(repo, tmp_path, execution):
     repo.write("agk.toml", f'execution = "{execution}"\n')
     api = week(tmp_path, {121: SELECTED})
     pull(api, 122, "2026-10-09T09:00:00Z")
+    for head in (1, 2):
+        api.runs(sha(122, head), [])
     lines, _ = section(repo, api)
     if execution == "local":
         assert lines[0].endswith("unknown: 1 (no CI run 1)")
