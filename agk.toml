@@ -348,6 +348,12 @@ tests = [
 code = "scripts/agk/check_neutrality.py"
 tests = ["tests/kit/test_check_neutrality.py", "tests/kit/test_core_rules_page.py"]
 [[testing.map]]
+code = "scripts/agk/check_amendments.py"
+tests = [
+  "tests/kit/test_amendment_class.py", "tests/kit/test_route_settled_amendment.py",
+  "tests/kit/test_merge_cleared_settled.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_numbers.py"
 tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.py"]
 [[testing.map]]
@@ -765,6 +771,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_merge_cleared_settled.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit_dev/test_shared_index_reference.py",
   "tests/kit/test_autopilot_modes.py",
@@ -1091,6 +1098,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_route_settled_amendment.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit/test_brief_refuse_day.py",
   "tests/kit/test_route_reprove.py",
