@@ -18,3 +18,5 @@ rewritten so the unchanged guard finds nothing; a whole test keeps every shipped
    kit's own repository runs them (amendment 226)."
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: item 1 (to rule 2) applied to `docs/specs/0071-the-kit-runs-from-the-plugin-and-a-product-repository-keeps-only-its-project.md` word for word, on the maintainer's answer on #1906 (comment 7127025275).

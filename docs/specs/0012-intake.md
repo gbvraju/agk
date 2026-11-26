@@ -74,7 +74,7 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
     | Id | Check |
     | --- | --- |
     | C1 | the ids are the ones rule 2 prints for the base: the requirement is the next free `REQ` (in a project not below `REQ-101`), the spec number and the ADR number are the next free |
-    | C2 | the difference from the base is exactly the three files of rule 4, and the change to `docs/requirements.md` only adds the section of rule 5 at the end (no existing line is changed or removed) |
+    | C2 | the difference from the base is exactly the three files of rule 4 and any new `docs/runs/proposed-spec-amendments-<n>.md` files (amendment 242), and the change to `docs/requirements.md` only adds the section of rule 5 at the end (no existing line is changed or removed) |
     | C3 | the acceptance line parses with `common.parse_acceptance` into 1 to 8 criteria numbered from `AC1` with no repeat, and no criterion contains `; ` |
     | C4 | each criterion has `given`, `when`, `then` in order |
     | C5 | a negative case exists, or the spec has the line of rule 6 |
@@ -161,3 +161,11 @@ before it is merged.* Rules 14, 16. ADR-0021 decision 2 (SPEC-0012) and decision
 - 2026-10-16: the negative-case rule is a word list; a criterion can satisfy it without being a real negative case (due 2026-12-31).
 - 2026-10-16: the issue form is the only entry point for a product owner without a plugin session, and a person with a session still has to run
   `--from-issue`; an automatic issue-to-pull-request workflow is not built (due 2027-01-31).
+
+## Contexts
+
+- kit: `/agk:spec` (the plugin's `skills/spec/SKILL.md`) writes the three files of rule 4 with the kit-only `scripts/agk/intake.py`, whose `check` runs the deterministic checks of rule 11 (rules 4, 11 and 18)
+- github: the skill does not commit, push or open a pull request, it prints the commit message, the push command and the pull request body, and the product owner's phone path is the proposal issue that `/agk:spec --from-issue N` turns into the same three files, no issue-to-pull-request workflow is built (rules 13 and 15)
+- local: `intake.py check` reads the work tree and the merge base with the default branch, and the skill works on a local branch `intake/<req id lower case>-<slug>` (rules 3 and 11)
+- personal: not applicable: no rule here names personal mode. Intake writes a requirement, a Draft spec and an ADR stub in a governed repository (rule 4)
+- stacks: not applicable: no rule here names a stack. Intake writes prose files, which no stack pack reads (rule 4)
