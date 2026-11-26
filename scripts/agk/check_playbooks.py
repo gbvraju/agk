@@ -38,6 +38,11 @@ the check runs `run_gates.py` in the same process, so every check gate's step ru
 The domain packs (SPEC-0074 rule 2; REQ-081 AC1; brief #1935, ADR-0804): `findings` of every
 playbook adds `check_domains.findings`, so a pack's problem is one more `FAIL playbooks:` line and
 `ok playbooks` is unchanged when there is none; a stale `as_of` is a `warn domains:` line on stderr.
+
+The one composition (SPEC-0074 rule 4; REQ-081 AC2; brief #1936, ADR-0805): `composed` judges the
+layers that `check_domains.compose` gives, the playbook's and then each pack of `[domain] packs`,
+so a pack gate restated weaker is the same `rule 21:` line naming the pack's file and the key; the
+order of `default`, the modules and the playbook is unchanged (Q-D74B-3).
 """
 
 from __future__ import annotations
@@ -78,10 +83,13 @@ def _evidence(data: dict[str, Any]) -> list[str]:
 
 
 def _weakened(new: dict[str, Any], held: dict[str, Any]) -> list[str]:
-    """The keys in which `new` is weaker than `held` (SPEC-0048 rule 21)."""
+    """The keys in which `new` is weaker than `held` (SPEC-0048 rule 21): a check's `step` is kept
+    too, so a restatement never moves a gate to another step (fix list on 0ed1a719 item 1)."""
     keys = []
     if new.get("kind") == JUDGEMENT and held.get("kind") == CHECK:
         keys.append("kind")
+    elif held.get("kind") == CHECK and "step" in held and new.get("step") != held["step"]:
+        keys.append("step")
     if new.get("owner_only") is False and held.get("owner_only") is True:
         keys.append("owner_only")
     return keys
@@ -102,13 +110,17 @@ def _layers(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str]]:
 def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], list[str]]:
     """SPEC-0048 rules 21 and 23: the composed gates and evidence of the playbook at `path`, and the
     problems of the composition, each naming the rule, the file and the key, never a value."""
+    import check_domains  # here: config imports it lazily as well
+
     path, root = Path(path), Path(root)
     layers, problems = _layers(path, root)
+    pairs, refused = check_domains.compose(root, layers)  # brief #1936: the packs come last
+    problems += refused
     rel = f"{playbook_format.FOLDER}/{path.name}"
     gates: dict[str, dict[str, Any]] = {}
     evidence: dict[str, None] = {}
-    weak: set[str] = set()
-    for layer in layers:
+    weak: set[tuple[str, str]] = set()
+    for where, layer in pairs:
         evidence.update(dict.fromkeys(_evidence(layer)))
         for gate in _gates(layer):
             held = gates.get(gate["id"])
@@ -116,10 +128,12 @@ def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], l
             # SPEC-0072 rule 2: the eight enterprise ids are the kit's own names, never a value
             named = gate["id"] in playbook_format.ENTERPRISE
             prefix = f"gate: {gate['id']}, " if named else ""
-            weak.update(f"{prefix}key: {key}" for key in keys)
+            weak.update((where or rel, f"{prefix}key: {key}") for key in keys)
             if not keys:
                 gates[gate["id"]] = gate
-    problems += [f"rule 21: {rel}: a gate is restated weaker ({key})" for key in sorted(weak)]
+    problems += [
+        f"rule 21: {file}: a gate is restated weaker ({key})" for file, key in sorted(weak)
+    ]
     return list(gates.values()), list(evidence), problems
 
 
@@ -173,9 +187,7 @@ def standard(path: Path, root: Path) -> tuple[dict[str, Any], list[dict[str, Any
     return architecture, list(packs.values()), problems
 
 
-def findings(
-    root: Path, files: list[Path] | None = None, domains: bool | None = None
-) -> list[str]:
+def findings(root: Path, files: list[Path] | None = None, domains: bool | None = None) -> list[str]:
     """The problems of the check: the given playbooks, or all of them, and the declaration; with
     all of them, or `domains`, the domain packs' too (SPEC-0074 rule 2, brief #1935, ADR-0804)."""
     paths = playbook_format.playbooks(root) if files is None else files
@@ -186,6 +198,7 @@ def findings(
         + composed(path, root)[2]
         + standard(path, root)[2]
     ]
+    found = list(dict.fromkeys(found))  # a pack's line is the same for every playbook
     found += playbook_format.declaration(root)[1]
     if files is None and domains is None or domains:
         import check_domains  # here: a named playbook alone (a derive, a gate run) reads no pack
@@ -215,7 +228,7 @@ def cmd_check(root: Path) -> int:
         )
     import check_domains
 
-    for line in check_domains.stale(root):
+    for line in check_domains.stale(root) + check_domains.warnings(root):
         print(line, file=sys.stderr)
     print(f"ok {NAME} ({len(files)} playbooks)" if files else f"ok {NAME} (none)")
     import run_gates  # here: the runner imports this module

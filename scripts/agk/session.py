@@ -162,6 +162,10 @@ maintainers (not blocking): ...` that the newest verdict on the head also calls 
 item `nb:<Q-id>`: listed, never parked; a park written for it is lifted with one
 `Unparked-by: not-blocking Q-<id>`.
 
+Brief #1968 (ADR-0815): an owner-wait park holds until every Q id its `Owner needed:` asks is
+answered after it, an approval ask is the wait's item from the comments (never from the
+`agk:approve` label the park makes the router remove), and `ask-lines` prints one line per open id.
+
 Brief #1310 (ADR-0554): `watch --pr N` and `watch --assign ID` take `--until-event`: they return
 only on an event, printing every event line of one read, or after `[flow] wake_minutes` (110 by
 default) with `renew: no event` (exit 0); a slot's lease is renewed by the wait every 240 s, so
@@ -4553,6 +4557,34 @@ def closing_line(key: str, pr: dict, comments: Sequence[dict] = ()) -> str:
     return f"Maintainer answer: accept {(pr.get('head') or {}).get('sha') or '<head sha>'}"
 
 
+def closing_lines(
+    key: str,
+    pr: dict,
+    comments: Sequence[dict],
+    listed: set[str],
+    answerers: set[str],
+    carried=None,
+    left: dict | None = None,
+) -> list[str]:
+    """Brief #1968 answer 5 (ADR-0815): the lines that close owner item KEY: for an ask with
+    open Q ids, one `Maintainer answer: Q-<id> <your answer>` per open id in the ask's order,
+    then each open approval's line; any other item `closing_line`'s one line (ADR-0747). LEFT is
+    `open_owner_items`' own, read here when not given."""
+    if left is None:
+        left = {}
+        open_owner_items(pr, list(comments), listed, answerers, carried=carried, left=left)
+    ids, approvals = left.get(key, ([], []))
+    if not ids:
+        return [closing_line(key, pr, comments)]
+    lines = [f"Maintainer answer: {qid} <your answer>" for qid in ids]
+    for item in approvals:
+        lines.append(
+            f"Approve: {item}" if item.startswith("SPEC-")
+            else f"Maintainer answer: {item} approved"
+        )  # fmt: skip
+    return lines
+
+
 def sidecar_read(root, number: int) -> tuple[dict, list]:
     """Q-1784-1 (the steward's answer): in personal mode the sidecar's `forge/pulls/<n>.json` and
     `forge/comments-<n>.json`; an answer line counts only as `reviewers.derived_only` derives it
@@ -4578,9 +4610,11 @@ def ask_lines(root, number: int) -> int:
         raise CheckError(f"the pull request #{number} cannot be read")
     pr, comments = fresh
     pr = {**pr, "number": pr.get("number", number)}
-    found = open_owner_items(pr, comments, *owner_people(root, pr), carried=carried_check(root))
+    people, left = owner_people(root, pr), dict[str, tuple]()
+    found = open_owner_items(pr, comments, *people, carried=carried_check(root), left=left)
     for key, _ in sorted(found.items(), key=lambda kv: kv[1]):
-        print(f"{key}: {closing_line(key, pr, comments)}")
+        for line in closing_lines(key, pr, comments, *people, left=left):  # brief #1968 answer 5
+            print(f"{key}: {line}")
     if not found:
         print("none")
     return 0
@@ -4625,6 +4659,7 @@ def open_owner_items(
     answerers: set[str],
     own: bool = False,
     carried: Callable[[str, str], bool] | None = None,
+    left: dict | None = None,
 ) -> dict:
     """{key: since} of every open item that waits on the owner: a `Question:` for the maintainers
     (key: its Q id) until an `Answer:`, a `Maintainer answer:` or a `Correction:` naming that id by
@@ -4652,8 +4687,18 @@ def open_owner_items(
     Brief #1740 (ADR-0725): no `owner-merge` item while the pull request is labelled `agk:reprove`:
     the merge it asks for is held until the builder re-proves the head.
     Brief #1784 (ADR-0747): a question in the `NOT_BLOCKING` form is keyed `nb:<Q-id>` while the
-    newest listed verdict agrees (`agreed_not_blocking`); its newest first line decides the form."""
-    from route import answer_step, approval_ask  # here: route imports this file
+    newest listed verdict agrees (`agreed_not_blocking`); its newest first line decides the form.
+    Brief #1968 (ADR-0815): an `Owner needed:` keeps the Q ids its newest post names that no
+    answerer answered after it; an answer removes its id from every open ask and an ask closes
+    with its last id (and its offered approvals); an approval line closes approvals only, never
+    an ask's open ids. An open ask that offers approvals is the wait's item and the label adds no
+    `approve` beside it; a label-only `approve` park (`own_park`, with `agk:parked`) stays open
+    until an answerer's approval, accept of the head or general answer after its `Parked-by:`.
+    With `pr["settles"]` (`owner_read`, `[steward] settle_amendments` on), the settled line by a
+    `pr["settlers"]` account closes that amendment's approval (ADR-0813 answer 3). LEFT, when
+    given, gets {key: (open ids, open approvals)} of each open ask."""
+    from check_amendments import settled_key  # here, as route: read only by the owner wait
+    from route import answer_step, approval_answer, approval_ask  # route imports this file
 
     open_items: dict[str, datetime] = {}
     command = owner_command(pr.get("number"))
@@ -4661,7 +4706,14 @@ def open_owner_items(
     merge_at: datetime | None = None  # the open merge ask (brief #1733)
     pending: set[str] = set()  # the approvals open asks offer (brief #1656, brief #1735)
     newest_verdict = ""
-    ids_of: dict[str, set[str]] = {}  # the Q ids the newest `Owner needed:` of each key names
+    asks: dict[str, list[str]] = {}  # brief #1968: the unanswered Q ids of each key's newest ask
+    offers: dict[str, set[str]] = {}  # the approvals each key's newest ask offers
+    settles = pr.get("settles") if isinstance(pr.get("settles"), dict) else None  # brief #1968
+    settlers = {str(a).lstrip("@").lower() for a in pr.get("settlers") or []}
+
+    def closed(key: str) -> bool:  # brief #1968 answer 1: an ask closes with its last open item
+        return not asks.get(key) and not offers.get(key, set()) & pending
+
     head = str((pr.get("head") or {}).get("sha") or "")
     author = str((pr.get("user") or {}).get("login") or "").lower()
     ordered = in_order(comments)
@@ -4671,6 +4723,13 @@ def open_owner_items(
         body = str(c.get("body") or "")
         if who in listed and VERDICT.match(line):
             newest_verdict = body
+        settled = settled_key(line, body, settles) if settles is not None else None
+        if settled in pending and who in settlers:  # brief #1968 answer 4 (ADR-0813 answer 3)
+            pending.discard(settled)
+            for key in [k for k in offers if k in open_items and settled in offers[k]]:
+                if closed(key):
+                    open_items.pop(key, None)
+            continue
         if line.startswith(OWNER_NEEDED) and who in listed and command and command in body:
             if not approval_ask(body, files):
                 merge_at = when
@@ -4684,8 +4743,9 @@ def open_owner_items(
             found = QUESTION_ID.search(line)
             named = found.group(0) if found and found.group(0) in open_items else None
             open_items[named or "owner-needed"] = when
-            ids_of[named or "owner-needed"] = set(QUESTION_ID.findall(body))
-            pending |= approval_ask(body, files)
+            asks[named or "owner-needed"] = list(dict.fromkeys(QUESTION_ID.findall(body)))
+            offers[named or "owner-needed"] = approval_ask(body, files)
+            pending |= offers[named or "owner-needed"]
         elif own and who == author and (done := READY_REPORT.match(line)):
             if head and head.startswith(done.group(1)):
                 open_items.pop("owner-needed", None)
@@ -4693,8 +4753,12 @@ def open_owner_items(
             continue
         elif found := ANSWER_LINE.match(line):
             qid = found.group(1)
-            for key in [qid, *(k for k, ids in ids_of.items() if qid in ids)]:
-                open_items.pop(key, None)
+            touched = [k for k, ids in asks.items() if qid in ids]
+            for key in touched:  # brief #1968 answer 1: the id leaves every open ask
+                asks[key].remove(qid)
+            for key in dict.fromkeys([qid, *touched]):
+                if key in open_items and (key not in asks or closed(key)):
+                    open_items.pop(key, None)
         elif accepted := ACCEPT_LINE.match(line):
             if head and (accepted.group(1) == head or carries(carried, accepted.group(1), head)):
                 open_items.clear()
@@ -4703,7 +4767,14 @@ def open_owner_items(
         elif line.startswith(("Maintainer answer:", "Approve:")):
             if answer_step(line, files, pending) != "all":
                 continue  # misplaced, or one of several asked approvals (brief #1735)
+            asking = {  # fix list item 1: an ask with open ids; Q-1968-1: one keyed by its
+                k: open_items[k]  # open question's id closes as ADR-0723 (test_1735_5f_5j) reads
+                for k in asks
+                if asks[k] and k in open_items and (offers[k] or not QUESTION_ID.fullmatch(k))
+            }
             open_items.clear()
+            if approval_answer(line) is not None:  # brief #1968 answer 2, Q-PF-2: approvals only
+                open_items.update(asking)
             merge_at = None if not pending else merge_at
             pending = set()
         elif line.startswith("Correction:"):
@@ -4717,11 +4788,57 @@ def open_owner_items(
     if merge_at is not None and pr.get("draft") is not True and clears_head(newest_verdict, head):
         if not reproving:
             open_items["owner-merge"] = merge_at
+    offering = any(offers.get(k) for k in open_items)  # brief #1968 answer 2: the ask's item
     for label, key in OWNER_LABELS.items():
         if label in names and key not in open_items and not (reproving and key == "owner-merge"):
+            if key == "approve" and offering:
+                continue
             newest_post = moment(ordered[-1].get("created_at")) if ordered else None
             open_items[key] = newest_post or moment(pr.get("created_at"))
+    mark = own_park(comments) if PARKED_LABEL in names else None
+    if mark is not None and mark[0] == "approve" and "approve" not in open_items:
+        if not approval_after(ordered, mark[1], answerers, head, carried, pr, listed):  # answer 3
+            open_items["approve"] = moment(mark[1].get("created_at"))
+    if left is not None:
+        left.update(
+            {k: (list(asks[k]), sorted(offers[k] & pending)) for k in asks if k in open_items}
+        )
     return open_items
+
+
+def approval_after(
+    ordered: list, park: dict, answerers: set[str], head: str, carried, pr: dict, listed: set[str]
+) -> bool:
+    """Brief #1968 answer 3: whether an answerer posted, after the `Parked-by:` PARK, an accept
+    of HEAD (or one `carried` to it), a `Maintainer answer:` or `Approve:` naming neither a Q id
+    nor an approval, or an approval line (`route.approval_answer`) for a spec a listed verdict's
+    `Approval:` line asks (`route.asked_for`), one a listed `Owner needed:` offers
+    (`route.approval_ask`), or a spec or amendment the pull request's
+    changed files (`pr["files"]`, when read) change (fix list item 2, ADR-0723 decision 3)."""
+    from route import approval_answer, approval_ask, asked_for, changed_names, changes
+
+    asked: set[str] = set()
+    for c in ordered:
+        line, body = first_line(c), str(c.get("body") or "")
+        if author_of(c) in listed and VERDICT.match(line):
+            asked |= asked_for(body)
+        elif author_of(c) in listed and line.startswith(OWNER_NEEDED):
+            asked |= approval_ask(body, pr.get("files"))
+    names = changed_names(pr.get("files"))
+    after = ordered[ordered.index(park) + 1 :] if park in ordered else []
+    for c in after:
+        line = first_line(c)
+        if author_of(c) not in answerers:
+            continue
+        if accepted := ACCEPT_LINE.match(line):
+            if head and (accepted.group(1) == head or carries(carried, accepted.group(1), head)):
+                return True
+        elif (key := approval_answer(line)) is not None:  # fix list item 2 (ADR-0723)
+            if key in asked or (names is not None and changes(key, names)):
+                return True
+        elif line.startswith(("Maintainer answer:", "Approve:")) and not ANSWER_LINE.match(line):
+            return True
+    return False
 
 
 def carries(carried: Callable[[str, str], bool] | None, old: str, head: str) -> bool:
@@ -4858,11 +4975,38 @@ def owner_read(repo: str, number: int) -> tuple[dict, list] | None:
         comments = pages(endpoint) if isinstance(pr, dict) else None
         named = isinstance(comments, list) and names_approval(pr, comments)
         files = pages(changed) if named else None  # read only when an approval line needs them
+        settled = owner_settles(repo, pr, files) if named else None  # brief #1968 answer 4
     finally:
         MEMO, CACHE.unchanged = saved
     if not isinstance(comments, list):
         return None
-    return ({**pr, "files": files}, comments) if named else (pr, comments)
+    if not named:
+        return (pr, comments)
+    return ({**pr, "files": files, **(settled or {})}, comments)
+
+
+def owner_settles(repo: str, pr: dict, files, root=None) -> dict | None:
+    """Brief #1968 answer 4 (ADR-0813 answer 3): with `[steward] settle_amendments` on at ROOT
+    (else the checkout at or above the working folder), `{"settles": route.amendment_settles of
+    the changed files at the head, "settlers": the spec approvers}`; None with the setting off, or
+    with the files or the head unread, so nothing more is read."""
+    import check_amendments  # here, as route: read only by the owner wait
+    import route
+
+    root = root if root is not None else checkout_root()
+    head = str((pr.get("head") or {}).get("sha") or "")
+    if not isinstance(files, list) or not head or not check_amendments.settle_on(root):
+        return None
+    return {
+        "settles": route.amendment_settles(repo, files, head, root),
+        "settlers": list(spec_approvers(root)),
+    }
+
+
+def checkout_root(start: Path | None = None) -> Path | None:
+    """The nearest folder at or above START (the working folder) holding `agk.toml`, else None."""
+    here = (start or Path.cwd()).resolve()
+    return next((f for f in (here, *here.parents) if (f / "agk.toml").is_file()), None)
 
 
 def names_approval(pr: dict, comments: list) -> bool:
