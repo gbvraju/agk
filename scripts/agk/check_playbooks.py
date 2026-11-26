@@ -83,10 +83,13 @@ def _evidence(data: dict[str, Any]) -> list[str]:
 
 
 def _weakened(new: dict[str, Any], held: dict[str, Any]) -> list[str]:
-    """The keys in which `new` is weaker than `held` (SPEC-0048 rule 21)."""
+    """The keys in which `new` is weaker than `held` (SPEC-0048 rule 21): a check's `step` is kept
+    too, so a restatement never moves a gate to another step (fix list on 0ed1a719 item 1)."""
     keys = []
     if new.get("kind") == JUDGEMENT and held.get("kind") == CHECK:
         keys.append("kind")
+    elif held.get("kind") == CHECK and "step" in held and new.get("step") != held["step"]:
+        keys.append("step")
     if new.get("owner_only") is False and held.get("owner_only") is True:
         keys.append("owner_only")
     return keys

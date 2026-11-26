@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -23,7 +24,6 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import check_domains  # noqa: E402
 import check_playbooks  # noqa: E402
-import upgrade  # noqa: E402
 
 HEAD = 'format = 1\ndomain = "{name}"\ntitle = "An invented pack"\nas_of = "2026-11-25"\n'
 TERM = '\n[[terms]]\nterm = "{term}"\nmeaning = "An invented term"\nsynonyms = []\n'
@@ -220,12 +220,110 @@ def test_ac2_items_are_kept_once_at_their_first_place(tmp_path):
     assert [(t["term"], t["pack"]) for t in terms] == [("basket", "zz-shop")]
 
 
-def test_ac2_the_shipped_packs_are_the_manifests_and_no_project_pack_is_installed(tmp_path):
-    """REQ-081 AC2: SPEC-0074 rule 3 (a project's pack is never written by install or upgrade)."""
+def test_ac2_the_shipped_packs_are_the_manifests():
+    """REQ-081 AC2: SPEC-0074 rule 3 (`SHIPPED` is the manifest's `config/domains/` list)."""
     manifest = json.loads((KIT_ROOT / "kit/manifest.json").read_text(encoding="utf-8"))
     listed = {Path(p).stem for p in manifest["verbatim"] if p.startswith("config/domains/")}
     assert set(check_domains.SHIPPED) == listed
-    for mode in ("init", "adopt"):
-        whole, blocks = upgrade.installed_set(manifest, mode)
-        written = {Path(p).stem for p in [*whole, *blocks] if p.startswith("config/domains/")}
-        assert written <= listed and "zz-own" not in written
+
+
+def test_ac2_install_and_upgrade_leave_a_project_pack_unchanged(tmp_path):
+    """REQ-081 AC2: SPEC-0074 rule 3 (fix list on 0ed1a719 item 5: a real install and upgrade)."""
+    target = tmp_path / "project"
+    (target / "config" / "domains").mkdir(parents=True)
+    (target / "README.md").write_text("An example project, example.com.\n", encoding="utf-8")
+    own = target / "config" / "domains" / "zz-own.toml"
+    text = pack("zz-own")
+    own.write_text(text, encoding="utf-8")
+    init = run([str(KIT_ROOT / "scripts/agk/init.py"), str(target), "--unreleased"], tmp_path)
+    assert init.returncode == 0, init.stdout + init.stderr
+    assert own.read_text(encoding="utf-8") == text
+    for args in (["init", "-q"], ["add", "-A"]):
+        subprocess.run(["git", *args], cwd=target, check=True, capture_output=True)  # nosec B603 B607 - fixed argument list, no shell
+    done = run([str(KIT_ROOT / "scripts/agk/upgrade.py"), str(target)], tmp_path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert own.read_text(encoding="utf-8") == text
+    assert "zz-own" not in done.stdout
+
+
+def run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, *args], cwd=cwd, capture_output=True, text=True, check=False
+    )
+
+
+def test_ac2_a_pack_gate_that_moves_a_check_to_another_step_is_refused(tmp_path):
+    """REQ-081 AC2: SPEC-0048 rule 21 (fix list on 0ed1a719 item 1: a check keeps its step)."""
+    moved = GATE.format(id="tests-first", kind="check", owner="false", extra='step = "lint"\n')
+    root = project(tmp_path, {"zz-shop": pack("zz-shop", body=moved)}, ["zz-shop"])
+    gates, _, problems = check_playbooks.composed(web(root), root)
+    assert problems == [
+        "rule 21: config/domains/zz-shop.toml: a gate is restated weaker (key: step)"
+    ]
+    assert next(g for g in gates if g["id"] == "tests-first")["step"] == "tests-floor"
+
+
+def test_ac2_a_jurisdiction_without_its_domain_stays_where_it_is_listed(tmp_path):
+    """REQ-081 AC2: brief #1936 answer 7 (fix list on 0ed1a719 item 2)."""
+    shipped = {
+        n: (KIT_ROOT / f"config/domains/{n}.toml").read_text(encoding="utf-8")
+        for n in check_domains.SHIPPED
+    }
+    root = project(tmp_path, {**shipped, "payments-eu": pack("payments-eu")}, None)
+    assert check_domains.order(root, ["payments-eu", "field-service"]) == [
+        "payments-eu",
+        "field-service",
+    ]
+
+
+def test_ac2_a_shipped_pack_is_never_another_packs_layer(tmp_path):
+    """REQ-081 AC2: SPEC-0074 rule 4 (fix list on 0ed1a719 item 4)."""
+    packs = {n: pack(n) for n in ("aa", "field")}
+    packs["field-service"] = (KIT_ROOT / "config/domains/field-service.toml").read_text(
+        encoding="utf-8"
+    )
+    root = project(tmp_path, packs, None)
+    listed = ["field-service", "aa", "field"]
+    assert check_domains.order(root, listed) == ["field-service", "aa", "field"]
+
+
+ZZ_GATE = GATE.format(id="zz-gate", kind="check", owner="false", extra='step = "lint"\n')
+
+
+def test_ac2_with_no_work_type_default_alone_then_the_packs(tmp_path):
+    """REQ-081 AC2: brief #1936 answer 6 (`[delivery] work_type` absent: `default`, then packs)."""
+    root = project(tmp_path, {"zz-shop": pack("zz-shop", body=ZZ_GATE)}, ["zz-shop"])
+    base = root / "config" / "playbooks" / "default.toml"
+    ids = [g["id"] for g in check_playbooks.composed(base, root)[0]]
+    assert ids[-1] == "zz-gate" and "tests-first" in ids
+    assert check_playbooks.composed(base, root)[2] == []
+
+
+def test_ac2_a_derived_work_type_then_the_packs(tmp_path):
+    """REQ-081 AC2: brief #1936 answer 6 (a derived work type: its playbook, then the packs)."""
+    root = project(tmp_path, {"zz-shop": pack("zz-shop", body=ZZ_GATE)}, ["zz-shop"])
+    (root / "docs" / "research").mkdir(parents=True)
+    (root / "docs" / "research" / "zz-kiosk.md").write_text("# An invented record\n", "utf-8")
+    derived = root / "config" / "playbooks" / "zz-kiosk.toml"
+    own = GATE.format(id="zz-kiosk-gate", kind="judgement", owner="true", extra="")
+    derived.write_text('format = 1\nwork_type = "zz-kiosk"\n' + own, encoding="utf-8")
+    assert check_domains.playbook_format.is_derived("zz-kiosk", root)
+    ids = [g["id"] for g in check_playbooks.composed(derived, root)[0]]
+    assert ids.index("tests-first") < ids.index("zz-kiosk-gate") < ids.index("zz-gate")
+
+
+def test_ac2_in_the_plugin_layout_the_projects_pack_is_read_first(tmp_path, monkeypatch):
+    """REQ-081 AC2: brief #1936 answer 6 (`[kit] layout = "plugin"`: the project's pack by name,
+    else the plugin's)."""
+    root = project(tmp_path, {"zz-own": pack("zz-own", body=ZZ_GATE)}, None)
+    shutil.rmtree(root / "config" / "playbooks")
+    (root / "agk.toml").write_text(
+        '[kit]\nlayout = "plugin"\n\n[domain]\npacks = ["zz-own", "payments"]\n', "utf-8"
+    )
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(KIT_ROOT))
+    assert check_domains.pack_path(root, "payments") == KIT_ROOT / "config/domains/payments.toml"
+    plugin_web = KIT_ROOT / "config" / "playbooks" / "web-app.toml"
+    ids = [g["id"] for g in check_playbooks.composed(plugin_web, root)[0]]
+    assert ids.index("tests-first") < ids.index("card-data-scope") < ids.index("zz-gate")
+    (root / "config/domains/payments.toml").write_text(pack("payments", body=ZZ_GATE), "utf-8")
+    assert check_domains.pack_path(root, "payments") == root / "config/domains/payments.toml"

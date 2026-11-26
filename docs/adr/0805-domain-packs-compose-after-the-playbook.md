@@ -21,11 +21,13 @@ modules and the playbook only, and no file named a domain's signals.
    of `[domain] packs` in `check_domains.order`: the shipped packs (`check_domains.SHIPPED`, which a test holds equal to
    the `config/domains/` entries of `kit/manifest.json`) in the person's order, each followed by its jurisdiction
    layers (a listed pack named `<domain>-<region>`, in list order, even when listed before its domain), then the
-   project's own packs the same way. A jurisdiction layer whose domain is not listed stays where it is listed and is
-   one `warn domains:` line naming the missing domain.
+   project's own packs the same way. A jurisdiction layer whose domain is not listed stays where it is listed, among
+   the shipped packs, and is one `warn domains:` line naming the missing domain. A shipped pack is never another
+   pack's layer, whatever its name.
 2. `check_playbooks.composed` judges every layer of that one list with its one `_weakened`: a pack gate with an earlier
    id replaces it only when the same or stronger, and a weakening is `rule 21: config/domains/<file>: a gate is
-   restated weaker (key: <key>)`, naming the pack's file. A refused `[domain]` table is one problem line,
+   restated weaker (key: <key>)`, naming the pack's file. A restated `check` keeps its `step`: another step or none is
+   the same line with `key: step`, for a playbook layer as for a pack (`_weakened`). A refused `[domain]` table is one problem line,
    `rule 4: agk.toml: the [domain] table is refused (setting: domain.packs)`; `config.domain_settings` now also
    refuses a pack listed twice. `findings` prints a line the same for every playbook once.
 3. `check_domains.items(root)` keeps each `[[discovery]]`, `[[terms]]` and `[[acceptance]]` item once at its first
@@ -34,8 +36,9 @@ modules and the playbook only, and no file named a domain's signals.
    person decides` for a constraint whose attribute an earlier one names with another scenario. The composer never
    ranks two scenarios (free text, `Q-D74B-2`) and never drops either; the person's decision is rule 9's (build (d)).
    The warnings go to stderr from `check_playbooks.py` and `check_domains.py` and never fail.
-4. The domain signal table `config/domain-signals.toml`: `[[domain]]` rows of `name` (a pack of the kit's
-   `config/domains/`), `words`, `files` and `dependencies` (lists of single words), one row per seed pack.
+4. The domain signal table `config/domain-signals.toml`: `[[domain]]` rows of `name` (a pack of
+   `check_domains.SHIPPED`, never a project's own pack), `words`, `files` and `dependencies` (lists of single words),
+   one row per seed pack.
    `front_door.signal_problems` also checks it (`front_door.domain_signal_problems`), each line `rule 5:
    config/domain-signals.toml: [[domain]] row <n> ... (key: <key>)`, never a value; a kit copy without the file
    has nothing to check. It joins `kit/manifest.json` `verbatim`, and `kit/templates/gitattributes` pins it to LF. Reading it to propose a domain is build (c).

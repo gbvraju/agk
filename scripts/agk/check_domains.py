@@ -307,7 +307,10 @@ def _listed(root: Path) -> list[str]:
 
 def _parent(root: Path, name: str, names: list[str]) -> tuple[str, bool] | None:
     """The domain of a jurisdiction layer `name` (`<domain>-<region>`) and whether it is listed:
-    the longest listed prefix, else the longest that is a pack on disk; None for any other pack."""
+    the longest listed prefix, else the longest that is a pack on disk; None for any other pack, and
+    always for a shipped pack, which is never another pack's layer (fix list on 0ed1a719 item 4)."""
+    if name in SHIPPED:
+        return None
     cuts = [name[:i] for i, c in enumerate(name) if c == "-"][::-1]
     listed = next((d for d in cuts if d in names), None)
     if listed is not None:
@@ -319,11 +322,13 @@ def _parent(root: Path, name: str, names: list[str]) -> tuple[str, bool] | None:
 def order(root: Path, names: list[str]) -> list[str]:
     """Rule 4: the shipped packs in the person's order, each followed by its listed jurisdiction
     layers, then the project's own packs the same way; a layer whose domain is not listed stays
-    where it is listed."""
-    layers = {n: p[0] for n in names if (p := _parent(root, n, names)) and p[1]}
+    where it is listed, among the shipped packs (fix list on 0ed1a719 item 2)."""
+    found = {n: _parent(root, n, names) for n in names}
+    layers = {n: p[0] for n, p in found.items() if p and p[1]}
     heads = [n for n in names if n not in layers]
+    first = [n for n in heads if n in SHIPPED or found[n] is not None]
     out: list[str] = []
-    for name in [n for n in heads if n in SHIPPED] + [n for n in heads if n not in SHIPPED]:
+    for name in first + [n for n in heads if n not in first]:
         out += [name] + [n for n in names if layers.get(n) == name]
     return out
 

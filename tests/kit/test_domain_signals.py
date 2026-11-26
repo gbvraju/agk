@@ -25,11 +25,12 @@ import front_door  # noqa: E402
 
 TABLE = "config/domain-signals.toml"
 PLANT = "zanzibar-word"  # invented: it must never reach the output
-ROW = '[[domain]]\nname = "zz-shop"\nwords = ["basket"]\nfiles = []\ndependencies = []\n'
+ROW = '[[domain]]\nname = "payments"\nwords = ["basket"]\nfiles = []\ndependencies = []\n'
 
 
 def kit(root: Path, table: str) -> Path:
-    """The kit's signal tables and playbooks, one invented pack and the given domain table."""
+    """The kit's signal tables and playbooks, one project pack (never a shipped one, fix list on
+    0ed1a719 item 3) and the given domain table."""
     (root / "config").mkdir()
     shutil.copy(KIT_ROOT / "config/stack-signals.toml", root / "config/stack-signals.toml")
     shutil.copytree(KIT_ROOT / "config/playbooks", root / "config/playbooks")
@@ -40,12 +41,12 @@ def kit(root: Path, table: str) -> Path:
 
 
 def problems(root: Path) -> list[str]:
-    return front_door.domain_signal_problems(root / TABLE, root / "config/domains")
+    return front_door.domain_signal_problems(root / TABLE)
 
 
 def test_ac3_the_shipped_table_passes():
     """REQ-081 AC3: SPEC-0074 rule 5 (the kit's own table, one row per shipped pack)."""
-    assert front_door.domain_signal_problems(KIT_ROOT / TABLE, KIT_ROOT / "config/domains") == []
+    assert front_door.domain_signal_problems(KIT_ROOT / TABLE) == []
     assert front_door.signal_problems(KIT_ROOT) == []
     rows = tomllib.loads((KIT_ROOT / TABLE).read_text(encoding="utf-8"))["domain"]
     packs = {p.stem for p in (KIT_ROOT / "config/domains").glob("*.toml")}
@@ -83,8 +84,13 @@ BAD = {
         ROW.replace("dependencies = []", f'dependencies = ["{PLANT} lib"]'),
         f"{HEAD} is not a list of single words (key: dependencies)",
     ),
-    "no-pack": (ROW.replace("zz-shop", PLANT), f"{HEAD} `name` is no shipped pack (key: name)"),
-    "name-type": (ROW.replace('"zz-shop"', "3"), f"{HEAD} `name` is no shipped pack (key: name)"),
+    "no-pack": (ROW.replace("payments", PLANT), f"{HEAD} `name` is no shipped pack (key: name)"),
+    "own-pack": (
+        ROW.replace("payments", "zz-shop"),
+        f"{HEAD} `name` is no shipped pack (key: name)",
+    ),
+    "name-type": (ROW.replace('"payments"', "3"), f"{HEAD} `name` is no shipped pack (key: name)"),
+    "name-list": (ROW.replace('"payments"', "[]"), f"{HEAD} `name` is no shipped pack (key: name)"),
 }
 
 

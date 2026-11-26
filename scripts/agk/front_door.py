@@ -1596,13 +1596,15 @@ DOMAIN_SIGNALS = "config/domain-signals.toml"
 DOMAIN_ROW = ("name", "words", "files", "dependencies")
 
 
-def domain_signal_problems(path: Path, packs: Path) -> list[str]:
+def domain_signal_problems(path: Path) -> list[str]:
     """SPEC-0074 rule 5 (brief #1936, ADR-0805): the form of the domain signal table at `path`,
-    beside the stack table: `[[domain]]` rows of the `name` of a pack in the folder `packs` and
-    lists of single words, each line naming the row and the key, never a value. A kit copy without
-    the table has nothing to check."""
+    beside the stack table: `[[domain]]` rows of the `name` of a shipped pack
+    (`check_domains.SHIPPED`, never a project's own) and lists of single words, each line naming
+    the row and the key, never a value. A kit copy without the table has nothing to check."""
     if not path.is_file():
         return []
+    import check_domains  # here: a kit copy without the table needs no domain module
+
     head = f"rule 5: {DOMAIN_SIGNALS}:"
     try:
         table = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -1612,7 +1614,7 @@ def domain_signal_problems(path: Path, packs: Path) -> list[str]:
     rows = table.get("domain")
     if not isinstance(rows, list) or not rows:
         return found + [f"{head} [[domain]] has no row"]
-    names = {p.stem for p in packs.glob("*.toml")}
+    names = set(check_domains.SHIPPED)
     for number, row in enumerate(rows, 1):
         where = f"{head} [[domain]] row {number}"
         if not isinstance(row, dict):
@@ -1624,7 +1626,7 @@ def domain_signal_problems(path: Path, packs: Path) -> list[str]:
         for key in DOMAIN_ROW:
             if key not in row:
                 found.append(f"{where} is missing a key (key: {key})")
-            elif key == "name" and row[key] not in names:
+            elif key == "name" and (not isinstance(row[key], str) or row[key] not in names):
                 found.append(f"{where} `name` is no shipped pack (key: name)")
             elif key != "name" and not is_words(row[key]):
                 found.append(f"{where} is not a list of single words (key: {key})")
@@ -1634,7 +1636,7 @@ def domain_signal_problems(path: Path, packs: Path) -> list[str]:
 def signal_problems(root: Path) -> list[str]:
     """Rule 5's form check of the table, naming the setting and never a value; then the domain
     signal table's (SPEC-0074 rule 5), read from the same root."""
-    domains = domain_signal_problems(root / DOMAIN_SIGNALS, root / "config" / "domains")
+    domains = domain_signal_problems(root / DOMAIN_SIGNALS)
     try:
         table = tomllib.loads((root / SIGNALS).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
