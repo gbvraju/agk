@@ -543,24 +543,28 @@ def test_1968_item3_solo_mode_one_login_reads_by_the_lines_form():
 
 @pytest.mark.parametrize("value", ["hosted", "hybrid", "pool", "local"])
 def test_1968_item3_every_execution_value_unparks_through_owner_apply(tmp_path, monkeypatch, value):
-    """REQ-066: fix list item 3, `execution`: the one write path (`owner_apply`, which every
-    caller uses: the router's unpark, the conductor's sweep and owner pass, the steward and
-    `watch`) holds the #1961 park after one answer and unparks after the last."""
+    """REQ-066: fix list items 3 (on 32a497bd) and 1 (on 1b8f109d), `execution`: the caller
+    reads its root (`agk.toml` with the value, `config/reviewers.yaml` with the people) and
+    writes through the one path (`owner_apply`), here the router's unpark on the answer's run;
+    the #1961 park holds after one answer and is unparked after the last, for every value."""
     (tmp_path / "agk.toml").write_text(f'execution = "{value}"\n', encoding="utf-8")
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "reviewers.yaml").write_text(
+        f"version: 1\nverdict_authors: [{CONDUCTOR}]\nspec_approvers: [{OWNER}]\n",
+        encoding="utf-8",
+    )
     assert common.execution(tmp_path) == value
+    assert session.owner_people(tmp_path, {}) == (LISTED, ANSWERERS)
     wrote: list = []
     monkeypatch.setattr(session, "unpark_pull", lambda *a, **k: wrote.append(a) or True)
     monkeypatch.setattr(session, "park_pull", lambda *a, **k: pytest.fail("no park"))
     parked = pull(("agk:parked",))
     said = [ASK_1961, PARKED_1961, *answers("Answer: Q-1954-A x")]
     monkeypatch.setattr(session, "owner_read", lambda repo, n: (parked, said))
-    assert session.owner_apply("o/r", 1961, PLAIN, LISTED, ANSWERERS, NOW) is None and not wrote
+    assert route.owner_unpark("o/r", 1961, tmp_path) is None and not wrote
     done = [*said, *answers("Answer: Q-1954-B y", "Answer: Q-1954-C z")]
     monkeypatch.setattr(session, "owner_read", lambda repo, n: (parked, done))
-    assert session.owner_apply("o/r", 1961, PLAIN, LISTED, ANSWERERS, NOW) == (
-        "unpark",
-        "owner-needed",
-    )
+    assert route.owner_unpark("o/r", 1961, tmp_path) == "#1961 unparked owner-needed (brief #1534)"
     assert wrote == [("o/r", 1961, "owner-needed")]
 
 
