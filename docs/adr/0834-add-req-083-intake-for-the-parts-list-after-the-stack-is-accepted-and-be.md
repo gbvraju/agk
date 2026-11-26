@@ -38,8 +38,10 @@ not why a library is there.
 6. The person is asked only a paid licence, an off-list licence, an outside service that costs money or sends data out,
    and a need with no healthy candidate; the rest is the architect's, reviewed by a fresh reviewer with the bundle only.
 7. A new file-only `parts` step of `run_gates.py` fails a dependency the record does not name, a record part missing
-   from a build file, a version out of step, an empty required column and a second part for one need with no
-   `Decision:`, naming the rule and the component class, never a name or a version.
+   from a build file, a version out of step, an empty required column, a second part for one need with no
+   `Decision:`, and a health date older than `max_age_months` on a part whose version did not change, in a pull request
+   that changes the record or a build file (a warning otherwise), naming the rule and the component class, never a name
+   or a version.
 8. One optional `[parts]` table (`record`, `max_age_months`, `advisories`) holds the settings; with no table every result
    is unchanged on upgrade.
 9. The Approved specs change only by the proposals of amendments 258 (SPEC-0029 rule 5), 259 (SPEC-0072 rule 4) and 260
