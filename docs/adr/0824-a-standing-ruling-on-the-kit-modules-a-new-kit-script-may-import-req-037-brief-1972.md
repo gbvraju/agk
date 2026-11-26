@@ -2,7 +2,7 @@
 
 - Status: Proposed
 - Date: 2026-11-26
-- Deciders: maintainers (waits for the owner's answers to Q-KI-1 and Q-KI-2)
+- Deciders: maintainers (the owner's answers to Q-KI-1 and Q-KI-2 on #1985)
 - Related: ADR-0583, ADR-0514, ADR-0749, ADR-0404, ADR-0310, ADR-0759, ADR-0372, SPEC-0056, SPEC-0073, SPEC-0074, SPEC-0075, amendment 245, amendment 246, brief #1972, brief #1954, plan #661
 - Requirements: REQ-037
 
@@ -17,8 +17,10 @@ offline sibling checks), and on 2026-11-25 the same reading was ruled four times
 #1947, amendments 245 and 246, Q-1954-A on #1961). The owner's answer on #1947 (comment 7171440802,
 2026-11-25T18:49:05Z, quoted as data): "Maintainer answer: Q-1935-2 accept the imports" was a one-off answer for
 `check_domains.py`, not a standing ruling; and on the freeze (2026-11-26T04:21Z): "File both and work on creating the
-brief for all pending on freeze . Go ahead and park them". No owner line grants this ruling yet: the decision below is
-proposed and waits for the owner's answers to Q-KI-1 (the reading of the four spec lines) and Q-KI-2 (the base set).
+brief for all pending on freeze . Go ahead and park them". The standing ruling is the owner's answers on #1985
+(quoted as data): "Maintainer answer: Q-KI-1 accept" (comment 7186056545, 2026-11-26T07:59:20Z: the reading of the
+four spec lines, no spec text changed) and "Maintainer answer: Q-KI-2 accept" (comment 7186058007,
+2026-11-26T07:59:25Z: the base set, exactly the six modules plus the offline checks).
 The walk depth of a member (Q-1972-2) is answered on #1985 (2026-11-26T07:35:10Z, from brief #1972 answers 1 and 3
 and Q-KI-4): the module-level walk decides the set.
 
