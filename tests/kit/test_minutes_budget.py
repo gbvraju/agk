@@ -16,7 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 
 import doctor as doctor_script  # noqa: E402
+import facts  # noqa: E402
 import minutes  # noqa: E402
+import scorecard  # noqa: E402
 
 TODAY = date(2026, 10, 30)
 REPO = {"full_name": "example/app", "private": True, "owner": {"login": "example", "type": "User"}}
@@ -60,6 +62,8 @@ class Source:
             return 200, {"total_count": len(self.runs), "workflow_runs": list(self.runs)}
         if name == "rate_limit":
             return (200, self.rate) if self.rate is not None else (404, None)
+        if name == "repo":
+            return 200, REPO
         if name.startswith("jobs-"):
             rid = int(name.removeprefix("jobs-"))
             run = next(r for r in self.runs if r["id"] == rid)
@@ -334,3 +338,164 @@ def test_the_doctor_check_is_information_in_every_execution_mode(tmp_path, mode)
     assert result.message == (
         " (actions minutes: 100 of 2000 used (5%), level ok; runs out not this month)"
     )
+
+
+# --- fix list 7200656338 ------------------------------------------------------------------------
+
+
+def test_a_day_is_finished_by_the_real_clock_not_by_today(tmp_path, monkeypatch):
+    """REQ-020: brief #2011 answer 3, fix list item 1 (`--today` tomorrow keeps no file of the real
+    today, and a later reading reads that day again)."""
+    monkeypatch.setattr(minutes, "utc_today", lambda: date(2026, 10, 30))
+    keep = tmp_path / "keep"
+    runs = runs_per_day(1)
+    minutes.estimate(Source(runs, keep, rate(5000)), *week(), today=date(2026, 10, 31))
+    assert not (keep / "2026-10-30.json").exists() and (keep / "2026-10-29.json").exists()
+    again = Source(runs, keep, rate(5000))
+    minutes.estimate(again, *week(), today=date(2026, 10, 31))
+    assert again.job_calls() == ["jobs-7"]
+
+
+class Answers:
+    """A metrics-style source (data or None) of 1,500 runs' job lists and the allowance."""
+
+    def __init__(self, remaining: int | None) -> None:
+        self.remaining, self.calls = remaining, 0
+
+    def get(self, name: str, endpoint: str, until=None):
+        if name == "rate_limit":
+            return None if self.remaining is None else rate(self.remaining)
+        self.calls += 1
+        return two_minutes(date(2026, 10, 28))
+
+
+def fifteen_hundred() -> dict:
+    runs = [a_run(i, date(2026, 10, 28)) for i in range(1, 1501)]
+    return {"total_count": len(runs), "workflow_runs": runs}
+
+
+@pytest.mark.parametrize("adapter", [facts.WeekRuns, scorecard.Paired])
+def test_the_week_readers_read_the_allowance_too(adapter):
+    """REQ-020: brief #2011 answers 4 and 9, fix list item 2 (14,000 calls left: all 1,500 job
+    lists read and the estimate complete; no allowance read: 1,000 and incomplete)."""
+    src = Answers(14000)
+    est = minutes.estimate(adapter(src, fifteen_hundred()), *week(), today=TODAY)
+    assert (src.calls, est.complete, est.minutes) == (1500, True, 3000)
+    unread = Answers(None)
+    est = minutes.estimate(adapter(unread, fifteen_hundred()), *week(), today=TODAY)
+    assert (unread.calls, est.complete) == (1000, False)
+
+
+def test_a_stopped_report_says_at_least_and_unknown_when_nothing_was_read():
+    """REQ-020: brief #2011 answer 4, fix list item 3 (never an exact figure, never 0)."""
+    text = minutes.render(minutes.read(Source(runs_per_day(100), rate=rate(2500)), TODAY, 80, None))
+    assert "minutes used this month: at least 1000 (estimate from run history)" in text
+    assert "estimate from run history: at least 1000 " in text
+    assert "(29 of 31 days read; run again after the GitHub allowance resets at 17:51 UTC)" in text
+    spent = minutes.render(minutes.read(Source(runs_per_day(1), rate=rate(1500)), TODAY, 80, None))
+    assert "minutes used this month: unknown" in spent
+    assert "estimate from run history: unknown (the GitHub allowance is spent)" in spent
+    assert (
+        "actions minutes: unknown (24 of 31 days read; run again after" in spent
+    )  # 30 Sep-23 Oct: no runs
+    assert ": 0 (" not in spent
+
+
+def test_the_day_files_live_in_the_repository_roots_common_dir(repo, tmp_path_factory, monkeypatch):
+    """REQ-020: brief #2011 answers 3, 6 and 7, fix list items 4 and 6 (the real path, no injected
+    folder: from a subfolder, shared by a linked worktree, none outside a git checkout)."""
+    repo.write("sub/a.txt", "a\n")
+    repo.git("add", "-A")
+    repo.git("commit", "-q", "-m", "first")
+    expected = (repo.root / ".git").resolve() / "agk-minutes" / "example-app"
+    monkeypatch.chdir(repo.root / "sub")
+    assert minutes.Gh("example/app").keep == expected
+    linked = tmp_path_factory.mktemp("linked") / "wt"
+    repo.git("worktree", "add", "-q", str(linked))
+    monkeypatch.chdir(linked)
+    assert minutes.Gh("example/app").keep == expected
+    monkeypatch.chdir(tmp_path_factory.mktemp("plain"))
+    assert minutes.Gh("example/app").keep is None
+
+
+@pytest.mark.parametrize("mode", ["local", "hosted", "hybrid", "pool"])
+@pytest.mark.parametrize("used", [1000, 1600, 1900])
+def test_the_check_warns_and_never_fails_above_half_in_every_mode(tmp_path, mode, used):
+    """REQ-020: brief #2011 answer 6, fix list item 5 (from the 50% level the check is a warning,
+    the `warn` severity, never an error, in every execution mode)."""
+    api = tmp_path / "api"
+    api.mkdir()
+    (api / "repo.json").write_text(json.dumps(REPO), encoding="utf-8")
+    billed = {"total_minutes_used": used, "included_minutes": 2000}
+    (api / "billing.json").write_text(json.dumps(billed), encoding="utf-8")
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "agk.toml").write_text(
+        f'default_branch = "main"\nexecution = "{mode}"\n', encoding="utf-8"
+    )
+    result = doctor_script.minutes_result(root, doctor_script.Reads(None, api), date(2026, 10, 19))
+    assert result.status == "fail"
+    assert doctor_script.CHECKS["actions-minutes"][0] == "warn"
+
+
+def test_personal_mode_reads_no_forge(tmp_path):
+    """REQ-020: brief #2011 answer 6 (`[personal]`: no forge, `not-github`, no minutes read)."""
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
+    result = doctor_script.minutes_result(root, doctor_script.Reads(None, None), TODAY)
+    assert (result.status, result.reason) == ("cannot-check", "not-github")
+
+
+def test_paused_prints_the_one_line_before_any_minutes_read(repo):
+    """REQ-020: brief #2011 answer 6 (`paused = true`: the `--paused` path is unchanged)."""
+    repo.write("agk.toml", 'default_branch = "main"\npaused = true\n')
+    proc = repo.run("doctor.py", "--paused")
+    assert (proc.returncode, proc.stdout) == (0, "agk paused\n"), proc.stdout + proc.stderr
+
+
+def test_a_day_file_is_written_whole_by_rename(tmp_path, monkeypatch):
+    """REQ-020: brief #2011 answer 7 (two sessions: each writes a whole file by rename)."""
+    keep = tmp_path / "keep"
+    moves: list[tuple[Path, Path]] = []
+    real = minutes.os.replace
+
+    def recorded(a, b):
+        moves.append((Path(a), Path(b)))
+        real(a, b)
+
+    monkeypatch.setattr(minutes.os, "replace", recorded)
+    minutes.estimate(Source([a_run(1, date(2026, 10, 28))], keep, rate(5000)), *week(), today=TODAY)
+    assert (keep / "2026-10-28.json") in [b for _, b in moves]
+    assert all(a.parent == keep and a.name.endswith(".tmp") for a, _ in moves)
+    assert not list(keep.glob("*.tmp")) and not list(keep.glob(".*.tmp"))
+
+
+def test_a_day_file_of_the_month_before_is_read_only_inside_the_window(tmp_path):
+    """REQ-020: brief #2011 answer 7 (a week that starts in the month before reads its kept day;
+    a month reading leaves it out of the month's sums)."""
+    keep = tmp_path / "keep"
+    nov = (datetime(2026, 11, 1, tzinfo=UTC), datetime(2026, 12, 1, tzinfo=UTC))
+    seven = (datetime(2026, 10, 28, tzinfo=UTC), datetime(2026, 11, 4, tzinfo=UTC))
+    runs = [a_run(1, date(2026, 10, 29)), a_run(2, date(2026, 11, 2))]
+    today = date(2026, 11, 3)
+    first = minutes.estimate(Source(runs, keep, rate(5000)), *nov, True, seven, today=today)
+    assert (keep / "2026-10-29.json").exists()
+    src = Source(runs, keep, rate(5000))
+    again = minutes.estimate(src, *nov, True, seven, today=today)
+    assert src.job_calls() == []  # both days kept
+    assert (again.minutes, again.week_minutes) == (first.minutes, first.week_minutes) == (2, 4)
+
+
+def test_each_rate_set_keeps_its_own_file(tmp_path):
+    """REQ-020: brief #2011 answer 6, fix list item 7 (a reading at the runner rates and one
+    counted once do not rewrite each other's day files)."""
+    keep = tmp_path / "keep"
+    day = date(2026, 10, 28)
+    for rates in (True, False):
+        minutes.estimate(Source([a_run(1, day)], keep, rate(5000)), *week(), rates, today=TODAY)
+    assert (keep / "2026-10-28.json").exists() and (keep / "2026-10-28.plain.json").exists()
+    for rates in (True, False):
+        src = Source([a_run(1, day)], keep, rate(5000))
+        minutes.estimate(src, *week(), rates, today=TODAY)
+        assert src.job_calls() == []

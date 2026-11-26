@@ -48,6 +48,7 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -89,6 +90,7 @@ UNREAD_LIMIT = 1000
 KEEP_FOLDER = "agk-minutes"
 KEEP_SCHEMA = 1
 AUTO = object()
+ALLOWANCE = "allowance"  # the reason class of an estimate the allowance left unread
 
 
 def reason_of(status: int) -> str:
@@ -230,16 +232,17 @@ class Gh:
 
 
 def keep_folder(repo: str) -> Path | None:
-    """`<git common dir>/agk-minutes/<owner>-<repo>`, shared by the clone's worktrees; None outside
-    a git checkout (nothing is kept, brief #2011 answer 7)."""
+    """`<git common dir>/agk-minutes/<owner>-<repo>` of the repository root (`repo_root`), shared
+    by the clone's worktrees; None outside a git checkout (nothing kept, brief #2011 answer 7)."""
     try:
+        root = repo_root()
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True,
             text=True,
             encoding="utf-8",
         )
-    except OSError:
+    except (OSError, CheckError):
         return None
     found = proc.stdout.strip()
     if proc.returncode != 0 or not found or not repo:
@@ -319,6 +322,12 @@ class Estimate:
     reset: str | None = None
 
 
+def utc_today() -> date:
+    """The real UTC day: a day is finished, and may be kept, only before it (fix list
+    7200656338 item 1), whatever `--today` says."""
+    return datetime.now(UTC).date()
+
+
 def midnight(moment: datetime) -> bool:
     return moment.astimezone(UTC).timetz().replace(tzinfo=None) == datetime.min.time()
 
@@ -327,11 +336,17 @@ def day_start(day: date) -> datetime:
     return datetime(day.year, day.month, day.day, tzinfo=UTC)
 
 
+def day_file(keep: Path, day: str, rates: bool) -> Path:
+    """A kept day's file, one per rate set (fix list 7200656338 item 7): `<day>.json` counted at
+    the runner rates (a private repository), `<day>.plain.json` counted once."""
+    return keep / (f"{day}.json" if rates else f"{day}.plain.json")
+
+
 def load_day(keep: Path, day: date, rates: bool) -> dict | None:
     """A kept day, or None when it is missing, cannot be parsed, is of another schema or was kept
     for the other rates (then the day is read again, brief #2011 answer 3)."""
     try:
-        data = json.loads((keep / f"{day.isoformat()}.json").read_text(encoding="utf-8"))
+        data = json.loads(day_file(keep, day.isoformat(), rates).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     if not isinstance(data, dict) or data.get("schema") != KEEP_SCHEMA:
@@ -361,9 +376,9 @@ def save_day(keep: Path, data: dict) -> None:
     """Writes one kept day whole, by rename, so a reader sees one file or the other."""
     try:
         keep.mkdir(parents=True, exist_ok=True)
-        tmp = keep / f".{data['day']}.{os.getpid()}.tmp"
+        tmp = keep / f".{data['day']}.{os.getpid()}.{threading.get_ident()}.tmp"
         tmp.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
-        os.replace(tmp, keep / f"{data['day']}.json")
+        os.replace(tmp, day_file(keep, data["day"], data["rates"]))
     except OSError:
         return  # nothing kept; the day is read again next time
 
@@ -429,7 +444,8 @@ def estimate(
     since = (first - timedelta(days=1)).date().isoformat()
     floor = datetime.fromisoformat(since).replace(tzinfo=UTC)
     last = max(end, week[1]) if week else end
-    today = today or datetime.now(UTC).date()
+    today = today or utc_today()
+    finished = min(today, utc_today())  # a day before this one is finished
     keep = getattr(src, "keep", None)
     if not all(midnight(x) for x in (start, end, *(week or ()))):
         keep = None  # a kept day holds whole days only
@@ -438,7 +454,7 @@ def estimate(
     kept: dict[date, dict] = {}
     if keep is not None:
         for day in days:
-            if day < today and (data := load_day(keep, day, rates)) is not None:
+            if day < finished and (data := load_day(keep, day, rates)) is not None:
                 kept[day] = data
     est = Estimate(days=len(days))
     runs: list[dict] = []
@@ -547,7 +563,7 @@ def estimate(
     est.days_read = len(kept) + sum(1 for r in fresh.values() if r["whole"])
     if keep is not None:
         for day, record in fresh.items():
-            if day < today and record["whole"]:
+            if day < finished and record["whole"]:
                 save_day(
                     keep,
                     {
@@ -560,6 +576,8 @@ def estimate(
                     },
                 )
     est.minutes = sum(est.workflows.values())
+    if est.stopped and not chosen and not kept:  # nothing read: unknown, never 0 (item 3)
+        est.minutes, est.reason = None, ALLOWANCE
     return est
 
 
@@ -568,9 +586,10 @@ def stopped_line(est: Estimate) -> str | None:
     if not est.stopped:
         return None
     when = f"resets at {est.reset}" if est.reset else "resets, at a time that cannot be read"
+    used = "unknown" if est.minutes is None else f"at least {est.minutes} used this month"
     return (
-        f"actions minutes: at least {est.minutes} used this month ({est.days_read} of "
-        f"{est.days} days read; run again after the GitHub allowance {when})"
+        f"actions minutes: {used} ({est.days_read} of {est.days} days read; run again after the "
+        f"GitHub allowance {when})"
     )
 
 
@@ -788,14 +807,20 @@ def render(data: dict) -> str:
     if used["source"] == "billing":
         lines.append(f"minutes used this month: {used['minutes']} (billing, the whole account)")
     elif used["source"] == "estimate":
-        lines.append(f"minutes used this month: {used['minutes']} (estimate from run history)")
+        bound = "" if est["complete"] else "at least "
+        lines.append(
+            f"minutes used this month: {bound}{used['minutes']} (estimate from run history)"
+        )
     else:
         lines.append("minutes used this month: unknown")
     if inc["minutes"] is not None:
         lines.append(f"included minutes: {inc['minutes']}")
     else:
         lines.append(f"included minutes: unknown (the token cannot read billing: {inc['reason']})")
-    if est["minutes"] is None:
+    if est["minutes"] is None and est["reason"] == ALLOWANCE:
+        lines.append("estimate from run history: unknown (the GitHub allowance is spent)")
+        lines.append(est["stopped"])
+    elif est["minutes"] is None:
         lines.append(
             f"estimate from run history: unknown (the token cannot read the run history: "
             f"{est['reason']})"
