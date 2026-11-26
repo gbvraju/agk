@@ -1084,6 +1084,7 @@ def test_with_no_weekly_line_the_save_step_keeps_the_windows_figures(tmp_path, m
         "pr_tests": LINE_75,
         "pr_tests_median": MEDIAN_FAST,
         "full_suite": FULL_SUITE,
+        "pr_tests_limit": None,  # every pull request read (brief #2012 answer 8)
     }
 
 

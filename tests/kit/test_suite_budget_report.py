@@ -115,7 +115,8 @@ def test_the_median_minutes_of_each_mode(repo, tmp_path):
     api = Api(tmp_path)
     saved(api, [(1, SELECTED, 60), (2, SELECTED, 180), (3, ALWAYS, 600)])
     assert line(report(repo, api), "pr tests median:") == (
-        "pr tests median: selected 2.0 minutes (2 runs); full 10.0 minutes (1 runs)"
+        "pr tests median: selected 2.0 minutes (2 pull requests); "
+        "full 10.0 minutes (1 pull requests)"
     )
 
 
@@ -124,7 +125,8 @@ def test_a_mode_with_no_run_is_unknown(repo, tmp_path):
     api = Api(tmp_path)
     saved(api, [(1, SELECTED, 60)])
     assert line(report(repo, api), "pr tests median:") == (
-        "pr tests median: selected 1.0 minutes (1 runs); full unknown (0 runs)"
+        "pr tests median: selected 1.0 minutes (1 pull requests); "
+        "full unknown (0 pull requests)"
     )
 
 

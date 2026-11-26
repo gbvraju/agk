@@ -28,14 +28,27 @@ def ran_job(
     }
 
 
-def saved(
-    api: Api, runs: list[tuple[int, str, int]], sha: str = HEAD, name: str = "Tests of the checks"
-) -> None:
-    """Each run: its id, its job log and the seconds of its test step."""
-    api.runs(
-        sha, [run(rid, "governance full", f"09:0{i}:00") for i, (rid, _, _) in enumerate(runs)]
-    )
-    for rid, text, seconds in runs:
+def own_pull(api: Api, number: int) -> str:
+    """Pull request NUMBER, a copy of 121 with a head of its own; its head."""
+    head = f"{number:04d}{0:036d}"
+    for name in ("comments", "files"):
+        (api.path / f"{name}-{number}.json").write_text((api.path / f"{name}-121.json").read_text())
+    (api.path / f"commits-{number}.json").write_text(json.dumps([{"sha": head}]))
+    data = json.loads((api.path / "pull-121.json").read_text())
+    data.update(number=number, head={"sha": head})
+    (api.path / f"pull-{number}.json").write_text(json.dumps(data))
+    pulls = json.loads((api.path / "pulls.json").read_text())
+    (api.path / "pulls.json").write_text(json.dumps([*pulls, {**pulls[0], "number": number}]))
+    (api.path / f"checks-{head}.json").write_text(json.dumps({"check_runs": []}))
+    return head
+
+
+def saved(api: Api, runs: list[tuple[int, str, int]], name: str = "Tests of the checks") -> None:
+    """Each run, of a pull request of its own (brief #2012: one log per pull request): its id,
+    its job log and the seconds of its test step."""
+    for i, (rid, text, seconds) in enumerate(runs):
+        head = HEAD if i == 0 else own_pull(api, 121 + i)
+        api.runs(head, [run(rid, "governance full", f"09:0{i}:00")])
         api.jobs(rid, [ran_job(rid * 10, seconds, name)])
         (api.path / f"job-log-{rid * 10}.json").write_text(json.dumps(text))
 
@@ -78,8 +91,8 @@ def test_the_share_the_minutes_and_each_reason(repo, tmp_path):
         ],
     )
     assert line(report(repo, api), "pr tests:") == (
-        "pr tests: 5 runs; selected 1 of 5 (20%); test step 12.0 minutes; "
-        "full: always_full 1, unmapped 1, thorough 1, other 1; unknown: 0"
+        "pr tests: 5 pull requests; selected 1 of 5 (20%); test step 12.0 minutes; "
+        "full: always_full 1, unmapped 1, share 0, thorough 1, other 1; unknown: 0"
     )
 
 
@@ -104,7 +117,7 @@ def test_a_project_run_is_read_from_its_own_lines(repo, tmp_path):
     )
     saved(api, [(1, picked, 60), (2, full, 60)], name="Project tests")
     assert line(report(repo, api), "pr tests:").startswith(
-        "pr tests: 2 runs; selected 1 of 2 (50%);"
+        "pr tests: 2 pull requests; selected 1 of 2 (50%);"
     )
 
 
@@ -113,7 +126,9 @@ def test_a_run_of_a_push_is_not_counted(repo, tmp_path):
     api = Api(tmp_path)
     api.runs(HEAD, [run(1, "governance full", event="push")])
     api.jobs(1, [ran_job(10)])
-    assert line(report(repo, api), "pr tests:").startswith("pr tests: 0 runs; selected 0 of 0 (-);")
+    assert line(report(repo, api), "pr tests:").startswith(
+        "pr tests: 0 pull requests; selected 0 of 0 (-);"
+    )
 
 
 def test_a_skipped_step_is_not_a_run(repo, tmp_path):
@@ -121,7 +136,7 @@ def test_a_skipped_step_is_not_a_run(repo, tmp_path):
     api = Api(tmp_path)
     api.runs(HEAD, [run(1, "governance full")])
     api.jobs(1, [ran_job(10, conclusion="skipped")])
-    assert line(report(repo, api), "pr tests:").startswith("pr tests: 0 runs;")
+    assert line(report(repo, api), "pr tests:").startswith("pr tests: 0 pull requests;")
 
 
 def test_a_log_that_cannot_be_read_is_unknown(repo, tmp_path):
@@ -129,14 +144,14 @@ def test_a_log_that_cannot_be_read_is_unknown(repo, tmp_path):
     api = Api(tmp_path)
     api.runs(HEAD, [run(1, "governance full")])
     api.jobs(1, [ran_job(10)])
-    assert line(report(repo, api), "pr tests:").endswith("unknown: 1")
+    assert line(report(repo, api), "pr tests:").endswith("unknown: 1 (failed 1)")
 
 
 def test_a_log_with_no_mode_line_is_unknown(repo, tmp_path):
     """REQ-051: SPEC-0007 rule 10 (a log that states no mode is `unknown`, never a mode)."""
     api = Api(tmp_path)
     saved(api, [(1, log("nothing about tests"), 60)])
-    assert line(report(repo, api), "pr tests:").endswith("unknown: 1")
+    assert line(report(repo, api), "pr tests:").endswith("unknown: 1 (no mode 1)")
 
 
 def test_no_full_run_names_no_path(repo, tmp_path):
