@@ -326,6 +326,7 @@ from common import (
     CheckError,
     cleared_items,
     covered_fix_list,
+    differs_problem,
     final_accepts,
     fix_items,
     option_pairs,
@@ -2066,7 +2067,12 @@ WATCH_BOUND = 300  # seconds: `watch` returns by then with `tick` (ADR-0368, ADR
 RENEW_EVERY = 240  # seconds between renewals during one watch
 LEASE_LINE = re.compile(
     r"Conductor: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+)"
-    r"(?: since (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z))?"
+    r"(?: since (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z))?(; tools: gitleaks missing)?"
+)
+TOOLS_MARK = "; tools: gitleaks missing"  # brief #2006 answer 1 (ADR-0830)
+TOOLS_LINE = (
+    "lease: tools: gitleaks is missing; a light re-prove asks the builder for its record "
+    "(tool: gitleaks)"
 )
 TIME = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -2460,10 +2466,13 @@ def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
 def form_problem(body: str) -> str | None:
     """Brief #2001 answer 4, before a post only: a `Verdict: fix list` that gives the builder
     nothing to do, with no numbered item and no `Final:` line, or with only ADR acceptance lines
-    (post `Verdict: cleared <head>` with them). A posted one is still read (`verdict_problem`)."""
+    (post `Verdict: cleared <head>` with them), and a verdict whose `Differs:` lines do not match
+    its evidence check (brief #2006 answer 3). A posted one is still read (`verdict_problem`)."""
     text = body.strip()
     if cleared_items(text):  # the fix list on 12129d1, item 2
         return CLEARED_ITEMS
+    if problem := differs_problem(text):  # brief #2006 answer 3
+        return problem
     if not text.startswith("Verdict: fix list") or fix_items(text):
         return None
     if not any(line.startswith("Final:") for line in text.splitlines()):
@@ -2757,6 +2766,20 @@ def fresh_own(holder, found, name: str | None, now: datetime) -> bool:
     return start is not None and (now - start).total_seconds() < RENEW_EVERY
 
 
+def lease_tools(root, repo: str) -> str | None:
+    """Brief #2006 answer 1 (ADR-0830): `TOOLS_LINE` when gitleaks is not on PATH in local mode
+    (`reprove_local`), the refusal of a malformed setting as one line, else None. The take still
+    succeeds: the conductor's reviews need no scanner; a default branch not fetched says nothing."""
+    if shutil.which("gitleaks") is not None:
+        return None
+    try:
+        return TOOLS_LINE if reprove_local(root, repo) else None
+    except merge_cleared.Refused:
+        return None
+    except CheckError as err:
+        return f"lease: tools: not checked: {err}"
+
+
 def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
     issue = plan_issue(root)
     if issue is None:
@@ -2793,12 +2816,19 @@ def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
         return 0
     if mode == "--take":
         taken = found[1].group(4) or found[1].group(2) if holder and found else stamp_of(now)
-        text = f"body=Conductor: active {stamp_of(now)} {name} since {taken}"
+        # brief #2006 answer 1: a fresh take says a missing scanner once; a renew of a marked lease
+        # checks the tool again and keeps the mark only while it is still missing
+        kept = bool(holder and found and found[1].group(5))
+        tools = lease_tools(root, repo) if kept or not holder else None
+        suffix = TOOLS_MARK if tools == TOOLS_LINE else ""
+        text = f"body=Conductor: active {stamp_of(now)} {name} since {taken}{suffix}"
         write_marker(repo, issue, found, text)
         if mark is not None:
             mark.parent.mkdir(parents=True, exist_ok=True)
             mark.write_text(f"{name}\n", encoding="utf-8")
         print(f"lease: taken by {name} until {stamp_of(now + timedelta(minutes=LEASE_MINUTES))}")
+        if tools and not holder:
+            print(tools)
         return 0
     if holder:  # --release by the holder
         write_marker(repo, issue, found, f"body=Conductor: released {stamp_of(now)} {name}")

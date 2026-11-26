@@ -228,7 +228,7 @@ import tempfile
 import time
 import tomllib
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -255,8 +255,10 @@ from common import (  # noqa: E402
     CheckError,
     cleared_items,
     covered_fix_list,
+    differs_lines,
     final_accepts,
     final_records,
+    fix_items,
     long_form,
     long_temp_dir,
     show,
@@ -1001,26 +1003,86 @@ def stamp(item: dict) -> tuple[str, int]:
     return str(item.get("created_at") or ""), cid if isinstance(cid, int) else -1
 
 
-def answered(comments: list[dict], verdict: dict, sha: str, approvers: list[str]) -> bool:
+VERDICT_HEAD = re.compile(
+    r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{40})(?: \(conductor fallback\))?"
+)
+CARRY_DEPTH = 8  # light merges in a row an accept carries along (brief #2006 answer 7)
+
+
+def light_of(root: Path) -> Callable[[str, str], bool] | None:
+    """Whether NEW is the light merge of OLD (`session_plan.light_merge`) on the default branch
+    as last fetched and its `[flow] shared_indexes`, or None when either cannot be read (brief
+    #2006 answer 2a)."""
+    try:
+        base, data = default_ref(root)
+    except Refused:
+        return None
+    shared = shared_of(data)
+    if shared is None:
+        return None
+    return lambda old, new: session_plan.light_merge(root, old, new, base, shared)
+
+
+def differs_on(item: dict, head: str) -> bool:
+    return "differs" in [
+        m.group(1)
+        for m in EVIDENCE.finditer(str(item.get("body") or ""))
+        if m.group(2) == head[:12]
+    ]
+
+
+def answered(
+    comments: list[dict], verdict: dict, sha: str, approvers: list[str],
+    light: Callable[[str, str], bool] | None = None, depth: int = 0,
+) -> bool:  # fmt: skip
     """A comment by a spec approver, after the verdict, whose first line is exactly
-    `Maintainer answer: accept <the 40-character head>` (SPEC-0039 rule 4)."""
+    `Maintainer answer: accept <the 40-character head>` (SPEC-0039 rule 4), or, with LIGHT, such
+    an accept of OLD carried to SHA (brief #2006 answer 2, ADR-0830): the newest earlier verdict
+    on another head is a `differs` clearing or covered verdict on OLD (never `rejected`) with the
+    same `Differs:` lines as VERDICT, SHA
+    is OLD's light merge, the accept follows that verdict, and no verdict between them, nor that
+    one, has a numbered item. Any other difference needs a new accept."""
     wanted = ACCEPT.format(sha)
     for item in comments:
         if first_line(item) != wanted or login(item) not in approvers:
             continue
         if stamp(item) > stamp(verdict):
             return True
+    lines = differs_lines(str(verdict.get("body") or ""))
+    if light is None or depth >= CARRY_DEPTH or not lines:
+        return False
+    earlier = [
+        c for c in comments if first_line(c).startswith("Verdict:") and stamp(c) < stamp(verdict)
+    ]
+    for prior in sorted(earlier, key=stamp, reverse=True):
+        body = str(prior.get("body") or "")
+        if fix_items(body) or cleared_items(body):
+            return False
+        found = VERDICT_HEAD.fullmatch(first_line(prior))
+        old = found.group(1) if found else None
+        if old == sha:
+            continue  # another verdict on this head, with no numbered item
+        cleared = CLEARED_LINE.fullmatch(first_line(prior).removesuffix(FALLBACK)) is not None
+        clearing = cleared and readable_cleared(prior)  # as `carried_from` reads one
+        if old is None or not (clearing or accepted_adrs(prior, old) is not None):
+            return False  # a rejected verdict, or a fix list that is not covered, carries nothing
+        if not differs_on(prior, old) or differs_lines(body) != lines:
+            return False
+        return light(old, sha) and answered(comments, prior, old, approvers, light, depth + 1)
     return False
 
 
-def local_evidence(verdict: dict, comments: list[dict], sha: str, approvers: list[str]) -> None:
+def local_evidence(
+    verdict: dict, comments: list[dict], sha: str, approvers: list[str],
+    light: Callable[[str, str], bool] | None = None,
+) -> None:  # fmt: skip
     body = str(verdict.get("body") or "")
     lines = [x.strip() for x in body.splitlines()]
     named = [m for x in lines if (m := LOCAL_EVIDENCE.match(x)) and sha.startswith(m.group(1))]
     checks = [m.group(1) for m in EVIDENCE.finditer(body) if m.group(2) == sha[:12]]
     if not named or not checks:
         raise Held("no local evidence for this head (rule 4)")
-    if "differs" in checks and not answered(comments, verdict, sha, approvers):
+    if "differs" in checks and not answered(comments, verdict, sha, approvers, light):
         raise Held("evidence differs (rule 4)")
 
 
@@ -2557,11 +2619,11 @@ def lapse_recheck(data: dict, repo: str, authors: list[str]) -> None:
 
 def lapse_evidence(
     repo: str, verdict: dict, comments: list[dict], sha: str, approvers: list[str],
-    required: list[str],
+    required: list[str], light: Callable[[str, str], bool] | None = None,
 ) -> None:  # fmt: skip
     """A lapse merge needs both kinds of evidence of rule 4 for its head: the verdict's local
     evidence that agrees and every required check green on GitHub (brief #1615 answer 1)."""
-    local_evidence(verdict, comments, sha, approvers)
+    local_evidence(verdict, comments, sha, approvers, light)
     ci_evidence(repo, sha, required)
 
 
@@ -3100,10 +3162,11 @@ def holds(
         raise Held("no record issue (rule 7)")
     if lapse and titled(issues, RECORD_TITLE):
         raise Held(LAPSE_RECORD_OPEN)
+    light = light_of(root)  # brief #2006 answer 2: an accept carries over a light merge
     if lapse:
-        lapse_evidence(repo, verdict, comments, sha, rules.approvers, rules.required)
+        lapse_evidence(repo, verdict, comments, sha, rules.approvers, rules.required, light)
     elif local_mode(rules.data, issues):
-        local_evidence(verdict, comments, sha, rules.approvers)
+        local_evidence(verdict, comments, sha, rules.approvers, light)
     else:
         ci_evidence(repo, sha, rules.required)
     accepts = accepted_adrs(verdict, named) or []

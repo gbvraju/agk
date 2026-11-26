@@ -20,8 +20,8 @@ After a removal (brief #348 build (b), ADR-0203), a git work tree with no agk.to
 kit's files left is reported as `no kit installed`, exit 0; anything else without agk.toml is the
 refusal of SPEC-0006 rule 13.
 `actions-minutes` (brief #370, ADR-0215) prints the one line of `minutes.py --line`: it reads, also
-with GET, the account's Actions billing and, only when that cannot be read, this month's run history
-of the repository; a warning from the 50% level on, never a failure.
+with GET, the account's Actions billing only (brief #2011, ADR-0832: at most two calls with the
+repository read, never the run history); a warning from the 50% level on, never a failure.
 Brief #548 (ADR-0272): with more than five linked worktrees it reads, with one GET each, the pull
 requests of their branches and prints `tidy: <n> finished worktrees; run session.py tidy` before
 the summary when more than five are candidates of `session.py tidy`; it changes no exit code.
@@ -661,9 +661,8 @@ HINTS = {
     "no-release": "the kit's repository has no published release, or it cannot be seen",
     "release-unreadable": "the newest release of the kit's repository could not be read; try "
     "again later or check `gh` access to it",
-    "minutes-unknown": "the token can read neither the account's Actions billing nor the run "
-    "history; run `python3 scripts/agk/minutes.py` with a token that can "
-    "(docs/guides/project-ci.md)",
+    "minutes-unknown": "the token cannot read the account's Actions billing; run "
+    "`python3 scripts/agk/minutes.py` for the estimate (docs/guides/project-ci.md)",
 }
 
 
@@ -1433,7 +1432,7 @@ def ci_results(root: Path, config: dict) -> dict[str, Result]:
 def minutes_result(root: Path, reads: Reads, today: datetime.date | None = None) -> Result:
     """`actions-minutes` (brief #370 answer 2): the line of `minutes.py --line`; a warning from the
     50% level on, never a failure; cannot-check when the repository cannot be read, or when
-    neither billing nor the run history can (`minutes-unknown`)."""
+    billing cannot (`minutes-unknown`; brief #2011 answer 1: billing only, no estimate)."""
     repo_data, reason = reads.get("repo", "")
     if not isinstance(repo_data, dict):
         return Result("cannot-check", reason or "bad-response")

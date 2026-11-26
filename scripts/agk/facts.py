@@ -846,7 +846,12 @@ class WeekRuns:
     def __init__(self, src: Any, runs: dict) -> None:
         self.src, self.runs = src, runs
 
+    reads_allowance = True  # brief #2011 answer 4 (the first fix list item 2)
+
     def get(self, name: str, endpoint: str, until: Any = None) -> tuple[int, Any]:
+        if name == "rate_limit":
+            data = self.src.get("rate_limit", "rate_limit")
+            return (200, data) if isinstance(data, dict) else (404, None)
         if name == "runs":
             return 200, self.runs
         rid = name.removeprefix("jobs-")

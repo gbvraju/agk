@@ -34,9 +34,9 @@ python3 scripts/agk/minutes.py --line
 ```
 
    It says how many minutes are used of the plan's included minutes, the level passed (`ok`, `50%`, `minutes_warn`, `95%`) and
-   the day they run out at this month's rate (`runs out about <YYYY-MM-DD>` or `not this month`); `unknown` when the token can
-   read neither billing nor the run history. At the `95%` level, recommend local mode (`docs/guides/local-mode.md`) before
-   starting sessions: their checks may soon not run on GitHub. The line is information; it starts and stops nothing.
+   the day they run out at this month's rate (`runs out about <YYYY-MM-DD>` or `not this month`); `unknown`, with the reason
+   class, when the token cannot read billing (`python3 scripts/agk/minutes.py` then gives the estimate). At the `95%` level,
+   recommend local mode (`docs/guides/local-mode.md`) before starting sessions: their checks may soon not run on GitHub. The line is information; it starts and stops nothing.
 
 2. **Confirm.** Ask once: `Start these <n> sessions: <name takes #brief, ...>? (yes/no)`. Only a plain `yes` from the person counts; any
    other answer, or none, stops here and nothing starts. Do not change the plan, and do not start a session the plan does not name.
