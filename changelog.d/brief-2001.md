@@ -1,0 +1,1 @@
+- Verdicts: a verdict with nothing to fix is posted as `Verdict: cleared <head>`, carrying any ADR `Final:` lines; the conductor's check refuses a fix list with nothing to fix before it is posted, and the builder's watch ignores the cleared label (brief #2001, ADR-0827)

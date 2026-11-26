@@ -2409,7 +2409,8 @@ def head_problem(
             return None
         if files is None:
             files = read(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
-        touched = {str(f.get("filename")) for f in files if f.get("status") in ("added", "modified")}
+        changed = ("added", "modified")
+        touched = {str(f.get("filename")) for f in files if f.get("status") in changed}
         return FINAL_OUTSIDE if any(path not in touched for path in finals) else None
     if not text.startswith("Verdict: fix list") or fix_items(text):
         return None

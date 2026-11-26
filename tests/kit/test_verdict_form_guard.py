@@ -76,7 +76,7 @@ def test_a_fix_list_with_no_items_on_a_covered_pull_request_must_be_cleared(proj
 
 
 def test_a_fix_list_with_no_items_is_refused_beside_a_proposed_adr_too(proj, stub):  # noqa: F811
-    """Brief #2001 answer 4 (ADR-0827): the acceptance is `Verdict: cleared` with its Final lines."""
+    """Brief #2001 answer 4 (ADR-0827): an acceptance is `Verdict: cleared` with its Final lines."""
     serve(stub, [{"filename": ADR, "status": "added"}])
     assert check(proj, stub, NO_ITEMS, "--pr", "7").stdout.strip() == conductor.FIX_LIST_EMPTY
 

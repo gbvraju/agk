@@ -9,7 +9,7 @@
   ADR-0725 (`agk:reprove` stays an event), ADR-0179 (solo mode), plan #661
 - Requirements: REQ-028
 
-Protected classes: `scripts/agk/`, `.claude/`, `kit/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `.claude/`, `kit/`, `tests/kit/`, `agk.toml`, `config/`
 
 ## Context
 
@@ -39,7 +39,7 @@ steward chat, quoted as data): "Brief 2 and 3 ,".
 5. **The watch.** `session.watch` prints no `label` line when the new label is `agk:merge-ready` or `agk:owner-merge`
    and the newest listed verdict clears the head (`merge_cleared.clears_head`). Every other label stays an event.
 6. **The texts.** `.claude/agents/conductor.md` and the builder's runtime prompt say the form; words are replaced, not
-   added. `architect.md`, `shadow.md`, `kit/templates/playbook/verdict.md` and `skills/review-pass/SKILL.md` stay as
+   added, so `config/rule-budget.txt` lowers the conductor's line to its new count. `architect.md`, `shadow.md`, `kit/templates/playbook/verdict.md` and `skills/review-pass/SKILL.md` stay as
    they are (Q-EF-6).
 7. **The spec.** Amendment 256 proposes the lines for SPEC-0021 rules 1, 3a and 9 and SPEC-0039 rule 3; the reviewers
    approve it (principle 6). Session rule 1 is unchanged.

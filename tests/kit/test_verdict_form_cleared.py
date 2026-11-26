@@ -163,6 +163,7 @@ def test_the_router_posts_no_reply_on_an_old_form_verdict(monkeypatch):
 # --- answer 5: the watch ---------------------------------------------------------------------
 
 CLEARED_ON_SHA = f"Verdict: cleared {SHA}\n\nFinal: {ADR} Proposed -> Accepted\n"
+WATCH_SINCE = ("watch", "--pr", "7", "--interval", "0", "--since", "9", "--timeout")
 
 
 def test_the_cleared_verdict_still_ends_the_watch():
@@ -181,7 +182,7 @@ def test_watch_prints_no_label_line_after_a_clearing_verdict(proj, stub):  # noq
     )
     stub.serve(f"repos/{REPO}/pulls/7", pull(labels=(label,)))
     stub.serve(f"repos/{REPO}/issues/7/comments", verdict)
-    out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1", "--since", "9")
+    out = session(proj, stub, *WATCH_SINCE, "1")
     assert out.returncode == 3 and out.stdout.strip() == "timeout", out.stdout + out.stderr
 
 
@@ -192,7 +193,7 @@ def test_watch_still_prints_reprove_after_a_clearing_verdict(proj, stub):  # noq
         [(pull(labels=("agk:merge-ready",)), verdict), (pull(labels=("agk:reprove",)), verdict)],
         base=verdict,
     )
-    out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "5", "--since", "9")
+    out = session(proj, stub, *WATCH_SINCE, "5")
     assert out.stdout.strip() == "label agk:reprove", out.stdout + out.stderr
 
 
@@ -212,9 +213,8 @@ def test_the_texts_say_the_cleared_form():
     conductor_md = (ROOT / ".claude/agents/conductor.md").read_text(encoding="utf-8")
     builder = (ROOT / "kit/templates/runtime/builder.txt").read_text(encoding="utf-8")
     assert "a fix list has numbered items or a status-commit `Final:` line" in conductor_md
-    assert "`Verdict: cleared <sha>` with the full 40-character head and its ADR `Final:` lines" in (
-        conductor_md
-    )
+    form = "`Verdict: cleared <sha>` with the full 40-character head and its ADR `Final:` lines"
+    assert form in conductor_md
     final = next(ln for ln in builder.splitlines() if ln.startswith("FINAL LINES:"))
     assert "A `Verdict: cleared` on your head is no work" in final
     assert "nothing to change" in final and "older form" in final
