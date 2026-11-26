@@ -210,6 +210,6 @@ def test_req052_the_steward_end_reads_the_usage_line_when_no_figure_is_typed(tmp
 
 
 def test_req052_the_builder_report_text_passes_helpers():
-    """REQ-052: fix list 2 item 1, the top-level builder's `Report:` text runs `usage.py --helpers`."""
+    """REQ-052: fix list 2 item 1, the top-level builder's `Report:` runs `usage.py --helpers`."""
     text = (KIT / "kit" / "templates" / "runtime" / "builder.txt").read_text(encoding="utf-8")
     assert "usage.py --helpers --since <the time of your previous Report:>" in text
