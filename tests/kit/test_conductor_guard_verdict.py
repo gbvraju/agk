@@ -23,7 +23,8 @@ import common  # noqa: E402
 MARK = "conductor guard rule 6"
 POST = "gh api --method POST repos/o/r/issues/7/comments"
 SHA = "a1b2c3d4e5f6"
-GOOD = f"Verdict: fix list {SHA}\n\nFinal: docs/adr/0001-x.md Proposed -> Accepted\n"
+# brief #2001 (ADR-0827): an ADR acceptance is posted as `Verdict: cleared <full head>`
+GOOD = f"Verdict: cleared {SHA + '0' * 28}\n\nFinal: docs/adr/0001-x.md Proposed -> Accepted\n"
 CLEARED = f"Verdict: cleared {SHA}\n\nAll fine.\n"
 BAD = f"Verdict: cleared {SHA}\nFinal: flip ADR-0146 to Accepted in one commit.\n"
 SHAPE = f"Verdict: fix list {SHA}\nFinal: flip the ADR\n"
@@ -35,10 +36,12 @@ NUMBERED_BODY = (
 
 STUB_PULL = json.dumps({"head": {"sha": SHA + "0" * 28}})
 STUB_TREE = json.dumps({"truncated": False, "tree": [{"path": "docs/adr/0001-x.md"}]})
+STUB_FILES = json.dumps([{"filename": "docs/adr/0001-x.md", "status": "added"}])
 GH_STUB = f"""#!/bin/sh
 case "$4" in
   repos/o/r/pulls/7) echo '{STUB_PULL}' ;;
   repos/o/r/git/trees/*) echo '{STUB_TREE}' ;;
+  repos/o/r/pulls/7/files*) echo '{STUB_FILES}' ;;
   *) exit 1 ;;
 esac
 """
