@@ -165,7 +165,7 @@ before it is merged.* Rules 14, 16. ADR-0021 decision 2 (SPEC-0012) and decision
 ## Contexts
 
 - kit: `/agk:spec` (the plugin's `skills/spec/SKILL.md`) writes the three files of rule 4 with the kit-only `scripts/agk/intake.py`, whose `check` runs the deterministic checks of rule 11 (rules 4, 11 and 18)
-- github: the skill does not commit, push or open a pull request; it prints the commit message, the push command and the pull request body, and the product owner's phone path is the proposal issue that `/agk:spec --from-issue N` turns into the same three files; no issue-to-pull-request workflow is built (rules 13 and 15)
+- github: the skill does not commit, push or open a pull request, it prints the commit message, the push command and the pull request body, and the product owner's phone path is the proposal issue that `/agk:spec --from-issue N` turns into the same three files, no issue-to-pull-request workflow is built (rules 13 and 15)
 - local: `intake.py check` reads the work tree and the merge base with the default branch, and the skill works on a local branch `intake/<req id lower case>-<slug>` (rules 3 and 11)
 - personal: not applicable: no rule here names personal mode. Intake writes a requirement, a Draft spec and an ADR stub in a governed repository (rule 4)
 - stacks: not applicable: no rule here names a stack. Intake writes prose files, which no stack pack reads (rule 4)

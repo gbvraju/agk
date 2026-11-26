@@ -83,7 +83,7 @@ Each is a point the brief leaves open; the reading after it is the most conserva
 ## Contexts
 
 - kit: `scripts/agk/sbom.py make`, `check` and `findings` read the commit with local `git` and list the repository's declared components, the kit's own `kit-file` entries of `kit/manifest.json` included, and the release pack's `bom.json` is the bill at the tagged commit (rules 2 to 5)
-- github: the dependency scan runs only in a workflow step the owner approves, outside `governance`, and never fails a required check; a finding opens or edits the one `agk-supply-chain` issue with the body of rule 7 only (rules 6, 8 and 9)
-- local: `sbom.py make`, `check` and `findings` open no socket, post nothing and write only their `FILE`, so they run the same on a person's machine; no governance step, `Makefile` target or `prepush.py` step names the scanner (rules 4, 6 and 7)
+- github: the dependency scan runs only in a workflow step the owner approves, outside `governance`, and never fails a required check, a finding opens or edits the one `agk-supply-chain` issue with the body of rule 7 only (rules 6, 8 and 9)
+- local: `sbom.py make`, `check` and `findings` open no socket, post nothing and write only their `FILE`, so they run the same on a person's machine, no governance step, `Makefile` target or `prepush.py` step names the scanner (rules 4, 6 and 7)
 - personal: not applicable: no rule here names personal mode. The bill is made from a governed repository's own commit (rule 2)
 - stacks: in a project whose `[delivery] work_type` has the chosen stack `node`, a `pyproject.toml` absent at the commit lists nothing and the bill takes its name from `package.json` (rules 2 and 3, amendment 232)
