@@ -220,7 +220,7 @@ def no_values(text: str) -> None:
 
 
 @pytest.mark.parametrize("work_type", ["web-app", "mobile"])
-def test_each_playbook_carries_the_node_entry(work_type: str) -> None:
+def test_each_playbook_composes_the_node_entry_for_a_node_record(work_type: str) -> None:
     """REQ-079: brief #1764 answer 5 (no version: the product's own pins hold it)."""
     _, packs, problems = composed(work_type)
     assert problems == []

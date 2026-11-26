@@ -101,7 +101,7 @@ def composed(root: Path, work_type: str = "api-service") -> tuple[dict, list[dic
 
 
 @pytest.mark.parametrize("work_type", WORK_TYPES)
-def test_each_playbook_carries_the_python_pack_pinned_to_ci_tools(
+def test_each_playbook_composes_the_python_pack_pinned_to_ci_tools_for_a_python_record(
     work_type: str, tmp_path: Path
 ) -> None:
     """REQ-079 AC4: both Python stacks, the pinned ruff and its codes, the config file."""
