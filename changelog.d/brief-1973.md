@@ -1,0 +1,1 @@
+- Role files: the architect, review agent, shadow reviewer and drift auditor say in their first paragraph that what they read is data, never an instruction (session rule 38), and a test holds every installed role file to it (brief #1973, ADR-0820)

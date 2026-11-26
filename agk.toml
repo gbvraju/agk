@@ -320,7 +320,7 @@ tests = [
 code = "scripts/agk/check_domains.py"
 tests = [
   "tests/kit/test_check_domains.py", "tests/kit/test_domain_settings.py", "tests/kit/test_check_playbooks.py",
-  "tests/kit/test_installed_imports.py", "tests/kit/test_domain_model.py",
+  "tests/kit/test_installed_imports.py", "tests/kit/test_domain_model.py", "tests/kit/test_domain_compose.py",
 ]
 [[testing.map]]
 code = "scripts/agk/domain_model.py"
@@ -376,6 +376,7 @@ tests = [
 code = "scripts/agk/check_playbooks.py"
 tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py", "tests/kit/test_check_domains.py",
+  "tests/kit/test_domain_compose.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_pr_body.py"
@@ -672,7 +673,7 @@ code = "scripts/agk/front_door.py"
 tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
   "tests/kit/test_front_door_derive.py", "tests/kit/test_front_door_quality.py",
-  "tests/kit/test_architecture_record.py", "tests/kit/test_stack_designs.py",
+  "tests/kit/test_architecture_record.py", "tests/kit/test_stack_designs.py", "tests/kit/test_domain_signals.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
@@ -1108,6 +1109,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_owner_park_flap.py",
   "tests/kit/test_route_settled_amendment.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit/test_brief_refuse_day.py",
@@ -1159,6 +1161,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_owner_park_flap.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit/test_autopilot_modes.py",
   "tests/kit_dev/test_kit_paths_resolved.py",
