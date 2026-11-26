@@ -298,9 +298,11 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
+import tomllib
 from collections.abc import Set as AbstractSet
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -311,6 +313,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import caps
 import common
+import kit_root
 import launch
 import merge_cleared
 import session
@@ -1937,6 +1940,8 @@ def reprove(root, number: int, apply: bool) -> int:
     with APPLY, makes it (`PUT pulls/<n>/update-branch` pinned by `expected_head_sha`), reads the
     new head and posts `Report: <new head> merge of main (light re-prove, ...)`. A full re-prove or
     a conflict exits 3 and writes nothing; a refused or unreadable step is an error (exit 1)."""
+    if personal_forge(root):  # brief #1969 answer 5: no pull request in personal mode
+        raise CheckError("reprove: personal mode has no pull request (setting: forge)")
     repo = session.repo_name(root)
     pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
     head = str((pull.get("head") or {}).get("sha") or "")
@@ -1968,6 +1973,10 @@ def reprove(root, number: int, apply: bool) -> int:
     )
     if not apply:
         return 0
+    local = reprove_local(root, repo)  # brief #1969: refuses a malformed execution before the PUT
+    if session.paused_default(root):
+        print("reprove: agk paused; nothing updated")
+        return 0
     endpoint = f"repos/{repo}/pulls/{number}/update-branch"
     post(endpoint, "update-branch was refused", "-f", f"expected_head_sha={head}", method="PUT")
     new = head
@@ -1983,10 +1992,148 @@ def reprove(root, number: int, apply: bool) -> int:
         time.sleep(REPROVE_PAUSE)
     if not re.fullmatch(r"[0-9a-f]{40}", new) or new == head:
         raise CheckError("the branch was updated but its new head cannot be read; no Report posted")
-    body = f"body=Report: {new} {REPROVE_REPORT}"
-    post(f"repos/{repo}/issues/{number}/comments", "the Report cannot be posted", "-f", body)
+    report, code = f"Report: {new} {REPROVE_REPORT}", 0
+    if local:
+        lines, line = reprove_record(root, number, new, str(pull.get("body") or ""))
+        found = session.gh(f"repos/{repo}/pulls/{number}")
+        now = str(((found or {}).get("head") or {}).get("sha") or "") if found else ""
+        if now != new:
+            print(f"{lead} head moved after the update; nothing posted")
+            return merge_cleared.EXIT_HELD
+        report, code = report + "\n\n" + lines, (0 if line.startswith(new) else EXIT_HELD)
+        print(f"{lead} Local evidence: {line}")
+    post(
+        f"repos/{repo}/issues/{number}/comments",
+        "the Report cannot be posted",
+        "-f",
+        "body=" + report,
+    )
     print(f"{lead} updated to {new[:12]}; Report posted")
-    return 0
+    return code
+
+
+EXIT_HELD = merge_cleared.EXIT_HELD
+RECORD_NOTE = "(the conductor's light re-prove record)"
+
+
+def personal_forge(root) -> bool:
+    """`forge = "files"` at the top level or in `[personal]` of the checkout's agk.toml."""
+    try:
+        data = tomllib.loads((Path(root) / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    personal = data.get("personal")
+    return data.get("forge") == "files" or (
+        isinstance(personal, dict) and personal.get("forge") == "files"
+    )
+
+
+def reprove_local(root, repo: str) -> bool:
+    """Brief #1969 answer 5: local mode as `merge_cleared.local_mode` reads it from the default
+    branch as last fetched and the open issues; a malformed `execution` is refused (the setting)."""
+    _, data = merge_cleared.default_ref(Path(root))
+    value = data.get("execution", "hosted")
+    if not isinstance(value, str) or value not in merge_cleared.EXECUTIONS:
+        raise CheckError(f"reprove: {merge_cleared.EXECUTION}")
+    if value == "local":
+        return True
+    issues = session.pages(f"repos/{repo}/issues?state=open")
+    if issues is None:
+        raise CheckError("the open issues cannot be read")
+    return merge_cleared.local_mode(data, issues)
+
+
+def reprove_run(argv: list[str], cwd: Path) -> tuple[int, str]:
+    """One kit script run in the scratch worktree: (its exit code, its output)."""
+    done = subprocess.run(  # nosec B603 - fixed argument list from the kit, no shell
+        argv, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )  # fmt: skip
+    return done.returncode, done.stdout + done.stderr
+
+
+def failed_step(path: Path) -> str:
+    """The first step of the record at PATH that did not pass, else `prepush` alone."""
+    try:
+        steps = json.loads(path.read_text(encoding="utf-8")).get("steps") or []
+    except (OSError, ValueError, AttributeError):
+        return "prepush"
+    bad = [s.get("name") for s in steps if isinstance(s, dict) and s.get("outcome") != "ok"]
+    return f"prepush step {bad[0]}" if bad and isinstance(bad[0], str) else "prepush"
+
+
+def reprove_record(root, number: int, new: str, body: str) -> tuple[str, str]:
+    """Brief #1969 answers 1, 2 and 4: (the lines the Report gains, the `Local evidence:` value:
+    `<new> <Evidence check line> ...` on a passing record, else `none (<step or reason>)`)."""
+    if prepush_defer_line() in [x.strip() for x in body.splitlines()]:
+        return none_line("Secret-scan deferred; not a ready record in local mode")
+    if shutil.which("gitleaks") is None:
+        return none_line("gitleaks is not installed (tool: gitleaks)")
+    git_dir = Path(git_text(root, "rev-parse", "--absolute-git-dir"))
+    common_dir = Path(git_text(root, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    scratch = git_dir / "agk" / f"reprove-{number}"
+    text = scratch.with_name(f"reprove-{number}.body")
+    fetch = ["fetch", "-q", "origin", f"refs/pull/{number}/head"]
+    try:
+        scratch.parent.mkdir(parents=True, exist_ok=True)
+        git_code(root, "worktree", "remove", "--force", str(scratch))
+        if git_code(root, *fetch) or git_code(root, "worktree", "add", "-q", "--detach",
+                                              str(scratch), new):  # fmt: skip
+            return none_line("the scratch worktree of the head cannot be made")
+        text.write_text(body, encoding="utf-8")
+        kit = kit_root.kit_dir(scratch)
+        argv = [sys.executable, str(kit / "prepush.py"), "--quick", "--record", "--body", str(text)]
+        code, out = reprove_run(argv, scratch)
+        record = common_dir / "agk-evidence" / f"{new}.json"
+        evidence = [x for x in out.splitlines() if x.startswith("Evidence: ")]
+        if code != 0 or not evidence or not record.is_file():
+            return none_line(failed_step(record))
+        check = [
+            sys.executable,
+            str(kit / "evidence.py"),
+            "check",
+            "--head",
+            new,
+            "--body",
+            str(text),
+        ]
+        code, out = reprove_run(check, scratch)
+        agrees = [
+            x for x in out.splitlines() if x.startswith(f"Evidence check: agrees, head {new[:12]}")
+        ]
+        if code != 0 or not agrees:
+            return none_line("evidence differs")
+        line = f"{new} {agrees[-1].strip()} {RECORD_NOTE}"
+        data = record.read_text(encoding="utf-8").rstrip("\n")
+        return f"{evidence[-1].strip()}\nLocal evidence: {line}\n\n```json\n{data}\n```", line
+    finally:
+        git_code(root, "worktree", "remove", "--force", str(scratch))
+        git_code(root, "worktree", "prune")
+        text.unlink(missing_ok=True)
+
+
+def none_line(reason: str) -> tuple[str, str]:
+    return f"Local evidence: none ({reason})", f"none ({reason})"
+
+
+def prepush_defer_line() -> str:
+    import prepush  # read only here: prepush's one deferral line (ADR-0327)
+
+    return prepush.DEFER_LINE
+
+
+def git_code(root, *args: str) -> int:
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
+    ).returncode  # fmt: skip
+
+
+def git_text(root, *args: str) -> str:
+    done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
+    )  # fmt: skip
+    if done.returncode != 0 or not done.stdout.strip():
+        raise CheckError("the clone's git folder cannot be read")
+    return done.stdout.strip()
 
 
 def rerun(root, number: int, apply: bool) -> int:
