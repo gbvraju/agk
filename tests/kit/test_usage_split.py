@@ -1,9 +1,9 @@
 """The usage line split by kind, with a reason when it is not shown (brief #2020, ADR-0835).
 
-REQ-052: `usage.py` prints `Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output <d>)`,
-`<n>` still the sum; a count of a kind it does not know is summed in `<n>` and named `other`; a
-sub-agent's transcript beside the session's file is read with it, each message id counted once; and
-`Usage: not shown (<class>)` names why, never a path or an id. The readers of `Report:` and
+REQ-052: `usage.py` prints `Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output
+<d>)`, `<n>` still the sum; a count of a kind it does not know is summed in `<n>` and named `other`;
+a sub-agent's transcript beside the session's file is read with it, each message id counted once;
+and `Usage: not shown (<class>)` names why, never a path or an id. The readers of `Report:` and
 `Progress:` lines read the new form as they read today's. Invented transcripts in `tmp_path`, no
 network. The tests were written first.
 """
@@ -15,9 +15,8 @@ import subprocess  # nosec B404 - fixed argument lists, no shell
 import sys
 from pathlib import Path
 
-import pytest
-
 import metrics
+import pytest
 import session
 
 KIT = Path(__file__).resolve().parents[2]
@@ -88,8 +87,13 @@ def test_req052_a_sub_agent_transcript_beside_the_session_is_read(tmp_path):
 def test_req052_two_transcripts_of_a_resumed_session_count_a_message_once(tmp_path):
     """REQ-052: answer 7, `--transcript` twice; a message id in both is counted once."""
     one = write(tmp_path / "a.jsonl", [entry("m1", "2026-11-10T08:00:00Z")])
-    two = write(tmp_path / "b.jsonl", [entry("m1", "2026-11-10T09:00:00Z"), entry("m2", "2026-11-10T09:00:00Z")])
-    assert usage("--transcript", str(one), "--transcript", str(two)).startswith("Usage: 2684 tokens (")
+    two = write(
+        tmp_path / "b.jsonl",
+        [entry("m1", "2026-11-10T09:00:00Z"), entry("m2", "2026-11-10T09:00:00Z")],
+    )
+    assert usage("--transcript", str(one), "--transcript", str(two)).startswith(
+        "Usage: 2684 tokens ("
+    )
     assert usage("--transcript", str(two), "--since", "2026-11-10T08:30:00Z").startswith(
         "Usage: 2684 tokens ("
     )
@@ -145,6 +149,28 @@ def test_req052_the_readers_read_the_split_and_the_reason_as_today():
     comments = [{"body": split, "user": {"login": "b"}}, {"body": reason, "user": {"login": "b"}}]
     assert metrics.usage_of(comments, "b") == 1342
     assert metrics.usage_of(comments[1:], "b") == "not-reported"
-    for ending in (SPLIT, "Usage: not shown (no-session-id)", "Usage: 5 tokens", "Usage: not shown"):
+    for ending in (
+        SPLIT,
+        "Usage: not shown (no-session-id)",
+        "Usage: 5 tokens",
+        "Usage: not shown",
+    ):
         match = session.PROGRESS.fullmatch(f"Progress: abc1234 done 2/4; next: 3; {ending}")
         assert match and match.group(4) == "3", ending
+
+
+def test_req052_the_steward_end_reads_the_usage_line_when_no_figure_is_typed(tmp_path):
+    """REQ-052: answer 5, `steward.py end` without `--tokens` carries the split or the class."""
+    import usage as reader
+
+    home = tmp_path / "rt"
+    write(home / "projects" / "-w" / f"{SESSION}.jsonl", [entry("m1", "2026-11-10T08:00:00Z")])
+    env = {"CLAUDE_CONFIG_DIR": str(home), "CLAUDE_CODE_SESSION_ID": SESSION}
+    assert (
+        reader.tokens_figure(env) == "1342 (input 2, cache write 300, cache read 1000, output 40)"
+    )
+    assert reader.tokens_figure({}) == "not shown (no-session-id)"
+    import steward_daily
+
+    line = f"Ended: steward s1 calls 9; tokens {reader.tokens_figure(env)}"
+    assert steward_daily.ENDED.fullmatch(line).group(3) == reader.tokens_figure(env)

@@ -1,0 +1,53 @@
+# ADR-0835: The usage line is split by kind, reads the sub-agents and says why it is not shown
+
+- Status: Proposed
+- Date: 2026-11-26
+- Deciders: maintainers (the owner's yes on brief #2020, 2026-11-26T19:15Z)
+- Related: SPEC-0045 rule 8, ADR-0289, ADR-0419, ADR-0544, REQ-052, brief #798, brief #2020, plan #661
+- Requirements: REQ-052
+
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
+
+## Context
+
+Brief #2020 found that 9 of 70 builder `Report:` comments on eight merged pull requests carried a figure. A `not
+shown` gave no reason. The figure that was shown was one sum of four kinds of tokens whose prices differ by an order
+of magnitude. SPEC-0045 rule 8 counts the session's own transcript only, and a helper agent's tokens only where the
+runtime writes them into that file (`Q-798-8`). A builder measured this runtime on 2026-11-26 (`Q-CM-1`). A sub-agent's
+transcript is a separate file, `<projects>/<folder>/<session id>/subagents/agent-<id>.jsonl`, beside the parent's
+`<session id>.jsonl`. Its entries carry usage records, and the parent's file holds none of them, so the parent's figure
+leaves them out.
+
+## Decision
+
+1. `scripts/agk/usage.py` reads, with each transcript it reads (the running session's own, or each `--transcript
+   FILE`, which may now be given more than once), the sub-agent transcripts beside it, `<folder>/<stem>/subagents/*.jsonl`.
+   Across all of them each message id is counted once, at its first entry. This changes `Q-798-8` of SPEC-0045 rule 8.
+2. Its line is `Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output <d>)`. `<n>` stays the sum, so a
+   reader that takes `<n>` reads the same figure. A whole count of 0 or more under any other `*_tokens` key of a usage
+   record is summed in `<n>` and named `, other <e>` when it is not 0.
+3. With no figure the line is `Usage: not shown (<class>)`. The class is `no-session-id` (no named file and no valid
+   session id), `no-transcript` (a file not found), `unreadable` (a file that cannot be read as text) or
+   `no-usage-record` (no usage record, or none at or after `--since`). It never names a path, an id or a value
+   (principle 8). One unreadable file gives `unreadable` for the whole line, so a short sum is never printed.
+4. The readers of the line accept the new ending: `metrics.usage_of` (`Report:` lines) and `session.PROGRESS`
+   (`Progress:` lines).
+5. `steward.py end` without `--tokens` writes `tokens <n> (input <a>, ...)` or `tokens not shown (<class>)` from the
+   same reader. A typed `--tokens` is used as before.
+
+## Consequences
+
+A report's figure says what kind of tokens it holds, a session that uses helper agents reports their tokens too, and a
+missing figure says why. Protected path classes changed: `scripts/agk/` (`usage.py`, `metrics.py`, `session.py`,
+`steward.py`), `tests/kit/` (`test_usage_split.py`, `test_usage_transcript.py`) and `agk.toml` (the new test file in the
+`[[testing.map]]` entries of those four scripts).
+
+## Residual
+
+- 2026-11-26: `Q-2020-1`: answers 3, 4 and 6 of brief #2020 (a price table by kind under `[models.prices]`, the sums
+  by pull request, brief, role and stage, and the weekly coverage line) overlap ADR-0544's `[cost.prices.<model>]`
+  table and `metrics.py --cost`. They wait for the maintainers' ruling and are not built here.
+- 2026-11-26: a builder that itself runs as a sub-agent reads the parent's session id `(verify: whether this runtime
+  gives a sub-agent its own id in the environment)`, so its line holds the parent's figure, not its own.
+- 2026-11-26: the conductor's `Conductor report` (answer 5) is written from `.claude/agents/conductor.md`, a path class
+  the brief's `Touches:` does not name, and is not changed here.

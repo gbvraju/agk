@@ -516,7 +516,8 @@ def first_lines(comments: Any, prefix: str, authors: list[str] | None = None) ->
     return found
 
 
-REPORT_USAGE = re.compile(r"Report:.*\bUsage: (\d+) tokens\s*")
+# ADR-0835: the figure may end with its split by kind
+REPORT_USAGE = re.compile(r"Report:.*\bUsage: (\d+) tokens(?: \([a-z0-9 ,]+\))?\s*")
 
 
 def usage_of(comments: Any, login: str) -> int | str:

@@ -1,0 +1,1 @@
+- Usage: `usage.py` now splits the figure by kind (`Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output <d>)`, `<n>` still the sum), reads the sub-agent transcripts beside the session's file, takes `--transcript` more than once and says why with `Usage: not shown (<class>)`; `steward.py end` without `--tokens` carries the same figure (brief #2020, ADR-0835)
