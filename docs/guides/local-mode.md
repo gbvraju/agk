@@ -199,6 +199,10 @@ Step 1 of the conductor's protocol (CI first) has nothing to read in local mode,
    `Evidence check: agrees|differs, head <sha12>, record <sha12>, governance <outcome>, sample <k> of <m> same exit`, exit 0
    when the record agrees and 1 when it differs. Its `record` digest must equal the one in the builder's `Evidence:` line.
 3. Read the builder's `Local evidence:` line. It must name the head the verdict names; a line for an older head is no evidence.
+   On a head the conductor's light re-prove made (`conductor.py reprove --apply`, brief #1969, ADR-0818), that
+   `Report:` carries the `Evidence:` line, `Local evidence: <head> Evidence check: agrees, ... (the conductor's light re-prove
+   record)` and the record in a fenced `json` block, and its line stands for the builder's. A failed run posts
+   `Local evidence: none (<step or reason>)` instead, exits 3 and the re-prove goes back to a builder.
 4. Name in the verdict the local evidence it relied on, in one line:
 
        Local evidence: <head sha> Evidence check: agrees, ... (conductor's run); proof <outcome>, tests <n> passed (builder's line)
