@@ -201,7 +201,7 @@ To step back, set `pr_tests = "full"` or remove the line. `agk.toml` is a protec
 |---|---|---|
 | `ci-drafts` | a workflow that holds a check of `required_checks` and runs on `pull_request` never reads `github.event.pull_request.draft` (outside a comment) | default 1 |
 | `ci-concurrency` | a workflow that holds a check of `required_checks` has no `concurrency:` group, at the top or on a job | default 2 |
-| `actions-minutes` | the Actions minutes have passed the `50%` level (the line of `minutes.py --line`, below); `cannot check (minutes-unknown)` when the token can read neither billing nor the run history | the section below |
+| `actions-minutes` | the Actions minutes have passed the `50%` level (the line of `minutes.py --line`, below); `cannot check (minutes-unknown)` when the token cannot read billing | the section below |
 
 The router's own workflow is not judged: it labels every pull request, drafts included, and runs no test.
 
@@ -238,11 +238,19 @@ It prints:
   minutes unknown; the day is when the included minutes are used up at this month's daily rate so far (the minutes used over
   the days of the month through today): `runs out about <YYYY-MM-DD>`, or `not this month`.
 
-`python3 scripts/agk/minutes.py --line` prints only the level and the day, in one line, reading billing first and the run
-history only when billing cannot be read, for example
+`python3 scripts/agk/minutes.py --line` prints only the level and the day, in one line, reading billing only (brief #2011:
+one call; when billing cannot be read the line is `unknown` with its reason class and names `minutes.py` for the estimate),
+for example
 `actions minutes: 1900 of 2000 used (95%), level 95%; runs out about 2026-10-20; at this level, see local mode in
 docs/guides/local-mode.md`. The doctor prints the same line as its check `actions-minutes`, a warning from the `50%` level on and
 never a failure, and `/agk:launch` prints it before it asks to start sessions.
+
+The full report's estimate (brief #2011) reads no job list of a skipped run, keeps each finished UTC day's sums in
+`<git common dir>/agk-minutes/<owner>-<repo>/<YYYY-MM-DD>.json` (`<YYYY-MM-DD>.plain.json` for a public repository; local,
+never committed; today by the real UTC clock is never kept), so a later report reads only today and the days not yet kept,
+and reads `/rate_limit` first: it reads at most the remaining calls less 2,000 job lists (1,000 when the allowance cannot be
+read), oldest day first; a figure of a reading stopped early reads `at least` (`unknown` when nothing was read), and it says
+`actions minutes: at least <n> used this month (<k> of <m> days read; run again after the GitHub allowance resets at <HH:MM UTC>)`.
 
 When the minutes run out, the checks cannot run on GitHub until the month turns or the plan changes: see local mode
 (brief #322) for how to keep working.
