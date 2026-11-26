@@ -1112,6 +1112,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
+  "tests/kit/test_owner_park_flap.py",
   "tests/kit/test_route_settled_amendment.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit/test_brief_refuse_day.py",
@@ -1163,6 +1164,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_owner_park_flap.py",
   "tests/kit/test_github_call_record.py",
   "tests/kit/test_autopilot_modes.py",
   "tests/kit_dev/test_kit_paths_resolved.py",
