@@ -389,6 +389,12 @@ def allowance(src: Any) -> tuple[int, str | None]:
     return max(0, remaining - ALLOWANCE_MARGIN), when
 
 
+def created_day(run_: dict) -> date:
+    """The UTC day a run was created; `date.min`, a day no reading asks, without a time."""
+    moment = stamp(run_.get("created_at"))
+    return moment.astimezone(UTC).date() if moment is not None else date.min
+
+
 def ranges(days: list[date]) -> list[tuple[date, date]]:
     """The runs of consecutive days, as (first, last)."""
     out: list[tuple[date, date]] = []
@@ -474,7 +480,7 @@ def estimate(
         if d not in kept
     }
     for run_ in runs:
-        record = fresh.get(stamp(run_.get("created_at")).date())  # type: ignore[union-attr]
+        record = fresh.get(created_day(run_))
         if record is None:
             continue
         record["runs"].append(run_.get("id"))
@@ -483,11 +489,11 @@ def estimate(
         elif run_.get("status") not in (None, "completed"):
             record["whole"] = False
     for run_ in to_read[len(chosen) :]:
-        record = fresh.get(stamp(run_.get("created_at")).date())  # type: ignore[union-attr]
+        record = fresh.get(created_day(run_))
         if record is not None:
             record["whole"] = False
     for run_, (status, jobs) in zip(chosen, answers, strict=True):
-        record = fresh.get(stamp(run_.get("created_at")).date())  # type: ignore[union-attr]
+        record = fresh.get(created_day(run_))
         if status != 200 or not isinstance(jobs, dict):
             est.complete = False
             if record is not None:
