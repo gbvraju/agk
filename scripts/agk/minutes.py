@@ -28,6 +28,14 @@ so a busy repository is no longer cut at 1,000 runs; only a one-hour window over
 estimate a lower bound. It also prints the minutes per merged pull request of the last 7 days (the
 7 days through `--today`, which may begin in the month before), by the same rule.
 
+Brief #2011 (ADR-0832): `--line` and the doctor read billing only (one call); when billing cannot
+be read the line says `unknown` with its reason class and points here for the estimate. The
+estimate reads no job list of a run whose conclusion is `skipped` (`skipped_runs`), keeps each
+finished UTC day's sums in `<git common dir>/agk-minutes/<owner>-<repo>/<YYYY-MM-DD>.json` (local,
+never committed; `--api-dir` keeps none), and reads `/rate_limit` once before the job lists: at
+most `remaining` less ALLOWANCE_MARGIN of them (UNREAD_LIMIT when it cannot be read), oldest day
+first, and a reading stopped early says `at least` with the time the allowance resets.
+
 Exit: 0 read, 3 the warning was printed, 1 refused (the repository cannot be read, or a setting is
 invalid), 2 usage.
 """
@@ -36,6 +44,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -71,6 +80,15 @@ SELF_HOSTED = "self-hosted"
 MULTIPLIERS = (("windows", 2), ("macos", 10))
 # Job lists read at once: one `gh api` each, so a month of a thousand runs reads in minutes.
 READERS = 8
+# Brief #2011 (ADR-0832, Q-DM-1: named constants, not settings): the calls of the hourly REST
+# allowance an estimate leaves to the other sessions, and the job lists it reads at most when
+# `/rate_limit` cannot be read.
+ALLOWANCE_MARGIN = 2000
+UNREAD_LIMIT = 1000
+# The kept days: one file per finished UTC day under the git common dir, of this schema.
+KEEP_FOLDER = "agk-minutes"
+KEEP_SCHEMA = 1
+AUTO = object()
 
 
 def reason_of(status: int) -> str:
@@ -89,8 +107,11 @@ class ApiDir:
     """Recorded responses: `<name>.json` answers 200, `<name>.status` holds a refused read's status,
     and a read with neither is missing (404)."""
 
-    def __init__(self, path: Path) -> None:
+    reads_allowance = True
+
+    def __init__(self, path: Path, keep: Path | None = None) -> None:
         self.path = path
+        self.keep = keep  # no day file in the recorded mode, unless a test names a folder
 
     def get(self, name: str, endpoint: str, until: Any = None) -> tuple[int, Any]:
         status = self.path / f"{name}.status"
@@ -109,8 +130,18 @@ class ApiDir:
 class Gh:
     """Live reads: `gh api` with GET only, paged by hand."""
 
-    def __init__(self, repo: str) -> None:
+    reads_allowance = True
+
+    def __init__(self, repo: str, keep: Any = AUTO) -> None:
         self.repo = repo
+        self._keep = keep
+
+    @property
+    def keep(self) -> Path | None:
+        """The folder of this repository's kept days, found on first use (brief #2011)."""
+        if self._keep is AUTO:
+            self._keep = keep_folder(self.repo)
+        return self._keep
 
     def one(self, endpoint: str) -> tuple[int, Any]:
         try:
@@ -198,6 +229,24 @@ class Gh:
             page += 1
 
 
+def keep_folder(repo: str) -> Path | None:
+    """`<git common dir>/agk-minutes/<owner>-<repo>`, shared by the clone's worktrees; None outside
+    a git checkout (nothing is kept, brief #2011 answer 7)."""
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except OSError:
+        return None
+    found = proc.stdout.strip()
+    if proc.returncode != 0 or not found or not repo:
+        return None
+    return Path(found) / KEEP_FOLDER / repo.replace("/", "-")
+
+
 # --- the month --------------------------------------------------------------------------------
 
 
@@ -261,6 +310,94 @@ class Estimate:
     running_jobs: int = 0
     workflows: dict[str, int] = field(default_factory=dict)
     week_minutes: int = 0
+    # brief #2011: the runs not read (skipped), the days read whole of the days asked, and,
+    # when the allowance stopped the reading, the time it resets (None: it cannot be read)
+    skipped_runs: int = 0
+    days_read: int = 0
+    days: int = 0
+    stopped: bool = False
+    reset: str | None = None
+
+
+def midnight(moment: datetime) -> bool:
+    return moment.astimezone(UTC).timetz().replace(tzinfo=None) == datetime.min.time()
+
+
+def day_start(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, tzinfo=UTC)
+
+
+def load_day(keep: Path, day: date, rates: bool) -> dict | None:
+    """A kept day, or None when it is missing, cannot be parsed, is of another schema or was kept
+    for the other rates (then the day is read again, brief #2011 answer 3)."""
+    try:
+        data = json.loads((keep / f"{day.isoformat()}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("schema") != KEEP_SCHEMA:
+        return None
+    if data.get("day") != day.isoformat() or data.get("rates") is not rates:
+        return None
+    by_start, ids = data.get("by_start"), data.get("runs")
+    if not isinstance(by_start, dict) or not isinstance(ids, list):
+        return None
+    for key, entry in by_start.items():
+        try:
+            date.fromisoformat(key)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(entry, dict) or not isinstance(entry.get("workflows"), dict):
+            return None
+        counts = [entry.get("self_hosted"), entry.get("running")]
+        counts += list(entry["workflows"].values())
+        if not all(isinstance(x, int) and not isinstance(x, bool) for x in counts):
+            return None
+    if not isinstance(data.get("skipped_runs"), int):
+        return None
+    return data
+
+
+def save_day(keep: Path, data: dict) -> None:
+    """Writes one kept day whole, by rename, so a reader sees one file or the other."""
+    try:
+        keep.mkdir(parents=True, exist_ok=True)
+        tmp = keep / f".{data['day']}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, keep / f"{data['day']}.json")
+    except OSError:
+        return  # nothing kept; the day is read again next time
+
+
+def allowance(src: Any) -> tuple[int, str | None]:
+    """(the job lists this reading may make, the reset time as HH:MM UTC): `remaining` less
+    ALLOWANCE_MARGIN, or UNREAD_LIMIT and None when `/rate_limit` cannot be read (verify: GitHub
+    does not count that read against the allowance)."""
+    if not getattr(src, "reads_allowance", False):
+        return UNREAD_LIMIT, None
+    status, data = src.get("rate_limit", "/rate_limit")
+    core = None
+    if status == 200 and isinstance(data, dict):
+        core = (data.get("resources") or {}).get("core") or data.get("rate")
+    if not isinstance(core, dict):
+        return UNREAD_LIMIT, None
+    remaining, reset = core.get("remaining"), core.get("reset")
+    if not isinstance(remaining, int) or isinstance(remaining, bool):
+        return UNREAD_LIMIT, None
+    when = None
+    if isinstance(reset, int | float) and not isinstance(reset, bool):
+        when = datetime.fromtimestamp(reset, UTC).strftime("%H:%M UTC")
+    return max(0, remaining - ALLOWANCE_MARGIN), when
+
+
+def ranges(days: list[date]) -> list[tuple[date, date]]:
+    """The runs of consecutive days, as (first, last)."""
+    out: list[tuple[date, date]] = []
+    for day in days:
+        if out and out[-1][1] + timedelta(days=1) == day:
+            out[-1] = (out[-1][0], day)
+        else:
+            out.append((day, day))
+    return out
 
 
 def estimate(
@@ -269,30 +406,61 @@ def estimate(
     end: datetime,
     rates: bool = True,
     week: tuple[datetime, datetime] | None = None,
+    today: date | None = None,
 ) -> Estimate:
     """The month's minutes from the run history: each job of a GitHub-hosted runner that started
     in the month, rounded up per job, then multiplied by its runner's rate when `rates` (a private
     repository). A run created the day before the month is read, since its jobs may start in it;
     a re-run of an older run keeps its old creation time and is not read. With WEEK, the jobs
     that started in it are also summed by the same rule (`week_minutes`, brief #1116), from one
-    reading of the runs from the earlier of the two starts."""
+    reading of the runs from the earlier of the two starts.
+
+    Brief #2011 (ADR-0832): a skipped run's job list is not read; a finished day (before TODAY,
+    UTC) is read from its kept file when the source keeps days and every bound is a UTC midnight,
+    and kept when its every run was read and answered with no job still running; the job lists
+    read stop at the allowance (`allowance`), oldest day first."""
     first = min(start, week[0]) if week else start
     since = (first - timedelta(days=1)).date().isoformat()
     floor = datetime.fromisoformat(since).replace(tzinfo=UTC)
-    status, data = src.get(
-        "runs", f"/repos/{{repo}}/actions/runs?created=%3E%3D{since}", (floor, end)
-    )
-    if status != 200 or not isinstance(data, dict):
-        return Estimate(minutes=None, reason=reason_of(status), complete=False)
-    runs = data.get("workflow_runs") or []
-    est = Estimate()
-    if isinstance(data.get("total_count"), int) and data["total_count"] > len(runs):
-        est.complete = False
     last = max(end, week[1]) if week else end
-    chosen = [
-        r for r in runs if (c := stamp(r.get("created_at"))) is not None and floor <= c < last
-    ]
-    est.runs = len(chosen)
+    today = today or datetime.now(UTC).date()
+    keep = getattr(src, "keep", None)
+    if not all(midnight(x) for x in (start, end, *(week or ()))):
+        keep = None  # a kept day holds whole days only
+    final = min((last - timedelta(seconds=1)).date(), today)
+    days = [floor.date() + timedelta(days=i) for i in range((final - floor.date()).days + 1)]
+    kept: dict[date, dict] = {}
+    if keep is not None:
+        for day in days:
+            if day < today and (data := load_day(keep, day, rates)) is not None:
+                kept[day] = data
+    est = Estimate(days=len(days))
+    runs: list[dict] = []
+    listed: set[date] = set()
+    for a, b in ranges([d for d in days if d not in kept]):
+        lo = day_start(a)
+        hi = last if b == final else day_start(b) + timedelta(days=1)
+        status, data = src.get(
+            "runs", f"/repos/{{repo}}/actions/runs?created=%3E%3D{a.isoformat()}", (lo, hi)
+        )
+        if status != 200 or not isinstance(data, dict):
+            return Estimate(minutes=None, reason=reason_of(status), complete=False)
+        got = data.get("workflow_runs") or []
+        if isinstance(data.get("total_count"), int) and data["total_count"] > len(got):
+            est.complete = False
+        else:
+            listed |= {d for d in days if a <= d <= b}
+        runs += [r for r in got if (c := stamp(r.get("created_at"))) is not None and lo <= c < hi]
+    est.runs = len(runs)
+    runs.sort(key=lambda r: str(r.get("created_at")))
+    skipped = [r for r in runs if r.get("conclusion") == "skipped"]
+    to_read = [r for r in runs if r.get("conclusion") != "skipped"]
+    est.skipped_runs = len(skipped)
+    skipped_ids = {id(r) for r in skipped}
+    budget, reset = allowance(src) if to_read else (0, None)
+    chosen = to_read[:budget]
+    if len(chosen) < len(to_read):
+        est.complete, est.stopped, est.reset = False, True, reset
 
     def jobs_of(run_: dict) -> tuple[int, Any]:
         rid = run_.get("id")
@@ -300,35 +468,104 @@ def estimate(
 
     with ThreadPoolExecutor(max_workers=READERS) as pool:
         answers = list(pool.map(jobs_of, chosen))
+    fresh: dict[date, dict] = {
+        d: {"whole": d in listed, "runs": [], "skipped_runs": 0, "by_start": {}}
+        for d in days
+        if d not in kept
+    }
+    for run_ in runs:
+        record = fresh.get(stamp(run_.get("created_at")).date())  # type: ignore[union-attr]
+        if record is None:
+            continue
+        record["runs"].append(run_.get("id"))
+        if id(run_) in skipped_ids:
+            record["skipped_runs"] += 1
+        elif run_.get("status") not in (None, "completed"):
+            record["whole"] = False
+    for run_ in to_read[len(chosen) :]:
+        record = fresh.get(stamp(run_.get("created_at")).date())  # type: ignore[union-attr]
+        if record is not None:
+            record["whole"] = False
     for run_, (status, jobs) in zip(chosen, answers, strict=True):
+        record = fresh.get(stamp(run_.get("created_at")).date())  # type: ignore[union-attr]
         if status != 200 or not isinstance(jobs, dict):
             est.complete = False
+            if record is not None:
+                record["whole"] = False
             continue
         name = str(run_.get("name") or run_.get("path") or "unknown")
         for job in jobs.get("jobs") or []:
             started = stamp(job.get("started_at"))
             if started is None:
                 continue
-            if (
-                week
-                and week[0] <= started < week[1]
-                and SELF_HOSTED not in (job.get("labels") or [])
-            ):
-                value = job_minutes(job)
-                est.week_minutes += (value or 0) * (multiplier(job) if rates else 1)
+            hosted = SELF_HOSTED not in (job.get("labels") or [])
+            value = job_minutes(job)
+            billed = (value or 0) * (multiplier(job) if rates else 1)
+            if record is not None:
+                entry = record["by_start"].setdefault(
+                    started.date().isoformat(), {"workflows": {}, "self_hosted": 0, "running": 0}
+                )
+                entry["workflows"].setdefault(name, 0)
+                if not hosted:
+                    entry["self_hosted"] += 1
+                elif value is None:
+                    entry["running"] += 1
+                    record["whole"] = False
+                else:
+                    entry["workflows"][name] += billed
+            if week and week[0] <= started < week[1] and hosted:
+                est.week_minutes += billed
             if not start <= started < end:
                 continue
             est.workflows.setdefault(name, 0)
-            if SELF_HOSTED in (job.get("labels") or []):
+            if not hosted:
                 est.self_hosted_jobs += 1
                 continue
-            minutes = job_minutes(job)
-            if minutes is None:
+            if value is None:
                 est.running_jobs += 1
                 continue
-            est.workflows[name] += minutes * (multiplier(job) if rates else 1)
+            est.workflows[name] += billed
+    for data in kept.values():
+        est.runs += len(data["runs"])
+        est.skipped_runs += data["skipped_runs"]
+        for key, entry in data["by_start"].items():
+            moment = day_start(date.fromisoformat(key))
+            if week and week[0] <= moment < week[1]:
+                est.week_minutes += sum(entry["workflows"].values())
+            if not start <= moment < end:
+                continue
+            for name, value in entry["workflows"].items():
+                est.workflows[name] = est.workflows.get(name, 0) + value
+            est.self_hosted_jobs += entry["self_hosted"]
+            est.running_jobs += entry["running"]
+    est.days_read = len(kept) + sum(1 for r in fresh.values() if r["whole"])
+    if keep is not None:
+        for day, record in fresh.items():
+            if day < today and record["whole"]:
+                save_day(
+                    keep,
+                    {
+                        "schema": KEEP_SCHEMA,
+                        "day": day.isoformat(),
+                        "rates": rates,
+                        "runs": record["runs"],
+                        "skipped_runs": record["skipped_runs"],
+                        "by_start": record["by_start"],
+                    },
+                )
     est.minutes = sum(est.workflows.values())
     return est
+
+
+def stopped_line(est: Estimate) -> str | None:
+    """The line of a reading the allowance stopped (brief #2011 answer 4), else None."""
+    if not est.stopped:
+        return None
+    when = f"resets at {est.reset}" if est.reset else "resets, at a time that cannot be read"
+    return (
+        f"actions minutes: at least {est.minutes} used this month ({est.days_read} of "
+        f"{est.days} days read; run again after the GitHub allowance {when})"
+    )
 
 
 def merged_times(src: Any, since: datetime) -> list[datetime] | None:
@@ -437,14 +674,16 @@ def repo_of(src: Any) -> dict:
 
 
 def outlook(src: Any, repo: dict, today: date, warn: int) -> tuple[str, str]:
-    """(level, line) reading billing first and the run history only when billing cannot be read
-    (the doctor's check and `--line`, brief #370 answer 2)."""
+    """(level, line) from billing only, one call (the doctor's check and `--line`; brief #2011
+    answer 1, ADR-0832, which drops ADR-0215's estimate here): when billing cannot be read the
+    line is `unknown` with its reason class and points to the full report for the estimate."""
     _, used, included, reason = billing(src, repo.get("owner") or {})
     if used is not None:
         return line_of(used, included, None, None, warn, today)
-    start, end = month_of(today)
-    est = estimate(src, start, end, repo.get("private") is not False)
-    return line_of(est.minutes, None, reason, est.reason, warn, today)
+    return "unknown", (
+        f"actions minutes: unknown (the token cannot read billing: {reason}); "
+        "run python3 scripts/agk/minutes.py for the estimate"
+    )
 
 
 def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
@@ -453,7 +692,7 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
     endpoint, used, included, reason = billing(src, repo.get("owner") or {})
     rates = repo.get("private") is not False
     week = week_of(today)
-    est = estimate(src, start, end, rates, week)
+    est = estimate(src, start, end, rates, week, today)
     times = merged_times(src, min(start, week[0]))
     merged = merged_in(times, start, end)
     week_merged = merged_in(times, *week)
@@ -493,6 +732,10 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
             "running_jobs": est.running_jobs,
             "workflows": est.workflows,
             "multipliers": rates,
+            "skipped_runs": est.skipped_runs,
+            "days_read": est.days_read,
+            "days": est.days,
+            "stopped": stopped_line(est),
         },
         "merged_pulls": merged,
         "per_merged_pull": per_pull,
@@ -568,6 +811,11 @@ def render(data: dict) -> str:
             lines.append(
                 "  (a lower bound: the run list was capped, or a run's jobs could not be read)"
             )
+        if est["skipped_runs"]:
+            n = est["skipped_runs"]
+            lines.append(f"  ({n} skipped {plural(n, 'run')} not read: they use no minutes)")
+        if est["stopped"]:
+            lines.append(est["stopped"])
         if est["self_hosted_jobs"]:
             n = est["self_hosted_jobs"]
             lines.append(f"  ({n} {plural(n, 'job')} on a self-hosted runner, not billed)")

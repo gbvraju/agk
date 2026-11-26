@@ -130,16 +130,14 @@ def test_the_doctor_makes_at_most_two_calls_over_a_month_of_40000_runs(tmp_path,
     result = doctor_script.minutes_result(root, reads, TODAY)
     assert len(calls) <= 2, calls
     assert (result.status, result.reason) == ("cannot-check", "minutes-unknown")
-    assert "python3 scripts/agk/minutes.py" in doctor_script.REASONS["minutes-unknown"]
-    assert "run history" not in doctor_script.REASONS["minutes-unknown"]
+    assert "python3 scripts/agk/minutes.py" in doctor_script.HINTS["minutes-unknown"]
+    assert "run history" not in doctor_script.HINTS["minutes-unknown"]
 
 
 def test_the_line_with_billing_is_todays_line_byte_for_byte():
     """REQ-020: brief #2011 answer 1 (billing answers: the line and the levels are today's)."""
     src = Source([])
-    src.get = lambda name, endpoint, until=None: (
-        (200, BILLED) if name == "billing" else (404, None)
-    )
+    src.get = lambda name, endpoint, until=None: (200, BILLED) if name == "billing" else (404, None)
     level, line = minutes.outlook(src, REPO, date(2026, 10, 19), 80)
     assert (level, line) == (
         "ok",
