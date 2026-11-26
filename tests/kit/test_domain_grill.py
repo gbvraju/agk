@@ -135,6 +135,33 @@ def test_ac3_past_the_budget_only_regulated_critical_items_are_asked_with_one_li
     assert out.count(LINE) == 1
 
 
+def test_ac3_a_refused_domain_table_refuses_the_questions(tmp_path):
+    """REQ-081 AC3: answer 4, a refused `[domain]` table is never read as no packs."""
+    root = grill_project(tmp_path, None, extra='[domain]\npacks = "zz-law"\n')
+    with pytest.raises(grill.CheckError, match=r"domain\.packs"):
+        grill.questions(root, "light", None, None)
+
+
+def test_ac3_past_the_budget_a_playbook_held_id_is_not_asked_again(tmp_path, monkeypatch):
+    """REQ-081 AC3: fix list item 6, only the ids the pack itself contributes pass the budget."""
+    import check_domains
+
+    root = grill_project(tmp_path, ["zz-law"])
+    own = [i[0] for i in grill.composed(root, None) if not i[0].startswith("zz-")]
+    taken = own[-2]  # a playbook item, not yet answered below
+    real = check_domains.items
+
+    def items(r):
+        found = real(r)
+        clash = {"id": taken, "text": "?", "depth": "light", "critical": True, "pack": "zz-law"}
+        return {**found, "discovery": [clash, *found["discovery"]]}
+
+    monkeypatch.setattr(check_domains, "items", items)
+    done = [x for x in own if x != taken][: grill.BUDGET["light"]]
+    out = grill.questions(root, "light", None, str(answers(tmp_path, done)))
+    assert ids(out) == ["zz-law-a"]
+
+
 def test_ac3_within_the_budget_no_extra_line(tmp_path):
     """REQ-081 AC3: rule 6, the line only once the budget is spent."""
     root = grill_project(tmp_path, ["zz-law"])
@@ -220,9 +247,10 @@ def project(tmp: Path, toml: str = SOLO, files: dict[str, str] | None = None) ->
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "state" / "memory.json"))
-    for name in ("AGK_STEWARD_START", "AGK_ROLE", "CLAUDE_CODE_REMOTE"):
+    for name in ("AGK_STEWARD_START", "CLAUDE_CODE_REMOTE"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("AGK_SESSION", "s1")
+    monkeypatch.setenv("AGK_ROLE", "steward")
     records: list = []
     monkeypatch.setattr(
         steward_owner.steward,
@@ -318,20 +346,96 @@ def test_ac3_not_yet_or_none_of_these_writes_nothing_and_records_it(env, words):
     root = project(tmp)
     propose(root)
     code, lines = yes(tmp, root, words)
-    assert code == 0, lines
+    assert code == 1 and lines == ["not yet: recorded, nothing written"]  # as work-type
     assert packs_of(root) is None and records[-1][0] == "Decision"
     assert not [a for a in steward_owner.load_asks(root) if a["open"]]
 
 
-def test_ac3_the_setting_is_written_only_from_a_recorded_ask(env):
-    """REQ-081 AC3: answer 7, a yes with no open domain ask writes nothing."""
+def writes(monkeypatch) -> list[str]:
+    """Every file `domain_ask` writes through `Path.write_text`, by name."""
+    seen: list[str] = []
+    real = Path.write_text
+    monkeypatch.setattr(
+        Path, "write_text", lambda self, *a, **k: seen.append(self.name) or real(self, *a, **k)
+    )
+    return seen
+
+
+def test_ac3_the_setting_is_written_only_from_a_recorded_ask(env, monkeypatch):
+    """REQ-081 AC3: answer 7, a yes with no open domain ask writes no file and no setting."""
     tmp, _ = env
     root = project(tmp)
+    seen = writes(monkeypatch)
     code, lines = yes(tmp, root)
     assert code == 2 and "propose again" in lines[0]
+    assert packs_of(root) is None and [x for x in seen if x != "words.txt"] == []
+
+
+@pytest.mark.parametrize(
+    "words",
+    ["No, not payments.", "payments, but not until next month", "Not yet, maybe payments later",
+     "No payments", "payments?"],
+)  # fmt: skip
+def test_ac3_a_negative_or_conditional_reply_is_refused_before_any_write(env, monkeypatch, words):
+    """REQ-081 AC3: answer 2 (fix list item 1), SPEC-0062 rule 14: a pack in a no is no yes."""
+    tmp, records = env
+    root = project(tmp)
+    propose(root)
+    seen = writes(monkeypatch)
+    code, lines = yes(tmp, root, words)
+    assert code == 2 and "not a yes" in lines[0]
+    assert packs_of(root) is None and [x for x in seen if x != "words.txt"] == []
+    assert records == [] and git(root, "branch", "--show-current").strip() == "main"
+
+
+def mixed(tmp: Path, toml: str = SOLO) -> Path:
+    files = {"dispatch.py": "\n", "payments.py": "\n", "constitution/vision.md": "A refund desk.\n"}
+    root = project(tmp, toml, files=files)
+    propose(root)
+    return root
+
+
+@pytest.mark.parametrize(
+    ("words", "packs"), [("2", ["field-service"]), ("(1)", ["payments"]),
+                         ("field-service please", ["field-service"]), ("Yes", ["payments"])],
+)  # fmt: skip
+def test_ac3_a_choice_by_name_or_whole_number(env, words, packs):
+    """REQ-081 AC3: answer 2 (fix list item 2), a number only as the whole reply."""
+    tmp, _ = env
+    root = mixed(tmp)
+    code, lines = yes(tmp, root, words)
+    assert code == 0, lines
+    assert packs_of(root) == {"packs": packs}
+
+
+def test_ac3_a_stray_number_is_no_choice(env):
+    """REQ-081 AC3: fix list item 2, "yes, in 2 weeks" picks nothing."""
+    tmp, _ = env
+    root = mixed(tmp)
+    code, lines = yes(tmp, root, "yes, in 2 weeks")
+    assert code == 1 and lines[0].startswith("not a yes")
     assert packs_of(root) is None
-    source = (SCRIPTS / "domain_ask.py").read_text(encoding="utf-8")
-    assert source.count(".write_text(") == 2  # agk.toml and the ADR, both in `yes`
+
+
+def test_ac3_a_team_approvers_own_words_print_the_change_only(env):
+    """REQ-081 AC3: answer 2, SPEC-0073 rule 12: the approver's words name the pack; printed."""
+    tmp, _ = env
+    root = project(tmp, TEAM)
+    propose(root)
+    code, lines = yes(tmp, root, "payments fits this shop", by="boss")
+    assert code == 0 and lines[0].startswith("printed only") and 'packs = ["payments"]' in lines
+    assert packs_of(root) is None
+    assert yes(tmp, root, "payments fits this shop", by="stranger")[0] == 2  # not an approver
+
+
+def test_ac3_a_packs_value_over_several_lines_is_replaced_whole(env):
+    """REQ-081 AC3: fix list item 4, the whole value, valid TOML."""
+    text = SOLO + "[domain]\npacks = [\n]\nstale_months = 12\n\n[flow]\nowner_wait_minutes = 10\n"
+    out = domain_ask.with_packs(text, ["payments"])
+    assert tomllib.loads(out)["domain"] == {"packs": ["payments"], "stale_months": 12}
+    assert tomllib.loads(out)["flow"] == {"owner_wait_minutes": 10}
+    added = domain_ask.with_packs(SOLO + "[domain]\nstale_months = 6\n", ["payments"])
+    assert tomllib.loads(added)["domain"] == {"packs": ["payments"], "stale_months": 6}
 
 
 def test_ac3_a_declared_domain_is_kept(env):
@@ -345,11 +449,19 @@ def test_ac3_a_declared_domain_is_kept(env):
     assert propose(project(tmp / "b", paid))[1] == ["domain: declared; nothing to propose"]
 
 
-def test_ac3_a_builder_session_is_refused(env, monkeypatch):
-    """REQ-081 AC3: answer 2, only the steward asks or writes the domain."""
+@pytest.mark.parametrize("role", ["builder", None])
+def test_ac3_a_builder_or_unset_role_is_refused(env, monkeypatch, role):
+    """REQ-081 AC3: answer 2 (fix list item 3), only the steward asks or writes the domain."""
     tmp, _ = env
     root = project(tmp)
-    monkeypatch.setenv("AGK_ROLE", "builder")
+    if role is None:
+        propose(root)
+        monkeypatch.delenv("AGK_ROLE")
+        code, lines = yes(tmp, root)
+        assert code == 2 and "AGK_ROLE" in lines[0] and packs_of(root) is None
+        assert propose(root)[0] == 2
+        return
+    monkeypatch.setenv("AGK_ROLE", role)
     code, lines = propose(root)
     assert code == 2 and "AGK_ROLE" in lines[0]
     assert steward_owner.load_asks(root) == []

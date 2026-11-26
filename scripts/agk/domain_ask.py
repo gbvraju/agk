@@ -17,7 +17,9 @@ takes the person's recorded reply to that ask, as `work-type --yes` does: "not y
 these" records a `Decision:` and writes nothing; a yes writes `[domain] packs` and a Proposed
 project ADR on the branch `steward/domain` in solo mode with one person, and prints only
 otherwise. A plain yes is refused in team mode, naming `review_mode`. `agk.toml` is written only
-here, from a recorded ask. A session whose `AGK_ROLE` is not the steward's is refused. Reads files
+here, from a recorded ask, after a reply with a question, a condition or a no is refused; a
+number is a choice only as the whole reply. A session whose `AGK_ROLE` is not `steward`, or is
+unset, is refused. Reads files
 and local git only: no network, no model.
 """
 
@@ -34,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import front_door  # noqa: E402
 import steward_owner as owner  # noqa: E402
+from common import CheckError  # noqa: E402
 
 from config import domain_settings  # noqa: E402
 
@@ -44,12 +47,13 @@ FORM = "domain"
 SOURCES = ("constitution/vision.md", "docs/discovery")
 NONE_OF_THESE = re.compile(r"none of these[.!]?", re.IGNORECASE)
 TABLE = re.compile(r"^\[domain\][ \t]*(?:#.*)?$", re.M)
-PACKS = re.compile(r"^packs[ \t]*=.*$", re.M)
+PACKS = re.compile(r"^packs[ \t]*=")
+CHOICE = re.compile(r"\(?([1-9])\)?[.!]?")
+NEGATIVE = re.compile(r"\b(?:no|nope|never|don't|dont|do not|stop|wait)\b", re.IGNORECASE)
 
 
 def _role() -> str | None:
-    role = os.environ.get("AGK_ROLE")
-    if role and role != "steward":
+    if os.environ.get("AGK_ROLE") != "steward":  # an unset role is refused too (fix list item 3)
         return "refused: only the steward asks for the domain (setting: AGK_ROLE)"
     return None
 
@@ -139,9 +143,13 @@ def propose(root: Path, now: datetime, kit: Path = KIT) -> tuple[int, list[str]]
 
 
 def chosen(words: str, names: list[str]) -> list[str]:
-    """The offered packs the words name, by name or by number, in the offer's order."""
+    """The offered packs the words name, in the offer's order: by name anywhere; by number only
+    when the whole reply is one number of the offer (fix list item 2)."""
+    if found := CHOICE.fullmatch(words.strip()):
+        number = int(found[1])
+        return names[number - 1 : number] if 1 <= number <= len(names) else []
     said = set(re.findall(r"[a-z0-9-]+", words.lower()))
-    return [n for i, n in enumerate(names, 1) if n in said or str(i) in said]
+    return [n for n in names if n in said]
 
 
 def with_packs(text: str, names: list[str]) -> str:
@@ -151,9 +159,21 @@ def with_packs(text: str, names: list[str]) -> str:
         return f"{text.rstrip(chr(10))}\n\n[domain]\n{line}\n"
     end = re.search(r"^\[", text[found.end() :], re.M)
     stop = found.end() + (end.start() if end else len(text) - found.end())
-    body = text[found.end() : stop]
-    body = PACKS.sub(line, body, count=1) if PACKS.search(body) else f"\n{line}{body}"
-    return text[: found.end()] + body + text[stop:]
+    lines = text[found.end() : stop].split("\n")
+    at = next((n for n, x in enumerate(lines) if PACKS.match(x)), None)
+    if at is None:
+        lines.insert(1, line)
+    else:  # the whole value, over as many lines as its brackets take (fix list item 4)
+        end, depth = at, 0
+        for end in range(at, len(lines)):
+            depth += lines[end].split("#")[0].count("[") - lines[end].split("#")[0].count("]")
+            if depth <= 0:
+                break
+        lines[at : end + 1] = [line]
+    out = text[: found.end()] + "\n".join(lines) + text[stop:]
+    if tomllib.loads(out).get("domain", {}).get("packs") != names:
+        raise CheckError(f"the [domain] table cannot be rewritten (setting: domain.packs, {RULE})")
+    return out
 
 
 def adr(root: Path, ask: dict, names: list[str], words: str, at: str) -> str:
@@ -190,7 +210,7 @@ def _closed(root: Path, asks: list[dict], ask: dict, words: str, at: str) -> tup
         f'domain: not yet, the person said "{words}" at {at}',
         owner.steward.gh_api,
     )
-    return code, said if code else ["not yet: recorded, nothing written"]
+    return code or 1, said if code else ["not yet: recorded, nothing written"]  # as work-type
 
 
 def yes(
@@ -227,14 +247,14 @@ def yes(
         return 2, ["refused: the words are one line the data guard passes (setting: [guard])"]
     if owner.NOT_YET.fullmatch(words) or NONE_OF_THESE.fullmatch(words):
         return _closed(root, asks, ask, words, at)
+    if owner.BACKSTOP.search(words) or NEGATIVE.search(words):  # before any choice (item 1)
+        return 2, ["refused: a question, a condition or a no is not a yes (SPEC-0062 rule 14)"]
     names = chosen(words, ask["packs"])
     plain = not names and steward_voice.is_yes(words)
     if plain and team:
         return 2, ["refused: a plain yes never holds in team mode (setting: review_mode)"]
     if plain:
         names = ask["packs"][:1]
-    elif not names and owner.BACKSTOP.search(words):
-        return 2, ["refused: a question or a condition is not a yes (SPEC-0062 rule 14)"]
     if not names:
         return 1, ["not a yes: nothing written; ask again in other words (SPEC-0062 rule 14)"]
     if domain_settings(root)["packs"]:
@@ -259,6 +279,8 @@ def yes(
         ]
     if owner.git_out(root, "rev-parse", "--verify", "--quiet", BRANCH).returncode == 0:
         return 2, [f"refused: the branch {BRANCH} already exists; nothing written"]
+    toml = root / "agk.toml"
+    rewritten = with_packs(toml.read_text(encoding="utf-8"), names)  # refused before any write
     code, said = owner.steward.record(  # first: a memory that cannot be written writes nothing
         root, "Decision", f'domain: yes, the person said "{words}" at {at}', owner.steward.gh_api
     )
@@ -268,8 +290,7 @@ def yes(
     owner.save_asks(root, asks)
     if owner.git_out(root, "switch", "-q", "-c", BRANCH, base).returncode:
         return 2, [f"refused: the branch {BRANCH} cannot be made; nothing written"]
-    toml = root / "agk.toml"
-    toml.write_text(with_packs(toml.read_text(encoding="utf-8"), names), encoding="utf-8")
+    toml.write_text(rewritten, encoding="utf-8")
     rel = adr(root, ask, names, words, at)
     return 0, [
         f"wrote agk.toml and {rel} (Proposed) on {BRANCH}; nothing committed or pushed",

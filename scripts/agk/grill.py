@@ -110,7 +110,9 @@ def answered(path: str | None) -> set[str]:
     return {r["id"] for r in rows if isinstance(r.get("id"), str)}
 
 
-def pack_items(root: Path) -> tuple[list[tuple[str, str, str, bool]], set[str]]:
+def pack_items(
+    root: Path, held: set[str] = frozenset()
+) -> tuple[list[tuple[str, str, str, bool]], set[str]]:
     """SPEC-0074 rule 6 (brief #1937, ADR-0806): the grill items of the packs of `[domain] packs`
     in their composed order, and the ids asked past the budget. A regulated pack (a `critical`
     `[[regulations]]` entry) asks its critical items at `light` and its others at `standard` at
@@ -127,6 +129,8 @@ def pack_items(root: Path) -> tuple[list[tuple[str, str, str, bool]], set[str]]:
     items, always = [], set()
     for entry in check_domains.items(root)["discovery"]:
         if entry.get("depth") not in depths or not isinstance(entry.get("critical"), bool):
+            continue
+        if entry.get("id") in held:  # the playbook's item keeps its place (fix list item 6)
             continue
         depth, critical = entry["depth"], entry["critical"]
         if entry["pack"] in regulated:
@@ -146,8 +150,7 @@ def composed(root: Path, kind: str | None) -> list[tuple[str, str, str, bool]]:
     _checked(base, root)
     own = _work_type(root, kind)
     items = [*playbook_format.grill_items(base), *(playbook_format.grill_items(own) if own else [])]
-    held = {item[0] for item in items} | {SUCCESS}
-    items += [item for item in pack_items(root)[0] if item[0] not in held]
+    items += pack_items(root, {item[0] for item in items} | {SUCCESS})[0]
     texts = dict(playbook_format.discovery(base))
     return [*items, (SUCCESS, texts[SUCCESS], playbook_format.GRILL_DEPTHS[0], True)]
 
@@ -167,9 +170,11 @@ def questions(root: Path, depth: str | None, kind: str | None, answers: str | No
     done = answered(answers)
     kept = _load(answers).get("grill", []) if answers else []
     spent = len({r.get("id") for r in kept if "status" in r}) >= BUDGET[depth]
-    always = pack_items(root)[1] if spent else set()
+    items = composed(root, kind)
+    own = {i[0] for i in items} - {i[0] for i in pack_items(root)[0]} if spent else set()
+    always = pack_items(root, own)[1] if spent else set()
     lines = []
-    for item_id, text, item_depth, critical in composed(root, kind):
+    for item_id, text, item_depth, critical in items:
         if item_id in done or playbook_format.GRILL_DEPTHS.index(item_depth) > rank:
             continue
         if spent and item_id not in always:  # rule 6: past the budget, the rules' items only
