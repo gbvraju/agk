@@ -468,6 +468,10 @@ branch `claude/brief-<n>`, no pull request and no `Progress:`, `Report:` or `Que
 `Report: ... escalate` never is (brief #669, ADR-0322). The poll interval is
 `conductor_poll_seconds` (60 by default), all of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
 nothing; the conductor guard allows exactly these forms.
+Both also read the Tells to the conductor's id (its lease name, else `AGK_SESSION` with `AGK_ROLE=conductor`) on the
+open `agk-conductor` issue (brief #1970, ADR-0823): `watch` ends on a new one with `<issue> Tell: <id> <message>`, and `sweep`
+prints each unread one once as `TELL <comment id> reply-to <steward session|none>: <line>`, moving the `inbox` mark in the git
+directory; with no id, no listed author or a failed read it prints one `TELL:` line naming what is missing.
 
 `merge-queue` (brief #643 build (b), ADR-0329) is the batched merge: with `auto_merge` on, it judges every open pull request by
 `merge_cleared.py`'s own holds (a cleared head, green required checks, every hold of SPEC-0039 rule 5, the clearing verdict by a

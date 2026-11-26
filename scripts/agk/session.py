@@ -3598,6 +3598,11 @@ def inbox(root, me: str) -> int:
 
 def unread(root, me: str) -> list[str]:
     """The unread `Tell:` lines of `inbox`, oldest first; the mark moves past the newest."""
+    return [line for _, line in unread_pairs(root, me)]
+
+
+def unread_pairs(root, me: str) -> list[tuple[int, str]]:
+    """`unread` with each line's comment id, which the conductor's `sweep` prints (brief #1970)."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
     comments = pages(f"repos/{repo}/issues/{issue}/comments")
@@ -3618,7 +3623,7 @@ def unread(root, me: str) -> list[str]:
     if lines:
         mark.parent.mkdir(parents=True, exist_ok=True)
         mark.write_text(f"{lines[-1][0]}\n", encoding="utf-8")
-    return [line for _, line in lines]
+    return lines
 
 
 def is_red(item: dict) -> bool:

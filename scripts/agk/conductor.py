@@ -315,6 +315,7 @@ import launch
 import merge_cleared
 import session
 import session_plan
+import steward
 from common import (
     FINAL_LINE,
     NOT_FIX_LIST,
@@ -348,6 +349,8 @@ TRIGGERS = ("Question:", "Report:")
 # What wakes `watch` (brief #1112, ADR-0475): `TRIGGERS` and an owner's answer or approval;
 # `waiting_on` keeps `TRIGGERS`.
 WAKES = TRIGGERS + ("Answer:", "Maintainer answer:", "Approve:")
+TELLS = ("Tell:",)  # the messages to the conductor that `watch` and `sweep` read (brief #1970)
+STEWARD_LISTING = "repos/{}/issues?labels=" + steward.LABEL + "&state=open&per_page=10"
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
 HELD_MINUTES = 15  # a ready, green head with no verdict for this long (brief #854 answer 9)
 HELD_EVERY = 300  # seconds between two held-review checks of `watch` (brief #1125 answer 1)
@@ -422,7 +425,11 @@ READS = ["full"]  # `github_reads` of this run, set once by `watch` (brief #1314
 
 
 def new_lines(
-    repo: str, since: datetime, approvers: AbstractSet[str] = frozenset(), reads: str = ""
+    repo: str,
+    since: datetime,
+    approvers: AbstractSet[str] = frozenset(),
+    reads: str = "",
+    root=None,
 ) -> list[str]:
     """The waking lines of the open briefs and pull requests since `since`. With `reads` delta
     (brief #1314, ADR-0555 decision 2) one `changed_comments` read stands for every issue's pages:
@@ -451,7 +458,89 @@ def new_lines(
             first = session.first_line(c)
             if wakes(c, approvers) and session.moment(c.get("created_at")) > since:
                 lines.append(f"{number} {first}")
+    if root is not None:  # brief #1970 answer 2: the Tells to the conductor, from the same delta
+        lines += tell_lines(root, repo, since, delta)
     return lines
+
+
+# --- the Tells to the conductor (brief #1970, ADR-0823) ---------------------------------------
+
+TELL_ISSUE: dict[str, int] = {}  # the `agk-conductor` issue, read once per run of `watch`
+
+
+def tell_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def conductor_id(root) -> str | None:
+    """Answer 1: the lease name, else `AGK_SESSION` when `AGK_ROLE` is `conductor`."""
+    if name := own_name(root):
+        return name
+    if os.environ.get("AGK_ROLE") == "conductor":
+        return os.environ.get("AGK_SESSION") or None
+    return None
+
+
+def reply_to(repo: str) -> str:
+    """The session of the live `Started: steward` marker (`steward.live_run`), else `none`."""
+    try:
+        listed = read(STEWARD_LISTING.format(repo), "the steward issue")
+        numbers = [i["number"] for i in listed if "pull_request" not in i and "number" in i]
+        if not numbers:
+            return "none"
+        notes = read(f"repos/{repo}/issues/{max(numbers)}/comments", "the steward notes")
+    except CheckError:
+        return "none"
+    found = steward.live_run(notes, tell_now())
+    return found[0] if found else "none"
+
+
+def tell_lines(root, repo: str, since: datetime | None = None, delta: list | None = None) -> list:
+    """The one reader of the Tells to the conductor's id by a listed author (answer 8). With
+    `since` (`watch`, answer 2): `<issue> Tell: <id> <message>` for each created after it, from
+    `delta` when given, else one `since` GET; silent when nothing can be read. Without (`sweep`,
+    answer 3): `TELL <comment id> reply-to <session>: <line>` for each unread one, oldest first,
+    with the inbox mark, so each prints once; a name, author or read problem is one `TELL:` line."""
+    if common.personal_table(Path(root)) is not None:
+        return []  # answer 5: personal mode has no agk-conductor issue
+    me = conductor_id(root)
+    allowed = {
+        a.lstrip("@").lower()
+        for a in session.counted_authors(session.verdict_authors(Path(root)), None) or []
+    }
+    if since is not None:
+        if not me or not allowed:
+            return []
+        try:
+            issue = TELL_ISSUE.get(repo) or TELL_ISSUE.setdefault(
+                repo, session.conductor_issue(repo)
+            )
+            comments = (
+                [c for c in delta if session.issue_of(c) == issue]
+                if delta is not None
+                else read(
+                    f"repos/{repo}/issues/{issue}/comments?since={since.strftime(TIME)}",
+                    f"the comments of #{issue}",
+                )
+            )
+        except CheckError:
+            return []
+        return [
+            f"{issue} {line}"
+            for c in sorted(comments, key=lambda c: c.get("id") or 0)
+            if session.moment(c.get("created_at")) > since
+            and (line := session.tell_line(c, me, allowed))
+        ]
+    if not me:
+        return ["TELL: no conductor name (lease)"]
+    if not allowed:
+        return ["TELL: no listed author (verdict_authors)"]
+    try:
+        pairs = session.unread_pairs(root, me)
+    except CheckError as exc:
+        return [f"TELL: {str(exc).removeprefix('tell: ')}"]
+    who = reply_to(repo) if pairs else "none"
+    return [f"TELL {cid} reply-to {who}: {line}" for cid, line in pairs]
 
 
 def renew_lease(root) -> int:
@@ -516,7 +605,8 @@ def watch(root, since: datetime, once: bool) -> int:
                     return code
                 renewed = time.monotonic()
             approvers = {a.lstrip("@").lower() for a in spec_approvers(Path(root))}
-            lines = new_lines(repo, since, approvers) + green_lines(root, repo, since)
+            lines = new_lines(repo, since, approvers, root=root)
+            lines += green_lines(root, repo, since)
             lines = lines or held_lines(root, repo)
             lines = lines + start_lines(root, repo)  # with every return (brief #1179, ADR-0500)
         except CheckError as exc:
@@ -1316,6 +1406,7 @@ def sweep(root) -> int:
         lines += owner_lines(root, repo, pulls, waits, authors, approvers, now, kept)
         answerers = {a.lstrip("@").lower() for a in [*(authors or []), *(approvers or [])]}
         lines += steward_lines(root, kept, answerers, now)  # SPEC-0059 rule 2 (brief #1322)
+    lines += tell_lines(root, repo)  # brief #1970 answer 3: each unread Tell to the conductor
     lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
     lines += held_builder_lines(root)  # builders the watchdog held on this machine (ADR-0568)
     lines += extra_conductor_lines(root)  # brief #1409: the extra conductors of this machine

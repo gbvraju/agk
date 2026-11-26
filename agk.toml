@@ -480,6 +480,7 @@ tests = [
   "tests/kit/test_wait_until_event.py",
   "tests/kit/test_conductor_start_wake.py",
   "tests/kit/test_light_reprove.py",
+  "tests/kit/test_conductor_tells.py",
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"

@@ -208,7 +208,7 @@ def test_1970_the_role_file_says_act_or_answer():
     text = (KIT_ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     paragraph = next((p for p in text.split("\n\n") if p.startswith("Tells to you")), "")
     for part in (
-        "`TELL`",
+        "`TELL <comment id>",
         "reply-to",
         "not done:",
         "already done:",
