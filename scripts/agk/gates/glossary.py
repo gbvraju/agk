@@ -6,19 +6,21 @@
 
     python3 scripts/agk/gates/glossary.py [--root DIR] [--write]
 
-The product's one glossary, `docs/glossary.md`, is one table of the columns `Term`, `Meaning`,
-`In code` and `Synonyms`. The step fails a table missing, a second table or other columns; a row
-with an empty `Term` or `Meaning` or other cells; a term twice (case-folded and trimmed, against
-every term and synonym of an earlier row); and more rows than `[quality] glossary_terms` (10 to
-200, 40), whose refusal names `quality.glossary_terms` as `config.quality_settings` does. The other
-`[quality]` keys are not read. Several names in `In code` (an adopted codebase's aliases) are one
-row. Each failure names the rule, the path class and the row number, never a term (principle 8). A
-`\\|` inside a cell is text; a fenced block is not read. `--write` writes the glossary from
-`kit/templates/glossary.md`, read from the kit root as `layers.py` reads the architecture template,
-once and never over a glossary (`Q-73E-1`); seeding it from the grill and the steward's `Term:`
-notes is the steward's, by hand (`Q-73E-2`). It runs only where the glossary exists. Files only:
-no network. Installed; it imports only installed modules; the runner's interface of
-`scripts/agk/gates/` (`RULE`, `check`, `applies`).
+The product's one glossary, `docs/glossary.md`, is one table of the columns `Term`, `Meaning`, `In
+code` and `Synonyms`. The step fails a table missing, a second table or other columns; a row with an
+empty `Term` or `Meaning` or other cells; a term twice (case-folded and trimmed, against every term
+and synonym of an earlier row); a `Packs: <id>, <id>` line that does not name `[domain] packs` in
+order, or one without packs (SPEC-0074 rule 7, brief #1954, ADR-0810: a pack's synonyms are included
+by reference, never rows, so the cap counts rows only); and more rows than `[quality]
+glossary_terms` (10 to 200, 40), whose refusal names `quality.glossary_terms` as
+`config.quality_settings` does. The other `[quality]` keys are not read. Several names in `In code`
+(an adopted codebase's aliases) are one row. Each failure names the rule, the path class and the row
+number, never a term (principle 8). A `\\|` inside a cell is text; a fenced block is not read.
+`--write` writes the glossary from `kit/templates/glossary.md`, read from the kit root as
+`layers.py` reads the architecture template, once and never over a glossary (`Q-73E-1`); seeding it
+from the grill and the steward's `Term:` notes is the steward's, by hand (`Q-73E-2`). It runs only
+where the glossary exists. Files only: no network. Installed; it imports only installed modules; the
+runner's interface of `scripts/agk/gates/` (`RULE`, `check`, `applies`).
 """
 
 from __future__ import annotations
@@ -46,6 +48,10 @@ TWICE = "SPEC-0073 rule 8: a glossary term is in the glossary twice"
 CAP = "SPEC-0073 rule 8: the glossary is over its cap (setting: quality.glossary_terms)"
 UNREAD = "SPEC-0073 rule 8: the glossary cannot be read"
 REFUSED = "the [quality] table is refused (setting: quality.glossary_terms)"
+PACKS = (
+    "SPEC-0074 rule 7: the glossary's Packs line does not name the packs (setting: domain.packs)"
+)
+DOMAIN_REFUSED = "the [domain] table is refused (setting: domain)"
 USAGE = "usage: python3 scripts/agk/gates/glossary.py [--root DIR] [--write]"
 SPLIT = re.compile(r"(?<!\\)\|")
 SEPARATOR = re.compile(r"^:?-{3,}:?$")
@@ -96,21 +102,40 @@ def names(row: list[str]) -> set[str]:
     return {w.strip().casefold() for w in words if w.strip()}
 
 
+def packs_lines(text: str) -> list[str]:
+    """The `Packs:` lines outside a fenced block (SPEC-0074 rule 7, ADR-0810)."""
+    out, fenced = [], False
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced and line.startswith("Packs:"):
+            out.append(" ".join(line.split()))
+    return out
+
+
 def check(root: Path, playbook: dict[str, Any]) -> list[tuple[str, str]]:
     """The runner's interface: (rule, path class) of each failure; each names its row."""
     limit = cap(root)
     if limit is None:
         return [(REFUSED, RECORD)]
     try:
-        found = tables((root / RECORD).read_text(encoding="utf-8"))
+        packs = config.domain_settings(root)["packs"]
+    except config.DomainSettingError:
+        return [(DOMAIN_REFUSED, RECORD)]
+    try:
+        text = (root / RECORD).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return [(UNREAD, RECORD)]
+    found = tables(text)
     if len(found) != 1 or len(found[0]) < 2:
         return [(FORM, RECORD)]
     head, rule, *rows = (cells(line) for line in found[0])
     if [c.casefold() for c in head] != list(COLUMNS) or not all(SEPARATOR.match(c) for c in rule):
         return [(FORM, RECORD)]
     out: list[tuple[str, str]] = []
+    if packs_lines(text) != ([f"Packs: {', '.join(packs)}"] if packs else []):
+        out.append((PACKS, RECORD))
     seen: set[str] = set()
     for number, row in enumerate(rows, 1):
         if len(row) != len(COLUMNS):

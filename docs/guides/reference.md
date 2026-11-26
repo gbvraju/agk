@@ -547,6 +547,18 @@ problem is one `FAIL domains: rule 2: <file>: <what> (key: <key>)` line, never a
 lines as `FAIL playbooks:`, so the `playbooks` step runs it. An `as_of` older than `[domain] stale_months` is a `warn domains:`
 line and never fails. Prints `ok domains (<n> packs)` or `ok domains (none)`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
 
+## The project domain model
+
+    python3 scripts/agk/domain_model.py [--root DIR] init --area A | rule ... | classify ... | entity ... | regulation ... | confirm --id ID
+
+The project's domain model, `docs/domain/` (SPEC-0074 rules 7 and 9, brief #1954, ADR-0810): `entities.md`, `rules-<area>.md`
+(numbered business rules, each with a source, an owner and `confirmed` or `inferred`, at most 200 per file), `data.md` (each
+data item `personal`, `health`, `payment`, `confidential` or `public`) and `regulations.md` (each regulation of `[domain]
+packs` in or out of scope). The steward or the architect writes it in planning, never a builder; each value passes the data
+guard first. `check_domains.py` fails each breach of the forms as `rule 7: docs/domain/<file>: <what> (id: <id>)`, only where
+the folder exists; the steward's harvest reads confirmed rules and classes as decisions and inferred rules as questions.
+Exit 0 written, 1 refused, 2 usage.
+
 ## Settled amendments
 
     python3 scripts/agk/check_amendments.py settle --amendment N --evidence E --agreed yes|no --comments FILE [--intake]

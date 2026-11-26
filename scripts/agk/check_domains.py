@@ -7,10 +7,11 @@
 
 A domain pack is `config/domains/<slug>.toml`: public, cited knowledge of one domain (its terms,
 actors, regulations, constraints, questions and gates), never a customer's specifics. `findings`
-gives one line per problem of each pack, `rule 2: config/domains/<file>: <what> (key: <key>)`,
-never a value. `check_playbooks.findings` adds them, so the governance step `playbooks` prints them
-as `FAIL playbooks:` lines; run alone (`--root DIR`) it prints `ok domains (<n> packs)` or
-`ok domains (none)`. An `as_of` older than `[domain] stale_months` is a `warn domains:` line on
+gives one line per problem of each pack, `rule 2: config/domains/<file>: <what> (key: <key>)`, never
+a value, then the lines of the project domain model, `docs/domain/`, that `domain_model.findings`
+gives (rule 7, ADR-0810). `check_playbooks.findings` adds them, so the governance step `playbooks`
+prints them as `FAIL playbooks:` lines; run alone (`--root DIR`) it prints `ok domains (<n> packs)`
+or `ok domains (none)`. An `as_of` older than `[domain] stale_months` is a `warn domains:` line on
 stderr and never fails (rule 14). Reads files only: no network, no model, nothing written. In a
 clean layout the project's pack is read first by name, then the plugin's.
 """
@@ -26,6 +27,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import domain_model
 import playbook_format
 from common import repo_root, run, utf8_output
 from guard import scan_text
@@ -282,7 +284,7 @@ def findings(root: Path) -> list[str]:
             out.append(f"{RULE}: {rel}: the domain of {held[domain]} (key: domain)")
         elif isinstance(domain, str):
             held[domain] = _rel(path, root)
-    return out
+    return out + domain_model.findings(root)  # rule 7: the project domain model, ADR-0810
 
 
 def _months(root: Path) -> int:

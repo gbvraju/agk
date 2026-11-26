@@ -320,8 +320,17 @@ tests = [
 code = "scripts/agk/check_domains.py"
 tests = [
   "tests/kit/test_check_domains.py", "tests/kit/test_domain_settings.py", "tests/kit/test_check_playbooks.py",
-  "tests/kit/test_installed_imports.py",
+  "tests/kit/test_installed_imports.py", "tests/kit/test_domain_model.py",
 ]
+[[testing.map]]
+code = "scripts/agk/domain_model.py"
+tests = [
+  "tests/kit/test_domain_model.py", "tests/kit/test_check_domains.py", "tests/kit/test_steward_onboarding.py",
+  "tests/kit/test_glossary_step.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = "kit/templates/domain-*.md"
+tests = ["tests/kit/test_domain_model.py"]
 [[testing.map]]
 code = "scripts/agk/check_final_clearance.py"
 tests = [

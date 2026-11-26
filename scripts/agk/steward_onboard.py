@@ -16,7 +16,9 @@ the repository's issue and pull request comments (`Maintainer answer:`, `Answer:
 `Owner needed:` first lines; an answer or `Owner needed:` only from a listed verdict author or spec
 approver of `config/reviewers.yaml`), the open `agk:parked` issues, and the files: Accepted ADRs,
 `docs/runs/decisions/`, Approved specs, the statuses of `docs/requirements.md`, the signed-off
-prototype versions and the last line of `check_plan.py --trace`. It writes them as memory notes
+prototype versions, the last line of `check_plan.py --trace` and the project domain model of
+`docs/domain/` (SPEC-0074 rule 7, ADR-0810: confirmed rules and data classes are decisions, inferred
+rules are owner questions, at most five and then a count). It writes them as memory notes
 marked `harvested`, each line citing its source: `Decision:` notes of at most 50 lines, one `Owner
 question:` per open question and per question two answers contradict (never a decision), `Risk:` for
 parked work and `Gap:` for each source it could not read. A line the data guard matches is withheld,
@@ -50,6 +52,7 @@ ISSUES = "repos/{owner}/{repo}/issues"
 COMMENTS = ISSUES + "/comments?per_page=100&page=<page>"
 LABELLED = ISSUES + "?labels=<label>&state=<state>&per_page=100"
 CHUNK = 50
+ASKED = 5  # SPEC-0074 rule 14, owner's answer Q-1954-B: batches of five (ADR-0810)
 FIRST = re.compile(r"^(Maintainer answer|Answer|Question): (Q-[\w-]+)\s*(.*)")
 STATUS = re.compile(r"^- Status: (\S+)", re.M)
 HEADING = re.compile(r"^# ((?:ADR|SPEC)-\d+): (.+)$", re.M)
@@ -190,6 +193,38 @@ def from_files(root: Path, gaps: list) -> list:
     return out
 
 
+def from_domain(root: Path, gaps: list) -> tuple[list, list]:
+    """SPEC-0074 rules 7, 9 and 14 (brief #1954, ADR-0810): each `confirmed` rule and each
+    classified data item of `docs/domain/` is a decision citing its file and id, never a rule's
+    text (confidential domain knowledge stays in the folder); each `inferred` rule is one
+    owner question, at most `ASKED`, then one line with the count; an unreadable file is a gap."""
+    import domain_model
+
+    where = domain_model.folder(root)
+    if not where.is_dir():
+        return [], []
+    for path in sorted(where.glob("*.md")):
+        if domain_model.read(path) is None:
+            gaps.append(f"{domain_model.FOLDER}/{path.name} cannot be read")
+    decisions, inferred = [], []
+    for rule in domain_model.rules(root):
+        cite = f"(source: {domain_model.FOLDER}/{rule.file} {rule.id})"
+        if rule.status == "confirmed":
+            decisions.append(f"{rule.id} is confirmed {cite}")  # the text stays in docs/domain/
+        else:
+            inferred.append(f"{rule.id} is inferred: confirm or correct it {cite}")
+    data = domain_model.read(where / domain_model.DATA) or ""
+    for item, kind in domain_model.data_items(data):
+        if kind in domain_model.CLASSES:
+            cite = f"(source: {domain_model.FOLDER}/{domain_model.DATA} {item})"
+            decisions.append(f"{short(item)} is {kind} {cite}")
+    owner = inferred[:ASKED]
+    if len(inferred) > ASKED:
+        more = len(inferred) - ASKED
+        owner.append(f"{more} more inferred rules wait for a yes (source: {domain_model.FOLDER}/)")
+    return decisions, owner
+
+
 def harvest(root: Path, gh) -> dict:
     """Rule 20's one read of the facts, by list pages only."""
     gaps: list = []
@@ -214,6 +249,9 @@ def harvest(root: Path, gh) -> dict:
                 for i in parked
             ]
     decisions += from_files(root, gaps)
+    domain_decisions, domain_owner = from_domain(root, gaps)
+    decisions += domain_decisions
+    owner += domain_owner
     return {"Decision": decisions, "Owner question": owner, "Risk": risks, "Gap": gaps}
 
 
