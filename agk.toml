@@ -656,6 +656,7 @@ code = "scripts/agk/front_door.py"
 tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
   "tests/kit/test_front_door_derive.py", "tests/kit/test_front_door_quality.py",
+  "tests/kit/test_architecture_record.py", "tests/kit/test_stack_designs.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
@@ -981,6 +982,9 @@ tests = [
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_stack_choice.py",
 ]
 [[testing.map]]
+code = "scripts/agk/gates/architecture_quality.py"
+tests = ["tests/kit/test_architecture_record.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/gates/committed_secrets.py"
 tests = ["tests/kit/test_gate_secrets_settings.py", "tests/kit/test_run_gates.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
@@ -1046,7 +1050,10 @@ code = "kit/templates/data-model.md"
 tests = ["tests/kit/test_contracts.py"]
 [[testing.map]]
 code = "kit/templates/architecture.md"
-tests = ["tests/kit/test_layers_step.py", "tests/kit/test_contracts.py"]
+tests = ["tests/kit/test_layers_step.py", "tests/kit/test_contracts.py", "tests/kit/test_architecture_record.py"]
+[[testing.map]]
+code = "kit/templates/stack-adr.md"
+tests = ["tests/kit/test_stack_designs.py", "tests/kit_dev/test_stack_playbook.py"]
 [[testing.map]]
 code = "kit/templates/runtime/builder.txt"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py"]

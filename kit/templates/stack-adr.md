@@ -25,6 +25,8 @@ TODO(architect): what the product needs from a stack, as the owner gave it in th
    - test selection: judgement (the [testing] profile and the always_full paths the option proposes, its test configuration and build files, and any other path only with a `# full: <reason>` comment)
 3. **Chosen**: none yet
 
+## Designs compared
+
 ## Consequences
 
 The architect accepts one option; the ADR then locks it. Each practice marked `check` is added as a governance step by the build that adopts the stack; each marked `judgement` is recorded here and enforced by review only.
