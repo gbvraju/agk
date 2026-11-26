@@ -472,7 +472,9 @@ def test_a_carried_head_behind_more_than_max_behind_merges_holds(tmp_path):
 # record of the head it made, so the first verdict on that head needs no builder.
 
 EVIDENCE_LINE = "Evidence check: agrees, head {}, record 0123456789ab, governance passed"
-RECORD_TEXT = '{{"head": "{}", "result": "passed", "steps": [{{"name": "pr-body", "outcome": "ok"}}]}}'
+RECORD_TEXT = (
+    '{{"head": "{}", "result": "passed", "steps": [{{"name": "pr-body", "outcome": "ok"}}]}}'
+)
 BODY = "Brief: #70\nSummary: An example change.\n"
 
 
@@ -675,6 +677,6 @@ def test_the_conductor_agent_text_names_the_light_re_prove_record():
 
 
 def test_reprove_is_the_one_place_the_conductor_makes_a_head():
-    call = '/update-branch"'  # the one endpoint string a PUT is sent to (merge_cleared only names it)
+    call = '/update-branch"'  # the endpoint string a PUT goes to; merge_cleared only names it
     found = sorted(p.name for p in SCRIPTS.glob("*.py") if call in p.read_text("utf-8"))
     assert found == ["conductor.py"]
