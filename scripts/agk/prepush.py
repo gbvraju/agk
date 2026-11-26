@@ -972,21 +972,35 @@ TRAILING_WORKERS = re.compile(r" -n ([1-9][0-9]*)$")  # the one form `pytest_wor
 
 def split_workers(command: str, root: Path) -> tuple[str, int]:
     """COMMAND without its worker part and the worker count (1 when it has none; brief #2005,
-    ADR-0829): a trailing ` -n <n>` that `pytest_workers` adds, or ROOT's `parallel_command` with
-    `{workers}` filled, read as its template. Any other command is returned as it is."""
-    found = TRAILING_WORKERS.search(command)
-    if found:
-        return command[: found.start()], int(found.group(1))
-    try:
-        template = parallel_command(root)
-    except (CheckError, OSError, ValueError):
-        template = None
-    if isinstance(template, str) and "{workers}" in template:
+    ADR-0829): ROOT's `parallel_command` with `{workers}` filled, or the `project_tests` that
+    `full_command` replaces with it, read as the template; else a trailing ` -n <n>` of a command
+    that `last_pytest` reads as pytest, the one form `pytest_workers` adds (fix list 7195972070
+    items 1 and 2). Any other command is returned as it is."""
+    template, project = parallel_parts(root)
+    if template is not None:
         parts = [re.escape(part) for part in template.split("{workers}")]
         filled = re.fullmatch("([1-9][0-9]*)".join(parts), command)
         if filled and len(set(filled.groups())) == 1:
             return template, int(filled.group(1))
+        if project and command == project:
+            return template, 1
+    found = TRAILING_WORKERS.search(command)
+    if found and last_pytest(command[: found.start()]) is not None:
+        return command[: found.start()], int(found.group(1))
     return command, 1
+
+
+def parallel_parts(root: Path) -> tuple[str | None, str | None]:
+    """ROOT's `parallel_command` when it holds `{workers}` (else None), and its `project_tests`
+    when `full_command` would run that template in its place (a command that is not pytest)."""
+    try:
+        template = parallel_command(root)
+        project = str(load_config(root).get("project_tests") or "").strip()
+    except (CheckError, OSError, ValueError, KeyError):
+        return None, None
+    if not isinstance(template, str) or "{workers}" not in template:
+        return None, None
+    return template, (project if pytest_interpreter(project) is None else None)
 
 
 def without_workers(command: str, root: Path) -> str:

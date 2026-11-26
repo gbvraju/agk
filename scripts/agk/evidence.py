@@ -36,8 +36,9 @@ different output digest is a note, never a failure, since outputs carry timings.
 The full run's command is rebuilt with `[testing] workers` as prepush builds it (SPEC-0044 rule
 4, `prepush.full_command`) and each selected run with `prepush.selected_workers` (brief #980,
 ADR-0422), so a record made with workers agrees on the same machine. Brief #2005 (ADR-0829): the
-recorded and the planned command are compared through `prepush.without_workers`, which takes out a
-trailing ` -n <n>` or reads a filled `parallel_command` as its template; such a run is replayed
+recorded and the planned command are compared through `prepush.without_workers`, which reads a
+filled `parallel_command` (and the single `project_tests` it replaces) as its template and takes
+out a trailing ` -n <n>` of a pytest command; such a run is replayed
 with the planned command and noted `workers: <name> recorded <r>, replayed <p>`. Anything else
 (another file, option or interpreter, `-n auto`, `-n` not at the end) still differs by `command`,
 and a single run matches a planned run in workers and the reverse.

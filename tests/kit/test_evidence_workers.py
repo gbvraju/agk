@@ -31,8 +31,9 @@ TWO = {("whole", "whole"): f"{PY} -n 2"}
 TEMPLATE = "make test-parallel JOBS={workers} SITE=https://example.com"
 
 
-def tree(tmp_path: Path, parallel: str | None = None) -> Path:
-    text = "[testing]\n" + (f'parallel_command = "{parallel}"\n' if parallel else "")
+def tree(tmp_path: Path, parallel: str | None = None, project: str = "", more: str = "") -> Path:
+    text = f'project_tests = "{project}"\n' if project else ""
+    text += "[testing]\n" + more + (f'parallel_command = "{parallel}"\n' if parallel else "")
     (tmp_path / "agk.toml").write_text(text, encoding="utf-8")
     return tmp_path
 
@@ -81,6 +82,27 @@ def test_a_filled_parallel_command_reads_as_its_template(tmp_path):
     four, two = TEMPLATE.replace("{workers}", "4"), TEMPLATE.replace("{workers}", "2")
     assert prepush.without_workers(four, root) == prepush.without_workers(two, root) == TEMPLATE
     assert prepush.without_workers(four + " -k slow", root) == four + " -k slow"
+
+
+def test_a_trailing_n_of_a_command_that_is_not_pytest_is_left_as_written(tmp_path):
+    """REQ-051: fix list 7195972070 item 1 (`pytest_workers` adds `-n` only to pytest)."""
+    root = tree(tmp_path)
+    assert prepush.without_workers("make test -n 4", root) == "make test -n 4"
+    assert prepush.without_workers("make test; echo done -n 4", root) == "make test; echo done -n 4"
+
+
+def test_the_single_project_tests_reads_as_the_parallel_template(tmp_path):
+    """REQ-051: fix list 7195972070 item 2 (answer 7: one machine had one worker or no xdist)."""
+    root = tree(tmp_path, "make test JOBS={workers}", project="make test")
+    assert prepush.split_workers("make test", root) == ("make test JOBS={workers}", 1)
+    assert prepush.split_workers("make test JOBS=2", root) == ("make test JOBS={workers}", 2)
+    assert prepush.without_workers("make check", root) == "make check"
+
+
+def test_a_pytest_project_tests_is_not_read_as_the_template(tmp_path):
+    """REQ-051: item 2 (a pytest `project_tests` takes `-n`, never `parallel_command`)."""
+    root = tree(tmp_path, "make test JOBS={workers}", project=PY)
+    assert prepush.split_workers(PY, root) == (PY, 1)
 
 
 def test_a_parallel_command_without_workers_is_compared_as_written(tmp_path):
@@ -134,6 +156,65 @@ def test_filled_parallel_commands_with_four_and_two_agree(tmp_path, rebuilt):
     units, diffs, notes = rebuilt(root, [run("whole", four)], {("whole", "whole"): two})
     assert diffs == [] and units["tests/whole/whole"].command == two
     assert "workers: tests/whole/whole recorded 4, replayed 2" in notes
+
+
+def test_a_recorded_single_project_run_agrees_with_a_planned_parallel_command(tmp_path, rebuilt):
+    """REQ-051: fix list 7195972070 item 2, through the check."""
+    root = tree(tmp_path, "make test JOBS={workers}", project="make test")
+    plan = {("proof", "full"): "make test JOBS=2"}
+    units, diffs, notes = rebuilt(root, [run("full", "make test", "proof")], plan)
+    assert diffs == [] and units["tests/full"].command == "make test JOBS=2"
+    assert "workers: tests/full recorded 1, replayed 2" in notes
+    plan = {("proof", "full"): "make test"}
+    _, diffs, _ = rebuilt(root, [run("full", "make test -n 4", "proof")], plan)
+    assert diffs == ["not what prepush runs: tests/full (field: command)"]
+
+
+def planned_by_selected_workers(root: Path, monkeypatch) -> dict:
+    """The plan as `planned_runs` builds it: the whole set through `prepush.selected_workers`."""
+    monkeypatch.setattr(prepush, "xdist_ready", lambda *a: None)  # xdist imports here
+    sets, _ = prepush.selected_workers(root, [("whole", PY, ".", "listed")])
+    return {("whole", name): command for name, command, _cwd, _reason in sets}
+
+
+@pytest.mark.parametrize("more", ["", "workers = 1\n"])
+def test_with_one_worker_or_none_the_plan_has_no_n_and_a_record_in_workers_agrees(
+    tmp_path, rebuilt, monkeypatch, more
+):
+    """REQ-051: fix list 7195972070 item 4 (`[testing] workers` absent or 1)."""
+    monkeypatch.delenv("AGK_TEST_WORKERS", raising=False)
+    root = tree(tmp_path, more=more)
+    plan = planned_by_selected_workers(root, monkeypatch)
+    assert plan == {("whole", "whole"): PY}
+    _, diffs, notes = rebuilt(root, [run("whole", PY)], plan)
+    assert diffs == [] and not [n for n in notes if n.startswith("workers:")]
+    units, diffs, notes = rebuilt(root, [run("whole", f"{PY} -n 4")], plan)
+    assert diffs == [] and units["tests/whole/whole"].command == PY
+    assert "workers: tests/whole/whole recorded 4, replayed 1" in notes
+
+
+def test_agk_test_workers_sets_the_plan_and_a_record_with_another_count_agrees(
+    tmp_path, rebuilt, monkeypatch
+):
+    """REQ-051: fix list 7195972070 item 4 (`AGK_TEST_WORKERS`, end to end through
+    `selected_workers`, the verdict's Not proven)."""
+    monkeypatch.setenv("AGK_TEST_WORKERS", "2")
+    root = tree(tmp_path, more='workers = "auto"\n')
+    plan = planned_by_selected_workers(root, monkeypatch)
+    assert plan == {("whole", "whole"): f"{PY} -n 2"}
+    units, diffs, notes = rebuilt(root, [run("whole", f"{PY} -n 4")], plan)
+    assert diffs == [] and units["tests/whole/whole"].command == f"{PY} -n 2"
+    assert "workers: tests/whole/whole recorded 4, replayed 2" in notes
+
+
+def test_a_bad_agk_test_workers_is_refused_naming_the_variable(tmp_path, monkeypatch):
+    """REQ-051: answer 6 (a malformed value is refused naming the variable, never the value)."""
+    monkeypatch.setenv("AGK_TEST_WORKERS", "many")
+    root = tree(tmp_path, more='workers = "auto"\n')
+    with pytest.raises(prepush.CheckError) as raised:
+        prepush.selected_workers(root, [("whole", PY, ".", "listed")])
+    assert "(setting: AGK_TEST_WORKERS)" in str(raised.value)
+    assert "many" not in str(raised.value)
 
 
 @pytest.mark.parametrize(

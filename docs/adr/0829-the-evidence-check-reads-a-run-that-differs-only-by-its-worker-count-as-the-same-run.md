@@ -20,15 +20,18 @@ quoted as data): "Draft 1 , 2 and 3 then file it".
 
 ## Decision
 
-1. `prepush.without_workers(command, root)` returns COMMAND without its worker part: a trailing ` -n <digits>` (the
-   one form `pytest_workers` writes, never `-n 0`), or, for `[testing] parallel_command` with `{workers}` filled, the
-   template itself. Any other command is returned as it is. `evidence.py` compares the recorded and the planned command
+1. `prepush.without_workers(command, root)` returns COMMAND without its worker part. For `[testing]
+   parallel_command` with `{workers}` filled (the same number at each placeholder) it returns the template, and it
+   returns the template also for the `project_tests` that `full_command` replaces with it (a command that is not
+   pytest). Otherwise it takes off a trailing ` -n <digits>`, the one form `pytest_workers` writes (never `-n 0`),
+   but only from a command that `last_pytest` reads as pytest. Any other command is returned as it is. `evidence.py` compares the recorded and the planned command
    through it; the cwd and the name are compared as before.
 2. A run that matches only by decision 1 is replayed with the conductor's own planned command, and the check adds one
    note `workers: <name> recorded <r>, replayed <p>` (worker counts, 1 for a run with none). The `Evidence check:` line
    stays `agrees` when every replayed exit matches.
 3. Nothing else loosens: another file, option, interpreter, `-n auto`, or `-n` not at the end still differs by
-   `field: command`. A single run against a planned `-n <p>`, and the reverse, match.
+   `field: command`. A trailing `-n <n>` of a command that is not pytest (`make test -n 4`) is compared as written. A single run against a
+   planned `-n <p>` or a planned filled `parallel_command`, and the reverse, match.
 
 ## Consequences
 
@@ -38,4 +41,7 @@ since every recorded command is compared through `without_workers`. CI, workflow
 
 ## Residual
 
-Another runner's worker option (not `-n`, not `parallel_command`) is still compared as written.
+Another runner's worker option (not `-n`, not `parallel_command`) is still compared as written. A `{workers}`
+placeholder in `parallel_command` must mean the worker count: the check reads every number in its place as one, so a
+template that used it for anything else (`SHARD={workers}`) would read two different runs as the same run. The
+setting's comment in the kit's `agk.toml` says so; no guide describes `parallel_command` today.
