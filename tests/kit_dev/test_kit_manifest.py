@@ -83,6 +83,7 @@ SINGLES = {
     "config/session-rules.md",
     "config/stack-defaults.toml",
     "config/stack-signals.toml",
+    "config/standards.toml",  # brief #1974 (ADR-0817)
 }
 FORBIDDEN = [r"gbvraju", r"day-\d", r"\bK[0-4]\b", r"PR #\d+", r"Q-K\d"]
 ALLOWED_VARS = {

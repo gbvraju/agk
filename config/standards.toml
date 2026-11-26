@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The stack-keyed standards file (SPEC-0072 rules 2 and 6; brief #1974, ADR-0817): one `[[standards]]` entry per stack,
+# in the playbook entry's form with one more key, `runtime` (a key of the stack table of scripts/agk/gates/pins.py).
+# `check_playbooks.standard` composes the entries of the runtime the Accepted stack record chose, for every work type,
+# before the playbook layers; a playbook entry for the same stack replaces one only with an equal or stronger `rules`.
+# The Python entries pin ruff from config/ci-tools.txt (mypy is pinned there too); the Node entry's tools are the
+# product's own pinned eslint and prettier, so it names no version, and its codes are eslint:recommended's defaults.
+
+[[standards]]
+stack = "python-pyproject"
+runtime = "python"
+lint = "python-lint"
+format = "python-format"
+type = "python-type"
+config = "pyproject.toml"
+rules = { tool = "ruff", version = "0.17.4", codes = ["E", "F", "I", "B", "UP"] }
+
+[[standards]]
+stack = "python-pip"
+runtime = "python"
+lint = "python-lint"
+format = "python-format"
+type = "python-type"
+config = "pyproject.toml"
+rules = { tool = "ruff", version = "0.17.4", codes = ["E", "F", "I", "B", "UP"] }
+
+[[standards]]
+stack = "node"
+runtime = "node"
+lint = "node-lint"
+format = "node-format"
+type = "node-type"
+config = "package.json"
+rules = { tool = "eslint", codes = [
+  "constructor-super", "for-direction", "getter-return", "no-async-promise-executor", "no-case-declarations",
+  "no-class-assign", "no-compare-neg-zero", "no-cond-assign", "no-const-assign", "no-constant-binary-expression",
+  "no-constant-condition", "no-control-regex", "no-debugger", "no-delete-var", "no-dupe-args",
+  "no-dupe-class-members", "no-dupe-else-if", "no-dupe-keys",
+  "no-duplicate-case", "no-empty",
+  "no-empty-character-class", "no-empty-pattern", "no-empty-static-block", "no-ex-assign", "no-extra-boolean-cast",
+  "no-fallthrough", "no-func-assign", "no-global-assign", "no-import-assign", "no-invalid-regexp",
+  "no-irregular-whitespace", "no-loss-of-precision", "no-misleading-character-class", "no-new-native-nonconstructor",
+  "no-nonoctal-decimal-escape", "no-obj-calls", "no-octal", "no-prototype-builtins", "no-redeclare",
+  "no-regex-spaces", "no-self-assign", "no-setter-return", "no-shadow-restricted-names", "no-sparse-arrays",
+  "no-this-before-super", "no-undef", "no-unexpected-multiline", "no-unreachable", "no-unsafe-finally",
+  "no-unsafe-negation", "no-unsafe-optional-chaining", "no-unused-labels", "no-unused-private-class-members",
+  "no-unused-vars", "no-useless-backreference", "no-useless-catch", "no-useless-escape", "no-with", "require-yield",
+  "use-isnan", "valid-typeof",
+] }
