@@ -323,8 +323,8 @@ class Estimate:
 
 
 def utc_today() -> date:
-    """The real UTC day: a day is finished, and may be kept, only before it (fix list
-    7200656338 item 1), whatever `--today` says."""
+    """The real UTC day: a day is finished, and may be kept, only before it (the first fix list,
+    item 1), whatever `--today` says."""
     return datetime.now(UTC).date()
 
 
@@ -337,7 +337,7 @@ def day_start(day: date) -> datetime:
 
 
 def day_file(keep: Path, day: str, rates: bool) -> Path:
-    """A kept day's file, one per rate set (fix list 7200656338 item 7): `<day>.json` counted at
+    """A kept day's file, one per rate set (the first fix list item 7): `<day>.json` counted at
     the runner rates (a private repository), `<day>.plain.json` counted once."""
     return keep / (f"{day}.json" if rates else f"{day}.plain.json")
 

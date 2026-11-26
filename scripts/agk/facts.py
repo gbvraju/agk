@@ -846,7 +846,7 @@ class WeekRuns:
     def __init__(self, src: Any, runs: dict) -> None:
         self.src, self.runs = src, runs
 
-    reads_allowance = True  # brief #2011 answer 4 (fix list 7200656338 item 2)
+    reads_allowance = True  # brief #2011 answer 4 (the first fix list item 2)
 
     def get(self, name: str, endpoint: str, until: Any = None) -> tuple[int, Any]:
         if name == "rate_limit":
