@@ -335,3 +335,37 @@ def test_req066_the_guard_allows_the_settled_line_only_with_the_setting_on(tmp_p
     project(root, on=False)
     found = decide(root, good)
     assert found is not None and "steward.settle_amendments" in found["permissionDecisionReason"]
+
+
+# --- brief #2002 (ADR-0828): a brief's quoted items are read and classed as a file's -------------
+
+FILE_254 = Path(__file__).resolve().parents[2] / "docs" / "runs" / "proposed-spec-amendments-254.md"
+
+
+def test_req066_2002_quoted_items_are_read_and_classed_as_a_file(tmp_path):
+    """REQ-066: brief #2002 answer 1: the `> ` removed, `items` and `item_class` read the quote."""
+    lines = ["Spec fit: SPEC-0072 rule 1 change by amendment 254",
+             "> 1. **SPEC-0072 rule 1.** Append \"x\" (amendment 254).", "> Class: behaviour",
+             "> 2. **SPEC-0072 rule 1.** Append \"y\".", "Size: M"]  # fmt: skip
+    text = ca.quoted_items(lines, 0)
+    assert [n for n, _ in ca.items(text)] == [1, 2]
+    assert ca.file_problems("Spec fit: SPEC-0072", text, tmp_path) == [
+        "Spec fit: SPEC-0072 item 2: no Class line (ADR-0813 answer 1)"
+    ]
+    assert ca.quoted_items(lines, 4) == ""
+
+
+def test_req066_2002_the_items_digest_is_the_same_in_the_brief_and_in_the_file():
+    """REQ-066: brief #2002 answers 5 and 6: the digest of the brief's quoted items equals that of
+    the file the builder writes word for word, whatever its wrapping, header or closing line."""
+    text = FILE_254.read_text(encoding="utf-8")
+    quoted = "\n".join(
+        "> " + line for line in text.split("## Items\n", 1)[1].split("\n\n", 1)[0].strip().splitlines()
+    )
+    brief = ca.quoted_items(["Spec fit: SPEC-0030 rules 4 and 6 change by amendment 254",
+                             *quoted.splitlines()], 0)  # fmt: skip
+    assert ca.items_digest(brief) == ca.items_digest(text)
+    wrapped = text.replace(" insert ", "\n   insert ", 1)
+    assert ca.items_digest(wrapped) == ca.items_digest(text)
+    assert ca.items_digest(text.replace("never an owner ask", "an owner ask")) != ca.items_digest(text)
+    assert ca.items_digest("no items") is None
