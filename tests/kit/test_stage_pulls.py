@@ -1,7 +1,8 @@
-"""Kit tests: the path from an idea takes four stage pull requests (brief #2021, ADR-0836, REQ-050).
+"""Kit tests: the path from an idea takes four stage pull requests (brief #2021, ADR-0836).
 
-The stack options and their accept stand on one stage branch, two approvals stand at two heads of one
-pull request, each tied to its own record's digest, and `[plan] stage_pulls` chooses `stage` or `step`.
+REQ-050. The stack options and their accept stand on one stage branch, two approvals stand at two
+heads of one pull request, each tied to its own record's digest, and `[plan] stage_pulls` chooses
+`stage` or `step`.
 Invented records under a temporary root (example.com); local git only, no network.
 """
 
@@ -18,10 +19,11 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import common  # noqa: E402
-import config  # noqa: E402
 import design_signoff  # noqa: E402
 import steward_evidence  # noqa: E402
 from test_stack_choice import STACK, engines, git, project, record  # noqa: E402
+
+import config  # noqa: E402
 
 CHECK_ADRS = KIT_ROOT / "scripts" / "agk" / "check_adrs.py"
 LINK = "https://github.example.com/o/r/pull/1#issuecomment-1"
@@ -29,7 +31,7 @@ HEAD = "a" * 40
 
 
 def stage_branch(tmp: Path) -> Path:
-    """A project whose default branch has no stack record; the stage branch adds the Proposed one."""
+    """A project with no stack record on main; its stage branch adds the Proposed one."""
     root = project(tmp, None, '\n[testing]\nprofile = "balanced"\n', commit=True)
     (root / STACK).write_text(record(), encoding="utf-8")
     git(root, "add", "-A")
@@ -38,7 +40,7 @@ def stage_branch(tmp: Path) -> Path:
 
 
 def test_the_accept_follows_the_options_on_one_stage_branch(tmp_path):
-    """REQ-050 answer 1: the Proposed stack record and its accept in one pull request pass both checks."""
+    """REQ-050 answer 1: the Proposed record and its accept in one pull request pass both checks."""
     root = stage_branch(tmp_path)
     assert git(root, "ls-tree", "-r", "--name-only", "main", "docs/adr") == ""  # not on main
     proc = engines(root, "stack-accept", "--option", "A", "--reason", "nothing to host suits it")
@@ -86,7 +88,7 @@ def test_two_approvals_at_two_heads_both_count(tmp_path):
 
 
 def test_a_fix_after_approval_voids_only_its_own_record(tmp_path):
-    """REQ-050 answer 6: a fix to the prototype asks its approval again; the inventory's still counts."""
+    """REQ-050 answer 6: a fix to the prototype asks its approval again; the inventory's counts."""
     root = signed(tmp_path)
     page = root / "docs" / "design" / "prototype" / "v1" / "home--empty.html"
     page.write_text("<p>Welcome back to example.com</p>\n", encoding="utf-8")
@@ -140,7 +142,7 @@ def test_every_stage_before_build_names_one_of_four_pull_requests():
 
 
 def test_the_guide_and_skills_drop_one_pull_request_per_step():
-    """REQ-050 answers 3 and 4: the texts name the four stages and keep today's per-step form as `step`."""
+    """REQ-050 answers 3 and 4: the texts name the four stages and keep the old form as `step`."""
     guide = (KIT_ROOT / "docs" / "guides" / "planning.md").read_text(encoding="utf-8")
     idea = guide.split("## From an idea", 1)[1].split("\n## ", 1)[0]
     assert "Each step is its own pull request" not in idea
