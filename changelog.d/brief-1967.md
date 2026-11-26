@@ -1,0 +1,1 @@
+- Doctor: `amendment-unapplied` (warn) lists each approved spec amendment on the default branch, added in the last 30 days, whose file has no applied line a day after its approval; `check_amendments.applied` and `check_amendments.approval` read the line and the approval (brief #1967, ADR-0814)
