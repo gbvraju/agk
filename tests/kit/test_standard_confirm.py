@@ -65,6 +65,7 @@ def project(
 ) -> Path:
     root = tmp_path / "product"
     shutil.copytree(ROOT / "config" / "playbooks", root / "config" / "playbooks")
+    shutil.copy(ROOT / "config" / "standards.toml", root / "config")  # brief #1975
     lines = [f'review_mode = "{mode}"']
     if personal_mode:
         lines += ["", "[personal]", 'level = "light"', 'forge = "files"']
@@ -103,6 +104,13 @@ def test_req079_ac6_a_business_user_sees_one_plain_screen_with_no_kit_term(tmp_p
 def test_req079_ac6_a_team_sees_the_full_list(tmp_path):
     """REQ-079 AC6: rule 8, team mode lists the layers and directions, each pack and every gate."""
     root = project(tmp_path, "team")
+    (root / "docs" / "adr").mkdir(parents=True)  # brief #1975: a pack is listed for a chosen stack
+    (root / "docs" / "adr" / "0002-stack-options.md").write_text(
+        "# ADR-0002: stack options\n\n- Status: Accepted\n- Date: 2026-11-20\n\n## Decision\n\n"
+        "1. **Options**\n   - Option A — one service at example.com. Parts: python 3.12.7 PSF-2.0, "
+        "examplelib 1.2.3 MIT.\n3. **Chosen**: Option A\n",
+        encoding="utf-8",
+    )
     code, lines = steward_owner.standard_screen(root, None)
     text = "\n".join(lines)
     gates, _, _ = check_playbooks.composed(root / "config/playbooks/web-app.toml", root)

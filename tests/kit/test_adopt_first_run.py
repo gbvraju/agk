@@ -309,7 +309,7 @@ def _planted(tmp_path: Path, stack: str) -> tuple[Path, dict]:
         )
         return root, next(e for e in node.node_entries("web-app") if e["stack"] == "node")
     root = py_sample(tmp_path, code="import json\nx=1\n\n\ndef f(a):\n    return a\n")
-    entries = py.check_playbooks.standard(py.PLAYBOOKS / "api-service.toml", py.KIT_ROOT)[1]
+    entries = py.composed(root)[1]  # brief #1975: the sample chose Python
     return root, next(e for e in entries if e["stack"] == "python-pyproject")
 
 
