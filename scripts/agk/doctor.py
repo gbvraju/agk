@@ -653,6 +653,8 @@ HINTS = {
     "no-answerer": "list an answerer in config/reviewers.yaml (setting: spec_approvers or "
     "verdict_authors)",
     "no-default-branch": "fetch the default branch (setting: default_branch in agk.toml)",
+    "shallow-clone": "the clone is shallow; fetch the full history (`git fetch --unshallow`) "
+    "so that each file's adding pull request can be read",
     "comments-unbounded": "a pull request has more comments than doctor reads; read it by hand",
     "plugin-unreadable": "only the project's and this plugin's skills are read; check it by hand",
     "no-ruleset": "no ruleset targets the default branch; fix ruleset-missing or ruleset-target",
@@ -1276,6 +1278,10 @@ def amendment_result(
     if ref is None:
         tree = list((root / "docs" / "runs").glob("proposed-spec-amendments-*.md"))
         return Result("cannot-check", "no-default-branch") if tree else Result("ok")
+    if git_read(root, "rev-parse", "--is-shallow-repository")[1] == "true":
+        code, tree = git_read(root, "ls-tree", "-r", "--name-only", ref, "--", "docs/runs/")
+        if any(AMENDMENT_FILE.fullmatch(name) for name in tree.splitlines()):
+            return Result("cannot-check", "shallow-clone")  # each file's add is the graft's
     since = now - datetime.timedelta(days=AMENDMENT_DAYS)
     open_files = []  # the AMENDMENT_FILES newest with no applied line: at most that many GETs
     for number, path, when, subject in added_amendments(root, ref):

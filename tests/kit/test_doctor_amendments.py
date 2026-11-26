@@ -231,6 +231,19 @@ def test_1967_the_origin_branch_is_read_before_the_local_one(tmp_path):
     assert check(root, {"comments-7": [approved()]}).status == "fail"
 
 
+def test_1967_a_shallow_clone_is_cannot_check_never_ok(tmp_path):
+    """REQ-020: brief #1967 answer 4 (fix list 7185416403 item 1): a shallow clone shows every
+    file as added by its one grafted commit, so its `(#n)` would be read for each."""
+    root = project(tmp_path)
+    add(root, 226)
+    clone = tmp_path / "shallow"
+    git(tmp_path, "clone", "-q", "--depth", "1", f"file://{root}", str(clone))
+    assert git(clone, "rev-parse", "--is-shallow-repository").strip() == "true"
+    res = check(clone, {"comments-7": [approved()]})
+    assert (res.status, res.reason) == ("cannot-check", "shallow-clone")
+    assert "full history" in doctor.HINTS["shallow-clone"]
+
+
 @pytest.mark.parametrize("approvers", ['["@REPLACE-ME"]', "[]"])
 def test_1967_no_answerer_is_cannot_check_naming_the_setting(tmp_path, approvers):
     """REQ-020: brief #1967 answer 3 (`config/reviewers.yaml`)."""

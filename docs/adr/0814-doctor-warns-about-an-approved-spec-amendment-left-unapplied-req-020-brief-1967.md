@@ -33,7 +33,8 @@ GitHub with GET and already has the same shape of check (`brief-finished`, `lost
    (`FINISHED_AFTER`). Its fix: apply each listed amendment word for word in a docs pull request and close its file
    with the applied line (brief #1900). A file whose adding commit names no `(#n)` is counted as `unread <k>`.
 3. **Never a false ok.** A comment read that fails is `cannot-check` with its reason class, and more pages than
-   `LOST_PAGES` is `comments-unbounded`. No answerer listed in `config/reviewers.yaml` is `no-answerer`, and an
+   `LOST_PAGES` is `comments-unbounded`. A shallow clone (`git rev-parse --is-shallow-repository`) with an
+   amendment file is `shallow-clone`, since every file there shows as added by the one grafted commit. No answerer listed in `config/reviewers.yaml` is `no-answerer`, and an
    amendment file in the tree with no default branch to read is `no-default-branch`; each hint names the setting, never
    a value. A project with no amendment file to read, and a sidecar (`[personal] forge = "files"`), are `ok`.
 4. **Settings.** No new setting (`Q-AA-5`: the bounds are constants, as `LOST_PAGES` is). In `review_mode = "solo"`
