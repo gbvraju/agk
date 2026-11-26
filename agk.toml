@@ -169,6 +169,7 @@ whole_tests = [
 ]
 # Install the pinned CI test tools once when xdist is missing, so builders run the tests in workers
 # as CI does; the full run takes parallel_command, since project_tests is compound (brief #1021, ADR-0436).
+# Its {workers} must mean the worker count: the evidence check reads a number there as one (ADR-0829).
 tools_file = "config/ci-tools.txt"
 parallel_command = "(python3 -m pytest --version && ruff --version) >/dev/null 2>&1 || python3 -m pip install -q pytest ruff; AGK_KIT_TESTS=1 python3 -m pytest -c tests/kit/pytest.ini tests/kit tests/kit_dev -q -n {workers}"
 always_full = [
@@ -647,8 +648,9 @@ tests = ["tests/kit/test_pins.py"]
 [[testing.map]]
 code = "scripts/agk/evidence.py"
 tests = [
-  "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py", "tests/kit/test_kit_root.py",
-  "tests/kit/test_long_temp_dir.py", "tests/kit/test_prepush_quick_whole.py", "tests/kit/test_test_timing.py",
+  "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py", "tests/kit/test_evidence_workers.py",
+  "tests/kit/test_kit_root.py", "tests/kit/test_long_temp_dir.py", "tests/kit/test_prepush_quick_whole.py",
+  "tests/kit/test_test_timing.py",
 ]
 [[testing.map]]
 code = "scripts/agk/execution.py"
@@ -951,6 +953,7 @@ tests = ["tests/kit/test_kit_root.py", "tests/kit/test_plugin_version_pin.py"]
 code = "scripts/agk/prepush.py"
 tests = [
   "tests/kit/test_batch.py", "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py",
+  "tests/kit/test_evidence_workers.py",
   "tests/kit/test_kit_root.py", "tests/kit/test_kit_suite_selection.py", "tests/kit/test_lock.py", "tests/kit/test_lock_slots.py",
   "tests/kit/test_long_temp_dir.py", "tests/kit/test_prepush.py", "tests/kit/test_prepush_lint_missing_tool.py",
   "tests/kit/test_prepush_lock_inherited.py", "tests/kit/test_prepush_proof_timeout_warning.py",
