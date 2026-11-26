@@ -669,6 +669,18 @@ edit`, never `ok`. A record that holds any of them is checked whole by the `arch
 with one of the eight ISO/IEC 25010 characteristics; `- <flow>: <STRIDE letters>: <mitigation or accepted: <reason>>`;
 `- traced: ...` or `- alerted: ...`) or fewer scenarios than numbered `## Needs` lines fails naming the section.
 
+    python3 scripts/agk/gates/domain_scenarios.py
+    python3 scripts/agk/gates/domain_threats.py
+
+The `domain-scenarios` and `domain-threats` steps (SPEC-0074 rule 8, amendment 241; brief #1955, ADR-0811) are modules
+of the runner, never run by themselves, and apply only where `docs/architecture.md` holds its quality sections. With
+`[domain] packs` set, each composed constraint is one `## Quality scenarios` line naming its own attribute and ending
+` [<pack>.<constraint>]`; a constraint with no line, or a line citing none or naming another attribute, fails naming the
+id. Where `docs/domain/data.md` exists, each `## Threats`
+flow naming a classified data item ends `(class: <class>)`; without it `domain-threats` prints `not run domain-threats:
+no data classification`. With packs set, `engines.py stack-check` also requires an indented `Domain fit: meets` or
+`Domain fit: cannot meet: <pack>.<constraint>, ...` line after each option bullet.
+
     python3 scripts/agk/gates/glossary.py [--root DIR] [--write]
 
 The `glossary` step (SPEC-0073 rule 8; brief #1951, ADR-0812) of `run_gates.py`'s `QUALITY_STEPS`, run after the
