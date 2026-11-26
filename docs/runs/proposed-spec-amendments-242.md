@@ -15,3 +15,5 @@ one new ADR; any other extra file still fails C2."
    "and any new `docs/runs/proposed-spec-amendments-<n>.md` files (amendment 242)".
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: item 1 (to rule 11, the C2 row) applied to `docs/specs/0012-intake.md` word for word, on the maintainer's answer on #1924 (comment 7154233190).

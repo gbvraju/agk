@@ -24,3 +24,5 @@ repository, the kit's own included, reads pyproject.toml as today."
    `pyproject.toml` (amendment 232)."
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: items 1 and 2 (to rules 2 and 3) and 3 (to `## Tests`) applied to `docs/specs/0054-every-dependency-is-scanned-and-listed-in-a-standard-bill-of-materials.md` word for word, on the maintainer's answer on #1911 (comment 7132451826).
