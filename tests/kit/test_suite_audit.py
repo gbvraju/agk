@@ -15,7 +15,7 @@ import pytest
 PROOF = '[proof.kit]\ndirs = ["tests"]\npatterns = ["test_*.py"]\ncommand = "pytest {files}"\n'
 MAP = (
     '[testing]\nwhole_tests = ["tests/test_whole.py"]\n'
-    '[[testing.map]]\ncode = "app/*.py"\ntests = ["tests/test_a.py", "tests/test_b*.py"]\n'
+    '[[testing.map]]\ncode = "app/*.py"\ntests = ["tests/test_a.py", "tests/test_b.py"]\n'
 )
 A = '''import app_mod
 
@@ -63,8 +63,8 @@ FILES = {
 }
 
 
-def start(repo, **changed: str | None) -> None:
-    repo.commit({**FILES, **{k.replace("__", "/"): v for k, v in changed.items()}}, "base")
+def start(repo, toml: str | None = None) -> None:
+    repo.commit({**FILES, **({"agk.toml": toml} if toml is not None else {})}, "base")
 
 
 def audit(repo, *args: str):
@@ -124,12 +124,12 @@ def test_since_counts_added_and_removed_test_lines(repo):
     repo.commit({"tests/test_lonely.py": None}, "drop")
     got = data(repo, "--since", "2000-01-01")
     assert got["since"] == {"day": "2000-01-01", "added": 9, "removed": 1}
-    assert data(repo, "--since", "2999-01-01")["since"]["added"] == 0
+    assert data(repo, "--since", "2099-01-01")["since"]["added"] == 0
 
 
 def test_no_testing_table_says_no_testing_map(repo):
     """REQ-051: brief #2007 answer 6 (no `[testing]`: list (d) says so, the rest print)."""
-    start(repo, agk__toml=PROOF)
+    start(repo, toml=PROOF)
     got = data(repo)
     assert got["unselected"] == {"note": "no testing map"}
     assert got["equal"]["count"] == 1
@@ -138,13 +138,13 @@ def test_no_testing_table_says_no_testing_map(repo):
 
 def test_no_proof_table_reads_tests_by_default(repo):
     """REQ-051: brief #2007 answer 6 (`[proof]` absent: `tests/` with `test_*.py`)."""
-    start(repo, agk__toml=MAP)
+    start(repo, toml=MAP)
     assert data(repo)["files"] == 5
 
 
 def test_a_malformed_map_is_refused_naming_the_setting(repo):
     """REQ-051: brief #2007 answer 6 (a malformed table, named by its setting)."""
-    start(repo, agk__toml=PROOF + '[testing]\nmap = "app/secret-value"\n')
+    start(repo, toml=PROOF + '[testing]\nmap = "app/secret-value"\n')
     proc = audit(repo)
     assert proc.returncode == 2
     assert "setting: testing.map" in proc.stderr and "secret-value" not in proc.stderr

@@ -1331,6 +1331,9 @@ tests = ["tests/kit/test_survey.py", "tests/kit_dev/test_kit_manifest.py"]
 code = "scripts/agk/test_map.py"
 tests = ["tests/kit/test_test_map.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/test_audit.py"
+tests = ["tests/kit/test_suite_audit.py", "tests/kit_dev/test_reference_commands.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/test_plan.py"
 tests = [
   "tests/kit/test_evidence.py", "tests/kit/test_guide_testing_map.py", "tests/kit/test_impact.py",

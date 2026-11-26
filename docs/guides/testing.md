@@ -198,6 +198,29 @@ runner runs one job.
 `--quick` still skips every test and takes no lock. Without a `[testing]` table the `tests` step runs exactly as before: proof's
 plan alone, with no regression set and no lock.
 
+## Reading the suite as a whole
+
+    python3 scripts/agk/test_audit.py [--json] [--since YYYY-MM-DD] [--limit N]
+
+Beside the per-file timing of the prepush record and doctor's slow-suite line, one read-only command shows how the suite
+has grown (brief #2007, ADR-0831). For the test files of the `[proof]` areas (absent: `tests/` with `test_*.py`) it prints
+the files, the test functions (read with Python's `ast`, never run), the test lines and the code lines of the map's `code`
+entries, and with `--since` the `def test_` lines that local git added and removed since that day. Then five lists, each
+capped at `--limit` names (20 by default) with its full count:
+
+- **equal tests**: test functions whose bodies, docstrings left out, are the same;
+- **wording-only tests**: a test that reads a `.md` file and only checks that phrases are in it, running no kit code and no
+  command;
+- **brief-pinned names**: a test whose name holds `brief`, `adr` or `amendment` and a number;
+- **unselected files**: a test file that no `[[testing.map]]` entry, `whole_tests` entry or `always_full` glob names, so it
+  runs only in the full suite (`no testing map` without a `[testing]` table);
+- **slowest files**: the slowest files of the newest prepush record, or `per-file timing: unknown` without one.
+
+Each list is a candidate for a person to review, never a ruling: the command removes nothing, and a later clean-up names
+its tests and its reason in a pull request reviewed as any other. A Python file that does not parse is named once as
+`not read`; test files of other languages are counted as `other test files: <n>, not read`. `--json` prints the same as
+one object. A malformed option exits 2 naming the option, and a malformed `[testing]` table is refused naming the setting.
+
 ## The flake ledger
 
 A flaky test passes and fails on the same code. Retrying it until it passes, or skipping it quietly, hides it: nobody owns it

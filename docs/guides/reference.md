@@ -930,6 +930,14 @@ files in no area as "not run by proof"; without the table it prints `project_tes
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
 
+## Test suite audit
+
+    python3 scripts/agk/test_audit.py [--json] [--since YYYY-MM-DD] [--limit N]
+
+Reads the test suite as a whole and prints its size, its growth since a day and five candidate lists: equal tests,
+wording-only tests, brief-pinned names, unselected files and the slowest files. It reads tracked files and local git only,
+writes nothing and is never a gate. See [testing.md](testing.md#reading-the-suite-as-a-whole) and ADR-0831.
+
 ## Smoke run after a merge
 
     python3 scripts/agk/smoke.py [--base REF] [--head REF] [--run]
