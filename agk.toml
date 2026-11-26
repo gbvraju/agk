@@ -311,6 +311,12 @@ tests = [
   "tests/kit_dev/test_design_write.py", "tests/kit/test_design_signoff.py", "tests/kit/test_design_import.py",
 ]
 [[testing.map]]
+code = "scripts/agk/design_usability.py"
+tests = [
+  "tests/kit/test_design_usability.py", "tests/kit/test_check_design.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_design_inventory_check.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_domains.py"
 tests = [
   "tests/kit/test_check_domains.py", "tests/kit/test_domain_settings.py", "tests/kit/test_check_playbooks.py",

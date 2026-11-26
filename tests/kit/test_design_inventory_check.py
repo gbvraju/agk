@@ -708,7 +708,8 @@ def test_ac2_a_signed_inventory_lists_a_new_requirement_as_waiting(tmp_path):
     assert di.waiting_requirements(tmp_path) == ["REQ-003"]
     proc = check(tmp_path)
     assert proc.returncode == 0, proc.stdout
-    assert proc.stdout.splitlines() == [WAITING, "ok design"]
+    usability = "design: usability not applicable (work type)"  # brief #1953: no work type
+    assert proc.stdout.splitlines() == [WAITING, usability, "ok design"]
 
 
 def test_ac2_two_new_requirements_give_two_waiting_lines(tmp_path):

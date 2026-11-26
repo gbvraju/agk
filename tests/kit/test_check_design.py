@@ -678,3 +678,13 @@ def test_ac7_a_grill_hold_out_of_form_fails_naming_the_setting(tmp_path):
     assert proc.returncode == 1, proc.stdout
     assert "quality.grill_hold" in proc.stdout and "maybe" not in proc.stdout
     assert "is held" not in proc.stdout and "ok design" not in proc.stdout
+
+
+# --- the usability record (SPEC-0038 rule 10 by amendment 237; REQ-080 AC5; brief #1953) --------
+
+
+def test_ac5_a_web_app_with_no_design_record_is_unchanged(tmp_path):
+    """REQ-080 AC5: brief #1953 answer 8 (`ok design (no design record)` with no record at all)."""
+    put(tmp_path, "agk.toml", '[delivery]\nwork_type = "web-app"\n')
+    proc = check(tmp_path)
+    assert (proc.returncode, proc.stdout) == (0, "ok design (no design record)\n")

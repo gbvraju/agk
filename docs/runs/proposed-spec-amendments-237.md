@@ -25,3 +25,8 @@ The sentence (brief #1918), quoted as data: "Intake for Day-1 quality: a grill i
 No other rule changes.
 
 2026-11-25 (from `date -u`), brief #1933: item 1 (to rule 2) applied to `docs/specs/0038-a-project-s-work-type-selects-a-delivery-playbook-that-never-weakens-a-gate.md` word for word, its last full stop made a comma so the sentence goes on, on the maintainer's answer on #1920 (comment 7159666133); items 2 and 3 are build (i)'s.
+
+2026-11-25 (from `date -u`), brief #1953: items 2 (to SPEC-0038 rule 10, under **web-app** and **mobile**, each bullet's
+last full stop made a semicolon so the list goes on) and 3 (at the end of SPEC-0037 rule 7's own paragraph, before its
+amendment 173 bullet) applied word for word, on the maintainer's answer on #1920 (comment 7159666133). All three items
+are now applied.
