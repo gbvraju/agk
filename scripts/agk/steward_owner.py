@@ -21,7 +21,8 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
        python3 scripts/agk/steward_owner.py draft --slug SLUG [--layers FILE]
        python3 scripts/agk/steward_owner.py fix-brief --brief N --file FILE --seen UPDATED_AT
        python3 scripts/agk/steward_owner.py file-brief --file FILE --title TEXT
-                                           [--said FILE --at TIME [--by LOGIN] [--name NAME]]
+                                           [--said FILE --at TIME [--by LOGIN] [--name NAME]
+                                            [--asked FILE]]
        python3 scripts/agk/steward_owner.py work-type --propose
        python3 scripts/agk/steward_owner.py work-type --yes --said FILE --at TIME [--by LOGIN]
        python3 scripts/agk/steward_owner.py domain --propose
@@ -88,8 +89,13 @@ the same checks and its `Priority:` is at or below `[steward] auto_file`, or on 
 explicit yes (`--said`, `--at`; in team mode `--by` a spec approver), no older than four times
 `[flow] owner_wait_minutes` (24 hours unset), quoted in an `Owner said` line; with `--name`, also
 `Yes, file the <NAME> brief` (brief #1753). It files nothing when an open brief has the same title
-or body. In personal mode both print and write nothing; a steward the supervisor started runs
-neither (exit 2).
+or body. Brief #2002 (ADR-0828): a draft whose `Spec fit:` line changes a rule is never filed
+under `auto_file`; the yes approves each amendment it names (`... brief with amendment <m>`), or
+that `--asked FILE` (the words the person was asked) names for a plain yes, and in solo mode it
+posts on the filed brief `Maintainer answer: amendment <m> approved` with `Text: <digest>`, `Owner
+said`, `Asked` and `Who: ProductOwner`; in team mode it prints the first two lines for a spec
+approver; any other amendment is printed `not approved at filing`. In personal mode both print
+and write nothing; a steward the supervisor started runs neither (exit 2).
 
 Brief #1757 (ADR-0735, amendment 218 to SPEC-0038 rule 5): with no `[delivery] work_type` and one
 work type other than `pilot` named by the discovery documents, `work-type --propose` records one
@@ -1185,13 +1191,57 @@ def with_owner_said(body: str, at: str, words: str) -> str:
     )
 
 
-def named_yes(words: str, name: str) -> bool:
-    """Brief #1753 answer 1: `yes, file the <name> brief` and its three shorter forms."""
+def named_amendments(words: str, name: str) -> list[int] | None:
+    """Brief #1753 answer 1: `yes, file the <name> brief` and its three shorter forms; brief #2002
+    answer 5: with ` with amendment(s) <m>[ and <k>]`, the amendments it names. None: no yes."""
     said, name = (" ".join(x.lower().split()) for x in (words.strip().removesuffix("."), name))
     n = re.escape(name)
-    return bool(
-        re.fullmatch(rf"yes,? (?:file the {n} brief|file {n}|brief the {n}|brief {n})", said)
+    found = re.fullmatch(
+        rf"yes,? (?:file the {n} brief|file {n}|brief the {n}|brief {n})"
+        r"(?: with amendments? (\d+(?:(?:,? and |, )\d+)*))?",
+        said,
     )
+    if found is None:
+        return None
+    return [int(x) for x in re.findall(r"\d+", found.group(1) or "")]
+
+
+def named_yes(words: str, name: str) -> bool:
+    return named_amendments(words, name) is not None
+
+
+FILING_ASK = re.compile(r"\bamendments? (\d+(?:(?:,? and |, )\d+)*)", re.I)
+NOT_AT_FILING = "amendment {}: not approved at filing (setting: {})"
+
+
+def filing_approvals(
+    root: Path, body: str, granted: set[int], quotes: list[str], by: str | None
+) -> tuple[list[tuple[int, str]], list[str]]:
+    """Brief #2002 answer 5 (ADR-0828): ([(amendment, the approval comment)], lines) for each
+    `change` of BODY's `Spec fit:` lines that the person's yes GRANTED: rule 5's form with the
+    `Text:` digest of its quoted items, then QUOTES (`Owner said`, `Asked`), `Who: ProductOwner`."""
+    import check_amendments
+    import check_brief
+    import reviewers
+
+    approvers = {a.lower() for a in reviewers.spec_approvers(root)}
+    person = reviewers.solo_person(root)
+    able = (person or by or "").lower() in approvers
+    made, lines = [], []
+    for number, quoted in sorted(check_brief.fit_items(body).items()):
+        if number not in granted:
+            lines.append(NOT_AT_FILING.format(number, "Spec fit:"))
+        elif not able:
+            lines.append(NOT_AT_FILING.format(number, "spec_approvers"))
+        else:
+            text = [
+                check_amendments.APPROVED_LINE.format(number),
+                f"Text: {check_amendments.items_digest(quoted)}",
+                *quotes,
+                OWNER_WHO,
+            ]
+            made.append((number, "\n".join(text) + "\n"))
+    return made, lines
 
 
 def flat(text: object) -> str:
@@ -1222,9 +1272,12 @@ def duplicate(root: Path, title: str, body: str) -> int | None:
 
 def file_brief(
     root: Path, draft_file: Path, title: str, said: Path | None, at: str | None,
-    by: str | None, now: datetime, name: str | None = None,
+    by: str | None, now: datetime, name: str | None = None, asked: Path | None = None,
 ) -> tuple[int, list[str]]:  # fmt: skip
-    """Answer 2: open one `agk-brief` at or below `auto_file`, or on the person's explicit yes."""
+    """Answer 2: open one `agk-brief` at or below `auto_file`, or on the person's explicit yes;
+    brief #2002 answer 5: a brief that changes a rule only on the yes, which approves each
+    amendment it names (or that the ASKED words named, for a plain yes)."""
+    import check_brief
     import reviewers
     import steward_outbound as outbound
     import steward_voice
@@ -1235,6 +1288,8 @@ def file_brief(
         return 2, [refusal]
     if name is not None and said is None:
         return 2, ["refused: --name goes with --said (setting: --name)"]
+    if asked is not None and said is None:
+        return 2, ["refused: --asked goes with --said (setting: --asked)"]
     if name is not None and not (0 < len(name) <= 80 and "`" not in name and name.isprintable()):
         return 2, [
             "refused: --name is one line of 1 to 80 characters, no backquote (setting: --name)"
@@ -1247,6 +1302,10 @@ def file_brief(
         return 2, ["refused: a brief has a one-line title (setting: --title)"]
     limit = steward_settings(root)["auto_file"]
     draft = [f"brief draft: {title}", *body.rstrip().splitlines()]
+    changes, granted, quotes = check_brief.fit_changes(body), set(), []
+    if said is None and changes:
+        return 1, [*draft, "not filed: a spec change needs the person's yes"
+                   " (setting: steward.auto_file)"]  # fmt: skip
     if said is None:
         priority = PRIORITY.search(body)
         if limit is False or priority is None or int(priority[1]) > limit:
@@ -1271,12 +1330,23 @@ def file_brief(
                 "refused: the yes is too old or in the future (setting: [flow] owner_wait_minutes)"
             ]
         body = with_owner_said(body, at, words)
+        question = asked.read_text(encoding="utf-8").strip() if asked is not None else ""
+        named = named_amendments(words, name) if name is not None else None
+        granted = set(named or []) or {
+            int(n) for m in FILING_ASK.finditer(question) for n in re.findall(r"\d+", m.group(1))
+        }  # fmt: skip
+        quotes = [
+            f'Owner said ({at}): "{words}"',
+            f'Asked: "{question}"' if question else f'Asked: "file the {title} brief"',
+        ]
+    approvals, approval_lines = filing_approvals(root, body, granted, quotes, by)
     warned: list[str] = []
     if refusal := brief_refusal(root, body, None, warned):
         return 2, [refusal]
     if personal_table(root) is not None:
+        printed = [x for _, text in approvals for x in text.splitlines()]
         return 0, ["personal mode: nothing is posted; the developer files this brief:", *draft,
-                   *warned]  # fmt: skip
+                   *printed, *approval_lines, *warned]  # fmt: skip
     if (held := duplicate(root, title, body)) is not None:
         return 2, [f"refused: #{held} is an open brief with this title or body; nothing filed"
                    " (setting: --title)"]  # fmt: skip
@@ -1293,7 +1363,15 @@ def file_brief(
     code, lines = steward.record(
         root, "Decision", f"#{made['number']} filed as a brief: {why}", steward.gh_api
     )
-    return code, [f"brief filed: #{made['number']} ({session.LABEL})", *lines, *warned]
+    for number, text in approvals:  # brief #2002 answer 5: solo posts, team prints
+        if reviewers.solo_person(root) is not None:
+            post_file(root, made["number"], text)
+            approval_lines.append(f"approved at filing on #{made['number']}: amendment {number}")
+        else:
+            approval_lines += [f"post on #{made['number']} as a spec approver:",
+                               *text.splitlines()[:2]]  # fmt: skip
+    return code, [f"brief filed: #{made['number']} ({session.LABEL})", *lines, *approval_lines,
+                  *warned]  # fmt: skip
 
 
 # --- brief #1757 (ADR-0735, amendment 218): the work type named in discovery, on the owner's yes
@@ -1552,6 +1630,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--at")
     b.add_argument("--by")
     b.add_argument("--name")  # brief #1753: the short name the steward offered for this draft
+    b.add_argument("--asked", type=Path)  # brief #2002: the words the person said yes to
     t = sub.add_parser("work-type")  # brief #1757 (ADR-0735)
     t.add_argument("--propose", action="store_true")
     t.add_argument("--yes", action="store_true")
@@ -1615,6 +1694,7 @@ def main(argv: list[str] | None = None) -> int:
                 opts.by,
                 datetime.now(UTC),
                 name=opts.name,
+                asked=opts.asked,
             )
         elif opts.command == "work-type" and opts.propose != opts.yes:
             if opts.propose:

@@ -628,7 +628,7 @@ FIT_SPEC = (
     "## Rules\n\n1. **One.** A thing.\n2. **Two.** Send in batches of at most five.\n"
     "7a. **Lettered.** A lettered rule.\n\n## Tests\n\n1. Not a rule.\n"
 )
-FIT_ITEMS = "> 1. **SPEC-0901 rule 2.** Append \"x\" (amendment 254).\n> Class: behaviour\n"
+FIT_ITEMS = '> 1. **SPEC-0901 rule 2.** Append "x" (amendment 254).\n> Class: behaviour\n'
 
 
 def fit_root(tmp_path: Path, status: str = "Approved", req: str = "REQ-001", day: str = "") -> Path:
@@ -698,8 +698,10 @@ def test_req066_2002_each_bad_line_fails_on_any_day(tmp_path, line, message):
 
 def test_req066_2002_a_change_with_its_reserved_amendment_and_items_passes(tmp_path):
     """REQ-066: answer 1: the quoted items are read and classed as a file's (ADR-0813)."""
-    body = fitted("Reserved: amendments 254 and 255\n"
-                  "Spec fit: SPEC-0901 rule 1 within; rule 2 change by amendment 254\n" + FIT_ITEMS)  # fmt: skip
+    body = fitted(
+        "Reserved: amendments 254 and 255\n"
+        "Spec fit: SPEC-0901 rule 1 within; rule 2 change by amendment 254\n" + FIT_ITEMS
+    )
     assert fit(body, fit_root(tmp_path)) == ([], [])
     assert check_brief.fit_changes(body) == [254]
 
@@ -713,7 +715,10 @@ def test_req066_2002_a_number_limit_stated_otherwise_warns_modelled_on_1954(tmp_
         "spec fit: SPEC-0901 rule 2 states a number limit the brief states with another number;"
         " name rule 2 in the Spec fit: line (setting: Spec fit:)"
     ])  # fmt: skip
-    same = GOOD.replace("2. two\n", "2. two: send at most five\n") + "Spec fit: SPEC-0901 rule 1 within\n"
+    same = (
+        GOOD.replace("2. two\n", "2. two: send at most five\n")
+        + "Spec fit: SPEC-0901 rule 1 within\n"
+    )
     assert fit(same, fit_root(tmp_path / "b")) == ([], [])
 
 

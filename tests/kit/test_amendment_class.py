@@ -360,12 +360,15 @@ def test_req066_2002_the_items_digest_is_the_same_in_the_brief_and_in_the_file()
     the file the builder writes word for word, whatever its wrapping, header or closing line."""
     text = FILE_254.read_text(encoding="utf-8")
     quoted = "\n".join(
-        "> " + line for line in text.split("## Items\n", 1)[1].split("\n\n", 1)[0].strip().splitlines()
+        "> " + line
+        for line in text.split("## Items\n", 1)[1].split("\n\n", 1)[0].strip().splitlines()
     )
     brief = ca.quoted_items(["Spec fit: SPEC-0030 rules 4 and 6 change by amendment 254",
                              *quoted.splitlines()], 0)  # fmt: skip
     assert ca.items_digest(brief) == ca.items_digest(text)
     wrapped = text.replace(" insert ", "\n   insert ", 1)
     assert ca.items_digest(wrapped) == ca.items_digest(text)
-    assert ca.items_digest(text.replace("never an owner ask", "an owner ask")) != ca.items_digest(text)
+    assert ca.items_digest(text.replace("never an owner ask", "an owner ask")) != ca.items_digest(
+        text
+    )
     assert ca.items_digest("no items") is None

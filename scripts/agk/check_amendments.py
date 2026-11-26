@@ -89,6 +89,8 @@ def items(text: str) -> list[tuple[int, str]]:
     """The numbered items under `## Items` (the whole text when there is no such heading)."""
     part = text.split("\n## Items", 1)[-1].split("\n## ", 1)[0]
     starts = list(ITEM.finditer(part))
+    if not starts:  # brief #2002: a text with no item, where zip(strict) would raise
+        return []
     ends = [m.start() for m in starts[1:]] + [len(part)]
     return [(int(m.group(1)), part[m.start() : end]) for m, end in zip(starts, ends, strict=True)]
 
@@ -151,6 +153,27 @@ def added_problems(root: Path, added: list[tuple[int, str]]) -> list[str]:
 def digest(text: str) -> str:
     """The short digest of an amendment's text that a settled line records (answer 7)."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def quoted_items(lines: list[str], at: int) -> str:
+    """Brief #2002 answer 1 (ADR-0828): the `> ` lines right under LINES[AT], a brief's `Spec fit:`
+    line, with the `> ` removed: the amendment's items as `items` and `item_class` read a file."""
+    found = []
+    for line in lines[at + 1 :]:
+        if not line.startswith(">"):
+            break
+        found.append(line[2:] if line.startswith("> ") else line[1:])
+    return "\n".join(found) + "\n" if found else ""
+
+
+def items_digest(text: str) -> str | None:
+    """Brief #2002 answers 5 and 6: the digest of the items alone, each up to its first blank
+    line with its spaces and line breaks made one space, so a brief's quoted items and the file a
+    builder writes word for word from them have one digest; None when TEXT has no item."""
+    listed = items(text)
+    if not listed:
+        return None
+    return digest("\n".join(" ".join(body.split("\n\n")[0].split()) for _, body in listed))
 
 
 def settleable(text: str, root: Path) -> bool:

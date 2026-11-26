@@ -564,7 +564,7 @@ def test_req066_the_cli_passes_name_through(root, monkeypatch):
     seen: dict = {}
     monkeypatch.setattr(steward_owner, "repo_root", lambda: base)
     monkeypatch.setattr(
-        steward_owner, "file_brief", lambda *a, name=None: seen.update(name=name) or (0, [])
+        steward_owner, "file_brief", lambda *a, name=None, **k: seen.update(name=name) or (0, [])
     )
     draft = write(base, "draft.md", BODY)
     assert (
@@ -653,7 +653,9 @@ def test_req066_2002_a_spec_change_is_never_filed_under_auto_file(fits):
     base, _, gh, _ = fits
     code, lines = filing(base, None, name=None, text=CHANGE.replace("Priority: 1", "Priority: 0"))
     assert code == 1 and gh.created == []
-    assert lines[-1] == "not filed: a spec change needs the person's yes (setting: steward.auto_file)"
+    assert (
+        lines[-1] == "not filed: a spec change needs the person's yes (setting: steward.auto_file)"
+    )
 
 
 def test_req066_2002_a_yes_naming_the_amendment_files_and_posts_the_approval_in_solo(fits):
@@ -688,7 +690,9 @@ def test_req066_2002_a_plain_yes_to_an_ask_naming_the_amendment_approves_it(fits
     code, lines = filing(base, "Yes, go ahead.", name=None, asked=ask)
     assert code == 0 and len(gh.filed) == 1
     assert gh.filed[0].splitlines()[3] == f'Asked: "{ask}"'
-    code, lines = filing(base, "Yes, go ahead.", name=None, asked="File the brief? I recommend yes.")
+    code, lines = filing(
+        base, "Yes, go ahead.", name=None, asked="File the brief? I recommend yes."
+    )
     assert len(gh.filed) == 1 and NOT_AT_FILING in lines
 
 
@@ -699,7 +703,10 @@ def test_req066_2002_team_mode_prints_the_approval_for_a_spec_approver(fits):
     code, lines = filing(base, f"Yes, file the {NAME} brief with amendment 254", by="boss")
     assert code == 0 and len(gh.created) == 1 and gh.filed == []
     at = lines.index("post on #12 as a spec approver:")
-    assert lines[at + 1 : at + 3] == ["Maintainer answer: amendment 254 approved", f"Text: {DIGEST}"]
+    assert lines[at + 1 : at + 3] == [
+        "Maintainer answer: amendment 254 approved",
+        f"Text: {DIGEST}",
+    ]
 
 
 def test_req066_2002_no_spec_approver_approves_nothing_at_filing(fits):

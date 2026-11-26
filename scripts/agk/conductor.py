@@ -2434,8 +2434,10 @@ def full_problem(repo: str, number: int, body: str, root=None) -> str | None:
     `check-verdict --pr` and the guard run before a post, the reviewer's gate last (ADR-0528). A
     read that fails is a CheckError."""
     if body.strip().startswith("Owner needed:"):
-        return size_ask_problem(repo, number, body, root) or closing_problem(
-            repo, number, body, root
+        return (
+            size_ask_problem(repo, number, body, root)
+            or closing_problem(repo, number, body, root)
+            or filed_problem(repo, number, body, root)
         )
     problem = line_problem(body)
     if problem or not body.strip().startswith("Verdict:"):
@@ -2518,6 +2520,59 @@ def size_ask_problem(repo: str, number: int, body: str, root) -> str | None:
     ]
     accepted = size_of(repo, number, pull, said[-1] if said else None, root)[2]
     return f"{rules.SIZE_ASK} {SIZE_SETTING}" if accepted else None
+
+
+FILED_REFUSED = (
+    "refused: amendment {} was approved at filing on brief #{}; no ask (setting: Spec fit:)"
+)
+AMENDMENT_ASK = re.compile(r"Maintainer answer: amendment (\d+) approved")
+
+
+def filed_problem(repo: str, number: int, body: str, root) -> str | None:
+    """Brief #2002 answer 6 (ADR-0828): an `Owner needed:` that asks `Maintainer answer: amendment
+    <m> approved` when the pull request's `Brief: #<b>` issue holds that approval by a spec
+    approver (the solo exact form) whose `Text:` digest is the digest of the items of the
+    amendment file at the head. No `Brief:` line, a brief or file that cannot be read, another
+    digest or a later `Correction:` naming it: the ask is allowed, as before."""
+    import check_amendments  # noqa: PLC0415 - read only for an owner ask
+    import reviewers  # noqa: PLC0415
+
+    asked = []
+    for raw in body.splitlines()[1:]:
+        line = raw.strip()
+        line = line[1:-1].strip() if len(line) > 1 and line[0] == line[-1] == "`" else line
+        if found := AMENDMENT_ASK.fullmatch(line):
+            asked.append(int(found.group(1)))
+    if not asked:
+        return None
+    base = root if root is not None else repo_root()
+    try:
+        pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
+        brief = re.search(r"(?m)^Brief: #(\d+)", str(pull.get("body") or ""))
+        head = str((pull.get("head") or {}).get("sha") or "")
+        if brief is None or not head:
+            return None
+        notes = [c for c in read(f"repos/{repo}/issues/{brief.group(1)}/comments", "the brief")
+                 if isinstance(c, dict)]  # fmt: skip
+        for m in asked:
+            path = quote(check_amendments.amendment_path(f"amendment {m}"))
+            record = read_one(f"repos/{repo}/contents/{path}?ref={head}", "the amendment")
+            text = base64.b64decode(record["content"]).decode("utf-8")
+            want = check_amendments.items_digest(text)
+            kept = [
+                c
+                for c in notes
+                if not session.first_line(c).startswith("Maintainer answer:")
+                or check_amendments.TEXT_LINE.findall(str(c.get("body") or "")) == [want]
+            ]
+            exact = reviewers.solo_person(base) is not None
+            if want and check_amendments.approval(
+                kept, reviewers.spec_approvers(base), m, exact=exact
+            ):
+                return FILED_REFUSED.format(m, brief.group(1))
+    except (CheckError, KeyError, TypeError, ValueError):
+        return None
+    return None
 
 
 CLOSING_REFUSED = "refused: an Owner needed: names no line that closes it (setting: Owner needed:)"

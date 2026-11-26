@@ -16,6 +16,10 @@ A test never pins its own ADR's status: a test of an ADR that the same pull requ
 - Branch: chore/short-name
 - Size: S|M|L
 - Reserved: ADR-nnnn and amendment number <n> (for each spec amendment the item adds), both reserved in the brief's field note
+- Spec fit: SPEC-nnnn rules <list> within; rule <n> change by amendment <m> (one line per Approved spec the
+  Answers name or the Advances requirement's spec; each change quotes its items under the line, e.g.
+  `Spec fit: SPEC-0059 rules 5 and 11 within; rule 6 change by amendment 255` followed by `> 1. ...` and
+  `> Class: behaviour`; brief #2002, ADR-0828)
 - Expected: <low>-<high> hours
 
 The study lines, in the form `check_brief.py --root` reads (brief #1813): `Impact:` alone, its five lines in this

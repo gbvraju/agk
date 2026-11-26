@@ -1144,15 +1144,19 @@ AMENDMENT_FILE = (
     "No other rule changes.\n"
 )
 FILED_DIGEST = check_amendments.items_digest(AMENDMENT_FILE)
-ASK_254 = "Owner needed: amendment 254 changes SPEC-0901.\n\nMaintainer answer: amendment 254 approved\n"
+ASK_254 = (
+    "Owner needed: amendment 254 changes SPEC-0901.\n\nMaintainer answer: amendment 254 approved\n"
+)
 FILED_REFUSED = (
     "refused: amendment 254 was approved at filing on brief #9; no ask (setting: Spec fit:)"
 )
 
 
 def filing_approval(digest: str = FILED_DIGEST, login: str = "owner") -> dict:
-    body = (f"Maintainer answer: amendment 254 approved\nText: {digest}\n"
-            'Owner said (2026-11-26T11:05Z): "Yes, file it with amendment 254"\nWho: ProductOwner\n')  # fmt: skip
+    body = (
+        f"Maintainer answer: amendment 254 approved\nText: {digest}\n"
+        'Owner said (2026-11-26T11:05Z): "Yes, file it with amendment 254"\nWho: ProductOwner\n'
+    )
     return {"id": 5, "user": {"login": login}, "body": body, "created_at": "2026-11-26T11:06:00Z"}
 
 
@@ -1213,8 +1217,15 @@ def test_req066_2002_the_ask_stays_allowed_when_the_filing_approval_does_not_hol
     elif change == "unreadable brief":
         state["comments"] = None
     elif change == "corrected":
-        state["comments"] = [filing_approval(), {"id": 6, "user": {"login": "owner"},
-            "body": "Correction: amendment 254 is withdrawn", "created_at": "2026-11-26T12:00:00Z"}]  # fmt: skip
+        state["comments"] = [
+            filing_approval(),
+            {
+                "id": 6,
+                "user": {"login": "owner"},
+                "body": "Correction: amendment 254 is withdrawn",
+                "created_at": "2026-11-26T12:00:00Z",
+            },
+        ]
     elif change == "edited file":
         state["file"] = AMENDMENT_FILE.replace('"x"', '"y"')
     else:
