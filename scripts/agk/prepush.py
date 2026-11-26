@@ -1139,11 +1139,11 @@ def gate(
     made: list[dict] = []
     warnings: list[str] = []
     if quick:
-        left, kind_of = None, "whole"
+        left, run_set = None, "whole"
         sets, notes = quick_sets(root, found, areas)
     else:
         found, left = left_to_ci(root, found, areas)
-        kind_of = "regression"
+        run_set = "regression"
         sets, notes = regression_sets(root, found, areas)
     left_run = left is not None and left != RUNS_HERE  # only a selection is left to CI
     sets, single = selected_workers(root, sets)
@@ -1151,7 +1151,7 @@ def gate(
     notes = list(dict.fromkeys(notes))
     junit = junit_setting(root)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
-    planned.extend((*item, kind_of) for item in sets)
+    planned.extend((*item, run_set) for item in sets)
     shown = False
     for name, command, cwd, reason, kind in planned:
         if kind != "proof" and not shown:
