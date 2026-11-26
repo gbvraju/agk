@@ -123,6 +123,7 @@ def test_req037_the_offline_checks_and_the_base_modules_walk_clean_on_main():
     found = kit_imports(KIT)
     assert set(KIT_IMPORTS) <= found
     assert OFFLINE <= found
+    assert "check_pr_body" in found  # the known case of the module-level walk (Q-1972-2)
     assert not {"check_brief", "check_numbers", "check_acceptance", "session"} & found
 
 
@@ -203,3 +204,4 @@ def test_req037_the_conductor_file_and_the_adr_name_the_ruling():
     assert "rules.py imports <script>" in conductor and "(ADR-0824)" in conductor
     adr = next((ROOT / "docs" / "adr").glob("0824-*.md")).read_text(encoding="utf-8")
     assert "- Status: " in adr and '"Maintainer answer: Q-1935-2 accept the imports"' in adr
+    assert "`check_pr_body` is a member" in adr  # Q-1972-2, answered on #1985
