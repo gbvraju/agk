@@ -1,0 +1,1 @@
+- Owner wait: a parked pull request stays parked until every Q id its `Owner needed:` asks is answered, an approval ask is read from the comments instead of the `agk:approve` label the park removes, and `session.py ask-lines` lists each open id (brief #1968, ADR-0815)
