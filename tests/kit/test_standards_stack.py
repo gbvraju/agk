@@ -22,7 +22,6 @@ import pytest
 KIT_ROOT = Path(__file__).resolve().parents[2]
 AGK = KIT_ROOT / "scripts" / "agk"
 sys.path.insert(0, str(AGK))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_playbooks  # noqa: E402
 import kit_root  # noqa: E402
@@ -208,7 +207,6 @@ def test_req079_a_derived_playbook_composes_the_python_entries(tmp_path: Path) -
     root = project(tmp_path, SLUG)
     research = root / "docs" / "research" / f"{SLUG}.md"
     research.parent.mkdir(parents=True)
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from test_front_door_derive import record_text
 
     research.write_text(record_text(), encoding="utf-8")
