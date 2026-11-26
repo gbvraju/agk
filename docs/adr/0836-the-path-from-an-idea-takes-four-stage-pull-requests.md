@@ -6,7 +6,7 @@
 - Related: ADR-0515, ADR-0564, ADR-0664, ADR-0671, SPEC-0029, SPEC-0037, SPEC-0043, SPEC-0062, REQ-050, brief #2021, plan #661
 - Requirements: REQ-050
 
-Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -37,7 +37,8 @@ with the inventory and design rows of `docs/design/signoffs.md` tied to their re
 4. **The texts.** The guide's "From an idea" names the four stages and their yes points; `skills/stack/SKILL.md` step 4
    lets the accept follow on the same branch; `skills/start/SKILL.md` and `skills/vision/SKILL.md` let the day-zero
    record join the discovery pull request. The one-pull-request-per-step wording of the guide and the skills is replaced
-   by the `"step"` value.
+   by the `"step"` value. The `[testing]` map of this repository's `agk.toml` names the new test file under the
+   scripts it reads.
 
 ## Consequences
 
