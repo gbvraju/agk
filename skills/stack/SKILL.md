@@ -114,7 +114,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
    The prompt for the accepting change:
 
 ```
-Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). From a fresh default branch, on a new branch, change
+Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). With [plan] stage_pulls = "stage", on the technical
+design pull request's branch, which holds the record; with "step" (the default), from a fresh default branch, on a new branch. Change
 only two lines of that file in one ordinary commit: "- Status: Proposed" becomes "- Status: Accepted", and "3. **Chosen**: none
 yet" becomes "3. **Chosen**: Option <X> — <one-line reason>". Then, in a second ordinary commit, copy the [testing] values
 that the ADR's test selection practice gives for option <X> into the [testing] table of agk.toml. Run engines.py stack-check

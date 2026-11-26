@@ -56,8 +56,7 @@ def test_the_accept_follows_the_options_on_one_stage_branch(tmp_path):
         encoding="utf-8",
         timeout=60,
     )
-    assert "an Accepted ADR may change only" not in adrs.stdout, adrs.stdout
-    assert "cannot be deleted" not in adrs.stdout, adrs.stdout
+    assert adrs.returncode == 0, adrs.stdout + adrs.stderr
 
 
 def signed(tmp: Path) -> Path:
@@ -156,3 +155,32 @@ def test_the_guide_and_skills_drop_one_pull_request_per_step():
         text = (KIT_ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "goes in its own pull request, merged first (ADR-0664" not in text
         assert "discovery pull request" in text
+
+
+@pytest.mark.parametrize(
+    ("text", "stage", "line"),
+    [
+        (
+            '[plan]\nstage_pulls = "stage"\n',
+            "scope",
+            "pull request: discovery (plan.stage_pulls: stage)",
+        ),
+        (
+            '[plan]\nstage_pulls = "stage"\n',
+            "stack and technical design",
+            "pull request: technical design (plan.stage_pulls: stage)",
+        ),
+        ("", "prototype and design", "pull request: one per step (plan.stage_pulls: step)"),
+        ('[plan]\nstage_pulls = "stage"\n', "build", "pull request: the build's own"),
+    ],
+)
+def test_the_stage_line_names_its_pull_request(tmp_path, text, stage, line):
+    """REQ-050 answers 1 and 3: `steward_evidence.py stage` reads the setting and the map."""
+    assert steward_evidence.pull_line(write_toml(tmp_path, text), stage) == line
+
+
+def test_the_stage_line_refuses_another_value(tmp_path):
+    """REQ-050 answer 5: the stage line refuses the setting as the reader does."""
+    root = write_toml(tmp_path, '[plan]\nstage_pulls = "both"\n')
+    with pytest.raises(config.StagePullsSettingError):
+        steward_evidence.pull_line(root, "plan")

@@ -300,6 +300,18 @@ def agent_text(root: Path, env: dict | None = None) -> str:
     raise CheckError("the steward's role file cannot be read (path class: .claude/agents/)")
 
 
+def pull_line(root: Path, stage: str) -> str:
+    """Brief #2021 (ADR-0836): which pull request the stage is in, by `[plan] stage_pulls`."""
+    from config import stage_pulls
+
+    pull = STAGE_PULLS[stage]
+    if pull is None:
+        return "pull request: the build's own"
+    if stage_pulls(root) == "step":
+        return "pull request: one per step (plan.stage_pulls: step)"
+    return f"pull request: {pull} (plan.stage_pulls: stage)"
+
+
 def skills(root: Path, env: dict | None = None) -> dict[str, str]:
     """Rule 19: the stage-to-skill table of the agent file, the one copy."""
     rows = re.findall(r"^\| ([^|`][^|]*?) \| (`[^|]+?) \|$", agent_text(root, env), re.M)
@@ -347,7 +359,8 @@ def main(argv: list[str] | None = None) -> int:
             return 3 if line.startswith("no skill") else 0
         if opts.command == "stage":
             when = date.fromisoformat(opts.date) if opts.date else today
-            print(f"stage: {stage_of(root, when, conductor_open(root, gh_api))}")
+            stage = stage_of(root, when, conductor_open(root, gh_api))
+            print(f"stage: {stage}\n{pull_line(root, stage)}")
             return 0
         if opts.command == "triage":
             found = triage(json.loads(opts.finding.read_text(encoding="utf-8")), root)

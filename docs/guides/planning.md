@@ -138,8 +138,8 @@ checkout; the other scripts are installed under `scripts/agk/`.
 
 A project that starts from an idea, with no customer prototype, reaches the same published plan: its vision, its charter,
 its signed-off kit design and its accepted stack become the planning sources (SPEC-0043 rules 2a and 2b as amendment 174
-proposes; brief #1216, ADR-0515). With `stage_pulls = "stage"` in the `[plan]` table of `agk.toml`, which the steward's
-setup writes for a new project on your yes, the steps below go in four pull requests, one per stage, each on its own
+proposes; brief #1216, ADR-0515). With `stage_pulls = "stage"` in the `[plan]` table of `agk.toml`, which you set by hand for
+now (the steward's setup asking for it is a later step), the steps below go in four pull requests, one per stage, each on its own
 branch from the default branch and merged by you before the next stage starts (brief #2021, ADR-0836). Every check runs
 on each push of a stage, and each approval names its head and is tied to its own record's digest, so a later push in the
 same pull request never voids an earlier approval of another record; a fix to an approved record asks its approval
