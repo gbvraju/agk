@@ -136,6 +136,17 @@ def test_a_rejected_verdict_on_old_carries_nothing(merged):
     assert evidence(root, plain, new) == "evidence differs (rule 4)"  # not covered: no Final:
 
 
+def test_a_covered_fix_list_on_old_carries_only_with_adr_acceptance_lines(merged):
+    """Fix list on c06852d, item 1: as `carried_from`, a fix list on OLD carries only when its
+    `Final:` lines accept ADRs alone (`accepted_adrs`)."""
+    root, old, new = merged
+    adr = "Final: docs/adr/0001-example.md Proposed -> Accepted"
+    spec = "Final: docs/specs/0001-example.md Draft -> Approved"
+    for final, wanted in ((adr, "ok"), (spec, "evidence differs (rule 4)")):
+        fix = verdict(1, old, first="fix list", extra=final)
+        assert evidence(root, [fix, accept(2, old), verdict(3, new)], new) == wanted, final
+
+
 def test_a_merge_of_old_and_main_with_extra_content_carries_nothing(tmp_path):
     """Fix list on 4d181da, item 4: the parents are (OLD, main) but the tree adds a file."""
     root, old, main = world(tmp_path, {"agk.toml": TOP}, {"agk.toml": BOTTOM})

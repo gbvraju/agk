@@ -29,31 +29,33 @@ record differed by the same field each time. The owner's word (the steward chat,
    renew by the holder prints nothing), reads local mode as `reprove_local` does. In local mode with no `gitleaks` on
    PATH it prints one more line, `lease: tools: gitleaks is missing; a light re-prove asks the builder for its record
    (tool: gitleaks)`, and its `Conductor: active` marker ends `; tools: gitleaks missing`. A renew of a marked lease
-   checks the tool again, silently, and keeps the mark only while it is still missing. The take still exits 0. A malformed `execution` prints `lease: tools: not checked:` and
-   the refusal naming the setting; a default branch not fetched says nothing.
+   checks the tool again, silently, and keeps the mark only while it is still missing. The take still exits 0. A
+   malformed `execution` prints `lease: tools: not checked:` and the refusal naming the setting; a default branch not
+   fetched says nothing.
 2. **The accept carries over a light merge.** `merge_cleared.answered`, given the light-merge reader `light_of` (the
-   default branch as last fetched and its `[flow] shared_indexes`; None, so no carry, when either cannot be read),
-   also counts `Maintainer answer: accept <old>` by an account in `spec_approvers` for the head when: the newest
-   earlier verdict naming another head is `Verdict: cleared <old>` or a covered fix list on OLD (never `rejected`),
-   names OLD in full, has no numbered item and an `Evidence check: differs` for OLD; its `Differs:` lines equal, as a set, those of the verdict on the head; the head is OLD's light merge
-   (`session_plan.light_merge`); and the accept follows that verdict on OLD (or itself carries, up to 8 light merges in
-   a row). Earlier verdicts on the same head are passed over only when they have no numbered item. Any other
-   difference, a builder push (the head is then no light merge of OLD), a full re-prove or a verdict with a numbered
-   item between them needs a new accept. `merge_cleared.holds` passes the reader for local mode and the lapse merge,
-   so the conductor's merge, `--owner` and the router's merge-ready reading share it. This narrows ADR-0685 decision 3:
-   without the reader the accept stays exact to the head, and the carry is only this one; its test
+   default branch as last fetched and its `[flow] shared_indexes`; None, so no carry, when either cannot be read), also
+   counts `Maintainer answer: accept <old>` by an account in `spec_approvers` for the head when: the newest earlier
+   verdict naming another head is a readable `Verdict: cleared <old>` or a fix list on OLD whose `Final:` lines accept
+   ADRs alone (`accepted_adrs`, as `carried_from` reads them; never `rejected`), names OLD in full, has no numbered item
+   and an `Evidence check: differs` for OLD; its `Differs:` lines equal, as a set, those of the verdict on the head; the
+   head is OLD's light merge (`session_plan.light_merge`); and the accept follows that verdict on OLD (or itself
+   carries, up to 8 light merges in a row). Earlier verdicts on the same head are passed over only when they have no
+   numbered item. Any other difference, a builder push (the head is then no light merge of OLD), a full re-prove or a
+   verdict with a numbered item between them needs a new accept. `merge_cleared.holds` passes the reader for local mode
+   and the lapse merge, so the conductor's merge, `--owner` and the router's merge-ready reading share it. This narrows
+   ADR-0685 decision 3: without the reader the accept stays exact to the head, and the carry is only this one; its test
    (`test_1616_the_merger_evidence_accept_stays_exact`) now checks that exact reading by behaviour.
-3. **The difference is written as lines.** A verdict whose `Evidence check:` is `differs` carries one line
-   `Differs: <name> (field: <field>)` per `not what prepush runs:` line of `evidence.py`. `common.differs_problem`,
-   read by `conductor.form_problem` before a post (so `check-verdict` and the guard refuse it), refuses a `differs`
-   check without the lines, the lines beside no `differs` check, and a line of another shape, naming SPEC-0039 rule 4
-   and the shape, never the body. A posted verdict is read as before, so one posted before this build has no lines and
-   no accept carries from it.
+3. **The difference is written as lines.** A verdict whose `Evidence check:` is `differs` carries one line `Differs:
+   <name> (field: <field>)` per `not what prepush runs:` line of `evidence.py`. `common.differs_problem`, read by
+   `conductor.form_problem` before a post (so `check-verdict` and the guard refuse it), refuses a `differs` check
+   without the lines, the lines beside no `differs` check, and a line of another shape, naming SPEC-0039 rule 4 and the
+   shape, never the body. A posted verdict is read as before, so one posted before this build has no lines and no accept
+   carries from it.
 4. **The texts.** `.claude/agents/conductor.md`'s local-mode paragraph says that an owner's accept carries over light
    merges whose `Differs:` lines match, with words replaced, not added: its `config/rule-budget.txt` line (4895 words,
    37 rule lines) is unchanged. The `Owner needed:` text is unchanged.
-5. **The spec.** Amendment 257 proposes the SPEC-0039 rule 4 lines; the spec approvers apply it (principle 6). Until
-   it is approved, this ADR stays Proposed (Q-RP-4).
+5. **The spec.** Amendment 257 proposes the SPEC-0039 rule 4 lines; the spec approvers apply it (principle 6). Until it
+   is approved, this ADR stays Proposed (Q-RP-4).
 
 Settings: `execution` `local` (or the open local-mode record issue): decisions 1 and 2 apply; `hosted`, `hybrid` or
 `pool`: CI proves the merge head, `local_evidence` is not read and decision 1 prints nothing; another value is refused

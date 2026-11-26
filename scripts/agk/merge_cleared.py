@@ -1062,9 +1062,9 @@ def answered(
         old = found.group(1) if found else None
         if old == sha:
             continue  # another verdict on this head, with no numbered item
-        covered = covered_fix_list(body)
-        clearing = CLEARED_LINE.fullmatch(first_line(prior).removesuffix(FALLBACK)) is not None
-        if old is None or not (clearing or (covered is not None and covered[0] == old)):
+        cleared = CLEARED_LINE.fullmatch(first_line(prior).removesuffix(FALLBACK)) is not None
+        clearing = cleared and readable_cleared(prior)  # as `carried_from` reads one
+        if old is None or not (clearing or accepted_adrs(prior, old) is not None):
             return False  # a rejected verdict, or a fix list that is not covered, carries nothing
         if not differs_on(prior, old) or differs_lines(body) != lines:
             return False
