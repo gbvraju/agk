@@ -8,17 +8,20 @@ SPEC-0045 rule 8 (brief #798 build (a)), as ADR-0835 (brief #2020) changes it. I
 session's own transcript file, found by the runtime's session id variable under the runtime's home
 folder (verify: `CLAUDE_CODE_SESSION_ID` and `<CLAUDE_CONFIG_DIR or
 ~/.claude>/projects/*/<id>.jsonl` are read from this cloud runtime, not from its documentation,
-Q-798-5), or each file a `--transcript FILE` names, and with each the sub-agent transcripts beside
-it, `<folder>/<id>/subagents/*.jsonl` (measured in this runtime, Q-CM-1). It sums, over the entries
+Q-798-5), or each file a `--transcript FILE` names, and with `--helpers` each one's own sub-agent
+transcripts beside it, `<folder>/<id>/subagents/*.jsonl` (measured in this runtime, Q-CM-1). A
+sub-agent sees its parent's session id (measured), so a session passes `--helpers` only when it is
+the top-level session; without it no sibling's tokens enter its line. It sums, over the entries
 with a distinct message id across all of them, the four token counts of each entry's usage record
-(input, cache creation input, cache read input and output) and any other whole `*_tokens` count,
-named `other`. Of an entry it reads only its message id, its timestamp and those counts, and prints
+(input, cache creation input, cache read input and output) and any other whole `*_tokens` count
+whose key names no cache (so a flattened cache-creation count is never counted twice), named
+`other`. Of an entry it reads only its message id, its timestamp and those counts, and prints
 no text of the transcript. Its one line is `Usage: <n> tokens (input <a>, cache write <b>, cache
 read <c>, output <d>[, other <e>])`, `<n>` the sum, or `Usage: not shown (<class>)`, the class one
 of `no-session-id`, `no-transcript`, `unreadable` or `no-usage-record`, never a path, an id, 0 or an
 estimate. `--since <UTC time>` (`YYYY-MM-DDTHH:MM:SSZ`) keeps only the messages first written at or
 after that time (Q-798-7). Read-only: it writes no file, posts nothing and makes no network call.
-Usage: python3 scripts/agk/usage.py [--transcript FILE ...] [--since TIME]
+Usage: python3 scripts/agk/usage.py [--transcript FILE ...] [--since TIME] [--helpers]
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import utf8_output
 
-USAGE = "usage: usage.py [--transcript FILE ...] [--since YYYY-MM-DDTHH:MM:SSZ]"
+USAGE = "usage: usage.py [--transcript FILE ...] [--since YYYY-MM-DDTHH:MM:SSZ] [--helpers]"
 NOT_SHOWN = "Usage: not shown"
 NAMES = ("input", "cache write", "cache read", "output")
 COUNTS = (
@@ -105,6 +108,7 @@ def record_of(line: str) -> tuple[str, datetime | None, list[int]] | None:
         if k not in COUNTS
         and isinstance(k, str)
         and k.endswith("_tokens")
+        and "cache" not in k
         and type(v) is int
         and v >= 0
     )
@@ -145,16 +149,20 @@ def line_of(sums: list[int] | None, reason: str) -> str:
 
 
 def total(path: Path, since: datetime | None) -> int | None:
-    """The sum of one file and its sub-agents; None for no figure."""
-    sums, _ = figures(with_helpers(path), since)
+    """The sum of one file; None for no figure."""
+    sums, _ = figures([path], since)
     return None if sums is None else sum(sums)
 
 
 def parse(argv: list[str]) -> dict | None:
-    options: dict = {"transcript": [], "since": None}
+    options: dict = {"transcript": [], "since": None, "helpers": False}
     i = 0
     while i < len(argv):
         arg = argv[i]
+        if arg == "--helpers":
+            options["helpers"] = True
+            i += 1
+            continue
         if arg not in ("--transcript", "--since") or i + 1 >= len(argv):
             return None
         value = argv[i + 1]
@@ -168,14 +176,19 @@ def parse(argv: list[str]) -> dict | None:
     return options
 
 
-def session_line(env: dict, transcripts: list[Path], since: datetime | None) -> str:
-    """The line for the named files, else for the running session's own (with its sub-agents)."""
+def session_line(
+    env: dict, transcripts: list[Path], since: datetime | None, helpers: bool = False
+) -> str:
+    """The line for the named files, else for the running session's own; with `helpers`, each
+    file's own sub-agents too. A sub-agent sees its parent's session id (measured, ADR-0835), so
+    the sub-agent files are read only when the top-level session asks, never by default."""
     if not transcripts:
         path, reason = session_transcript(env)
         if path is None:
             return line_of(None, reason)
         transcripts = [path]
-    return line_of(*figures([p for t in transcripts for p in with_helpers(t)], since))
+    files = [p for t in transcripts for p in (with_helpers(t) if helpers else [t])]
+    return line_of(*figures(files, since))
 
 
 def tokens_figure(env: dict) -> str:
@@ -190,7 +203,9 @@ def main(argv: list[str] | None = None) -> int:
     if options is None:
         print(f"{USAGE}\n(refused: an option of usage.py is missing or malformed)")
         return 2
-    print(session_line(dict(os.environ), options["transcript"], options["since"]))
+    print(
+        session_line(dict(os.environ), options["transcript"], options["since"], options["helpers"])
+    )
     return 0
 
 

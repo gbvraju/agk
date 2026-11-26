@@ -147,11 +147,12 @@ unknown key or a wrong value is refused, naming the setting. See ADR-0374.
 
 ## The token figure of a session
 
-    python3 scripts/agk/usage.py [--transcript FILE ...] [--since YYYY-MM-DDTHH:MM:SSZ]
+    python3 scripts/agk/usage.py [--transcript FILE ...] [--since YYYY-MM-DDTHH:MM:SSZ] [--helpers]
     python3 scripts/agk/metrics.py --usage-by-kind FACTS [--before YYYY-MM-DD] [--after YYYY-MM-DD]
 
 The first prints `Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output <d>)` from the running session's
-own transcript and its sub-agents' transcripts beside it, each message counted once, `<n>` the sum, or `Usage: not shown
+own transcript (with `--helpers`, which only a top-level session passes, also its own sub-agents' transcripts beside
+it), each message counted once, `<n>` the sum, or `Usage: not shown
 (<class>)` with the class `no-session-id`, `no-transcript`, `unreadable` or `no-usage-record` (ADR-0835); it writes no file, posts nothing and makes no network call, and prints no
 text of the transcript. A builder passes `--since` with the time of its previous `Report:` and ends its `Report:` and
 `Progress:` lines with the line it prints. The second prints, per kind, the merged pull requests with their tokens, one

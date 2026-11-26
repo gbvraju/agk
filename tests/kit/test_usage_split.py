@@ -65,23 +65,33 @@ def test_req052_the_line_splits_the_four_kinds_and_keeps_the_sum(tmp_path):
 
 def test_req052_a_kind_it_does_not_know_is_summed_and_named_other(tmp_path):
     """REQ-052: answer 7, an unknown `*_tokens` count is in `<n>` and named `other`."""
-    path = write(tmp_path / "t.jsonl", [entry("m1", "2026-11-10T08:00:00Z", new_kind_tokens=8)])
+    flat = {"ephemeral_5m_cache_input_tokens": 300}  # a flattened cache write is not counted twice
+    rows = [entry("m1", "2026-11-10T08:00:00Z", new_kind_tokens=8, **flat)]
+    path = write(tmp_path / "t.jsonl", rows)
     assert usage("--transcript", str(path)) == (
         "Usage: 1350 tokens (input 2, cache write 300, cache read 1000, output 40, other 8)\n"
     )
 
 
-def test_req052_a_sub_agent_transcript_beside_the_session_is_read(tmp_path):
-    """REQ-052: answer 1, `<id>/subagents/*.jsonl` beside `<id>.jsonl` (measured, Q-CM-1)."""
+def test_req052_helpers_add_only_the_session_s_own_sub_agents_each_once(tmp_path):
+    """REQ-052: answer 1 and fix list item 2, `<id>/subagents/*.jsonl` beside `<id>.jsonl`
+    (measured, Q-CM-1) only with `--helpers`; no sibling's tokens enter another's line."""
     home = tmp_path / "rt"
     folder = home / "projects" / "-work-x"
-    write(folder / f"{SESSION}.jsonl", [entry("m1", "2026-11-10T08:00:00Z")])
-    helper = [entry("m2", "2026-11-10T08:01:00Z", 1, 0, 10, 1), entry("m1", "2026-11-10T08:02:00Z")]
-    write(folder / SESSION / "subagents" / "agent-a1.jsonl", helper)
+    parent = write(folder / f"{SESSION}.jsonl", [entry("m1", "2026-11-10T08:00:00Z")])
+    one = [entry("m2", "2026-11-10T08:01:00Z", 1, 0, 10, 1), entry("m1", "2026-11-10T08:02:00Z")]
+    two = [entry("m3", "2026-11-10T08:03:00Z", 0, 0, 100, 0)]
+    sib_a = write(folder / SESSION / "subagents" / "agent-a1.jsonl", one)
+    sib_b = write(folder / SESSION / "subagents" / "agent-b2.jsonl", two)
     env = {"CLAUDE_CONFIG_DIR": str(home), "CLAUDE_CODE_SESSION_ID": SESSION}
-    expected = "Usage: 1354 tokens (input 3, cache write 300, cache read 1010, output 41)\n"
-    assert usage(env=env, cwd=tmp_path) == expected
-    assert usage("--transcript", str(folder / f"{SESSION}.jsonl")) == expected
+    assert usage(env=env, cwd=tmp_path) == SPLIT + "\n"  # a sub-agent sees this same id
+    assert usage("--transcript", str(sib_a)).startswith("Usage: 1354 tokens (")
+    assert usage("--transcript", str(sib_b)) == (
+        "Usage: 100 tokens (input 0, cache write 0, cache read 100, output 0)\n"
+    )
+    helped = "Usage: 1454 tokens (input 3, cache write 300, cache read 1110, output 41)\n"
+    assert usage("--helpers", env=env, cwd=tmp_path) == helped
+    assert usage("--transcript", str(parent), "--helpers") == helped
 
 
 def test_req052_two_transcripts_of_a_resumed_session_count_a_message_once(tmp_path):
@@ -159,18 +169,36 @@ def test_req052_the_readers_read_the_split_and_the_reason_as_today():
         assert match and match.group(4) == "3", ending
 
 
-def test_req052_the_steward_end_reads_the_usage_line_when_no_figure_is_typed(tmp_path):
-    """REQ-052: answer 5, `steward.py end` without `--tokens` carries the split or the class."""
+def test_req052_the_progress_figure_of_the_over_cap_count_reads_the_split():
+    """REQ-052: fix list item 1, `caps.PROGRESS_USAGE` reads `<n>` of the split ending."""
+    import caps
+
+    for ending, figure in ((SPLIT, "1342"), ("Usage: 5 tokens", "5")):
+        found = caps.PROGRESS_USAGE.fullmatch(f"Progress: abc1234 done 2/4; next: 3; {ending}")
+        assert found and found.group(1) == figure, ending
+
+
+def test_req052_the_steward_end_reads_the_usage_line_when_no_figure_is_typed(tmp_path, monkeypatch):
+    """REQ-052: answer 5 and fix list item 4, `steward.py end` without `--tokens` passes the
+    reader's figure to the `Ended:` note; a typed `--tokens` is passed as before."""
+    import steward
+    import steward_daily
     import usage as reader
 
     home = tmp_path / "rt"
     write(home / "projects" / "-w" / f"{SESSION}.jsonl", [entry("m1", "2026-11-10T08:00:00Z")])
-    env = {"CLAUDE_CONFIG_DIR": str(home), "CLAUDE_CODE_SESSION_ID": SESSION}
-    assert (
-        reader.tokens_figure(env) == "1342 (input 2, cache write 300, cache read 1000, output 40)"
-    )
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", SESSION)
+    seen: list = []
+    monkeypatch.setattr(steward, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(steward, "no_start", lambda root: None)
+    monkeypatch.setattr(steward, "end", lambda *a: (seen.append(a[-1]), (0, ["ok"]))[1])
+    assert steward.main(["end", "--session", "s1", "--calls", "9"]) == 0
+    assert steward.main(["end", "--session", "s1", "--tokens", "77"]) == 0
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID")
+    assert steward.main(["end", "--session", "s1"]) == 0
+    split = "1342 (input 2, cache write 300, cache read 1000, output 40)"
+    assert seen == [split, 77, "not shown (no-session-id)"]
+    line = f"Ended: steward s1 calls 9; tokens {split}"
+    assert steward_daily.ENDED.fullmatch(line).group(3) == split
     assert reader.tokens_figure({}) == "not shown (no-session-id)"
-    import steward_daily
-
-    line = f"Ended: steward s1 calls 9; tokens {reader.tokens_figure(env)}"
-    assert steward_daily.ENDED.fullmatch(line).group(3) == reader.tokens_figure(env)

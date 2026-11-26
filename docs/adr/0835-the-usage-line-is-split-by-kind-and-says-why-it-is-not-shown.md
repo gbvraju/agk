@@ -6,7 +6,7 @@
 - Related: SPEC-0045 rule 8, ADR-0289, ADR-0419, ADR-0544, REQ-052, brief #798, brief #2020, plan #661
 - Requirements: REQ-052
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`, `config/`
 
 ## Context
 
@@ -20,18 +20,24 @@ leaves them out.
 
 ## Decision
 
-1. `scripts/agk/usage.py` reads, with each transcript it reads (the running session's own, or each `--transcript
-   FILE`, which may now be given more than once), the sub-agent transcripts beside it, `<folder>/<stem>/subagents/*.jsonl`.
-   Across all of them each message id is counted once, at its first entry. This changes `Q-798-8` of SPEC-0045 rule 8.
+1. `scripts/agk/usage.py` reads the running session's own transcript, or each `--transcript FILE` (which may now be
+   given more than once). With `--helpers` it also reads each one's own sub-agent transcripts,
+   `<folder>/<stem>/subagents/*.jsonl`. Across all of them each message id is counted once, at its first entry. A
+   sub-agent's environment carries its parent's session id and no id of its own (measured 2026-11-26). So the sub-agent
+   files are read only when the session asks for them, and only the top-level session does; a sibling's tokens never
+   enter another sub-agent's line, and each token is counted once (SPEC-0049 rule 4). This changes `Q-798-8` of
+   SPEC-0045 rule 8 (amendment 261).
 2. Its line is `Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output <d>)`. `<n>` stays the sum, so a
    reader that takes `<n>` reads the same figure. A whole count of 0 or more under any other `*_tokens` key of a usage
-   record is summed in `<n>` and named `, other <e>` when it is not 0.
+   record whose key names no cache (so a flattened cache-creation count is never counted twice) is summed in `<n>` and
+   named `, other <e>` when it is not 0.
 3. With no figure the line is `Usage: not shown (<class>)`. The class is `no-session-id` (no named file and no valid
    session id), `no-transcript` (a file not found), `unreadable` (a file that cannot be read as text) or
    `no-usage-record` (no usage record, or none at or after `--since`). It never names a path, an id or a value
    (principle 8). One unreadable file gives `unreadable` for the whole line, so a short sum is never printed.
-4. The readers of the line accept the new ending: `metrics.usage_of` (`Report:` lines) and `session.PROGRESS`
-   (`Progress:` lines).
+4. The readers of the line accept the new ending: `metrics.usage_of` (`Report:` lines), `session.PROGRESS` and
+   `caps.PROGRESS_USAGE` (`Progress:` lines). Session rules 8, 17 and 32 name the ending, and amendment 261 proposes
+   the same lines for SPEC-0045 rule 8.
 5. `steward.py end` without `--tokens` writes `tokens <n> (input <a>, ...)` or `tokens not shown (<class>)` from the
    same reader. A typed `--tokens` is used as before.
 
@@ -39,15 +45,17 @@ leaves them out.
 
 A report's figure says what kind of tokens it holds, a session that uses helper agents reports their tokens too, and a
 missing figure says why. Protected path classes changed: `scripts/agk/` (`usage.py`, `metrics.py`, `session.py`,
-`steward.py`), `tests/kit/` (`test_usage_split.py`, `test_usage_transcript.py`) and `agk.toml` (the new test file in the
-`[[testing.map]]` entries of those four scripts).
+`steward.py`, `caps.py`), `tests/kit/` (`test_usage_split.py`, `test_usage_transcript.py`), `agk.toml` (the new test
+file in the `[[testing.map]]` entries of `usage.py`, `metrics.py`, `session.py` and `steward.py`) and `config/`
+(`config/session-rules.md` rules 8, 17 and 32).
 
 ## Residual
 
 - 2026-11-26: `Q-2020-1`: answers 3, 4 and 6 of brief #2020 (a price table by kind under `[models.prices]`, the sums
   by pull request, brief, role and stage, and the weekly coverage line) overlap ADR-0544's `[cost.prices.<model>]`
   table and `metrics.py --cost`. They wait for the maintainers' ruling and are not built here.
-- 2026-11-26: a builder that itself runs as a sub-agent reads the parent's session id `(verify: whether this runtime
-  gives a sub-agent its own id in the environment)`, so its line holds the parent's figure, not its own.
+- 2026-11-26: a builder that itself runs as a sub-agent finds the parent's file through the parent's session id
+  (measured: the runtime gives it no id of its own), so its line holds the parent's own figure, not its own; a way
+  for it to find its own file is left open.
 - 2026-11-26: the conductor's `Conductor report` (answer 5) is written from `.claude/agents/conductor.md`, a path class
   the brief's `Touches:` does not name, and is not changed here.
