@@ -160,6 +160,16 @@ def test_1967_the_thirty_day_and_twenty_file_bounds(tmp_path):
     assert (doctor.AMENDMENT_DAYS, doctor.AMENDMENT_FILES) == (30, 20)
 
 
+def test_1967_an_applied_file_takes_no_place_in_the_twenty(tmp_path):
+    """REQ-020: brief #1967 answer 2 (the 20 newest files with no applied line)."""
+    root = project(tmp_path)
+    add(root, 201, pr=201, when="2026-11-01T10:00:00Z")
+    for n in range(202, 222):  # 20 newer files, each applied
+        add(root, n, pr=n, when=f"2026-11-{n - 200:02d}T10:00:00Z", tail=FORM_A)
+    res = check(root, {"comments-201": [approved(201)]})
+    assert (res.status, res.message) == ("fail", " (amendment 201 (#201))")
+
+
 @pytest.mark.parametrize(
     "api", [{}, {"comments-7": {"message": "Bad credentials", "status": "401"}}]
 )

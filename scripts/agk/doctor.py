@@ -409,6 +409,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "brief carries `Finishes: #n` beside `Brief: #n`, so that the router closes it when it "
         "merges (session rule 28)",
     ),
+    "amendment-unapplied": (  # brief #1967 (ADR-0814), beside `brief-finished`
+        "warn",
+        "no approved spec amendment has waited more than a day unapplied",
+        "approved spec amendments unapplied for more than a day",
+        "apply each listed amendment word for word in a docs pull request and close its file with "
+        "the applied line (brief #1900)",
+    ),
     "state-labels": (
         "warn",
         "every state label of the router names its actor",
@@ -643,6 +650,10 @@ HINTS = {
     "version-mismatch": "use a kit of the same version as version in agk.toml, or run /agk:upgrade",
     "offline": "check the network connection",
     "bad-response": "the input could not be read",
+    "no-answerer": "list an answerer in config/reviewers.yaml (setting: spec_approvers or "
+    "verdict_authors)",
+    "no-default-branch": "fetch the default branch (setting: default_branch in agk.toml)",
+    "comments-unbounded": "a pull request has more comments than doctor reads; read it by hand",
     "plugin-unreadable": "only the project's and this plugin's skills are read; check it by hand",
     "no-ruleset": "no ruleset targets the default branch; fix ruleset-missing or ruleset-target",
     "no-release": "the kit's repository has no published release, or it cannot be seen",
@@ -1198,6 +1209,107 @@ def pull_comments(reads: Reads, number: int) -> list[dict] | None:
         if len(data) < 100:
             return found
     return None  # more than the pages read: not a clean result
+
+
+AMENDMENT_DAYS = 30  # brief #1967 answer 2: files added in the last 30 days (Q-AA-5: a constant)
+AMENDMENT_FILES = 20  # and of those the 20 newest
+AMENDMENT_FILE = re.compile(r"docs/runs/proposed-spec-amendments-(\d+)\.md")
+ADDING_PR = re.compile(r"\(#(\d+)\)\s*$")
+
+
+def added_amendments(root: Path, ref: str) -> list[tuple[int, str, datetime.datetime, str]]:
+    """(number, path, when added, adding commit subject) of each amendment file on REF, newest
+    first, from `git log --diff-filter=A`; a file added again counts from its newest add."""
+    code, out = git_read(
+        root, "log", "--diff-filter=A", "--format=%x00%cI%x00%s", "--name-only", ref, "--",
+        "docs/runs/",
+    )  # fmt: skip
+    if code != 0:
+        return []
+    code, tree = git_read(root, "ls-tree", "-r", "--name-only", ref, "--", "docs/runs/")
+    present = set(tree.splitlines()) if code == 0 else set()
+    found: dict[str, tuple[int, str, datetime.datetime, str]] = {}
+    parts = out.split("\x00")
+    for i in range(1, len(parts) - 1, 2):
+        try:
+            when = datetime.datetime.fromisoformat(parts[i].strip())
+        except ValueError:
+            continue
+        subject, _, names = parts[i + 1].partition("\n")
+        for name in names.split():
+            hit = AMENDMENT_FILE.fullmatch(name)
+            if hit and name in present and name not in found:
+                found[name] = (int(hit.group(1)), name, when, subject)
+    return sorted(found.values(), key=lambda f: f[2], reverse=True)
+
+
+def git_text(root: Path, spec: str) -> str | None:
+    """The file SPEC (`<ref>:<path>`) as git holds it, unstripped (its digest is read), else None."""
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, read-only git, no shell
+            ["git", "-C", str(root), "show", spec], capture_output=True, text=True, encoding="utf-8"
+        )
+    except (OSError, UnicodeDecodeError):
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def comments_reason(reads: Reads, number: int) -> str:
+    """The reason class of a failed `pull_comments` read of NUMBER (answer 4)."""
+    _, why = reads.get(f"comments-{number}", f"/issues/{number}/comments?per_page=100&page=1")
+    return why or "comments-unbounded"
+
+
+def amendment_result(
+    root: Path, config: dict, reads: Reads, now: datetime.datetime | None = None
+) -> Result:
+    """`amendment-unapplied` (brief #1967, ADR-0814): each amendment file on the default branch,
+    added in the last `AMENDMENT_DAYS` (the `AMENDMENT_FILES` newest), with no applied line, whose
+    adding pull request holds an answerer's approval older than a day. A warning; GET only."""
+    import check_amendments as amend
+
+    personal = config.get("personal")
+    if isinstance(personal, dict) and personal.get("forge") == "files":
+        return Result("ok", message=" (not applicable: personal mode reads no forge)")
+    now = now or datetime.datetime.now(datetime.UTC)
+    ref = lost_ref(root, config)
+    if ref is None:
+        tree = list((root / "docs" / "runs").glob("proposed-spec-amendments-*.md"))
+        return Result("cannot-check", "no-default-branch") if tree else Result("ok")
+    since = now - datetime.timedelta(days=AMENDMENT_DAYS)
+    open_files = []  # the AMENDMENT_FILES newest with no applied line: at most that many GETs
+    for number, path, when, subject in added_amendments(root, ref):
+        text = git_text(root, f"{ref}:{path}")
+        if when >= since and text is not None and not amend.applied(text):
+            open_files.append((number, path, subject, text))
+        if len(open_files) == AMENDMENT_FILES:
+            break
+    if not open_files:
+        return Result("ok")
+    _, answerers = session.owner_people(root, {})
+    if not answerers:
+        return Result("cannot-check", "no-answerer")
+    exact = config.get("review_mode") == "solo"
+    settle = amend.settle_on(root)
+    listed: list[tuple[int, str]] = []
+    unread = 0
+    for number, path, subject, text in open_files:
+        pr = ADDING_PR.search(subject)
+        if pr is None:
+            unread += 1
+            continue
+        comments = pull_comments(reads, int(pr.group(1)))
+        if comments is None:
+            return Result("cannot-check", comments_reason(reads, int(pr.group(1))))
+        settles = amend.digests({f"amendment {number}": text}, root) if settle else None
+        when = amend.approval(comments, answerers, number, settles, exact)
+        if when is not None and now - when > FINISHED_AFTER:
+            listed.append((number, f"amendment {number} (#{pr.group(1)})"))
+    tail = f" (unread {unread})" if unread else ""
+    if not listed:
+        return Result("ok", message=tail)
+    names = ", ".join(name for _, name in sorted(listed))  # at most AMENDMENT_FILES, all named
+    return Result("fail", message=f" ({names}){tail}")
 
 
 def lost_record_lines(root: Path, reads: Reads) -> list[str]:
@@ -2562,6 +2674,7 @@ def run_checks(
     reads = Reads(repo or origin_repo(root), api_dir)
     results.update(remote_results(reads, config, (root / REPORT_WORKFLOW).is_file(), writers))
     results["brief-finished"] = finished_result(reads)
+    results["amendment-unapplied"] = amendment_result(root, config, reads)
     results["state-labels"] = state_labels_result(root, config, reads)
     results["brief-invalid-label"] = brief_invalid_label_result(root, reads)
     results["brief-broad-touches"] = broad_touches_result(root, reads)

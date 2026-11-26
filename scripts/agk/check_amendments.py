@@ -312,6 +312,69 @@ def overrides(comments: list[dict]) -> list[tuple[str, datetime]]:
     return found
 
 
+# Brief #1967 answer 1 (ADR-0814): the two forms of a file's applied line on the default branch,
+# brief #1900's and SPEC-0073 build (c)'s, each matched across a wrapped line.
+APPLIED = (
+    re.compile(
+        r"^\d{4}-\d{2}-\d{2} \(from `?date -u`?\), brief #\d+:\s+items?\s[^\n]*?"
+        r"\bapplied\s+to\s+`?docs/specs/[^\s`]+`?\s+word\s+for\s+word",
+        re.MULTILINE,
+    ),
+    re.compile(
+        r"^Applied \(\d{4}-\d{2}-\d{2}, from `?date -u`?\):\s+items?\s[^`]*?\bto\s+"
+        r"`?docs/specs/[^\s`]+`?,?\s+word\s+for\s+word",
+        re.MULTILINE,
+    ),
+)
+APPROVED_LINE = "Maintainer answer: amendment {} approved"
+
+
+def applied(text: str) -> bool:
+    """Whether TEXT, an amendment file, holds an applied line of either form (answer 1)."""
+    return any(p.search(text) for p in APPLIED)
+
+
+def comment_time(comment: dict) -> datetime | None:
+    try:
+        when = datetime.fromisoformat(str(comment.get("created_at")).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo is not None else None
+
+
+def approval(
+    comments: list[dict],
+    answerers: set[str] | list[str],
+    n: int,
+    settles: dict[str, str] | None = None,
+    exact: bool = False,
+) -> datetime | None:
+    """The time of the first comment by one of ANSWERERS whose first line approves amendment N
+    (`Maintainer answer: amendment <n> approved`, the whole line when EXACT, solo mode) or is a
+    settled line that `settled_keys` accepts for SETTLES; None when there is none, or when a later
+    `Correction:` by an answerer names the amendment (answers 1 and 4). Data only."""
+    allowed = {str(a).lstrip("@").lower() for a in answerers}
+    key, line_text = f"amendment {n}", APPROVED_LINE.format(n)
+    named = re.compile(rf"\bamendment {n}\b")
+    found: datetime | None = None
+    for c in comments:
+        if not isinstance(c, dict):
+            continue
+        line, _, login = first(c)
+        if login not in allowed:
+            continue
+        if line.startswith("Correction:") and named.search(line):
+            found = None
+            continue
+        asked = line == line_text or (
+            not exact and line.startswith(line_text) and not line[len(line_text) :][:1].isalnum()
+        )
+        settled = settles is not None and key in settled_keys([c], list(allowed), settles)
+        if (asked or settled) and found is None:
+            found = comment_time(c)
+    return found
+
+
 def comment_records(path: Path) -> list[dict]:
     """The saved comments (a JSON list) the override share reads; unreadable is a refusal."""
     try:
