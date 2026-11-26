@@ -4767,7 +4767,11 @@ def open_owner_items(
         elif line.startswith(("Maintainer answer:", "Approve:")):
             if answer_step(line, files, pending) != "all":
                 continue  # misplaced, or one of several asked approvals (brief #1735)
-            asking = {k: open_items[k] for k in asks if asks[k] and offers[k] and k in open_items}
+            asking = {  # fix list item 1: an ask with open ids; Q-1968-1: one keyed by its
+                k: open_items[k]  # open question's id closes as ADR-0723 (test_1735_5f_5j) reads
+                for k in asks
+                if asks[k] and k in open_items and (offers[k] or not QUESTION_ID.fullmatch(k))
+            }
             open_items.clear()
             if approval_answer(line) is not None:  # brief #1968 answer 2, Q-PF-2: approvals only
                 open_items.update(asking)
@@ -4793,7 +4797,7 @@ def open_owner_items(
             open_items[key] = newest_post or moment(pr.get("created_at"))
     mark = own_park(comments) if PARKED_LABEL in names else None
     if mark is not None and mark[0] == "approve" and "approve" not in open_items:
-        if not approval_after(ordered, mark[1], answerers, head, carried):  # brief #1968 answer 3
+        if not approval_after(ordered, mark[1], answerers, head, carried, pr, listed):  # answer 3
             open_items["approve"] = moment(mark[1].get("created_at"))
     if left is not None:
         left.update(
@@ -4802,10 +4806,25 @@ def open_owner_items(
     return open_items
 
 
-def approval_after(ordered: list, park: dict, answerers: set[str], head: str, carried) -> bool:
-    """Brief #1968 answer 3: whether an answerer posted, after the `Parked-by:` PARK, an
-    `Approve:`, an accept of HEAD (or one `carried` to it) or a `Maintainer answer:` naming no Q
-    id (`Maintainer answer: amendment <n> approved` among them)."""
+def approval_after(
+    ordered: list, park: dict, answerers: set[str], head: str, carried, pr: dict, listed: set[str]
+) -> bool:
+    """Brief #1968 answer 3: whether an answerer posted, after the `Parked-by:` PARK, an accept
+    of HEAD (or one `carried` to it), a `Maintainer answer:` or `Approve:` naming neither a Q id
+    nor an approval, or an approval line (`route.approval_answer`) for a spec a listed verdict's
+    `Approval:` line asks (`route.asked_for`), one a listed `Owner needed:` offers
+    (`route.approval_ask`), or a spec or amendment the pull request's
+    changed files (`pr["files"]`, when read) change (fix list item 2, ADR-0723 decision 3)."""
+    from route import approval_answer, approval_ask, asked_for, changed_names, changes
+
+    asked: set[str] = set()
+    for c in ordered:
+        line, body = first_line(c), str(c.get("body") or "")
+        if author_of(c) in listed and VERDICT.match(line):
+            asked |= asked_for(body)
+        elif author_of(c) in listed and line.startswith(OWNER_NEEDED):
+            asked |= approval_ask(body, pr.get("files"))
+    names = changed_names(pr.get("files"))
     after = ordered[ordered.index(park) + 1 :] if park in ordered else []
     for c in after:
         line = first_line(c)
@@ -4814,9 +4833,10 @@ def approval_after(ordered: list, park: dict, answerers: set[str], head: str, ca
         if accepted := ACCEPT_LINE.match(line):
             if head and (accepted.group(1) == head or carries(carried, accepted.group(1), head)):
                 return True
-        elif line.startswith("Approve:"):
-            return True
-        elif line.startswith("Maintainer answer:") and not ANSWER_LINE.match(line):
+        elif (key := approval_answer(line)) is not None:  # fix list item 2 (ADR-0723)
+            if key in asked or (names is not None and changes(key, names)):
+                return True
+        elif line.startswith(("Maintainer answer:", "Approve:")) and not ANSWER_LINE.match(line):
             return True
     return False
 

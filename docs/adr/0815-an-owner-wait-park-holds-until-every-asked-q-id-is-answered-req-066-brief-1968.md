@@ -26,13 +26,16 @@ park's key gone and unparked it (#1945 twice, #1949 twice, #1959 once). Second, 
    counts nothing for it. This narrows ADR-0685 decision 1 to a one-id ask, which behaves as before.
 2. **The approval item comes from the comments.** An open `Owner needed:` that offers approvals (`route.approval_ask`)
    is the wait's item, and the `agk:approve` label adds no `approve` item beside it. An approval line closes the
-   approvals (`route.answer_step`, ADR-0723); on an ask that offers approvals and names Q ids, the ids stay open
-   (`Q-PF-2`). `Maintainer answer: accept <head>` (or one carried to it, ADR-0685 decision 2) and a
+   approvals (`route.answer_step`, ADR-0723) and never an ask's open Q ids (`Q-PF-2`), whether or not the ask offers
+   an approval; an ask keyed by the Q id of an open maintainers question it names closes on the approval as ADR-0723's
+   tests read (`Q-1968-1`). `Maintainer answer: accept <head>` (or one carried to it, ADR-0685 decision 2) and a
    `Maintainer answer:` naming neither a Q id nor an approval close every item, as before.
 3. **A label-only approval park holds.** An `agk:approve` with no approval ask in the comments still opens `approve`
    from the label. While the wait's own park keyed `approve` (`own_park`) holds `agk:parked`, the item stays open until
-   an answerer posts, after the `Parked-by:`, an `Approve:`, a `Maintainer answer:` naming no Q id (an amendment
-   approval among them) or the accept of the head. A park keyed `approve` written before this build is held the same
+   an answerer posts, after the `Parked-by:`, the accept of the head, a `Maintainer answer:` naming neither a Q id nor
+   an approval, or an approval line for a spec or amendment that a listed verdict's `Approval:` line or `Owner needed:`
+   asks or the pull request's changed files change (ADR-0723 decision 3); an approval of anything else counts nothing,
+   since the router would set `agk:approve` again. A park keyed `approve` written before this build is held the same
    way. An `agk:parked` removed by hand is repaired as before.
 4. **The settled line counts in the wait.** With `[steward] settle_amendments` on (`check_amendments.settle_on`, at the
    checkout found at or above the working folder), `owner_read` adds `settles` (`route.amendment_settles` of the

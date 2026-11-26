@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 
@@ -64,10 +65,29 @@ def items(pr: dict, comments: list) -> dict:
 
 
 def router_labels(labels: set[str]) -> set[str]:
-    """The label set `route.apply` leaves while `agk:parked` holds: every other state label of
-    `route.LABELS` removed (`route.base_state` returns `agk:parked`)."""
-    assert route.base_state({"labels": sorted(labels)}) == route.PARKED
-    return {x for x in labels if x not in route.LABELS or x == route.PARKED}
+    """Answer 10 (fix list item 4): the label set the router's own `route.apply` leaves while
+    `agk:parked` holds (`route.base_state` returns `agk:parked`), its writes recorded, not sent."""
+    wanted = route.base_state({"labels": sorted(labels)})
+    assert wanted == route.PARKED
+    left = set(labels)
+
+    def write(endpoint: str, *extra: str, method: str, what: str = "") -> None:
+        if method == "DELETE":
+            left.discard(unquote(endpoint.rsplit("/", 1)[1]))
+        elif method == "POST":
+            left.add(extra[-1].split("=", 1)[1])
+
+    class Known:
+        def ensure(self, name: str) -> None:
+            assert name in route.LABELS
+
+    saved = route.write
+    route.write = write
+    try:
+        route.apply("acme/widgets", 1945, sorted(labels), wanted, Known())
+    finally:
+        route.write = saved
+    return left
 
 
 def same_under_router(pr_labels: tuple, comments: list, files=None) -> tuple:
@@ -146,7 +166,9 @@ def test_1968_1949_a_label_only_park_holds_until_an_approval_line_after_it():
     "line, closes",
     [
         ("Approve: SPEC-0075", True),
-        ("Maintainer answer: amendment 245 approved", True),
+        ("Maintainer answer: amendment 245 approved", False),  # fix list item 2: not asked
+        ("Approve: SPEC-9999", False),
+        ("Approve: dddddddd SPEC-0075", True),
         (f"Maintainer answer: accept {HEAD}", True),
         ("Maintainer answer: go ahead", True),
         (f"Maintainer answer: accept {'e' * 40}", False),
@@ -435,3 +457,119 @@ def test_1968_no_listed_verdict_author_parks_nothing():
 def test_1968_the_owner_merge_hand_over_is_never_parked():
     """REQ-066: brief #1968 answer 7 (ADR-0722): unchanged."""
     assert step(pull(("agk:owner-merge",)), [LATER]) == ("handover", "owner-merge")
+
+
+# --- fix list on 32a497bd ------------------------------------------------------------------------
+
+ASK_TWO = at(
+    1, CONDUCTOR, "Owner needed: two questions\n\nQ-1954-A: the home?\nQ-1954-B: the prefix?\n", 300
+)
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["Approve: SPEC-0075", "Approve: SPEC-9999", "Maintainer answer: amendment 245 approved"],
+)
+@pytest.mark.parametrize("files", [None, [SPEC, AMENDMENT]])
+def test_1968_item1_an_approval_line_never_ends_an_ask_with_open_ids(line, files):
+    """REQ-066: fix list item 1 (Q-PF-2): an ask naming Q ids and offering no approval stays
+    open after any approval line until each id is answered."""
+    said = [ASK_TWO, PARKED_1961, *answers(line)]
+    assert step(pull(("agk:parked",), files), said) is None
+    assert list(items(pull(("agk:parked",), files), said)) == ["owner-needed"]
+    done = [*said, at(40, OWNER, "Answer: Q-1954-A x", 5), at(41, OWNER, "Answer: Q-1954-B y", 4)]
+    assert step(pull(("agk:parked",), files), done) == ("unpark", "owner-needed")
+
+
+def test_1968_item1_an_ask_keyed_by_its_open_questions_id_closes_as_adr_0723_reads():
+    """REQ-066: Q-1968-1: `Owner needed: Q-<id> ...` keyed by the builder's open maintainers
+    question closes on an approval line as `test_1735_5f_5j_...` holds (ADR-0723)."""
+    said = [
+        at(1, "builder-example", "Question: Q-1723-9 for the maintainers: a or b?", 60),
+        at(2, CONDUCTOR, "Owner needed: Q-1723-9 pick a or b", 59),
+        at(3, OWNER, "Approve: SPEC-0050", 50),
+    ]
+    assert items(pull(), said) == {}
+
+
+@pytest.mark.parametrize("files", [None, [SPEC]])
+def test_1968_item2_an_approval_for_another_spec_never_ends_a_label_only_park(files):
+    """REQ-066: fix list item 2 (ADR-0723): only an approval the verdict asks or the pull request
+    changes counts; the router would set `agk:approve` again for anything else."""
+    said = [VERDICT_1949, LATER, PARKED_APPROVE, at(5, OWNER, "Approve: SPEC-9999", 10)]
+    assert step(pull(("agk:parked",), files), said) is None
+    amend = [VERDICT_1949, LATER, PARKED_APPROVE]
+    amend.append(at(5, OWNER, "Maintainer answer: amendment 245 approved", 10))
+    assert step(pull(("agk:parked",), [AMENDMENT]), amend) == ("unpark", "approve")
+    assert step(pull(("agk:parked",), [SPEC]), amend) is None
+
+
+def test_1968_item3_personal_mode_ask_lines_lists_the_open_ids(monkeypatch, capsys, tmp_path):
+    """REQ-066: fix list item 3, `[personal] forge = "files"`: the sidecar's records, no GitHub
+    read; nothing in a sidecar answers but what `reviewers.derived_only` derives."""
+    import json
+
+    (tmp_path / "forge" / "pulls").mkdir(parents=True)
+    (tmp_path / "forge" / "pulls" / "3.json").write_text(json.dumps(pull()), encoding="utf-8")
+    said = [ASK_1961, at(9, OWNER, "Answer: Q-1954-A plain", 5)]
+    (tmp_path / "forge" / "comments-3.json").write_text(json.dumps(said), encoding="utf-8")
+    monkeypatch.setattr(session, "personal_table", lambda root: {"forge": "files"})
+    monkeypatch.setattr(session, "owner_people", lambda root, pr: (LISTED, ANSWERERS))
+    monkeypatch.setattr(session, "agent_apps", lambda root: [])
+    monkeypatch.setattr(session, "solo_person", lambda root: None)
+    monkeypatch.setattr(session, "gh", lambda *a, **k: pytest.fail("no GitHub read"))
+    assert session.ask_lines(tmp_path, 3) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"owner-needed: Maintainer answer: {q} <your answer>"
+        for q in ("Q-1954-A", "Q-1954-B", "Q-1954-C")
+    ]
+
+
+def test_1968_item3_solo_mode_one_login_reads_by_the_lines_form():
+    """REQ-066: fix list item 3, `review_mode = "solo"`: the one person posts the ask and the
+    answers under one account; only the line's form decides, and the park still holds."""
+    one = "person-example"
+    ask = {**ASK_1961, "user": {"login": one}}
+    park = {**PARKED_1961, "user": {"login": one}}
+    said = [ask, park, *({**c, "user": {"login": one}} for c in answers("Answer: Q-1954-A x"))]
+    steps = session.owner_step(pull(("agk:parked",)), said, PLAIN, NOW, {one}, {one})
+    assert steps is None
+    rest = [at(30, one, "Answer: Q-1954-B y", 5), at(31, one, "Answer: Q-1954-C z", 4)]
+    assert session.owner_step(pull(("agk:parked",)), [*said, *rest], PLAIN, NOW, {one}, {one}) == (
+        "unpark",
+        "owner-needed",
+    )
+
+
+@pytest.mark.parametrize("value", ["hosted", "hybrid", "pool", "local"])
+def test_1968_item3_every_execution_value_unparks_through_owner_apply(tmp_path, monkeypatch, value):
+    """REQ-066: fix list item 3, `execution`: the one write path (`owner_apply`, which every
+    caller uses: the router's unpark, the conductor's sweep and owner pass, the steward and
+    `watch`) holds the #1961 park after one answer and unparks after the last."""
+    (tmp_path / "agk.toml").write_text(f'execution = "{value}"\n', encoding="utf-8")
+    assert common.execution(tmp_path) == value
+    wrote: list = []
+    monkeypatch.setattr(session, "unpark_pull", lambda *a, **k: wrote.append(a) or True)
+    monkeypatch.setattr(session, "park_pull", lambda *a, **k: pytest.fail("no park"))
+    parked = pull(("agk:parked",))
+    said = [ASK_1961, PARKED_1961, *answers("Answer: Q-1954-A x")]
+    monkeypatch.setattr(session, "owner_read", lambda repo, n: (parked, said))
+    assert session.owner_apply("o/r", 1961, PLAIN, LISTED, ANSWERERS, NOW) is None and not wrote
+    done = [*said, *answers("Answer: Q-1954-B y", "Answer: Q-1954-C z")]
+    monkeypatch.setattr(session, "owner_read", lambda repo, n: (parked, done))
+    assert session.owner_apply("o/r", 1961, PLAIN, LISTED, ANSWERERS, NOW) == (
+        "unpark",
+        "owner-needed",
+    )
+    assert wrote == [("o/r", 1961, "owner-needed")]
+
+
+def test_1968_item3_paused_runs_no_owner_step(tmp_path, monkeypatch, capsys):
+    """REQ-066: fix list item 3, `paused = true` (session rule 33): the router reads and writes
+    nothing, so no owner step runs."""
+    (tmp_path / "agk.toml").write_text("paused = true\n", encoding="utf-8")
+    monkeypatch.setattr(route, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(session, "owner_apply", lambda *a, **k: pytest.fail("no owner step"))
+    monkeypatch.setattr(route, "gh", lambda *a, **k: pytest.fail("no read"))
+    assert route.main(["--pr", "1961"]) == 0
+    assert common.PAUSED_LINE in capsys.readouterr().out
