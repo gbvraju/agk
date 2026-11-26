@@ -82,14 +82,20 @@ def test_the_merger_accepts_both_forms_with_the_same_lines(monkeypatch):
     [
         f"Verdict: cleared {HEAD}\n\n{SPEC_FINAL}\n",  # a spec Final: the builder's status commit
         f"Verdict: cleared {HEAD}\n\n1. Fix it.\n\n{ACCEPT}\n",  # numbered items beside it
+        f"Verdict: cleared {HEAD}\n\n1. Fix it.\n",  # the fix list on 12129d1, item 2
     ],
 )
-def test_the_merger_holds_a_cleared_verdict_whose_final_line_it_cannot_read(body):
-    """The fix list on 8d2042a, item 4: such a verdict never merges without its acceptance."""
+def test_the_merger_holds_a_cleared_verdict_whose_final_line_it_cannot_read(body, monkeypatch):
+    """The fix lists on 8d2042a (item 4) and 12129d1 (items 1 and 2): such a verdict never merges,
+    on its head or carried over a light re-prove, and the check refuses it before a post."""
     verdict = {"id": 3, "user": {"login": "boss"}, "body": body, "created_at": "2026-11-26T12:00Z"}
     assert not merge_cleared.clears_head(verdict, HEAD)
     held = ("held", merge_cleared.UNREADABLE_FINAL)
     assert merge_cleared.judge([verdict], HEAD, ["boss"]) == held
+    monkeypatch.setattr(merge_cleared.session_plan, "light_merge", lambda *_a: True)
+    assert merge_cleared.carried_from(ROOT, [verdict], "c" * 40, ["boss"], "main", []) is None
+    if "1. Fix it." in body:
+        assert conductor.form_problem(body) == conductor.CLEARED_ITEMS
     for good in (NEW, f"Verdict: cleared {HEAD}\nRead: all files.\n"):
         verdict["body"] = good
         assert merge_cleared.judge([verdict], HEAD, ["boss"]) == ("cleared", "")

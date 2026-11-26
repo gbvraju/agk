@@ -324,6 +324,7 @@ from common import (
     FINAL_LINE,
     NOT_FIX_LIST,
     CheckError,
+    cleared_items,
     covered_fix_list,
     final_accepts,
     fix_items,
@@ -2049,6 +2050,10 @@ FIX_LIST_EMPTY = (  # brief #2001 answer 4
     "SPEC-0021 rule 1: a fix list with no numbered item and no Final: line gives the builder "
     "nothing to do; post `Verdict: cleared <head>`"
 )
+CLEARED_ITEMS = (
+    "SPEC-0021 rule 9: a cleared verdict carries no numbered item; post them as "
+    "`Verdict: fix list <head>`, or leave them out"
+)
 FIX_LIST_ACCEPTS = (
     "SPEC-0021 rule 1: a fix list whose only content is ADR acceptance Final: lines gives the "
     "builder nothing to do; post `Verdict: cleared <head>` with the same `Final:` lines"
@@ -2455,6 +2460,8 @@ def form_problem(body: str) -> str | None:
     nothing to do, with no numbered item and no `Final:` line, or with only ADR acceptance lines
     (post `Verdict: cleared <head>` with them). A posted one is still read (`verdict_problem`)."""
     text = body.strip()
+    if cleared_items(text):  # the fix list on 12129d1, item 2
+        return CLEARED_ITEMS
     if not text.startswith("Verdict: fix list") or fix_items(text):
         return None
     if not any(line.startswith("Final:") for line in text.splitlines()):
