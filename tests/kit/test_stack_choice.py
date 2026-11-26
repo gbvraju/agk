@@ -441,6 +441,13 @@ def test_req_081_ac5_an_accepted_record_written_before_packs_is_held(tmp_path):
     assert fit_fails(tmp_path, OPTION_A + OPTION_B, status="Accepted") == []
 
 
+@pytest.mark.parametrize("line", ["     Domain fit: partly\n", "   - Domain fit: meets\n"])
+def test_req_081_ac5_an_accepted_record_with_a_malformed_line_is_checked_whole(tmp_path, line):
+    """Fix list on 92250ef9 item 1: only an Accepted record with no try at the line is held."""
+    found = fit_fails(tmp_path, OPTION_A + line + OPTION_B + MEETS, status="Accepted")
+    assert found == ["FAIL engines: SPEC-0074 rule 8: option A has no Domain fit line"]
+
+
 def test_req_081_ac5_the_option_parsers_read_every_option_with_the_lines():
     sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
     import engines as engines_module  # noqa: PLC0415

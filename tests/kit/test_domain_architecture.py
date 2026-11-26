@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import socket
 import sys
 from pathlib import Path
@@ -27,6 +28,7 @@ sys.path.insert(0, str(AGK))
 
 import check_domains  # noqa: E402
 import front_door  # noqa: E402
+import run_gates  # noqa: E402
 from gates import domain_scenarios, domain_threats  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("no_network")
@@ -37,7 +39,7 @@ CONSTRAINT = (
     '\n[[constraints]]\nid = "{id}"\nattribute = "retention"\nscenario = "stimulus: an order is'
     ' closed; response: it is kept; measure: {years} years"\nhard = {hard}\nbasis = "expected"\n'
 )
-ROW = "- reliability: an order is closed -> it is kept (at least {years} years) [{cite}]"
+ROW = "- retention: an order is closed -> it is kept (at least {years} years) [{cite}]"
 OTHER = "- security: a stranger calls the order api -> it is refused (100 percent of calls)"
 THREATS = (
     "- web to api: S, T, I: TLS on every call (class: payment)\n"
@@ -85,9 +87,7 @@ def project(
         "config/domains/zz-shop.toml",
         pack("zz-shop", ("orders-kept", 5, "true"), ("logs-kept", 1, "false")),
     )
-    table = (
-        "" if listed is None else f"[domain]\npacks = {json.dumps(list(listed))}\n"
-    )
+    table = "" if listed is None else f"[domain]\npacks = {json.dumps(list(listed))}\n"
     write(root, "agk.toml", table)
     rows = scenarios or "\n".join(
         [
@@ -156,6 +156,40 @@ def test_req_081_ac5_a_cited_row_keeps_the_form_of_build_g(tmp_path):
     line = ROW.format(years=5, cite="zz-shop.orders-kept")
     assert front_door.quality_line_ok("Quality scenarios", line)
     assert not front_door.quality_line_ok("Quality scenarios", line + " trailing words")
+    # a pack's attribute word is taken only on a cited row; an uncited row keeps the eight
+    assert not front_door.quality_line_ok("Quality scenarios", line.rsplit(" [", 1)[0])
+
+
+def test_req_081_ac5_a_row_naming_another_attribute_fails_naming_its_id(tmp_path):
+    """Fix list on 92250ef9 item 4: the row names its constraint's own attribute."""
+    rows = "\n".join(
+        [
+            ROW.format(years=5, cite="zz-shop.orders-kept").replace("- retention:", "- audit:"),
+            ROW.format(years=1, cite="zz-shop.logs-kept"),
+        ]
+    )
+    assert scenario_problems(project(tmp_path, scenarios=rows)) == [
+        (
+            "SPEC-0074 rule 8: a quality scenario names another attribute than its constraint",
+            f"{SCENARIOS}; id: zz-shop.orders-kept",
+        )
+    ]
+
+
+def test_req_081_ac5_two_packs_with_one_constraint_are_each_cited(tmp_path):
+    """Fix list on 92250ef9 item 3 (brief answer 6): cited by pack, so both rows."""
+    root = project(tmp_path, listed=["zz-shop", "zz-other"])
+    write(root, "config/domains/zz-other.toml", pack("zz-other", ("orders-kept", 5, "true")))
+    assert sorted(check_domains.cited(root)) == [
+        "zz-other.orders-kept",
+        "zz-shop.logs-kept",
+        "zz-shop.orders-kept",
+    ]
+    assert scenario_problems(root) == [(MISSING, f"{SCENARIOS}; id: zz-other.orders-kept")]
+    text = (root / front_door.RECORD).read_text(encoding="utf-8")
+    row = ROW.format(years=5, cite="zz-other.orders-kept")
+    write(root, front_door.RECORD, text.replace("## Threats", f"{row}\n\n## Threats"))
+    assert scenario_problems(root) == []
 
 
 def test_req_081_ac5_no_packs_adds_nothing(tmp_path):
@@ -196,6 +230,17 @@ def test_req_081_ac5_a_flow_with_an_unclassified_item_fails_naming_it(tmp_path):
     ]
 
 
+def test_req_081_ac5_an_item_ending_in_punctuation_is_still_found(tmp_path):
+    """Fix list on 92250ef9 item 2: the match does not hang on the item's last character."""
+    data = DATA + "- card (PAN): payment\n- card no.: payment\n"
+    for item in ("card (PAN)", "card no."):
+        threats = THREATS.replace("TLS on every call (class: payment)", f"the {item} under TLS")
+        root = project(tmp_path / item.replace(" ", "-"), data=data, threats=threats)
+        assert domain_threats.check(root, {}) == [
+            (UNCLASSED, f"{front_door.RECORD}; section: Threats; flow: 1; item: {item}")
+        ]
+
+
 def test_req_081_ac5_a_class_outside_the_five_fails(tmp_path):
     root = project(
         tmp_path, data=DATA, threats=THREATS.replace("(class: payment)", "(class: secret)")
@@ -215,6 +260,19 @@ def test_req_081_ac5_data_without_packs_still_checks_the_threats(tmp_path):
     root = project(tmp_path, listed=None, scenarios=OTHER, data=DATA)
     assert not domain_scenarios.applies(root)
     assert domain_threats.applies(root) and domain_threats.check(root, {}) == []
+
+
+def test_req_081_ac5_the_runner_runs_both_steps_and_prints_not_run(tmp_path, capsys):
+    """Through `run_gates`: a missing row fails by the step's name; no data.md is `not run`."""
+    rows = "\n".join([OTHER, ROW.format(years=5, cite="zz-shop.orders-kept")])
+    root = project(tmp_path, scenarios=rows)
+    shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
+    lines = [line for _, line in run_gates.results(root)]
+    assert f"domain-scenarios: {MISSING} (path class: {SCENARIOS}; id: zz-shop.logs-kept)" in lines
+    assert "domain-threats: no data classification" in lines
+    run_gates.main(["--root", str(root)])
+    out = capsys.readouterr().out
+    assert "not run domain-threats: no data classification" in out
 
 
 # --- the class stays closed (brief answer 8) ----------------------------------------------------

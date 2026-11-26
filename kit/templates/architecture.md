@@ -46,7 +46,7 @@ TODO(architect): the parts, the data stores and each outside service above, and 
 
 ## Quality scenarios
 
-TODO(architect): one or more lines `- <attribute>: <stimulus> -> <response> (<number>)` for each need above, the attribute one of the eight quality characteristics of ISO/IEC 25010 (functional suitability, performance efficiency, compatibility, usability, reliability, security, maintainability, portability). With `[domain] packs` set, one more line for each domain constraint, ending ` [<pack>.<constraint>]` (SPEC-0074 rule 8).
+TODO(architect): one or more lines `- <attribute>: <stimulus> -> <response> (<number>)` for each need above, the attribute one of the eight quality characteristics of ISO/IEC 25010 (functional suitability, performance efficiency, compatibility, usability, reliability, security, maintainability, portability). With `[domain] packs` set, one more line for each domain constraint, its attribute the constraint's own and ending ` [<pack>.<constraint>]` (SPEC-0074 rule 8).
 
 ## Threats
 

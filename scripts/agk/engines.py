@@ -218,6 +218,7 @@ OPTION = re.compile(r"^\s*-\s+Option ([A-Z]) — (.+)$")
 # SPEC-0074 rule 8 (brief #1955, ADR-0811): an indented line after an option bullet, never a bullet
 DOMAIN_FIT = re.compile(r"^\s+Domain fit: (?:meets|cannot meet: (\S.*))$")
 FIT_SLOT = "     Domain fit: TODO(architect)"
+FIT_NAMED = re.compile(r"^\s*(?:[-*]\s+)?Domain fit\b")  # any try at the line, well formed or not
 UNCITED = "not of the form <pack>.<constraint>"
 PRACTICE = re.compile(r"^\s*-\s+(.+?):\s+(check|judgement)(?:\s+\((.*)\))?\s*$")
 STACK_PLACEHOLDER = re.compile(r"TODO\(architect\)")
@@ -631,7 +632,7 @@ def domain_fit_problems(text: str, cited: dict[str, dict]) -> list[str]:
 
     lines = [ln for ln in section(text, "Decision") or [] if ln.strip()]
     accepted = re.search(r"(?m)^- Status: Accepted$", text)
-    if not cited or accepted and not any(DOMAIN_FIT.match(ln) for ln in lines):
+    if not cited or accepted and not any(FIT_NAMED.match(ln) for ln in lines):
         return []
     out = []
     for at, line in enumerate(lines):

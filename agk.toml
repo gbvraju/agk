@@ -1034,7 +1034,7 @@ tests = [
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_glossary_step.py",
   "tests/kit/test_stack_choice.py", "tests/kit/test_layers_draft.py", "tests/kit/test_run_gates_touched.py",
   "tests/kit/test_run_gates.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_tests_floor.py",
-  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_gate_runner_map.py",
+  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_gate_runner_map.py", "tests/kit/test_domain_architecture.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/baseline.py"

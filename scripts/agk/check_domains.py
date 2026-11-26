@@ -384,9 +384,12 @@ def cited(root: Path) -> dict[str, dict] | None:
         names = _listed(root)
     except Exception:  # config.DomainSettingError: its line names the setting
         return None
-    if not names:
-        return {}
-    return {f"{e['pack']}.{e.get('id')}": e for e in items(root)["constraints"]}
+    out: dict[str, dict] = {}
+    for name in order(root, names):  # each pack's own key: a repeat in another pack is cited too
+        path = pack_path(root, name)
+        for entry in _entries(load(path) or {}).get("constraints", []) if path else []:
+            out.setdefault(f"{name}.{entry.get('id')}", {**entry, "pack": name})
+    return out
 
 
 def warnings(root: Path) -> list[str]:

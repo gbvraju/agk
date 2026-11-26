@@ -1117,6 +1117,12 @@ def quality_line_ok(section: str, line: str) -> bool:
     """The form of one `- ` line of a quality section (brief #1952 answer 2); form only."""
     if section == "Quality scenarios":
         m = SCENARIO.match(line)
+        if m is not None and m.group(
+            5
+        ):  # brief #1955: a cited row names its constraint's attribute
+            import check_domains  # here: a record without packs needs no domain module
+
+            return m.group(1) in (*QUALITY_ATTRIBUTES, *check_domains.ATTRIBUTES)
         return m is not None and m.group(1) in QUALITY_ATTRIBUTES
     if section == "Threats":
         m = THREAT.match(line)
@@ -1171,8 +1177,9 @@ def domain_scenario_problems(
     body: dict[str, list[str]], cited: dict[str, dict]
 ) -> list[tuple[str, str]]:
     """SPEC-0074 rule 8 (brief #1955): one `## Quality scenarios` row per composed constraint, its
-    tail ` [<pack>.<constraint>]` (`check_domains.CITATION`); a missing row or a row citing no
-    composed constraint fails naming the id, and a citation out of its form is never echoed."""
+    tail ` [<pack>.<constraint>]` (`check_domains.CITATION`) and its attribute the constraint's own;
+    a missing row, a row citing no composed constraint or naming another attribute fails naming the
+    id, and a citation out of its form is never echoed."""
     import check_domains  # here: a record without packs needs no domain module
 
     where = f"{RECORD}; section: Quality scenarios"
@@ -1187,6 +1194,13 @@ def domain_scenario_problems(
                     (
                         f"{RULE_8}: a quality scenario cites no composed domain constraint",
                         f"{where}; id: {shown}",
+                    )
+                )
+            elif m.group(1) != cited[m.group(5)].get("attribute"):
+                out.append(
+                    (
+                        f"{RULE_8}: a quality scenario names another attribute than its constraint",
+                        f"{where}; id: {m.group(5)}",
                     )
                 )
     missing = [c for c in cited if c not in rows]
@@ -1218,7 +1232,7 @@ def threat_class_problems(
             )
         text = CLASS_MARK.sub("", line).casefold()
         for item, kind in items:
-            named = re.search(rf"\b{re.escape(item.casefold())}\b", text)
+            named = re.search(rf"(?<!\w){re.escape(item.casefold())}(?!\w)", text)
             if named and kind in domain_model.CLASSES and kind not in marked:
                 out.append(
                     (
