@@ -27,6 +27,7 @@ import evidence  # noqa: E402
 import prepush  # noqa: E402
 
 PY = ".venv/bin/python -m pytest -q tests/test_a.py"
+TWO = {("whole", "whole"): f"{PY} -n 2"}
 TEMPLATE = "make test-parallel JOBS={workers} SITE=https://example.com"
 
 
@@ -122,7 +123,7 @@ def test_a_single_run_agrees_with_a_plan_in_workers_and_the_reverse(tmp_path, re
 def test_the_same_count_adds_no_note(tmp_path, rebuilt):
     """REQ-051: answer 2 (the note only where the counts differ)."""
     root = tree(tmp_path)
-    _, diffs, notes = rebuilt(root, [run("whole", f"{PY} -n 2")], {("whole", "whole"): f"{PY} -n 2"})
+    _, diffs, notes = rebuilt(root, [run("whole", f"{PY} -n 2")], TWO)
     assert diffs == [] and not [n for n in notes if n.startswith("workers:")]
 
 
@@ -148,7 +149,7 @@ def test_filled_parallel_commands_with_four_and_two_agree(tmp_path, rebuilt):
 def test_anything_else_still_differs_by_command(tmp_path, rebuilt, recorded):
     """REQ-051: answer 3 (another file, option, interpreter or worker form still differs)."""
     root = tree(tmp_path)
-    units, diffs, notes = rebuilt(root, [run("whole", recorded)], {("whole", "whole"): f"{PY} -n 2"})
+    units, diffs, notes = rebuilt(root, [run("whole", recorded)], TWO)
     assert diffs == ["not what prepush runs: tests/whole/whole (field: command)"]
     assert "tests/whole/whole" not in units
     assert not [n for n in notes if n.startswith("workers:")]
