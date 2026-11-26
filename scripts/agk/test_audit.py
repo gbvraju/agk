@@ -228,7 +228,7 @@ def audit(root: Path, since: str | None, limit: int) -> dict:
     code_rx = [glob_rx(g) for g in code_globs(root)]
     code = {p for p in tracked if any(rx.fullmatch(p) for rx in code_rx)}
     code_lines = sum(
-        len((root / p).read_text(errors="replace").splitlines())
+        len((root / p).read_text(encoding="utf-8", errors="replace").splitlines())
         for p in code
         if (root / p).is_file()
     )
