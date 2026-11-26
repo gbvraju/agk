@@ -493,3 +493,15 @@ def test_ac3_the_steward_subcommand_runs_the_proposal(env, monkeypatch):
     monkeypatch.chdir(root)
     assert steward_owner.main(["domain", "--propose"]) == 0
     assert [a["form"] for a in steward_owner.load_asks(root)] == ["domain"]
+
+
+def test_ac3_the_owners_grant_lets_the_grill_alone_import_check_domains(tmp_path, capsys):
+    """REQ-081 AC3: Q-1937-K1 (ADR-0806 decision 6), one script and one module; no other."""
+    import rules
+    from test_import_ruling import run, tree
+
+    assert rules.GRANTED == {"grill": frozenset({"check_domains"})}
+    root = tree(tmp_path, files={"extra.py": "import check_domains\n"})
+    assert run(capsys, str(SCRIPTS / "grill.py"), "--root", str(root))[0] == 0
+    code, out = run(capsys, str(root / "scripts" / "agk" / "extra.py"), "--root", str(root))
+    assert code == 1 and "imports check_domains outside" in out[0]

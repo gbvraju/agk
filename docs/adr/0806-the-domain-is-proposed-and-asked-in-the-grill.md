@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-26
 - Deciders: maintainers
-- Related: SPEC-0074, SPEC-0073, SPEC-0062, SPEC-0057, ADR-0805, ADR-0802, ADR-0801, ADR-0735, brief #1937, brief #1936, brief #1934, brief #1757, plan #661
+- Related: SPEC-0074, SPEC-0073, ADR-0824, SPEC-0062, SPEC-0057, ADR-0805, ADR-0802, ADR-0801, ADR-0735, brief #1937, brief #1936, brief #1934, brief #1757, plan #661
 - Requirements: REQ-081
 
 Protected classes: `scripts/agk/`, `skills/`, `tests/kit/`, `agk.toml`, `kit/`
@@ -50,7 +50,12 @@ builds (a) and (b) (ADR-0801, ADR-0802) shipped `grill.py` and `/agk:grill`.
    budget, `questions` prints only the regulated packs' critical items still open and, when there is one, the line "A
    few more questions are needed for the rules of this business."; no second interview, no second record.
 5. SPEC-0073 offers no `grill = "off"`, so the brief's `off` case has nothing to read (named in the pull request).
-6. `domain_ask.py` joins `kit/manifest.json` (a class the reserved line did not name), and `[[testing.map]]` maps it,
+6. **The grill's import (Q-1937-K1).** `grill.pack_items` imports `check_domains`, which is outside ADR-0824's set
+   because `check_domains` imports `domain_model` at module level. The owner ruled on #1992 (comment 7193360337,
+   2026-11-26T13:26:41Z, quoted as data): "Maintainer answer: Q-1937-K1 accept check_domains in grill.py". So
+   `rules.GRANTED` holds that one pair, and `rules.py imports scripts/agk/grill.py` reads it as within the ruling.
+   `KIT_IMPORTS` is unchanged, and no other script or module gains a grant.
+7. `domain_ask.py` joins `kit/manifest.json` (a class the reserved line did not name), and `[[testing.map]]` maps it,
    `grill.py`, `front_door.py` and `steward_owner.py` to `tests/kit/test_domain_grill.py`.
 
 ## Consequences
