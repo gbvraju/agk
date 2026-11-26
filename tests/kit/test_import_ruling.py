@@ -18,13 +18,15 @@ ROOT = Path(__file__).resolve().parents[2]
 KIT = ROOT / "scripts" / "agk"
 ACCEPTED = "# ADR-0824: invented\n\n- Status: Accepted\n- Date: 2026-11-26\n"
 PROPOSED = ACCEPTED.replace("Accepted", "Proposed")
-# The checks whose module-level walk stays offline on main at 71eb8ab3 (12; the brief's 14 was
-# read at 6a5acb46, before #1961 gave `check_domains.py` a module-level `domain_model`).
+# The checks whose module-level walk stays offline on main at ed342cf1 (11; the brief's 14 was
+# read at 6a5acb46, before #1961 gave `check_domains.py` a module-level `domain_model` and #1984
+# gave `check_playbooks.py` a module-level `from gates import pins`; both left the set).
 OFFLINE = {
     "check_adrs", "check_amendments", "check_build_state", "check_licence_notice",
-    "check_neutrality", "check_plan", "check_playbooks", "check_pr_body", "check_pr_mode",
+    "check_neutrality", "check_plan", "check_pr_body", "check_pr_mode",
     "check_requirements", "check_review_report", "check_runbooks",
 }  # fmt: skip
+LEFT = {"check_domains", "check_playbooks"}  # an outside module-level import leaves the set
 
 
 def tree(tmp_path: Path, status: str | None = ACCEPTED, files: dict | None = None) -> Path:
@@ -125,6 +127,7 @@ def test_req037_the_offline_checks_and_the_base_modules_walk_clean_on_main():
     assert OFFLINE <= found
     assert "check_pr_body" in found  # the known case of the module-level walk (Q-1972-2)
     assert not {"check_brief", "check_numbers", "check_acceptance", "session"} & found
+    assert not LEFT & found
 
 
 def test_req037_without_the_accepted_adr_there_is_no_standing_ruling(tmp_path, capsys):
