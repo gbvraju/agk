@@ -359,8 +359,9 @@ def test_the_minutes_line_is_unknown_without_billing_and_run_history(tmp_path):
     assert "python3 scripts/agk/minutes.py" in text
 
 
-def test_the_minutes_line_with_an_estimate_only_is_not_unknown(tmp_path):
-    """REQ-020: brief #370 answer 2 (billing refused, the run history read: the estimate)."""
+def test_the_minutes_line_with_billing_refused_reads_no_run_history(tmp_path):
+    """REQ-020: brief #370 answer 2 as brief #2011 answer 1 changes it (ADR-0832): billing refused,
+    the run history readable, and still no estimate: `minutes-unknown`, pointing to minutes.py."""
     api_dir = tmp_path / "e"
     dirs = prepare("ok", api_dir)
     month = ROOT / "tests" / "kit" / "fixtures" / "minutes" / "month"
@@ -371,9 +372,7 @@ def test_the_minutes_line_with_an_estimate_only_is_not_unknown(tmp_path):
     (dirs["api"] / "billing.status").write_text("403\n", encoding="utf-8")
     proc = doctor("--api-dir", str(dirs["api"]), "--json", str(dirs["root"]))
     entry = checks_of(proc.stdout)["actions-minutes"]
-    assert entry["status"] == "ok"
-    assert "used this month (estimate from run history)" in entry["message"]
-    assert "level unknown" in entry["message"]
+    assert (entry["status"], entry["reason"]) == ("cannot-check", "minutes-unknown")
 
 
 def doctor_text(tmp_path: Path, refused: tuple[str, ...]) -> str:
