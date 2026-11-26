@@ -974,8 +974,8 @@ def split_workers(command: str, root: Path) -> tuple[str, int]:
     """COMMAND without its worker part and the worker count (1 when it has none; brief #2005,
     ADR-0829): ROOT's `parallel_command` with `{workers}` filled, or the `project_tests` that
     `full_command` replaces with it, read as the template; else a trailing ` -n <n>` of a command
-    that `last_pytest` reads as pytest, the one form `pytest_workers` adds (fix list 7195972070
-    items 1 and 2). Any other command is returned as it is."""
+    that `last_pytest` reads as pytest, the one form `pytest_workers` adds (the fix list on
+    6191e236, items 1 and 2). Any other command is returned as it is."""
     template, project = parallel_parts(root)
     if template is not None:
         parts = [re.escape(part) for part in template.split("{workers}")]
