@@ -638,14 +638,21 @@ def fits(root, monkeypatch):
     return root
 
 
-def filing(base: Path, said: str | None, name: str | None = NAME, asked: str | None = None,
-           by: str | None = None, text: str = CHANGE):  # fmt: skip
+def filing(
+    base: Path, said: str | None, name: str | None = NAME, by: str | None = None, text: str = CHANGE
+):
     words = write(base, "said.txt", said + "\n") if said is not None else None
-    question = write(base, "asked.txt", asked + "\n") if asked is not None else None
     return steward_owner.file_brief(
-        base, write(base, "draft.md", text), "A person signs in", words, AT, by, NOW,
-        name=name, asked=question,
-    )  # fmt: skip
+        base, write(base, "draft.md", text), "A person signs in", words, AT, by, NOW, name=name
+    )
+
+
+def record_ask(
+    base: Path, question: str, session: str = "steward-a", at: str = "2026-11-22T07:40Z"
+):
+    """The session's open ask, as `steward_owner.py ask` records it (the asks file)."""
+    steward_owner.save_asks(base, [{"id": "Q-12-1", "question": question, "at": at,
+                                    "open": True, "session": session}])  # fmt: skip
 
 
 def test_req066_2002_a_spec_change_is_never_filed_under_auto_file(fits):
@@ -667,9 +674,20 @@ def test_req066_2002_a_yes_naming_the_amendment_files_and_posts_the_approval_in_
     assert code == 0, lines
     assert len(gh.created) == 1 and len(gh.filed) == 1
     posted = gh.filed[0].rstrip().splitlines()
-    assert posted[:2] == ["Maintainer answer: amendment 254 approved", f"Text: {DIGEST}"]
-    assert posted[2] == f'Owner said ({AT}): "{said}"' and posted[3].startswith("Asked")
-    assert posted[-1] == "Who: ProductOwner"
+    assert (
+        posted
+        == [  # fix list 7202066567 item 5: `Owner said` second, as the steward guard reads
+            "Maintainer answer: amendment 254 approved",
+            f'Owner said ({AT}): "{said}"',
+            'Asked: "file the A person signs in brief"',
+            f"Text: {DIGEST}",
+            "Who: ProductOwner",
+        ]
+    )
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".claude" / "hooks"))
+    import steward_guard  # noqa: PLC0415
+
+    assert steward_guard.OWNER_SAID.match(posted[1])
     assert "approved at filing on #12: amendment 254" in lines
 
 
@@ -683,17 +701,29 @@ def test_req066_2002_a_yes_that_names_no_amendment_files_and_approves_nothing(fi
     assert code == 0 and gh.filed == [] and NOT_AT_FILING in lines
 
 
-def test_req066_2002_a_plain_yes_to_an_ask_naming_the_amendment_approves_it(fits):
-    """REQ-066: answer 5: a plain yes counts only for an ask that named each amendment."""
+def test_req066_2002_a_plain_yes_counts_only_for_the_recorded_ask_naming_the_amendment(
+    fits, monkeypatch
+):
+    """REQ-066: answer 5 and fix list 7202066567 item 1: a plain yes approves an amendment only
+    when the session's recorded open ask named it; another session's ask, an ask newer than the
+    yes and an ask naming none approve nothing, and the brief is still filed."""
     base, _, gh, _ = fits
-    ask = "File the sign-in brief with its rule change, amendment 254? I recommend yes."
-    code, lines = filing(base, "Yes, go ahead.", name=None, asked=ask)
+    monkeypatch.setenv("AGK_SESSION", "steward-a")
+    ask = "May I file the sign-in work with its rule change, amendment 254? I recommend yes."
+    record_ask(base, ask)
+    code, lines = filing(base, "Yes, go ahead.", name=None)
     assert code == 0 and len(gh.filed) == 1
-    assert gh.filed[0].splitlines()[3] == f'Asked: "{ask}"'
-    code, lines = filing(
-        base, "Yes, go ahead.", name=None, asked="File the brief? I recommend yes."
-    )
-    assert len(gh.filed) == 1 and NOT_AT_FILING in lines
+    assert gh.filed[0].splitlines()[2] == f'Asked (2026-11-22T07:40Z): "{ask}"'
+    for other in (
+        dict(question=ask, session="steward-b"),
+        dict(question=ask, at="2026-11-22T07:55Z"),
+        dict(question="May I file the sign-in work? I recommend yes."),
+    ):
+        record_ask(base, **other)
+        code, lines = filing(base, "Yes, go ahead.", name=None)
+        assert code == 0 and len(gh.filed) == 1 and NOT_AT_FILING in lines
+    steward_owner.save_asks(base, [])
+    assert NOT_AT_FILING in filing(base, "Yes, go ahead.", name=None)[1]
 
 
 def test_req066_2002_team_mode_prints_the_approval_for_a_spec_approver(fits):

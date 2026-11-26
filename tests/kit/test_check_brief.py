@@ -766,3 +766,13 @@ def test_req066_2002_a_spec_without_a_rules_section_has_no_rules_and_never_raise
     assert fit(fitted("Spec fit: SPEC-0901 rule 2 within\n"), root)[1] == [
         "spec fit: SPEC-0903 has no Spec fit: line (setting: Spec fit:)"
     ]
+
+
+def test_req066_2002_the_warnings_stay_after_the_fail_day(tmp_path):
+    """REQ-066: fix list 7202066567 item 2: from `[flow] brief_study_fails_from` the limit warning
+    is still shown beside a passing line (brief #2002's own rule 18 warning stays)."""
+    root = fit_root(tmp_path, day="2026-11-20")
+    body = GOOD.replace("2. two\n", "2. two: send at most 20 questions\n")
+    body += "Spec fit: SPEC-0901 rule 1 within\n"
+    fails, warns = fit(body, root, "2026-11-25T10:00:00Z")
+    assert fails == [] and len(warns) == 1 and "SPEC-0901 rule 2 states a number limit" in warns[0]

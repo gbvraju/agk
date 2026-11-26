@@ -16,4 +16,6 @@ the yes at filing is the owner's word on the amendment, so it is recorded on the
 1. **SPEC-0059 rule 6, filing.** After "Each brief filed without the owner's word is listed in the daily list (rule 13)." insert "A brief whose `Spec fit:` line changes a rule is never filed without the owner's word, and that word approves each such amendment only when it names it; in solo mode the steward then posts on the brief, in rule 5's form, `Maintainer answer: amendment <n> approved` with a `Text:` digest of the quoted items, and in team mode prints it for a spec approver to post (amendment 255)."
 Class: behaviour
 
+## Unchanged
+
 SPEC-0059 rules 5, 11 and 12 are unchanged. No other rule changes.

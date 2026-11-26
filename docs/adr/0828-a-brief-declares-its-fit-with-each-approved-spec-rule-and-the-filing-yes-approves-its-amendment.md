@@ -37,13 +37,18 @@ word (2026-11-26T11:05Z, the steward chat, quoted as data): "Brief 2 and 3 ,".
 4. **The skill.** `skills/brief/SKILL.md` gains a spec fit step after the study; `docs/briefs/TEMPLATE.md` the line.
 5. **One yes covers both.** `steward_owner.file_brief` never files a brief with a `change` under `[steward]
    auto_file`; the person's yes approves each amendment only when it names it (`Yes, file the <NAME> brief with
-   amendment <m>`, or a plain yes to an ask that named each number). In solo mode the steward then posts on the brief
-   one `Maintainer answer: amendment <m> approved` per amendment with `Text: <digest of the quoted items>`, `Owner
-   said`, `Asked` and `Who: ProductOwner`; in team mode it prints the first two lines for a spec approver to post. A
-   yes that names no amendment files the brief and prints `amendment <m>: not approved at filing (setting: Spec fit:)`.
+   amendment <m>`, or a plain yes to the session's recorded open ask, the asks file `approve` reads, that named each
+   number; a plain yes to anything else approves none). In solo mode the steward then posts on the brief one comment
+   per amendment: `Maintainer answer: amendment <m> approved`, `Owner said`, `Asked`, `Text: <digest of the quoted
+   items>` and `Who: ProductOwner`, in the order the steward guard reads; in team mode it prints the first line and
+   the `Text:` line for a spec approver to post. A yes that names no amendment files the brief and prints
+   `amendment <m>: not approved at filing (setting: Spec fit:)`. The digest (`check_amendments.items_digest`) reads
+   each item whole, to the next item or `## ` heading, with its spaces and line breaks made one space.
 6. **The review.** `conductor.full_problem` gains `filed_problem`: an `Owner needed:` that asks for amendment `<m>`
    is refused when the pull request's `Brief: #<b>` issue holds an approval that `check_amendments.approval` reads
-   whose `Text:` digest equals the digest of the items of the file at the head. A different digest allows the ask.
+   whose `Text:` digest equals the digest of the items of the file at the head: in solo mode only the relayed form
+   (`Owner said` second, `Who: ProductOwner` last), in team mode only a spec approver's own comment, never a relayed
+   one (`check_amendments.filing_approval`). A different digest allows the ask.
 7. **A departure no one declared** from an Approved rule the line states within is a fix list item, never an owner
    ask; an owner ask that stays names `Spec fit miss: brief #<b> SPEC-<nnnn> rule <n>`.
 8. **No new setting.** `[flow] brief_study_fails_from` makes a missing or incomplete line fail on and after that day

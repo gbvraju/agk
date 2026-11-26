@@ -372,3 +372,14 @@ def test_req066_2002_the_items_digest_is_the_same_in_the_brief_and_in_the_file()
         text
     )
     assert ca.items_digest("no items") is None
+
+
+def test_req066_2002_the_digest_reads_each_item_whole(tmp_path):
+    """REQ-066: fix list 7202066567 item 4: a second paragraph added to an item changes the
+    digest; the closing `## ` section after the items is not an item."""
+    text = (FILE_254.parent / "proposed-spec-amendments-255.md").read_text(encoding="utf-8")
+    added = text.replace("Class: behaviour\n", "Class: behaviour\n\nAlso a new paragraph.\n", 1)
+    assert ca.items_digest(added) != ca.items_digest(text)
+    closing = text.replace("No other rule changes.", "Rule 7 changes too.")
+    assert ca.items_digest(closing) == ca.items_digest(text)
+    assert "Rule 7" not in "".join(body for _, body in ca.items(closing))

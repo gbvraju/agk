@@ -18,4 +18,6 @@ Class: behaviour
 2. **SPEC-0030 rule 6, the conductor.** After the sentence on the verdict comment insert "A departure from an Approved rule that the brief's `Spec fit:` line states within, or from the brief where brief and spec agree, is a fix list item to follow the approved text, never an owner ask; an amendment the brief's issue approved for the text at the head is not asked again (amendment 254)."
 Class: behaviour
 
+## Unchanged
+
 No other rule changes.

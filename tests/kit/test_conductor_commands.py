@@ -1152,11 +1152,17 @@ FILED_REFUSED = (
 )
 
 
-def filing_approval(digest: str = FILED_DIGEST, login: str = "owner") -> dict:
-    body = (
-        f"Maintainer answer: amendment 254 approved\nText: {digest}\n"
-        'Owner said (2026-11-26T11:05Z): "Yes, file it with amendment 254"\nWho: ProductOwner\n'
-    )
+def filing_approval(
+    digest: str = FILED_DIGEST, login: str = "owner", form: str = "relayed"
+) -> dict:
+    """The steward's relayed form (fix list 7202066567 item 5), `bare` or the approver's `own`."""
+    lines = ["Maintainer answer: amendment 254 approved"]
+    if form == "relayed":
+        lines += ['Owner said (2026-11-26T11:05Z): "Yes, file it with amendment 254"',
+                  'Asked: "file the example brief"']  # fmt: skip
+    lines.append(f"Text: {digest}")
+    lines += ["Who: ProductOwner"] if form == "relayed" else []
+    body = "\n".join(lines) + "\n"
     return {"id": 5, "user": {"login": login}, "body": body, "created_at": "2026-11-26T11:06:00Z"}
 
 
@@ -1200,7 +1206,17 @@ def test_req066_2002_an_ask_for_an_amendment_approved_on_its_brief_is_refused(fi
 
 @pytest.mark.parametrize(
     "change",
-    ["digest", "login", "no brief", "unreadable brief", "corrected", "edited file", "other ask"],
+    [
+        "digest",
+        "login",
+        "no brief",
+        "unreadable brief",
+        "corrected",
+        "edited file",
+        "other ask",
+        "bare in solo",
+        "relayed in team",
+    ],
 )
 def test_req066_2002_the_ask_stays_allowed_when_the_filing_approval_does_not_hold(filed, change):
     """REQ-066: answers 6 and 10: a different digest, an approval by someone not listed, no
@@ -1226,6 +1242,10 @@ def test_req066_2002_the_ask_stays_allowed_when_the_filing_approval_does_not_hol
                 "created_at": "2026-11-26T12:00:00Z",
             },
         ]
+    elif change == "bare in solo":  # fix list 7202066567 item 3: the relayed form is required
+        state["comments"] = [filing_approval(form="bare")]
+    elif change == "relayed in team":
+        (root / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
     elif change == "edited file":
         state["file"] = AMENDMENT_FILE.replace('"x"', '"y"')
     else:
@@ -1239,3 +1259,12 @@ def test_req066_2002_full_problem_runs_the_filed_check_on_an_owner_ask(filed, mo
     monkeypatch.setattr(conductor, "size_ask_problem", lambda *a: None)
     monkeypatch.setattr(conductor, "closing_problem", lambda *a: None)
     assert conductor.full_problem(REPO, 16, ASK_254, root) == FILED_REFUSED
+
+
+def test_req066_2002_in_team_mode_only_the_approvers_own_answer_counts(filed):
+    """REQ-066: answer 9 and fix list 7202066567 item 3: in team mode the spec approver's own
+    `Maintainer answer:` with the digest refuses the ask; a relayed one never does."""
+    root, state, _ = filed
+    (root / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
+    state["comments"] = [filing_approval(form="own")]
+    assert conductor.filed_problem(REPO, 16, ASK_254, root) == FILED_REFUSED

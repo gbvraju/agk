@@ -2559,15 +2559,9 @@ def filed_problem(repo: str, number: int, body: str, root) -> str | None:
             record = read_one(f"repos/{repo}/contents/{path}?ref={head}", "the amendment")
             text = base64.b64decode(record["content"]).decode("utf-8")
             want = check_amendments.items_digest(text)
-            kept = [
-                c
-                for c in notes
-                if not session.first_line(c).startswith("Maintainer answer:")
-                or check_amendments.TEXT_LINE.findall(str(c.get("body") or "")) == [want]
-            ]
-            exact = reviewers.solo_person(base) is not None
-            if want and check_amendments.approval(
-                kept, reviewers.spec_approvers(base), m, exact=exact
+            solo = reviewers.solo_person(base) is not None
+            if check_amendments.filing_approval(
+                notes, reviewers.spec_approvers(base), m, want, solo
             ):
                 return FILED_REFUSED.format(m, brief.group(1))
     except (CheckError, KeyError, TypeError, ValueError):
