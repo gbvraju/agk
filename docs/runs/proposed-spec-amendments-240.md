@@ -19,3 +19,5 @@ The sentence (brief #1919), quoted as data: "Intake for domain intelligence on t
    composer prints both sources and never chooses (amendment 240)."
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1936: item 1 (to rule 23) applied to `docs/specs/0048-a-problem-in-a-person-s-words-takes-one-guided-path-to-the-builds.md` word for word, on the maintainer's answer on #1922 (comment 7159679447).

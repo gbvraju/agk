@@ -38,6 +38,7 @@
     "agk.mk",
     "config/ci-tools.txt",
     "config/core-rules.md",
+    "config/domain-signals.toml",
     "config/domains/field-service.toml",
     "config/domains/payments.toml",
     "config/playbooks/api-service.toml",
