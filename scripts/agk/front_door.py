@@ -1592,8 +1592,50 @@ def signal_row_problems(kind: str, rows: object) -> list[str]:
     return found
 
 
+DOMAIN_SIGNALS = "config/domain-signals.toml"
+DOMAIN_ROW = ("name", "words", "files", "dependencies")
+
+
+def domain_signal_problems(root: Path) -> list[str]:
+    """SPEC-0074 rule 5 (brief #1936, ADR-0805): the form of the domain signal table, beside the
+    stack table: `[[domain]]` rows of a shipped pack's `name` and lists of single words, each line
+    naming the row and the key, never a value. A kit copy without the table has nothing to check."""
+    path = root / DOMAIN_SIGNALS
+    if not path.is_file():
+        return []
+    head = f"rule 5: {DOMAIN_SIGNALS}:"
+    try:
+        table = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return [f"{head} cannot be read"]
+    found = [] if set(table) <= {"domain"} else [f"{head} an unknown top-level key"]
+    rows = table.get("domain")
+    if not isinstance(rows, list) or not rows:
+        return found + [f"{head} [[domain]] has no row"]
+    packs = {p.stem for p in (root / "config" / "domains").glob("*.toml")}
+    for number, row in enumerate(rows, 1):
+        where = f"{head} [[domain]] row {number}"
+        if not isinstance(row, dict):
+            found.append(f"{where} is not a table")
+            continue
+        found += [f"{where} has an unknown key (key: {k})" for k in sorted(set(row) - {*DOMAIN_ROW})]
+        for key in DOMAIN_ROW:
+            if key not in row:
+                found.append(f"{where} is missing a key (key: {key})")
+            elif key == "name" and row[key] not in packs:
+                found.append(f"{where} `name` is no shipped pack (key: name)")
+            elif key != "name" and not is_words(row[key]):
+                found.append(f"{where} is not a list of single words (key: {key})")
+    return found
+
+
 def signal_problems(root: Path) -> list[str]:
-    """Rule 5's form check of the table, naming the setting and never a value."""
+    """Rule 5's form check of the table, naming the setting and never a value; then the domain
+    signal table's (SPEC-0074 rule 5)."""
+    return _stack_signal_problems(root) + domain_signal_problems(root)
+
+
+def _stack_signal_problems(root: Path) -> list[str]:
     try:
         table = tomllib.loads((root / SIGNALS).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
