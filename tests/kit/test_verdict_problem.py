@@ -22,8 +22,9 @@ import common  # noqa: E402
 SHA = "a1b2c3d4e5f6"
 ADR = "docs/adr/0001-the-adr.md"
 GOOD = f"Verdict: fix list {SHA}\n\nFinal: {ADR} Proposed -> Accepted\n"
-NOT_FIX = (
-    "SPEC-0021 rule 1: a Final: line is read only under 'Verdict: fix list <sha>'; "
+NOT_FIX = (  # brief #2001: a cleared verdict on the full head may carry ADR acceptances
+    "SPEC-0021 rule 1: a Final: line is read only under 'Verdict: fix list <sha>', or under "
+    "'Verdict: cleared <full head>' when every Final: line accepts an ADR; "
     "write that first line, or leave the Final: line out"
 )
 SHAPE = (

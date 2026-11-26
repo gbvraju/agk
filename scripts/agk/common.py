@@ -496,14 +496,18 @@ def show(root: Path, rev: str, path: str) -> str | None:
 
 # an optional ` (conductor fallback)` ending is the same verdict (ADR-0431 decision 3)
 FIX_LIST = re.compile(r"Verdict: fix list ([0-9a-f]{4,40})(?: \(conductor fallback\))?")
+# brief #2001 (ADR-0827): a verdict with nothing to fix carries its ADR acceptance on the full head
+CLEARED_FULL = re.compile(r"Verdict: cleared ([0-9a-f]{40})(?: \(conductor fallback\))?")
 FINAL_LINE = re.compile(r"Final: (\S+) (?:(REQ-\d+) )?(\S+) -> (\S+)")
 REQUIREMENTS = "docs/requirements.md"
 
 
 def covered_fix_list(body: str) -> tuple[str, list[tuple[str, str | None, str, str]]] | None:
-    """SPEC-0021 rules 1 and 2: (reviewed sha, [(path, requirement id, old, new)]) or None."""
+    """SPEC-0021 rules 1 and 2: (reviewed sha, [(path, requirement id, old, new)]) or None. A
+    `Verdict: cleared <full head>` whose every `Final:` line accepts an ADR reads the same (rule 3a,
+    brief #2001); a cleared verdict with any other `Final:` line is None."""
     lines = body.splitlines()
-    head = FIX_LIST.fullmatch(lines[0]) if lines else None
+    head = (FIX_LIST.fullmatch(lines[0]) or CLEARED_FULL.fullmatch(lines[0])) if lines else None
     if head is None or any(re.match(r"\s*\d+\.", line) for line in lines):
         return None
     edits = []
@@ -513,6 +517,8 @@ def covered_fix_list(body: str) -> tuple[str, list[tuple[str, str | None, str, s
             if match is None or (match.group(1) == REQUIREMENTS) != bool(match.group(2)):
                 return None
             edits.append((match.group(1), match.group(2), match.group(3), match.group(4)))
+    if head.re is CLEARED_FULL and final_accepts(edits) is None:
+        return None
     return (head.group(1), edits) if edits else None
 
 
@@ -646,7 +652,8 @@ def accepted_by_final(root: Path, ref: str) -> set[str]:
 
 
 NOT_FIX_LIST = (
-    "SPEC-0021 rule 1: a Final: line is read only under 'Verdict: fix list <sha>'; "
+    "SPEC-0021 rule 1: a Final: line is read only under 'Verdict: fix list <sha>', or under "
+    "'Verdict: cleared <full head>' when every Final: line accepts an ADR; "
     "write that first line, or leave the Final: line out"
 )
 FINAL_WITH_ITEMS = (
@@ -679,7 +686,9 @@ def verdict_problem(body: str) -> str | None:
     if not finals:
         return None
     if FIX_LIST.fullmatch(lines[0]) is None:
-        return NOT_FIX_LIST
+        if CLEARED_FULL.fullmatch(lines[0]) is None or covered_fix_list(body) is None:
+            return NOT_FIX_LIST  # brief #2001: only an ADR acceptance on the full head is cleared
+        return None
     if any(re.match(r"\s*\d+\.", line) for line in lines):  # `covered_fix_list` reads no such list
         return FINAL_WITH_ITEMS
     for line in finals:

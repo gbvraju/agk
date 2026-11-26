@@ -78,7 +78,7 @@ def test_the_merger_accepts_both_forms_with_the_same_lines(monkeypatch):
 
 
 def test_the_router_labels_the_cleared_acceptance_merge_ready():
-    f = facts(comments=[said(1, "boss", NEW)], files=ADDED)
+    f = facts(head=HEAD, comments=[said(1, "boss", NEW)], files=ADDED)
     assert route.decide(f) == "agk:merge-ready"
     assert route.final_accept_clears(NEW, HEAD, ADDED)
 
@@ -154,7 +154,7 @@ def test_the_router_posts_no_reply_on_an_old_form_verdict(monkeypatch):
     monkeypatch.setattr(route, "head_check", lambda *a: None)
     posted: list = []
     monkeypatch.setattr(route, "write", lambda *a, **k: posted.append(a))
-    f = facts(comments=[said(1, "boss", OLD)], files=ADDED)
+    f = facts(head=HEAD, comments=[said(1, "boss", OLD)], files=ADDED)
     assert route.unreadable_lines(REPO, 7, f) == []
     route.correct_verdicts(REPO, 7, f["comments"], f["authors"])
     assert posted == []
@@ -170,8 +170,9 @@ def test_the_cleared_verdict_still_ends_the_watch():
     assert session_py.builder_verdicts([verdict], SHA, ["boss"]) == [verdict]
 
 
-@pytest.mark.parametrize("label", ["agk:merge-ready", "agk:owner-merge"])
-def test_watch_prints_no_label_line_after_a_clearing_verdict(proj, stub, label):  # noqa: F811
+def test_watch_prints_no_label_line_after_a_clearing_verdict(proj, stub):  # noqa: F811
+    """`agk:owner-merge` ends the watch by its own owner-wait line, as today."""
+    label = "agk:merge-ready"
     verdict = [comment(9, "boss", CLEARED_ON_SHA)]
     watching(
         stub,
@@ -217,3 +218,5 @@ def test_the_texts_say_the_cleared_form():
     final = next(ln for ln in builder.splitlines() if ln.startswith("FINAL LINES:"))
     assert "A `Verdict: cleared` on your head is no work" in final
     assert "nothing to change" in final and "older form" in final
+    budget = (ROOT / "config/rule-budget.txt").read_text(encoding="utf-8")
+    assert ".claude/agents/conductor.md 4887 37" in budget.splitlines()  # words replaced, not added
