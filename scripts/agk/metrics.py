@@ -150,7 +150,7 @@ class Gh:
         self.repo = repo
         self.seen: dict[tuple[str, str], Any] = {}
         self.failed: dict[str, str] = {}
-        self.last: str | None = None  # the class of the last call that failed, None after one that answered
+        self.last: str | None = None  # the class of the last failed call; None after an answer
 
     def raw(self, endpoint: str) -> str | None:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
