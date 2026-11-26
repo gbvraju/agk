@@ -22,7 +22,7 @@ from 2026-11-18 to 2026-11-26, median 24 minutes each (brief #1969's measurement
    open issues, `reprove --apply`, after it reads the new head, fetches it, adds a detached scratch worktree at it under
    `<git dir>/agk/reprove-<n>`, writes the pull request body to a file beside (not inside) it, and runs the head's own
    `prepush.py --quick --record --body <file>` there under `env -i` with only `PATH` and a scratch `HOME` beside the
-   worktree, as the bounded governance run does, so the head's code never sees the conductor's credentials (the record
+   worktree, as the bounded governance run does, so the head's code gets none of the conductor's environment (the record
    goes to the clone's shared evidence folder; prepush holds the heavy lock itself). Then the conductor's own
    `evidence.py check --head <new> --body <file>` (`kit_root.kit_dir` of its checkout of the default branch, ADR-0542)
    checks it, and its `record` digest must equal the `Evidence:` line's. The worktree, the body file and the scratch
@@ -57,3 +57,6 @@ machine per light merge. No workflow, label, ruleset or required check changes.
 
 - 2026-11-26: the rule text of SPEC-0050 rule 7a changes only by amendment 253, applied by the maintainers.
 - 2026-11-26: refusing a builder's local-mode ready `Report:` with no record is not done here (`Q-LR-4`).
+- 2026-11-26: `env -i` hides only the environment. The head's prepush runs as the same user, so it can still read
+  files that user can read, such as the GitHub CLI's `hosts.yml` under the real home and a token in the clone's
+  `.git/config`. A separate user or a container would close that and is later work.
