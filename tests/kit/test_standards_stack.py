@@ -40,6 +40,8 @@ NONE_COMPOSED = (
 )
 PARTS = {"python": "python 3.12.7 PSF-2.0", "node": "node 22.11.0 MIT", "go": "go 1.23.4 BSD"}
 SLUG = "chat-store-plugin"
+SIGNALS = "config/stack-signals.toml"
+RUNTIME, STACK = "(key: standards.runtime)", "(key: standards.stack)"
 
 
 def record(runtime: str, status: str = "Accepted") -> str:
@@ -111,7 +113,7 @@ def form(tmp: Path, text: str) -> list[str]:
 
 
 def entry(**changes: object) -> str:
-    """The shipped python-pip entry as TOML, with keys changed (None drops one)."""
+    """The shipped python-pyproject entry as TOML, with keys changed (None drops one)."""
     data = next(e for e in tomllib.loads((KIT_ROOT / FILE).read_text())["standards"])
     data = {**data, **changes}
     lines = ["[[standards]]"]
@@ -272,10 +274,10 @@ def test_req079_the_warning_counts_the_files_stacks(tmp_path: Path) -> None:
     [
         (entry(runtime=None), "an entry is missing the key `runtime` (key: standards.runtime)"),
         (entry(extra="x"), "an entry has a key outside the format (key: standards.extra)"),
-        (entry(runtime="cobol"), "a `runtime` is not a key of the stack table (key: standards.runtime)"),
-        (entry(stack="zz-invented"), "a `stack` is not a stack of config/stack-signals.toml (key: standards.stack)"),
-        (entry(runtime="node"), "a `stack` is not one the runtime's pack serves (key: standards.stack)"),
-        (entry() + entry(), "a `stack` appears twice (key: standards.stack)"),
+        (entry(runtime="cobol"), f"a `runtime` is not a key of the stack table {RUNTIME}"),
+        (entry(stack="zz-invented"), f"a `stack` is not a stack of {SIGNALS} {STACK}"),
+        (entry(runtime="node"), f"a `stack` is not one the runtime's pack serves {STACK}"),
+        (entry() + entry(), f"a `stack` appears twice {STACK}"),
         (entry(lint=None), "an entry is missing the key `lint` (key: standards.lint)"),
         ("[[standards]\n", "the file is not TOML (path class: config/standards.toml)"),
     ],
