@@ -40,6 +40,15 @@ NONE_COMPOSED = (
 )
 PARTS = {"python": "python 3.12.7 PSF-2.0", "node": "node 22.11.0 MIT", "go": "go 1.23.4 BSD"}
 SLUG = "chat-store-plugin"
+PYPROJECT = {  # the first entry of config/standards.toml; a test checks they are equal
+    "stack": "python-pyproject",
+    "runtime": "python",
+    "lint": "python-lint",
+    "format": "python-format",
+    "type": "python-type",
+    "config": "pyproject.toml",
+    "rules": {"tool": "ruff", "version": "0.17.4", "codes": ["E", "F", "I", "B", "UP"]},
+}
 SIGNALS = "config/stack-signals.toml"
 RUNTIME, STACK = "(key: standards.runtime)", "(key: standards.stack)"
 
@@ -119,9 +128,10 @@ def form(tmp: Path, text: str) -> list[str]:
 
 
 def entry(**changes: object) -> str:
-    """The shipped python-pyproject entry as TOML, with keys changed (None drops one)."""
-    data = next(e for e in tomllib.loads((KIT_ROOT / FILE).read_text())["standards"])
-    data = {**data, **changes}
+    """The shipped python-pyproject entry as TOML, with keys changed (None drops one); held here,
+    not read from the file, because the parameters are built at collection, where a copied kit
+    may carry no `config/` (tests/kit/test_agk_mk.py)."""
+    data = {**PYPROJECT, **changes}
     lines = ["[[standards]]"]
     for key, value in data.items():
         if value is None:
@@ -145,6 +155,7 @@ def test_req079_the_file_holds_the_three_entries_as_web_app_holds_them() -> None
         "python-pip": "python",
         "node": "node",
     }
+    assert shipped[0] == PYPROJECT
     manifest = (KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8")
     assert f'"{FILE}"' in manifest
 

@@ -294,7 +294,7 @@ def findings(
     try:
         found += standards_file(root)[1]  # brief #1974 answer 4
     except kit_root.Refused:
-        pass  # the declaration above names the setting (`layout`, `CLAUDE_PLUGIN_ROOT`)
+        pass  # the declaration above names the setting (`layout`, the plugin root)
     if files is None and domains is None or domains:
         import check_domains  # here: a named playbook alone (a derive, a gate run) reads no pack
 
