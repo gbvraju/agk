@@ -764,7 +764,8 @@ def capacity_settings(root: Path) -> dict | None:
 
 # --- the [steward] table (SPEC-0059 rule 12, brief #1320, ADR-0557) -----------------------------
 
-STEWARD_DEFAULTS = {"auto_file": 0, "fix_briefs": False}  # brief #1715: `fix_briefs` (ADR-0714)
+STEWARD_DEFAULTS = {"auto_file": 0, "fix_briefs": False, "settle_amendments": False}  # ADR-0813
+STEWARD_SWITCHES = ("fix_briefs", "settle_amendments")  # brief #1715 (ADR-0714), brief #1957
 
 
 class StewardSettingError(CheckError):
@@ -774,7 +775,10 @@ class StewardSettingError(CheckError):
 def steward_settings(root: Path) -> dict:
     """`auto_file`: the highest brief priority the steward files without the owner's word, a whole
     number from 0 to 3, or `false` for none; 0 when unset or with no table. `fix_briefs`: whether
-    `steward_owner.py fix-brief` writes a brief's mechanical lines (brief #1715), `false` unset."""
+    `steward_owner.py fix-brief` writes a brief's mechanical lines (brief #1715), `false` unset.
+    `settle_amendments`: whether the steward settles a correction or implementation amendment
+    (brief #1957, ADR-0813), `false` unset, and read as `false` until principle 6 holds ADR-0813's
+    clause (`settle_refusal` names principle 6)."""
     try:
         table = config_source(root).get("steward", {})
     except (OSError, ValueError):
@@ -783,10 +787,39 @@ def steward_settings(root: Path) -> dict:
         raise StewardSettingError("the [steward] table is refused (setting: steward)")
     for key, value in table.items():
         number = isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 3
-        ok = isinstance(value, bool) if key == "fix_briefs" else number or value is False
+        ok = isinstance(value, bool) if key in STEWARD_SWITCHES else number or value is False
         if key not in STEWARD_DEFAULTS or not ok:
             raise StewardSettingError(f"the [steward] table is refused (setting: steward.{key})")
-    return {**STEWARD_DEFAULTS, **table}
+    found = {**STEWARD_DEFAULTS, **table}
+    if found["settle_amendments"] is True and not principle_six_applied(root):
+        found["settle_amendments"] = False  # refused alone (`settle_refusal`); the rest still read
+    return found
+
+
+def settle_refusal(root: Path) -> str | None:
+    """Brief #1957 answer 5 (ADR-0813): `settle_amendments = true` is refused, naming principle 6,
+    until principle 6 holds ADR-0813's clause; `auto_file` and `fix_briefs` stay read."""
+    try:
+        table = config_source(root).get("steward", {})
+    except (OSError, ValueError):
+        return None  # `steward_settings` refuses the table itself
+    if isinstance(table, dict) and table.get("settle_amendments") is True:
+        if not principle_six_applied(root):
+            return "settle_amendments is refused (setting: steward.settle_amendments; principle 6)"
+    return None
+
+
+def principle_six_applied(root: Path) -> bool:
+    """Whether `constitution/principles.md` at ROOT holds ADR-0813's clause in principle 6."""
+    from check_amendments import PRINCIPLE_CLAUSE
+    from kit_root import kit_file
+
+    try:  # the kit's own constitution, read where the layout puts it (ADR-0759)
+        text = kit_file(root, "constitution/principles.md").read_text(encoding="utf-8")
+    except (CheckError, OSError, UnicodeDecodeError):
+        return False
+    six = next((x for x in text.splitlines() if x.startswith("6. ")), "")
+    return PRINCIPLE_CLAUSE in six
 
 
 # --- the [quality] table (SPEC-0073 rule 11, brief #1933, ADR-0801) -----------------------------

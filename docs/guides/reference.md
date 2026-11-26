@@ -547,6 +547,18 @@ problem is one `FAIL domains: rule 2: <file>: <what> (key: <key>)` line, never a
 lines as `FAIL playbooks:`, so the `playbooks` step runs it. An `as_of` older than `[domain] stale_months` is a `warn domains:`
 line and never fails. Prints `ok domains (<n> packs)` or `ok domains (none)`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
 
+## Settled amendments
+
+    python3 scripts/agk/check_amendments.py settle --amendment N --evidence E --agreed yes|no --comments FILE [--intake]
+
+Prints the steward's settled line for amendment N (brief #1957, ADR-0813): `Answer: amendment <n> settled (evidence: <e>;
+class: <class>; rule: <spec and rule>)`, a `Text:` digest of the amendment as it reads, and `Who: AGK steward`, when `[steward] settle_amendments = true`, the fresh
+reviewer agreed (`--agreed yes`) and every item of `docs/runs/proposed-spec-amendments-<n>.md` is `Class: correction` or
+`Class: implementation` and two owner overrides of its class in seven days in `--comments` (a saved JSON list of comments)
+have not stopped it; otherwise `owner: amendment <n> ...` and exit 1. It posts nothing: the steward posts the line with
+`steward_evidence.py answer`, and in personal mode the developer does. The `numbers` governance step fails an amendment file
+from 251 on whose item has no `Class:` line, or a class its text contradicts. Exit 0 settled, 1 the owner's, 2 usage.
+
 ## Playbook gates
 
 `python3 scripts/agk/run_gates.py [--baseline] [--root DIR]` runs, from `check_playbooks.py` once the playbooks pass (so inside
