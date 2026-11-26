@@ -246,9 +246,10 @@ docs/guides/local-mode.md`. The doctor prints the same line as its check `action
 never a failure, and `/agk:launch` prints it before it asks to start sessions.
 
 The full report's estimate (brief #2011) reads no job list of a skipped run, keeps each finished UTC day's sums in
-`<git common dir>/agk-minutes/<owner>-<repo>/<YYYY-MM-DD>.json` (local, never committed; today is never kept), so a later
-report reads only today and the days not yet kept, and reads `/rate_limit` first: it reads at most the remaining calls less
-2,000 job lists (1,000 when the allowance cannot be read), oldest day first, and a reading stopped early says
+`<git common dir>/agk-minutes/<owner>-<repo>/<YYYY-MM-DD>.json` (`<YYYY-MM-DD>.plain.json` for a public repository; local,
+never committed; today by the real UTC clock is never kept), so a later report reads only today and the days not yet kept,
+and reads `/rate_limit` first: it reads at most the remaining calls less 2,000 job lists (1,000 when the allowance cannot be
+read), oldest day first; a figure of a reading stopped early reads `at least` (`unknown` when nothing was read), and it says
 `actions minutes: at least <n> used this month (<k> of <m> days read; run again after the GitHub allowance resets at <HH:MM UTC>)`.
 
 When the minutes run out, the checks cannot run on GitHub until the month turns or the plan changes: see local mode

@@ -26,9 +26,11 @@ shared by every session, ran out twice that day.
 2. `minutes.estimate` reads no job list for a run whose `conclusion` is `skipped`, and counts it in `skipped_runs`. Every other
    run, `cancelled` included, is read (`Q-DM-4`).
 3. `minutes.estimate` keeps each finished UTC day's sums, per day the runs were created, as one JSON file per day in
-   `<git common dir>/agk-minutes/<owner>-<repo>/<YYYY-MM-DD>.json` (schema 1: the run ids, the skipped count, and per day
-   the jobs started the minutes per workflow after the runner rates, the self-hosted and the running job counts, and the rates
-   they were counted with). A day is written only when it is before today, its run list was not capped, every run on it was
+   `<git common dir>/agk-minutes/<owner>-<repo>/<YYYY-MM-DD>.json`, the git common dir of the repository root, shared by its
+   worktrees (schema 1: the run ids, the skipped count, and per day the jobs started the minutes per workflow after the runner
+   rates, the self-hosted and the running job counts, and the rates they were counted with); a reading counted once (a public
+   repository) keeps `<YYYY-MM-DD>.plain.json`, so the two rate sets never rewrite each other's files. A day is written only
+   when it is before today by the real UTC clock (whatever `--today` says), its run list was not capped, every run on it was
    read, every job list answered 200 and no job was still running, whole by rename. A later reading takes a kept day from its
    file and lists and reads only the days without one and today. A file that cannot be parsed, of another schema or of the
    other rates is ignored and the day read again. A source keeps days only through its `keep` folder: `minutes.Gh` finds the
@@ -36,9 +38,10 @@ shared by every session, ran out twice that day.
    Days are kept and read only when every bound of the window is a UTC midnight.
 4. Before reading job lists, `minutes.estimate` reads `/rate_limit` once (verify: GitHub does not count it against the
    allowance) and reads at most `remaining` less `ALLOWANCE_MARGIN` (2,000) job lists, oldest day first, so the days it
-   finishes are kept. When `/rate_limit` cannot be read, or the source cannot read it, it reads at most `UNREAD_LIMIT` (1,000).
-   A reading stopped early is not complete and the report says `actions minutes: at least <n> used this month (<k> of <m> days
-   read; run again after the GitHub allowance resets at <HH:MM UTC>)`, or `resets, at a time that cannot be read`. The two
+   finishes are kept. When `/rate_limit` cannot be read it reads at most `UNREAD_LIMIT` (1,000); `facts.py`'s and
+   `scorecard.py`'s week readers ask their own source for it, as `minutes.Gh` does. A reading stopped early is not complete,
+   its figures read `at least`, one that read nothing reads `unknown` (never 0), and the report says `actions minutes: at least <n> used this month (<k> of <m> days
+   read; run again after the GitHub allowance resets at <HH:MM UTC>)`, or `resets, at a time that cannot be read`, with `unknown` in place of `at least <n> used this month` when nothing was read. The two
    numbers are named constants, not settings (`Q-DM-1`).
 5. ADR-0476's windows are kept; the run list is now asked once per run of consecutive days without a kept file.
 
@@ -47,7 +50,7 @@ shared by every session, ran out twice that day.
 The doctor's check makes at most two GitHub calls (the repository read it shares, and billing) and ends in under a second; a
 repeated report reads only today and the days not yet kept, and leaves 2,000 calls of the hourly allowance to the other
 sessions. Every caller of `minutes.estimate` (`minutes.py`, `measures.py`, `facts.py`, `scorecard.py`) gets the skip and the
-allowance; the callers that answer from their own reads keep no day. No workflow, label, check or ruleset changes.
+allowance; the week readers of `facts.py` and `scorecard.py` keep no day. No workflow, label, check or ruleset changes.
 
 ## Residual
 
