@@ -1064,7 +1064,7 @@ def answered(
             continue  # another verdict on this head, with no numbered item
         covered = covered_fix_list(body)
         clearing = CLEARED_LINE.fullmatch(first_line(prior).removesuffix(FALLBACK)) is not None
-        if not (clearing or (covered is not None and covered[0] == old)):
+        if old is None or not (clearing or (covered is not None and covered[0] == old)):
             return False  # a rejected verdict, or a fix list that is not covered, carries nothing
         if not differs_on(prior, old) or differs_lines(body) != lines:
             return False
