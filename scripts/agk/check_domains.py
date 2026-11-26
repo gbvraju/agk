@@ -14,6 +14,16 @@ prints them as `FAIL playbooks:` lines; run alone (`--root DIR`) it prints `ok d
 or `ok domains (none)`. An `as_of` older than `[domain] stale_months` is a `warn domains:` line on
 stderr and never fails (rule 14). Reads files only: no network, no model, nothing written. In a
 clean layout the project's pack is read first by name, then the plugin's.
+
+The one composition (SPEC-0074 rules 3 and 4, amendment 240 to SPEC-0048 rule 23; REQ-081 AC2;
+brief #1936, ADR-0805): `compose(root, layers)` appends to the playbook's layers the packs of
+`[domain] packs` in `order`: the shipped packs in the person's order, each followed by its
+jurisdiction layers (`<domain>-<region>`, in list order, even when listed before it), then the
+project's own packs (a name `SHIPPED` does not hold). `check_playbooks.composed` judges every layer
+by its one `_weakened`. `items` keeps each `[[discovery]]`, `[[terms]]` and `[[acceptance]]` item
+once at its first place and every constraint with its pack; `warnings` gives a `warn domains:` line
+for two constraints of one attribute that differ (both kept, never chosen, Q-D74B-2) and for a
+jurisdiction layer whose domain is not listed. With no `[domain]` table nothing is appended.
 """
 
 from __future__ import annotations
@@ -66,6 +76,8 @@ SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
 }
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 KEY_AT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
+SHIPPED = ("field-service", "payments")  # the seed packs; a test holds them to kit/manifest.json
+KEPT_ONCE = {"discovery": "id", "terms": "term", "acceptance": "id"}
 
 
 def _is(value: Any, kind: str) -> bool:
@@ -287,6 +299,108 @@ def findings(root: Path) -> list[str]:
     return out + domain_model.findings(root)  # rule 7: the project domain model, ADR-0810
 
 
+def _listed(root: Path) -> list[str]:
+    import config  # here: config reads this module for `[domain] packs`
+
+    return list(config.domain_settings(root)["packs"])
+
+
+def _parent(root: Path, name: str, names: list[str]) -> tuple[str, bool] | None:
+    """The domain of a jurisdiction layer `name` (`<domain>-<region>`) and whether it is listed:
+    the longest listed prefix, else the longest that is a pack on disk; None for any other pack, and
+    always for a shipped pack, which is never another pack's layer (fix list on 0ed1a719 item 4)."""
+    if name in SHIPPED:
+        return None
+    cuts = [name[:i] for i, c in enumerate(name) if c == "-"][::-1]
+    listed = next((d for d in cuts if d in names), None)
+    if listed is not None:
+        return listed, True
+    found = next((d for d in cuts if pack_path(root, d) is not None), None)
+    return (found, False) if found is not None else None
+
+
+def order(root: Path, names: list[str]) -> list[str]:
+    """Rule 4: the shipped packs in the person's order, each followed by its listed jurisdiction
+    layers, then the project's own packs the same way; a layer whose domain is not listed stays
+    where it is listed, among the shipped packs (fix list on 0ed1a719 item 2)."""
+    found = {n: _parent(root, n, names) for n in names}
+    layers = {n: p[0] for n, p in found.items() if p and p[1]}
+    heads = [n for n in names if n not in layers]
+    first = [n for n in heads if n in SHIPPED or found[n] is not None]
+    out: list[str] = []
+    for name in first + [n for n in heads if n not in first]:
+        out += [name] + [n for n in names if layers.get(n) == name]
+    return out
+
+
+def compose(root: Path, layers: list[dict]) -> tuple[list[tuple[str | None, dict]], list[str]]:
+    """Rule 4: the playbook's layers (each with no file of its own) and then each pack of
+    `[domain] packs` in `order` with its file; and the problem of a refused table."""
+    pairs: list[tuple[str | None, dict]] = [(None, layer) for layer in layers]
+    try:
+        names = _listed(root)
+    except Exception as refused:  # config.DomainSettingError: its line names the setting
+        return pairs, [f"rule 4: agk.toml: {refused}"]
+    for name in order(root, names):
+        path = pack_path(root, name)
+        if path is not None:
+            pairs.append((_rel(path, root), load(path) or {}))
+    return pairs, []
+
+
+def items(root: Path) -> dict[str, list[dict]]:
+    """Rule 4: the composed packs' items, each with its `pack`: `[[discovery]]`, `[[terms]]` and
+    `[[acceptance]]` once at their first place, and every `[[constraints]]` entry but a repeat."""
+    try:
+        names = order(root, _listed(root))
+    except Exception:  # a refused table is the composition's problem line
+        names = []
+    out: dict[str, list[dict]] = {name: [] for name in (*KEPT_ONCE, "constraints")}
+    seen: set[tuple] = set()
+    for name in names:
+        path = pack_path(root, name)
+        rows = _entries(load(path) or {}) if path is not None else {}
+        for section in out:
+            for entry in rows.get(section, []):
+                key = KEPT_ONCE.get(section)
+                mark = (
+                    (section, entry.get(key))
+                    if key
+                    else (section, *map(entry.get, ("id", "attribute", "scenario")))
+                )
+                if mark not in seen:
+                    seen.add(mark)
+                    out[section].append({**entry, "pack": name})
+    return out
+
+
+def warnings(root: Path) -> list[str]:
+    """Rule 4: one `warn domains:` line per constraint whose attribute an earlier one names with a
+    different scenario (ids and pack names only; the stricter holds until a person decides), and
+    per jurisdiction layer whose domain `[domain] packs` does not list. Never a failure."""
+    try:
+        names = _listed(root)
+    except Exception:  # a refused table is the composition's problem line
+        return []
+    out = []
+    for name in names:
+        found = _parent(root, name, names)
+        if found is not None and not found[1]:
+            out.append(
+                f"warn {NAME}: {name} is a jurisdiction layer of {found[0]}, which "
+                "`[domain] packs` does not list"
+            )
+    first: dict[Any, dict] = {}
+    for entry in items(root)["constraints"]:
+        held = first.setdefault(entry.get("attribute"), entry)
+        if held is not entry and held.get("scenario") != entry.get("scenario"):
+            out.append(
+                f"warn {NAME}: attribute {entry['attribute']}: {held['id']} ({held['pack']}) and "
+                f"{entry['id']} ({entry['pack']}) differ; the stricter holds until a person decides"
+            )
+    return out
+
+
 def _months(root: Path) -> int:
     import config  # here: config reads this module for `[domain] packs`
 
@@ -323,7 +437,7 @@ def cmd_check(root: Path) -> int:
         print(f"FAIL {NAME}: {line}")
     if found:
         return 1
-    for line in stale(root):
+    for line in stale(root) + warnings(root):
         print(line, file=sys.stderr)
     count = len(packs(root))
     print(f"ok {NAME} ({count} packs)" if count else f"ok {NAME} (none)")

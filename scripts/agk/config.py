@@ -905,6 +905,8 @@ def domain_settings(root: Path) -> dict:
     names = table.get("packs", [])
     if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
         raise _refuse_domain("packs")
+    if len(set(names)) != len(names):  # brief #1936: a pack listed twice
+        raise _refuse_domain("packs")
     import check_domains  # here: the check imports this module for `stale_months`
 
     for name in names:
