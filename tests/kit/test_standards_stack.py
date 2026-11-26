@@ -145,17 +145,22 @@ def entry(**changes: object) -> str:
     return "\n".join(lines) + "\n"
 
 
-def test_req079_the_file_holds_the_three_entries_as_web_app_holds_them() -> None:
-    """Answer 1: the same step names, config, tool, version and codes, each with its runtime."""
+def test_req079_the_file_holds_the_three_entries_and_no_playbook_a_copy() -> None:
+    """Answer 1 (brief #1975, 19I-b): the file is the one source; the step names, config, tool,
+    version and codes are main's, each with its runtime; no playbook holds an entry of its own."""
     shipped = tomllib.loads((KIT_ROOT / FILE).read_text(encoding="utf-8"))["standards"]
-    web = playbook_format.load(BOOKS / "web-app.toml")["standards"]
-    assert [{k: v for k, v in e.items() if k != "runtime"} for e in shipped] == web
     assert {e["stack"]: e["runtime"] for e in shipped} == {
         "python-pyproject": "python",
         "python-pip": "python",
         "node": "node",
     }
-    assert shipped[0] == PYPROJECT
+    assert shipped[0] == PYPROJECT and shipped[1] == {**PYPROJECT, "stack": "python-pip"}
+    node = shipped[2]
+    assert (node["lint"], node["format"], node["type"], node["config"]) == (
+        *node_pack.STEP_NAMES, "package.json")
+    assert node["rules"]["tool"] == "eslint" and len(node["rules"]["codes"]) == 61
+    for path in sorted(BOOKS.glob("*.toml")):
+        assert "standards" not in playbook_format.load(path), path.stem
     manifest = (KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8")
     assert f'"{FILE}"' in manifest
 
@@ -408,3 +413,70 @@ def test_req079_the_kit_itself_composes_nothing_of_the_file() -> None:
     """Answer 6: no work type in the kit, so its run is unchanged."""
     assert pins.chosen(KIT_ROOT) is None
     assert stacks(KIT_ROOT, "default") == []
+
+
+MOVED = ("web-app", "api-service", "mobile")  # brief #1975: the playbooks that held a copy
+
+
+def old_copy(root: Path, work_type: str) -> None:
+    """A project's own copy of the playbook as main shipped it: the file's entries without
+    `runtime`, the form brief #1589 and brief #1764 wrote."""
+    shipped = tomllib.loads((KIT_ROOT / FILE).read_text(encoding="utf-8"))["standards"]
+    text = "".join(
+        entry(**{**e, "runtime": None}) if e["runtime"] == "python" else _node_entry(e)
+        for e in shipped
+    )
+    book = root / f"config/playbooks/{work_type}.toml"
+    book.write_text(book.read_text(encoding="utf-8") + "\n" + text, encoding="utf-8")
+
+
+def _node_entry(e: dict) -> str:
+    codes = ", ".join(f'"{c}"' for c in e["rules"]["codes"])
+    keys = "".join(f'{k} = "{e[k]}"\n' for k in ("stack", "lint", "format", "type", "config"))
+    return f'[[standards]]\n{keys}rules = {{ tool = "eslint", codes = [{codes}] }}\n'
+
+
+def running(root: Path, work_type: str) -> list[dict]:
+    """The composed entries whose pack is on (the ones `run_gates.pack_results` runs), without
+    `runtime`."""
+    out = []
+    for e in check_playbooks.standard(playbook_format.path(root, work_type), root)[1]:
+        module = python_pack if e["stack"] in python_pack.STACKS else node_pack
+        if e["stack"] in module.STACKS and module.on(root):
+            out.append({k: v for k, v in e.items() if k != "runtime"})
+    return sorted(out, key=lambda e: e["stack"])
+
+
+@pytest.mark.parametrize("runtime", ["python", "node"])
+@pytest.mark.parametrize("work_type", MOVED)
+def test_req079_the_three_run_the_entries_main_runs(
+    work_type: str, runtime: str, tmp_path: Path
+) -> None:
+    """Answers 2 and 3, Q-19Ib-2: a chosen runtime runs the same entries as a project whose own
+    copy still carries main's entries, and that old copy composes with no refusal."""
+    roots = [project(tmp_path / x, work_type, runtime) for x in ("after", "before")]
+    old_copy(roots[1], work_type)
+    for root in roots:
+        (root / "package.json").write_text('{"name": "sample"}\n', encoding="utf-8")
+        assert check_playbooks.standard(playbook_format.path(root, work_type), root)[2] == []
+    after, before = (running(root, work_type) for root in roots)
+    want = sorted(python_pack.STACKS) if runtime == "python" else ["node"]
+    assert [e["stack"] for e in after] == want and after == before
+
+
+@pytest.mark.parametrize("work_type", MOVED)
+def test_req079_the_screen_claims_checks_only_for_a_chosen_stack(
+    work_type: str, tmp_path: Path
+) -> None:
+    """Q-19Ib-1: before a stack is chosen no pack is listed and the style bullet is gone; after a
+    Python record the screen lists the Python packs and says it again."""
+    import steward_owner  # noqa: PLC0415
+
+    bullet = "checked for style and type mistakes"
+    root = project(tmp_path / "none", work_type, None)
+    (root / "agk.toml").write_text('review_mode = "team"\n' + (root / "agk.toml").read_text())
+    assert not [x for x in steward_owner.standard_screen(root, None)[1] if x.startswith("Pack")]
+    (root / "agk.toml").write_text((root / "agk.toml").read_text().replace("team", "solo"))
+    assert bullet not in "\n".join(steward_owner.standard_screen(root, None)[1])
+    root = project(tmp_path / "py", work_type, "python")
+    assert bullet in "\n".join(steward_owner.standard_screen(root, None)[1])
