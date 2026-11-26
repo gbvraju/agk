@@ -27,8 +27,9 @@ steward chat, quoted as data): "Brief 2 and 3 ,".
    carry `Final: docs/adr/<file> Proposed -> Accepted` lines (the rule 3a acceptance). A `Final:` line for a spec,
    `docs/requirements.md` or a stack-options ADR still asks for the builder's status commit and stays a
    `Verdict: fix list <head>` with no numbered item (rule 3, unchanged). A fix list keeps its numbered items.
-   The merger clears a `Verdict: cleared` only when `verdict_problem` reads its `Final:` lines, and it still
-   merges an older fix list of only ADR acceptances.
+   The merger clears or carries a `Verdict: cleared` only when `verdict_problem` reads its `Final:` lines and it
+   has no numbered item (which the conductor's check also refuses before a post), and it still merges an older
+   fix list of only ADR acceptances.
 2. **One reader.** `common.covered_fix_list` also reads `Verdict: cleared <40 hex>` whose every `Final:` line passes
    `final_accepts`, returning the same tuple; a cleared verdict with any other `Final:` line returns None. Every reader
    through it reads both forms; the old fix-list form is still read.
