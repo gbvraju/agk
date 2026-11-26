@@ -21,9 +21,9 @@ followed by `Recommended: <steward fills>`, the placeholder the grill skill fill
 `budget: <n>`, the depth's question budget. The composed domain packs' items follow the work
 type's (SPEC-0074 rule 6; brief #1937, ADR-0806): a regulated pack's critical items at every depth,
 its others at `standard` and `deep`; once the answers file holds the budget's number of asked
-items, only those critical items are printed, then the line `PAST_BUDGET`. An id the answers file
-holds (its `answers` list, and its `grill` list) is never printed. Without `--depth` the depth is `[quality] grill`. Reads files
-only: no network, no model. Exit 0 ok, 1 refused, 2 usage.
+items, only those critical items are printed, then the line `PAST_BUDGET`. An id the answers
+file holds (its `answers` list, and its `grill` list) is never printed. Without `--depth` the
+depth is `[quality] grill`. Reads files only: no network, no model. Exit 0 ok, 1 refused, 2 usage.
 
 `record` appends one row to the answers file's `grill` list, the claim quoted as given, and never
 writes `answers`: `stated`, `assumption` (with its test), `open`, or a `Risk accepted:` row. It
