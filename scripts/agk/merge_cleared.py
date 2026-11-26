@@ -740,7 +740,9 @@ def trusted(comments: list[dict], allowed: list[str]) -> list[dict]:
     return [c for c in comments if not first_line(c).startswith("Verdict:") or login(c) in names]
 
 
-UNREADABLE_FINAL = "the latest verdict carries a Final: line that cannot be read (SPEC-0021 rule 1)"
+UNREADABLE_FINAL = (
+    "the latest verdict carries a Final: line that cannot be read (rule 3; SPEC-0021 rule 1)"
+)
 
 
 def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]:
@@ -752,7 +754,8 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
     if verdict is None:
         return "held", "no verdict (rule 3)"
     if not clears_head(verdict, sha):
-        if verdict_problem(str(verdict.get("body") or "")):
+        named = first_line(verdict).removesuffix(FALLBACK) == f"Verdict: cleared {sha}"
+        if named and verdict_problem(str(verdict.get("body") or "")):
             return "held", UNREADABLE_FINAL
         return "held", "the latest verdict does not clear this head (rule 3)"
     if login(verdict) not in {a.lstrip("@").lower() for a in allowed}:
