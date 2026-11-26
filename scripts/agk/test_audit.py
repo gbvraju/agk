@@ -89,11 +89,11 @@ def code_globs(root: Path) -> list[str]:
     return [e["code"] for e in entries if isinstance(e, dict) and isinstance(e.get("code"), str)]
 
 
-def body_key(node: ast.AST) -> str:
+def body_key(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     body = list(node.body)
-    first = body[0] if body else None
-    if isinstance(first, ast.Expr) and isinstance(getattr(first, "value", None), ast.Constant):
-        body = body[1:] if isinstance(first.value.value, str) else body
+    first = body[0].value if body and isinstance(body[0], ast.Expr) else None
+    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+        body = body[1:]
     return "\n".join(ast.dump(s) for s in body)
 
 

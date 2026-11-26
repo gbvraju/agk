@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import subprocess  # nosec B404 - fixed argument lists only, no shell
+import sys
 
 import pytest
 
@@ -175,7 +176,7 @@ def test_it_writes_nothing_and_imports_no_network_module(repo):
         check=True,
     ).stdout.strip()
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        ["python3", "scripts/agk/rules.py", "imports", "scripts/agk/test_audit.py"],
+        [sys.executable, "scripts/agk/rules.py", "imports", "scripts/agk/test_audit.py"],
         cwd=kit,
         capture_output=True,
         text=True,
