@@ -50,6 +50,7 @@ def project(tmp: Path, work_type: str | None = "web-app", mode: str = "init") ->
     root = tmp / "sample"
     (root / "docs" / "adr").mkdir(parents=True)
     shutil.copytree(KIT_ROOT / "config" / "playbooks", root / "config" / "playbooks")
+    shutil.copy(KIT_ROOT / "config" / "standards.toml", root / "config")  # brief #1975
     toml = f'default_branch = "main"\nmode = "{mode}"\n'
     if work_type:
         toml += f'\n[delivery]\nwork_type = "{work_type}"\n'
@@ -320,11 +321,10 @@ def test_req079_render_writes_the_kind_line_of_the_slice_brief():
 
 
 def pack_entry() -> dict:
-    """The `python-pyproject` entry the API service's playbook carries (brief #1683)."""
+    """The `python-pyproject` entry (brief #1683), from the stack file since brief #1975."""
     import check_playbooks
 
-    playbook = KIT_ROOT / "config" / "playbooks" / "api-service.toml"
-    packs = check_playbooks.standard(playbook, KIT_ROOT)[1]
+    packs = check_playbooks.standards_file(KIT_ROOT)[0]
     return next(e for e in packs if e["stack"] == "python-pyproject")
 
 

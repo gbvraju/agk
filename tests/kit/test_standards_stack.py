@@ -109,12 +109,6 @@ def stacks(root: Path, name: str) -> list[str]:
     return [e["stack"] for e in check_playbooks.standard(path, root)[1]]
 
 
-def own(work_type: str) -> list[str]:
-    """The stacks a shipped playbook still carries itself (web-app, api-service, mobile: 19I-b)."""
-    found = playbook_format.load(BOOKS / f"{work_type}.toml").get("standards", [])
-    return [e["stack"] for e in found]
-
-
 def gates(root: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
     code = run_gates.main(["--root", str(root)])
     out = capsys.readouterr()
@@ -145,17 +139,20 @@ def entry(**changes: object) -> str:
     return "\n".join(lines) + "\n"
 
 
-def test_req079_the_file_holds_the_three_entries_as_web_app_holds_them() -> None:
-    """Answer 1: the same step names, config, tool, version and codes, each with its runtime."""
+def test_req079_the_file_holds_the_three_entries_and_no_playbook_a_copy() -> None:
+    """Answer 1 (brief #1975, 19I-b): the file is the one source; the step names, config, tool,
+    version and codes are main's, each with its runtime; no playbook holds an entry of its own."""
     shipped = tomllib.loads((KIT_ROOT / FILE).read_text(encoding="utf-8"))["standards"]
-    web = playbook_format.load(BOOKS / "web-app.toml")["standards"]
-    assert [{k: v for k, v in e.items() if k != "runtime"} for e in shipped] == web
     assert {e["stack"]: e["runtime"] for e in shipped} == {
         "python-pyproject": "python",
         "python-pip": "python",
         "node": "node",
     }
-    assert shipped[0] == PYPROJECT
+    assert shipped == [PYPROJECT, {**PIP, "runtime": "python"}, {**NODE, "runtime": "node"}]
+    assert (NODE["lint"], NODE["format"], NODE["type"]) == node_pack.STEP_NAMES
+    assert len(NODE_CODES) == 61
+    for path in sorted(BOOKS.glob("*.toml")):
+        assert "standards" not in playbook_format.load(path), path.stem
     manifest = (KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8")
     assert f'"{FILE}"' in manifest
 
@@ -170,17 +167,17 @@ def test_req079_every_work_type_composes_the_python_entries(work_type: str, tmp_
     """Answers 2 and 5, Q-19I-1: the stack decides, once per stack."""
     root = project(tmp_path, work_type)
     found = stacks(root, work_type)
-    assert sorted(found) == sorted({*python_pack.STACKS, *own(work_type)})
+    assert sorted(found) == sorted(python_pack.STACKS)
 
 
 @pytest.mark.parametrize("work_type", WORK_TYPES)
 def test_req079_every_work_type_composes_the_node_entry(work_type: str, tmp_path: Path) -> None:
     """Answers 2 and 5: a Node record composes the Node entry and no Python one."""
     root = project(tmp_path, work_type, runtime="node")
-    assert stacks(root, work_type) == own(work_type)  # answer 6: no package.json, pack not on
+    assert stacks(root, work_type) == []  # answer 6: no package.json, pack not on
     (root / "package.json").write_text('{"name": "sample"}\n', encoding="utf-8")
     found = stacks(root, work_type)
-    assert sorted(found) == sorted({"node", *own(work_type)})
+    assert found == ["node"]
 
 
 @pytest.mark.parametrize(
@@ -210,7 +207,7 @@ def test_req079_another_runtime_composes_none_and_prints_no_pack(
     monkeypatch.setitem(pins.STACKS, "go", ("go-modules", "go.mod", "go.sum", "go"))
     root = project(tmp_path, work_type, "go")
     assert pins.chosen(root) is not None and pins.chosen(root)[0][0] == "go-modules"
-    assert stacks(root, work_type) == own(work_type)
+    assert stacks(root, work_type) == []
     _, out = gates(root, capsys)
     assert "not run standards: no pack for go-modules" in out, out
     assert "no standards entry composed" not in out and "ok standards" not in out
@@ -257,8 +254,8 @@ def test_req079_a_playbook_entry_replaces_the_files_and_never_drops_a_code(
     root = project(tmp_path, "api-service")
     assert sorted(stacks(root, "api-service")) == sorted(python_pack.STACKS)
     book = root / "config/playbooks/api-service.toml"
-    text = book.read_text(encoding="utf-8")
-    book.write_text(text.replace('codes = ["E", "F", "I", "B", "UP"]', 'codes = ["E"]', 1))
+    weaker = entry(runtime=None, rules={"tool": "ruff", "version": "0.17.4", "codes": ["E"]})
+    book.write_text(book.read_text(encoding="utf-8") + "\n" + weaker, encoding="utf-8")
     found = check_playbooks.standard(book, root)[2]
     assert found == [
         "SPEC-0072 rule 2: config/playbooks/api-service.toml: a pack's `rules` drops a rule "
@@ -408,3 +405,105 @@ def test_req079_the_kit_itself_composes_nothing_of_the_file() -> None:
     """Answer 6: no work type in the kit, so its run is unchanged."""
     assert pins.chosen(KIT_ROOT) is None
     assert stacks(KIT_ROOT, "default") == []
+
+
+MOVED = ("web-app", "api-service", "mobile")  # brief #1975: the playbooks that held a copy
+NODE_CODES = [  # the `node` entry's codes on the default branch at ed342cf1, before brief #1975
+    "constructor-super", "for-direction", "getter-return", "no-async-promise-executor",
+    "no-case-declarations", "no-class-assign", "no-compare-neg-zero", "no-cond-assign",
+    "no-const-assign", "no-constant-binary-expression", "no-constant-condition",
+    "no-control-regex", "no-debugger", "no-delete-var", "no-dupe-args", "no-dupe-class-members",
+    "no-dupe-else-if", "no-dupe-keys", "no-duplicate-case", "no-empty",
+    "no-empty-character-class", "no-empty-pattern", "no-empty-static-block", "no-ex-assign",
+    "no-extra-boolean-cast", "no-fallthrough", "no-func-assign", "no-global-assign",
+    "no-import-assign", "no-invalid-regexp", "no-irregular-whitespace", "no-loss-of-precision",
+    "no-misleading-character-class", "no-new-native-nonconstructor",
+    "no-nonoctal-decimal-escape", "no-obj-calls", "no-octal", "no-prototype-builtins",
+    "no-redeclare", "no-regex-spaces", "no-self-assign", "no-setter-return",
+    "no-shadow-restricted-names", "no-sparse-arrays", "no-this-before-super", "no-undef",
+    "no-unexpected-multiline", "no-unreachable", "no-unsafe-finally", "no-unsafe-negation",
+    "no-unsafe-optional-chaining", "no-unused-labels", "no-unused-private-class-members",
+    "no-unused-vars", "no-useless-backreference", "no-useless-catch", "no-useless-escape",
+    "no-with", "require-yield", "use-isnan", "valid-typeof",
+]
+PIP = {**PYPROJECT, "stack": "python-pip"}
+NODE = {
+    "stack": "node", "lint": "node-lint", "format": "node-format", "type": "node-type",
+    "config": "package.json", "rules": {"tool": "eslint", "codes": NODE_CODES},
+}
+# Each playbook's own entries on the default branch at ed342cf1, held as data, without `runtime`.
+MAIN = {
+    "web-app": [PYPROJECT, PIP, NODE],
+    "api-service": [PYPROJECT, PIP],
+    "mobile": [NODE],
+}
+
+
+def bare(e: dict) -> dict:
+    return {k: v for k, v in e.items() if k != "runtime"}
+
+
+def old_copy(root: Path, work_type: str) -> None:
+    """A project's own copy of the playbook as the default branch shipped it, with its own
+    entries (`MAIN`), in the form brief #1589 and brief #1764 wrote."""
+    text = "".join(
+        _node_entry(e) if e["stack"] == "node" else entry(**{**e, "runtime": None})
+        for e in MAIN[work_type]
+    )
+    book = root / f"config/playbooks/{work_type}.toml"
+    book.write_text(book.read_text(encoding="utf-8") + "\n" + text, encoding="utf-8")
+
+
+def _node_entry(e: dict) -> str:
+    codes = ", ".join(f'"{c}"' for c in e["rules"]["codes"])
+    keys = "".join(f'{k} = "{e[k]}"\n' for k in ("stack", "lint", "format", "type", "config"))
+    return f'[[standards]]\n{keys}rules = {{ tool = "eslint", codes = [{codes}] }}\n'
+
+
+def running(root: Path, work_type: str) -> list[dict]:
+    """The composed entries whose pack is on (the ones `run_gates.pack_results` runs), without
+    `runtime`."""
+    out = []
+    for e in check_playbooks.standard(playbook_format.path(root, work_type), root)[1]:
+        module = python_pack if e["stack"] in python_pack.STACKS else node_pack
+        if e["stack"] in module.STACKS and module.on(root):
+            out.append(bare(e))
+    return sorted(out, key=lambda e: e["stack"])
+
+
+@pytest.mark.parametrize("runtime", ["python", "node"])
+@pytest.mark.parametrize("work_type", MOVED)
+def test_req079_the_three_run_the_entries_main_runs(
+    work_type: str, runtime: str, tmp_path: Path
+) -> None:
+    """Answers 2 and 3, Q-19Ib-2: a chosen runtime runs the same entries as a project whose own
+    copy still carries main's entries, and that old copy composes with no refusal."""
+    roots = [project(tmp_path / x, work_type, runtime) for x in ("after", "before")]
+    old_copy(roots[1], work_type)
+    for root in roots:
+        (root / "package.json").write_text('{"name": "sample"}\n', encoding="utf-8")
+        assert check_playbooks.standard(playbook_format.path(root, work_type), root)[2] == []
+    after, before = (running(root, work_type) for root in roots)
+    want = [bare(e) for e in (PYPROJECT, PIP) if runtime == "python"] or [NODE]
+    assert after == sorted(want, key=lambda e: e["stack"]) == before
+
+
+@pytest.mark.parametrize("work_type", MOVED)
+def test_req079_the_screen_claims_checks_only_for_a_chosen_stack(
+    work_type: str, tmp_path: Path
+) -> None:
+    """Q-19Ib-1: before a stack is chosen the team screen lists no pack and the solo screen has no
+    style bullet; after a Python record both say it again."""
+    import steward_owner  # noqa: PLC0415
+
+    def screen(root: Path, mode: str) -> str:
+        text = (root / "agk.toml").read_text(encoding="utf-8")
+        (root / "agk.toml").write_text(f'review_mode = "{mode}"\n{text}', encoding="utf-8")
+        return "\n".join(steward_owner.standard_screen(root, None)[1])
+
+    bullet = "checked for style and type mistakes"
+    for runtime, say in ((None, False), ("python", True)):
+        team = screen(project(tmp_path / f"t{runtime}", work_type, runtime), "team")
+        solo = screen(project(tmp_path / f"s{runtime}", work_type, runtime), "solo")
+        assert ("Pack python-pyproject: lint python-lint" in team) is say, team
+        assert (bullet in solo) is say, solo
