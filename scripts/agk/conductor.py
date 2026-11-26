@@ -2074,7 +2074,7 @@ def reprove_record(root, number: int, new: str, body: str) -> tuple[str, str]:
         return none_line("gitleaks is not installed (tool: gitleaks)")
     try:
         git_dir = Path(git_text(root, "rev-parse", "--absolute-git-dir"))
-        common = Path(git_text(root, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+        shared = Path(git_text(root, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     except CheckError:
         return none_line("the clone's git folder cannot be read")
     scratch = git_dir / "agk" / f"reprove-{number}"
@@ -2083,7 +2083,7 @@ def reprove_record(root, number: int, new: str, body: str) -> tuple[str, str]:
         scratch.with_name(f"reprove-{number}.home"),
     )
     try:
-        return record_in(root, scratch, text, home, common, number, new, body)
+        return record_in(root, scratch, text, home, shared, number, new, body)
     except OSError:
         return none_line("the scratch folder or the body file cannot be written")
     except (CheckError, kit_root.Refused) as exc:
@@ -2102,14 +2102,14 @@ def setting_of(message: str) -> str:
     return found.group(0) if found else "(setting: layout)"
 
 
-def record_in(root, scratch, text, home, common, number, new, body) -> tuple[str, str]:
+def record_in(root, scratch, text, home, shared, number, new, body) -> tuple[str, str]:
     """The record step of answer 1 (review item 1): the head's own `prepush.py` runs in the scratch
     worktree with only `PATH` and a scratch `HOME` (`env -i`, as the bounded governance run), and
     the check is the conductor's own `evidence.py`, from the checkout of the default branch."""
     scratch.parent.mkdir(parents=True, exist_ok=True)
     git_code(root, "worktree", "remove", "--force", str(scratch))
     fetch = ["fetch", "-q", "origin", f"refs/pull/{number}/head"]
-    made = ["worktree", "add", "-q", "--detach", str(scratch), new]
+    made = [*common.CHECKOUT, "worktree", "add", "-q", "--detach", str(scratch), new]
     if git_code(root, *fetch) or git_code(root, *made):
         return none_line("the scratch worktree of the head cannot be made")
     text.write_text(body, encoding="utf-8")
@@ -2118,7 +2118,7 @@ def record_in(root, scratch, text, home, common, number, new, body) -> tuple[str
     kit = kit_root.kit_dir(scratch)
     run = [sys.executable, str(kit / "prepush.py"), "--quick", "--record", "--body", str(text)]
     code, out = reprove_run([*sandbox, *run], scratch)
-    record = common / "agk-evidence" / f"{new}.json"
+    record = shared / "agk-evidence" / f"{new}.json"
     evidence = [x.strip() for x in out.splitlines() if x.startswith("Evidence: ")]
     if code != 0 or not evidence or not record.is_file():
         return none_line(failed_step(record))
