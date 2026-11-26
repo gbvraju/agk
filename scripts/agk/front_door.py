@@ -1016,6 +1016,25 @@ STACK_RECORD = re.compile(r"^docs/adr/\d{4}-stack-options\.md$")
 CHARTER = re.compile(r"^docs/adr/\d{4}-project-charter\.md$")
 RULE_5 = "SPEC-0072 rule 5"
 MARKER = "TODO(architect)"  # brief #1842 answer 4: the template's own word, in these sections
+# SPEC-0073 rule 8, amendment 236 (brief #1952, ADR-0808): held apart from the sections above; a
+# record with none of them is a note until its next edit, one with any of them is checked whole.
+QUALITY_SECTIONS = ("Quality scenarios", "Threats", "Operations")
+# The eight quality characteristics of ISO/IEC 25010, by name only (Q-73G-4).
+QUALITY_ATTRIBUTES = (
+    "functional suitability",
+    "performance efficiency",
+    "compatibility",
+    "usability",
+    "reliability",
+    "security",
+    "maintainability",
+    "portability",
+)
+SCENARIO = re.compile(r"^- ([a-z ]+): (\S.*?) -> (\S.*?) \(([^()]*\d[^()]*)\)$")
+THREAT = re.compile(r"^- ([^:]*\S):\s+([A-Z](?:[,\s]*[A-Z])*):\s+(\S.*)$")
+STRIDE = frozenset("STRIDE")
+OPERATION = re.compile(r"^- (?:traced|alerted): \S")
+QUALITY_HELD = "the record predates its quality sections; held until its next edit"
 
 
 def slice_problems(rel: str, text: str, strict: bool) -> tuple[list[str], list[str]]:
@@ -1084,6 +1103,66 @@ def record_held(text: str) -> bool:
     return not heads & set(NEW_SECTIONS)
 
 
+def quality_held(text: str) -> bool:
+    """Amendment 236: a record with none of the quality sections is a note (Q-73G-2)."""
+    heads = {name for name, _ in sections_of(text.split("\n"))}
+    return not heads & set(QUALITY_SECTIONS)
+
+
+def quality_line_ok(section: str, line: str) -> bool:
+    """The form of one `- ` line of a quality section (brief #1952 answer 2); form only."""
+    if section == "Quality scenarios":
+        m = SCENARIO.match(line)
+        return m is not None and m.group(1) in QUALITY_ATTRIBUTES
+    if section == "Threats":
+        m = THREAT.match(line)
+        if not m:
+            return False
+        letters = re.findall(r"[A-Z]", m.group(2))
+        rest = m.group(3)
+        accepted = rest.startswith("accepted:")
+        return (
+            set(letters) <= STRIDE
+            and len(set(letters)) == len(letters)
+            and (not accepted or bool(rest[len("accepted:") :].strip()))
+        )
+    return bool(OPERATION.match(line))
+
+
+def record_quality_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """(what, section) of each failure of the quality sections; nothing when none is present."""
+    if not set(body) & set(QUALITY_SECTIONS):
+        return []
+    out = []
+    for name in QUALITY_SECTIONS:
+        if name not in body:
+            out.append(("the record lacks a required section", name))
+            continue
+        if any(MARKER in ln for ln in body[name]):
+            out.append((f"the record holds a {MARKER} marker", name))
+            continue
+        lines = [ln.rstrip() for ln in body[name] if ln.startswith("- ")]
+        if not lines:
+            out.append(("the section holds none of its lines", name))
+        elif not all(quality_line_ok(name, ln) for ln in lines):
+            out.append(("a line of the section is not of its form", name))
+        elif name == "Quality scenarios":
+            needs = body.get("Needs", [])
+            numbered = [ln for ln in needs if ln.startswith("- ") and AMOUNT.search(ln)]
+            if len(lines) < len(numbered):
+                out.append(("the section has fewer scenarios than numbered needs", name))
+    return out
+
+
+def quality_record_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """(rule, path class) of each failure of the quality sections alone, read whether or not the
+    record is held (fix list on a9780186 item 1: a held record with a quality section)."""
+    return [
+        (f"{RULE_5}: {what}", f"{RECORD}; section: {section}")
+        for what, section in record_quality_problems(body)
+    ]
+
+
 def record_problems(root: Path) -> list[tuple[str, str]]:
     """Amendment 204: (rule, path class) of each failure of the record; never a value."""
     text = (root / RECORD).read_text(encoding="utf-8")
@@ -1111,6 +1190,7 @@ def record_problems(root: Path) -> list[tuple[str, str]]:
         m = re.match(r"^\s*[-*]\s+([^:]+?)\s*(?::.*)?$", ln)
         if m and diagram is not None and m.group(1).lower() not in drawn:
             fail("an outside service is missing from the diagram", "Diagram")
+    out += quality_record_problems(body)
     needs = body.get("Needs")
     if needs is None:
         return sorted(set(out))
@@ -1196,10 +1276,15 @@ def check_design(files: list[str], root: Path, today: datetime.date) -> int:
     problems: list[str] = []
     paths, designs = read_files(files, root, DESIGN, 7, problems)
     if (root / RECORD).is_file():
-        if record_held((root / RECORD).read_text(encoding="utf-8")):
+        whole = (root / RECORD).read_text(encoding="utf-8")
+        if record_held(whole):
             print(f"note {NAME}: {RULE_5}: {RECORD}: held until its next edit (no new section)")
+            held = quality_record_problems(dict(sections_of(whole.split("\n"))))
+            problems += [f"{rule} (path class: {cls})" for rule, cls in held]
         else:
             problems += [f"{rule} (path class: {cls})" for rule, cls in record_problems(root)]
+            if quality_held(whole):
+                print(f"note {NAME}: {RULE_5}: {RECORD}: {QUALITY_HELD}")
     if not paths:
         if problems:
             raise Refusal(problems)

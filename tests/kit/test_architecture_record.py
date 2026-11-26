@@ -29,7 +29,7 @@ sys.path.insert(0, str(AGK))
 import engines  # noqa: E402
 import front_door  # noqa: E402
 import run_gates  # noqa: E402
-from gates import architecture_record  # noqa: E402
+from gates import architecture_quality, architecture_record  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("no_network")
 
@@ -213,9 +213,13 @@ def test_req_079_ac1_the_record_the_foundation_writes_passes_the_step(tmp_path, 
     assert f"- {SERVICE}:" in text and "{{" not in text
     # brief #1842 answer 4: the written record holds the template's markers until the foundation
     # fills it; each marked section fails, and nothing else does
-    marked = {"Context", "Parts", "Data stores", "Outside services", "Needs", "Diagram"}
+    # brief #1952: and the three quality sections, so its first edit fills them too
+    marked = {*front_door.NEW_SECTIONS, *front_door.QUALITY_SECTIONS}
     assert found(tmp_path) == sorted((MARKER, f"{front_door.RECORD}; section: {s}") for s in marked)
     filled = text.replace("TODO(architect): ", "").replace("TODO(architect)", "none")
+    for name in front_door.QUALITY_SECTIONS:
+        head, _, rest = filled.partition(f"## {name}\n")
+        filled = f"{head}## {name}\n\n{QUALITY[name]}\n\n## {rest.split('## ', 1)[1]}"
     (tmp_path / "docs/architecture.md").write_text(filled, encoding="utf-8")
     assert found(tmp_path) == []
     capsys.readouterr()
@@ -350,3 +354,213 @@ def test_req_079_ac1_the_vision_skill_asks_it_in_plain_words():
     assert "busiest hour" in text and "Recommended:" in text
     stack = (KIT_ROOT / "skills" / "stack" / "SKILL.md").read_text(encoding="utf-8")
     assert "docs/architecture.md" in stack and "## Diagram" in stack
+
+
+# --- the quality sections (SPEC-0073 rule 8, amendment 236; brief #1952, ADR-0808; REQ-080 AC5) --
+
+QUALITY = {
+    "Quality scenarios": (
+        "- performance efficiency: 300 people order at once -> each page answers"
+        " (under 2 seconds)\n"
+        "- reliability: the orders store fails -> the shop is back (within 4 hours)\n"
+        "- security: a stranger calls the order api -> it is refused (100 percent of calls)\n"
+        "- maintainability: the month's bill comes -> it stays in budget (under 80 dollars)"
+    ),
+    "Threats": (
+        "- web to api: S, T, I: signed sessions and TLS on every call\n"
+        "- api to Mailrelay Example: I: accepted: the receipts hold no card number"
+    ),
+    "Operations": (
+        "- traced: each order call, end to end\n- alerted: the order api down for 5 minutes"
+    ),
+}
+QUALITY_HELD = "the record predates its quality sections; held until its next edit"
+
+
+def quality_record(root: Path, drop: tuple[str, ...] = (), **change: str) -> Path:
+    path = record(root)
+    parts = [f"## {k}\n\n{change.get(k, v)}\n" for k, v in QUALITY.items() if k not in drop]
+    path.write_text(path.read_text(encoding="utf-8") + "\n" + "\n".join(parts), encoding="utf-8")
+    return path
+
+
+def test_req_080_ac5_the_tuple_is_the_three_sections_apart_from_the_rest():
+    """REQ-080 AC5: one tuple, apart from the sections of amendment 204, which are unchanged."""
+    assert front_door.QUALITY_SECTIONS == ("Quality scenarios", "Threats", "Operations")
+    assert front_door.NEW_SECTIONS == (
+        "Context", "Parts", "Data stores", "Outside services", "Needs", "Diagram"
+    )
+    assert front_door.RECORD_SECTIONS == (*front_door.NEW_SECTIONS, "Layers")
+
+
+def test_req_080_ac5_a_full_record_with_the_quality_sections_passes(tmp_path, capsys):
+    quality_record(project(tmp_path))
+    assert found(tmp_path) == []
+    run_gates.main(["--root", str(tmp_path)])  # the fixture's other gates are not this test's
+    out = capsys.readouterr().out
+    assert "ok architecture-record" in out and "architecture-quality" not in out
+
+
+def test_req_080_ac5_a_record_without_the_quality_sections_is_a_note(tmp_path, capsys):
+    """REQ-080 AC5: all six sections and none of the quality ones: ok plus the quality hold."""
+    record(project(tmp_path))
+    assert front_door.quality_held((tmp_path / front_door.RECORD).read_text(encoding="utf-8"))
+    assert found(tmp_path) == []
+    run_gates.main(["--root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "ok architecture-record\n" in out
+    assert f"not run architecture-quality: {QUALITY_HELD}" in out
+    assert "ok architecture-quality" not in out and "FAIL gates: architecture" not in out
+
+
+def test_req_080_ac5_a_held_record_prints_both_reasons_and_never_ok(tmp_path, capsys):
+    project(tmp_path)
+    write(tmp_path, "docs/architecture.md", "# Architecture\n\n## Layers\n\n| a | b |\n")
+    run_gates.main(["--root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "not run architecture-record:" in out and "not run architecture-quality:" in out
+    assert "ok architecture-record" not in out and "ok architecture-quality" not in out
+
+
+@pytest.mark.parametrize(
+    ("kept", "missing"),
+    [
+        ("Threats", ["Operations", "Quality scenarios"]),
+        ("Operations", ["Quality scenarios", "Threats"]),
+        ("Quality scenarios", ["Operations", "Threats"]),
+    ],
+)
+def test_req_080_ac5_one_quality_section_fails_the_missing_ones(tmp_path, capsys, kept, missing):
+    """REQ-080 AC5: a record with one section fails each missing one, naming the section."""
+    root = project(tmp_path)
+    quality_record(root, drop=tuple(s for s in QUALITY if s != kept))
+    lack = "SPEC-0072 rule 5: the record lacks a required section"
+    assert found(root) == [(lack, f"{front_door.RECORD}; section: {s}") for s in missing]
+    assert run_gates.main(["--root", str(root)]) == 1
+    out = capsys.readouterr().out
+    assert all(f"section: {s}" in out for s in missing)
+    assert "architecture-quality" not in out
+
+
+@pytest.mark.parametrize("section", list(QUALITY))
+def test_req_080_ac5_a_marker_in_a_quality_section_fails(tmp_path, section):
+    root = project(tmp_path)
+    planted = f"TODO(architect): INVENTEDPLANTEDWORD\n{QUALITY[section]}"
+    quality_record(root, **{section: planted})
+    rows = found(root)
+    assert rows == [(MARKER, f"docs/architecture.md; section: {section}")], rows
+    assert all("INVENTEDPLANTEDWORD" not in r + c for r, c in rows)
+
+
+FORM = "SPEC-0072 rule 5: a line of the section is not of its form"
+
+
+@pytest.mark.parametrize(
+    ("section", "text"),
+    [
+        ("Quality scenarios", "- speed: 300 people -> pages answer (under 2 seconds)"),
+        ("Quality scenarios", "- reliability: the store fails -> it is back"),
+        ("Quality scenarios", "- reliability: the store fails, it is back (4 hours)"),
+        ("Threats", "- web to api: S, X: signed sessions"),
+        ("Threats", "- web to api: signed sessions"),
+        ("Threats", "- web to api: S, S: signed sessions"),
+        ("Threats", "- web to api: T: accepted:"),
+        ("Operations", "- watched: each order call"),
+        ("Operations", "- traced:"),
+    ],
+)
+def test_req_080_ac5_a_line_out_of_form_fails_naming_the_section(tmp_path, section, text):
+    root = project(tmp_path)
+    quality_record(root, **{section: f"{QUALITY[section]}\n{text}"})
+    rows = found(root)
+    assert rows == [(FORM, f"docs/architecture.md; section: {section}")], rows
+    assert all(text not in r + c for r, c in rows)
+
+
+EMPTY = "SPEC-0072 rule 5: the section holds none of its lines"
+
+
+@pytest.mark.parametrize("section", list(QUALITY))
+def test_req_080_ac5_an_empty_quality_section_fails(tmp_path, section):
+    root = project(tmp_path)
+    quality_record(root, **{section: "Nothing yet."})
+    assert found(root) == [(EMPTY, f"docs/architecture.md; section: {section}")]
+
+
+def test_req_080_ac5_each_numbered_need_has_a_scenario(tmp_path):
+    """Four `## Needs` lines of the fixture hold a number (`Logged` does not): three scenarios
+    fail; the fixture's four pass."""
+    root = project(tmp_path)
+    fewer = "\n".join(QUALITY["Quality scenarios"].split("\n")[:3])
+    quality_record(root, **{"Quality scenarios": fewer})
+    few = "SPEC-0072 rule 5: the section has fewer scenarios than numbered needs"
+    assert found(root) == [(few, "docs/architecture.md; section: Quality scenarios")]
+    quality_record(root)
+    assert found(root) == []
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    [
+        "functional suitability", "performance efficiency", "compatibility", "usability",
+        "reliability", "security", "maintainability", "portability",
+    ],
+)
+def test_req_080_ac5_each_of_the_eight_attributes_is_read(tmp_path, attribute):
+    root = project(tmp_path)
+    extra = f"- {attribute}: an invented stimulus -> an invented response (1 second)"
+    quality_record(root, **{"Quality scenarios": f"{QUALITY['Quality scenarios']}\n{extra}"})
+    assert found(root) == []
+
+
+def test_req_080_ac5_a_crlf_record_is_read_the_same(tmp_path):
+    root = project(tmp_path)
+    path = quality_record(root, drop=("Operations",))
+    path.write_bytes(path.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
+    lack = "SPEC-0072 rule 5: the record lacks a required section"
+    assert found(root) == [(lack, "docs/architecture.md; section: Operations")]
+
+
+def test_req_080_ac5_check_design_reads_the_quality_sections(tmp_path, capsys):
+    root = project(tmp_path)
+    quality_record(root, drop=("Threats",))
+    with pytest.raises(front_door.Refusal) as caught:
+        front_door.check_design([], root, front_door.iso_date(TODAY))
+    assert any("section: Threats" in p for p in caught.value.problems)
+    record(root)
+    front_door.check_design([], root, front_door.iso_date(TODAY))
+    assert "quality sections" in capsys.readouterr().out
+
+
+def test_req_080_ac5_the_template_carries_the_quality_sections_with_markers():
+    """REQ-080 AC5: the one tuple is read by the template test, the writer and the check."""
+    text = (KIT_ROOT / "kit" / "templates" / "architecture.md").read_text(encoding="utf-8")
+    body = dict(front_door.sections_of(text.split("\n")))
+    heads = list(body)
+    assert heads.index("Diagram") < heads.index("Quality scenarios")
+    for name in front_door.QUALITY_SECTIONS:
+        assert any(front_door.MARKER in ln for ln in body[name]), name
+
+
+def test_req_080_ac5_a_held_record_with_a_quality_section_has_it_checked(tmp_path, capsys):
+    """Fix list on a9780186 item 1: none of the six sections but `## Threats`: the quality
+    sections are still checked, by the `architecture-quality` step and by `check-design`."""
+    root = project(tmp_path)
+    text = f"# Architecture\n\n## Threats\n\n{QUALITY['Threats']}\n\n## Layers\n\n| a | b |\n"
+    write(root, "docs/architecture.md", text)
+    assert architecture_record.skipped(root) == architecture_record.HELD
+    assert architecture_quality.applies(root) and architecture_quality.skipped(root) is None
+    lack = "SPEC-0072 rule 5: the record lacks a required section"
+    missing = ("Quality scenarios", "Operations")
+    want = [(lack, f"docs/architecture.md; section: {s}") for s in missing]
+    assert architecture_quality.check(root, {}) == want
+    assert run_gates.main(["--root", str(root)]) == 1
+    out = capsys.readouterr().out
+    assert "FAIL gates: architecture-quality: SPEC-0072 rule 5" in out
+    assert "section: Operations" in out and "not run architecture-record:" in out
+    with pytest.raises(front_door.Refusal) as caught:
+        front_door.check_design([], root, front_door.iso_date(TODAY))
+    assert any("section: Quality scenarios" in p for p in caught.value.problems)
+    write(root, "docs/architecture.md", text.replace("S, T, I", "S, X"))
+    form = "SPEC-0072 rule 5: a line of the section is not of its form"
+    assert (form, "docs/architecture.md; section: Threats") in architecture_quality.check(root, {})

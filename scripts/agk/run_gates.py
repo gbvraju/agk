@@ -28,6 +28,9 @@ The product steps (`PRODUCT_STEPS`): `pins` (SPEC-0072 rule 4; brief #1776, ADR-
 work type is declared, not run without a chosen stack, then `bom` and `licences` where a lock is
 read.
 
+The `architecture-quality` step (SPEC-0073 rule 8, amendment 236; brief #1952, ADR-0808) follows
+`architecture-record`: a record with none of its quality sections prints `not run`, never `ok`.
+
 The quality step (`QUALITY_STEPS`: `glossary`; SPEC-0073 rule 8, brief #1951, ADR-0812) runs after
 them only where `docs/glossary.md` exists: one table, one row per term, no term twice, at most
 `[quality] glossary_terms` rows.
@@ -91,7 +94,7 @@ REGISTRY = Path(__file__).resolve().parent / "gates"
 STEP = re.compile(r"^[a-z][a-z0-9-]*$")
 # SPEC-0072 rule 5 (brief #1588, ADR-0668): steps of the composed `[architecture]`, not of a gate;
 # each runs, under its own name, only where its `applies(root)` is true.
-ARCHITECTURE_STEPS = ("layers", "architecture-record")  # brief #1595 (ADR-0675)
+ARCHITECTURE_STEPS = ("layers", "architecture-record", "architecture-quality")  # ADR-0675, ADR-0808
 # brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way
 # only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
 # brief #1776 (ADR-0742): `pins` first, where a work type is declared; no stack chosen is not run.

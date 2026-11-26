@@ -262,6 +262,7 @@ OTHERS = {
     "scripts/agk/check_brief.py": "checks a brief's `Layer:` line against the layer names",
     "scripts/agk/check_playbooks.py": "composes `[architecture]` for the step and the writers",
     "scripts/agk/config.py": "documents the layer paths as the packs' default scope",
+    "scripts/agk/gates/architecture_quality.py": "holds a record without its quality sections",
     "scripts/agk/gates/injection_set.py": "is not run until the record exists",
     "scripts/agk/gates/node_pack.py": "reads the layer paths as its default scope",
     "scripts/agk/gates/pins.py": "reads whether the record exists, for its wait (brief #1909)",
@@ -269,7 +270,7 @@ OTHERS = {
     "scripts/agk/gates/tests_floor.py": "reads whether the record exists and the files in a layer",
     "scripts/agk/plan_sources.py": "its `architecture` source is docs/sources/, not the record",
     "scripts/agk/playbook_format.py": "checks the form of `[architecture]`",
-    "scripts/agk/run_gates.py": "runs the layers and architecture-record steps",
+    "scripts/agk/run_gates.py": "runs the layers and the two architecture record steps",
     "scripts/agk/steward_owner.py": "shows the draft and passes it to derive-write (answer 2)",
 }
 NAMES = re.compile(r"docs/architecture\.md|[\"']architecture[\"']|\[architecture\]")
