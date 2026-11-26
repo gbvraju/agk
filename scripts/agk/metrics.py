@@ -110,9 +110,9 @@ RATE_LIMITED = re.compile(r"rate limit", re.IGNORECASE)
 
 
 def failure_class(status: str, text: str) -> str:
-    """Brief #2012 answer 3: `rate-limited` for a 403 or 429 that GitHub says is a rate limit,
+    """Brief #2012 answer 3: `rate-limited` for a 429, or a 403 that GitHub says is a rate limit,
     `refused` for another 4xx, `failed` otherwise."""
-    if status in ("403", "429") and RATE_LIMITED.search(text):
+    if status == "429" or (status == "403" and RATE_LIMITED.search(text)):
         return "rate-limited"
     return "refused" if len(status) == 3 and status.startswith("4") else "failed"
 
@@ -1146,7 +1146,25 @@ def median_minutes(values: list[int]) -> str:
     return f"{tenths(Decimal(str(median(values))) / 60)} minutes" if values else UNKNOWN
 
 
-PULL_CALLS = 4  # the calls one pull request's tests need: runs, jobs, a log and its commits page
+class OutOfCalls(Exception):
+    """The hourly allowance ran out before a read (brief #2012 answer 3)."""
+
+
+class Metered:
+    """A source that counts each read as it is made and stops at the allowance (None: no limit)."""
+
+    def __init__(self, src: Any, left: int | None) -> None:
+        self.src, self.left = src, left
+
+    def get(self, name: str, endpoint: str, until: Any = None) -> Any:
+        if self.left is not None:
+            if self.left <= 0:
+                raise OutOfCalls
+            self.left -= 1
+        return self.src.get(name, endpoint, until)
+
+    def why(self, name: str) -> str | None:
+        return failed_as(self.src, name) if hasattr(self.src, "why") else None
 
 
 def failed_as(src: Any, name: str) -> str:
@@ -1201,7 +1219,8 @@ def pull_tests(src: Any, detail: dict) -> tuple[str, Any]:
 
 def hourly_room(src: Any) -> int | None:
     """The core calls left this hour (`GET rate_limit`, which GitHub does not count), or None
-    when unknown or not recorded: read as unlimited (brief #2012 answer 3)."""
+    when unknown or not recorded: read as unlimited (brief #2012 answer 3). Each read of the
+    section counts one call (a paged read may cost more; cached reads cost none)."""
     data = src.get("rate_limit", "rate_limit")
     core = data.get("resources", {}).get("core", {}) if isinstance(data, dict) else {}
     left = core.get("remaining") if isinstance(core, dict) else None
@@ -1226,18 +1245,20 @@ def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, ...]:
     paths: dict[str, int] = {}
     took_by_mode: dict[str, list[int]] = {"selected": [], "full": []}
     reasons: dict[str, int] = {}
-    room = hourly_room(ctx.src)
-    chosen = details
-    if room is not None and room < PULL_CALLS * len(details):
-
-        def newest(d: dict) -> tuple[str, int]:
-            return str(d.get("merged_at") or d.get("closed_at") or ""), int(d["number"])
-
-        fit = max(room, 0) // PULL_CALLS
-        chosen = sorted(sorted(details, key=newest, reverse=True)[:fit], key=newest)
+    merged = [d for d in details if d.get("merged_at")]  # answer 1: merged pull requests only
+    src = Metered(ctx.src, hourly_room(ctx.src))
     local = local_execution(ctx.root)
-    for d in chosen:
-        state, found = pull_tests(ctx.src, d)
+    read = 0
+
+    def newest(d: dict) -> tuple[str, int]:
+        return str(d.get("merged_at") or ""), int(d["number"])
+
+    for d in sorted(merged, key=newest, reverse=True):
+        try:
+            state, found = pull_tests(src, d)
+        except OutOfCalls:
+            break
+        read += 1
         if state == "none":
             if local:
                 unknown["no CI run"] = unknown.get("no CI run", 0) + 1
@@ -1260,6 +1281,8 @@ def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, ...]:
         reasons[word] = reasons.get(word, 0) + 1
         for path in named:
             paths[path] = paths.get(path, 0) + 1
+    if read < len(merged):
+        unknown["hourly limit"] = len(merged) - read  # left unread: never a silent zero
     pulls = selected + sum(kinds.values())
     share = f"{round(100 * selected / pulls)}%" if pulls else NONE
     fulls = ", ".join(f"{k} {v}" for k, v in kinds.items())
@@ -1284,8 +1307,8 @@ def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, ...]:
             or "none"
         ),
     )
-    if len(chosen) < len(details):
-        lines += (f"pr tests: {len(chosen)} of {len(details)} pull requests read (hourly limit)",)
+    if read < len(merged):
+        lines += (f"pr tests: {read} of {len(merged)} pull requests read (hourly limit)",)
     return lines
 
 
@@ -1642,6 +1665,7 @@ def window_tests(src: Any, root: Path, start: datetime, end: datetime) -> dict |
     return {
         "pr_tests": lines[0],
         "pr_tests_median": lines[2],
+        "pr_tests_limit": lines[4] if len(lines) > 4 else None,  # brief #2012 answer 8
         "full_suite": full_suite_line(ctx, details),
     }
 

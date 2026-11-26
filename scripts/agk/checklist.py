@@ -356,6 +356,9 @@ def tests_point(view: View) -> Point:
         f"selected {selected} of {runs} pull request runs; test step {match[4]} minutes; "
         f"selected median {shown(pr)}; full suite median on main {shown(full)} ({source})"
     )
+    limit = found.get("pr_tests_limit")  # a partial read says so (brief #2012 answer 8)
+    if isinstance(limit, str):
+        measure += f"; {limit}"
     if selected == 0:
         return "no", measure
     fast = pr is not None and full is not None and pr <= full

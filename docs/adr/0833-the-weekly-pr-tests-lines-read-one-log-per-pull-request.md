@@ -20,23 +20,25 @@ failed became `unknown` with no reason said. A full run for `[testing] full_when
 
 ## Decision
 
-1. **One log per pull request** (`scripts/agk/metrics.py`, `pr_tests_lines`, `pull_tests`, `tested_run`). For each pull
-   request of the week the section reads the runs of its last head, keeps the latest governance run of event
+1. **One log per pull request** (`scripts/agk/metrics.py`, `pr_tests_lines`, `pull_tests`, `tested_run`). For each merged
+   pull request of the week (one closed unmerged is not counted) the section reads the runs of its last head, keeps the latest governance run of event
    `pull_request` whose test step ran (`pr_test_step`, as before; a `governance edited` run is passed over unread), and
    reads that run's jobs and one job log. Only when the last head has no such run does it read the commits and take the
    latest earlier head that has one. The counts are per pull request: `pr tests: <n> pull requests; selected <k> of <n>
    (<share>); ...`, and the median line counts pull requests.
 2. **The `share` kind** (`full_kind`, `FULL_KINDS`). A reason that starts `selection ` is `share`; `FULL_KINDS` is
    `always_full, unmapped, share, thorough, other`, and `pr tests full reasons:` names it `share`.
-3. **Why a read failed** (`Gh.raw`, `Gh.why`, `ApiDir.why`). A failed read keeps its class: `rate-limited` for a 403 or
-   429 that GitHub says is a rate limit, `refused` for another 4xx, `failed` otherwise. A recorded answer in
+3. **Why a read failed** (`Gh.raw`, `Gh.why`, `ApiDir.why`). A failed read keeps its class: `rate-limited` for a 429,
+   or a 403 that GitHub says is a rate limit, `refused` for another 4xx, `failed` otherwise. A recorded answer in
    `--api-dir` whose body holds only `message`, `status` and `documentation_url` is a failed read of that class. The
    line ends `unknown: <n> (<class> <count>, ...)`; a log with no mode line is `no mode`, a step that has not ended is
    `not ended`, and, with `execution = "local"`, a pull request with no governance run that ran tests is `no CI run`.
-   Before the section `metrics.py` reads `GET rate_limit` once (GitHub does not count it, as `session.py` reads it);
-   when `resources.core.remaining` is below four calls per pull request (runs, jobs, the log and a commits page), it
-   reads the newest pull requests that fit and adds the line `pr tests: <k> of <n> pull requests read (hourly limit)`.
-   An unreadable or unrecorded answer reads as unlimited.
+   Before the section `metrics.py` reads `GET rate_limit` once (GitHub does not count it, as `session.py` reads it),
+   and `resources.core.remaining` is the section's allowance (`Metered`): each read counts one call as it is made, the
+   pull requests are read newest first, and the read stops before it would pass the allowance. The pull requests left
+   unread count as `hourly limit` under unknown, never as an empty week, and the line `pr tests: <k> of <n> pull
+   requests read (hourly limit)` follows; `window_tests` keeps it as `pr_tests_limit` and the checklist's tests point
+   names it. An unreadable or unrecorded answer reads as unlimited.
 4. **What does not change.** No selection rule: ADR-0359, ADR-0393, ADR-0422, ADR-0440 and ADR-0692 stand. No workflow
    file. `checklist.py` reads the `pr tests:` line in both the old `<n> runs` and the new `<n> pull requests` form, so a
    saved weekly issue of an earlier week still reads.

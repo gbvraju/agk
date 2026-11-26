@@ -88,7 +88,7 @@ def test_one_log_per_pull_request(repo, tmp_path):
     api = week(tmp_path, {121: SELECTED, 122: SELECTED, 123: PR_FULL})
     lines, names = section(repo, api)
     logs = [n for n in names if n.startswith("job-log-")]
-    assert logs == ["job-log-121110", "job-log-122110", "job-log-123110"]
+    assert sorted(logs) == ["job-log-121110", "job-log-122110", "job-log-123110"]
     assert not [n for n in names if n.startswith("run-jobs-") and n.endswith("0")]  # edited
     assert not [n for n in names if n.startswith("runs-") and n.endswith("1")]  # earlier heads
     assert lines[0] == (
@@ -142,27 +142,81 @@ def test_a_live_failure_keeps_its_class(monkeypatch):
     answers = {
         "a": Proc(1, json.dumps(RATE), "gh: API rate limit exceeded (HTTP 403)"),
         "b": Proc(1, '{"message":"Too Many Requests"}', "gh: Too Many Requests (HTTP 429)"),
+        "f": Proc(1, '{"message":"Forbidden"}', "gh: Forbidden (HTTP 403)"),
         "c": Proc(1, json.dumps(EXPIRED), "gh: Not Found (HTTP 404)"),
         "d": Proc(1, "", "error connecting to api.github.com"),
         "e": Proc(0, "[]", ""),
     }
     monkeypatch.setattr(metrics_mod.subprocess, "run", lambda args, **_: answers[args[-1]])
     gh = metrics_mod.Gh("example/repo")
-    for name in "abcde":
+    for name in "abcdef":
         assert (gh.get(name, name) is None) == (name != "e")
-    assert [gh.why(n) for n in "abcde"] == ["rate-limited", "refused", "refused", "failed", None]
+    assert [gh.why(n) for n in "abcdef"] == [
+        "rate-limited",
+        "rate-limited",  # a 429 is a rate limit by its status
+        "refused",
+        "failed",
+        None,
+        "refused",  # a 403 that does not say rate limit
+    ]
+
+
+def remaining(api: Api, left: int) -> None:
+    answer = {"resources": {"core": {"remaining": left}}}
+    (api.path / "rate_limit.json").write_text(json.dumps(answer))
 
 
 def test_the_hourly_limit_reads_the_newest_that_fit(repo, tmp_path):
-    """REQ-062: brief #2012 answer 3 (`remaining` below the need reads the newest that fit)."""
+    """REQ-062: brief #2012 answer 3 (each read is counted as made; the newest that fit)."""
     api = week(tmp_path, {121: SELECTED, 122: SELECTED, 123: SELECTED})
-    (api.path / "rate_limit.json").write_text(json.dumps({"resources": {"core": {"remaining": 9}}}))
+    remaining(api, 8)  # three reads each for 123 and 122; 121 runs out at its log
     lines, names = section(repo, api)
-    assert [n for n in names if n.startswith("job-log-")] == ["job-log-122110", "job-log-123110"]
+    assert [n for n in names if n.startswith("job-log-")] == ["job-log-123110", "job-log-122110"]
+    assert len(names) == 1 + 8  # `rate_limit`, then never past the allowance
     assert lines[0].startswith("pr tests: 2 pull requests;")
+    assert lines[0].endswith("unknown: 1 (hourly limit 1)")
     assert lines[-1] == "pr tests: 2 of 3 pull requests read (hourly limit)"
     body = report(repo, api)
     assert "pr tests: 2 of 3 pull requests read (hourly limit)" in body.splitlines()
+
+
+def test_no_calls_left_is_not_an_empty_week(repo, tmp_path):
+    """REQ-062: brief #2012 answer 3 (`remaining: 0` counts every pull request as unknown)."""
+    api = week(tmp_path, {121: SELECTED, 122: SELECTED, 123: SELECTED})
+    remaining(api, 0)
+    lines, _ = section(repo, api)
+    assert lines[0].startswith("pr tests: 0 pull requests; selected 0 of 0 (-);")
+    assert lines[0].endswith("unknown: 3 (hourly limit 3)")
+    assert lines[-1] == "pr tests: 0 of 3 pull requests read (hourly limit)"
+
+
+def test_the_window_figures_keep_the_limit_line(repo, tmp_path):
+    """REQ-062: brief #2012 answer 8 (`window_tests` and the checklist keep the limit line)."""
+    from datetime import UTC, datetime
+
+    import checklist as checklist_mod
+
+    api = week(tmp_path, {121: SELECTED, 122: SELECTED, 123: SELECTED})
+    remaining(api, 8)
+    start, end = datetime(2026, 10, 5, tzinfo=UTC), datetime(2026, 10, 12, tzinfo=UTC)
+    figures = metrics_mod.window_tests(metrics_mod.ApiDir(api.path), repo.root, start, end)
+    assert figures is not None
+    assert figures["pr_tests_limit"] == "pr tests: 2 of 3 pull requests read (hourly limit)"
+    unlimited = week(tmp_path / "b", {121: SELECTED})
+    again = metrics_mod.window_tests(metrics_mod.ApiDir(unlimited.path), repo.root, start, end)
+    assert again is not None and again["pr_tests_limit"] is None
+    assert checklist_mod.PR_TESTS.search(figures["pr_tests"])[1] == "2"
+
+
+def test_an_unmerged_pull_request_is_not_counted(repo, tmp_path):
+    """REQ-062: brief #2012 answer 1 (each merged pull request of the week, only)."""
+    api = week(tmp_path, {121: SELECTED, 122: SELECTED})
+    data = json.loads((api.path / "pull-122.json").read_text())
+    data.update(merged=False, merged_at=None)
+    (api.path / "pull-122.json").write_text(json.dumps(data))
+    lines, names = section(repo, api)
+    assert lines[0].startswith("pr tests: 1 pull requests; selected 1 of 1 (100%);")
+    assert not [n for n in names if "122" in n]
 
 
 def test_no_rate_limit_answer_reads_as_unlimited(repo, tmp_path):
@@ -216,3 +270,15 @@ def test_a_project_run_still_counts(repo, tmp_path):
     (api.path / "job-log-121110.json").write_text(json.dumps(picked))
     lines, _ = section(repo, api)
     assert lines[0].startswith("pr tests: 1 pull requests; selected 1 of 1 (100%);")
+
+
+def test_the_checklist_names_a_partial_read(tmp_path, capsys):
+    """REQ-062: brief #2012 answer 8 (the tests point's measure says the read was partial)."""
+    from test_checklist import FULL_SUITE, LINE_75, MEDIAN_FAST, lines_of, project, saved
+
+    limit = "pr tests: 12 of 15 pull requests read (hourly limit)"
+    window = {"pr_tests": LINE_75, "pr_tests_median": MEDIAN_FAST, "full_suite": FULL_SUITE}
+    found = lines_of(
+        capsys, project(tmp_path, saved(window_tests=window | {"pr_tests_limit": limit})), tmp_path
+    )
+    assert found[3][1].endswith(f"(window); {limit}")
