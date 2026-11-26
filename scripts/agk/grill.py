@@ -18,9 +18,12 @@ Prints the grill items to ask, in order: the items of `config/playbooks/default.
 the depth, then the work type's own items (KIND, else the declared `[delivery] work_type`, else
 none), then `success` among the critical items. Each item is one line `<id> (critical|-) <text>`
 followed by `Recommended: <steward fills>`, the placeholder the grill skill fills. The last line is
-`budget: <n>`, the depth's question budget. An id the answers file holds (its `answers` list, and
-its `grill` list) is never printed. Without `--depth` the depth is `[quality] grill`. Reads files
-only: no network, no model. Exit 0 ok, 1 refused, 2 usage.
+`budget: <n>`, the depth's question budget. The composed domain packs' items follow the work
+type's (SPEC-0074 rule 6; brief #1937, ADR-0806): a regulated pack's critical items at every depth,
+its others at `standard` and `deep`; once the answers file holds the budget's number of asked
+items, only those critical items are printed, then the line `PAST_BUDGET`. An id the answers
+file holds (its `answers` list, and its `grill` list) is never printed. Without `--depth` the
+depth is `[quality] grill`. Reads files only: no network, no model. Exit 0 ok, 1 refused, 2 usage.
 
 `record` appends one row to the answers file's `grill` list, the claim quoted as given, and never
 writes `answers`: `stated`, `assumption` (with its test), `open`, or a `Risk accepted:` row. It
@@ -62,6 +65,7 @@ BUDGET = {"light": 5, "standard": 12, "deep": 20}  # SPEC-0073 rule 11
 RECOMMENDED = "Recommended: <steward fills>"
 SUCCESS = "success"  # SPEC-0073 rule 3: a discovery id, the fifth critical item
 WORK_TYPE = "(setting: work-type)"
+PAST_BUDGET = "A few more questions are needed for the rules of this business."  # SPEC-0074 rule 6
 
 
 def _checked(path: Path, root: Path) -> Path:
@@ -106,14 +110,58 @@ def answered(path: str | None) -> set[str]:
     return {r["id"] for r in rows if isinstance(r.get("id"), str)}
 
 
-def composed(root: Path, kind: str | None) -> list[tuple[str, str, str, bool]]:
-    """The grill items of the composed playbook, in order, `success` last."""
+def pack_items(
+    root: Path, held: frozenset[str] | set[str] = frozenset()
+) -> tuple[list[tuple[str, str, str, bool]], set[str]]:
+    """SPEC-0074 rule 6 (brief #1937, ADR-0806): the grill items of the packs of `[domain] packs`
+    in their composed order, and the ids asked past the budget. A regulated pack (a `critical`
+    `[[regulations]]` entry) asks its critical items at `light` and its others at `standard` at
+    the least; any other pack's items keep their depth."""
+    import check_domains  # here: a project without packs reads no pack
+
+    regulated = set()
+    for name in check_domains.order(root, check_domains._listed(root)):
+        path = check_domains.pack_path(root, name)
+        rows = (check_domains.load(path) or {}).get("regulations") if path else None
+        if any(isinstance(r, dict) and r.get("critical") is True for r in rows or []):
+            regulated.add(name)
+    depths = playbook_format.GRILL_DEPTHS
+    items, always = [], set()
+    for entry in check_domains.items(root)["discovery"]:
+        if entry.get("depth") not in depths or not isinstance(entry.get("critical"), bool):
+            continue
+        if entry.get("id") in held:  # the playbook's item keeps its place (fix list item 6)
+            continue
+        depth, critical = entry["depth"], entry["critical"]
+        if entry["pack"] in regulated:
+            depth = depths[0] if critical else max(depth, depths[1], key=depths.index)
+            if critical:
+                always.add(entry["id"])
+        items.append((entry["id"], entry["text"], depth, critical))
+    return items, always
+
+
+def _own(root: Path, kind: str | None) -> tuple[list[tuple[str, str, str, bool]], Path]:
+    """The playbook's and the work type's grill items, and the default playbook's path."""
     base = playbook_format.default_playbook(root)
     if base is None:
         raise CheckError(f"rule 3: there is no default playbook under {playbook_format.FOLDER}/")
     _checked(base, root)
     own = _work_type(root, kind)
     items = [*playbook_format.grill_items(base), *(playbook_format.grill_items(own) if own else [])]
+    return items, base
+
+
+def held_ids(root: Path, kind: str | None) -> set[str]:
+    """The ids the playbook holds before any pack: a pack never adds one again (brief #1937)."""
+    return {item[0] for item in _own(root, kind)[0]} | {SUCCESS}
+
+
+def composed(root: Path, kind: str | None) -> list[tuple[str, str, str, bool]]:
+    """The grill items of the composed playbook, in order, then the packs' (brief #1937),
+    `success` last; an id held earlier keeps its first place."""
+    items, base = _own(root, kind)
+    items += pack_items(root, held_ids(root, kind))[0]
     texts = dict(playbook_format.discovery(base))
     return [*items, (SUCCESS, texts[SUCCESS], playbook_format.GRILL_DEPTHS[0], True)]
 
@@ -131,11 +179,18 @@ def questions(root: Path, depth: str | None, kind: str | None, answers: str | No
     depth = depth or quality_settings(root)["grill"]
     rank = playbook_format.GRILL_DEPTHS.index(depth)
     done = answered(answers)
+    kept = _load(answers).get("grill", []) if answers else []
+    spent = len({r.get("id") for r in kept if "status" in r}) >= BUDGET[depth]
+    always = pack_items(root, held_ids(root, kind))[1] if spent else set()  # the pack's own ids
     lines = []
     for item_id, text, item_depth, critical in composed(root, kind):
         if item_id in done or playbook_format.GRILL_DEPTHS.index(item_depth) > rank:
             continue
+        if spent and item_id not in always:  # rule 6: past the budget, the rules' items only
+            continue
         lines += [f"{item_id} {'(critical)' if critical else '-'} {text}", RECOMMENDED]
+    if lines and spent:
+        lines.append(PAST_BUDGET)
     return [*lines, f"budget: {BUDGET[depth]}"]
 
 

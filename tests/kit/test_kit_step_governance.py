@@ -219,6 +219,18 @@ def work_type_yes(root: Path) -> str:
     return kit(root, "run_gates.py", "--root", ".", ok=False)
 
 
+def domain_yes(root: Path) -> str:
+    """Brief #1937 (ADR-0806): the two writes of `domain --yes`, its line and its record."""
+    import domain_ask
+
+    on(root, domain_ask.BRANCH)
+    toml = root / "agk.toml"
+    toml.write_text(domain_ask.with_packs(toml.read_text("utf-8"), ["payments"]), "utf-8")
+    ask = {"at": "2026-11-23T09:00Z", "question": "?"}
+    domain_ask.adr(root, ask, ["payments"], "Yes", "2026-11-23T09:05Z")
+    return ""
+
+
 def baseline_write(root: Path) -> str:
     on(root, "gates")
     out = kit(root, "run_gates.py", "--root", ".", ok=False)
@@ -300,6 +312,7 @@ STEPS = {
         work_type_yes,
         ADOPTED,
     ),
+    "domain yes adopted": ("scripts/agk/domain_ask.py::yes", domain_yes, ADOPTED),
     "adopt baseline write": ("scripts/agk/run_gates.py::ratchet", baseline_write, ADOPTED),
     "design inventory": ("scripts/agk/design.py::inventory", inventory, {}),
     "sign-off row": ("docs/design/signoffs.md", signoff_row, {}),

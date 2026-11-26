@@ -177,7 +177,10 @@ always_full = [
 ]
 [[testing.map]]
 code = "scripts/agk/grill.py"
-tests = ["tests/kit/test_grill.py", "tests/kit/test_installed_imports.py"]
+tests = ["tests/kit/test_grill.py", "tests/kit/test_installed_imports.py", "tests/kit/test_domain_grill.py"]
+[[testing.map]]
+code = "scripts/agk/domain_ask.py"
+tests = ["tests/kit/test_domain_grill.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 
 [[testing.map]]
 code = "scripts/agk/history_scan.py"
@@ -679,7 +682,7 @@ tests = [
   "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
   "tests/kit/test_front_door_derive.py", "tests/kit/test_front_door_quality.py",
   "tests/kit/test_architecture_record.py", "tests/kit/test_stack_designs.py", "tests/kit/test_domain_signals.py",
-  "tests/kit/test_domain_architecture.py",
+  "tests/kit/test_domain_grill.py", "tests/kit/test_domain_architecture.py",
 ]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
@@ -1323,7 +1326,7 @@ tests = [
   "tests/kit/test_standard_confirm.py", "tests/kit/test_steward_owner_approve.py",
   "tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py",
   "tests/kit/test_autopilot_supervisor.py", "tests/kit/test_kit_defect_report.py",
-  "tests/kit/test_steward_fix_brief.py", "tests/kit/test_layers_draft.py",
+  "tests/kit/test_steward_fix_brief.py", "tests/kit/test_layers_draft.py", "tests/kit/test_domain_grill.py",
 ]
 [[testing.map]]
 code = "scripts/agk/steward_voice.py"

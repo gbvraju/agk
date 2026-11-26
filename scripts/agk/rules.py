@@ -321,6 +321,9 @@ IMPORTS_WARNING = (
     "name in Questions any other kit module the build needs"
 )
 DYNAMIC = ("import_module", "__import__")
+# The owner's rulings for one script and one module outside the set (ADR-0824 decision 2), each
+# recorded by an ADR: `grill.py` may import `check_domains` (the owner on #1992, ADR-0806).
+GRANTED: dict[str, frozenset[str]] = {"grill": frozenset({"check_domains"})}
 
 
 def _imported(tree: ast.Module, every: bool) -> set[str]:
@@ -437,7 +440,8 @@ def imports(root: Path, script: str) -> int:
         print(f"Imports: {shown}, no standing ruling: ask the owner")
         return 1
     members = set(kit_imports(path.parent) - {path.stem})
-    outside = sorted(n for n in used if not _allowed(n, members))
+    granted = GRANTED.get(path.stem, frozenset())
+    outside = sorted(n for n in used if not _allowed(n, members) and n not in granted)
     for name in outside:
         print(
             f"Imports: {shown} imports {name} outside the standing ruling "
