@@ -535,6 +535,36 @@ def cleared_items(body: str) -> bool:
     return any(re.match(r"\s*\d+\.", line) for line in lines[1:])
 
 
+# brief #2006 answer 3 (ADR-0830): one line per `not what prepush runs:` difference of evidence.py
+DIFFERS = re.compile(r"Differs: (\S(?:.*\S)?) \(field: (\w+)\)")
+EVIDENCE_CHECK = re.compile(r"Evidence check: (agrees|differs), head [0-9a-f]{12}(?![0-9A-Za-z])")
+DIFFERS_MISSING = (
+    "SPEC-0039 rule 4: an `Evidence check: differs` verdict carries one line "
+    "'Differs: <name> (field: <field>)' per difference evidence.py printed"
+)
+DIFFERS_ALONE = (
+    "SPEC-0039 rule 4: a 'Differs:' line stands only beside an `Evidence check: differs`"
+)
+DIFFERS_SHAPE = "SPEC-0039 rule 4: a Differs: line reads 'Differs: <name> (field: <field>)'"
+
+
+def differs_lines(body: str) -> frozenset[str]:
+    """The `Differs:` lines of a verdict BODY, as a set (brief #2006 answer 2c)."""
+    return frozenset(ln.strip() for ln in body.splitlines() if ln.strip().startswith("Differs:"))
+
+
+def differs_problem(body: str) -> str | None:
+    """Brief #2006 answer 3, before a post: a `differs` check without its `Differs:` lines, the
+    lines beside no `differs` check, or a line of another shape; a message that names the rule."""
+    lines = differs_lines(body)
+    if any(DIFFERS.fullmatch(ln) is None for ln in lines):
+        return DIFFERS_SHAPE
+    checks = {m.group(1) for m in EVIDENCE_CHECK.finditer(body)}
+    if "differs" in checks and not lines:
+        return DIFFERS_MISSING
+    return DIFFERS_ALONE if lines and "differs" not in checks else None
+
+
 RULE_TAG = re.compile(r"\(rule: (none|\S+ \d+[a-z]?)\)\.?")
 RULE_TAGS_FROM = "rule_tags_from"
 
