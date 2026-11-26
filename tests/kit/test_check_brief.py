@@ -602,3 +602,16 @@ def test_rule4_the_size_limits_are_in_brief_problems_for_next_and_plan():
         "rule 4: Size S allows at most 3 code paths, Touches names 4: split the brief or raise Size"
     ]
     assert session.brief_problems(sized("S", 4), {"S": 4, "M": 6}) == []
+
+
+def test_req037_a_brief_naming_the_import_phrase_is_warned_never_failed(tmp_path):
+    """REQ-037: brief #1972 answer 4 (ADR-0824: one warning before `ok brief`, none without it)."""
+    body = GOOD.replace("Size: M\n", "Size: M\nPlan: standard library and `common.py` only.\n")
+    out = check(tmp_path, body)
+    assert out.returncode == 0
+    assert out.stdout.splitlines() == [
+        'warning: ADR-0824: "standard library and common.py only" is read as the kit\'s offline '
+        "set; name in Questions any other kit module the build needs",
+        "ok brief",
+    ]
+    assert check(tmp_path, GOOD).stdout.strip() == "ok brief"

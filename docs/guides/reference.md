@@ -525,6 +525,15 @@ read first, the secret-scan deferral line of `prepush.py`, the body lines of CLA
 the session rules that bind a builder quoted from `config/session-rules.md`; `--follow-up TEXT` (one line, never a verdict)
 replaces the stop on an existing pull request with the follow-up for it. The guard allows exactly these forms.
 
+## Kit script imports
+
+Where an Approved spec or a brief says a new kit script uses the "standard library and `common.py` only", the words
+read, once ADR-0824 is Accepted, as the standard library less its network modules plus the kit's offline set (ADR-0824): `common`, `guard`,
+`config`, `playbook_format`, `kit_root`, `tree_walk` and every `check_*.py` whose module-level imports stay within that
+set. `python3 scripts/agk/rules.py imports scripts/agk/<script>.py` prints `Imports: <script> within the standing
+ruling (ADR-0824)` (exit 0) or one `outside ... : ask the owner` line per module (exit 1); with the ADR not Accepted,
+or withdrawn, it prints `no standing ruling: ask the owner`. `check_brief.py` warns on a brief that names the phrase.
+
 ## Playbook evidence
 
 With a declared work type (`[delivery] work_type` in `agk.toml`, SPEC-0038 rule 5), a clearing verdict on a pull request of the

@@ -59,6 +59,8 @@ Brief #1856 (ADR-0774, rule 4c): with a `[testing]` table, a brief whose `Touche
 whole test (failures from `[flow] brief_study_fails_from`), and for a closed-class test, a test
 outside the map entry of a touched code path and a project's file-by-file mapped folder (warnings
 only); a Reserved line whose path classes leave out a named `agk.toml` warns (rule 4b).
+Brief #1972 (ADR-0824): a brief that names "standard library and `common.py` only" is warned
+that the words read as the kit's offline set (`rules.py imports`), never failed.
 
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
@@ -91,6 +93,7 @@ from common import (
 )
 from gates.layers import architecture
 from impact import is_test_file, matches, testing_table
+from rules import IMPORTS_PHRASE, IMPORTS_WARNING
 from session import (
     ADDS,
     TOUCHES,
@@ -479,6 +482,11 @@ def body_problems(
     return problems
 
 
+def phrase_warnings(body: str) -> list[str]:
+    """Brief #1972 answer 4 (ADR-0824): one warning, never a failure, on the import phrase."""
+    return [IMPORTS_WARNING] if IMPORTS_PHRASE.search(body) else []
+
+
 def brief_result(
     body: str,
     root: Path | None,
@@ -506,11 +514,11 @@ def brief_result(
     if problems:
         return problems, []
     if root is None:
-        return [], study
+        return [], study + phrase_warnings(body)
     fails, testing = testing_problems(body, root, today or utc_day(), filed)  # brief #1856
     if fails:
         return fails, []
-    return [], protected_warnings(body, root) + testing + study
+    return [], protected_warnings(body, root) + testing + study + phrase_warnings(body)
 
 
 def check(
