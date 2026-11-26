@@ -391,7 +391,7 @@ def fit_fails(tmp: Path, options: str, toml: str = PACKS, status: str = "Propose
 
 
 def test_req_081_ac5_each_option_with_its_domain_fit_passes(tmp_path):
-    """REQ-081 AC5: an option that cannot meet a hard constraint is shown and kept, never dropped."""
+    """REQ-081 AC5: an option that cannot meet a hard constraint is shown and kept, not dropped."""
     assert fit_fails(tmp_path, OPTION_A + MEETS + OPTION_B + CANNOT) == []
 
 

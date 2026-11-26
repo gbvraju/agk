@@ -215,6 +215,10 @@ INSTALLED_PLACEHOLDER = "TODO(maintainers)"
 PLACEHOLDER = re.compile(r"TODO\(owner\)")
 STACK_NAME = re.compile(r"^docs/adr/(\d{4})-stack-options\.md$")
 OPTION = re.compile(r"^\s*-\s+Option ([A-Z]) — (.+)$")
+# SPEC-0074 rule 8 (brief #1955, ADR-0811): an indented line after an option bullet, never a bullet
+DOMAIN_FIT = re.compile(r"^\s+Domain fit: (?:meets|cannot meet: (\S.*))$")
+FIT_SLOT = "     Domain fit: TODO(architect)"
+UNCITED = "not of the form <pack>.<constraint>"
 PRACTICE = re.compile(r"^\s*-\s+(.+?):\s+(check|judgement)(?:\s+\((.*)\))?\s*$")
 STACK_PLACEHOLDER = re.compile(r"TODO\(architect\)")
 # The lock of an Accepted stack ADR: one option, then at most a one-line reason (brief 274).
@@ -416,6 +420,10 @@ def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
     if playbook is not None:
         text = with_playbook(text, *playbook)
     text = with_names(text).replace(RECOMMENDED_SLOT, recommended_option(root))
+    if domain_cited(root):  # brief #1955: one slot after each option, only with packs set
+        text = re.sub(
+            r"(?m)^(   - Option [A-Z] — .*)$", lambda m: m.group(1) + "\n" + FIT_SLOT, text
+        )
     line = screens_line(root)  # brief #1843 answer 1
     text = text.replace("\n" + SCREENS_SLOT, "\n" + line if line else "")
     path = root / rel
@@ -607,6 +615,41 @@ def with_names(text: str) -> str:
 def practice_names(option_text: str) -> list[str]:
     _, _, tail = option_text.partition("Practices:")
     return [p.strip().rstrip(".") for p in tail.split(",") if p.strip().rstrip(".")]
+
+
+def domain_cited(root: Path) -> dict[str, dict] | None:
+    import check_domains  # noqa: PLC0415 - read only where a stack ADR is written or checked
+
+    return check_domains.cited(root)
+
+
+def domain_fit_problems(text: str, cited: dict[str, dict]) -> list[str]:
+    """SPEC-0074 rule 8 (brief #1955): with packs set, each option bullet is followed by its
+    `Domain fit:` line, each id a composed `hard` constraint; an option that cannot meet one is kept
+    and may be chosen. An Accepted ADR with no such line was written before packs and is held."""
+    import check_domains  # noqa: PLC0415
+
+    lines = [ln for ln in section(text, "Decision") or [] if ln.strip()]
+    accepted = re.search(r"(?m)^- Status: Accepted$", text)
+    if not cited or accepted and not any(DOMAIN_FIT.match(ln) for ln in lines):
+        return []
+    out = []
+    for at, line in enumerate(lines):
+        m = OPTION.match(line)
+        if not m:
+            continue
+        head = f"SPEC-0074 rule 8: option {m.group(1)}"
+        fit = DOMAIN_FIT.match(lines[at + 1]) if at + 1 < len(lines) else None
+        if not fit:
+            out.append(f"{head} has no Domain fit line")
+            continue
+        for cid in (c.strip() for c in (fit.group(1) or "").split(",") if c.strip()):
+            if cid not in cited:
+                shown = cid if check_domains.CITATION.match(cid) else UNCITED
+                out.append(f"{head} names an unknown domain constraint (id: {shown})")
+            elif cited[cid].get("hard") is not True:
+                out.append(f"{head} names a constraint that is not hard (id: {cid})")
+    return out
 
 
 def stack_problems(name: str, text: str) -> list[str]:
@@ -1005,8 +1048,12 @@ def cmd_stack_check(root: Path) -> int:
         print("ok engines-stack (no stack ADR)")
         return 0
     problems: list[str] = []
+    cited = domain_cited(root)
+    if cited is None:
+        print("not run engines-stack domain fit: [domain] is refused (setting: domain)")
     for path in files:
-        problems += stack_problems(path.name, path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        problems += stack_problems(path.name, text) or domain_fit_problems(text, cited or {})
     for problem in problems:
         print(f"FAIL engines: {problem}")
     if not problems:

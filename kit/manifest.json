@@ -123,6 +123,8 @@
     "scripts/agk/gates/committed_secrets.py",
     "scripts/agk/gates/contract_tests.py",
     "scripts/agk/gates/cut_over_order.py",
+    "scripts/agk/gates/domain_scenarios.py",
+    "scripts/agk/gates/domain_threats.py",
     "scripts/agk/gates/environment_settings.py",
     "scripts/agk/gates/glossary.py",
     "scripts/agk/gates/injection_set.py",

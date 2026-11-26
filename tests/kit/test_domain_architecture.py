@@ -13,6 +13,7 @@ Fixtures in `tmp_path` only: invented packs and data (example.com), no network.
 
 from __future__ import annotations
 
+import json
 import re
 import socket
 import sys
@@ -85,7 +86,7 @@ def project(
         pack("zz-shop", ("orders-kept", 5, "true"), ("logs-kept", 1, "false")),
     )
     table = (
-        "" if listed is None else "[domain]\npacks = [%s]\n" % ", ".join(f'"{n}"' for n in listed)
+        "" if listed is None else f"[domain]\npacks = {json.dumps(list(listed))}\n"
     )
     write(root, "agk.toml", table)
     rows = scenarios or "\n".join(
@@ -220,7 +221,7 @@ def test_req_081_ac5_data_without_packs_still_checks_the_threats(tmp_path):
 
 
 def test_req_081_ac5_the_citation_form_is_one_pattern(tmp_path):
-    """One pattern of `<pack>.<constraint>`, in the composition's reader, imported by both checks."""
+    """One pattern of `<pack>.<constraint>`, in the composition's reader; both checks import it."""
     source = check_domains.CITATION.pattern
     holders = [
         p.relative_to(KIT_ROOT).as_posix()

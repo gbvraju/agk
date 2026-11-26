@@ -94,7 +94,13 @@ REGISTRY = Path(__file__).resolve().parent / "gates"
 STEP = re.compile(r"^[a-z][a-z0-9-]*$")
 # SPEC-0072 rule 5 (brief #1588, ADR-0668): steps of the composed `[architecture]`, not of a gate;
 # each runs, under its own name, only where its `applies(root)` is true.
-ARCHITECTURE_STEPS = ("layers", "architecture-record", "architecture-quality")  # ADR-0675, ADR-0808
+ARCHITECTURE_STEPS = (
+    "layers",
+    "architecture-record",
+    "architecture-quality",
+    "domain-scenarios",  # brief #1955 (ADR-0811): SPEC-0074 rule 8
+    "domain-threats",
+)  # ADR-0675, ADR-0808
 # brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way
 # only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
 # brief #1776 (ADR-0742): `pins` first, where a work type is declared; no stack chosen is not run.

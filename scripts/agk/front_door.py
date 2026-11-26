@@ -1030,11 +1030,15 @@ QUALITY_ATTRIBUTES = (
     "maintainability",
     "portability",
 )
-SCENARIO = re.compile(r"^- ([a-z ]+): (\S.*?) -> (\S.*?) \(([^()]*\d[^()]*)\)$")
+# brief #1955 (ADR-0811): an optional tail ` [<citation>]` of a domain constraint (SPEC-0074 rule 8)
+SCENARIO = re.compile(r"^- ([a-z ]+): (\S.*?) -> (\S.*?) \(([^()]*\d[^()]*)\)(?: \[([^\[\]]+)\])?$")
 THREAT = re.compile(r"^- ([^:]*\S):\s+([A-Z](?:[,\s]*[A-Z])*):\s+(\S.*)$")
 STRIDE = frozenset("STRIDE")
 OPERATION = re.compile(r"^- (?:traced|alerted): \S")
 QUALITY_HELD = "the record predates its quality sections; held until its next edit"
+RULE_8 = "SPEC-0074 rule 8"
+CLASS_MARK = re.compile(r"\(class: ([a-z]+(?:, [a-z]+)*)\)")
+UNCITED = "not of the form <pack>.<constraint>"
 
 
 def slice_problems(rel: str, text: str, strict: bool) -> tuple[list[str], list[str]]:
@@ -1161,6 +1165,68 @@ def quality_record_problems(body: dict[str, list[str]]) -> list[tuple[str, str]]
         (f"{RULE_5}: {what}", f"{RECORD}; section: {section}")
         for what, section in record_quality_problems(body)
     ]
+
+
+def domain_scenario_problems(
+    body: dict[str, list[str]], cited: dict[str, dict]
+) -> list[tuple[str, str]]:
+    """SPEC-0074 rule 8 (brief #1955): one `## Quality scenarios` row per composed constraint, its
+    tail ` [<pack>.<constraint>]` (`check_domains.CITATION`); a missing row or a row citing no
+    composed constraint fails naming the id, and a citation out of its form is never echoed."""
+    import check_domains  # here: a record without packs needs no domain module
+
+    where = f"{RECORD}; section: Quality scenarios"
+    out, rows = [], set()
+    for line in body.get("Quality scenarios", []):
+        m = SCENARIO.match(line.rstrip())
+        if m and m.group(5):
+            rows.add(m.group(5))
+            if m.group(5) not in cited:
+                shown = m.group(5) if check_domains.CITATION.match(m.group(5)) else UNCITED
+                out.append(
+                    (
+                        f"{RULE_8}: a quality scenario cites no composed domain constraint",
+                        f"{where}; id: {shown}",
+                    )
+                )
+    missing = [c for c in cited if c not in rows]
+    return out + [
+        (f"{RULE_8}: a domain constraint has no quality scenario", f"{where}; id: {c}")
+        for c in missing
+    ]
+
+
+def threat_class_problems(
+    body: dict[str, list[str]], items: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """SPEC-0074 rule 8 (brief #1955): each `## Threats` flow names, in `(class: <c>)`, the class
+    of each data item of `docs/domain/data.md` it names; a missing class, or one outside the five,
+    fails naming the flow's number and the item, never the flow's text."""
+    import domain_model  # here: a record without a data classification needs no domain module
+
+    where = f"{RECORD}; section: Threats"
+    out = []
+    flows = [ln.rstrip() for ln in body.get("Threats", []) if ln.startswith("- ")]
+    for number, line in enumerate(flows, 1):
+        marked = {c for m in CLASS_MARK.finditer(line) for c in m.group(1).split(", ")}
+        if marked - set(domain_model.CLASSES):
+            out.append(
+                (
+                    f"{RULE_8}: a threat flow names a class outside the five",
+                    f"{where}; flow: {number}",
+                )
+            )
+        text = CLASS_MARK.sub("", line).casefold()
+        for item, kind in items:
+            named = re.search(rf"\b{re.escape(item.casefold())}\b", text)
+            if named and kind in domain_model.CLASSES and kind not in marked:
+                out.append(
+                    (
+                        f"{RULE_8}: a threat flow does not carry the class of its data item",
+                        f"{where}; flow: {number}; item: {item}",
+                    )
+                )
+    return out
 
 
 def record_problems(root: Path) -> list[tuple[str, str]]:
