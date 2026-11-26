@@ -65,7 +65,8 @@ ASSIGN = re.compile(
 )
 REFUSED = re.compile(r"\bRefused \((\d+)\)")
 PR_TESTS = re.compile(
-    r"pr tests: (\d+) runs; selected (\d+) of (\d+) \([^)]*\); test step ([\d.]+) minutes"
+    r"pr tests: (\d+) (?:runs|pull requests); selected (\d+) of (\d+) \([^)]*\); "
+    r"test step ([\d.]+) minutes"
 )
 SELECTED_MEDIAN = re.compile(r"pr tests median: selected ([\d.]+) minutes")
 FULL_MEDIAN = re.compile(r"full suite: median (\d+)s")
@@ -355,6 +356,9 @@ def tests_point(view: View) -> Point:
         f"selected {selected} of {runs} pull request runs; test step {match[4]} minutes; "
         f"selected median {shown(pr)}; full suite median on main {shown(full)} ({source})"
     )
+    limit = found.get("pr_tests_limit")  # a partial read says so (brief #2012 answer 8)
+    if isinstance(limit, str):
+        measure += f"; {limit}"
     if selected == 0:
         return "no", measure
     fast = pr is not None and full is not None and pr <= full
