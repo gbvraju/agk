@@ -78,6 +78,9 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 KEY_AT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
 SHIPPED = ("field-service", "payments")  # the seed packs; a test holds them to kit/manifest.json
 KEPT_ONCE = {"discovery": "id", "terms": "term", "acceptance": "id"}
+# SPEC-0074 rule 8 (brief #1955, ADR-0811): the one citation form of a composed constraint,
+# `<pack>.<constraint>`, read by the record's `domain-scenarios` step and `engines.py stack-check`.
+CITATION = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)\.([A-Za-z0-9][A-Za-z0-9_-]*)$")
 
 
 def _is(value: Any, kind: str) -> bool:
@@ -371,6 +374,21 @@ def items(root: Path) -> dict[str, list[dict]]:
                 if mark not in seen:
                     seen.add(mark)
                     out[section].append({**entry, "pack": name})
+    return out
+
+
+def cited(root: Path) -> dict[str, dict] | None:
+    """Rule 8: the composed constraints by their citation `<pack>.<constraint>`; `{}` with no
+    `[domain] packs`, None when the table is refused (the caller prints `not run`, not a guess)."""
+    try:
+        names = _listed(root)
+    except Exception:  # config.DomainSettingError: its line names the setting
+        return None
+    out: dict[str, dict] = {}
+    for name in order(root, names):  # each pack's own key: a repeat in another pack is cited too
+        path = pack_path(root, name)
+        for entry in _entries(load(path) or {}).get("constraints", []) if path else []:
+            out.setdefault(f"{name}.{entry.get('id')}", {**entry, "pack": name})
     return out
 
 
