@@ -36,3 +36,5 @@ for the owner's `Maintainer answer: amendment <n> approved` (#1945 waited about 
    Class: behaviour
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: items 1 to 4 (to rules 4, 11, 12 and 13) applied to `docs/specs/0059-a-steward-answers-what-the-evidence-settles-and-asks-the-owner-only-the-rest.md` word for word, on the maintainer's answer on #1959 (comment 7181600150).
