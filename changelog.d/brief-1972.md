@@ -1,0 +1,1 @@
+- Rules: `rules.py imports <script>` says whether a new kit script's imports stay within the kit's offline set, the standing reading of "standard library and `common.py` only"; the brief check warns on that phrase and the conductor takes the line instead of asking the owner (brief #1972, ADR-0824)

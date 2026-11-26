@@ -10,6 +10,7 @@ ADR-0404). Installed in projects.
     python3 rules.py consolidate --plan [--root DIR] [--since DATE] [--repo O/R] [--api-dir DIR]
     python3 rules.py consolidate --apply --hash HASH [--root DIR]
     python3 rules.py size --pr N [--root DIR] [--repo OWNER/REPO] [--api-dir DIR]
+    python3 rules.py imports <script> [--root DIR]
 
 The instruction files are `[rules] files` in `agk.toml` (paths or globs, in order); without it, the
 four core files, every file under `.claude/agents/` and `config/review-checklist.md`.
@@ -20,6 +21,10 @@ counts with `config/rule-budget.txt` and exits 1 on any difference, naming the f
 and `budget_ruling` state the owner's two standing rulings (ADR-0583) for the conductor's verdicts.
 `size --pr N` (GET only) prints the one size line of ruling 1 from `size_count` (changed lines, the
 records a brief requires left out, ADR-0749) and `size_guide`, and `records: <n> lines not counted`.
+`imports <script>` (a file read only, ADR-0824) reads every import of one `scripts/agk/` file and
+prints `Imports: <script> within the standing ruling (ADR-0824)` (exit 0) or one `outside` line
+per module (exit 1): within is the standard library less `NETWORK` and `kit_imports` of the
+script's folder (`KIT_IMPORTS` and each `check_*.py` whose module-level walk stays offline).
 
 `dropped` reads, with `gh api` GET only or from recorded responses (`--api-dir`: `pulls.json` and
 `comments-<n>.json`), the open and merged pull requests updated since DATE, and counts the numbered
@@ -39,6 +44,7 @@ plan or a dirty tree, and never commits.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -89,7 +95,8 @@ USAGE = (
     "rules.py dropped --since YYYY-MM-DD [--root DIR] [--repo OWNER/REPO] [--api-dir DIR] | "
     "rules.py consolidate --plan [--root DIR] [--since YYYY-MM-DD] [--repo O/R] [--api-dir DIR] | "
     "rules.py consolidate --apply --hash HASH [--root DIR] | "
-    "rules.py size --pr N [--root DIR] [--repo OWNER/REPO] [--api-dir DIR]"
+    "rules.py size --pr N [--root DIR] [--repo OWNER/REPO] [--api-dir DIR] | "
+    "rules.py imports <script> [--root DIR]"
 )
 
 
@@ -295,6 +302,131 @@ def budget_ruling(rel: str, old: int, new: int, old_rules: int, new_rules: int) 
     if new_rules > old_rules or new * 10 > old * 11:
         return None
     return f"Rule budget: {rel} {old} to {new} words, standing ruling ({STANDING})"
+
+
+# --- the standing import ruling (brief #1972, ADR-0824) -----------------------------------------
+
+IMPORTS_ADR = "ADR-0824"
+KIT_IMPORTS = ("common", "guard", "config", "playbook_format", "kit_root", "tree_walk")
+NETWORK = frozenset(
+    ("urllib", "http", "socket", "ssl", "ftplib", "smtplib", "poplib", "imaplib", "nntplib")
+    + ("xmlrpc", "webbrowser")
+)
+IMPORTS_PHRASE = re.compile(r"standard library and `?common\.py`? only")
+IMPORTS_WARNING = (
+    f'{IMPORTS_ADR}: "standard library and common.py only" is read as the kit\'s offline set; '
+    "name in Questions any other kit module the build needs"
+)
+DYNAMIC = ("import_module", "__import__")
+
+
+def _imported(tree: ast.Module, every: bool) -> set[str]:
+    """The top-level names TREE imports: at module level (outside functions), or EVERY level; a
+    relative import is its dotted text and a dynamic import is `importlib.import_module`."""
+    found: set[str] = set()
+    nodes = ast.walk(tree) if every else _module_level(tree.body)
+    for node in nodes:
+        if isinstance(node, ast.Import):
+            found |= {a.name.split(".")[0] for a in node.names}
+        elif isinstance(node, ast.ImportFrom):
+            found.add(("." * node.level) + (node.module or "") if node.level else str(node.module).split(".")[0])
+        elif every and isinstance(node, ast.Call):
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if name in DYNAMIC:
+                found.add("importlib.import_module" if name == "import_module" else name)
+    return found - {"__future__"}
+
+
+def _module_level(body: list):
+    """The statements of BODY and of its blocks, leaving out function bodies."""
+    for node in body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        yield node
+        for field in ("body", "orelse", "finalbody", "handlers"):
+            inner = getattr(node, field, None)
+            if isinstance(inner, list):
+                yield from _module_level(inner)
+
+
+def _parsed(path: Path) -> ast.Module | None:
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def kit_modules(folder: Path) -> set[str]:
+    """The kit's own module names in FOLDER: its `.py` files and its packages."""
+    return {p.stem for p in folder.glob("*.py")} | {
+        p.parent.name for p in folder.glob("*/__init__.py")
+    }
+
+
+def kit_imports(folder: Path) -> frozenset[str]:
+    """The offline set of FOLDER (a file read only): each `KIT_IMPORTS` module and `check_*.py`
+    whose module-level imports reach only the standard library less `NETWORK` and other members.
+    A file that does not parse, or a module FOLDER does not hold, is not a member; a cycle is
+    walked once (the largest set that holds)."""
+    kit = kit_modules(folder)
+    walks = {}
+    for name in sorted({*KIT_IMPORTS, *(p.stem for p in folder.glob("check_*.py"))} & kit):
+        tree = _parsed(folder / f"{name}.py")
+        if tree is not None:
+            walks[name] = _imported(tree, every=False)
+    members = set(walks)
+    while True:
+        out = {m for m in members if any(not _allowed(n, members) for n in walks[m])}
+        if not out:
+            return frozenset(members)
+        members -= out
+
+
+def _allowed(name: str, members: set[str]) -> bool:
+    return name in members or (name in sys.stdlib_module_names and name not in NETWORK)
+
+
+def imports_withdrawn(root: Path) -> bool:
+    """Whether ADR-0824 holds no ruling: no Accepted file of it, or an Accepted ADR withdraws it
+    (as `size_withdrawn` reads ADR-0583)."""
+    accepted_file = False
+    for path in sorted((root / "docs" / "adr").glob("[0-9]*.md")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        accepted = "- Status: Accepted" in lines
+        if path.name.startswith("0824-"):
+            accepted_file = accepted_file or accepted
+        if accepted and f"- Withdraws: {IMPORTS_ADR}" in lines:
+            return True
+    return not accepted_file
+
+
+def imports(root: Path, script: str) -> int:
+    """`rules.py imports <script>`: every import of one `scripts/agk/` file against the ruling."""
+    path = Path(script) if Path(script).is_absolute() else root / script
+    path = path.resolve()
+    folders = {(root / "scripts" / "agk").resolve(), Path(__file__).resolve().parent}
+    if path.suffix != ".py" or path.parent not in folders or not path.is_file():
+        print("Imports: refused: the script is outside scripts/agk/")
+        return 2
+    tree = _parsed(path)
+    if tree is None:
+        print("Imports: refused: a file of scripts/agk/ does not parse")
+        return 2
+    shown, used = f"scripts/agk/{path.name}", _imported(tree, every=True)
+    if imports_withdrawn(root):
+        if used - {"common"} <= (set(sys.stdlib_module_names) - NETWORK):
+            print(f"Imports: {shown} within the standard library and common.py")
+            return 0
+        print(f"Imports: {shown}, no standing ruling: ask the owner")
+        return 1
+    members = set(kit_imports(path.parent) - {path.stem})
+    outside = sorted(n for n in used if not _allowed(n, members))
+    for name in outside:
+        print(f"Imports: {shown} imports {name} outside the standing ruling ({IMPORTS_ADR}): ask the owner")
+    if not outside:
+        print(f"Imports: {shown} within the standing ruling ({IMPORTS_ADR})")
+    return 1 if outside else 0
 
 
 def size(root: Path, number: int, repo: str | None, api: str | None) -> int:
@@ -686,10 +818,12 @@ def consolidate_apply(root: Path, wanted: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = sys.argv[1:] if argv is None else argv
-    if not args or args[0] not in ("budget", "dropped", "consolidate", "size"):
+    if not args or args[0] not in ("budget", "dropped", "consolidate", "size", "imports"):
         print(USAGE)
         return 2
     command, rest = args[0], args[1:]
+    if command == "imports":
+        return imports_main(rest)
     flags = {
         "budget": {"--check"},
         "dropped": set(),
@@ -732,6 +866,25 @@ def main(argv: list[str] | None = None) -> int:
     except CheckError as exc:
         print(f"{command}: {exc}")
         return 1
+
+
+def imports_main(rest: list[str]) -> int:
+    """`imports <script> [--root DIR]`: one script, at most one `--root`."""
+    root, scripts = None, []
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--root" and i + 1 < len(rest) and root is None:
+            root, i = Path(rest[i + 1]).resolve(), i + 2
+        elif rest[i].startswith("--"):
+            print(USAGE)
+            return 2
+        else:
+            scripts.append(rest[i])
+            i += 1
+    if len(scripts) != 1:
+        print(USAGE)
+        return 2
+    return imports(root or repo_root(), scripts[0])
 
 
 def consolidate(root: Path, opts: dict[str, str]) -> int:
