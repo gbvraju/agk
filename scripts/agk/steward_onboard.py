@@ -52,7 +52,7 @@ ISSUES = "repos/{owner}/{repo}/issues"
 COMMENTS = ISSUES + "/comments?per_page=100&page=<page>"
 LABELLED = ISSUES + "?labels=<label>&state=<state>&per_page=100"
 CHUNK = 50
-ASKED = 5  # SPEC-0074 rule 14, owner's answer Q-1954-B: inferred domain rules in batches of five (ADR-0810)
+ASKED = 5  # SPEC-0074 rule 14, owner's answer Q-1954-B: batches of five (ADR-0810)
 FIRST = re.compile(r"^(Maintainer answer|Answer|Question): (Q-[\w-]+)\s*(.*)")
 STATUS = re.compile(r"^- Status: (\S+)", re.M)
 HEADING = re.compile(r"^# ((?:ADR|SPEC)-\d+): (.+)$", re.M)
