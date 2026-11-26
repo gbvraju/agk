@@ -539,7 +539,7 @@ def spec_rules(root: Path, number: str) -> tuple[str | None, dict[str, str]]:
         status = brief_study.STATUS.search(text)
         part = text.split("\n## Rules", 1)[-1].split("\n## ", 1)[0] if "\n## Rules" in text else ""
         starts = list(RULE_START.finditer(part))
-        ends = [m.start() for m in starts[1:]] + [len(part)]
+        ends = [m.start() for m in starts[1:]] + ([len(part)] if starts else [])
         return (status.group(1) if status else "", {
             m.group(1): part[m.start() : end] for m, end in zip(starts, ends, strict=True)
         })  # fmt: skip

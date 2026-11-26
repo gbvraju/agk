@@ -754,3 +754,15 @@ def test_req066_2002_brief_result_runs_the_spec_fit_after_the_study(tmp_path):
     failed = check(tmp_path, bad, "--root", str(root))
     assert failed.returncode == 1 and "which Reserved: does not name" in failed.stdout
     assert "spec fit" not in check(tmp_path, bad).stdout
+
+
+def test_req066_2002_a_spec_without_a_rules_section_has_no_rules_and_never_raises(tmp_path):
+    """REQ-066: CI on baac16a: a spec file with no `## Rules` heading (a sidecar's) read safely."""
+    root = fit_root(tmp_path)
+    (root / "docs" / "specs" / "0903-bare.md").write_text(
+        "# SPEC-0903: bare\n\n- Status: Approved\n- Requirements: REQ-001\n", encoding="utf-8"
+    )
+    assert check_brief.spec_rules(root, "0903") == ("Approved", {})
+    assert fit(fitted("Spec fit: SPEC-0901 rule 2 within\n"), root)[1] == [
+        "spec fit: SPEC-0903 has no Spec fit: line (setting: Spec fit:)"
+    ]
