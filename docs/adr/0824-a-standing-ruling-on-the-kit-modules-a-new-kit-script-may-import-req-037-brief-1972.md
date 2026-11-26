@@ -60,8 +60,9 @@ level (Q-1972-1).
 
 ## Residual
 
-- 2026-11-26: whether `domain_model` joins `KIT_IMPORTS` (it is neither a base module nor a check) is the owner's
-  (Q-1972-1); until then `check_domains.py` and `domain_model.py` print an `outside` line.
+- 2026-11-26: `domain_model` (neither a base module nor a check) does not join `KIT_IMPORTS` here; it joins only by a
+  later ADR that edits the tuple, and until then `check_domains.py` and `domain_model.py` print an `outside` line
+  (Q-1972-1, the steward's `Answer:` on #1985, comment 7187335451, from the owner's answer to Q-KI-2).
 - 2026-11-26: the known case of the module-level walk (Q-1972-2): `check_pr_body` is a member though it imports
   `session`, which imports `http.client` and `ssl` inside functions; a function-level call into `session` is not read
   for the set (Q-KI-4, no call-graph check). The any-level read of decision 3 stays for the one script checked.
