@@ -4610,7 +4610,7 @@ def ask_lines(root, number: int) -> int:
         raise CheckError(f"the pull request #{number} cannot be read")
     pr, comments = fresh
     pr = {**pr, "number": pr.get("number", number)}
-    people, left = owner_people(root, pr), {}
+    people, left = owner_people(root, pr), dict[str, tuple]()
     found = open_owner_items(pr, comments, *people, carried=carried_check(root), left=left)
     for key, _ in sorted(found.items(), key=lambda kv: kv[1]):
         for line in closing_lines(key, pr, comments, *people, left=left):  # brief #1968 answer 5
@@ -4784,10 +4784,10 @@ def open_owner_items(
     if merge_at is not None and pr.get("draft") is not True and clears_head(newest_verdict, head):
         if not reproving:
             open_items["owner-merge"] = merge_at
-    asking = any(offers.get(k) for k in open_items)  # brief #1968 answer 2: the ask's item
+    offering = any(offers.get(k) for k in open_items)  # brief #1968 answer 2: the ask's item
     for label, key in OWNER_LABELS.items():
         if label in names and key not in open_items and not (reproving and key == "owner-merge"):
-            if key == "approve" and asking:
+            if key == "approve" and offering:
                 continue
             newest_post = moment(ordered[-1].get("created_at")) if ordered else None
             open_items[key] = newest_post or moment(pr.get("created_at"))
