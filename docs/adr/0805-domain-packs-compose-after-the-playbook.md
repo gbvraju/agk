@@ -38,7 +38,7 @@ modules and the playbook only, and no file named a domain's signals.
    `config/domains/`), `words`, `files` and `dependencies` (lists of single words), one row per seed pack.
    `front_door.signal_problems` also checks it (`front_door.domain_signal_problems`), each line `rule 5:
    config/domain-signals.toml: [[domain]] row <n> ... (key: <key>)`, never a value; a kit copy without the file
-   has nothing to check. It joins `kit/manifest.json` `verbatim`. Reading it to propose a domain is build (c).
+   has nothing to check. It joins `kit/manifest.json` `verbatim`, and `kit/templates/gitattributes` pins it to LF. Reading it to propose a domain is build (c).
 5. `tests/kit_dev/test_kit_manifest.py` lists the table among the installed single files (SPEC-0074 rule 15), the
    one change under `tests/kit_dev/`, a class the brief's reserved line did not name. A project's own pack is never in the manifest, so the installer and `upgrade.py` (`installed_set`) never write it.
 6. Amendment 240 is applied to SPEC-0048 rule 23 word for word; its proposal file records the application.
