@@ -1,0 +1,1 @@
+- Conductor: `conductor.py watch` wakes on a new `Tell: <conductor id>` by a listed author on the `agk-conductor` issue and `sweep` prints each unread one once as `TELL <comment id> reply-to <steward session|none>: <line>`; the role file tells the conductor to act on each or answer why not (brief #1970, ADR-0823)

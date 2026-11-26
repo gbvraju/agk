@@ -57,7 +57,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
    `- <practice>: judgement` when it is recorded judgement only, and keeps the template's `local profile` bullet; it keeps the
    template's `fast tests` and `test selection` bullets too, and writes in the parenthesis of `test selection`, for each option,
    the `[testing]` profile and the `always_full` paths of `agk.toml` it proposes (`docs/guides/testing.md`), keeping or
-   amending the playbook's proposals where the skeleton holds them; **Chosen** stays `none yet`. On the prototype path (or any
+   amending the playbook's proposals where the skeleton holds them; **Chosen** stays `none yet`. With `[domain] packs` set in `agk.toml`, each option bullet is followed by one
+   indented line, never a bullet, `  Domain fit: meets` or `  Domain fit: cannot meet: <pack>.<constraint>, ...`, naming
+   each `hard` constraint of the composed packs the option cannot meet (SPEC-0074 rule 8); an option that cannot meet one
+   is kept and shown, never dropped, and may still be chosen on the person's yes; a pack's `[[references]]` are offered as
+   options with their source, never imposed. On the prototype path (or any
    project with an inventory) the Context holds a `Screens to build` line; fill each option's `Build speed:` phrase with how it
    builds those screens (server-rendered pages, a client framework, a component library), from the inventory and the signed-off
    version, and from nothing the owner did not give, and keep the line in the Context. Never set `Status: Accepted` and never name an option as chosen: that is the
