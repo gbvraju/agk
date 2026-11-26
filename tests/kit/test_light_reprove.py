@@ -673,7 +673,11 @@ def test_personal_mode_is_refused_naming_forge_before_any_read(tmp_path, monkeyp
 
 def test_the_conductor_agent_text_names_the_light_re_prove_record():
     text = (SCRIPTS.parents[1] / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
-    assert "the `Local evidence:` line of that `Report:` stands for the builder's line" in text
+    local = next(p for p in text.split("\n\n") if p.startswith("Local mode."))
+    assert (
+        "the builder's `Local evidence:` line, or on your light re-prove's head that `Report:`'s"
+        in local
+    )
 
 
 def test_reprove_is_the_one_place_the_conductor_makes_a_head():

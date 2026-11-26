@@ -6,7 +6,7 @@
 - Related: SPEC-0050, SPEC-0039, ADR-0495, ADR-0713, ADR-0725, ADR-0542, ADR-0629, ADR-0528, ADR-0684, ADR-0327, amendment 171, amendment 216, amendment 253, brief #1969, plan #661
 - Requirements: REQ-057
 
-Protected classes: `scripts/agk/`, `.claude/`, `tests/kit/`, `docs/runs/`, `docs/guides/`
+Protected classes: `scripts/agk/`, `.claude/`, `tests/kit/`
 
 ## Context
 
