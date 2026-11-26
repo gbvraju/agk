@@ -28,14 +28,14 @@ record differed by the same field each time. The owner's word (the steward chat,
 1. **The lease take names a missing scanner.** `conductor.py lease --take`, on a fresh take (no valid lease held; a
    renew by the holder prints nothing), reads local mode as `reprove_local` does. In local mode with no `gitleaks` on
    PATH it prints one more line, `lease: tools: gitleaks is missing; a light re-prove asks the builder for its record
-   (tool: gitleaks)`, and its `Conductor: active` marker ends `; tools: gitleaks missing` (kept on a renew, so the
-   lease shows it while held). The take still exits 0. A malformed `execution` prints `lease: tools: not checked:` and
+   (tool: gitleaks)`, and its `Conductor: active` marker ends `; tools: gitleaks missing`. A renew of a marked lease
+   checks the tool again, silently, and keeps the mark only while it is still missing. The take still exits 0. A malformed `execution` prints `lease: tools: not checked:` and
    the refusal naming the setting; a default branch not fetched says nothing.
 2. **The accept carries over a light merge.** `merge_cleared.answered`, given the light-merge reader `light_of` (the
    default branch as last fetched and its `[flow] shared_indexes`; None, so no carry, when either cannot be read),
    also counts `Maintainer answer: accept <old>` by an account in `spec_approvers` for the head when: the newest
-   earlier verdict naming another head names OLD in full, has no numbered item and an `Evidence check: differs` for
-   OLD; its `Differs:` lines equal, as a set, those of the verdict on the head; the head is OLD's light merge
+   earlier verdict naming another head is `Verdict: cleared <old>` or a covered fix list on OLD (never `rejected`),
+   names OLD in full, has no numbered item and an `Evidence check: differs` for OLD; its `Differs:` lines equal, as a set, those of the verdict on the head; the head is OLD's light merge
    (`session_plan.light_merge`); and the accept follows that verdict on OLD (or itself carries, up to 8 light merges in
    a row). Earlier verdicts on the same head are passed over only when they have no numbered item. Any other
    difference, a builder push (the head is then no light merge of OLD), a full re-prove or a verdict with a numbered

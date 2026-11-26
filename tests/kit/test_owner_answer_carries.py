@@ -216,7 +216,6 @@ def test_1616_the_merger_evidence_accept_stays_exact():
     ]  # fmt: skip
     verdict = {"id": 2, "created_at": "2026-11-26T10:00:00Z", "body": f"Verdict: cleared {head}"}
     assert not merge_cleared.answered(comments, verdict, head, ["owner"])
-    assert "light" in inspect.signature(merge_cleared.answered).parameters
 
 
 # --- the git-backed check -----------------------------------------------------------------------

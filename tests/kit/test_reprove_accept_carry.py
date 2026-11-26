@@ -127,6 +127,27 @@ def test_a_verdict_with_a_numbered_item_between_needs_a_new_accept(merged):
     assert evidence(root, comments, new) == "evidence differs (rule 4)"
 
 
+def test_a_rejected_verdict_on_old_carries_nothing(merged):
+    """Fix list on 4d181da, item 2: only a clearing or covered verdict on OLD carries."""
+    root, old, new = merged
+    comments = [verdict(1, old, first="rejected"), accept(2, old), verdict(3, new)]
+    assert evidence(root, comments, new) == "evidence differs (rule 4)"
+    plain = [verdict(1, old, first="fix list"), accept(2, old), verdict(3, new)]
+    assert evidence(root, plain, new) == "evidence differs (rule 4)"  # not covered: no Final:
+
+
+def test_a_merge_of_old_and_main_with_extra_content_carries_nothing(tmp_path):
+    """Fix list on 4d181da, item 4: the parents are (OLD, main) but the tree adds a file."""
+    root, old, main = world(tmp_path, {"agk.toml": TOP}, {"agk.toml": BOTTOM})
+    new = update_branch(root, old, main, extra={"docs/extra.md": "more\n"})
+    parents = git(root, "rev-list", "--parents", "-n", "1", new).split()[1:]
+    assert parents == [old, main]
+    comments = [verdict(1, old), accept(2, old), verdict(3, new)]
+    assert evidence(root, comments, new) == "evidence differs (rule 4)"
+    clean = update_branch(root, old, main)  # the same parents without the extra file carries
+    assert evidence(root, [verdict(1, old), accept(2, old), verdict(3, clean)], clean) == "ok"
+
+
 def test_a_builder_push_after_old_carries_nothing(merged):
     root, old, _ = merged
     git(root, "checkout", "-q", old)
@@ -280,7 +301,9 @@ def test_with_gitleaks_or_in_hosted_mode_the_take_is_as_before(
     assert not written(stub)[0].splitlines()[0].endswith("missing")
 
 
-def test_a_renew_prints_no_tools_line(repo, stub, tmp_path):
+@pytest.mark.parametrize("scanner", [False, True], ids=["still-missing", "installed"])
+def test_a_renew_prints_no_tools_line_and_checks_the_tool_again(repo, stub, tmp_path, scanner):
+    """Fix list on 4d181da, item 1: the mark stays only while gitleaks is still missing."""
     lease_world(repo, stub, "local")
     stamp = (datetime.now(UTC) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     held = comment(
@@ -288,10 +311,11 @@ def test_a_renew_prints_no_tools_line(repo, stub, tmp_path):
     )
     stub.serve(PLAN, [held])
     stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
-    out = take(repo, stub, tmp_path, scanner=False)
+    out = take(repo, stub, tmp_path, scanner=scanner)
     assert out.returncode == 0, out.stderr
     assert TOOLS not in out.stdout
-    assert written(stub)[0].splitlines()[0].endswith("; tools: gitleaks missing")  # the mark kept
+    marked = written(stub)[0].splitlines()[0].endswith("; tools: gitleaks missing")
+    assert marked is not scanner
 
 
 def test_a_malformed_execution_is_named_and_the_take_still_succeeds(repo, stub, tmp_path):

@@ -1038,7 +1038,8 @@ def answered(
     """A comment by a spec approver, after the verdict, whose first line is exactly
     `Maintainer answer: accept <the 40-character head>` (SPEC-0039 rule 4), or, with LIGHT, such
     an accept of OLD carried to SHA (brief #2006 answer 2, ADR-0830): the newest earlier verdict
-    on another head is a `differs` verdict on OLD with the same `Differs:` lines as VERDICT, SHA
+    on another head is a `differs` clearing or covered verdict on OLD (never `rejected`) with the
+    same `Differs:` lines as VERDICT, SHA
     is OLD's light merge, the accept follows that verdict, and no verdict between them, nor that
     one, has a numbered item. Any other difference needs a new accept."""
     wanted = ACCEPT.format(sha)
@@ -1061,7 +1062,11 @@ def answered(
         old = found.group(1) if found else None
         if old == sha:
             continue  # another verdict on this head, with no numbered item
-        if old is None or not differs_on(prior, old) or differs_lines(body) != lines:
+        covered = covered_fix_list(body)
+        clearing = CLEARED_LINE.fullmatch(first_line(prior).removesuffix(FALLBACK)) is not None
+        if not (clearing or (covered is not None and covered[0] == old)):
+            return False  # a rejected verdict, or a fix list that is not covered, carries nothing
+        if not differs_on(prior, old) or differs_lines(body) != lines:
             return False
         return light(old, sha) and answered(comments, prior, old, approvers, light, depth + 1)
     return False

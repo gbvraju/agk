@@ -2767,17 +2767,18 @@ def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
         return 0
     if mode == "--take":
         taken = found[1].group(4) or found[1].group(2) if holder and found else stamp_of(now)
-        # brief #2006 answer 1: a fresh take says a missing scanner once; a renew keeps the mark
-        tools = None if holder else lease_tools(root, repo)
+        # brief #2006 answer 1: a fresh take says a missing scanner once; a renew of a marked lease
+        # checks the tool again and keeps the mark only while it is still missing
         kept = bool(holder and found and found[1].group(5))
-        suffix = TOOLS_MARK if kept or tools == TOOLS_LINE else ""
+        tools = lease_tools(root, repo) if kept or not holder else None
+        suffix = TOOLS_MARK if tools == TOOLS_LINE else ""
         text = f"body=Conductor: active {stamp_of(now)} {name} since {taken}{suffix}"
         write_marker(repo, issue, found, text)
         if mark is not None:
             mark.parent.mkdir(parents=True, exist_ok=True)
             mark.write_text(f"{name}\n", encoding="utf-8")
         print(f"lease: taken by {name} until {stamp_of(now + timedelta(minutes=LEASE_MINUTES))}")
-        if tools:
+        if tools and not holder:
             print(tools)
         return 0
     if holder:  # --release by the holder
