@@ -1,0 +1,1 @@
+- Testing: `test_audit.py` reads the test suite as a whole and prints its size, its growth since a day (`--since`) and five candidate lists (equal tests, wording-only tests, brief-pinned names, test files no map selects and the slowest files of the newest prepush record), with `--json` and `--limit`; it reads only, removes nothing and is never a gate (brief #2007, ADR-0831)
