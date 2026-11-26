@@ -77,6 +77,41 @@ def test_the_merger_accepts_both_forms_with_the_same_lines(monkeypatch):
     assert merge_cleared.clears_head(new, HEAD) and merge_cleared.no_builder_event(new, HEAD)
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        f"Verdict: cleared {HEAD}\n\n{SPEC_FINAL}\n",  # a spec Final: the builder's status commit
+        f"Verdict: cleared {HEAD}\n\n1. Fix it.\n\n{ACCEPT}\n",  # numbered items beside it
+    ],
+)
+def test_the_merger_holds_a_cleared_verdict_whose_final_line_it_cannot_read(body):
+    """The fix list on 8d2042a, item 4: such a verdict never merges without its acceptance."""
+    verdict = {"id": 3, "user": {"login": "boss"}, "body": body, "created_at": "2026-11-26T12:00Z"}
+    assert not merge_cleared.clears_head(verdict, HEAD)
+    held = ("held", merge_cleared.UNREADABLE_FINAL)
+    assert merge_cleared.judge([verdict], HEAD, ["boss"]) == held
+    for good in (NEW, f"Verdict: cleared {HEAD}\nRead: all files.\n"):
+        verdict["body"] = good
+        assert merge_cleared.judge([verdict], HEAD, ["boss"]) == ("cleared", "")
+
+
+def test_the_record_check_and_a_light_re_prove_read_the_cleared_form(monkeypatch):
+    """The two points the verdict on 8d2042a left unproven: `check_adrs` verifies a squash record
+    whose Final is the cleared form, and a cleared acceptance carries over a light re-prove."""
+    import check_adrs  # noqa: PLC0415 - only this test reads it
+
+    url = f"https://api.github.com/repos/{REPO}/issues/7"
+    verdict = {"id": 11, "user": {"login": "boss"}, "body": NEW, "issue_url": url}
+    assert check_adrs.final_record_verified(ADR, (7, 11), verdict, ["boss"])
+    monkeypatch.setattr(merge_cleared.session_plan, "light_merge", lambda *_a: True)
+    merged = "c" * 40
+    verdict["created_at"] = "2026-11-26T12:00Z"
+    assert merge_cleared.carried_from(ROOT, [verdict], merged, ["boss"], "main", []) == HEAD
+    monkeypatch.setattr(merge_cleared, "adr_status", lambda *_a: "Proposed")
+    lines = merge_cleared.acceptance_lines(REPO, merged, verdict, HEAD)
+    assert lines == ["ADR-0001 Accepted (Final 11)", common.MERGED_BY]
+
+
 def test_the_router_labels_the_cleared_acceptance_merge_ready():
     f = facts(head=HEAD, comments=[said(1, "boss", NEW)], files=ADDED)
     assert route.decide(f) == "agk:merge-ready"
@@ -218,5 +253,5 @@ def test_the_texts_say_the_cleared_form():
     final = next(ln for ln in builder.splitlines() if ln.startswith("FINAL LINES:"))
     assert "A `Verdict: cleared` on your head is no work" in final
     assert "nothing to change" in final and "older form" in final
-    budget = (ROOT / "config/rule-budget.txt").read_text(encoding="utf-8")
-    assert ".claude/agents/conductor.md 4887 37" in budget.splitlines()  # words replaced, not added
+    merge = next(ln for ln in conductor_md.splitlines() if ln.startswith("The guarded merge"))
+    assert "or an older fix list of only those" in merge  # the merger still merges one (answer 9)

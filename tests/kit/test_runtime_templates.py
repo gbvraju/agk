@@ -311,5 +311,5 @@ def test_1879_a_final_only_fix_list_is_no_event_in_the_builder_and_conductor_tex
     assert "push nothing and post `Report: <head> fix list applied: nothing to change`" in final
     role = (ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     merge = next(ln for ln in role.splitlines() if ln.startswith("The guarded merge"))
-    assert "`Verdict: cleared <sha>` with the full 40-character head (its ADR `Final:`" in merge
+    assert "`Verdict: cleared <sha>` with the full 40-character head (with its ADR" in merge
     assert "SPEC-0021 rule 3a" in merge
