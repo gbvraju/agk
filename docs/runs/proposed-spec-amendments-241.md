@@ -20,3 +20,5 @@ The sentence (brief #1919), quoted as data: "Intake for domain intelligence on t
    as options, never imposed (amendment 241)."
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1955: items 1 and 2 (to rule 5) applied to `docs/specs/0072-each-work-type-playbook-carries-its-architecture-a-stack-sta.md` word for word, on the maintainer's answer on #1922 (comment 7172954642).
