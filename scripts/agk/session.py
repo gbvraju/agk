@@ -3602,6 +3602,15 @@ def inbox(root, me: str) -> int:
 
 def unread(root, me: str) -> list[str]:
     """The unread `Tell:` lines of `inbox`, oldest first; the mark moves past the newest."""
+    found = unread_comments(root, me)
+    if found:
+        move_mark(root, me, found[-1][0].get("id", 0))
+    return [line for _, line in found]
+
+
+def unread_comments(root, me: str) -> list[tuple[dict, str]]:
+    """`unread` with each line's comment, moving no mark: the conductor's `sweep` moves it with
+    `move_mark` only after it printed them (brief #1970)."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
     comments = pages(f"repos/{repo}/issues/{issue}/comments")
@@ -3614,15 +3623,18 @@ def unread(root, me: str) -> list[str]:
         read = 0
     floor = max(read, last_request(comments, me))
     allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
-    lines = [
-        (c.get("id", 0), line)
+    return [
+        (c, line)
         for c in sorted(comments, key=lambda c: c.get("id", 0))
         if c.get("id", 0) > floor and (line := tell_line(c, me, allowed))
     ]
-    if lines:
-        mark.parent.mkdir(parents=True, exist_ok=True)
-        mark.write_text(f"{lines[-1][0]}\n", encoding="utf-8")
-    return [line for _, line in lines]
+
+
+def move_mark(root, me: str, cid: int) -> None:
+    """Write the id of the newest message printed into the inbox mark."""
+    mark = inbox_mark(root, me)
+    mark.parent.mkdir(parents=True, exist_ok=True)
+    mark.write_text(f"{cid}\n", encoding="utf-8")
 
 
 def is_red(item: dict) -> bool:
