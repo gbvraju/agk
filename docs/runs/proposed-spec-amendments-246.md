@@ -19,3 +19,5 @@ of rule 14 on every value it writes, so `grill.py` imports `guard.py`, the reade
    `config.py`, `playbook_format.py` and `guard.py` only, no network, no model) (amendment 246)".
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: items 1 (to rule 6) and 2 (to rule 2) applied to `docs/specs/0073-every-idea-is-grilled-before-its-vision-and-held-to-industr.md` word for word, on the maintainer's answer on #1946 (comment 7170809266).

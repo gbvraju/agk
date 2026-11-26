@@ -17,3 +17,5 @@ a missing or failing file is still refused."
    `config/playbooks/<slug>.toml` and research record `docs/research/<slug>.md` are both in the project (amendment 233)".
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: item 1 (to rule 5) applied to `docs/specs/0038-a-project-s-work-type-selects-a-delivery-playbook-that-never-weakens-a-gate.md` word for word, on the maintainer's answer on #1912 (comment 7135904405).

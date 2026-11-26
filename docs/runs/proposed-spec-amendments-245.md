@@ -22,3 +22,5 @@ new script takes its one `kit/manifest.json` row in the build that adds it.
    row the manifest test requires for `grill.py` (amendment 245)."
 
 No other rule changes.
+
+2026-11-26 (from `date -u`), brief #1966: items 1 (to rule 2, as amendment 246 item 2 reads it) and 2 (to rule 15) applied to `docs/specs/0073-every-idea-is-grilled-before-its-vision-and-held-to-industr.md` word for word, on the maintainer's answer on #1945 (comment 7169031896).
