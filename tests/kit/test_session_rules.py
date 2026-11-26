@@ -413,7 +413,7 @@ def test_req037_each_role_file_points_at_rule_38_in_its_first_paragraph_and_is_i
     """REQ-037: brief #1710 answers 3 and 5, brief #1973 answers 1 to 4 (`[kit] layout`)."""
     verbatim, experimental, plugin = role_files()
     agents_dir = ROOT / ".claude" / "agents"
-    on_disk = sorted(str(p.relative_to(ROOT)) for p in agents_dir.glob("*.md"))
+    on_disk = sorted(p.relative_to(ROOT).as_posix() for p in agents_dir.glob("*.md"))
     assert sorted(verbatim + experimental) == on_disk, f"{CLASS}: a role file is not installed"
     # Installed and plugin layouts ship the same role files; the experimental reviewer is
     # installed only.
