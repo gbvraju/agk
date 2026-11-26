@@ -967,6 +967,53 @@ def selected_workers(
     return made, list(dict.fromkeys(lines))
 
 
+TRAILING_WORKERS = re.compile(r" -n ([1-9][0-9]*)$")  # the one form `pytest_workers` writes
+
+
+def split_workers(command: str, root: Path) -> tuple[str, int]:
+    """COMMAND without its worker part and the worker count (1 when it has none; brief #2005,
+    ADR-0829): ROOT's `parallel_command` with `{workers}` filled, or the `project_tests` that
+    `full_command` replaces with it, read as the template; else a trailing ` -n <n>` of a command
+    that `last_pytest` reads as pytest, the one form `pytest_workers` adds (the fix list on
+    6191e236, items 1 and 2). Any other command is returned as it is."""
+    template, project = parallel_parts(root)
+    if template is not None:
+        parts = [re.escape(part) for part in template.split("{workers}")]
+        filled = re.fullmatch("([1-9][0-9]*)".join(parts), command)
+        if filled and len(set(filled.groups())) == 1:
+            return template, int(filled.group(1))
+        if project and command == project:
+            return template, 1
+    found = TRAILING_WORKERS.search(command)
+    if found and last_pytest(command[: found.start()]) is not None:
+        return command[: found.start()], int(found.group(1))
+    return command, 1
+
+
+def parallel_parts(root: Path) -> tuple[str | None, str | None]:
+    """ROOT's `parallel_command` when it holds `{workers}` (else None), and its `project_tests`
+    when `full_command` would run that template in its place (a command that is not pytest)."""
+    try:
+        template = parallel_command(root)
+        project = str(load_config(root).get("project_tests") or "").strip()
+    except (CheckError, OSError, ValueError, KeyError):
+        return None, None
+    if not isinstance(template, str) or "{workers}" not in template:
+        return None, None
+    return template, (project if pytest_interpreter(project) is None else None)
+
+
+def without_workers(command: str, root: Path) -> str:
+    """COMMAND with the worker part taken out (`split_workers`), so that a record made where the
+    worker count differs reads as the same run (brief #2005 answer 1)."""
+    return split_workers(command, root)[0]
+
+
+def worker_count(command: str, root: Path) -> int:
+    """The worker count of COMMAND (`split_workers`): 1 when it has no worker part."""
+    return split_workers(command, root)[1]
+
+
 def workers_notes(root: Path, sets: list[tuple[str, str, str, str]]) -> list[str]:
     """The one line `tests: <n> workers (...)` when a run of SETS starts in workers: a command
     that `pytest_workers` gave `-n <n>`, or the full run's filled `parallel_command` (brief

@@ -1,0 +1,1 @@
+- Evidence: `evidence.py check` reads a recorded test run that differs from its plan only by the worker count (a trailing `-n <n>` of a pytest command, or a filled `parallel_command` and its single `project_tests`) as the same run, replays it with its own count and notes `workers: <name> recorded <r>, replayed <p>` (brief #2005, ADR-0829)
