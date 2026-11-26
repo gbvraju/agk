@@ -52,6 +52,9 @@ steward chat, quoted as data): "Brief 2 and 3 ,".
 About 24 builder wakes, 24 no-op Reports and 9 second reviews fewer per 30 merged pull requests. No workflow, label,
 check, ruleset or setting changes: `auto_merge`, `review_mode`, `execution`, `pr_mode` and `[personal]` read the new
 form as they read the old one. A verdict posted in the old form before the upgrade is read and merged as today.
+A `Verdict: cleared` already posted on an open pull request with a numbered line (a note, indented or not) is now
+held by the merger with its reason (rule 3; SPEC-0021 rules 1 and 9), and the head stays cleared in the label
+until the conductor posts a new verdict on it: a fix list with those items, or a cleared verdict without them.
 
 ## Residual
 

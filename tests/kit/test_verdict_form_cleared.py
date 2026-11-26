@@ -83,6 +83,7 @@ def test_the_merger_accepts_both_forms_with_the_same_lines(monkeypatch):
         f"Verdict: cleared {HEAD}\n\n{SPEC_FINAL}\n",  # a spec Final: the builder's status commit
         f"Verdict: cleared {HEAD}\n\n1. Fix it.\n\n{ACCEPT}\n",  # numbered items beside it
         f"Verdict: cleared {HEAD}\n\n1. Fix it.\n",  # the fix list on 12129d1, item 2
+        f"Verdict: cleared {HEAD}\n\n  1. Fix it.\n",  # indented: the fix list on d5a6e2b, item 1
     ],
 )
 def test_the_merger_holds_a_cleared_verdict_whose_final_line_it_cannot_read(body, monkeypatch):
@@ -94,11 +95,22 @@ def test_the_merger_holds_a_cleared_verdict_whose_final_line_it_cannot_read(body
     assert merge_cleared.judge([verdict], HEAD, ["boss"]) == held
     monkeypatch.setattr(merge_cleared.session_plan, "light_merge", lambda *_a: True)
     assert merge_cleared.carried_from(ROOT, [verdict], "c" * 40, ["boss"], "main", []) is None
-    if "1. Fix it." in body:
+    if "1. Fix it." in body:  # the reading of `covered_fix_list`, indented or not
         assert conductor.form_problem(body) == conductor.CLEARED_ITEMS
     for good in (NEW, f"Verdict: cleared {HEAD}\nRead: all files.\n"):
         verdict["body"] = good
         assert merge_cleared.judge([verdict], HEAD, ["boss"]) == ("cleared", "")
+
+
+def test_a_cleared_verdict_with_a_numbered_note_posted_before_the_upgrade_is_held():
+    """The fix list on d5a6e2b, item 2: a cleared verdict already posted on an open pull request
+    with a numbered note (the form of #810's era, as in test_rules_dropped.py) is held by the
+    merger with its reason; the conductor posts a new verdict on the head. A plain one clears."""
+    note = f"Verdict: cleared {HEAD}\nRead: all files.\n\n1. a note (rule: none)\n"
+    old = {"id": 2, "user": {"login": "boss"}, "body": note, "created_at": "2026-11-20T09:00Z"}
+    assert merge_cleared.judge([old], HEAD, ["boss"]) == ("held", merge_cleared.UNREADABLE_FINAL)
+    new = {"id": 4, "user": {"login": "boss"}, "body": NEW, "created_at": "2026-11-26T12:00Z"}
+    assert merge_cleared.judge([old, new], HEAD, ["boss"]) == ("cleared", "")
 
 
 def test_the_record_check_and_a_light_re_prove_read_the_cleared_form(monkeypatch):

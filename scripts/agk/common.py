@@ -526,12 +526,13 @@ FIX_ITEM = re.compile(r"\d+\.\s")
 
 
 def cleared_items(body: str) -> bool:
-    """Whether BODY is a `Verdict: cleared` with a numbered item (`<n>. ` at the left margin), which
-    no cleared verdict carries (SPEC-0021 rule 9, brief #2001; the fix list on 12129d1)."""
+    """Whether BODY is a `Verdict: cleared` with a numbered item (a line that starts, after spaces,
+    with digits and a dot, as `covered_fix_list` reads one), which no cleared verdict carries
+    (SPEC-0021 rule 9, brief #2001; the fix lists on 12129d1 and d5a6e2b)."""
     lines = body.strip().splitlines()
     if not lines or not lines[0].strip().startswith("Verdict: cleared"):
         return False
-    return any(FIX_ITEM.match(line) for line in lines[1:])
+    return any(re.match(r"\s*\d+\.", line) for line in lines[1:])
 
 
 RULE_TAG = re.compile(r"\(rule: (none|\S+ \d+[a-z]?)\)\.?")
