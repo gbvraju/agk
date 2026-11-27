@@ -2694,6 +2694,7 @@ def personal_line(root: Path, osname: str | None = None) -> tuple[int, str] | No
         f"personal mode: forge {table['forge']}, level {table['level']}, "
         f"disclosure {table['ai_disclosure']}",
         *pinned_lines(root, table.get("plugin_version")),
+        *pack_stale_lines(root),
     ]
     if (osname or os.name) == "nt":
         lines.append(WINDOWS_PERMISSIONS)
@@ -3242,6 +3243,18 @@ def held_floor_lines(root: Path) -> list[str]:
     return out
 
 
+def pack_stale_lines(root: Path) -> list[str]:
+    """Brief #2045 (ADR-0848, SPEC-0077 rule 8): one warn line per stale date of a pack in use,
+    with the date and `(verify)`; nothing when the table or a pack is refused (the `packs-settings`
+    row or the `playbooks` step names it); no exit code."""
+    import packs  # noqa: PLC0415 - only these lines read the packs
+
+    try:
+        return packs.stale(root)
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return []
+
+
 def _count(n: int) -> str:
     return f"{n} problem" if n == 1 else f"{n} problems"
 
@@ -3475,6 +3488,7 @@ def main(argv: list[str] | None = None) -> int:
         skills += history_scan_lines(root.resolve())
         skills += held_licence_lines(root.resolve())
         skills += held_floor_lines(root.resolve())
+        skills += pack_stale_lines(root.resolve())
         design = design_import_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")

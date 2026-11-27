@@ -1568,6 +1568,14 @@ def holds_line(root: Path, start: date, end: date) -> str:
     )
 
 
+def stale_pack_lines(root: Path, today: date) -> list[str]:
+    """SPEC-0077 rule 8 (brief #2045, ADR-0848): the stale packs in use, `packs: none stale`, or
+    `packs: stale unknown (setting: ...)`; files only, never a failure."""
+    import packs  # noqa: PLC0415 - only this line reads the packs
+
+    return packs.report_lines(root, today)
+
+
 def render(
     week: str,
     start: date,
@@ -1626,6 +1634,7 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
         *pr_tests_lines(ctx, details),
         holds_line(ctx.root, start, end),
         coverage_line(ctx.src, details),  # brief #2020 answer 4: the reports that carry a figure
+        *stale_pack_lines(ctx.root, today),  # brief #2045: SPEC-0077 rule 8, never failing
     )
     records.sort(key=lambda r: int(r["number"]))
     flags = []
