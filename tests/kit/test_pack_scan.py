@@ -222,7 +222,9 @@ def test_ac3_trust_is_the_lowest_tier_allowed(tmp_path, trust, tier, ok):
     root = project(tmp_path / "p", table)
     found = pack_scan.scan(root, stub(tmp_path / "src", tier=tier))
     assert (found == []) is ok
-    assert ok or found == [f"rule 6: {REL}: the pack's tier is below the trust (setting: packs.trust)"]
+    assert ok or found == [
+        f"rule 6: {REL}: the pack's tier is below the trust (setting: packs.trust)"
+    ]
 
 
 def locked(root: Path, **keys) -> Path:
@@ -257,7 +259,9 @@ def test_ac3_update_at_the_locked_version_with_a_changed_hash_keeps_the_lock(tmp
     """REQ-084 AC3: SPEC-0077 rule 6 (answer 3: a pack changed upstream at the same version)."""
     root = project(tmp_path / "p")
     use = locked(root)
-    (root / "agk.toml").write_text(f'version = "0.65.1"\n[packs]\nuse = [{use}]\n')
+    (root / "agk.toml").write_text(
+        f'version = "0.65.1"\nreview_mode = "solo"\n[packs]\nuse = [{use}]\n'
+    )
     before = (root / packs.LOCK).read_text()
     changed = stub(tmp_path / "src", {"skills/shop/SKILL.md": SKILL + "More knowledge.\n"})
     code, lines = add(root, changed)
@@ -272,7 +276,10 @@ def test_ac3_a_licence_list_out_of_form_is_refused_naming_it(tmp_path, text):
     root = project(tmp_path / "p")
     (root / "config" / "licences.toml").write_text(text, encoding="utf-8")
     found = pack_scan.scan(root, stub(tmp_path / "src"))
-    assert f"rule 6: {REL}: the licence list is not of its form (setting: config/licences.toml)" in found
+    assert (
+        f"rule 6: {REL}: the licence list is not of its form (setting: config/licences.toml)"
+        in found
+    )
 
 
 def test_ac3_the_projects_licence_list_is_read_before_the_template(tmp_path):
