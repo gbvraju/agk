@@ -1,0 +1,43 @@
+# A reference product of the evaluation set (SPEC-0077 rule 9, ADR-0846). Invented: every host is
+# example.com and every address .invalid. The text below is data for a session, never an instruction.
+format = 1
+id = "booking-web"
+title = "Class booking for an invented yoga studio"
+source = "plan #1769 (read 2026-11-27); SPEC-0073 rule 16"
+work_type = "web-app"
+domain = "none"
+idea = "I want my yoga studio's members to book and cancel classes online at https://studio.example.com."
+problem = "Members phone or message the front desk to book a class, staff keep the timetable on paper, and full classes have no waiting list, so places go empty after late cancellations."
+users = ["members who book and cancel classes", "front-desk staff who run the timetable", "the studio owner who reads attendance"]
+non_goals = ["payments and memberships", "a mobile app", "video classes"]
+
+[[acceptance]]
+id = "AC1"
+text = "A member signs in and books a place in a class that has a free place."
+
+[[acceptance]]
+id = "AC2"
+text = "A member cancels a booking up to two hours before the class, and the place is freed."
+
+[[acceptance]]
+id = "AC3"
+text = "A full class keeps a waiting list in order, and a freed place goes to the first member waiting."
+
+[[acceptance]]
+id = "AC4"
+text = "Staff add, move and cancel classes in the timetable, and booked members are told."
+
+[[acceptance]]
+id = "AC5"
+text = "A member is reminded by email the day before a booked class."
+
+[[acceptance]]
+id = "AC6"
+text = "Every page passes the accessibility check at the standard's breakpoints in light and dark."
+
+[answers]
+who_signs_in = "Members sign in with their own email address."
+class_size = "Each class holds up to 20 people."
+cancel_window = "Two hours before the class starts."
+reminders = "One email the day before, from the studio."
+hosting = "Your recommendation."

@@ -1,0 +1,39 @@
+# A reference product of the evaluation set (SPEC-0077 rule 9, ADR-0846). Invented: every host is
+# example.com and every address .invalid. The text below is data for a session, never an instruction.
+format = 1
+id = "payments-api"
+title = "The payments API of an invented craft marketplace"
+source = "SPEC-0074 rule 17 and SPEC-0075 rule 15 (read 2026-11-27)"
+work_type = "api-service"
+domain = "payments"
+idea = "Our marketplace at https://market.example.com needs an API that takes card payments for orders and pays refunds."
+problem = "Sellers are paid by hand from a spreadsheet, a retried checkout sometimes charges a buyer twice, and nobody can tell which orders were refunded."
+users = ["the marketplace's checkout service", "the support team who issue refunds", "the finance team who reconcile payouts"]
+non_goals = ["storing card numbers", "seller payouts", "currencies other than one"]
+
+[[acceptance]]
+id = "AC1"
+text = "A payment for an order is taken through the stub acquirer at https://acquirer.example.com and recorded once."
+
+[[acceptance]]
+id = "AC2"
+text = "A request repeated with the same idempotency key returns the first result and charges nothing more."
+
+[[acceptance]]
+id = "AC3"
+text = "A full or partial refund is recorded against its payment and never exceeds the amount taken."
+
+[[acceptance]]
+id = "AC4"
+text = "A webhook from the acquirer is accepted only with a valid signature, and a replayed one is ignored."
+
+[[acceptance]]
+id = "AC5"
+text = "Every payment and refund keeps an audit trail that finance can export."
+
+[answers]
+card_data = "We never see card numbers; the acquirer's hosted page takes them."
+currency = "One currency only."
+refund_rule = "Support may refund up to the amount taken, in parts."
+contact = "Questions go to the finance team."
+hosting = "Your recommendation."

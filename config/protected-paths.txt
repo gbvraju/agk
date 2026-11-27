@@ -17,3 +17,4 @@ kit/
 tests/kit_dev/
 .claude-plugin/
 skills/
+evals/
