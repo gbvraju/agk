@@ -27,6 +27,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 KIT = Path(__file__).resolve().parents[2]
 RUNS = 3  # rule 9: three runs on `strongest`; never a rubric key
 TIER = "strongest"
@@ -122,14 +124,14 @@ def texts(value: Any) -> list[str]:
     return []
 
 
-def product_problems(data: dict, folder: str, root: Path) -> list:
+def product_problems(data: dict, folder: str) -> list:
     rule = "rule 9"
     out = keys(data, PRODUCT, rule)
     if data.get("format") != 1 and _is(data.get("format"), INT):
         out.append((rule, "an unknown format", "format"))
     if _is(data.get("id"), STR) and data["id"] != folder:
         out.append((rule, "an id that is not its folder's name", "id"))
-    stems = {p.stem for p in (root / "config" / "playbooks").glob("*.toml")}
+    stems = {p.stem for p in (KIT / "config" / "playbooks").glob("*.toml")}  # the kit's own
     if _is(data.get("work_type"), STR) and data["work_type"] not in stems:
         out.append((rule, "a value outside its list", "work_type"))
     if _is(data.get("domain"), STR) and data["domain"] not in ("none", *shipped_domains()):
@@ -164,7 +166,6 @@ def _ours(host: str, suffix: str) -> bool:
 
 
 def shipped_domains() -> tuple[str, ...]:
-    sys.path.insert(0, str(KIT / "scripts" / "agk"))
     import check_domains
 
     return tuple(check_domains.SHIPPED)
@@ -217,7 +218,6 @@ def read_toml(path: Path) -> dict | None:
 
 
 def scanned(path: Path) -> bool:
-    sys.path.insert(0, str(KIT / "scripts" / "agk"))
     from guard import scan_text
 
     try:
@@ -250,7 +250,7 @@ def check(root: Path) -> tuple[list[str], str]:
         cls = f"product file {folder.name}"
         data = read(folder / "product.toml", cls)
         if data is not None:
-            add(cls, product_problems(data, folder.name, root))
+            add(cls, product_problems(data, folder.name))
     if not folders:
         add("product file", [("rule 9", "no product", "evals")])
     layers = len(rubric.get("layer") or []) if isinstance(rubric, dict) else 0
@@ -313,7 +313,6 @@ def _priced(key: str, value: Any) -> bool:
 
 
 def stages() -> tuple[str, ...]:
-    sys.path.insert(0, str(KIT / "scripts" / "agk"))
     import steward_evidence
 
     return (*steward_evidence.STAGES, *STAGES_MORE)
