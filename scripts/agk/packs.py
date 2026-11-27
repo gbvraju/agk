@@ -316,7 +316,7 @@ def fetch_source(source: str, tag: str | None, dest: Path) -> bool:
 
 def remote_tags(source: str) -> list[str] | None:
     argv = ["git", "ls-remote", "--tags", "--refs", source]
-    done = subprocess.run(argv, capture_output=True, text=True, check=False)  # nosec B603 - fixed argv, after the yes
+    done = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", check=False)  # nosec B603 - fixed argv, after the yes
     if done.returncode:
         return None
     return [
