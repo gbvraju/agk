@@ -902,6 +902,12 @@ tests = [
 code = "scripts/agk/personal_adopt.py"
 tests = ["tests/kit/test_personal_adopt.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/eval_run.py"
+tests = ["tests/kit_dev/test_eval_run.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "evals/**"
+tests = ["tests/kit_dev/test_eval_run.py"]
+[[testing.map]]
 code = "scripts/agk/personal_state.py"
 tests = [
   "tests/kit/test_entry_points_refuse.py", "tests/kit/test_personal_state.py",

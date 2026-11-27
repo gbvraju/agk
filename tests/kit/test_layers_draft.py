@@ -262,6 +262,7 @@ OTHERS = {
     "scripts/agk/check_brief.py": "checks a brief's `Layer:` line against the layer names",
     "scripts/agk/check_playbooks.py": "composes `[architecture]` for the step and the writers",
     "scripts/agk/config.py": "documents the layer paths as the packs' default scope",
+    "scripts/agk/eval_run.py": "names rule 9's architecture layer and reads no record",
     "scripts/agk/gates/architecture_quality.py": "holds a record without its quality sections",
     "scripts/agk/gates/injection_set.py": "is not run until the record exists",
     "scripts/agk/gates/node_pack.py": "reads the layer paths as its default scope",
