@@ -1,0 +1,38 @@
+[
+ {
+  "id": 1,
+  "issue_url": "https://api.github.com/repos/example/demo/issues/9001",
+  "created_at": "2026-12-15T09:00:00Z",
+  "user": {
+   "login": "bot-example"
+  },
+  "body": "Report: abc1234 merge of main (light re-prove, governance only)\n\nWho: example"
+ },
+ {
+  "id": 2,
+  "issue_url": "https://api.github.com/repos/example/demo/issues/9001",
+  "created_at": "2026-12-16T09:00:00Z",
+  "user": {
+   "login": "bot-example"
+  },
+  "body": "Report: abc1235 ready for review; Usage: 1200 tokens"
+ },
+ {
+  "id": 3,
+  "issue_url": "https://api.github.com/repos/example/demo/issues/9002",
+  "created_at": "2026-12-17T08:00:00Z",
+  "user": {
+   "login": "bot-example"
+  },
+  "body": "Started: cb9002 2026-12-17T08:00:00Z by the supervisor (build)"
+ },
+ {
+  "id": 4,
+  "issue_url": "https://api.github.com/repos/example/demo/issues/9003",
+  "created_at": "2026-12-01T08:00:00Z",
+  "user": {
+   "login": "bot-example"
+  },
+  "body": "Built but unused: none (agk metrics 2026-W48)"
+ }
+]

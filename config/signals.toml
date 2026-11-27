@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The signals of use (brief #2054, ADR-0852): one `[[signal]]` per shipped feature, read only by
+# `metrics.signal_lines`. `id` is lowercase words joined by `-`; `feature` is `ADR-nnnn` or `brief #n`;
+# `since` is the day it shipped; `kind` is log (`step`, `pattern`), comment (`pattern`, optional `then`),
+# run (`event`), commit (`pattern`) or none (`reason`). `setting` (optional) names the `<table>.<key>`
+# or top-level key that turns the feature on. Patterns are Python regular expressions of at most 200
+# characters, matched per line. A decision dated on or after `from` with no row is listed every week.
+from = "2026-11-27"
+
+[[signal]]
+id = "tests-selected"
+feature = "ADR-0348"
+since = "2026-11-08"
+kind = "log"
+step = "Tests of the checks"
+pattern = '^tests: mode selected'
+
+[[signal]]
+id = "light-reprove"
+feature = "brief #1163"
+since = "2026-11-25"
+kind = "comment"
+pattern = '^Report: \S+ merge of main \(light re-prove'
+
+[[signal]]
+id = "short-jobs"
+feature = "ADR-0586"
+since = "2026-11-16"
+kind = "comment"
+pattern = '^Started: \S+ \S+ by the supervisor \((build|fix)\)'
+then = '^Report: '
+
+[[signal]]
+id = "usage-figure"
+feature = "ADR-0835"
+since = "2026-11-26"
+kind = "comment"
+pattern = '^Report:.*\bUsage: \d+ tokens'
+
+[[signal]]
+id = "merge-queue"
+feature = "ADR-0417"
+since = "2026-11-10"
+kind = "run"
+event = "merge_group"
+setting = "flow.merge_queue"
+
+[[signal]]
+id = "unused-on-owner-list"
+feature = "ADR-0852"
+since = "2026-11-27"
+kind = "comment"
+pattern = '^Built but unused: '

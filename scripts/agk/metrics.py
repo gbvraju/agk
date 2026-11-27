@@ -33,6 +33,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    DEFAULT_CONFIG,
     REQUIREMENTS,
     CheckError,
     agent_apps,
@@ -41,6 +42,7 @@ from common import (
     execution,
     final_accepts,
     git,
+    load_config,
     matches,
     parse_estimate,
     read_list,
@@ -66,7 +68,9 @@ USAGE = (
     "[--repo OWNER/REPO] [--api-dir DIR]\n"
     "       metrics.py --cost [--day YYYY-MM-DD] [--days N] [--records DIR] [--save]\n"
     "       metrics.py --report-sums FACTS [--after YYYY-MM-DD] [--model ID] [--repo OWNER/REPO] "
-    "[--api-dir DIR]"
+    "[--api-dir DIR]\n"
+    "       metrics.py --signals [--today YYYY-MM-DD] [--days N] [--repo OWNER/REPO] "
+    "[--api-dir DIR] [--saved FILE]"
 )
 UNKNOWN = "unknown"
 NONE = "-"
@@ -1576,6 +1580,319 @@ def stale_pack_lines(root: Path, today: date) -> list[str]:
     return packs.report_lines(root, today)
 
 
+# --- the signals of use (brief #2054, ADR-0852) -----------------------------------------------
+
+SIGNALS_FILE = "config/signals.toml"  # read here only (answer 9)
+SIGNAL_KINDS = ("log", "comment", "run", "commit", "none")
+SIGNAL_FIELDS = {
+    "log": ("step", "pattern"),
+    "comment": ("pattern",),
+    "run": ("event",),
+    "commit": ("pattern",),
+    "none": ("reason",),
+}
+SIGNAL_PATTERNS = ("pattern", "then")
+SIGNAL_CALLS = 20  # the section's GET allowance; `GET rate_limit` is not counted
+SIGNAL_DAYS = 14
+SIGNAL_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+SIGNAL_FEATURE = re.compile(r"ADR-\d{4}|brief #\d+")
+SIGNAL_EVENT = re.compile(r"[a-z_]+")
+SIGNAL_SETTING = re.compile(r"(?:(?P<table>[a-z_]+)\.)?(?P<key>[a-z_]+)")
+ADR_NUMBERED = re.compile(r"(\d{4})-[^/]+\.md")
+ADR_DATE = re.compile(r"^- Date: (\d{4}-\d{2}-\d{2})", re.M)
+
+
+class SignalRefused(Exception):
+    """The registry breaks a rule of answer 6; the message is the field, never its value."""
+
+
+def signal_day(value: Any, field: str) -> date:
+    try:
+        return date.fromisoformat(value) if isinstance(value, str) else date.fromisoformat("")
+    except ValueError:
+        raise SignalRefused(field) from None
+
+
+def signal_setting(name: Any) -> bool:
+    from config import TABLE_KEYS, TOP_KEYS  # noqa: PLC0415 - only a row's setting needs them
+
+    found = SIGNAL_SETTING.fullmatch(name) if isinstance(name, str) else None
+    if found is None:
+        return False
+    table, key = found["table"], found["key"]
+    if table is None:
+        return key in TOP_KEYS or key in DEFAULT_CONFIG
+    return key in TABLE_KEYS.get(table, frozenset())
+
+
+def signal_rows(text: str) -> tuple[date, list[dict]]:
+    """(`from`, the rows) of the registry, or SignalRefused naming the field (answer 6)."""
+    import tomllib  # noqa: PLC0415
+
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        raise SignalRefused("file") from None
+    since = signal_day(data.get("from"), "from")
+    rows = data.get("signal", [])
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        raise SignalRefused("signal")
+    seen: set[str] = set()
+    for item in rows:
+        rid = item.get("id")
+        if not isinstance(rid, str) or not SIGNAL_ID.fullmatch(rid) or rid in seen:
+            raise SignalRefused("id")
+        seen.add(rid)
+        if not isinstance(item.get("feature"), str) or not SIGNAL_FEATURE.fullmatch(
+            item["feature"]
+        ):
+            raise SignalRefused("feature")
+        item["since"] = signal_day(item.get("since"), "since")
+        if item.get("kind") not in SIGNAL_KINDS:
+            raise SignalRefused("kind")
+        needed = SIGNAL_FIELDS[item["kind"]]
+        for field in (*needed, *(f for f in SIGNAL_PATTERNS if f in item and f not in needed)):
+            value = item.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise SignalRefused(field)
+            if field in SIGNAL_PATTERNS:
+                try:
+                    item[field] = re.compile(value, re.M) if len(value) <= 200 else None
+                except re.error:
+                    item[field] = None
+                if item[field] is None:
+                    raise SignalRefused(field)
+        if item["kind"] == "run" and not SIGNAL_EVENT.fullmatch(item["event"]):
+            raise SignalRefused("event")
+        if "setting" in item and not signal_setting(item["setting"]):
+            raise SignalRefused("setting")
+    return since, rows
+
+
+def setting_on(source: dict, name: str) -> bool:
+    table, _, key = name.rpartition(".")
+    holder = source.get(table) if table else source
+    return isinstance(holder, dict) and holder.get(key) is True
+
+
+class SignalReads:
+    """The section's reads: each once, metered by `min(hourly_room, SIGNAL_CALLS)`, the room read
+    only when a first read is needed; a read not answered is (None, its class)."""
+
+    def __init__(self, src: Any) -> None:
+        self.src, self.metered, self.done = src, None, {}
+
+    def get(self, name: str, endpoint: str, until: Any = None) -> tuple[Any, str]:
+        if name not in self.done:
+            if self.metered is None:
+                room = hourly_room(self.src)
+                self.metered = Metered(
+                    self.src, min(SIGNAL_CALLS, room if room is not None else SIGNAL_CALLS)
+                )
+            try:
+                data = self.metered.get(name, endpoint, until)
+            except OutOfCalls:
+                return None, "hourly limit"  # not kept: the allowance is spent for every later read
+            self.done[name] = (data, "" if data is not None else failed_as(self.src, name))
+        return self.done[name]
+
+
+def in_days(when: Any, start: date, end: date) -> bool:
+    found = stamp(when) if isinstance(when, str) else None
+    return found is not None and start <= found.date() < end
+
+
+def comment_count(item: dict, comments: list[dict]) -> int:
+    """Comments with a line matching the pattern; with `then`, only those followed by a later
+    comment of the same issue with a line matching `then` (answer 2)."""
+    ordered = sorted(comments, key=lambda c: str(c.get("created_at")))
+    count = 0
+    for i, one in enumerate(ordered):
+        if not item["pattern"].search(str(one.get("body") or "")):
+            continue
+        if "then" in item and not any(
+            later.get("issue_url") == one.get("issue_url")
+            and item["then"].search(str(later.get("body") or ""))
+            for later in ordered[i + 1 :]
+        ):
+            continue
+        count += 1
+    return count
+
+
+def log_count(item: dict, reads: SignalReads, start: date, end: date) -> tuple[int | None, str]:
+    """Of the newest `TIMED_LOGS` governance `pull_request` runs of the window, those whose named
+    step ran and whose log has a matching line."""
+    data, why = reads.get(
+        "signal-runs-pull_request",
+        f"repos/{{repo}}/actions/runs?event=pull_request&created=%3E%3D{start}",
+    )
+    listed = data.get("workflow_runs") if isinstance(data, dict) else None
+    if not isinstance(listed, list):
+        return None, why or "failed"
+    runs = [
+        r
+        for r in newest_first(listed)
+        if is_governance(r) and in_days(r.get("created_at"), start, end)
+    ]
+    count, ran = 0, False
+    for run_ in runs[:TIMED_LOGS]:
+        jobs, why = reads.get(
+            f"run-jobs-{run_.get('id')}", f"repos/{{repo}}/actions/runs/{run_.get('id')}/jobs"
+        )
+        if not isinstance(jobs, dict) or not isinstance(jobs.get("jobs"), list):
+            return None, why or "failed"
+        job = next(
+            (
+                j
+                for j in jobs["jobs"]
+                if any(
+                    s.get("name") == item["step"] and s.get("conclusion") in RAN
+                    for s in steps_of(j)
+                )
+            ),
+            None,
+        )
+        if job is None:
+            continue
+        ran = True
+        text, why = reads.get(
+            f"job-log-{job.get('id')}", f"repos/{{repo}}/actions/jobs/{job.get('id')}/logs"
+        )
+        if not isinstance(text, str):
+            return None, why or "failed"
+        count += bool(
+            item["pattern"].search("\n".join(LOG_STAMP.sub("", x) for x in text.splitlines()))
+        )
+    return (count, "") if ran else (None, "no step run")
+
+
+def commit_count(root: Path, item: dict, start: date, end: date) -> tuple[int | None, str]:
+    branch = str(load_config(root).get("default_branch") or "main")
+    if not git(root, "rev-parse", "--verify", "-q", f"origin/{branch}", check=False).strip():
+        return None, "failed"
+    out = git(
+        root,
+        "log",
+        "--first-parent",
+        f"origin/{branch}",
+        f"--since={start}T00:00:00Z",
+        f"--until={end}T00:00:00Z",
+        "--format=%B%x00",
+        check=False,
+    )
+    return sum(1 for body in out.split("\0") if item["pattern"].search(body)), ""
+
+
+def signal_count(ctx: dict, item: dict) -> tuple[int | None, str]:
+    """(the count, '') of one row, or (None, the class of what was not read)."""
+    kind, start, end, reads = item["kind"], ctx["start"], ctx["end"], ctx["reads"]
+    if ctx["personal"] and kind != "commit":
+        return None, "setting: forge"
+    if ctx["local"] and kind in ("log", "run"):
+        return None, "setting: execution"
+    if kind == "commit":
+        return commit_count(ctx["root"], item, start, end)
+    saved = ctx["saved"]
+    if saved is not None and kind in ("comment", "run"):
+        days = saved.get("days")
+        if not isinstance(days, int) or days < ctx["days"]:
+            return None, f"saved window {days if isinstance(days, int) else 'unknown'} days"
+        listed = saved.get("comments" if kind == "comment" else "runs")
+        if not isinstance(listed, list):
+            return None, "failed"
+        listed = [
+            x for x in listed if isinstance(x, dict) and in_days(x.get("created_at"), start, end)
+        ]
+        if kind == "comment":
+            return comment_count(item, listed), ""
+        return sum(1 for r in listed if r.get("event") == item["event"]), ""
+    if kind == "log":
+        return log_count(item, reads, start, end)
+    if kind == "run":
+        endpoint = (
+            f"repos/{{repo}}/actions/runs?event={item['event']}&created=%3E%3D{start}&per_page=1"
+        )
+        data, why = reads.get(f"signal-runs-{item['event']}", endpoint)
+        total = data.get("total_count") if isinstance(data, dict) else None
+        ok = isinstance(total, int) and not isinstance(total, bool)
+        return (total, "") if ok else (None, why or "failed")
+    data, why = reads.get(
+        "comments-signals", f"repos/{{repo}}/issues/comments?since={start}T00:00:00Z"
+    )
+    if not isinstance(data, list):
+        return None, why or "failed"
+    return comment_count(
+        item, [c for c in data if isinstance(c, dict) and in_days(c.get("created_at"), start, end)]
+    ), ""
+
+
+def unrowed(root: Path, since: date, rows: list[dict]) -> str:
+    named = {r["feature"] for r in rows}
+    found = []
+    folder = root / "docs" / "adr"
+    for path in sorted(folder.glob("*.md")) if folder.is_dir() else []:
+        number = ADR_NUMBERED.fullmatch(path.name)
+        day = (
+            ADR_DATE.search(path.read_text(encoding="utf-8", errors="replace")) if number else None
+        )
+        if day and day[1] >= since.isoformat() and f"ADR-{number[1]}" not in named:
+            found.append(f"ADR-{number[1]}")
+    return f"signals: decisions since {since} with no row: {', '.join(found) or 'none'}"
+
+
+def signal_lines(
+    root: Path, src: Any, end: date, days: int = SIGNAL_DAYS, saved: dict | None = None
+) -> list[str]:
+    """Brief #2054 answers 2, 3, 6 and 7: the section of the weekly report for the DAYS ending
+    END; a row is `unknown` whenever a read it needs was not answered, never a zero."""
+    path = root / SIGNALS_FILE
+    if not path.is_file():
+        return ["signals: none declared (path class: config/)"]
+    try:
+        since, rows = signal_rows(path.read_text(encoding="utf-8"))
+    except (SignalRefused, UnicodeDecodeError) as exc:
+        return [f"signals: refused (field: {exc if isinstance(exc, SignalRefused) else 'file'})"]
+    source = config_source(root)
+    start = end - timedelta(days=days)
+    ctx = {"root": root, "start": start, "end": end, "days": days, "saved": saved}
+    ctx |= {
+        "reads": SignalReads(src),
+        "local": local_execution(root),
+        "personal": "personal" in source,
+    }
+    tally = {"used": 0, "unused": 0, "new": 0, "unknown": 0, "none": 0}
+    unused, unknown = [], []
+    for item in rows:
+        if item["kind"] == "none":
+            tally["none"] += 1
+            continue
+        if item["since"] >= start:
+            tally["new"] += 1
+            continue
+        count, why = signal_count(ctx, item)
+        name = f"{item['id']} ({item['feature']})"
+        if count is None:
+            tally["unknown"] += 1
+            unknown.append(f"unknown: {name}: unknown ({why}) ({item['kind']})")
+        elif count:
+            tally["used"] += 1
+        else:
+            tally["unused"] += 1
+            off = (
+                f"; off by {item['setting']}"
+                if "setting" in item and not setting_on(source, item["setting"])
+                else ""
+            )
+            unused.append(f"unused: {name}: 0 in {days} days ({item['kind']}){off}")
+    other = f"; no runtime use {tally['none']}" if tally["none"] else ""
+    head = (
+        f"signals: {len(rows)} declared; used {tally['used']}; unused {tally['unused']}; "
+        f"new {tally['new']}; unknown {tally['unknown']}{other} ({days} days to {end})"
+    )
+    return [head, *unused, *unknown, unrowed(root, since, rows)]
+
+
 def render(
     week: str,
     start: date,
@@ -1635,6 +1952,7 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
         holds_line(ctx.root, start, end),
         coverage_line(ctx.src, details),  # brief #2020 answer 4: the reports that carry a figure
         *stale_pack_lines(ctx.root, today),  # brief #2045: SPEC-0077 rule 8, never failing
+        *signal_lines(ctx.root, ctx.src, end),  # brief #2054: the signals of use, never failing
     )
     records.sort(key=lambda r: int(r["number"]))
     flags = []
@@ -1713,6 +2031,7 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
     )
     document = {
         "saved_at": now,
+        "days": days,  # the window of the comments and runs (brief #2054 answer 3)
         "facts": facts.build(root, end.date(), repo, src, weeks),
         "comments": None
         if comments is None
@@ -2286,6 +2605,7 @@ def parse_args(args: list[str]) -> dict | None:
     options |= {"usage": None, "before": None, "after": None, "sums": None, "model": None}
     options |= {"save": False, "to": None, "days": 7}
     options |= {"cost": False, "day": None, "records": None, "save_cost": False, "days_set": False}
+    options |= {"signals": False, "saved": None}
     i = 0
     while i < len(args):
         arg = args[i]
@@ -2312,6 +2632,14 @@ def parse_args(args: list[str]) -> dict | None:
         if arg == "--save-checklist":
             options["save"] = True
             i += 1
+            continue
+        if arg == "--signals":
+            options["signals"] = True
+            i += 1
+            continue
+        if arg == "--saved" and i + 1 < len(args):
+            options["saved"] = args[i + 1]
+            i += 2
             continue
         if arg in ("--to", "--days") and i + 1 < len(args):
             if arg == "--to":
@@ -2352,6 +2680,8 @@ def parse_args(args: list[str]) -> dict | None:
             i += 1
         else:
             return None
+    if options["signals"] or options["saved"]:
+        return signals_options(options)
     if options["sums"] or options["model"]:
         return sums_options(options)
     if (options["before"] or options["after"]) and not options["usage"]:
@@ -2359,6 +2689,35 @@ def parse_args(args: list[str]) -> dict | None:
     if options["usage"] and (options["issues"] or options["today"] or options.get("mode_set")):
         return None
     return cost_options(options)
+
+
+def signals_options(options: dict) -> dict | None:
+    """`--signals` goes with `--today`, `--days`, `--repo`, `--api-dir` and `--saved` alone."""
+    other = options["usage"] or options["before"] or options["after"] or options["issues"]
+    other = other or options.get("mode_set") or options["save"] or options["to"] or options["sums"]
+    other = other or options["model"] or options["cost"] or options["day"] or options["records"]
+    if not options["signals"] or other or options["save_cost"]:
+        return None
+    if not options["days_set"]:
+        options["days"] = SIGNAL_DAYS
+    return options
+
+
+def signals_main(options: dict) -> int:
+    """Answer 3: the section alone, for the window of `--today`; it writes nothing."""
+    root = repo_root()
+    saved = None
+    if options["saved"]:
+        try:
+            saved = json.loads(Path(options["saved"]).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise CheckError("the saved file is not readable JSON (option: --saved)") from None
+        if not isinstance(saved, dict):
+            raise CheckError("the saved file is not a JSON object (option: --saved)")
+    src = ApiDir(Path(options["api"])) if options["api"] else Gh(options["repo"] or origin_repo())
+    _, end = window(options["today"] or datetime.now(UTC).date())
+    print("\n".join(signal_lines(root, src, end, options["days"], saved)))
+    return 0
 
 
 def sums_options(options: dict) -> dict | None:
@@ -2403,6 +2762,8 @@ def main(argv: list[str] | None = None) -> int:
     if options is None:
         print(USAGE, file=sys.stderr)
         return 2
+    if options["signals"]:
+        return signals_main(options)
     if options["cost"]:
         return cost_main(options)
     if options["sums"]:
