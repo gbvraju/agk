@@ -1,0 +1,1 @@
+- Tests: under `balanced` a covered changed file selects the tests that name its exact path, not every test that names its folder, so a kit pull request runs its selection instead of the full suite; the optional `[testing] hub_importers` stops importer expansion at a file with more importers, printing a `hub:` line (brief #2055, ADR-0853)
