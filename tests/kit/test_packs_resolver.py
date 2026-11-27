@@ -399,3 +399,18 @@ def test_ac2_a_clean_project_with_no_plugin_still_reads_its_own_playbook(tmp_pat
 
 def _no_plugin(root, env=None):
     raise playbook_format.Refused("kit_root: no plugin root (setting: CLAUDE_PLUGIN_ROOT)")
+
+
+def test_ac2_detect_composes_with_the_resolvers_own_functions(monkeypatch):
+    """REQ-084 AC2: SPEC-0077 rule 5 (one composition: `front_door` uses `packs.rows`, and its
+    one local name is `packs.CORE`, kept only for a partial copy with no `packs.py`)."""
+    assert front_door.KIT_LAYER == packs.CORE
+    source = inspect.getsource(front_door.signal_table) + inspect.getsource(front_door.domain_rows)
+    assert source.count("packs.rows(") == 2
+    assert not hasattr(front_door, "_by_name") and not hasattr(front_door, "_plain")
+    monkeypatch.setattr(playbook_format, "resolver", lambda: None)
+    kit = tomllib.loads((KIT_ROOT / front_door.SIGNALS).read_text(encoding="utf-8"))
+    assert front_door.signal_table(KIT_ROOT) == kit
+    assert front_door.domain_rows(KIT_ROOT) == rows_of(
+        KIT_ROOT / front_door.DOMAIN_SIGNALS, "domain"
+    )
