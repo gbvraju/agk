@@ -431,24 +431,25 @@ def _provenance(rel: str, section: str, entry: dict) -> list[str]:
 
 
 def _pack_layer(path: Path, root: Path) -> str | None:
-    """SPEC-0077 rule 5: the pack id of the layer the resolver reads PATH from, else None (no
-    resolver, no pack in use, a refused table or pack: today's format)."""
+    """SPEC-0077 rule 5: the pack id of the layer the resolver reads PATH from (a pack of
+    `packs.used` whose manifest lists it under `playbooks/`, as `packs.files` reads it), else None:
+    no resolver, no pack in use, a refused table or pack, the kit's or the project's own file."""
     packs = resolver()
     if packs is None:
         return None
     try:
-        found = packs.files(Path(root), "playbooks", core=Path(root) / FOLDER)
-    except (packs.Refused, Refused):
+        used = packs.used(Path(root))
+    except packs.Refused:
         return None
+    import check_packs  # here: check_packs imports this module
+
     want = Path(path).resolve()
-    return next(
-        (
-            layer
-            for layer, p in found
-            if layer not in (packs.CORE, packs.PROJECT) and p.resolve() == want
-        ),
-        None,
-    )
+    for pid, where in used:
+        listed = (check_packs.load(where / check_packs.MANIFEST) or {}).get("files", {})
+        names = [n for n in listed if n.startswith("playbooks/")]
+        if any((where / n).resolve() == want for n in names):
+            return pid
+    return None
 
 
 def _gates(rel: str, gates: list[dict], derived: bool = False) -> list[str]:

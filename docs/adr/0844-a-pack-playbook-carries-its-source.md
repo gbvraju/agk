@@ -19,9 +19,9 @@ lines without provenance and 18 `problems` lines with it, so no pack playbook co
 
 ## Decision
 
-1. **The layer.** `playbook_format._pack_layer(path, root)` asks the resolver (`packs.files(root, "playbooks")`) for
-   the file's layer and gives the pack id, or None: no resolver (a partial copy), no pack in use, a refused
-   `[packs]` table or pack, the kit's (`agk-core`) or the project's own file.
+1. **The layer.** `playbook_format._pack_layer(path, root)` asks the resolver for the file's layer: the pack of
+   `packs.used` whose manifest lists the file under `playbooks/`, as `packs.files` reads it, or None: no resolver (a
+   partial copy), no pack in use, a refused `[packs]` table or pack, the kit's (`agk-core`) or the project's own file.
 2. **The format of a pack's playbook.** For a pack layer each `[[phases]]`, `[[lanes]]`, `[[gates]]`, `[[claims]]`,
    `[[discovery]]` and `[[standards]]` entry also takes `source` and `basis` (`PACK_KEYS`, strings). A present one is
    checked by rule 3, each line `SPEC-0077 rule 3: <file>: <what> (key: <key>)`, never a value: a `source` that is not
