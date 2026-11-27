@@ -25,13 +25,14 @@ sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_packs  # noqa: E402
-import config  # noqa: E402
 import doctor  # noqa: E402
 import governance_map  # noqa: E402
 import packs  # noqa: E402
 import steward  # noqa: E402
 import steward_owner  # noqa: E402
 from test_steward_memory import GitHub  # noqa: E402
+
+import config  # noqa: E402
 
 SERVER = "docs-example"
 AT = "2026-11-27T13:30Z"
@@ -56,7 +57,9 @@ mcp = {mcp}
 "skills/shop/SKILL.md" = "{sha}"
 """
 REFUSED = "refused: the documentation server is not allowed (setting: packs.mcp)"
-LEFT_OUT = "warn packs: a listed documentation server has no verified pack in use (setting: packs.mcp)"
+LEFT_OUT = (
+    "warn packs: a listed documentation server has no verified pack in use (setting: packs.mcp)"
+)
 
 
 def stub_pack(root: Path, pid: str, tier: str = "curated", kit: str = ">=0.60.0,<1.0.0",

@@ -70,8 +70,9 @@ only on an explicit yes (in team mode `--by` a spec approver), else `not confirm
 applied` (exit 1); `ready` is `not ready` without it while a work type is declared. `research`
 records the web-research permission and, only on a yes, prints `search: <TEXT>` for a generic
 description (exit 2 for anything else); with `--server NAME`, one of `packs.servers` (SPEC-0077
-rule 7, brief #2044), the record names it and a yes prints `server: <NAME>` too. `draft` writes the project playbook (`front_door.py
-derive-write`) and its Proposed ADR, never `[delivery] work_type`.
+rule 7, brief #2044), the record names it and a yes prints `server: <NAME>` too. `draft` writes
+the project playbook (`front_door.py derive-write`) and its Proposed ADR, never `[delivery]
+work_type`.
 
 Brief #1690 (SPEC-0062 rules 13, 14 and 16, ADR-0703): `ask --target pr:N --line FILE` pins the
 pull request's full head and the exact line to write as the session's one open ask; `approve`
