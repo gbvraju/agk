@@ -61,6 +61,13 @@ outside the map entry of a touched code path and a project's file-by-file mapped
 only); a Reserved line whose path classes leave out a named `agk.toml` warns (rule 4b).
 Brief #1972 (ADR-0824): a brief that names "standard library and `common.py` only" is warned
 that the words read as the kit's offline set (`rules.py imports`), never failed.
+Brief #2002 (ADR-0828): with `--root DIR`, each Approved spec of `DIR/docs/specs/` that the
+Answers name, or whose `- Requirements:` names an `Advances:` id, needs one line `Spec fit:
+SPEC-<nnnn> <part>[; <part>]` (`rule(s) <list> within` or `rule(s) <list> change by amendment
+<m>`) naming every rule of it the brief names (`spec_fit_problems`); a missing line or rule warns
+before `[flow] brief_study_fails_from` and fails from it; a wrong line, or a change without its
+`Reserved:` amendment or quoted items (`> 1. ...` with `> Class:`), fails on any day. A fitted
+rule's number limit the Answers state with another number warns.
 
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
@@ -482,6 +489,220 @@ def body_problems(
     return problems
 
 
+# --- brief #2002 (ADR-0828): the Spec fit line of each Approved spec a brief names --------------
+
+FIT = "Spec fit:"
+FIT_SETTING = "(setting: Spec fit:)"
+RULE_LIST = r"\d+[a-z]?(?:(?:,? and |, )\d+[a-z]?)*"
+FIT_LINE = re.compile(r"Spec fit: SPEC-(\d{4}) (\S.*)")
+FIT_PART = re.compile(rf"rules? ({RULE_LIST}) (?:(within)|change by amendment (\d+))")
+NAMED_RULES = re.compile(rf"\bSPEC-(\d{{4}}) rules? ({RULE_LIST})\b")
+SPEC_NAMED = re.compile(r"\bSPEC-(\d{4})\b")
+RULE_START = re.compile(r"^(\d+[a-z]?)\. ", re.M)
+RESERVED_AMENDMENTS = re.compile(r"\bamendments? (\d+(?:(?:,? and |, )\d+)*)")
+STUDY_HEAD = re.compile(r"^[A-Z][A-Za-z -]*:(?: |$)")
+WORDS = ("one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
+         " fifteen sixteen seventeen eighteen nineteen twenty").split()  # fmt: skip
+NUM = r"(\d+|" + "|".join(WORDS) + r")"
+LIMITS = tuple(
+    (name, re.compile(form.format(NUM), re.I))
+    for name, form in (("at most", r"\bat most {}\b"), ("up to", r"\bup to {}\b"),
+                       ("or fewer", r"\b{} or fewer\b"), ("batches of", r"\bbatches of {}\b"))
+)  # fmt: skip
+
+
+def rule_numbers(text: str) -> list[str]:
+    """The rule numbers of a list such as `5, 11 and 12` (a lettered `7a` as written)."""
+    return re.findall(r"\d+[a-z]?", text)
+
+
+def answers_text(body: str) -> str:
+    """The Answers section: from its `Answers...:` line to the next `Key:` line at the margin."""
+    lines, out, inside = body.splitlines(), [], False
+    for line in lines:
+        if not inside:
+            inside = line.startswith("Answers") and line.rstrip().endswith(":")
+            continue
+        if STUDY_HEAD.match(line):
+            break
+        out.append(line)
+    return "\n".join(out)
+
+
+def spec_rules(root: Path, number: str) -> tuple[str | None, dict[str, str]]:
+    """(the spec's status or None without a file, {rule: its text}) of SPEC-NUMBER at ROOT."""
+    for path in sorted((root / "docs" / "specs").glob(f"{number}-*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None, {}
+        status = brief_study.STATUS.search(text)
+        part = text.split("\n## Rules", 1)[-1].split("\n## ", 1)[0] if "\n## Rules" in text else ""
+        starts = list(RULE_START.finditer(part))
+        ends = [m.start() for m in starts[1:]] + ([len(part)] if starts else [])
+        return (status.group(1) if status else "", {
+            m.group(1): part[m.start() : end] for m, end in zip(starts, ends, strict=True)
+        })  # fmt: skip
+    return None, {}
+
+
+def fit_lines(body: str) -> list[tuple[int, str, str]]:
+    """(index, spec number, rest) of each `Spec fit:` line; a malformed one has spec ``."""
+    out = []
+    for at, line in enumerate(body.splitlines()):
+        if line.startswith(FIT):
+            found = FIT_LINE.fullmatch(line.rstrip())
+            out.append((at, found.group(1), found.group(2)) if found else (at, "", ""))
+    return out
+
+
+def fit_parts(rest: str) -> list[tuple[list[str], int | None]] | None:
+    """[(rules, amendment or None for within)] of a line's parts, None when one is malformed."""
+    parts = []
+    for part in rest.split("; "):
+        found = FIT_PART.fullmatch(part.strip())
+        if found is None:
+            return None
+        parts.append(
+            (rule_numbers(found.group(1)), int(found.group(3)) if found.group(3) else None)
+        )
+    return parts
+
+
+def fit_items(body: str) -> dict[int, str]:
+    """{amendment: its quoted items} of each `change` part (answer 5 reads them at filing)."""
+    import check_amendments
+
+    lines, out = body.splitlines(), {}
+    for at, number, rest in fit_lines(body):
+        for _, amendment in (fit_parts(rest) or []) if number else []:
+            if amendment is not None:
+                out[amendment] = check_amendments.quoted_items(lines, at)
+    return out
+
+
+def fit_changes(body: str) -> list[int]:
+    """The amendments a brief's `Spec fit:` lines change rules by, in order."""
+    return sorted(fit_items(body))
+
+
+def limit_values(text: str) -> dict[str, set[str]]:
+    found: dict[str, set[str]] = {}
+    for name, form in LIMITS:
+        for value in form.findall(text):
+            value = value.lower()
+            found.setdefault(name, set()).add(
+                str(WORDS.index(value) + 1) if value in WORDS else value
+            )
+    return found
+
+
+def limit_warnings(body: str, number: str, rules: dict[str, str], named: set[str]) -> list[str]:
+    """Answer 2's one heuristic: a fitted rule's number limit the Answers state with another
+    number in the same form, while the line leaves that rule out (a warning only)."""
+    stated = limit_values(answers_text(body))  # what the brief states it builds
+    out = []
+    for rule, words in rules.items():
+        limits = limit_values(words)
+        if rule not in named and any(stated.get(k, set()) - v for k, v in limits.items()):
+            out.append(
+                f"spec fit: SPEC-{number} rule {rule} states a number limit the brief states"
+                f" with another number; name rule {rule} in the Spec fit: line {FIT_SETTING}"
+            )
+    return out
+
+
+def spec_fit_problems(
+    body: str, root: Path, today: str | None = None, filed: object = None
+) -> tuple[list[str], list[str]]:
+    """Brief #2002 answers 1, 2, 9 and 10 (ADR-0828): (failures, warnings) of the `Spec fit:`
+    lines. A missing line, or a named rule left out of it, warns before `[flow]
+    brief_study_fails_from` and fails on and after it; a wrong line fails on any day; a
+    `Priority: 0` brief is held only for a `change`. Names the line, spec and rule, never text."""
+    import check_amendments
+
+    lines, wrong, late = body.splitlines(), [], []
+    reserved = {
+        int(n) for x in lines if x.startswith("Reserved:")
+        for m in RESERVED_AMENDMENTS.finditer(x) for n in rule_numbers(m.group(1))
+    }  # fmt: skip
+    named: dict[str, set[str]] = {}
+    for found in NAMED_RULES.finditer(body):
+        named.setdefault(found.group(1), set()).update(rule_numbers(found.group(2)))
+    stated: dict[str, set[str]] = {}
+    seen: set[str] = set()
+    for at, number, rest in fit_lines(body):
+        parts = fit_parts(rest) if number else None
+        if parts is None:
+            wrong.append(f"spec fit: a Spec fit: line is malformed {FIT_SETTING}")
+            continue
+        if number in seen:
+            wrong.append(
+                f"spec fit: two Spec fit: lines for SPEC-{number}; write one {FIT_SETTING}"
+            )
+        seen.add(number)
+        status, rules = spec_rules(root, number)
+        if status != "Approved":
+            wrong.append(f"spec fit: the Spec fit: line names SPEC-{number}, which is not Approved"
+                         f" {FIT_SETTING}")  # fmt: skip
+            continue
+        within = {r for rs, m in parts if m is None for r in rs}
+        changed = {r for rs, m in parts if m is not None for r in rs}
+        stated[number] = within | changed
+        where = f"spec fit: the Spec fit: line of SPEC-{number}"
+        wrong += [f"{where} names rule {r}, which SPEC-{number} does not have {FIT_SETTING}"
+                  for r in sorted(stated[number] - set(rules))]  # fmt: skip
+        wrong += [f"{where} states rule {r} both within and changed {FIT_SETTING}"
+                  for r in sorted(within & changed)]  # fmt: skip
+        for m in sorted({m for _, m in parts if m is not None}):
+            if m not in reserved:
+                wrong.append(f"{where} changes by amendment {m}, which Reserved: does not name"
+                             f" {FIT_SETTING}")  # fmt: skip
+            quoted = check_amendments.quoted_items(lines, at)
+            if not check_amendments.items(quoted):
+                wrong.append(f"{where} changes by amendment {m} with no quoted items under the line"
+                             f" {FIT_SETTING}")  # fmt: skip
+            else:
+                wrong += [
+                    f"spec fit: {p}"
+                    for p in check_amendments.file_problems(
+                        f"Spec fit: SPEC-{number}", quoted, root
+                    )
+                ]
+    if re.search(r"(?m)^Priority: 0\s*$", body):
+        return wrong, []
+    wanted = set(SPEC_NAMED.findall(answers_text(body)))
+    advances = set(advances_ids(body))
+    warns = []
+    for spec in sorted((root / "docs" / "specs").glob("[0-9][0-9][0-9][0-9]-*.md")):
+        number = spec.name[:4]
+        status, rules = spec_rules(root, number)
+        if status != "Approved":
+            continue
+        if number not in wanted and not spec_requirements(spec) & advances:
+            continue
+        if number not in seen:
+            late.append(f"spec fit: SPEC-{number} has no Spec fit: line {FIT_SETTING}")
+        else:
+            late += [
+                f"spec fit: the Spec fit: line of SPEC-{number} leaves out rule {r} {FIT_SETTING}"
+                for r in sorted(named.get(number, set()) - stated.get(number, set()))
+            ]
+        warns += limit_warnings(body, number, rules, stated.get(number, set()))
+    if wrong or brief_study.enforced(root, today, filed):
+        return wrong + late, warns  # fix list on b35375a item 2: the warnings stay
+    return [], late + warns
+
+
+def spec_requirements(path: Path) -> set[str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return set()
+    found = re.search(r"(?m)^- Requirements:(.*)$", text)
+    return set(re.findall(r"REQ-\d+", found.group(1))) if found else set()
+
+
 def phrase_warnings(body: str) -> list[str]:
     """Brief #1972 answer 4 (ADR-0824): one warning, never a failure, on the import phrase."""
     return [IMPORTS_WARNING] if IMPORTS_PHRASE.search(body) else []
@@ -518,7 +739,10 @@ def brief_result(
     fails, testing = testing_problems(body, root, today or utc_day(), filed)  # brief #1856
     if fails:
         return fails, []
-    return [], protected_warnings(body, root) + testing + study + phrase_warnings(body)
+    fails, fit = spec_fit_problems(body, root, today or utc_day(), filed)  # brief #2002
+    if fails:
+        return fails, []
+    return [], protected_warnings(body, root) + testing + study + fit + phrase_warnings(body)
 
 
 def check(
