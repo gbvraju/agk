@@ -308,6 +308,11 @@ def verify(root: Path, use: list[dict] | None) -> list[str]:
         return [LOCK_CLASS]
     out = []
     by_id = {e["id"]: e for e in entries}
+    trust = None
+    if use is not None and entries:
+        import config
+
+        trust = config.packs_settings(root)["trust"]  # USE was read from it: not refused
     for e in entries:
         folder = root / check_packs.FOLDER / e["id"]
         label = f"rule 4: {check_packs.FOLDER}/{e['id']}"
@@ -324,6 +329,11 @@ def verify(root: Path, use: list[dict] | None) -> list[str]:
         manifest = folder / check_packs.MANIFEST
         if manifest.is_file() and check_packs.digest(manifest) != e["sha256"]:
             out.append(f"{label}: a locked file's SHA-256 differs (key: sha256)")
+        if trust is not None and manifest.is_file():
+            import pack_scan  # rule 6 (brief #2034, ADR-0841): trust and `kit` at verify too
+
+            data = check_packs.load(manifest) or {}
+            out += pack_scan.admitted(root, data, f"{check_packs.FOLDER}/{e['id']}", trust)
         if use is not None and e["id"] not in {u["id"] for u in use}:
             out.append(f"{label}: a locked pack is not listed in use (setting: packs.use)")
     for u in use or []:
@@ -448,10 +458,19 @@ def add(root, source, said, at, *, by=None, tag=None, fetch=fetch_source, record
                        " link or a file name out of form (key: files)"]  # fmt: skip
         stage = Path(tmp) / pid
         shutil.copytree(got, stage, symlinks=True)
-        if found := check_packs.problems(stage):
-            return 1, [*lines, *found]
+        import pack_scan  # rule 6 (brief #2034, ADR-0841): the adoption scans, before any write
+
+        if found := check_packs.problems(stage) + pack_scan.scan(root, stage):
+            return 1, [*lines, *dict.fromkeys(found)]
         entry = lock_entry(stage)
-        if any((e["id"], e["version"]) == (pid, entry["version"]) for e in entries):
+        same = [e for e in entries if (e["id"], e["version"]) == (pid, entry["version"])]
+        if same and (same[0]["sha256"], same[0]["files"]) != (entry["sha256"], entry["files"]):
+            return 1, [
+                *lines,
+                f"rule 6: {check_packs.FOLDER}/{pid}: the pack changed at the locked version"
+                " (key: version)",
+            ]
+        if same:
             return 1, [
                 *lines,
                 "refused: the pack is in the lock at that version; update --check"
@@ -469,6 +488,7 @@ def add(root, source, said, at, *, by=None, tag=None, fetch=fetch_source, record
         f"added {check_packs.FOLDER}/{pid} and {LOCK}; add it with its ADR, in agk.toml",
         "protected: `config/` (name them in this change's ADR)",
         f"[packs] use: {use}",
+        "gitleaks: not run",
     ]
 
 
