@@ -186,6 +186,19 @@ the `[cost.prices.<model>]` table above it adds USD; a figure without its split,
 `unknown` or `not priced`, never 0. It writes no file and posts nothing. The weekly metrics issue carries the same
 `usage reported:` line. See ADR-0835 and Q-2020-1.
 
+## The signals of use
+
+    python3 scripts/agk/metrics.py --signals [--today YYYY-MM-DD] [--days N] [--repo OWNER/REPO] [--api-dir DIR] [--saved FILE]
+
+Reads `config/signals.toml`, one `[[signal]]` row per shipped feature (`id`, `feature`, `since`, `kind` of `log`,
+`comment`, `run`, `commit` or `none`, optional `setting`), and prints the section the weekly metrics issue carries:
+`signals: <n> declared; used <a>; unused <b>; new <c>; unknown <d> (14 days to <end>)`, one `unused:` line per row with
+no use in the 14 days (ending `; off by <setting>` when that setting is off), one `unknown:` line per row whose reads
+were not all answered, never 0, and the decisions dated on or after `from` that no row names. Reads are GET only, at
+most 20 (`--api-dir` reads saved answers; `--saved FILE`, a `--save-checklist --days 14` file, serves the comment and
+run rows). No file: `signals: none declared`; a broken file: `signals: refused (field: <field>)`. It writes nothing.
+The steward's `Daily:` list carries each unused row as `Built but unused: <id> (<feature>)`. See ADR-0852.
+
 ## Release pack
 
     python3 scripts/agk/release_pack.py check <out>/<tag>

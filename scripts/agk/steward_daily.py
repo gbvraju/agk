@@ -59,6 +59,8 @@ PRIORITY = re.compile(r"^Priority: ([0-3])\s*$", re.M)
 OWNER_SAID = re.compile(r"^Owner said \(", re.M)
 OWNER_WHO = "Who: ProductOwner"  # a relayed owner decision (SPEC-0059 rule 5)
 COMMENTS = "repos/{owner}/{repo}/issues/comments?per_page=100&since={since}&page={page}"
+WEEKLY = re.compile(r"<!-- agk-metrics (\d{4}-W\d{2}) -->")
+UNUSED = re.compile(r"^unused: (\S+) \((.+?)\): ", re.M)
 LISTED = "repos/{owner}/{repo}/issues?state=all&per_page=100&since={since}&page={page}"
 
 
@@ -157,6 +159,23 @@ def warned(memory: list[dict], now: datetime) -> set[str]:
     return out
 
 
+def unused_lines(issues: list[dict] | None) -> list[str]:
+    """Brief #2054 answer 4: a `Built but unused:` line per `unused:` line of the newest weekly
+    metrics issue (of its week, the lowest number: the one `metrics.choose_action` updates)."""
+    weekly = [
+        (m[1], -int(i["number"]), i)
+        for i in issues or []
+        if (m := WEEKLY.search(i.get("body") or ""))
+    ]
+    if not weekly:
+        return ["Built but unused: unknown"]
+    week, _, issue = max(weekly, key=lambda x: x[:2])
+    found = UNUSED.findall(issue.get("body") or "")
+    return [f"Built but unused: {rid} ({feature})" for rid, feature in found] or [
+        f"Built but unused: none (agk metrics {week})"
+    ]
+
+
 def daily_text(
     today: date,
     days: list[date],
@@ -218,6 +237,7 @@ def daily_text(
             f"Warning: class {cls} overridden twice in seven days; it goes to the owner until a "
             "`Decision:` says otherwise"
         )
+    lines += unused_lines(issues)
     lines.append("Reads: since= (the cached readers of #1251 and #1262 are not used)")
     return "\n".join(lines) + f"\n\n{WHO}\n"
 
