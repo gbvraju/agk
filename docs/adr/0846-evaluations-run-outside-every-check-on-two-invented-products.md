@@ -6,7 +6,7 @@
 - Related: ADR-0837, ADR-0838, ADR-0839, ADR-0430, ADR-0835, ADR-0544, ADR-0052, SPEC-0077, REQ-084, brief #2042, brief #2020, plan #661
 - Requirements: REQ-084
 
-Protected classes: `scripts/agk/`, `tests/kit_dev/`, `config/`, `agk.toml`, `evals/`, `.github/`
+Protected classes: `scripts/agk/`, `tests/kit_dev/`, `config/`, `agk.toml`, `evals/`, `.github/`, `tests/kit/`
 
 ## Context
 
@@ -40,7 +40,10 @@ form, `check` and `median`, with no model; build (b) adds `run`. On main at e403
    `incomplete (<k> of 3 runs complete)`, never 0 (`Q-PG-3`).
 5. **Kit-only and closed.** `eval_run.py` runs only in the kit's own repository (`kit/manifest.json` and `evals/` beside
    it); elsewhere it refuses naming the path class `evals/`, exit 2. It is in `KIT_ONLY` of the manifest test, and no
-   check, gate, workflow, `agk.mk` recipe, governance step or `prepush.py` names it.
+   check, gate, workflow, `agk.mk` recipe, governance step or `prepush.py` names it. It is listed with its reason in
+   `config/kit-only.txt`, and the ceiling of that list in `tests/kit/test_parity.py` rises from 10 to 11, as ADR-0627
+   raised it once: the Approved rule 9 makes the script kit-only, so it can be neither installed nor shipped (principle
+   11: the check is changed by this record, not weakened to go green).
 6. **Protected.** `evals/` joins the kit's `config/protected-paths.txt` and the `protected` class of its
    `config/reviewers.yaml`, not the project templates, so a rubric change carries an ADR (principles 1 and 11,
    `Q-PG-7`). `.github/CODEOWNERS`, rendered from `config/reviewers.yaml` by `reviewers.py --codeowners --write`, gains

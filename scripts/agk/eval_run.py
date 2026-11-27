@@ -87,6 +87,10 @@ def _is(value: Any, kind: str) -> bool:
     return isinstance(value, list) and all(isinstance(v, dict) for v in value)
 
 
+def _as(value: Any, kind: str, default: Any) -> Any:
+    return value if _is(value, kind) else default
+
+
 def keys(data: dict, form: dict[str, str], rule: str, optional: tuple[str, ...] = ()) -> list:
     """(rule, what, key) for each missing, unknown or wrongly typed key."""
     out = [(rule, "an unknown key", k) for k in data if k not in form and k not in optional]
@@ -122,7 +126,7 @@ def product_problems(data: dict, folder: str, root: Path) -> list:
         out.append((rule, "a value outside its list", "domain"))
     if _is(data.get("source"), STR) and not DATE.search(data["source"]):
         out.append((rule, "a source with no read date", "source"))
-    rows = data.get("acceptance") if _is(data.get("acceptance"), ROWS) else []
+    rows: list = _as(data.get("acceptance"), ROWS, [])
     if rows and not 3 <= len(rows) <= 12:
         out.append((rule, "not 3 to 12 acceptance criteria", "acceptance"))
     ids = [r.get("id") for r in rows]
@@ -156,7 +160,7 @@ def shipped_domains() -> tuple[str, ...]:
 
 def rubric_problems(data: dict) -> list:
     out = keys(data, RUBRIC, "rule 9")
-    tol = data.get("tolerance")
+    tol: Any = data.get("tolerance")
     if "tolerance" in data:
         out = [(r, w, k) for r, w, k in out if k != "tolerance"]
         if not _is(tol, NUM):
@@ -167,7 +171,7 @@ def rubric_problems(data: dict) -> list:
         out.append(("rule 9", "an unknown format", "format"))
     if data.get("scale") != 6 and _is(data.get("scale"), INT):
         out.append(("rule 9", "a scale other than 0 to 6", "scale"))
-    layers = data.get("layer") if _is(data.get("layer"), ROWS) else []
+    layers: list = _as(data.get("layer"), ROWS, [])
     if tuple(layer.get("name") for layer in layers) != LAYERS:
         out.append(("rule 9", "a layer missing or out of order", "layer.name"))
     for layer in layers:
@@ -259,7 +263,7 @@ def record_problems(data: dict, product: str, n: int) -> list:
         for key, value in (data.get(part) or {}).items() if _is(data.get(part), TABLE) else []:
             if not (_is(value, NUM) or _is(value, STR)):
                 out.append((rule, "a value of the wrong type", f"{part}.{key}"))
-    cost = data.get("cost") if _is(data.get("cost"), TABLE) else {}
+    cost: dict = _as(data.get("cost"), TABLE, {})
     for key in (*COST, "usd") if cost or "cost" not in data else ():
         value = cost.get(key)
         if key not in cost:
@@ -267,14 +271,14 @@ def record_problems(data: dict, product: str, n: int) -> list:
         elif not (_is(value, INT if key != "usd" else NUM) or value in WORDS or _priced(key, value)):
             out.append((rule, "a value of the wrong type", f"cost.{key}"))
     out += [(rule, "an unknown key", f"cost.{k}") for k in cost if k not in (*COST, "usd")]
-    review = data.get("review") if _is(data.get("review"), TABLE) else {}
+    review: dict = _as(data.get("review"), TABLE, {})
     if any(k not in LAYERS for k in review):
         out.append((rule, "an unknown layer", "review"))
     if any(not (_is(v, INT) and 0 <= v <= 6) for v in review.values()):
         out.append((rule, "a score outside 0 to 6", "review"))
     if status == "complete" and set(review) != set(LAYERS):
         out.append((rule, "a layer not scored", "review"))
-    accepted = data.get("accepted") if _is(data.get("accepted"), STRS) else []
+    accepted: list = _as(data.get("accepted"), STRS, [])
     if any(not AC.match(a) for a in accepted):
         out.append((rule, "an acceptance id not of the form AC<n>", "accepted"))
     if len(accepted) != len(set(accepted)):
@@ -329,7 +333,8 @@ def median(folder: Path) -> tuple[list[str], list[str]]:
             value = statistics.median(rec["review"][layer] for rec in complete)
             report.append(f"{product.name} {layer} {value:g}")
         costs = [per_feature(rec) for rec in complete]
-        money = "unknown" if None in costs else f"{statistics.median(costs):.2f} usd"
+        known = [c for c in costs if c is not None]
+        money = f"{statistics.median(known):.2f} usd" if len(known) == len(costs) else "unknown"
         report.append(f"{product.name} cost per accepted feature {money}")
     return fails, report
 
