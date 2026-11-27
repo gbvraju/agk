@@ -103,15 +103,18 @@ def _date(value: Any) -> datetime.date | None:
 
 
 def folders(root: Path) -> list[Path]:
-    """The folders packs are read from: the project's own first (a project's pack, rule 15), then
-    the kit's by `kit_root.kit_file`, the same folder in the installed layout."""
+    """The folders packs are read from, strongest first: the project's own (a project's pack, rule
+    15), then the kit's, by `packs.files` (SPEC-0077 rule 5), the same folder in the installed
+    layout. A domain pack that a pack in use carries waits for SPEC-0077 build (j) (`Q-2032-2`)."""
     own = Path(root) / FOLDER
-    if playbook_format.kit_root is None:
+    packs = playbook_format.resolver()
+    if packs is None or playbook_format.kit_root is None:
         return [own]
     try:
         kit = playbook_format.kit_root.kit_file(Path(root), FOLDER)
     except playbook_format.Refused:
         return [own]
+    packs.files(Path(root), "domains", core=kit)  # a refused pack stops here
     return [own] if kit == own else [own, kit]
 
 

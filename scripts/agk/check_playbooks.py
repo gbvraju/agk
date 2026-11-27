@@ -64,6 +64,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import kit_root
+import packs
 import playbook_format
 from common import repo_root, run, utf8_output
 from gates import pins
@@ -117,7 +118,20 @@ def _layers(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str]]:
     if any(module.get("modules") for module in named):
         rel = f"{playbook_format.FOLDER}/{path.name}"
         problems.append(f"rule 23: {rel}: a playbook in `modules` names modules (key: modules)")
-    return [*layers, *named, _load(path)], problems
+    beneath = [_load(p) for _, p in _beneath(path, root)]
+    return [*layers, *named, *beneath, _load(path)], problems
+
+
+def _beneath(path: Path, root: Path) -> list[tuple[str, Path]]:
+    """SPEC-0077 rule 5 (brief #2032, `Q-2032-3`): for a pack's playbook, the same-named files
+    of the layers before it (`agk-core`, earlier packs), which it restates and never weakens; none
+    for the kit's or the project's playbook, which compose as before."""
+    found = [(layer, p) for layer, p in packs.files(root, "playbooks") if p.name == path.name]
+    at = [i for i, (layer, p) in enumerate(found) if p == path and layer not in _OWN]
+    return found[: at[0]] if at else []
+
+
+_OWN = (packs.CORE, packs.PROJECT)
 
 
 def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], list[str]]:
@@ -129,6 +143,13 @@ def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], l
     layers, problems = _layers(path, root)
     pairs, refused = check_domains.compose(root, layers)  # brief #1936: the packs come last
     problems += refused
+    beneath = _beneath(path, root)  # SPEC-0077 rule 5: each pack layer names its pack
+    if beneath:
+        mine = next(layer for layer, p in packs.files(root, "playbooks") if p == path)
+        own = f"{playbook_format.FOLDER}/{path.name}"
+        marks = [packs.label(layer, own) for layer, _ in [*beneath, (mine, path)]]
+        start = len(layers) - len(marks)
+        pairs[start : len(layers)] = [(m, pairs[start + i][1]) for i, m in enumerate(marks)]
     rel = f"{playbook_format.FOLDER}/{path.name}"
     gates: dict[str, dict[str, Any]] = {}
     evidence: dict[str, None] = {}
@@ -222,28 +243,45 @@ def _entry_problems(entry: dict[str, Any], known: list[str] | None) -> list[str]
 
 def standards_file(root: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Brief #1974 answer 4: the entries of `config/standards.toml` and the problems of its form,
-    each naming the key or the path class, never a value; a missing file is no entries. Raises
-    `kit_root.Refused` as `kit_file` does (a clean project with no plugin), naming the setting."""
+    each naming the key or the path class, never a value; a missing file is no entries. The file
+    of each layer of `packs.files` (SPEC-0077 rule 5, brief #2032) in order: a later layer's
+    entry for a stack replaces the held one only when its `rules` drops no code, else it is
+    refused naming the layer's path class. Raises `kit_root.Refused` as `kit_file` does (a clean
+    project with no plugin) and `packs.Refused`, each naming the setting."""
     root = Path(root)
-    path = kit_root.kit_file(root, STANDARDS)
-    where = f"{playbook_format.SPEC72}: {STANDARDS}:"
-    if not path.is_file():
-        return [], []
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
-        return [], [f"{where} the file is not TOML (path class: {STANDARDS})"]
-    found = data.get("standards", [])
-    if not isinstance(found, list) or not all(isinstance(e, dict) for e in found):
-        return [], [f"{where} `standards` is not a list of tables (key: standards)"]
+    held: list[dict[str, Any]] = []
+    lines: dict[str, None] = {}
     known = playbook_format.stacks(root)
-    out: dict[str, None] = {}
-    for entry in found:
-        out.update(dict.fromkeys(_entry_problems(entry, known)))
-    names = [e["stack"] for e in found if isinstance(e.get("stack"), str)]
-    if len(set(names)) != len(names):
-        out["a `stack` appears twice (key: standards.stack)"] = None
-    return found, [f"{where} {line}" for line in out]
+    for layer, path in packs.files(root, "standards"):
+        name = packs.label(layer, STANDARDS)
+        where = f"{playbook_format.SPEC72}: {name}:"
+        try:
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+            lines[f"{where} the file is not TOML (path class: {name})"] = None
+            continue
+        found = data.get("standards", [])
+        if not isinstance(found, list) or not all(isinstance(e, dict) for e in found):
+            lines[f"{where} `standards` is not a list of tables (key: standards)"] = None
+            continue
+        found = [packs.plain(e, layer) for e in found]
+        out: dict[str, None] = {}
+        for entry in found:
+            out.update(dict.fromkeys(_entry_problems(entry, known)))
+        names = [e["stack"] for e in found if isinstance(e.get("stack"), str)]
+        if len(set(names)) != len(names):
+            out["a `stack` appears twice (key: standards.stack)"] = None
+        for entry in found if held else ():
+            at = [i for i, e in enumerate(held) if e.get("stack") == entry.get("stack")]
+            if not at:
+                held.append(entry)
+            elif _codes(held[at[0]]) <= _codes(entry):
+                held[at[0]] = entry
+            else:
+                out["a pack's `rules` drops a rule code (key: standards.rules)"] = None
+        held = held or found  # the first layer's entries as they are (brief #1974)
+        lines.update(dict.fromkeys(f"{where} {line}" for line in out))
+    return held, list(lines)
 
 
 def stack_entries(root: Path) -> list[dict[str, Any]]:
