@@ -69,6 +69,7 @@ from common import (  # noqa: E402
     review_mode,
     utf8_output,
 )  # noqa: E402
+from usage import tokens_figure  # noqa: E402  (brief #2020 answer 5)
 
 KINDS = (
     "Decision",
@@ -885,7 +886,8 @@ def main(argv: list[str] | None = None) -> int:
         elif opts.command == "refresh":
             code, lines = refresh(root, opts.session, gh_api, now, opts.since)
         else:
-            code, lines = end(root, opts.session, gh_api, now, opts.calls, opts.tokens)
+            tokens = opts.tokens if opts.tokens is not None else tokens_figure(dict(os.environ))
+            code, lines = end(root, opts.session, gh_api, now, opts.calls, tokens)
     except Unreadable as exc:
         print(f"error: {exc} cannot be read", file=sys.stderr)
         return 4

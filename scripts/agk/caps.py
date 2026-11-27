@@ -41,7 +41,7 @@ from metrics import usage_of
 from config import caps_settings
 
 UNKNOWN = "unknown"
-PROGRESS_USAGE = re.compile(r"Progress: .*; Usage: (\d+) tokens")
+PROGRESS_USAGE = re.compile(r"Progress: .*; Usage: (\d+) tokens(?: \([a-z0-9 ,]+\))?")  # ADR-0835
 READY = re.compile(r"Report: \S+ ready for review\b.*")
 OPENS = re.compile(r"(?:Verdict: fix list\b|Correction:).*")
 

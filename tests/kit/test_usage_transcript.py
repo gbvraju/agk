@@ -12,6 +12,7 @@ written first.
 from __future__ import annotations
 
 import json
+import re
 import subprocess  # nosec B404 - fixed argument lists, no shell
 import sys
 import tomllib
@@ -58,13 +59,17 @@ def write(path: Path, entries, tail: str = "") -> Path:
 def usage(*args: str, env: dict | None = None, cwd: Path | None = None):
     full = {"PATH": "/usr/bin:/bin", "HOME": str(cwd or KIT)}
     full.update(env or {})
-    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), *args],
         capture_output=True,
         text=True,
         env=full,
         cwd=cwd or KIT,
     )
+    # ADR-0835 ends the line with the split or the class, tested in test_usage_split.py; here
+    # only the figure of rule 8 is read, so the ending is taken off.
+    proc.stdout = re.sub(r" \([a-z0-9 ,-]+\)$", "", proc.stdout, flags=re.MULTILINE)
+    return proc
 
 
 # --- rule 8: the figure ---------------------------------------------------------------------------
@@ -180,7 +185,7 @@ def test_ac7_the_command_runs_with_the_network_blocked(tmp_path):
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-c", code], capture_output=True, text=True, cwd=tmp_path
     )
-    assert proc.stdout == "Usage: 3965 tokens\n", proc.stdout + proc.stderr
+    assert proc.stdout.startswith("Usage: 3965 tokens ("), proc.stdout + proc.stderr
     text = SCRIPT.read_text(encoding="utf-8")
     assert "urllib" not in text and "socket" not in text and "subprocess" not in text
 

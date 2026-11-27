@@ -64,7 +64,9 @@ USAGE = (
     "[--api-dir DIR]\n"
     "       metrics.py --usage-by-kind FACTS [--before YYYY-MM-DD] [--after YYYY-MM-DD] "
     "[--repo OWNER/REPO] [--api-dir DIR]\n"
-    "       metrics.py --cost [--day YYYY-MM-DD] [--days N] [--records DIR] [--save]"
+    "       metrics.py --cost [--day YYYY-MM-DD] [--days N] [--records DIR] [--save]\n"
+    "       metrics.py --report-sums FACTS [--after YYYY-MM-DD] [--model ID] [--repo OWNER/REPO] "
+    "[--api-dir DIR]"
 )
 UNKNOWN = "unknown"
 NONE = "-"
@@ -115,7 +117,6 @@ def failure_class(status: str, text: str) -> str:
     if status == "429" or (status == "403" and RATE_LIMITED.search(text)):
         return "rate-limited"
     return "refused" if len(status) == 3 and status.startswith("4") else "failed"
-
 
 
 class ApiDir:
@@ -516,7 +517,8 @@ def first_lines(comments: Any, prefix: str, authors: list[str] | None = None) ->
     return found
 
 
-REPORT_USAGE = re.compile(r"Report:.*\bUsage: (\d+) tokens\s*")
+# ADR-0835: the figure may end with its split by kind
+REPORT_USAGE = re.compile(r"Report:.*\bUsage: (\d+) tokens(?: \([a-z0-9 ,]+\))?\s*")
 
 
 def usage_of(comments: Any, login: str) -> int | str:
@@ -1623,6 +1625,7 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
         full_suite_line(ctx, details),
         *pr_tests_lines(ctx, details),
         holds_line(ctx.root, start, end),
+        coverage_line(ctx.src, details),  # brief #2020 answer 4: the reports that carry a figure
     )
     records.sort(key=lambda r: int(r["number"]))
     flags = []
@@ -2105,9 +2108,173 @@ def cost_main(options: dict) -> int:
     return 0
 
 
+# --- the sums of the `Report:` lines (brief #2020 answer 4, Q-2020-1 (a), ADR-0835) -----------
+
+# The figure that ends a `Report:` first line: `<n>` alone, or `<n>` with its split by kind.
+REPORT_FIGURE = re.compile(
+    r"\bUsage: (\d+) tokens(?: \(input (\d+), cache write (\d+), cache read (\d+), "
+    r"output (\d+)(?:, other (\d+))?\))?"
+)
+SUM_KINDS = ("input", "cache_write", "cache_read", "output")
+SUM_ROLES = "conductor, reviewer, steward: not read (their lines are not Report: lines)"
+
+
+def report_lines(comments: Any, start: date | None) -> list[str]:
+    """The first lines of the `Report:` comments, oldest first (of the week from `start`)."""
+    found = first_lines(comments, "Report:") or []
+    if start is not None:
+        found = [
+            c
+            for c in found
+            if (w := stamp(c.get("created_at")))
+            and start_of(start) <= w
+            and w < start_of(start + WEEK)
+        ]
+    return [str(c.get("body") or "").splitlines()[0] for c in found]
+
+
+def report_figures(lines: list[str]) -> dict:
+    """The reports, the reported figures and their sums; a kind is None (unknown) when one figure
+    lacks the split, and `other` is counted in the total only."""
+    out: dict[str, Any] = {"reports": len(lines), "reported": 0, "total": 0}
+    out |= {kind: 0 for kind in SUM_KINDS}
+    for line in lines:
+        match = REPORT_FIGURE.search(line)
+        if match is None:
+            continue
+        out["reported"] += 1
+        out["total"] += int(match.group(1))
+        for i, kind in enumerate(SUM_KINDS, start=2):
+            have = out[kind]
+            out[kind] = (
+                None if match.group(i) is None or have is None else have + int(match.group(i))
+            )
+    return out
+
+
+def sums_usd(figures: dict, row: dict | None) -> Decimal | None:
+    """The money of reported figures at one `[cost.prices.<model>]` row; None when a figure lacks
+    its split or the row lacks a price of a kind used, never 0 for a missing figure."""
+    if row is None or any(figures[kind] is None for kind in SUM_KINDS):
+        return None
+    if figures["reported"] < figures["reports"] or figures.get("unread"):
+        return None
+    tokens = {kind: figures[kind] for kind in SUM_KINDS}
+    return usd_of("row", tokens, {"row": row})
+
+
+def coverage_line(src: Any, details: list[dict], start: date | None = None) -> str:
+    """`usage reported: <k> of <n> reports` of the pull requests' `Report:` lines (answer 4)."""
+    reports = reported = unread = 0
+    for detail in details:
+        number = detail.get("number")
+        comments = src.get(f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
+        if not isinstance(comments, list):
+            unread += 1
+            continue
+        figures = report_figures(report_lines(comments, start))
+        reports += figures["reports"]
+        reported += figures["reported"]
+    lacking = f" ({unread} pull requests unread)" if unread else ""
+    return f"usage reported: {reported} of {reports} reports{lacking}"
+
+
+def missing_of(figures: dict) -> str:
+    """The not-reported count, and beside it the pull requests whose comments were unread (the
+    fix list on 714b48e), so a sum is never printed as if complete."""
+    unread = figures.get("unread", 0)
+    lacking = f", {unread} pull requests unread" if unread else ""
+    return f"{figures['reports'] - figures['reported']} not reported{lacking}"
+
+
+def sum_total(figures: dict) -> str:
+    return str(figures["total"]) if figures["reported"] else UNKNOWN
+
+
+def report_sums(src: Any, root: Path, document: Any, start: date | None, model: str | None) -> str:
+    """The text of `--report-sums`: per pull request, per brief and per role, tokens by kind and
+    money where priced. It reads, writes and posts nothing else (Q-2020-1 (a))."""
+    pulls = document.get("pull_requests") if isinstance(document, dict) else None
+    if not isinstance(pulls, list):
+        return "Report sums: unknown (the pull requests of the facts cannot be read)\n"
+    prices = cost_prices(root)
+    row = prices.get(model) if model else None
+    priced = row is not None
+    span = (
+        "every Report: line"
+        if start is None
+        else f"week {start} to {start + WEEK - timedelta(days=1)}"
+    )
+    head = ["pull request", "brief", "reported", "not reported", *SUM_KINDS, "total", "usd"]
+    out = [f"Report sums ({span}; the Report: lines of the facts' pull requests, numbers only)"]
+    rows: list[list[str]] = []
+    by_brief: dict[str, dict] = {}
+    details: list[dict] = []
+    total: dict = report_figures([])
+    for record in pulls:
+        number = record.get("number") if isinstance(record, dict) else None
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        details.append({"number": number})
+        brief = record.get("brief")
+        name = f"#{brief}" if isinstance(brief, int) and not isinstance(brief, bool) else UNKNOWN
+        comments = src.get(f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
+        if not isinstance(comments, list):
+            rows.append([f"#{number}", name] + [UNKNOWN] * (len(head) - 2))
+            for into in (by_brief.setdefault(name, report_figures([])), total):
+                into["unread"] = into.get("unread", 0) + 1
+            continue
+        lines = report_lines(comments, start)
+        if not lines:
+            continue
+        figures = report_figures(lines)
+        usd = shown(sums_usd(figures, row)) if priced else NONE
+        cells = [figures["reported"], figures["reports"] - figures["reported"]]
+        cells += [shown(figures[k]) if figures["reported"] else UNKNOWN for k in SUM_KINDS]
+        rows.append([f"#{number}", name, *map(str, cells), sum_total(figures), usd])
+        for into in (by_brief.setdefault(name, report_figures([])), total):
+            into["reports"] += figures["reports"]
+            into["reported"] += figures["reported"]
+            into["total"] += figures["total"]
+            for kind in SUM_KINDS:
+                have, add = into[kind], figures[kind]
+                into[kind] = None if have is None or add is None else have + add
+    out.append(coverage_line(src, details, start))
+    out += ["", "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+    out += ["| " + " | ".join(r) + " |" for r in rows]
+    briefs = ", ".join(f"{b} {sum_total(f)} ({missing_of(f)})" for b, f in sorted(by_brief.items()))
+    out += ["", f"By brief: {briefs or NONE}"]
+    out.append(f"By role: builder {sum_total(total)} ({missing_of(total)}); {SUM_ROLES}")
+    line = f"Total: reports {total['reports']}, reported {total['reported']}"
+    line += f", total {sum_total(total)} ({missing_of(total)})"
+    if priced:
+        line += f", ~usd {shown(sums_usd(total, row))}"
+    out.append(line)
+    if priced:
+        out.append("usd priced at [cost] prices for the named model")
+    elif not prices:
+        out.append(f"usd: not priced (setting: {PRICES_SETTING})")
+    elif model:
+        out.append(f"usd: not priced (setting: {PRICES_SETTING} has no row for the named model)")
+    else:
+        out.append("usd: not priced (option: --model)")
+    return "\n".join(out) + "\n"
+
+
+def sums_main(options: dict) -> int:
+    try:
+        document = json.loads(Path(options["sums"]).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise CheckError("the facts file is not readable JSON (path class: facts file)") from None
+    src = ApiDir(Path(options["api"])) if options["api"] else Gh(options["repo"] or origin_repo())
+    text = report_sums(src, repo_root(), document, options["after"], options["model"])
+    sys.stdout.write(text)
+    return 0
+
+
 def parse_args(args: list[str]) -> dict | None:
     options: dict = {"today": None, "repo": None, "api": None, "issues": None, "mode": "body"}
-    options |= {"usage": None, "before": None, "after": None}
+    options |= {"usage": None, "before": None, "after": None, "sums": None, "model": None}
     options |= {"save": False, "to": None, "days": 7}
     options |= {"cost": False, "day": None, "records": None, "save_cost": False, "days_set": False}
     i = 0
@@ -2127,6 +2294,10 @@ def parse_args(args: list[str]) -> dict | None:
                     options["day"] = date.fromisoformat(args[i + 1])
                 except ValueError:
                     return None
+            i += 2
+            continue
+        if arg in ("--report-sums", "--model") and i + 1 < len(args):
+            options["sums" if arg == "--report-sums" else "model"] = args[i + 1]
             i += 2
             continue
         if arg == "--save-checklist":
@@ -2172,11 +2343,23 @@ def parse_args(args: list[str]) -> dict | None:
             i += 1
         else:
             return None
+    if options["sums"] or options["model"]:
+        return sums_options(options)
     if (options["before"] or options["after"]) and not options["usage"]:
         return None
     if options["usage"] and (options["issues"] or options["today"] or options.get("mode_set")):
         return None
     return cost_options(options)
+
+
+def sums_options(options: dict) -> dict | None:
+    """`--report-sums` goes with `--after`, `--model`, `--repo` and `--api-dir` alone."""
+    other = options["usage"] or options["before"] or options["issues"] or options["today"]
+    other = other or options.get("mode_set") or options["save"] or options["to"]
+    other = other or options["cost"] or options["day"] or options["records"]
+    if not options["sums"] or other or options["save_cost"] or options["days_set"]:
+        return None
+    return options
 
 
 def cost_options(options: dict) -> dict | None:
@@ -2213,6 +2396,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if options["cost"]:
         return cost_main(options)
+    if options["sums"]:
+        return sums_main(options)
     if options["save"]:
         return save_main(options)
     if options["usage"]:
