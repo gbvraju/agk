@@ -1887,7 +1887,10 @@ def reprove_hold(root, branch: str, number: int, sha: str) -> str | None:
     """`merge_cleared.reprove_check`'s re-prove hold of SHA on the default branch BRANCH as just
     fetched (with `refs/pull/<n>/head`), read with local git: `re-prove (rule 6 of SPEC-0050)`,
     `re-prove (unknown)` when a read fails, or None (brief #1740 answer 4, ADR-0725)."""
-    base = merge_cleared.fetched_base(root, branch, number, sha)
+    try:
+        base = merge_cleared.fetched_base(root, branch, number, sha)
+    except merge_cleared.Held as exc:  # a shallow checkout that stays shallow (brief #2058)
+        return str(exc)
     files = session_plan.reprove_files(root, base, sha) if base else None
     if files is None:
         return merge_cleared.REPROVE_UNKNOWN
@@ -3382,6 +3385,32 @@ def record_health(started: dict, now: datetime) -> None:
         autopilot.append_health({"started": started}, now)
 
 
+CLEARED_WHY = "a cleared head is not merged"  # brief #2058 answer 3
+CLEARED_LINE = re.compile(r"#([1-9]\d*) ([0-9a-f]{7}) cleared, not merged")
+
+
+def cleared_due(root, repo: str, state: dict) -> dict[str, str] | None:
+    """The `cleared, not merged` heads of the review queue (`session.review_queue --all`), as
+    {number: "<head7> <default-branch commit>"}, when one differs from what STATE kept for it
+    (brief #2058 answer 3, ADR-0856), so a held cleared head is retried once per new head or
+    default-branch commit, never every pass; None when none differs, or when the queue or the
+    default branch's commit cannot be read."""
+    try:
+        code, said = session.quietly(session.review_queue, root, "--all")
+    except CheckError:
+        return None
+    lines = [m for line in said.splitlines() if (m := CLEARED_LINE.fullmatch(line.strip()))]
+    if code or not lines:
+        return None
+    found = session.gh(f"repos/{repo}/commits/{launch.default_branch(root)}")
+    base = found.get("sha") if isinstance(found, dict) else None
+    if not isinstance(base, str) or not base:
+        return None
+    seen = {m.group(1): f"{m.group(2)} {base}" for m in lines}
+    kept = state.get("cleared") if isinstance(state.get("cleared"), dict) else {}
+    return seen if any(kept.get(n) != v for n, v in seen.items()) else None
+
+
 def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     """Hold the lease, run the scripts of the pass, start one conductor job only when needed and
     never a second one while the last may still run; start the steward job of a waiting question
@@ -3421,6 +3450,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     last = when(str(state.get("job_at") or ""))
     logged = logged_escalations(root, name, state) if not state.get("log_read") else []
     steward = steward_due(state, sweep_text, now)
+    cleared = cleared_due(root, repo, state)
     why = [
         text
         for text, yes in (
@@ -3428,6 +3458,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
             ("the plan starts a brief", starts),
             ("a sweep line changed", swept != state.get("sweep")),
             ("no job ran for 24 hours", last is None or now - last >= JOB_DAY),
+            (CLEARED_WHY, cleared is not None),
         )
         if yes
     ]
@@ -3463,6 +3494,8 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
         if code:
             return code
         state.update(fingerprint=fingerprint, sweep=swept)
+        if cleared is not None:  # kept only once a job was started on it (brief #2058)
+            state.update(cleared=cleared)
         started["conductor"] = 1
     if steward:
         if open_steward(root):

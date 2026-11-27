@@ -150,3 +150,35 @@ def test_the_reprove_hold_names_a_shallow_hold_and_never_raises(monkeypatch):
 
     monkeypatch.setattr(merge_cleared, "fetched_base", held)
     assert conductor.reprove_hold(Path("."), "main", 7, "a" * 40) == SHALLOW
+
+
+ON = '[flow]\nauto_merge = true\nauto_merge_method = "squash"\n'
+
+
+@pytest.mark.parametrize(
+    ("toml", "named", "kind"),
+    [
+        ("", "auto_merge", merge_cleared.Refused),
+        ('[flow]\nauto_merge = true\nauto_merge_method = "merge"\n', "auto_merge_method", None),
+        (f"paused = true\n{ON}", "paused", merge_cleared.Held),
+        (f'execution = "elsewhere"\n{ON}', "execution", merge_cleared.Refused),
+        (f"{ON}after_merge_timeout = 0\n", "after_merge_timeout", merge_cleared.Refused),
+        (f'{ON}max_behind_merges = "x"\n', "max_behind_merges", merge_cleared.Refused),
+    ],
+)
+def test_each_setting_is_refused_or_held_before_the_history_check(
+    origin, tmp_path, toml, named, kind
+):
+    """Answer 5: `ruled`, the first step of every merge (`outcome`), refuses or holds a setting
+    naming it before any fetch, so a shallow checkout stays as it was."""
+    (origin["root"] / "agk.toml").write_text(f'default_branch = "main"\n{toml}', encoding="utf-8")
+    git(origin["root"], "add", "-A")
+    git(origin["root"], "commit", "-q", "-m", "settings")
+    root = clone(origin, tmp_path)
+    with pytest.raises((merge_cleared.Refused, merge_cleared.Held)) as err:
+        merge_cleared.ruled(root)
+    assert named in str(err.value)
+    assert kind is None or isinstance(err.value, kind)
+    assert shallow(root) == "true"
+    outcome = inspect.getsource(merge_cleared.outcome)
+    assert outcome.index("ruled(root, owner)") < outcome.index("holds(")
