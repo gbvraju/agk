@@ -29,13 +29,24 @@ import steward_daily  # noqa: E402
 
 MIXED = KIT / "tests" / "kit" / "fixtures" / "metrics" / "signals-mixed"
 END = date(2026, 12, 28)  # the window end of `--today 2026-12-28`
-SHIPPED = (KIT / "config" / "signals.toml").read_text(encoding="utf-8")
+REGISTRY = KIT / "config" / "signals.toml"  # read by each test, never at collection
+SHIPPED = object()  # `project`'s default: the shipped registry
+
+
+def plugin_toml() -> str:
+    """A clean project's settings that pin the running plugin's version (read per test)."""
+    version = tomllib.loads((KIT / "agk.toml").read_text(encoding="utf-8"))["version"]
+    return (
+        f'version = "{version}"\n[flow]\nmerge_queue = false\n'
+        f'[kit]\nlayout = "plugin"\nplugin_version = "{version}"\n'
+    )
+
+
+def shipped() -> str:
+    return REGISTRY.read_text(encoding="utf-8")
+
+
 HEAD = 'from = "2026-11-27"\n'
-VERSION = tomllib.loads((KIT / "agk.toml").read_text(encoding="utf-8"))["version"]
-PLUGIN = (
-    f'version = "{VERSION}"\n[flow]\nmerge_queue = false\n'
-    f'[kit]\nlayout = "plugin"\nplugin_version = "{VERSION}"\n'
-)
 
 
 class Recorder:
@@ -53,12 +64,13 @@ class Recorder:
         return self.api.why(name)
 
 
-def project(tmp_path: Path, signals: str | None = SHIPPED, toml: str = "") -> Path:
+def project(tmp_path: Path, signals: object = SHIPPED, toml: str = "") -> Path:
     root = tmp_path / "project"
     (root / "config").mkdir(parents=True)
     (root / "agk.toml").write_text(toml or "[flow]\nmerge_queue = false\n", encoding="utf-8")
     if signals is not None:
-        (root / "config" / "signals.toml").write_text(signals, encoding="utf-8")
+        text = shipped() if signals is SHIPPED else str(signals)
+        (root / "config" / "signals.toml").write_text(text, encoding="utf-8")
     return root
 
 
@@ -346,7 +358,7 @@ def test_req_012_decisions_since_from_with_no_row_are_listed(tmp_path):
 def test_req_012_the_shipped_registry_passes_and_names_real_decisions(tmp_path):
     out = lines(project(tmp_path), Recorder(MIXED))
     assert not out[0].startswith("signals: refused")
-    data = tomllib.loads(SHIPPED)
+    data = tomllib.loads(shipped())
     for item in data["signal"]:
         feature = item["feature"]
         if feature.startswith("ADR-"):
@@ -360,7 +372,7 @@ def test_req_012_the_shipped_registry_passes_and_names_real_decisions(tmp_path):
 
 def test_req_012_the_class_stays_closed():
     assert metrics.SIGNAL_KINDS == ("log", "comment", "run", "commit", "none")
-    assert all(item["kind"] in metrics.SIGNAL_KINDS for item in tomllib.loads(SHIPPED)["signal"])
+    assert all(item["kind"] in metrics.SIGNAL_KINDS for item in tomllib.loads(shipped())["signal"])
     readers = {
         p.name
         for p in (KIT / "scripts").rglob("*.py")
@@ -388,7 +400,7 @@ def cli(cwd: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def test_req_012_signals_runs_from_the_plugin_on_the_projects_registry(tmp_path):
-    root = project(tmp_path, toml=PLUGIN)
+    root = project(tmp_path, toml=plugin_toml())
     git(root, "init", "-q", "-b", "main")
     proc = cli(root, "--signals", "--today", "2026-12-28", "--api-dir", str(MIXED))
     assert proc.returncode == 0, proc.stderr

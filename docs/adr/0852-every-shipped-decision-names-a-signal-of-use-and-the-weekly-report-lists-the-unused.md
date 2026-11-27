@@ -52,7 +52,8 @@ A feature that real runs never use is named every week and reaches the owner's D
 a feature adds its row to `config/signals.toml` with its own ADR; a decision dated on or after `from` without a row is
 shown every week until its row lands. The weekly cost is at most 20 GETs inside the existing metrics job. No workflow,
 ruleset, required check, label, `agk.mk` or `governance_map.CHECKS` changes. `init` and `adopt` install no registry
-(`Q-P0C-4`).
+(`Q-P0C-4`), so `config/signals.toml` is one line of `config/kit-only.txt`, and the ceiling of that list in
+`tests/kit/test_parity.py` rises from 11 to 12 by this decision, as ADR-0627 and ADR-0846 raised it.
 
 ## Residual
 
