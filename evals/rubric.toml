@@ -1,0 +1,64 @@
+# The evaluation rubric (SPEC-0077 rules 9 and 10, ADR-0846). Kit-only: never installed.
+# Each layer is scored 0 to `scale` by a fresh reviewer with the bundle only (ADR-0430).
+# `tolerance` is how far a median may fall below the last accepted record's before it is a
+# regression (rule 10, `Q-S0077-13`); 0 until the maintainers set another (`Q-PG-2`).
+# The runs (three) and the tier (`strongest`) are rule 9's and are not keys here.
+format = 1
+scale = 6
+tolerance = 0
+
+[[layer]]
+name = "problem"
+criteria = [
+  { text = "The discovery record states the problem, the success number, the users and the non-goals.", source = "SPEC-0073 rule 16" },
+  { text = "Each acceptance criterion of the product is traced to a requirement or named as left out.", source = "SPEC-0077 rule 9" },
+]
+
+[[layer]]
+name = "scope"
+criteria = [
+  { text = "Every critical item is settled or risk-accepted before the design.", source = "SPEC-0073 rule 16" },
+  { text = "At most 12 grill questions reached the person, each with a recommendation.", source = "SPEC-0073 rule 16" },
+]
+
+[[layer]]
+name = "domain-rules"
+criteria = [
+  { text = "The domain is recognised and the pack's critical items are asked within the grill's budget.", source = "SPEC-0074 rule 17" },
+  { text = "Every business rule has a source and an owner, and no domain claim lacks a source.", source = "SPEC-0074 rule 17" },
+]
+
+[[layer]]
+name = "architecture"
+criteria = [
+  { text = "The first merged build is the foundation, and its stack record has no open architect marker.", source = "SPEC-0072 rule 13" },
+  { text = "The stack record shows each option's domain fit.", source = "SPEC-0074 rule 17" },
+]
+
+[[layer]]
+name = "threats"
+criteria = [
+  { text = "The independent review finds the threat list and the cost present.", source = "SPEC-0073 rule 16" },
+  { text = "A committed secret or an unvalidated input is red, naming the rule and the path class.", source = "SPEC-0072 rule 13" },
+]
+
+[[layer]]
+name = "data"
+criteria = [
+  { text = "Every entity is in the model, and every stored business rule has a constraint or a named test.", source = "SPEC-0075 rule 15" },
+  { text = "Every data class has its retention and protection, and every index cites a query.", source = "SPEC-0075 rule 15" },
+]
+
+[[layer]]
+name = "usability"
+criteria = [
+  { text = "At most 5 business questions reached the person, each with a recommendation and its source.", source = "SPEC-0075 rule 15" },
+  { text = "The accessibility check runs on the product's pages, or the run records it as not run.", source = "SPEC-0077 rule 9" },
+]
+
+[[layer]]
+name = "code"
+criteria = [
+  { text = "A feature build with a lint, type or layer-import fault is red, naming the rule.", source = "SPEC-0072 rule 13" },
+  { text = "The tests pass, and the pins, licences and bill steps are green.", source = "SPEC-0077 rule 9" },
+]

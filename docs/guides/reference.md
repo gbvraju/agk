@@ -1251,6 +1251,18 @@ naming the newest kit version, else the newest imported version. A brand colour 
 that passes, with a proposal comment and an `ask the person:` line. It refuses an existing theme (rule 2) and a project with no version (rule 7),
 writing nothing; `design.py prototype` fills a new theme the same way.
 
+## Evaluations
+
+    python3 scripts/agk/eval_run.py check [--root DIR]
+    python3 scripts/agk/eval_run.py median DIR
+
+Two kit-only commands of SPEC-0077 rule 9 (brief #2042, ADR-0846), never run by CI, a check or a governance step, and refused
+outside the kit's own repository (path class `evals/`). `check` reads `evals/rubric.toml` and the two invented reference products,
+`evals/booking-web/` and `evals/payments-api/`, and prints `ok evals: 2 products, 8 layers` or one `FAIL evals: <file class>: <rule>:
+<what> (setting: <key>)` line per problem, never a value. `median DIR` checks each run record `DIR/<product>/run-<n>.json` and prints
+per product and layer the median of three complete runs and the cost per accepted feature, or `<product> incomplete (<k> of 3 runs
+complete)`, never 0. The run itself is build (b) of the brief.
+
 ## Design screenshots and comparison
 
     python3 scripts/agk/design.py screenshots --version v<n> [--root DIR]
