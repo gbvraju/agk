@@ -1,0 +1,1 @@
+- Merges: `merge_cleared.py` makes a shallow checkout full (`git fetch --unshallow`) before its would-be merge, or holds naming that fix, never replays a result kept from a shallow run, and the supervisor's pass retries a cleared, not merged head once per new head or default-branch commit (brief #2058, ADR-0856)
