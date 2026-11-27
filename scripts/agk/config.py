@@ -662,6 +662,30 @@ def stop_check_mode(root: Path) -> str:
     return value
 
 
+# --- the stage pull requests from an idea (brief #2021, ADR-0836) ------------------------------
+
+STAGE_PULLS = ("stage", "step")
+
+
+class StagePullsSettingError(CheckError):
+    """`[plan] stage_pulls` is refused, naming the setting and never the value."""
+
+
+def stage_pulls(root: Path) -> str:
+    """How the path from an idea splits into pull requests: `stage` (four, one per stage of
+    `steward_evidence.STAGE_PULLS`) or `step` (one per step, as before); `step` when unset, so an
+    upgrade changes nothing."""
+    refused = StagePullsSettingError("the setting is refused (setting: plan.stage_pulls)")
+    try:
+        plan = config_source(root).get("plan", {})
+    except (OSError, ValueError):
+        raise refused from None
+    value = plan.get("stage_pulls", "step") if isinstance(plan, dict) else None
+    if value not in STAGE_PULLS:
+        raise refused
+    return value
+
+
 # --- the owner's waits (brief #1282, ADR-0543) --------------------------------------------------
 
 OWNER_WAIT_MINUTES = 30
@@ -1072,6 +1096,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "default_hours",
             "iteration_days",
             "max_questions",
+            "stage_pulls",
         }
     ),
     "design": frozenset({"pixel_tolerance", "render", "ui_paths"}),

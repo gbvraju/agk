@@ -66,6 +66,17 @@ STAGES = (
     "plan",
     "build",
 )
+# The pull request each stage before `build` is in with `[plan] stage_pulls = "stage"` (brief #2021,
+# ADR-0836): four, each merged before the next starts; `build` has its own pull requests.
+STAGE_PULLS = {
+    "start": "discovery",
+    "vision and discovery": "discovery",
+    "scope": "discovery",
+    "prototype and design": "design",
+    "stack and technical design": "technical design",
+    "plan": "plan",
+    "build": None,
+}
 TRIAGES = ("kit brief", "kit correction", "kit question", "project brief", "owner question")
 MODES = re.compile(r"^Modes: github \S.*; local \S.*; personal \S", re.M)
 OWNER_LINE = re.compile(r'^Owner said \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z\): ".+"', re.M)
@@ -289,6 +300,18 @@ def agent_text(root: Path, env: dict | None = None) -> str:
     raise CheckError("the steward's role file cannot be read (path class: .claude/agents/)")
 
 
+def pull_line(root: Path, stage: str) -> str:
+    """Brief #2021 (ADR-0836): which pull request the stage is in, by `[plan] stage_pulls`."""
+    from config import stage_pulls
+
+    pull = STAGE_PULLS[stage]
+    if pull is None:
+        return "pull request: the build's own"
+    if stage_pulls(root) == "step":
+        return "pull request: one per step (plan.stage_pulls: step)"
+    return f"pull request: {pull} (plan.stage_pulls: stage)"
+
+
 def skills(root: Path, env: dict | None = None) -> dict[str, str]:
     """Rule 19: the stage-to-skill table of the agent file, the one copy."""
     rows = re.findall(r"^\| ([^|`][^|]*?) \| (`[^|]+?) \|$", agent_text(root, env), re.M)
@@ -336,7 +359,8 @@ def main(argv: list[str] | None = None) -> int:
             return 3 if line.startswith("no skill") else 0
         if opts.command == "stage":
             when = date.fromisoformat(opts.date) if opts.date else today
-            print(f"stage: {stage_of(root, when, conductor_open(root, gh_api))}")
+            stage = stage_of(root, when, conductor_open(root, gh_api))
+            print(f"stage: {stage}\n{pull_line(root, stage)}")
             return 0
         if opts.command == "triage":
             found = triage(json.loads(opts.finding.read_text(encoding="utf-8")), root)
