@@ -35,6 +35,7 @@ KIT_ONLY = {
     "scripts/agk/core_audit.py",
     "scripts/agk/personal_state.py",
     "scripts/agk/eval_run.py",  # the evaluation set, run only in the kit (ADR-0846)
+    "scripts/agk/eval_record.py",  # the eval record and its acceptance, kit-only (ADR-0847)
     "scripts/agk/board.py",  # the skill runs the plugin's copy (ADR-0506)
     "scripts/agk/workflow_apply.py",  # the skill runs the plugin's copy (ADR-0505)
     "scripts/agk/wsl.py",  # the skill runs the plugin's copy (ADR-0577)
