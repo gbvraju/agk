@@ -389,7 +389,12 @@ subprocess.run([*git, "add", "-A"], check=True)
 subprocess.run([*git, "commit", "-qm", "invented", "--no-verify"], check=True)
 sys.exit(3 if os.environ.get("STUB_FAIL") == str(n) else 0)
 """
-BLOCK = "import socket\n\ndef _no(*a, **k):\n    raise OSError('network blocked')\n\nsocket.socket = _no\nsocket.create_connection = _no\n"
+BLOCK = (
+    "import socket\n\n\nclass _Blocked(socket.socket):\n"
+    "    def __init__(self, *a, **k):\n        raise OSError('network blocked')\n\n\n"
+    "def _no(*a, **k):\n    raise OSError('network blocked')\n\n\n"
+    "socket.socket = _Blocked\nsocket.create_connection = _no\n"
+)
 GH = '#!/bin/sh\necho called >> "$GH_LOG"\nexit 1\n'
 
 
@@ -418,20 +423,15 @@ def stub(tmp_path: Path) -> dict:
 
 def run_eval(stub: dict, *more: str, **env: str) -> subprocess.CompletedProcess:
     root = stub["root"]
-    args = [
-        "run",
-        "--product",
-        "booking-web",
-        "--adapter",
-        f"{sys.executable} {root / 'stub.py'}",
-        "--said",
-        str(root / "said.txt"),
-        "--at",
-        "2026-11-27T19:30:00Z",
-        "--out",
-        str(root / "out"),
-        *more,
-    ]
+    given = {
+        "--product": "booking-web",
+        "--adapter": f"{sys.executable} {root / 'stub.py'}",
+        "--said": str(root / "said.txt"),
+        "--at": "2026-11-27T19:30:00Z",
+        "--out": str(root / "out"),
+    }
+    given.update(zip(more[0::2], more[1::2], strict=True))  # an option given replaces its default
+    args = ["run", *(x for pair in given.items() for x in pair)]
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         cwd=root,
@@ -531,6 +531,9 @@ def test_ac8_an_adapter_that_cannot_start_is_incomplete(stub):
         (("--minutes", "601"), {}, "(option: --minutes)", 2),
         (("--at", "yesterday"), {}, "(option: --at)", 2),
         (("--product", "spaceship"), {}, "(option: --product)", 2),
+        (("--product", "../evals"), {}, "(option: --product)", 2),
+        (("--adapter", ""), {}, "(option: --adapter)", 2),
+        (("--colour", "red"), {}, "(option: --colour)", 2),
         (("--out", str(KIT_ROOT / "build")), {}, "(path class: the kit's work tree)", 2),
         (("--said", "/nonexistent/said.txt"), {}, "(option: --said)", 2),
     ],
