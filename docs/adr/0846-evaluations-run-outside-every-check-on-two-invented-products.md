@@ -53,30 +53,6 @@ form, `check` and `median`, with no model; build (b) adds `run`. On main at e403
 7. **Wiring.** The `[testing]` map names `tests/kit_dev/test_eval_run.py` for `scripts/agk/eval_run.py` and `evals/**`,
    and the reference guide lists both commands.
 
-8. **The run (build (b)).** `eval_run.py run --product ID --adapter COMMAND --said FILE --at <UTC time> --out DIR
-   [--by LOGIN] [--minutes N]` is refused under `CI` or `GITHUB_ACTIONS` (setting `CI`), before any option is read, and
-   each option out of form is refused naming it, exit 2; `--out` inside the kit is refused naming the kit's work tree.
-   It starts nothing and writes nothing without the person's plain yes in `--said`, read by `steward_owner.yes_of` (in
-   team mode only a `spec_approvers` login given as `--by` counts, `Q-PG-5`). Then three runs in turn, each in
-   `OUT/<product>/scratch-<n>/`: an empty git repository `product/` with no remote, a sidecar made by
-   `personal_state.make_sidecar` (`forge = "files"`), `AGK_HOME` the scratch folder, no GitHub token and an empty
-   `GH_CONFIG_DIR`, so the run can make no GitHub call. The person's adapter is run as `launch.start_with` runs it
-   (split, no shell, the prompt on standard input, the product file given as data) with `AGK_KIND=build`,
-   `AGK_AGENT=builder`, `AGK_TIER=strongest` and `AGK_MODEL` from `[models.names] strongest` when set, stopped at
-   `--minutes` (1 to 600, default 240). A fresh reviewer session (`AGK_AGENT=architect-review`, ADR-0430) then runs in
-   `review/`, which holds only the product file, the rubric, the product's tree at its head, the sidecar's `docs/` and
-   the objective part, and writes `review.toml` (`accepted` and one `[[layer]]` per layer with `name`, `score` 0 to 6
-   and `reason`). `objective` is the sidecar's test command (`not-run (setting: personal.test_command)` when none)
-   and `run_gates.results`' counts, with `not-run` for the accessibility check, the scan and lint, which the sidecar
-   names nowhere; `process` counts the files forge's `Question:` and `Verdict:` comments, the records written under
-   the sidecar's `docs/` and the wall minutes, with the yes's time; `cost` is `metrics.read_replies` over the scratch
-   folder since the run began, priced by `metrics.usd_of` at the kit's `[cost] prices` (`not priced (setting:
-   cost.prices)` when a reply's model has no row; `other` is `unknown`, for the replies carry no such kind). A session
-   that fails, times out or cannot start leaves the run `incomplete` at the furthest stage the records reached, a
-   missing or malformed review at `review`, a reply of another model than a set `[models.names] strongest` at `tier`
-   (`Q-PG-8`), each never 0, and the next run still starts. `execution`, `pr_mode`, `[flow]`, `[models] build` and
-   `[models.prices]` are not read.
-
 ## Consequences
 
 The bar of rule 10 has fixed products and a fixed rubric to read, and a malformed record is refused before any median.
@@ -84,6 +60,5 @@ No governance run, CI job or required check changes: the check runs only when a 
 
 ## Residual
 
-Build (h) of SPEC-0077 writes `docs/runs/evals/<date>.md` and the promotion rule. That a real session on the
-`strongest` tier is what a reply's model names is unverified while `[models.names] strongest` is unset (verify,
-`Q-PG-8`) (2026-11-27).
+Build (b) of brief #2042 adds `eval_run.py run` (the scratch sidecar, the person's adapter, the fresh reviewer); build
+(h) of SPEC-0077 writes `docs/runs/evals/<date>.md` and the promotion rule (2026-11-27).
