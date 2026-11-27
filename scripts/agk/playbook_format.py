@@ -78,6 +78,14 @@ The resolver (REQ-078; brief #1666, ADR-0697): `folder(root, name)`, `path(root,
 the installed layout; in a clean project the project's own `<name>.toml` when it exists, else the
 plugin's (`kit_root.plugin_root`). Every reader, the declaration check and the modules use them;
 `playbooks(root)` still lists the project's own files alone.
+
+A pack's playbook (SPEC-0077 rules 3 and 5; REQ-084; brief #2040, ADR-0844): `_pack_layer(path,
+root)` asks the resolver for the file's layer; for a pack id (neither `agk-core` nor the project's)
+each `[[phases]]`, `[[lanes]]`, `[[gates]]`, `[[claims]]`, `[[discovery]]` and `[[standards]]`
+entry also takes `source` and `basis` (`PACK_KEYS`), and a present one is checked by rule 3: a
+`source` that is not a URL and an access date, or a `basis` other than `expected` (a claim's
+`basis` keeps its claim meaning, `Q-PS-1`). A missing one is `check_packs`'s line. The kit's and the
+project's playbooks keep today's format; a nested table takes neither (`Q-PS-2`).
 """
 
 from __future__ import annotations
@@ -129,6 +137,9 @@ RESEARCH = "docs/research"
 DERIVED_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 GATE_SOURCE = re.compile(r"^https?://\S+ \(accessed (\d{4}-\d{2}-\d{2})\)$")
 DERIVED_GATE_KEYS: dict[str, str] = {"source": "str", "basis": "str"}
+PACK_KEYS = DERIVED_GATE_KEYS  # SPEC-0077 rule 3: a pack's entry, the same two keys (ADR-0844)
+PACK_SECTIONS = ("phases", "lanes", "gates", "claims", "discovery")
+SPEC77 = "SPEC-0077 rule 3"
 PROFILES = ("balanced", "thorough")  # `fast` is refused by rule 4; impact.py's other profiles
 LOWERING_PROFILES = ("fast",)
 # SPEC-0038 rule 4: the settings of agk.toml that govern a gate.
@@ -405,6 +416,40 @@ def _sourced(rel: str, gate: dict) -> list[str]:
     if "basis" in gate and gate["basis"] != "expected":
         out.append(f"rule 22: {rel}: a gate `basis` is not expected")
     return out
+
+
+def _provenance(rel: str, section: str, entry: dict) -> list[str]:
+    """SPEC-0077 rule 3: the form of a pack entry's present provenance, never its value."""
+    out = []
+    if "source" in entry and source_date(entry["source"]) is None:
+        out.append(
+            f"{SPEC77}: {rel}: an entry `source` is not a URL and an access date (key: source)"
+        )
+    if section != "claims" and "basis" in entry and entry["basis"] != "expected":
+        out.append(f"{SPEC77}: {rel}: an entry `basis` is not expected (key: basis)")
+    return out
+
+
+def _pack_layer(path: Path, root: Path) -> str | None:
+    """SPEC-0077 rule 5: the pack id of the layer the resolver reads PATH from (a pack of
+    `packs.used` whose manifest lists it under `playbooks/`, as `packs.files` reads it), else None:
+    no resolver, no pack in use, a refused table or pack, the kit's or the project's own file."""
+    packs = resolver()
+    if packs is None:
+        return None
+    try:
+        used = packs.used(Path(root))
+    except packs.Refused:
+        return None
+    import check_packs  # here: check_packs imports this module
+
+    want = Path(path).resolve()
+    for pid, where in used:
+        listed = (check_packs.load(where / check_packs.MANIFEST) or {}).get("files", {})
+        names = [n for n in listed if n.startswith("playbooks/")]
+        if any((where / n).resolve() == want for n in names):
+            return pid
+    return None
 
 
 def _gates(rel: str, gates: list[dict], derived: bool = False) -> list[str]:
@@ -707,13 +752,15 @@ def stacks(root: Path) -> list[str] | None:
     return [r["name"] for r in rows if isinstance(r, dict) and isinstance(r.get("name"), str)]
 
 
-def _standards(rel: str, entries: list[dict], root: Path) -> list[str]:
+def _standards(rel: str, entries: list[dict], root: Path, pack: bool = False) -> list[str]:
     """SPEC-0072 rule 2: each `[[standards]]` entry's form, a known stack once, a relative
-    config."""
+    config; a pack's entry also takes rule 3's provenance (SPEC-0077, ADR-0844)."""
     where = f"{SPEC72}: {rel}:"
     out = []
     for entry in entries:
-        out += _table_keys(rel, "a `[[standards]]` entry", entry, STANDARD_KEYS, {})
+        extra = PACK_KEYS if pack else {}
+        out += _table_keys(rel, "a `[[standards]]` entry", entry, STANDARD_KEYS, extra)
+        out += _provenance(rel, "standards", entry) if pack else []
         if _is(entry.get("rules"), "table"):
             rules = entry["rules"]
             out += _table_keys(rel, "a `[[standards]]` `rules`", rules, RULES_KEYS, RULES_OPTIONAL)
@@ -752,6 +799,7 @@ def problems(path: Path, root: Path) -> list[str]:
     out: list[str] = []
     work_type = data.get("work_type")
     derived = isinstance(work_type, str) and is_derived(work_type, root)
+    pack = _pack_layer(path, root) is not None  # SPEC-0077 rule 3 (brief #2040, ADR-0844)
     if isinstance(work_type, str):
         if work_type not in WORK_TYPES and work_type != BASE and not derived:
             out.append(f"rule 1: {rel}: `work_type` is not one of the work types")
@@ -778,10 +826,14 @@ def problems(path: Path, root: Path) -> list[str]:
             continue
         if section == "gates" and derived:
             optional = {**optional, **DERIVED_GATE_KEYS}
+        listed = pack and section in PACK_SECTIONS and isinstance(value, list)
+        if listed:
+            optional = {**PACK_KEYS, **optional}  # a claim's `basis` keeps its type (Q-PS-1)
         tables = value if isinstance(value, list) else [value]
         where = f"[{section}]" if isinstance(value, dict) else f"a [[{section}]] entry"
         for table in tables:
             out += _table_keys(rel, where, table, required, optional)
+            out += _provenance(rel, section, table) if listed and isinstance(table, dict) else []
     if _is(data.get("phases"), TABLES):
         out += _phases(rel, data["phases"])
     out += _kinds(rel, data)
@@ -806,7 +858,7 @@ def problems(path: Path, root: Path) -> list[str]:
     if _is(data.get("architecture"), "table"):
         out += _architecture(rel, data, root)
     if _is(data.get("standards"), TABLES):
-        out += _standards(rel, data["standards"], root)
+        out += _standards(rel, data["standards"], root, pack)
     out += _named(rel, data)
     return out
 

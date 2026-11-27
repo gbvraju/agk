@@ -384,7 +384,7 @@ tests = [
 code = "scripts/agk/check_packs.py"
 tests = [
   "tests/kit/test_check_packs.py", "tests/kit/test_packs_settings.py", "tests/kit/test_check_playbooks.py",
-  "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_pack_playbook_source.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
@@ -940,6 +940,7 @@ code = "scripts/agk/playbook_format.py"
 tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
   "tests/kit/test_playbook_split.py", "tests/kit/test_node_pack.py", "tests/kit/test_playbook_standard.py",
+  "tests/kit/test_pack_playbook_source.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plugin_snapshot.py"
