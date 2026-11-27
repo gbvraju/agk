@@ -65,7 +65,9 @@ def test_ac7_the_note_names_the_last_accepted_records_medians(repo, tmp_path):
     kit_tree(repo, accepted=True)
     lines = output(repo, tmp_path)
     assert NOTE in lines
-    assert lines.index(NOTE) == next(i for i, x in enumerate(lines) if x.startswith("acceptance:")) + 1
+    assert (
+        lines.index(NOTE) == next(i for i, x in enumerate(lines) if x.startswith("acceptance:")) + 1
+    )
     assert not any(x.startswith("| evals") for x in lines)  # a note, never a metric row
 
 

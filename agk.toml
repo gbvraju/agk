@@ -386,7 +386,7 @@ code = "scripts/agk/check_packs.py"
 tests = [
   "tests/kit/test_check_packs.py", "tests/kit/test_packs_settings.py", "tests/kit/test_check_playbooks.py",
   "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_pack_playbook_source.py",
-  "tests/kit/test_packs_lock.py",
+  "tests/kit/test_packs_lock.py", "tests/kit_dev/test_eval_record.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
@@ -429,7 +429,7 @@ tests = [
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_flow_texts.py",
   "tests/kit_dev/test_kit_hashes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_merge_ref_base.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_pyproject_installs_as_nothing.py",
-  "tests/kit_dev/test_release_check.py", "tests/kit_dev/test_release_protected.py",
+  "tests/kit_dev/test_release_check.py", "tests/kit_dev/test_release_protected.py", "tests/kit_dev/test_eval_record.py",
   "tests/kit_dev/test_reviewer_wiring.py", "tests/kit_dev/test_route_concurrency_install.py",
   "tests/kit_dev/test_route_finishes_install.py", "tests/kit_dev/test_upgrade.py",
   "tests/kit_dev/test_upgrade_opt_in.py", "tests/kit_dev/test_upgrade_opt_in_several.py",
@@ -904,7 +904,13 @@ code = "scripts/agk/personal_adopt.py"
 tests = ["tests/kit/test_personal_adopt.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/eval_run.py"
-tests = ["tests/kit_dev/test_eval_run.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit_dev/test_eval_run.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_eval_record.py"]
+[[testing.map]]
+code = "scripts/agk/eval_record.py"
+tests = [
+  "tests/kit_dev/test_eval_record.py", "tests/kit/test_scorecard_evals.py", "tests/kit_dev/test_eval_run.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "evals/**"
 tests = ["tests/kit_dev/test_eval_run.py"]
@@ -1214,7 +1220,7 @@ code = "scripts/agk/sbom.py"
 tests = ["tests/kit/test_sbom.py", "tests/kit/test_product_deps.py"]
 [[testing.map]]
 code = "scripts/agk/scorecard.py"
-tests = ["tests/kit/test_scorecard.py", "tests/kit/test_minutes_budget.py"]
+tests = ["tests/kit/test_scorecard.py", "tests/kit/test_minutes_budget.py", "tests/kit/test_scorecard_evals.py"]
 [[testing.map]]
 code = "scripts/agk/common.py"
 tests = [

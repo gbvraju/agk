@@ -54,7 +54,11 @@ def kit(tmp_path: Path) -> Path:
     """A saved kit tree: the shipped rubric, a solo files-forge sidecar's settings."""
     root = tmp_path / "kit"
     put(root, "evals/rubric.toml", (KIT_ROOT / "evals" / "rubric.toml").read_text("utf-8"))
-    put(root, "agk.toml", 'version = "0.66.0"\nreview_mode = "solo"\n\n[personal]\nforge = "files"\n')
+    put(
+        root,
+        "agk.toml",
+        'version = "0.66.0"\nreview_mode = "solo"\n\n[personal]\nforge = "files"\n',
+    )
     return root
 
 
@@ -147,7 +151,8 @@ def test_ac7_an_incomplete_run_is_shown_with_its_stage_never_0(kit):
     text = lines_of(kit)
     assert "| booking-web | problem | 3 | incomplete (review) | 5 | 4 |" in text
     assert "- Regressions:" in text and "- booking-web incomplete review" in text
-    assert not any("| 0 |" in line for line in text)
+    scored = [line for line in text if any(f"| {layer} |" in line for layer in LAYERS)]
+    assert len(scored) == 8 and not any("| 0 |" in line for line in scored)
 
 
 def test_ac7_compare_names_the_product_the_layer_and_the_score_past_tolerance():
@@ -197,16 +202,18 @@ def test_ac8_a_bad_tolerance_is_refused_naming_tolerance(kit, value):
     assert not (kit / eval_record.FOLDER).exists()
 
 
-def test_ac7_write_never_overwrites_and_refuses_another_rubric(kit):
-    """REQ-084 AC7: SPEC-0077 rule 10 (answer 7)."""
+def test_ac7_write_never_overwrites_and_refuses_runs_out_of_form(kit):
+    """REQ-084 AC7: SPEC-0077 rule 10 (answer 7: an existing record; runs of another rubric)."""
     folder = runs(kit, three())
     assert eval_record.write(kit, folder, DAY)[0] == 0
     code, said = eval_record.write(kit, folder, DAY)
-    assert code == 1 and said == ["refused: a record exists for the date (path class: docs/runs/evals/)"]
+    assert code == 1 and said == [
+        "refused: a record exists for the date (path class: docs/runs/evals/)"
+    ]
     old = record(1, review={layer: 3 for layer in LAYERS[:-1]})
     other = runs(kit / "old", [old, record(2), record(3)])
     code, said = eval_record.write(kit, other, "2026-11-28")
-    assert code == 1 and said[-1].endswith("(path class: evals/)")
+    assert code == 1 and said[-1] == eval_record.BAD_RUNS
 
 
 def test_ac8_accept_on_a_yes_writes_the_status_the_line_and_one_setup_entry(kit):
@@ -220,7 +227,9 @@ def test_ac8_accept_on_a_yes_writes_the_status_the_line_and_one_setup_entry(kit)
     assert f'- Accepted: the person said "Yes" at {SAID_AT}' in text
     memory = (kit / "docs" / "runs" / "steward" / "memory.md").read_text("utf-8")
     assert memory.count("Setup: eval-record") == 1
-    assert f'Setup: eval-record {DAY}: accepted because the person said "Yes" at {SAID_AT}' in memory
+    assert (
+        f'Setup: eval-record {DAY}: accepted because the person said "Yes" at {SAID_AT}' in memory
+    )
     assert eval_record.accepted(kit)[0] == DAY
 
 
@@ -266,13 +275,20 @@ def test_ac8_accept_refuses_a_regressed_an_accepted_or_a_rerubricked_record(kit)
     assert code == 1 and out == ["refused: the record is already accepted (SPEC-0077 rule 10)"]
     assert eval_record.write(kit, runs(kit, three(score=4) + three("payments-api", 5)), DAY)[0] == 0
     code, out = eval_record.accept(kit, DAY, said, SAID_AT, None, gh_never)
-    assert code == 1 and out == ["refused: a record with a regression is never accepted (SPEC-0077 rule 10)"]
+    assert code == 1 and out == [
+        "refused: a record with a regression is never accepted (SPEC-0077 rule 10)"
+    ]
     day = "2026-11-28"
-    assert eval_record.write(kit, runs(kit / day, three(score=5) + three("payments-api", 5)), day)[0] == 0
+    assert (
+        eval_record.write(kit, runs(kit / day, three(score=5) + three("payments-api", 5)), day)[0]
+        == 0
+    )
     rubric = kit / "evals" / "rubric.toml"
     rubric.write_text(rubric.read_text("utf-8") + "\n", "utf-8")
     code, out = eval_record.accept(kit, day, said, SAID_AT, None, gh_never)
-    assert code == 1 and out == ["refused: the record was scored on another rubric (path class: evals/)"]
+    assert code == 1 and out == [
+        "refused: the record was scored on another rubric (path class: evals/)"
+    ]
     assert eval_record.accepted(kit)[0] == LAST
 
 
@@ -290,7 +306,9 @@ def test_ac7_accepted_is_the_newest_well_formed_accepted_record(kit):
 # --- the release (answer 4 (a)) -----------------------------------------------------------------
 
 RELEASE = KIT_ROOT / "scripts" / "agk" / "check_release.py"
-OLD_LOG = "# Changelog\n\n## Unreleased\n\n- #5 a change\n\n## 1.0.0 (2026-11-01)\n\n- #1 the start\n"
+OLD_LOG = (
+    "# Changelog\n\n## Unreleased\n\n- #5 a change\n\n## 1.0.0 (2026-11-01)\n\n- #1 the start\n"
+)
 NEW_LOG = (
     "# Changelog\n\n## Unreleased\n\n## 1.1.0 (2026-11-28)\n\n- #5 a change\n\n"
     "## 1.0.0 (2026-11-01)\n\n- #1 the start\n"
@@ -321,7 +339,11 @@ def release_tree(tmp_path: Path, evals: bool, record_day: str | None, mode: str 
     if evals:
         put(root, "evals/rubric.toml", (KIT_ROOT / "evals" / "rubric.toml").read_text("utf-8"))
     if record_day:
-        put(root, "agk.toml", 'version = "1.0.0"\nreview_mode = "solo"\n\n[personal]\nforge = "files"\n')
+        put(
+            root,
+            "agk.toml",
+            'version = "1.0.0"\nreview_mode = "solo"\n\n[personal]\nforge = "files"\n',
+        )
         accepted_record(root, record_day, 5)
         shutil.rmtree(root / record_day)
         versions(root, "1.0.0")
@@ -378,11 +400,12 @@ def test_ac8_no_evals_or_strict_mode_checks_as_today(tmp_path, evals, mode):
 
 def pack(root: Path, tier: str, evals: str | None) -> Path:
     folder = root / "config" / "packs" / "pack-a"
-    body = put(folder, "playbooks/a.md", "# A\n\n- basis = \"expected\"\n")
+    body = put(folder, "playbooks/a.md", '# A\n\n- basis = "expected"\n')
     digest = hashlib.sha256(body.read_bytes()).hexdigest()
     manifest = (
         'format = 1\nid = "pack-a"\nversion = "1.0.0"\npublisher = "Example"\n'
-        f'tier = "{tier}"\nlicence = "MIT"\nsource = "https://example.com/pack-a"\nkit = ">=0.1.0"\n'
+        f'tier = "{tier}"\nlicence = "MIT"\nsource = "https://example.com/pack-a"\n'
+        'kit = ">=0.1.0"\n'
         'as_of = "2026-11-01"\nreviewed = "2026-11-01 by the maintainers"\nkinds = ["playbooks"]\n'
         + (f'evals = "{evals}"\n' if evals else "")
         + f'[files]\n"playbooks/a.md" = "{digest}"\n[permissions]\n'

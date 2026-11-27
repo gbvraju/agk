@@ -1311,6 +1311,18 @@ complete)`, never 0. `run` (build (b)) starts nothing without the person's plain
 scratch files-forge sidecar with no GitHub token, through the person's own `--adapter` command on `strongest`, and has a fresh
 reviewer session score the bundle only; it writes `OUT/<product>/run-<n>.json`, a failed or unreviewed run `incomplete`, never 0.
 
+    python3 scripts/agk/eval_record.py write --runs DIR [--date YYYY-MM-DD]
+    python3 scripts/agk/eval_record.py accept <date> --said FILE --at <UTC time> [--by LOGIN]
+
+Two kit-only commands of SPEC-0077 rule 10 (brief #2043, ADR-0847), never run by CI or a check. `write` turns the run records under
+`DIR` into `docs/runs/evals/<date>.md` (`- Status: proposed`): the kit and the rubric's hash, `tolerance`, one table row per product and
+layer with the three runs and the median (an incomplete run shown with its stage, never 0), the cost per accepted feature, and
+`- Regressions:` naming each median below the last accepted record's by more than `tolerance`; it never overwrites. `accept` sets
+`- Status: accepted` only on the person's plain yes in `--said` (in team mode a `spec_approvers` login as `--by`) and records one
+`Setup` entry; any other reply changes no file, and a record with a regression is never accepted. Where `evals/rubric.toml` is on the
+base, a release pull request needs an accepted record dated on or after the last release, and a `curated` pack an accepted record
+named in its `evals`; the scorecard prints one `evals:` note.
+
 ## Design screenshots and comparison
 
     python3 scripts/agk/design.py screenshots --version v<n> [--root DIR]
