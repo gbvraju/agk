@@ -3,10 +3,10 @@
 - Status: Proposed
 - Date: 2026-11-27
 - Deciders: maintainers (the owner's yes on brief #2058, 2026-11-27T19:12:33Z)
-- Related: ADR-0570, ADR-0554, ADR-0585, ADR-0593, ADR-0684, SPEC-0039, brief #2058, brief #610, brief #1358, brief #1615, plan #661
+- Related: ADR-0583, ADR-0570, ADR-0554, ADR-0585, ADR-0593, ADR-0684, SPEC-0039, brief #2058, brief #610, brief #1358, brief #1615, plan #661
 - Requirements: REQ-046
 
-Protected classes: `scripts/agk/`, `.claude/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `.claude/`, `tests/kit/`, `agk.toml`, `config/`
 
 ## Context
 
@@ -36,7 +36,9 @@ from the lapse path (ADR-0684).
    per new head or default-branch commit, never on every pass. A queue or commit that cannot be read adds nothing.
 4. **The retry in the same session.** `.claude/agents/conductor.md` says that after a `held:` line whose cause is the
    checkout or a step put right since, the conductor runs the same command once more in the same session: one retry,
-   not a loop. The guard (`conductor_guard.merge_allowed`) and `.claude/settings.json` are unchanged.
+   not a loop. The guard (`conductor_guard.merge_allowed`) and `.claude/settings.json` are unchanged. The clause
+   adds 15 words and no rule line, so the role file's line of `config/rule-budget.txt` moves from 4895 to 4910 words,
+   with the cap of `tests/kit/test_conductor_playbook_evidence.py`, by ADR-0583 standing ruling 2 (0.3 percent).
 5. **Settings.** No new key. `ruled` still refuses or holds `auto_merge`, `auto_merge_method`, `paused`, `execution`,
    `after_merge_timeout` and `max_behind_merges` before any fetch; `merge_queue` reaches the same check through
    `run_merge`; `forge = "files"` is refused as today.

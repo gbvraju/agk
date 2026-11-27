@@ -3407,7 +3407,9 @@ def cleared_due(root, repo: str, state: dict) -> dict[str, str] | None:
     if not isinstance(base, str) or not base:
         return None
     seen = {m.group(1): f"{m.group(2)} {base}" for m in lines}
-    kept = state.get("cleared") if isinstance(state.get("cleared"), dict) else {}
+    kept = state.get("cleared")
+    if not isinstance(kept, dict):
+        kept = {}
     return seen if any(kept.get(n) != v for n, v in seen.items()) else None
 
 
