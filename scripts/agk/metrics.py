@@ -1680,7 +1680,9 @@ class SignalReads:
     only when a first read is needed; a read not answered is (None, its class)."""
 
     def __init__(self, src: Any) -> None:
-        self.src, self.metered, self.done = src, None, {}
+        self.src = src
+        self.metered: Metered | None = None
+        self.done: dict[str, tuple[Any, str]] = {}
 
     def get(self, name: str, endpoint: str, until: Any = None) -> tuple[Any, str]:
         if name not in self.done:
@@ -1836,7 +1838,7 @@ def unrowed(root: Path, since: date, rows: list[dict]) -> str:
         day = (
             ADR_DATE.search(path.read_text(encoding="utf-8", errors="replace")) if number else None
         )
-        if day and day[1] >= since.isoformat() and f"ADR-{number[1]}" not in named:
+        if number and day and day[1] >= since.isoformat() and f"ADR-{number[1]}" not in named:
             found.append(f"ADR-{number[1]}")
     return f"signals: decisions since {since} with no row: {', '.join(found) or 'none'}"
 
