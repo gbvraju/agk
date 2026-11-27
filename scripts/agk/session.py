@@ -397,7 +397,7 @@ STALL_HOURS = 4
 SAFE_REF = re.compile(r"[A-Za-z0-9._/-]+")
 PROGRESS = re.compile(  # the step, then the usage ending of session rule 8 (SPEC-0049 rule 4)
     r"Progress: ([0-9a-f]{7,40}) done (\d+)/(\d+); next: (\S.*?)"
-    r"(?:; Usage: (?:\d+ tokens|not shown))?"
+    r"(?:; Usage: (?:\d+ tokens(?: \([a-z0-9 ,]+\))?|not shown(?: \([a-z-]+\))?))?"
 )
 OVER_CAP = re.compile(r"Report: \S+ over cap (\d+(?:\.\d+)?)/\d+ (tokens|hours)\b.*")
 

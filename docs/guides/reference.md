@@ -147,11 +147,13 @@ unknown key or a wrong value is refused, naming the setting. See ADR-0374.
 
 ## The token figure of a session
 
-    python3 scripts/agk/usage.py [--transcript FILE] [--since YYYY-MM-DDTHH:MM:SSZ]
+    python3 scripts/agk/usage.py [--transcript FILE ...] [--since YYYY-MM-DDTHH:MM:SSZ] [--helpers]
     python3 scripts/agk/metrics.py --usage-by-kind FACTS [--before YYYY-MM-DD] [--after YYYY-MM-DD]
 
-The first prints `Usage: <n> tokens` from the running session's own transcript, each message counted once over its input,
-cache and output counts, or `Usage: not shown`; it writes no file, posts nothing and makes no network call, and prints no
+The first prints `Usage: <n> tokens (input <a>, cache write <b>, cache read <c>, output <d>)` from the running session's
+own transcript (with `--helpers`, which only a top-level session passes, also its own sub-agents' transcripts beside
+it), each message counted once, `<n>` the sum, or `Usage: not shown
+(<class>)` with the class `no-session-id`, `no-transcript`, `unreadable` or `no-usage-record` (ADR-0835); it writes no file, posts nothing and makes no network call, and prints no
 text of the transcript. A builder passes `--since` with the time of its previous `Report:` and ends its `Report:` and
 `Progress:` lines with the line it prints. The second prints, per kind, the merged pull requests with their tokens, one
 line per pull request and, with an optional `[models.prices]` table in `agk.toml` (a tier to a price per million tokens),
@@ -171,6 +173,18 @@ in `agk.toml` (`input`, `output`, `cache_write`, `cache_read`: USD per million t
 adds an estimate in USD; without one it prints tokens only. A figure it cannot read is `unknown`, never 0, and a record file it cannot read is counted and marks the total as a lower
 bound. `--save`
 writes the day's figures to `docs/runs/cost/<date>.json`. See ADR-0544.
+
+## The sums of the `Report:` lines
+
+    python3 scripts/agk/metrics.py --report-sums FACTS [--after YYYY-MM-DD] [--model ID] [--repo OWNER/REPO] [--api-dir DIR]
+
+Reads the comments of each pull request of a saved facts document (one GET each, or `--api-dir`) and sums the figures
+that end their `Report:` lines: one row per pull request with its brief, the reports with and without a figure, the
+tokens by kind and the total, then the sums by brief and by role (builder; the other roles post no `Report:` line) and
+`usage reported: <k> of <n> reports`. `--after DAY` takes the 7 days from that day. With `--model ID` naming a row of
+the `[cost.prices.<model>]` table above it adds USD; a figure without its split, a missing figure or a missing row is
+`unknown` or `not priced`, never 0. It writes no file and posts nothing. The weekly metrics issue carries the same
+`usage reported:` line. See ADR-0835 and Q-2020-1.
 
 ## Release pack
 

@@ -242,7 +242,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/caps.py"
-tests = ["tests/kit/test_caps.py"]
+tests = ["tests/kit/test_caps.py", "tests/kit/test_usage_split.py"]
 [[testing.map]]
 code = "scripts/agk/changelog_fragments.py"
 tests = [
@@ -840,6 +840,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
+  "tests/kit/test_usage_split.py",
   "tests/kit/test_checklist.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_forge.py",
   "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_measures.py",
   "tests/kit/test_metrics.py", "tests/kit/test_metrics_cost.py", "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_pr_tests_reads.py", "tests/kit/test_metrics_testing.py",
@@ -1099,7 +1100,7 @@ code = "kit/templates/stack-adr.md"
 tests = ["tests/kit/test_stack_designs.py", "tests/kit_dev/test_stack_playbook.py"]
 [[testing.map]]
 code = "kit/templates/runtime/builder.txt"
-tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py"]
+tests = ["tests/kit/test_layers_step.py", "tests/kit/test_runtime_templates.py", "tests/kit/test_usage_split.py"]
 [[testing.map]]
 code = "kit/templates/protected-paths*.txt"
 tests = ["tests/kit/test_layers_step.py", "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_project_mk_protected.py"]
@@ -1195,6 +1196,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_usage_split.py",
   "tests/kit/test_verdict_form_cleared.py",
   "tests/kit/test_owner_park_flap.py",
   "tests/kit/test_github_call_record.py",
@@ -1280,7 +1282,7 @@ code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
 [[testing.map]]
 code = "scripts/agk/steward.py"
-tests = ["tests/kit/test_day_zero.py", "tests/kit/test_steward_memory.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_setup.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
+tests = ["tests/kit/test_usage_split.py", "tests/kit/test_day_zero.py", "tests/kit/test_steward_memory.py", "tests/kit/test_steward_person.py", "tests/kit/test_steward_setup.py", "tests/kit/test_steward_agent.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_onboarding.py"]
 [[testing.map]]
 code = "scripts/agk/day_zero.py"
 tests = ["tests/kit/test_day_zero.py", "tests/kit/test_first_open.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1382,7 +1384,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/usage.py"
-tests = ["tests/kit/test_usage_transcript.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_usage_split.py", "tests/kit/test_usage_transcript.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/workflow_apply.py"
 tests = [
