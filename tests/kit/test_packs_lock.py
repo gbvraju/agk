@@ -24,7 +24,6 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
 import check_packs  # noqa: E402
-import check_playbooks  # noqa: E402
 import packs  # noqa: E402
 
 PID = "zz-shop"
@@ -153,8 +152,7 @@ def test_ac3_each_verify_failure_names_the_rule_and_the_pack(tmp_path, change, l
     else:  # the folder and the use entry moved on, the lock did not
         stub_pack(root / REL, version="1.3.0")
         (root / "agk.toml").write_text(f"[packs]\nuse = [{use_line(root, '1.3.0')}]\n")
-    assert line in packs.check(root)
-    assert line in check_playbooks.findings(root)
+    assert line in packs.check(root) and line in check_packs.findings(root)
     proc = subprocess.run(  # nosec B603 - fixed argument list
         [sys.executable, str(KIT_ROOT / "scripts/agk/packs.py"), "verify", "--root", str(root)],
         capture_output=True,
@@ -163,6 +161,14 @@ def test_ac3_each_verify_failure_names_the_rule_and_the_pack(tmp_path, change, l
     )
     assert proc.returncode == 1 and f"FAIL packs: {line}" in proc.stdout
     assert hashlib.sha256(SKILL.encode()).hexdigest() not in proc.stdout
+    step = subprocess.run(  # nosec B603 - the playbooks step: the resolver may stop it first
+        [sys.executable, str(KIT_ROOT / "scripts/agk/check_playbooks.py"), "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    fails = [x for x in step.stdout.splitlines() if x.startswith("FAIL playbooks: ")]
+    assert step.returncode == 1 and fails and all("packs" in x for x in fails)
 
 
 @pytest.mark.parametrize("text", ["[[pack]\n", 'pack = "zz"\n', '[[pack]]\nid = "Zz Bad"\n'])

@@ -11,7 +11,8 @@ value: a missing or unknown key, a value of the wrong type (a `bool` is never a 
 kind outside rule 2's nine, a file not listed in `files`, missing or whose SHA-256 differs, a file
 under no listed kind's folder, an entry of a TOML knowledge file with neither a dated `source` nor
 `basis = "expected"`, and a line that `guard.scan_text` flags. A pack folder that `[packs] use`
-does not list, or a refused `[packs]` table, is a `rule 12:` line. `check_playbooks.findings` adds
+does not list, or a refused `[packs]` table, is a `rule 12:` line; `packs.verify`'s `rule 4:` lines
+(the pack lock, brief #2033, ADR-0840) follow. `check_playbooks.findings` adds
 them, so the governance step `playbooks` prints them as `FAIL playbooks:` lines; run alone
 (`--root DIR`) it prints those lines as `FAIL packs:`, `ok packs (<n> packs)`, or nothing with no
 pack. The built-in pack `agk-core` is the kit's own files where they are today, read through
@@ -263,7 +264,9 @@ def findings(root: Path) -> list[str]:
             out.append(
                 f"rule 12: {_label(folder)}: the pack is not listed in use (setting: packs.use)"
             )
-    return out
+    import packs  # rule 4 (brief #2033, ADR-0840): the lock, offline, in the same step
+
+    return out + packs.verify(root, None if used is None else _settings(root)["use"])
 
 
 def cmd_check(root: Path) -> int:
