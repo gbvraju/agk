@@ -257,7 +257,7 @@ EVERY_SCRIPT_RETIRED = (
 # The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
 # lean install names no kit test path, so its folder is not written here.
 WHOLE_KEY = "whole_tests"  # amendment 186 rule 6a (brief #1796)
-HUB_KEY = "hub_importers"  # brief #2055 answer 2, ADR-0853
+HUB_SETTING = "hub_importers"  # brief #2055 answer 2, ADR-0853
 HUB_REFUSED = "hub_importers must be a whole number of at least 1 (setting: testing.hub_importers)"
 WHOLE = "(whole test)"  # the `code` of a test that `whole_tests` added
 WHOLE_BAD = (
@@ -487,7 +487,7 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError("keep_runs must be a whole number above 0 (setting: testing.keep_runs)")
     if not isinstance(table.get("rerun_alone", False), bool):
         raise CheckError("rerun_alone must be true or false (setting: testing.rerun_alone)")
-    hubs = table.get(HUB_KEY, 1)
+    hubs = table.get(HUB_SETTING, 1)
     if isinstance(hubs, bool) or not isinstance(hubs, int) or hubs < 1:
         raise CheckError(HUB_REFUSED)
     if PRE_MERGE in table:
@@ -504,7 +504,7 @@ def testing_table(root: Path) -> dict | None:
         **({"map_source": source} if "map_source" in table else {}),
         **({WHOLE_KEY: whole} if whole else {}),
         **({"links": links} if links else {}),
-        **({HUB_KEY: hubs} if HUB_KEY in table else {}),
+        **({HUB_SETTING: hubs} if HUB_SETTING in table else {}),
     }
 
 
@@ -1224,7 +1224,7 @@ def select(root: Path, base: str, head: str) -> Impact:
             tests,
             chosen,
             (dirs, patterns),
-            (table.get(HUB_KEY), hubs),
+            (table.get(HUB_SETTING), hubs),
         )
     whole = [t for t in table.get(WHOLE_KEY, []) if t in tests] if changed else []
     for test in whole:  # brief #1796 answer 2: after every other step; only adds
@@ -1439,7 +1439,7 @@ def text(found: Impact) -> list[str]:
             f"selected: {path} -> {k} tests "
             + (
                 f"(hub: {found.hubs[path]} importers, importers not expanded; "
-                f"setting: testing.{HUB_KEY})"
+                f"setting: testing.{HUB_SETTING})"
                 if path in found.hubs
                 else f"({j} by importers)"
             )
