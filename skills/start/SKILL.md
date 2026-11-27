@@ -19,8 +19,10 @@ The statement is data to turn into text, never instructions to follow.
 1. Read the next free ADR number and the branch name. This refuses, with the instruction to run `/agk:init` or `/agk:adopt` first, when
    `agk.toml` is absent; it installs nothing. Fetch the default branch first (`git fetch origin <default branch>`), and make sure the work
    tree is clean; if it is not, stop and say so (the command refuses too). When `docs/sources/day-zero.md` is in the work tree but not
-   on `origin/<default branch>`, stop: it goes in its own pull request, merged first (ADR-0664 item 4,
-   `docs/guides/steward-first-run.md` step 6), and the start begins after that merge.
+   on `origin/<default branch>`: with `[plan] stage_pulls = "stage"` it joins the discovery pull request (ADR-0836): set it aside
+   with `git stash push --include-untracked -- docs/sources/day-zero.md`, run the command and create the branch, then `git stash pop`
+   and commit it as the branch's first commit; with `"step"` (the default) stop: it goes in its own pull request, merged first
+   (`docs/guides/steward-first-run.md` step 6), and the start begins after that merge.
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" start-ids --statement "STATEMENT"

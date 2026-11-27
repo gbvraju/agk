@@ -1835,8 +1835,8 @@ def plan_settings(root: Path) -> dict:
     plan's Project number, a positive whole number, absent by default; ADR-0506),
     `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507)
     and `max_questions` (a positive whole number, absent by default, when `plan_intake.py validate`
-    uses 60; ADR-0520), and `active_milestones` (a list of milestone titles, absent by default;
-    ADR-0523).
+    uses 60; ADR-0520), `active_milestones` (a list of milestone titles, absent by default;
+    ADR-0523) and `stage_pulls` (`stage` or `step`, absent by default; ADR-0836).
     Any other key or value is a refusal that names the setting, never the value."""
     table = config_source(root).get(PLAN_TABLE)
     found = {**PLAN_DEFAULTS, "default_hours": {}}
@@ -1856,6 +1856,11 @@ def plan_settings(root: Path) -> dict:
         if key in ("board", "max_questions"):  # max_questions: brief #1221 (ADR-0520)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise CheckError(f"{key} must be a positive whole number (setting: [plan] {key})")
+            found[key] = value
+            continue
+        if key == "stage_pulls":  # brief #2021, ADR-0836: config.stage_pulls reads it
+            if value not in ("stage", "step"):
+                raise CheckError("the setting is refused (setting: plan.stage_pulls)")
             found[key] = value
             continue
         if key == "active_milestones":  # brief #1232, ADR-0523: the milestones builders start

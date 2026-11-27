@@ -85,11 +85,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
    `licences` step fails on it after the lock otherwise), and an option that `cannot be accepted` names the refusal
    `stack-accept` would give, to be fixed in the record first. Each practice marked
    `check` is added as a governance step by the build that adopts the stack, not by this command. Then say how an option is
-   accepted, once this Proposed ADR is merged: by one ordinary commit, in its own pull request, that sets `Status: Accepted` and
+   accepted after the architect's choice: by one ordinary commit that sets `Status: Accepted` and
    `Chosen: Option <X> — <one-line reason>` together (the line reads `3. **Chosen**: Option <X> — <one-line reason>`), and nothing
    else. It is not a `Final:` commit: a `Final:` commit may change only status lines, and while the ADR is Proposed the check
-   refuses any `Chosen` but `none yet`, so only the two lines together pass. `stack-check` accepts the pair, and the expected
-   verdict on that pull request is a plain `Verdict: cleared <sha>`. The build which accepts the stack also
+   refuses any `Chosen` but `none yet`, so only the two lines together pass. `stack-check` accepts the pair. With
+   `[plan] stage_pulls = "stage"` the commit follows on the same branch as the options, in the technical design pull
+   request (ADR-0836), which `stack-accept` allows: it needs a branch that is not the default branch, not the record
+   merged; with `"step"` (the default) the record is merged first and the commit goes in its own pull request. The
+   expected verdict is a plain `Verdict: cleared <sha>`. The build which accepts the stack also
    copies the chosen option's `[testing]` values, as the ADR's `test selection` practice gives them, into the `[testing]` table
    of `agk.toml` in the same pull request as the ADR, by a second ordinary commit that changes nothing else, so one ADR sets
    them; the record's `Protected classes:` line, which `stack-write` writes, names `agk.toml` (and, in an adopted project,
@@ -111,7 +114,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
    The prompt for the accepting change:
 
 ```
-Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). From a fresh default branch, on a new branch, change
+Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). With [plan] stage_pulls = "stage", on the technical
+design pull request's branch, which holds the record; with "step" (the default), from a fresh default branch, on a new branch. Change
 only two lines of that file in one ordinary commit: "- Status: Proposed" becomes "- Status: Accepted", and "3. **Chosen**: none
 yet" becomes "3. **Chosen**: Option <X> — <one-line reason>". Then, in a second ordinary commit, copy the [testing] values
 that the ADR's test selection practice gives for option <X> into the [testing] table of agk.toml. Run engines.py stack-check

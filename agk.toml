@@ -268,7 +268,7 @@ code = "scripts/agk/check_acceptance.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit/test_check_acceptance.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/check_adrs.py"
-tests = [
+tests = ["tests/kit/test_stage_pulls.py",
   "tests/kit/test_verdict_form_cleared.py",
   "tests/kit/test_check_adrs.py", "tests/kit/test_conductor_guard.py", "tests/kit/test_core_audit.py",
   "tests/kit/test_final_accepts.py", "tests/kit/test_personal_state.py", "tests/kit/test_review_context.py",
@@ -495,7 +495,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"
-tests = [
+tests = ["tests/kit/test_stage_pulls.py",
   "tests/kit/test_domain_settings.py",
   "tests/kit_dev/test_uninstall_settings.py",
   "tests/kit/test_brief_refuse_day.py",
@@ -569,7 +569,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/design_signoff.py"
-tests = [
+tests = ["tests/kit/test_stage_pulls.py",
   "tests/kit/test_check_design_prototype.py", "tests/kit/test_design_signoff.py",
   "tests/kit/test_design_signoff_digest.py", "tests/kit_dev/test_final_clearance_design.py",
   "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
@@ -616,7 +616,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/engines.py"
-tests = [
+tests = ["tests/kit/test_stage_pulls.py",
   "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py", "tests/kit/test_stack_choice.py",
   "tests/kit/test_stack_testing_match.py", "tests/kit_dev/test_engines_local_profile.py",
   "tests/kit_dev/test_engines_stack.py", "tests/kit_dev/test_engines_vision.py", "tests/kit_dev/test_guide_fixes.py",
@@ -1327,7 +1327,7 @@ code = "scripts/agk/steward_outbound.py"
 tests = ["tests/kit/test_steward_outbound_guard.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/steward_evidence.py"
-tests = ["tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py", "tests/kit/test_steward_daily.py"]
+tests = ["tests/kit/test_stage_pulls.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py", "tests/kit/test_steward_daily.py"]
 [[testing.map]]
 code = "scripts/agk/steward_owner.py"
 tests = [

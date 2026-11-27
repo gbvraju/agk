@@ -287,7 +287,9 @@ In solo mode (SPEC-0062 rule 4) a start with no `Person:` note prints `ask:` wit
 
 The steward's evidence rule, answer form and triage (SPEC-0059 rules 2, 3, 4, 6, 7, 12 and 19, ADR-0558). `stage` names
 the stage in the owner's words from the files (`docs/discovery/`, `docs/plan/scope.md`, a `*-stack-options.md` ADR,
-`docs/plan/milestones.md` or `scope-lock.md`) and one GET of the open `agk-conductor` issue, which makes it `build`. A
+`docs/plan/milestones.md` or `scope-lock.md`) and one GET of the open `agk-conductor` issue, which makes it `build`, and
+a second line `pull request: <discovery|design|technical design|plan> (plan.stage_pulls: stage)`, `pull request: one per
+step (plan.stage_pulls: step)` or, for `build`, `pull request: the build's own` (brief #2021, ADR-0836). A
 question file is JSON: `id`, `class` (`technical`, `requirement`, `business`, `scope`, `date`, `cost` or `signoff`),
 optional `changes`, `reverses` and `ranking`, and `findings`, each `source` (1 owner decision, 2 Approved spec or
 requirement, 3 signed-off prototype, 4 source document, 5 AGK rule or code), `answer`, `place` and `rule`. `settle` prints

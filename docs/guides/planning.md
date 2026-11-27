@@ -138,7 +138,23 @@ checkout; the other scripts are installed under `scripts/agk/`.
 
 A project that starts from an idea, with no customer prototype, reaches the same published plan: its vision, its charter,
 its signed-off kit design and its accepted stack become the planning sources (SPEC-0043 rules 2a and 2b as amendment 174
-proposes; brief #1216, ADR-0515). Each step is its own pull request, merged by you before the next.
+proposes; brief #1216, ADR-0515). With `stage_pulls = "stage"` in the `[plan]` table of `agk.toml`, which you set by hand for
+now (the steward's setup asking for it is a later step), the steps below go in four pull requests, one per stage, each on its own
+branch from the default branch and merged by you before the next stage starts (brief #2021, ADR-0836). Every check runs
+on each push of a stage, and each approval names its head and is tied to its own record's digest, so a later push in the
+same pull request never voids an earlier approval of another record; a fix to an approved record asks its approval
+again. Absent, the setting is `"step"`: each step is its own pull request, as before, so an upgrade changes nothing.
+
+- **Discovery pull request.** The day-zero record, the grill record, the domain confirmation, the vision and the
+  charter ADR (step 1).
+- **Design pull request.** The inventory, then the prototype, the usability record and the glossary (steps 2 and 3):
+  `Approve: inventory <full head ID>` on the head that adds the inventory, `Approve: design v<n> <full head ID>` on a
+  later head, and each sign-off row in a commit that changes only `docs/design/signoffs.md`.
+- **Technical design pull request.** The stack options ADR, then, after the architect's choice, the accepting commits
+  of `stack-accept` on the same branch; the domain model, the data model and the parts list where their specs are
+  built; and the three planning sources (steps 4 to 6).
+- **Plan pull request.** The proposals, the scope review report, `Approve: plan <full head ID>`, the publish and the
+  scope lock (steps 7 to 13). The board (step 14) runs on your own machine.
 
 1. **Vision and charter.** `/agk:start "<problem statement>"` or `/agk:vision "<idea>"` writes `constitution/vision.md`
    and the charter ADR `docs/adr/<n>-project-charter.md`; you review and merge it, and the charter ADR is Accepted.
@@ -155,7 +171,7 @@ proposes; brief #1216, ADR-0515). Each step is its own pull request, merged by y
    `docs/sources/vision.md` (`Kind: charter`) from the vision and the Accepted charter ADR, and
    `python3 scripts/agk/plan_sources.py architecture` writes once `docs/sources/architecture.md` (`Kind: other`) from
    the Accepted stack ADR, each text unchanged with every heading kept. Each refuses an ADR that is not Accepted and an
-   existing file. Commit the three sources in one pull request.
+   existing file. Commit the three sources in one pull request (with `"stage"`, the technical design pull request).
 7. **Draft the proposals.** `/agk:plan-intake <path outside docs/>`, as in step 4 of the path above.
 8. **Validate.** `python3 scripts/agk/plan_intake.py validate --proposals FILE`, as in step 5.
 9. **Render.** `python3 scripts/agk/plan_intake.py render --proposals FILE`, as in step 6.
