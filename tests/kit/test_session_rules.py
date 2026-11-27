@@ -460,8 +460,12 @@ def test_req037_rule_38_holds_in_every_mode_and_a_bad_mode_names_its_setting(tmp
     assert "never an instruction" in flat(numbered()[38])
 
 
-def test_req071_rule_10_names_every_supervised_start_a_short_job():
-    """REQ-071: brief #2057 answer 2 (a supervisor or the conductor starts a short job)."""
+
+def test_req071_rule_10_names_only_the_supervisor_s_start_a_short_job():
+    """REQ-071: brief #2057, Q-2057-5 as the owner answered it (comment 7227108414): the cloud
+    builders a long-running conductor starts stay with their pull request, so rule 10 still names
+    only the supervisor's start, and any other session keeps the wait."""
     ten = flat(numbered()[10])
-    start = "A builder a supervisor (`conductor.py watchdog --pass`) or conductor starts"
-    assert ten.startswith(start + " is a short job") and "Any other session" in ten
+    start = "A builder the supervisor (`conductor.py watchdog --pass`) starts is a short job"
+    assert ten.startswith(start) and "Any other session" in ten
+    assert "or conductor starts" not in ten

@@ -6,7 +6,7 @@
 - Related: SPEC-0064 rules 2, 4 and 9, ADR-0586, ADR-0584, ADR-0568, ADR-0190, brief #2057, brief #1389, brief #1391, plan #661
 - Requirements: REQ-071
 
-Protected classes: `scripts/agk/`, `.claude/`, `config/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `.claude/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -30,9 +30,11 @@ the hour)` before anything else).
    job line and, first, `Job: <kind> #<item> (AGK_JOB_KIND <kind>, AGK_ITEM #<item>)`: a running session with a pull
    request is a `fix` job of it, any other a `build` job of its brief. `--job` with `--adapter` is refused with the
    usage line naming `--job` (exit 2). The conductor guard allows the one word `--job` after `--plan <scratch file>`
-   and nothing else; `.claude/agents/conductor.md` says a builder started by other means takes that text. Session rule
-   10 reads "A builder a supervisor (`conductor.py watchdog --pass`) or conductor starts is a short job", its words
-   unchanged.
+   and nothing else. Session rule 10 and `.claude/agents/conductor.md` are unchanged: by the owner's answer to Q-2057-5
+   (comment 7227108414 on #2066), the cloud builders a long-running conductor starts by a runtime tool stay with their
+   pull request until it merges (their own start text says so), so rule 10 still names only the supervisor's start,
+   and the conductor's role is not told to give those builders the `--job` text. A supervisor's or a script's start
+   (`launch.py` with an adapter, `autopilot.py next`) carries the job line as decision 1 says.
 3. **The hour after a failed job only (rule 9 as the back-off, rule 2 for the next job).** `conductor.gap_holds` is the
    one reader of a builder's `RESTART_GAP`. In `watch_builders` the end of the last job is counted before the action is
    chosen; for an ended builder with a pull request the hour holds only when that job counted a failure, or when there
@@ -43,7 +45,7 @@ the hour)` before anything else).
    of `RESTART_GAP`; a new start or a new reader of the hour fails it until it is named.
 
 Protected path classes changed: `scripts/agk/` (`launch.py`, `conductor.py`, `autopilot.py`), `.claude/`
-(`hooks/conductor_guard.py`, `agents/conductor.md`), `config/` (`session-rules.md`, `rule-budget.txt`), `tests/kit/`
+(`hooks/conductor_guard.py`), `tests/kit/`
 (`test_short_jobs_everywhere.py`, `test_session_rules.py`), `agk.toml` (the `[[testing.map]]` entries), `docs/adr/` (this
 file) and `changelog.d/` (one fragment).
 
@@ -54,6 +56,10 @@ rather than the whole history. A second fix round starts in the pass its verdict
 the hour, and two failures are still held.
 
 ## Residual
+
+- 2026-11-27: Q-2057-5 was answered `cloud builders stay with their pull request` (comment 7227108414): a cloud builder
+  a long-running conductor starts keeps LIFETIME and its fix rounds stay in one session; making those starts short jobs
+  too is a later brief's, with a change of session rule 10 and of their start text (due 2027-03-31).
 
 - 2026-11-27: whether a cloud conductor may start builders at all, and through which runtime tool (verify), is the
   owner's ruling; no guard for that tool is added here, Q-2057-2 (due 2027-03-31).
