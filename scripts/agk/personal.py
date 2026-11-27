@@ -448,8 +448,11 @@ def descends(clone: Path, old: str, new: str) -> bool:
     return old != new and _git(clone, "merge-base", "--is-ancestor", old, new).returncode == 0
 
 
-def report(clone: Path, sidecar: Path, week: str | None) -> str:
-    """Rule 23, first measure: defects caught before push by the floor, for one ISO week."""
+def report(clone: Path, sidecar: Path, week: str | None, today=None) -> str:
+    """Rule 23, first measure: defects caught before push by the floor, for one ISO week; then the
+    sidecar's stale packs (SPEC-0077 rule 8, brief #2045, ADR-0848), never failing."""
+    import packs  # noqa: PLC0415 - only this line reads the packs
+
     year, number = week_of(week)
     events, skipped = read_events(sidecar)
     floors = [e for e in events if e["step"] == "floor"]
@@ -472,6 +475,7 @@ def report(clone: Path, sidecar: Path, week: str | None) -> str:
         lines.append(f"report: {name}: unknown ({SECOND_PART})")
     lines.append("report: baseline: unknown (the attach time is not recorded)")
     lines.extend(f"report: pushed without a gate: {name}" for name in ungated(clone, sidecar))
+    lines.extend(packs.report_lines(sidecar, today))
     lines.append(CAUTION)
     return "\n".join(lines)
 
