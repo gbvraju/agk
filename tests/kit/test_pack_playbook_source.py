@@ -48,6 +48,7 @@ def marked(line: str | None, text: str | None = None) -> str:
 
 
 def tree(root: Path, playbook: str, extra: str = PLUGIN, pid: str = "zz-a") -> Path:
+    root.mkdir(parents=True, exist_ok=True)
     clean(root)
     use(root, write_pack(root, pid, {"playbooks/web-app.toml": playbook}), extra=extra)
     return root / "config/packs" / pid / "playbooks/web-app.toml"
@@ -94,7 +95,9 @@ def test_a_bad_source_beside_expected_names_rule_3_the_file_and_the_key(tmp_path
     text = marked(EXPECTED).replace(EXPECTED, f'{EXPECTED}\nsource = "zz-not-a-url"', 1)
     path = tree(tmp_path, text)
     rel = "config/packs/zz-a/playbooks/web-app.toml"
-    want = f"SPEC-0077 rule 3: {rel}: an entry `source` is not a URL and an access date (key: source)"
+    want = (
+        f"SPEC-0077 rule 3: {rel}: an entry `source` is not a URL and an access date (key: source)"
+    )
     assert playbook_format.problems(path, tmp_path) == [want]
     assert "zz-not-a-url" not in "".join(lines(tmp_path))
 
@@ -162,7 +165,8 @@ def test_a_measured_claim_with_a_dated_source_passes_the_pack_check(tmp_path):
     record = tmp_path / "docs/runs/zz-record.md"
     record.parent.mkdir(parents=True)
     record.write_text("measured\n", encoding="utf-8")
-    claim = f'[[claims]]\ntext = "zz"\nbasis = "measured"\nrecord = "docs/runs/zz-record.md"\n{SOURCE}\n'
+    record_line = 'record = "docs/runs/zz-record.md"'
+    claim = f'[[claims]]\ntext = "zz"\nbasis = "measured"\n{record_line}\n{SOURCE}\n'
     path = tree(tmp_path, marked(EXPECTED) + "\n" + claim)
     assert check_packs.findings(tmp_path) == []
     assert playbook_format.problems(path, tmp_path) == []
@@ -177,7 +181,10 @@ def test_a_measured_claim_with_a_dated_source_passes_the_pack_check(tmp_path):
 def test_with_no_table_the_kit_tree_equals_the_snapshot():
     """REQ-084: SPEC-0077 rule 5 (no `[packs]` table: no file is a pack layer)."""
     assert check_playbooks.findings(KIT_ROOT, playbook_format.playbooks(KIT_ROOT)) == []
-    assert all(playbook_format._pack_layer(p, KIT_ROOT) is None for p in playbook_format.playbooks(KIT_ROOT))
+    assert all(
+        playbook_format._pack_layer(p, KIT_ROOT) is None
+        for p in playbook_format.playbooks(KIT_ROOT)
+    )
 
 
 def test_an_empty_use_reads_no_pack_layer(tmp_path):
@@ -236,7 +243,10 @@ def test_a_derived_playbook_keeps_rule_22(tmp_path):
     text = marked(None).replace('work_type = "web-app"', 'work_type = "zz-own"')
     own.write_text(text, encoding="utf-8")
     found = playbook_format.problems(own, tmp_path)
-    assert 'rule 22: config/playbooks/zz-own.toml: a gate has neither `source` nor `basis = "expected"`' in found
+    assert (
+        "rule 22: config/playbooks/zz-own.toml: a gate has neither `source` nor "
+        '`basis = "expected"`' in found
+    )
 
 
 def test_a_nested_table_with_provenance_is_still_refused(tmp_path):
@@ -258,7 +268,10 @@ def test_no_key_the_pack_check_requires_is_refused_by_the_playbook_check(tmp_pat
     line = SOURCE if key == "source" else EXPECTED
     clean(tmp_path)
     standards = (KIT_ROOT / "config/standards.toml").read_text(encoding="utf-8")
-    files = {"playbooks/web-app.toml": marked(line), "standards/standards.toml": marked(line, standards)}
+    files = {
+        "playbooks/web-app.toml": marked(line),
+        "standards/standards.toml": marked(line, standards),
+    }
     use(tmp_path, write_pack(tmp_path, "zz-a", files), extra=PLUGIN)
     assert check_packs.findings(tmp_path) == []
     assert lines(tmp_path) == []
