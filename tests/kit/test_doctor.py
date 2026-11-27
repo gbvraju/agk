@@ -192,7 +192,7 @@ def test_ac1_text_report_shape(tmp_path):
     assert lines[i + 1] == "  fix: run /agk:upgrade (SPEC-0008)"
     j = lines.index(next(ln for ln in lines if ln.startswith("?? vendored-missing error ")))
     assert lines[j + 1].startswith("  to check: ")
-    assert lines[-1] == "summary: 55 ok, 2 fail, 2 cannot-check"
+    assert lines[-1] == "summary: 56 ok, 2 fail, 2 cannot-check"
 
 
 def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
@@ -203,7 +203,7 @@ def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
     # `licence`: the fixture names no grant (ADR-0596)
     assert list(data) == sorted(data)
     assert list(data) == ["checks", "doctor", "licence", "secret_scan", "summary", "work_type"]
-    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 58}
+    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 59}
     for check in data["checks"]:
         assert list(check) == sorted(check)
         assert (check["status"] == "cannot-check") == ("reason" in check)
