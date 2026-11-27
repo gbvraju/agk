@@ -46,7 +46,11 @@ kinds = ["skills"]
 "skills/shop/SKILL.md" = "{sha}"
 """
 AMENDMENT = KIT_ROOT / "docs" / "runs" / "proposed-spec-amendments-261.md"
-SPEC_0029 = next((KIT_ROOT / "docs" / "specs").glob("0029-*.md"))
+SPEC_0029 = next((KIT_ROOT / "docs" / "specs").glob("0029-*.md"), KIT_ROOT / "docs" / "absent")
+# The kit repository alone holds the spec and the amendment; an installed project skips the test.
+in_the_kit = pytest.mark.skipif(
+    not (SPEC_0029.is_file() and AMENDMENT.is_file()), reason="the kit's spec is absent"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -199,6 +203,7 @@ def _inserts() -> list[str]:
     return [re.sub(r"\s*\n\s*", " ", f) for f in found]
 
 
+@in_the_kit
 def test_ac5_spec_0029_carries_amendment_261_word_for_word(tmp_path):
     """REQ-084 AC5: answer 3 (principle 6: the two items applied to rules 1 and 2, word for word,
     and the amendment file marked applied)."""
