@@ -32,7 +32,10 @@ END = date(2026, 12, 28)  # the window end of `--today 2026-12-28`
 SHIPPED = (KIT / "config" / "signals.toml").read_text(encoding="utf-8")
 HEAD = 'from = "2026-11-27"\n'
 VERSION = tomllib.loads((KIT / "agk.toml").read_text(encoding="utf-8"))["version"]
-PLUGIN = f'version = "{VERSION}"\n[flow]\nmerge_queue = false\n[kit]\nlayout = "plugin"\nplugin_version = "{VERSION}"\n'
+PLUGIN = (
+    f'version = "{VERSION}"\n[flow]\nmerge_queue = false\n'
+    f'[kit]\nlayout = "plugin"\nplugin_version = "{VERSION}"\n'
+)
 
 
 class Recorder:
