@@ -338,20 +338,22 @@ def test_ac2_a_derived_playbook_stays_the_projects_alone(tmp_path):
 
 
 READERS = (
-    (playbook_format, "folder"),
-    (playbook_format, "playbooks"),
-    (check_domains, "folders"),
-    (check_playbooks, "standards_file"),
-    (engines, "stack_defaults"),
-    (front_door, "signal_table"),
-    (front_door, "domain_rows"),
+    (playbook_format, "folder", "packs.files("),
+    (playbook_format, "playbooks", "packs.files("),
+    (check_domains, "folders", "packs.files("),
+    (check_playbooks, "standards_file", "packs.files("),
+    (engines, "stack_defaults", "packs.files("),
+    (front_door, "_knowledge", "packs.files("),
+    (front_door, "signal_table", "_knowledge("),
+    (front_door, "domain_rows", "_knowledge("),
 )
 
 
-@pytest.mark.parametrize(("module", "name"), READERS)
-def test_ac2_each_reader_of_rule_5_reads_through_the_resolver(module, name):
-    """REQ-084 AC2: SPEC-0077 rule 16 (each reader of rule 5 calls `packs.files`)."""
-    assert "packs.files(" in inspect.getsource(getattr(module, name))
+@pytest.mark.parametrize(("module", "name", "call"), READERS)
+def test_ac2_each_reader_of_rule_5_reads_through_the_resolver(module, name, call):
+    """REQ-084 AC2: SPEC-0077 rule 16 (each reader of rule 5 calls `packs.files`, or the one
+    helper of its module that does)."""
+    assert call in inspect.getsource(getattr(module, name))
 
 
 def test_ac2_no_other_kit_module_opens_a_knowledge_file_by_a_literal_path():

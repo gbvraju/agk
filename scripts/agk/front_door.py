@@ -2039,14 +2039,14 @@ def quoted(path: str) -> str:
     return '"' + "".join('\\"' if c == '"' else c for c in plain) + '"'
 
 
-def _knowledge(kit: Path, root: Path | None, kind: str, rel: str) -> list[tuple[str, Path]]:
+def _knowledge(core: Path, root: Path | None, kind: str) -> list[tuple[str, Path]]:
     """SPEC-0077 rule 5 (brief #2032): the kit's file, then each pack's in use by `packs.files`;
     the repository's own copy is never read (`Q-S0057-2`, `Q-2032-4`). The kit's file alone in a
     partial copy of the scripts with no resolver. Raises `packs.Refused`, naming the setting."""
     packs = playbook_format.resolver()
     if packs is None:
-        return [(CORE, kit / rel)] if (kit / rel).is_file() else []
-    found = packs.files(kit if root is None else root, kind, core=kit / rel)
+        return [(CORE, core)] if core.is_file() else []
+    found = packs.files(core.parents[1] if root is None else root, kind, core=core)
     return [(layer, path) for layer, path in found if layer != packs.PROJECT]
 
 
@@ -2094,7 +2094,7 @@ def signal_table(kit: Path, root: Path | None = None) -> dict:
     """The table of the kit's own root, then of each pack in use by `packs.files` (SPEC-0077
     rule 5, brief #2032): a later layer's rows of a `name` replace the earlier ones as proposals
     (`Q-PB-1`), its words are added; `signal_row_problems` also refuses a `pilot` row."""
-    found = _knowledge(kit, root, "stack-signals", SIGNALS)  # packs.files(...), Q-2032-4
+    found = _knowledge(kit / SIGNALS, root, "stack-signals")
     if not found or found[0][0] != CORE:
         raise Refusal([f"detect: {SIGNALS} cannot be read"])
     layers = [(layer, _signal_layer(layer, path)) for layer, path in found]
@@ -2203,7 +2203,7 @@ def domain_rows(kit: Path, root: Path | None = None) -> list[dict] | None:
     replacing the earlier one (`Q-PB-1`); None for a kit copy without it or with a row of another
     form in any layer (nothing is proposed then). The repository's own copy is never read."""
     layers = []
-    for layer, path in _knowledge(kit, root, "domain-signals", DOMAIN_SIGNALS):  # packs.files(
+    for layer, path in _knowledge(kit / DOMAIN_SIGNALS, root, "domain-signals"):
         try:
             rows = tomllib.loads(path.read_text(encoding="utf-8")).get("domain")
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
