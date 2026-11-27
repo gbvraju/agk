@@ -1,6 +1,6 @@
 # SPEC-0076: The parts list: every library chosen for a need, with its reason, kept in step
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-083
 
