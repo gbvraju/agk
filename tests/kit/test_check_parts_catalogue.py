@@ -127,8 +127,11 @@ def test_ac1_a_good_tree_has_no_finding_and_no_folder_none(tmp_path):
     ("needs", "line"),
     [
         ("format = [", "the file is not TOML (key: file)"),
-        ('format = 2\n[[needs]]\nid = "a"\ntext = "t"\nsignals = ["s"]\n', "format is not 1 (key: format)"),
-        ('format = true\n', "format is not 1 (key: format)"),
+        (
+            'format = 2\n[[needs]]\nid = "a"\ntext = "t"\nsignals = ["s"]\n',
+            "format is not 1 (key: format)",
+        ),
+        ("format = true\n", "format is not 1 (key: format)"),
         ('[[needs]]\nid = "a"\ntext = "t"\nsignals = ["s"]\n', "a key is missing (key: format)"),
         ("format = 1\nzz_extra = 1\n", "a key is unknown (key: zz_extra)"),
         ('format = 1\nneeds = "zz"\n', "a value has the wrong type (key: needs)"),
@@ -137,11 +140,26 @@ def test_ac1_a_good_tree_has_no_finding_and_no_folder_none(tmp_path):
             'format = 1\n[[needs]]\nid = "a"\ntext = "t"\nsignals = ["s"]\nzz = 1\n',
             "a key is unknown (key: needs.zz)",
         ),
-        ('format = 1\n[[needs]]\nid = "Zz A"\ntext = "t"\nsignals = ["s"]\n', "a value is out of form (key: needs.id)"),
-        ('format = 1\n[[needs]]\nid = "a"\ntext = 1\nsignals = ["s"]\n', "a value has the wrong type (key: needs.text)"),
-        ('format = 1\n[[needs]]\nid = "a"\ntext = "t\\nu"\nsignals = ["s"]\n', "a value is out of form (key: needs.text)"),
-        ('format = 1\n[[needs]]\nid = "a"\ntext = "t"\nsignals = []\n', "a value has the wrong type (key: needs.signals)"),
-        ('format = 1\n[[needs]]\nid = "a"\ntext = "t"\nsignals = [true]\n', "a value has the wrong type (key: needs.signals)"),
+        (
+            'format = 1\n[[needs]]\nid = "Zz A"\ntext = "t"\nsignals = ["s"]\n',
+            "a value is out of form (key: needs.id)",
+        ),
+        (
+            'format = 1\n[[needs]]\nid = "a"\ntext = 1\nsignals = ["s"]\n',
+            "a value has the wrong type (key: needs.text)",
+        ),
+        (
+            'format = 1\n[[needs]]\nid = "a"\ntext = "t\\nu"\nsignals = ["s"]\n',
+            "a value is out of form (key: needs.text)",
+        ),
+        (
+            'format = 1\n[[needs]]\nid = "a"\ntext = "t"\nsignals = []\n',
+            "a value has the wrong type (key: needs.signals)",
+        ),
+        (
+            'format = 1\n[[needs]]\nid = "a"\ntext = "t"\nsignals = [true]\n',
+            "a value has the wrong type (key: needs.signals)",
+        ),
         (
             'format = 1\n[[needs]]\nid = "a"\ntext = "t"\nsignals = ["s"]\n'
             '[[needs]]\nid = "a"\ntext = "u"\nsignals = ["v"]\n',
@@ -178,29 +196,47 @@ def test_ac1_a_need_id_repeated_by_another_layer_fails(tmp_path):
         ('format = 1\nparts = "zz"\n', "a value has the wrong type (key: parts)"),
         ("format = 1\n" + row(version='"1.2.3"'), "a row holds a version (key: parts.version)"),
         ("format = 1\n" + row(zz_other='"x"'), "a key is unknown (key: parts.zz_other)"),
-        ("format = 1\n" + row(need='"zz-nothing"'), "a row names a need no needs id names (key: parts.need)"),
+        (
+            "format = 1\n" + row(need='"zz-nothing"'),
+            "a row names a need no needs id names (key: parts.need)",
+        ),
         ("format = 1\n" + row(pick='"zz-best"'), "a value is out of form (key: parts.pick)"),
         ("format = 1\n" + row(name="true"), "a value has the wrong type (key: parts.name)"),
         ("format = 1\n" + row(when="1"), "a value has the wrong type (key: parts.when)"),
         ("format = 1\n" + row(licence=None), "a key is missing (key: parts.licence)"),
-        ("format = 1\n" + row(licence='"MIT OR zz bad"'), "a value is out of form (key: parts.licence)"),
+        (
+            "format = 1\n" + row(licence='"MIT OR zz bad"'),
+            "a value is out of form (key: parts.licence)",
+        ),
         ("format = 1\n" + row(source=None), "a key is missing (key: parts.source)"),
-        ("format = 1\n" + row(source='"https://example.com/zz"'), "a value is out of form (key: parts.source)"),
+        (
+            "format = 1\n" + row(source='"https://example.com/zz"'),
+            "a value is out of form (key: parts.source)",
+        ),
         (
             "format = 1\n" + row(source='"https://example.com/zz (accessed 2026-13-40)"'),
             "a value is out of form (key: parts.source)",
         ),
         ("format = 1\n" + row(reviewed=None), "a key is missing (key: parts.reviewed)"),
-        ("format = 1\n" + row(reviewed='"2026-11"'), "a value is out of form (key: parts.reviewed)"),
+        (
+            "format = 1\n" + row(reviewed='"2026-11"'),
+            "a value is out of form (key: parts.reviewed)",
+        ),
         ("format = 1\n" + row(trade_offs=None), "a key is missing (key: parts.trade_offs)"),
-        ("format = 1\n" + ROW + ROW.replace("zz-server", "zz-other"), "a need has more than one recommended row (key: parts.pick)"),
+        (
+            "format = 1\n" + ROW + ROW.replace("zz-server", "zz-other"),
+            "a need has more than one recommended row (key: parts.pick)",
+        ),
         (
             "format = 1\n"
             + ROW
             + "".join(row(name=f'"zz-alt-{n}"', pick='"alternative"') for n in range(3)),
             "a need has more than two alternative rows (key: parts.pick)",
         ),
-        ("format = 1\n" + ROW + row(pick='"alternative"'), "a name is used twice for one need (key: parts.name)"),
+        (
+            "format = 1\n" + ROW + row(pick='"alternative"'),
+            "a name is used twice for one need (key: parts.name)",
+        ),
     ],
 )
 def test_ac1_a_stack_catalogue_out_of_form_fails_naming_the_key(tmp_path, stack, line):
@@ -226,7 +262,8 @@ def test_ac1_a_file_naming_no_stack_fails_and_other_files_are_not_read(tmp_path)
     assert check(tmp_path) == [
         "rule 5: config/parts/zz-cobol.toml: the file names no stack (key: file)"
     ]
-    assert check(tmp_path, None) == check(tmp_path)  # no stack list: no name is known
+    assert check(tmp_path, None) == []  # run alone: the file names are not checked (Q-2068-1)
+    assert cpc.findings(tmp_path, [(packs.CORE, tmp_path / "config/parts/zz-cobol.toml")], []) != []
     (tmp_path / "config" / "parts" / "notes.md").write_text("zz\n", encoding="utf-8")
     assert len(check(tmp_path)) == 1
 
@@ -283,10 +320,6 @@ def test_ac1_the_playbooks_step_carries_a_catalogue_problem(tmp_path):
 def test_ac1_run_alone_the_check_counts_needs_and_catalogues(tmp_path):
     """REQ-083 AC1: SPEC-0076 rule 5 (`--root DIR` reads `DIR/config/parts/` only)."""
     script = str(KIT_ROOT / "scripts/agk/check_parts_catalogue.py")
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "stack-signals.toml").write_text(
-        '[[stack]]\nname = "node"\n', encoding="utf-8"
-    )
     tree(tmp_path)
 
     def run(*args: str) -> subprocess.CompletedProcess:
@@ -295,11 +328,16 @@ def test_ac1_run_alone_the_check_counts_needs_and_catalogues(tmp_path):
         )
 
     proc = run("--root", str(tmp_path))
-    assert proc.returncode == 0 and proc.stdout == "ok parts-catalogue (2 needs, 1 stack catalogues)\n"
+    assert (
+        proc.returncode == 0 and proc.stdout == "ok parts-catalogue (2 needs, 1 stack catalogues)\n"
+    )
     tree(tmp_path, stack="format = 1\n" + row(version='"1.2.3"'))
     proc = run("--root", str(tmp_path))
     assert proc.returncode == 1
-    assert proc.stdout == f"FAIL parts-catalogue: {RULE5}: a row holds a version (key: parts.version)\n"
+    assert (
+        proc.stdout
+        == f"FAIL parts-catalogue: {RULE5}: a row holds a version (key: parts.version)\n"
+    )
     assert run("--zz").returncode == 2
 
 

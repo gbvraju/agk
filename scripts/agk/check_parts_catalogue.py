@@ -12,8 +12,9 @@ The needs catalogue is `config/parts/needs.toml` (`format = 1`, one `[[needs]]` 
 stacks)` takes the `(layer, path)` files in their reading order and the stack names from its
 caller (`check_playbooks.findings`, through `packs.files` and `playbook_format.stacks`, `Q-PA-4`)
 and gives one line per problem, `rule 4|5: <path class>: <what> (key: <key>)`, never a value.
-Run alone it reads `DIR/config/parts/` only and prints those lines as `FAIL parts-catalogue:` or
-`ok parts-catalogue (<n> needs, <m> stack catalogues)`. Standard library and `common.py` only;
+Run alone it reads `DIR/config/parts/` only, so it does not check a file name against the stack
+names (`Q-2068-1`), and prints those lines as `FAIL parts-catalogue:` or `ok parts-catalogue (<n>
+needs, <m> stack catalogues)`. Standard library and `common.py` only;
 reads files only: no network, no model.
 
     python3 scripts/agk/check_parts_catalogue.py [--root DIR]
@@ -129,17 +130,19 @@ def part_problems(row: dict, ids: set[str]) -> list[str]:
     for key in PART_KEYS:
         if key in row and (line := _text(row[key], "parts", key)):
             what.append(line)
-    value = lambda key: row[key] if isinstance(row.get(key), str) else None  # noqa: E731
-    if value("need") is not None and value("need") not in ids:
+    need, pick, licence, source, reviewed = (
+        row[k] if isinstance(row.get(k), str) else None
+        for k in ("need", "pick", "licence", "source", "reviewed")
+    )
+    if need is not None and need not in ids:
         what.append("a row names a need no needs id names (key: parts.need)")
-    if value("pick") is not None and value("pick") not in PICKS:
+    if pick is not None and pick not in PICKS:
         what.append("a value is out of form (key: parts.pick)")
-    if value("licence") is not None and not SPDX.match(value("licence")):
+    if licence is not None and not SPDX.match(licence):
         what.append("a value is out of form (key: parts.licence)")
-    found = SOURCE.match(value("source") or "-")
-    if value("source") is not None and not (found and _date(found.group(1))):
+    found = SOURCE.match(source) if source is not None else None
+    if source is not None and not (found and _date(found.group(1))):
         what.append("a value is out of form (key: parts.source)")
-    reviewed = value("reviewed")
     if reviewed is not None and not (DATE.match(reviewed) and _date(reviewed)):
         what.append("a value is out of form (key: parts.reviewed)")
     return what
@@ -166,8 +169,8 @@ def _counts(rows: list[dict]) -> list[str]:
 
 def findings(root: Path, files: list[tuple[str, Path]], stacks: list[str] | None) -> list[str]:
     """The problems of FILES, the needs files first (rule 4), then each stack catalogue (rule
-    5) against the needs ids and STACKS (None: no stack name is known). ROOT is unused: every
-    path is given (kept for the form of the other checks of the step)."""
+    5) against the needs ids and STACKS (None, run alone: the file names are not checked,
+    `Q-2068-1`). ROOT is unused: every path is given (kept for the form of the step's checks)."""
     del root
     out: list[str] = []
     ids: set[str] = set()
@@ -187,7 +190,7 @@ def findings(root: Path, files: list[tuple[str, Path]], stacks: list[str] | None
         if path.name == NEEDS:
             continue
         cls = f"rule 5: {label(layer, path)}"
-        if path.stem not in (stacks or []):
+        if stacks is not None and path.stem not in stacks:
             out.append(f"{cls}: the file names no stack (key: file)")
         data = _load(path, out, cls)
         rows = _rows(data, "parts", out, cls) if data is not None else []
@@ -197,21 +200,9 @@ def findings(root: Path, files: list[tuple[str, Path]], stacks: list[str] | None
     return list(dict.fromkeys(out))
 
 
-def _stacks(root: Path) -> list[str] | None:
-    path = root / "config" / "stack-signals.toml"
-    if not path.is_file():
-        return None
-    try:
-        rows = tomllib.loads(path.read_text(encoding="utf-8")).get("stack")
-    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
-        return None
-    rows = rows if isinstance(rows, list) else []
-    return [r["name"] for r in rows if isinstance(r, dict) and isinstance(r.get("name"), str)]
-
-
 def cmd_check(root: Path) -> int:
     files = [("agk-core", p) for p in sorted((root / FOLDER).glob("*.toml"))]
-    found = findings(root, files, _stacks(root))
+    found = findings(root, files, None)  # alone: no stack list is read (`Q-2068-1`)
     for line in found:
         print(f"FAIL {NAME}: {line}")
     if found:

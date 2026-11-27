@@ -366,7 +366,7 @@ def parts_catalogue(root: Path) -> list[str]:
 
     try:
         files = packs.files(root, "parts")
-        stacks = playbook_format.stacks(root)
+        stacks = playbook_format.stacks(root) or []  # no table: no stack name is known
     except (packs.Refused, kit_root.Refused):
         return []
     return check_parts_catalogue.findings(root, files, stacks)

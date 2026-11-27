@@ -580,7 +580,8 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "ok ",
         "agk.toml: ",
         "set each [parts] key (record, max_age_months, advisories) to a value of its form, or "
-        "remove it to keep the default (a change to agk.toml needs an ADR in the same pull request)",
+        "remove it to keep the default (a change to agk.toml needs an ADR in the same pull "
+        "request)",
     ),
     "autopilot-settings": (  # brief #1390 (ADR-0587): read for one release, then [autopilot] only
         "warn",
