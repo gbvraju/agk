@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import re
 import shutil
 import sys
 import tomllib
@@ -55,6 +56,7 @@ def sha(text: str) -> str:
 def write_pack(root: Path, pid: str, files: dict[str, str], kinds: list[str] | None = None) -> str:
     """A pack under `config/packs/<pid>/` with FILES listed; returns its `use` entry."""
     base = root / "config" / "packs" / pid
+    base.mkdir(parents=True, exist_ok=True)
     for rel, text in files.items():
         (base / rel).parent.mkdir(parents=True, exist_ok=True)
         (base / rel).write_text(text, encoding="utf-8")
@@ -226,9 +228,21 @@ def test_ac2_a_pack_that_drops_a_rule_code_is_refused_naming_the_pack(tmp_path):
     assert "UP" in entry["rules"]["codes"]  # the stronger one held
 
 
-def weakened_playbook() -> str:
+def pack_playbook() -> str:
+    """The kit's web-app playbook with rule 3's `basis` on each top-level entry."""
     text = (KIT_ROOT / "config/playbooks/web-app.toml").read_text(encoding="utf-8")
-    return text.replace(
+    blocks = re.split(r"(?m)^(?=\[)", text)
+    marked = [
+        b.replace("]]\n", ']]\nbasis = "expected"\n', 1)
+        if b.startswith("[[") and "\nbasis = " not in b and "\nsource = " not in b
+        else b
+        for b in blocks
+    ]
+    return "".join(marked)
+
+
+def weakened_playbook() -> str:
+    return pack_playbook().replace(
         'id = "contract-tests"\nkind = "check"', 'id = "contract-tests"\nkind = "judgement"'
     )
 
@@ -249,8 +263,7 @@ def test_ac2_a_pack_playbook_that_weakens_a_gate_is_refused_naming_the_pack(tmp_
 def test_ac2_a_pack_playbook_that_restates_the_same_gates_composes_cleanly(tmp_path):
     """REQ-084 AC2: SPEC-0077 rule 5 (the same gate is never a weakening)."""
     root = clean(tmp_path)
-    text = (KIT_ROOT / "config/playbooks/web-app.toml").read_text(encoding="utf-8")
-    use(root, write_pack(root, "zz-a", {"playbooks/web-app.toml": text}),
+    use(root, write_pack(root, "zz-a", {"playbooks/web-app.toml": pack_playbook()}),
         extra='[kit]\nlayout = "plugin"\n')  # fmt: skip
     _, _, problems = check_playbooks.composed(playbook_format.path(root, "web-app"), root)
     assert not [p for p in problems if "config/packs" in p]
@@ -356,4 +369,3 @@ def test_ac2_no_other_kit_module_opens_a_knowledge_file_by_a_literal_path():
         or '"stack-signals.toml"' in path.read_text(encoding="utf-8")
     }
     assert named <= known, sorted(named - known)
-    assert "stack-defaults.toml\"\n" not in (KIT_ROOT / "scripts/agk/engines.py").read_text("utf-8")

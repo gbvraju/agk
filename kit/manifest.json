@@ -157,6 +157,7 @@
     "scripts/agk/metrics.py",
     "scripts/agk/minutes.py",
     "scripts/agk/new_spec.py",
+    "scripts/agk/packs.py",
     "scripts/agk/parity.py",
     "scripts/agk/personal.py",
     "scripts/agk/personal_adopt.py",

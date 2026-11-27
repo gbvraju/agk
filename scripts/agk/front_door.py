@@ -95,6 +95,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import packs
 import playbook_format
 from guard import scan_text
 from playbook_format import WORK_TYPES
@@ -2039,17 +2040,40 @@ def quoted(path: str) -> str:
     return '"' + "".join('\\"' if c == '"' else c for c in plain) + '"'
 
 
-def signal_table(kit: Path) -> dict:
-    """The table of the kit's own root; `signal_row_problems` also refuses a `pilot` row."""
+def _signal_layer(layer: str, path: Path) -> dict:
+    """One layer's table: the kit's whole, as before; a pack's or the project's with the kinds
+    it holds, its rows without their provenance keys (SPEC-0077 rule 3)."""
+    name = packs.label(layer, SIGNALS)
     try:
-        table = tomllib.loads((kit / SIGNALS).read_text(encoding="utf-8"))
+        table = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        raise Refusal([f"detect: {SIGNALS} cannot be read"]) from None
-    rows = [
-        problem for kind in SIGNAL_ROWS for problem in signal_row_problems(kind, table.get(kind))
-    ]
-    if rows or not (is_words(table.get("no_signal")) and is_words(table.get("ignore"))):
+        raise Refusal([f"detect: {name} cannot be read"]) from None
+    whole = layer == packs.CORE
+    for kind in SIGNAL_ROWS if whole else [k for k in SIGNAL_ROWS if k in table]:
+        if isinstance(table.get(kind), list):
+            table[kind] = [packs.plain(r, layer) if isinstance(r, dict) else r for r in table[kind]]
+        if signal_row_problems(kind, table.get(kind)):
+            raise Refusal([f"detect: {name} cannot be read"])
+    words = [k for k in ("no_signal", "ignore") if whole or k in table]
+    if not all(is_words(table.get(k)) for k in words):
+        raise Refusal([f"detect: {name} cannot be read"])
+    return table
+
+
+def signal_table(kit: Path, root: Path | None = None) -> dict:
+    """The table of the kit's own root, then of each pack in use and the project's by
+    `packs.files` (SPEC-0077 rule 5, brief #2032): a later layer's rows of a `name` replace the
+    earlier ones as proposals (`Q-PB-1`), its words are added; `signal_row_problems` also
+    refuses a `pilot` row. Raises `packs.Refused`, naming the setting."""
+    found = packs.files(kit if root is None else root, "stack-signals", core=kit / SIGNALS)
+    if not found or found[0][0] != packs.CORE:
         raise Refusal([f"detect: {SIGNALS} cannot be read"])
+    layers = [(layer, _signal_layer(layer, path)) for layer, path in found]
+    table = dict(layers[0][1])
+    for kind in SIGNAL_ROWS:
+        table[kind] = packs.rows([(n, t.get(kind, [])) for n, t in layers], "name")
+    for key in ("no_signal", "ignore"):
+        table[key] = list(dict.fromkeys(w for _, t in layers for w in t.get(key, [])))
     return table
 
 
@@ -2108,7 +2132,7 @@ def tests_fact(tree: list[tuple[str, str, str]], ignore: list[str]) -> dict:
 
 
 def detect_facts(root: Path, kit: Path) -> dict:
-    table = signal_table(kit)
+    table = signal_table(kit, root)
     if not root.is_dir():
         raise Refusal(["detect: --root is not a git repository"])
     head = head_tree(root)
@@ -2127,7 +2151,7 @@ def detect_facts(root: Path, kit: Path) -> dict:
     named = {
         p: t for p, t in texts.items() if any(fnmatch.fnmatchcase(base_of(p), g) for g in globs)
     }
-    domain = domain_fact(kit, tree, named, table["ignore"])  # brief #1937 (ADR-0806)
+    domain = domain_fact(kit, tree, named, table["ignore"], root)  # brief #1937 (ADR-0806)
     return {
         **({"domain": domain} if domain is not None else {}),
         "not_detectable": sorted(table["no_signal"]),
@@ -2144,27 +2168,43 @@ def detect_facts(root: Path, kit: Path) -> dict:
     }
 
 
-def domain_rows(kit: Path) -> list[dict] | None:
-    """SPEC-0074 rule 5 (brief #1937, ADR-0806): the rows of the kit's domain signal table, or
-    None for a kit copy without it or with a row of another form (nothing is proposed then)."""
-    try:
-        rows = tomllib.loads((kit / DOMAIN_SIGNALS).read_text(encoding="utf-8")).get("domain")
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+def domain_rows(kit: Path, root: Path | None = None) -> list[dict] | None:
+    """SPEC-0074 rule 5 (brief #1937, ADR-0806): the rows of the kit's domain signal table, then
+    of each pack in use and the project's by `packs.files` (SPEC-0077 rule 5, brief #2032), a
+    later row of a `name` replacing the earlier one (`Q-PB-1`); None for a kit copy without it or
+    with a row of another form in any layer (nothing is proposed then)."""
+    found = packs.files(kit if root is None else root, "domain-signals", core=kit / DOMAIN_SIGNALS)
+    layers = []
+    for layer, path in found:
+        try:
+            rows = tomllib.loads(path.read_text(encoding="utf-8")).get("domain")
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            return None
+        if isinstance(rows, list):
+            rows = [packs.plain(r, layer) if isinstance(r, dict) else r for r in rows]
+        good = isinstance(rows, list) and all(
+            isinstance(r, dict) and isinstance(r.get("name"), str)
+            and all(is_words(r.get(k)) for k in DOMAIN_ROW[1:])
+            for r in rows
+        )  # fmt: skip
+        if not good:
+            return None
+        layers.append((layer, rows))
+    if not layers or layers[0][0] != packs.CORE:
         return None
-    good = isinstance(rows, list) and all(
-        isinstance(r, dict) and isinstance(r.get("name"), str)
-        and all(is_words(r.get(k)) for k in DOMAIN_ROW[1:])
-        for r in rows
-    )  # fmt: skip
-    return rows if good else None
+    return packs.rows(layers, "name")
 
 
 def domain_fact(
-    kit: Path, tree: list[tuple[str, str, str]], manifests: dict[str, str], ignore: list[str]
+    kit: Path,
+    tree: list[tuple[str, str, str]],
+    manifests: dict[str, str],
+    ignore: list[str],
+    root: Path | None = None,
 ) -> dict | None:
     """Rule 5: each pack a head-tree file (by base name) or a stack manifest's dependency (a
     word) suggests, in path order; None without the table. The repository only (Q-D74C-2)."""
-    rows = domain_rows(kit)
+    rows = domain_rows(kit, root)
     if rows is None:
         return None
     hits = set()

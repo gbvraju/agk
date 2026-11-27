@@ -96,6 +96,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import check_protected_changes as protected
+import packs
 from check_adrs import validate as validate_adr
 from check_playbooks import composed
 from common import (
@@ -245,9 +246,7 @@ MAP_ARROW = " -> "
 PRACTICES_HEAD = "2. **Practices**"  # brief #1587: the gate bullets open the item
 PRACTICES_SLOT = "{{practices}}"  # each option's `Practices:`, the item's names (SPEC-0072 rule 4)
 PRACTICE_NAME = re.compile(r"^   - ([^:\n]+): (?:check|judgement)\b")
-DEFAULTS = (
-    KIT / "config" / "stack-defaults.toml"
-)  # brief #1591: read from the kit, never the project
+DEFAULTS = "config/stack-defaults.toml"  # brief #1591; SPEC-0077 rule 5: read by `stack_defaults`
 RECOMMENDED_SLOT = "{{recommended}}"
 RECOMMENDED = "(recommended)"
 EFFECTS = ("Cost", "Build speed", "Security", "Uptime")
@@ -504,13 +503,29 @@ def with_classes(text: str, classes: list[str]) -> tuple[str, int]:
     return added, len(every)
 
 
+def stack_defaults(root: Path) -> list[dict]:
+    """The `[[default]]` rows of the stack defaults by `packs.files` (SPEC-0077 rule 5, brief
+    #2032): the running kit's file, then each pack in use, then the project's, a later row of a
+    `work_type` replacing the earlier one as a proposal (`Q-PB-1`). Raises `packs.Refused`, and
+    the read errors that `recommended_option` names as the kit's file it cannot read."""
+    layers = []
+    for layer, path in packs.files(root, "stack-defaults", core=KIT / DEFAULTS):
+        found = tomllib.loads(path.read_text("utf-8"))["default"]
+        if not isinstance(found, list) or not all(isinstance(r, dict) for r in found):
+            raise TypeError
+        layers.append((layer, found))
+    if not layers or layers[0][0] != packs.CORE:
+        raise OSError  # the kit's own file is missing
+    return packs.rows(layers, "work_type")
+
+
 def recommended_option(root: Path) -> str:
     """Brief #1591 answers 2, 3 and 6: Option A from the kit's row for the declared work type,
     else the `default` row, so two runs for one shape recommend the same option; the stack the
     committed tree already holds, kept, when it is one other stack (SPEC-0057, never a rewrite)."""
     work_type, _ = declaration(root)
     try:
-        rows = {r["work_type"]: r for r in tomllib.loads(DEFAULTS.read_text("utf-8"))["default"]}
+        rows = {r["work_type"]: r for r in stack_defaults(root)}
         row = rows.get(work_type or "default") or rows["default"]
         keys = ("stack", "description", "cost", "build_speed", "security", "uptime", "reason")
         if not all(isinstance(row[k], str) and row[k].strip() for k in keys):

@@ -77,7 +77,7 @@ def signals(root: Path, kit: Path = KIT) -> dict[str, list[str]]:
     for hit in fact["candidates"]:
         found.setdefault(hit["name"], []).append(f"{hit['signal']} {hit['file']}")
     texts = _texts(root)
-    for row in front_door.domain_rows(kit) or []:
+    for row in front_door.domain_rows(kit, root) or []:
         for word in row["words"]:
             pattern = re.compile(front_door.WORD.format(re.escape(word)), re.IGNORECASE)
             if any(pattern.search(text) for text in texts):
