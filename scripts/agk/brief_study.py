@@ -609,8 +609,11 @@ def project_matches(body: str, root: Path) -> tuple[list[tuple[str, int, str, st
     reference: Path | None = None
     try:
         kit, reference = kit_root.kit_dir(root), kit_root.kit_file(root, REFERENCE)
-    except kit_root.Refused:
-        notes.append("not run kit search: no kit copy (setting: CLAUDE_PLUGIN_ROOT)")
+    except kit_root.Refused as exc:  # the resolver's refusal names its setting (ADR-0759)
+        named = re.search(r"\(setting: ([^)]+)\)", str(exc))
+        notes.append(
+            f"not run kit search: no kit copy (setting: {named.group(1) if named else 'layout'})"
+        )
     scripts = sorted(kit.glob("*.py")) if kit is not None and kit.is_dir() else []
     parts = _parts(root, notes)
     guide = _read(reference) if reference is not None else ""
