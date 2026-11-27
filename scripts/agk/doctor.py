@@ -2344,12 +2344,53 @@ def in_skills_folder(folder: Path, name: str) -> bool:
     return (folder / name / "SKILL.md").is_file()
 
 
+PACK_MISSING = Result(
+    "fail",
+    message=" (missing: packs)",
+    fix="pin a pack that holds the skill and passes `python3 scripts/agk/packs.py verify` "
+    "(setting: packs.use), or remove the setting so the kit's own template is used "
+    "(a change to agk.toml needs an ADR in the same pull request)",
+)
+
+
+def pack_skill(root: Path, pid: str, name: str) -> bool | None:
+    """SPEC-0029 rules 1 and 2 by amendment 261 (SPEC-0077 rule 12; brief #2035, ADR-0842): None
+    when PID names no pack of `[packs] use` (or a refused table), and for `agk` also no pack the
+    lock holds, so today's reading stands; else whether the lock holds `skills/<NAME>/SKILL.md` of
+    the pack and the pack passes `check_packs.problems` and `packs.verify`. Only the lock's
+    verified folder counts, never an unlocked copy; nothing is printed (`Q-PE-1`)."""
+    import check_packs
+    import packs
+
+    try:
+        use = models.packs_settings(root)["use"]
+    except CheckError:
+        return None
+    entry = next((e for e in packs.read_lock(root) or [] if e["id"] == pid), None)
+    if pid not in {u["id"] for u in use} or (entry is None and pid == "agk"):
+        return None
+    if entry is None or check_packs.problems(root / check_packs.FOLDER / pid):
+        return False
+    label = f"rule 4: {check_packs.FOLDER}/{pid}:"
+    if any(line.startswith(label) for line in packs.verify(root, use)):
+        return False
+    return f"skills/{name}/SKILL.md" in {f["path"] for f in entry["files"]}
+
+
+def pack_ids(root: Path) -> list[str]:
+    try:
+        return [u["id"] for u in models.packs_settings(root)["use"]]
+    except CheckError:
+        return []
+
+
 def engine_results(root: Path, kit_root: Path | None, config: dict) -> dict[str, Result]:
     """`[engines]` (SPEC-0029 rules 1 and 2): present, absent or missing; names the setting only.
 
     A skill is seen when its `SKILL.md` exists in the project's `.claude/skills/<name>/`, in the
     user's `~/.claude/skills/<name>/` or in the plugin's `skills/<name>/`; only the existence of
     the file is tested, nothing is read or printed. Other plugins' skills are not read (verify).
+    A `<pack id>:<skill>` of a pack in use reads from its locked folder (`pack_skill`).
     """
     table = config.get("engines", {})
     out: dict[str, Result] = {}
@@ -2365,6 +2406,10 @@ def engine_results(root: Path, kit_root: Path | None, config: dict) -> dict[str,
             continue
         name = table[key]
         plugin, _, local = name.rpartition(":") if isinstance(name, str) else ("", "", "")
+        found = pack_skill(root, plugin, local) if plugin and ENGINE_NAME.match(local) else None
+        if found is not None:  # amendment 261: a skill of a pack in use, from its locked folder
+            out[f"engine-{key}"] = Result("ok", message=" (present)") if found else PACK_MISSING
+            continue
         if not isinstance(name, str) or not ENGINE_NAME.match(local) or plugin not in ("", "agk"):
             valid = isinstance(name, str) and ENGINE_NAME.match(local) and ":" in name
             out[f"engine-{key}"] = (
@@ -3255,8 +3300,10 @@ def skill_lines(root: Path, kit_root: Path | None) -> list[str]:
         return []
     out = []
     for name in playbook_format.skills(path, root):
-        found = seen_by_the_user(root, name) or (
-            kit_root is not None and in_skills_folder(kit_root / "skills", name)
+        found = (
+            seen_by_the_user(root, name)
+            or (kit_root is not None and in_skills_folder(kit_root / "skills", name))
+            or any(pack_skill(root, pid, name) for pid in pack_ids(root))  # brief #2035
         )
         out.append(f"skill: {name} {'present' if found else 'absent'}")
     return out
