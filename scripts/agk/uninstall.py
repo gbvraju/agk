@@ -122,6 +122,11 @@ BASELINE_DETAIL = (
     f" (path class {BASELINE}: the gates' and the history scan's records of your project; delete "
     "by hand if no longer wanted)"
 )
+# Brief #2031 (ADR-0838): the project's packs, kept when `[packs]` goes; named, never deleted.
+PACKS = "config/packs/"
+PACKS_DETAIL = (
+    f" (path class {PACKS}: the packs your project pinned; delete by hand if no longer wanted)"
+)
 # The tables whose keys are known one by one (answer 2); every other table is judged by name.
 KEYED_TABLES: dict[str, frozenset[str]] = {**TABLE_KEYS, PERSONAL_TABLE: frozenset(PERSONAL_KEYS)}
 
@@ -222,6 +227,14 @@ def foreign_settings(data: dict, known: frozenset[str] = KIT_SETTINGS) -> list[s
         if isinstance(value, dict):
             found += [f"{table}.{key}" for key in value if key not in keys]
     return sorted(found)
+
+
+def packs_item(target: Path, plan: Plan) -> None:
+    """Brief #2031 answer 4: `config/packs/`, when it holds a file, is named as kept."""
+    packs = target / PACKS
+    if not passes_symlink(target, PACKS.rstrip("/")) and packs.is_dir():
+        if any(p.is_file() for p in packs.rglob("*")):
+            plan.items.append(Item(PACKS, "kept", PACKS_DETAIL))
 
 
 def placeholder_text(text: str) -> str | None:
@@ -517,6 +530,7 @@ def build_plan(target: Path, kit_root: Path, agreed: tuple[str, ...] = ()) -> Pl
     if not passes_symlink(target, BASELINE.rstrip("/")) and baseline.is_dir():
         if any(p.is_file() for p in baseline.rglob("*")):
             plan.items.append(Item(BASELINE, "kept", BASELINE_DETAIL))
+    packs_item(target, plan)
     if clean_layout(target):
         clean_items(target, kit_root, reader, plan, agreed)
     elif agreed:

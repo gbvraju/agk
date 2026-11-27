@@ -105,8 +105,11 @@ def test_ac5_every_key_set_is_read(tmp_path):
         ('use = [{ id = "zz-shop", version = ">=1", sha256 = "DIGEST" }]', "use"),
         ('use = [{ id = "agk-core", version = "1.2.0", sha256 = "DIGEST" }]', "use"),
         ('use = [{ id = "zz-shop", version = "1.2.0", sha256 = "DIGEST", zz = 1 }]', "use"),
-        ('use = [{ id = "zz-shop", version = "1.2.0", sha256 = "DIGEST" }, '
-         '{ id = "zz-shop", version = "1.2.0", sha256 = "DIGEST" }]', "use"),
+        (
+            'use = [{ id = "zz-shop", version = "1.2.0", sha256 = "DIGEST" }, '
+            '{ id = "zz-shop", version = "1.2.0", sha256 = "DIGEST" }]',
+            "use",
+        ),
         ('trust = "zz-gold"', "trust"),
         ("trust = 1", "trust"),
         ("stale_months = 0", "stale_months"),
@@ -143,7 +146,7 @@ def test_ac5_a_packs_key_in_another_table_is_reported_and_never_read(tmp_path):
 
 
 def test_ac5_the_domain_table_stays_independent(tmp_path):
-    """REQ-084 AC5: SPEC-0077 rule 12 (`[domain] packs` is unchanged; amendment 262 is build (j))."""
+    """REQ-084 AC5: SPEC-0077 rule 12 (`[domain] packs` unchanged; amendment 262 is build (j))."""
     text = "[domain]\npacks = []\nstale_months = 3\n"
     assert settings(tmp_path, text) == DEFAULTS
     assert config.domain_settings(tmp_path) == {"packs": [], "stale_months": 3}

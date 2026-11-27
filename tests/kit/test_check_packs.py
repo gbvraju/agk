@@ -55,11 +55,14 @@ def sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def write_pack(root: Path, manifest: str | None = None, files: dict[str, str] | None = None,
-               folder: str = PID) -> Path:
+def write_pack(
+    root: Path, manifest: str | None = None, files: dict[str, str] | None = None, folder: str = PID
+) -> Path:
     """A stub pack: FILES written and listed in `[files]` with their hashes unless MANIFEST is
     given whole."""
-    files = {"domains/shop.toml": KNOWLEDGE, "skills/shop/SKILL.md": SKILL} if files is None else files
+    files = (
+        {"domains/shop.toml": KNOWLEDGE, "skills/shop/SKILL.md": SKILL} if files is None else files
+    )
     base = root / "config" / "packs" / folder
     for rel, text in files.items():
         (base / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -99,33 +102,70 @@ def test_ac1_a_well_formed_stub_pack_passes(tmp_path):
 @pytest.mark.parametrize(
     ("old", "new", "what", "key"),
     [
-        ('format = 1\n', "", "a required key is missing", "format"),
-        ('format = 1\n', "format = 2\n", "the key has the wrong value", "format"),
-        ('format = 1\n', "format = true\n", "the key has the wrong type", "format"),
+        ("format = 1\n", "", "a required key is missing", "format"),
+        ("format = 1\n", "format = 2\n", "the key has the wrong value", "format"),
+        ("format = 1\n", "format = true\n", "the key has the wrong type", "format"),
         ('publisher = "Example Org"\n', "", "a required key is missing", "publisher"),
-        ('licence = "MIT"\n', 'licence = "MIT"\nzz_extra = "zz-x"\n', "the key is not of the format",
-         "zz_extra"),
+        (
+            'licence = "MIT"\n',
+            'licence = "MIT"\nzz_extra = "zz-x"\n',
+            "the key is not of the format",
+            "zz_extra",
+        ),
         ('id = "zz-shop"\n', 'id = "Zz_Shop"\n', "the key has the wrong value", "id"),
         ('id = "zz-shop"\n', 'id = "agk-core"\n', "the key has the wrong value", "id"),
         ('id = "zz-shop"\n', 'id = "zz-other"\n', "the id is not the folder's name", "id"),
         ('version = "1.2.0"\n', 'version = ">=1.2"\n', "the key has the wrong value", "version"),
         ('version = "1.2.0"\n', 'version = "1.x"\n', "the key has the wrong value", "version"),
         ('tier = "curated"\n', 'tier = "zz-gold"\n', "the key has the wrong value", "tier"),
-        ('as_of = "2026-11-20"\n', 'as_of = "20 Nov 2026"\n', "the key has the wrong value",
-         "as_of"),
-        ('reviewed = "2026-11-21 by maintainers"\n', 'reviewed = "2026-11-21"\n',
-         "the key has the wrong value", "reviewed"),
-        ('reviewed = "2026-11-21 by maintainers"\n', 'reviewed = "2026-11-21 by zz@example.com"\n',
-         "the key has the wrong value", "reviewed"),
-        ('kinds = ["domains", "skills"]', 'kinds = ["domains", "skills", "zz-recipes"]',
-         "a kind is not one of rule 2's nine", "kinds"),
-        ('kinds = ["domains", "skills"]', 'kinds = "domains"', "the key has the wrong type", "kinds"),
-        ("[permissions]\n", '[permissions]\nnetwork = "open"\n', "the key has the wrong value",
-         "permissions.network"),
-        ("[permissions]\n", "[permissions]\nmcp = [1]\n", "the key has the wrong type",
-         "permissions.mcp"),
-        ("[permissions]\n", "[permissions]\nhooks = true\n", "the key is not of the format",
-         "permissions.hooks"),
+        (
+            'as_of = "2026-11-20"\n',
+            'as_of = "20 Nov 2026"\n',
+            "the key has the wrong value",
+            "as_of",
+        ),
+        (
+            'reviewed = "2026-11-21 by maintainers"\n',
+            'reviewed = "2026-11-21"\n',
+            "the key has the wrong value",
+            "reviewed",
+        ),
+        (
+            'reviewed = "2026-11-21 by maintainers"\n',
+            'reviewed = "2026-11-21 by zz@example.com"\n',
+            "the key has the wrong value",
+            "reviewed",
+        ),
+        (
+            'kinds = ["domains", "skills"]',
+            'kinds = ["domains", "skills", "zz-recipes"]',
+            "a kind is not one of rule 2's nine",
+            "kinds",
+        ),
+        (
+            'kinds = ["domains", "skills"]',
+            'kinds = "domains"',
+            "the key has the wrong type",
+            "kinds",
+        ),
+        (
+            "[permissions]\n",
+            '[permissions]\nnetwork = "open"\n',
+            "the key has the wrong value",
+            "permissions.network",
+        ),
+        (
+            "[permissions]\n",
+            "[permissions]\nmcp = [1]\n",
+            "the key has the wrong type",
+            "permissions.mcp",
+        ),
+        (
+            "[permissions]\n",
+            "[permissions]\nhooks = true\n",
+            "the key is not of the format",
+            "permissions.hooks",
+        ),
         ('kit = ">=0.65"\n', "kit = 65\n", "the key has the wrong type", "kit"),
         ('kit = ">=0.65"\n', 'kit = ">=0.65"\nevals = 1\n', "the key has the wrong type", "evals"),
     ],
@@ -139,8 +179,17 @@ def test_ac1_a_malformed_manifest_is_refused_naming_rule_pack_and_key(
     write_pack(tmp_path, text.replace(old, new, 1))
     lines = check_packs.findings(tmp_path)
     assert f"rule 3: {REL}: {what} (key: {key})" in lines
-    for value in ("Zz_Shop", "zz-other", ">=1.2", "zz-gold", "20 Nov", "zz@example.com",
-                  "zz-recipes", "open", "zz-x"):
+    for value in (
+        "Zz_Shop",
+        "zz-other",
+        ">=1.2",
+        "zz-gold",
+        "20 Nov",
+        "zz@example.com",
+        "zz-recipes",
+        "open",
+        "zz-x",
+    ):
         assert all(value not in line for line in lines)
 
 
@@ -158,8 +207,11 @@ def test_ac1_a_file_not_listed_missing_or_changed_is_refused(tmp_path):
 
 def test_ac1_a_file_under_no_listed_kind_is_refused(tmp_path):
     """REQ-084 AC1: SPEC-0077 rule 3 (a file under no kind's folder, or outside the pack)."""
-    files = {"recipes/shop.toml": KNOWLEDGE, "skills/shop/SKILL.md": SKILL,
-             "playbooks/web.toml": KNOWLEDGE}
+    files = {
+        "recipes/shop.toml": KNOWLEDGE,
+        "skills/shop/SKILL.md": SKILL,
+        "playbooks/web.toml": KNOWLEDGE,
+    }
     write_pack(tmp_path, files=files)
     lines = check_packs.findings(tmp_path)
     assert lines.count(f"rule 3: {REL}: a file is under no listed kind's folder (key: kinds)") == 2
@@ -172,8 +224,12 @@ def test_ac1_a_file_under_no_listed_kind_is_refused(tmp_path):
 
 def test_ac1_a_bad_hash_value_is_refused(tmp_path):
     """REQ-084 AC1: SPEC-0077 rule 3 (`files` maps each path to a SHA-256)."""
-    write_pack(tmp_path, good().replace('"skills/shop/SKILL.md" = "', '"skills/shop/SKILL.md" = "zz'))
-    assert f"rule 3: {REL}: the key has the wrong value (key: files)" in check_packs.findings(tmp_path)
+    write_pack(
+        tmp_path, good().replace('"skills/shop/SKILL.md" = "', '"skills/shop/SKILL.md" = "zz')
+    )
+    assert f"rule 3: {REL}: the key has the wrong value (key: files)" in check_packs.findings(
+        tmp_path
+    )
 
 
 def test_ac1_an_entry_with_no_source_and_no_basis_is_refused(tmp_path):
@@ -182,10 +238,13 @@ def test_ac1_an_entry_with_no_source_and_no_basis_is_refused(tmp_path):
     bad += 'source = "https://example.com/zz"\n\n[[terms]]\nterm = "bay"\nbasis = "zz-guess"\n'
     write_pack(tmp_path, files={"domains/shop.toml": bad, "skills/shop/SKILL.md": SKILL})
     lines = check_packs.findings(tmp_path)
-    assert lines.count(
-        f'rule 3: {REL}: an entry has neither a dated `source` nor `basis = "expected"` '
-        "(key: source)"
-    ) == 3
+    assert (
+        lines.count(
+            f'rule 3: {REL}: an entry has neither a dated `source` nor `basis = "expected"` '
+            "(key: source)"
+        )
+        == 3
+    )
     write_pack(tmp_path, files={"domains/shop.toml": "[[terms]\n", "skills/shop/SKILL.md": SKILL})
     assert f"rule 3: {REL}: a knowledge file is not readable TOML (key: files)" in (
         check_packs.findings(tmp_path)
@@ -259,13 +318,17 @@ def test_ac1_run_alone_the_check_prints_nothing_with_no_pack(tmp_path):
     """REQ-084 AC1: SPEC-0077 rule 2 (with no pack the check prints nothing and exits 0)."""
     script = str(KIT_ROOT / "scripts/agk/check_packs.py")
     proc = subprocess.run(  # nosec B603 - fixed argument list
-        [sys.executable, script, "--root", str(tmp_path)], capture_output=True, text=True,
+        [sys.executable, script, "--root", str(tmp_path)],
+        capture_output=True,
+        text=True,
         check=False,
     )
     assert proc.returncode == 0 and proc.stdout == ""
     write_pack(tmp_path)
     proc = subprocess.run(  # nosec B603 - fixed argument list
-        [sys.executable, script, "--root", str(tmp_path)], capture_output=True, text=True,
+        [sys.executable, script, "--root", str(tmp_path)],
+        capture_output=True,
+        text=True,
         check=False,
     )
     assert proc.returncode == 1 and proc.stdout.startswith("FAIL packs: rule 12: ")
