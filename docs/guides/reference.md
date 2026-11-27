@@ -597,6 +597,24 @@ nothing; else `ok packs (<n> packs)`. The built-in pack `agk-core` is the kit's 
 pack in use declares); a refusal is `the [packs] table is refused (setting: packs.<key>)`. Reads files only. Exit 0 ok, 1 a
 problem, 2 usage.
 
+    python3 scripts/agk/packs.py verify [--root DIR]
+    python3 scripts/agk/packs.py add SOURCE [--tag TAG] --said FILE --at TIME [--by LOGIN] [--root DIR]
+    python3 scripts/agk/packs.py update --check --said FILE --at TIME [--by LOGIN] [--root DIR]
+
+The pack lock, `config/packs.lock` (SPEC-0077 rule 4, brief #2033, ADR-0840): one `[[pack]]` per pack with `id`,
+`version`, `sha256` (its `agk-pack.toml`'s) and `files = [{ path, sha256 }]`, every file of the pack. `verify` (offline;
+`check_packs.py` runs it, so the `playbooks` step does) fails a locked file whose hash differs, a file the lock does not
+hold, a lock entry whose folder is missing, a locked pack that `[packs] use` does not list and a use entry the lock does
+not hold or that differs from it, each one `FAIL packs: rule 4: config/packs/<id>: <what> (key|setting: ...)` line, never
+a value; a lock out of form is named by its path class. With nothing in use it prints `ok packs: none in use`. `add` and
+`update --check` read a source only on the person's recorded yes (`--said`, as `steward_owner.py research`; in team mode
+`--by` a spec approver) and never in a builder session; with no yes they record the no, read nothing and write nothing.
+`add` takes a folder, or a public `https` git URL with `--tag` an exact version tag (never a branch), copies the pack to
+`config/packs/<id>/` only after `check_packs.py` passed on it, writes the lock and prints the `[packs] use` entry for the
+person's `agk.toml` change and its ADR; it never writes `agk.toml`. `update --check` lists each locked pack's newer exact
+tags and changes nothing; a real update is `add` of the new tag. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
+a source that cannot be read.
+
 ## The project domain model
 
     python3 scripts/agk/domain_model.py [--root DIR] init --area A | rule ... | classify ... | entity ... | regulation ... | confirm --id ID

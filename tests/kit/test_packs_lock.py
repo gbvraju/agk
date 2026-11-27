@@ -177,22 +177,38 @@ def test_ac3_a_lock_out_of_form_is_named_by_its_path_class(tmp_path, text):
     root = locked(tmp_path)
     (root / packs.LOCK).write_text(text, encoding="utf-8")
     lines = packs.check(root)
-    assert lines == ["rule 4: config/packs.lock: the lock is not readable or out of form (key: pack)"]
+    assert lines == [
+        "rule 4: config/packs.lock: the lock is not readable or out of form (key: pack)"
+    ]
 
 
 def test_ac3_add_from_a_folder_on_a_yes_writes_the_folder_and_the_lock(tmp_path, capsys):
     """REQ-084 AC3: SPEC-0077 rule 4 (copied after its checks, the lock written, use printed)."""
     (tmp_path / "agk.toml").write_text('review_mode = "solo"\n', encoding="utf-8")
     calls = Calls(stub_pack(tmp_path / "outside" / "anything"))
-    code, lines = packs.add(tmp_path, "outside/anything", said(tmp_path, "yes"), "2026-11-27T10:00Z",
-                            fetch=calls.fetch, record=calls.record)  # fmt: skip
+    code, lines = packs.add(
+        tmp_path,
+        "outside/anything",
+        said(tmp_path, "yes"),
+        "2026-11-27T10:00Z",
+        fetch=calls.fetch,
+        record=calls.record,
+    )
     assert code == 0 and calls.notes[0].startswith("pack-add: yes because the person said")
     assert (tmp_path / REL / "skills" / "shop" / "SKILL.md").read_text() == SKILL
     assert f"[packs] use: {use_line(tmp_path)}" in lines
-    (tmp_path / "agk.toml").write_text(f'review_mode = "solo"\n[packs]\nuse = [{use_line(tmp_path)}]\n')
+    (tmp_path / "agk.toml").write_text(
+        f'review_mode = "solo"\n[packs]\nuse = [{use_line(tmp_path)}]\n'
+    )
     assert packs.check(tmp_path) == [] and check_packs.findings(tmp_path) == []
-    code, lines = packs.add(tmp_path, "outside/anything", said(tmp_path, "yes"), "2026-11-27T10:01Z",
-                            fetch=calls.fetch, record=calls.record)  # fmt: skip
+    code, lines = packs.add(
+        tmp_path,
+        "outside/anything",
+        said(tmp_path, "yes"),
+        "2026-11-27T10:01Z",
+        fetch=calls.fetch,
+        record=calls.record,
+    )
     assert code == 1 and "(setting: packs.use)" in lines[-1]  # the same version: use update
 
 
@@ -202,11 +218,19 @@ def test_ac3_add_and_update_check_without_a_yes_write_and_read_nothing(tmp_path,
     root = locked(tmp_path)
     before = (root / packs.LOCK).read_bytes()
     calls = Calls(stub_pack(tmp_path / "outside" / "p"), tags=["1.9.0"])
-    code, _ = packs.add(root, "https://example.com/zz.git", said(tmp_path, words), "T",
-                        tag="1.3.0", fetch=calls.fetch, record=calls.record)  # fmt: skip
+    code, _ = packs.add(
+        root,
+        "https://example.com/zz.git",
+        said(tmp_path, words),
+        "T",
+        tag="1.3.0",
+        fetch=calls.fetch,
+        record=calls.record,
+    )
     assert code == 1 and calls.fetched == [] and calls.notes[0].startswith("pack-add: no because")
-    code, _ = packs.update_check(root, said(tmp_path, words), "T", tags=calls.list_tags,
-                                 record=calls.record)  # fmt: skip
+    code, _ = packs.update_check(
+        root, said(tmp_path, words), "T", tags=calls.list_tags, record=calls.record
+    )
     assert code == 1 and calls.listed == [] and (root / packs.LOCK).read_bytes() == before
 
 
@@ -215,8 +239,9 @@ def test_ac3_update_check_lists_newer_tags_and_changes_nothing(tmp_path):
     root = locked(tmp_path)
     before = (root / packs.LOCK).read_bytes()
     calls = Calls(tags=["v1.1.0", "1.2.0", "main", "1.10.0", "v1.3.0"])
-    code, lines = packs.update_check(root, said(tmp_path, "yes"), "T", tags=calls.list_tags,
-                                     record=calls.record)  # fmt: skip
+    code, lines = packs.update_check(
+        root, said(tmp_path, "yes"), "T", tags=calls.list_tags, record=calls.record
+    )
     assert code == 0 and lines[-1] == f"{PID} 1.2.0: newer 1.3.0, 1.10.0"
     assert calls.listed == ["https://example.com/packs/zz-shop.git"]
     assert (root / packs.LOCK).read_bytes() == before
@@ -225,9 +250,24 @@ def test_ac3_update_check_lists_newer_tags_and_changes_nothing(tmp_path):
 @pytest.mark.parametrize(
     ("source", "tag", "code", "line"),
     [
-        ("https://example.com/zz.git", None, 2, "rule 4: a git source takes an exact tag (source: git)"),
-        ("https://example.com/zz.git", "main", 2, "rule 4: a git source takes an exact tag (source: git)"),
-        ("https://example.com/zz.git", "1.2.0", 4, "refused: the pack cannot be fetched (source: git)"),
+        (
+            "https://example.com/zz.git",
+            None,
+            2,
+            "rule 4: a git source takes an exact tag (source: git)",
+        ),
+        (
+            "https://example.com/zz.git",
+            "main",
+            2,
+            "rule 4: a git source takes an exact tag (source: git)",
+        ),
+        (
+            "https://example.com/zz.git",
+            "1.2.0",
+            4,
+            "refused: the pack cannot be fetched (source: git)",
+        ),
         ("missing/folder", None, 4, "refused: the pack cannot be fetched (source: folder)"),
     ],
 )
@@ -235,8 +275,15 @@ def test_ac3_a_source_out_of_form_or_unreachable_writes_nothing(tmp_path, source
     """REQ-084 AC3: SPEC-0077 rule 4 (answer 5: a branch, a failed fetch; one line, no write)."""
     (tmp_path / "agk.toml").write_text('review_mode = "solo"\n', encoding="utf-8")
     calls = Calls()
-    got, lines = packs.add(tmp_path, source, said(tmp_path, "yes"), "T", tag=tag,
-                           fetch=calls.fetch, record=calls.record)  # fmt: skip
+    got, lines = packs.add(
+        tmp_path,
+        source,
+        said(tmp_path, "yes"),
+        "T",
+        tag=tag,
+        fetch=calls.fetch,
+        record=calls.record,
+    )
     assert (got, lines[-1]) == (code, line)
     assert not (tmp_path / "config").exists()
 
@@ -247,8 +294,9 @@ def test_ac3_a_pack_that_fails_its_check_is_never_copied(tmp_path):
     bad = stub_pack(tmp_path / "outside" / "p")
     (bad / "skills" / "shop" / "SKILL.md").write_text("changed\n", encoding="utf-8")
     calls = Calls(bad)
-    code, lines = packs.add(tmp_path, "outside/p", said(tmp_path, "yes"), "T",
-                            fetch=calls.fetch, record=calls.record)  # fmt: skip
+    code, lines = packs.add(
+        tmp_path, "outside/p", said(tmp_path, "yes"), "T", fetch=calls.fetch, record=calls.record
+    )
     assert code == 1 and f"rule 3: {REL}: a listed file's SHA-256 differs (key: files)" in lines
     assert not (tmp_path / "config").exists()
 
@@ -266,11 +314,12 @@ def test_ac3_team_mode_counts_only_a_spec_approvers_yes(tmp_path, monkeypatch):
 
 
 def test_ac3_a_builder_session_adds_no_pack(tmp_path, monkeypatch):
-    """REQ-084 AC3: SPEC-0077 rule 4 (answer 4: the steward runs `add` on the yes, never a builder)."""
+    """REQ-084 AC3: SPEC-0077 rule 4 (answer 4: the steward runs `add`, never a builder)."""
     monkeypatch.setenv("AGK_AGENT", "builder")
     calls = Calls(stub_pack(tmp_path / "outside" / "p"))
-    code, lines = packs.add(tmp_path, "outside/p", said(tmp_path, "yes"), "T",
-                            fetch=calls.fetch, record=calls.record)  # fmt: skip
+    code, lines = packs.add(
+        tmp_path, "outside/p", said(tmp_path, "yes"), "T", fetch=calls.fetch, record=calls.record
+    )
     assert code == 2 and "(setting: AGK_AGENT)" in lines[0] and calls.notes == []
 
 

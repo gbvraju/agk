@@ -26,7 +26,7 @@ differs from it, each `rule 4: <path class>: <what> (key|setting: ...)`, never a
 passed on it, writes the lock and prints the `[packs] use` entry, never `agk.toml` (`Q-PC-2`).
 
     python3 scripts/agk/packs.py verify [--root DIR]
-    python3 scripts/agk/packs.py add SOURCE [--tag TAG] --said FILE --at TIME [--by LOGIN] [--root DIR]
+    python3 scripts/agk/packs.py add SOURCE [--tag TAG] --said FILE --at TIME [--by LOGIN]
     python3 scripts/agk/packs.py update --check --said FILE --at TIME [--by LOGIN] [--root DIR]
 
 Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4 a source that cannot be read.
@@ -171,9 +171,13 @@ def lock_entry(folder: Path) -> dict:
 def lock_text(entries: list[dict]) -> str:
     out = []
     for e in sorted(entries, key=lambda e: e["id"]):
-        rows = ",\n".join(f'  {{ path = "{f["path"]}", sha256 = "{f["sha256"]}" }}' for f in e["files"])
-        out.append(f'[[pack]]\nid = "{e["id"]}"\nversion = "{e["version"]}"\n'
-                   f'sha256 = "{e["sha256"]}"\nfiles = [\n{rows},\n]\n')  # fmt: skip
+        rows = ",\n".join(
+            f'  {{ path = "{f["path"]}", sha256 = "{f["sha256"]}" }}' for f in e["files"]
+        )
+        out.append(
+            f'[[pack]]\nid = "{e["id"]}"\nversion = "{e["version"]}"\n'
+            f'sha256 = "{e["sha256"]}"\nfiles = [\n{rows},\n]\n'
+        )
     return "\n".join(out)
 
 
@@ -186,10 +190,13 @@ def _in_form(e: object) -> bool:
     if not all(isinstance(e[k], str) for k in ("id", "version", "sha256")):
         return False
     files_ok = all(
-        isinstance(f, dict) and set(f) == {"path", "sha256"} and all(isinstance(v, str) for v in f.values())
-        and not Path(f["path"]).is_absolute() and ".." not in Path(f["path"]).parts
+        isinstance(f, dict)
+        and set(f) == {"path", "sha256"}
+        and all(isinstance(v, str) for v in f.values())
+        and not Path(f["path"]).is_absolute()
+        and ".." not in Path(f["path"]).parts
         for f in e["files"]
-    )  # fmt: skip
+    )
     return files_ok and bool(check_packs.SLUG.match(e["id"])) and e["id"] != check_packs.CORE
 
 
@@ -239,10 +246,10 @@ def verify(root: Path, use: list[dict] | None) -> list[str]:
             out.append(f"{label}: a locked pack is not listed in use (setting: packs.use)")
     for u in use or []:
         label = f"rule 4: {check_packs.FOLDER}/{u['id']}"
-        held = by_id.get(u["id"])
-        if held is None:
+        found = by_id.get(u["id"])
+        if found is None:
             out.append(f"{label}: a use entry the lock does not hold (setting: packs.use)")
-        elif (held["version"], held["sha256"]) != (u["version"], u["sha256"]):
+        elif (found["version"], found["sha256"]) != (u["version"], u["sha256"]):
             out.append(f"{label}: a use entry differs from the lock (setting: packs.use)")
     return list(dict.fromkeys(out))
 
@@ -265,14 +272,18 @@ def _builder() -> bool:
     return "builder" in (os.environ.get("AGK_AGENT"), os.environ.get("AGK_ROLE"))
 
 
-def _yes(root: Path, said: Path, at: str, by: str | None, what: str, record) -> tuple[int, list[str]]:
+def _yes(
+    root: Path, said: Path, at: str, by: str | None, what: str, record
+) -> tuple[int, list[str]]:
     """`steward_owner.research`'s order: a refusal, else the yes or the no recorded as Setup."""
     import steward_owner
     import steward_voice
 
     if _builder():
-        return 2, ["refused: a builder session adds or reads no pack; the steward runs it on the"
-                   " person's yes (setting: AGK_AGENT)"]  # fmt: skip
+        return 2, [
+            "refused: a builder session adds or reads no pack; the steward runs it on the"
+            " person's yes (setting: AGK_AGENT)"
+        ]
     code, refusal, words = steward_owner.yes_of(Path(root), Path(said), by)
     if refusal:
         return code, [refusal]
@@ -298,17 +309,21 @@ def fetch_source(source: str, tag: str | None, dest: Path) -> bool:
         shutil.copytree(source, dest, ignore=shutil.ignore_patterns(".git"))
         return True
     argv = ["git", "clone", "-q", "--depth", "1", "--branch", tag, source, str(dest)]
-    done = subprocess.run(argv, capture_output=True, check=False)  # nosec B603 B607 - fixed argv
+    done = subprocess.run(argv, capture_output=True, check=False)  # nosec B603 - fixed argv, after the yes
     shutil.rmtree(dest / ".git", ignore_errors=True)
     return done.returncode == 0
 
 
 def remote_tags(source: str) -> list[str] | None:
     argv = ["git", "ls-remote", "--tags", "--refs", source]
-    done = subprocess.run(argv, capture_output=True, text=True, check=False)  # nosec B603 B607
+    done = subprocess.run(argv, capture_output=True, text=True, check=False)  # nosec B603 - fixed argv, after the yes
     if done.returncode:
         return None
-    return [line.rsplit("refs/tags/", 1)[-1] for line in done.stdout.splitlines() if "refs/tags/" in line]
+    return [
+        line.rsplit("refs/tags/", 1)[-1]
+        for line in done.stdout.splitlines()
+        if "refs/tags/" in line
+    ]
 
 
 def _kind(source: str) -> str:
@@ -345,15 +360,23 @@ def add(root, source, said, at, *, by=None, tag=None, fetch=fetch_source, record
             return 1, [*lines, *found]
         entry = lock_entry(stage)
         if any((e["id"], e["version"]) == (pid, entry["version"]) for e in entries):
-            return 1, [*lines, "refused: the pack is in the lock at that version; update --check"
-                       " lists newer ones (setting: packs.use)"]  # fmt: skip
+            return 1, [
+                *lines,
+                "refused: the pack is in the lock at that version; update --check"
+                " lists newer ones (setting: packs.use)",
+            ]
         dest = root / check_packs.FOLDER / pid
         shutil.rmtree(dest, ignore_errors=True)
         shutil.copytree(stage, dest)
-    (root / LOCK).write_text(lock_text([*(e for e in entries if e["id"] != pid), entry]), encoding="utf-8")
+    (root / LOCK).write_text(
+        lock_text([*(e for e in entries if e["id"] != pid), entry]), encoding="utf-8"
+    )
     use = f'{{ id = "{pid}", version = "{entry["version"]}", sha256 = "{entry["sha256"]}" }}'
-    return 0, [*lines, f"added {check_packs.FOLDER}/{pid} and {LOCK}; add it with its ADR, in"
-               " agk.toml", f"[packs] use: {use}"]  # fmt: skip
+    return 0, [
+        *lines,
+        f"added {check_packs.FOLDER}/{pid} and {LOCK}; add it with its ADR, in agk.toml",
+        f"[packs] use: {use}",
+    ]
 
 
 def _version(text: str) -> tuple[int, ...] | None:
@@ -362,7 +385,7 @@ def _version(text: str) -> tuple[int, ...] | None:
 
 
 def update_check(root, said, at, *, by=None, tags=remote_tags, record=record_note):
-    """Rules 4 and 8: on a recorded yes, the newer exact tags of each locked pack; writes nothing."""
+    """Rules 4 and 8: on a recorded yes, the newer exact tags of each locked pack; no write."""
     import check_packs
 
     root = Path(root)
@@ -384,7 +407,9 @@ def update_check(root, said, at, *, by=None, tags=remote_tags, record=record_not
         now = _version(e["version"]) or ()
         newer = sorted({v for t in found if (v := _version(t)) and v > now})
         names = ", ".join(".".join(map(str, v)) for v in newer)
-        lines.append(f"{e['id']} {e['version']}: " + (f"newer {names}" if newer else "no newer tag"))
+        lines.append(
+            f"{e['id']} {e['version']}: " + (f"newer {names}" if newer else "no newer tag")
+        )
     return code, lines or ["no pack in the lock"]
 
 
@@ -422,7 +447,9 @@ def main(argv: list[str] | None = None) -> int:
     if opts.command == "verify":
         return run("packs", lambda: cmd_verify(root))
     if opts.command == "update" and not opts.check:
-        print("refused: a real update is `add` of the new tag with its ADR (rule 8)", file=sys.stderr)
+        print(
+            "refused: a real update is `add` of the new tag with its ADR (rule 8)", file=sys.stderr
+        )
         return 2
     if opts.command == "add":
         code, lines = add(root, opts.source, opts.said, opts.at, by=opts.by, tag=opts.tag)
