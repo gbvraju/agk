@@ -1003,9 +1003,12 @@ def packs_settings(root: Path) -> dict:
     if not isinstance(found["use"], list):
         raise _refuse_packs("use")
     seen: set = set()
-    use = [_pack_used(root, item, seen) for item in found["use"]]
-    if None in use:
-        raise _refuse_packs("use")
+    use: list[dict] = []
+    for item in found["use"]:
+        chosen = _pack_used(root, item, seen)
+        if chosen is None:
+            raise _refuse_packs("use")
+        use.append(chosen)
     import check_packs
 
     names = found["mcp"]

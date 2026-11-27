@@ -112,7 +112,7 @@ def test_ac7_a_domain_key_in_another_table_is_reported_and_never_read(tmp_path):
     """REQ-081 AC7: SPEC-0074 rule 12 (a misplaced key, by `misplaced_settings`)."""
     (tmp_path / "agk.toml").write_text("[flow]\nstale_months = 3\n", encoding="utf-8")
     found = config.misplaced_settings(config.config_source(tmp_path))
-    assert found == [("stale_months", "flow", ("domain",))]
+    assert found == [("stale_months", "flow", ("domain", "packs"))]  # `[packs]` too, ADR-0838
     assert config.domain_settings(tmp_path) == DEFAULTS
     assert config.misplaced_settings({"packs": []}) == [("packs", config.TOP_LEVEL, ("domain",))]
 

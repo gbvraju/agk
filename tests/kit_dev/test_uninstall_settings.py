@@ -262,7 +262,10 @@ def test_the_names_missing_on_main_are_kit_settings_now():
     # A key of a table never counts at the top level (ADR-0527's misplaced settings).
     inner = set().union(*config.TABLE_KEYS.values(), common.PERSONAL_KEYS)
     assert {"auto_merge", "queue", "strongest"} & config.KIT_SETTINGS == set()
-    assert inner - config.KIT_SETTINGS == inner
+    # `packs` is both a `[domain]` key (SPEC-0074) and the `[packs]` table (SPEC-0077 rule 12,
+    # ADR-0838): it counts as the table's name, never as the key.
+    assert inner - config.KIT_SETTINGS == inner - {"packs"}
+    assert "packs" in config.TABLE_KEYS and "packs" in config.TABLE_KEYS["domain"]
 
 
 # --- answer 9 (b): every template name is listed -------------------------------------------------

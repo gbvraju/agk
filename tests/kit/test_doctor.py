@@ -125,7 +125,7 @@ def test_ac1_the_ok_case_reports_none_and_exits_0(tmp_path):
     assert proc.returncode == 0, proc.stdout
     assert "FAIL" not in proc.stdout and "??" not in proc.stdout
     assert proc.stdout.splitlines()[0] == "agk doctor 9.9.9"
-    assert proc.stdout.splitlines()[-1] == "summary: 59 ok, 0 fail, 0 cannot-check"
+    assert proc.stdout.splitlines()[-1] == "summary: 60 ok, 0 fail, 0 cannot-check"
 
 
 def test_ac1_stricter_than_the_minimum_is_ok(tmp_path):
@@ -1083,7 +1083,7 @@ def test_ac6_the_design_lines_change_no_check_and_no_exit_code(tmp_path):
     assert proc.returncode == 0, proc.stdout
     lines = proc.stdout.splitlines()
     assert "design import: i1 manifest matches the files; map absent (2 pages)" in lines
-    assert lines[-1] == "summary: 59 ok, 0 fail, 0 cannot-check"
+    assert lines[-1] == "summary: 60 ok, 0 fail, 0 cannot-check"
     data = json.loads(doctor(*args, "--json", str(dirs["root"]), path=path).stdout)
     assert data["design_import"] == [
         "design import: i1 manifest matches the files; map absent (2 pages)"

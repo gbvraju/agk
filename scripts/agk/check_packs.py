@@ -155,7 +155,7 @@ def _values(data: dict, folder: Path) -> list[tuple[str, str]]:
     if text("tier") is not None and text("tier") not in TIERS:
         out.append(("the key has the wrong value", "tier"))
     kinds = data.get("kinds")
-    if _is(kinds, STRS) and any(k not in KINDS for k in kinds):
+    if isinstance(kinds, list) and _is(kinds, STRS) and any(k not in KINDS for k in kinds):
         out.append(("a kind is not one of rule 2's nine", "kinds"))
     return out
 
@@ -193,7 +193,8 @@ def _guarded(path: Path) -> list[tuple[str, str]]:
 
 
 def _files(data: dict, folder: Path) -> list[tuple[str, str]]:
-    listed = data.get("files") if isinstance(data.get("files"), dict) else {}
+    files = data.get("files")
+    listed: dict = files if isinstance(files, dict) else {}
     kinds = [k for k in data.get("kinds") or [] if isinstance(k, str)]
     out = []
     base = folder.resolve()
