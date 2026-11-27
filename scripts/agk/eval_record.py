@@ -178,8 +178,8 @@ def write(root: Path, runs: Path, day: str) -> tuple[int, list[str]]:
     path = root / FOLDER / f"{day}.md"
     if path.exists():
         return 1, [EXISTS]
-    fails = eval_run.median(Path(runs))[0] if Path(runs).is_dir() else [BAD_RUNS]
-    products = _runs(Path(runs)) if not fails else {}
+    fails = eval_run.median(Path(runs))[0] if Path(runs).is_dir() else []
+    products = _runs(Path(runs)) if Path(runs).is_dir() and not fails else {}
     if fails or not products:
         return 1, list(dict.fromkeys([*fails, BAD_RUNS]))
     kits = {(r["kit"]["version"], r["kit"]["sha"]) for recs in products.values() for r in recs if r}
