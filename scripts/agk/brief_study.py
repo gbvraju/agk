@@ -53,6 +53,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import kit_root
 import plan_names
 from common import CheckError, run, utf8_output
 from session import touches_of
@@ -90,6 +91,7 @@ SECTION = re.compile(r"^## ", re.M)
 DECISION = re.compile(r"^## Decision\b.*$", re.M)
 # Brief #2052 (ADR-0850): only the kit repository has the marker (`check_kit_tests.KIT_MAKE`).
 KIT_MAKE = "kit/agk-kit.mk"
+CONFIG = "scripts/agk/config.py"  # answer 2: a setting's key, when agk.toml does not set it
 CODE_WARNINGS = 10  # answer 2 (Q-P0A-2): the code matches warned at most, with one count line
 EXISTING_REF = re.compile(r"(?<![\w./*-])([\w.-]*[/.][\w./-]*):(\d+)\b")
 EXISTING_SEARCH = re.compile(r"`(?:grep|git grep|rg|brief_study\.py)\b[^`]*`")
@@ -413,9 +415,13 @@ def _setting_line(root: Path, table: str, key: str) -> tuple[str, int] | None:
             current = header.group(1)
         elif current == table and re.match(rf"\s*{re.escape(key)}\s*=", line):
             return "agk.toml", number
-    for number, line in enumerate(_read(root / "scripts" / "agk" / "config.py").splitlines(), 1):
+    try:  # the kit's own file, by the resolver (ADR-0759): the root's copy in the kit
+        config = kit_root.kit_file(root, CONFIG)
+    except kit_root.Refused:
+        return None
+    for number, line in enumerate(_read(config).splitlines(), 1):
         if f'"{key}"' in line:
-            return "scripts/agk/config.py", number
+            return CONFIG, number
     return None
 
 
