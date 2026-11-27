@@ -1,0 +1,1 @@
+- Packs: a pack's playbook may carry SPEC-0077 rule 3's dated `source` or `basis = "expected"` on each top-level entry and passes both the pack check and the playbook check; a bad `source` or `basis` is named by key, never by value; the kit's and the project's own playbooks keep today's format (brief #2040, ADR-0844)

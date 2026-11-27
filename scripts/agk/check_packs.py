@@ -161,10 +161,15 @@ def _values(data: dict, folder: Path) -> list[tuple[str, str]]:
     return out
 
 
-def _sourced(entry: dict) -> bool:
+def _sourced(entry: dict, section: str = "") -> bool:
+    """Rule 3: a dated `source` or `basis = "expected"`; a `[[claims]]` entry's `basis` keeps its
+    claim meaning, so a measured claim proves its provenance with a dated `source` (`Q-PS-1`)."""
+    dated = playbook_format.source_date(entry.get("source")) is not None
+    if section == "claims" and entry.get("basis") == "measured":
+        return dated
     if "basis" in entry:
         return entry["basis"] == "expected"
-    return playbook_format.source_date(entry.get("source")) is not None
+    return dated
 
 
 def _knowledge(path: Path) -> list[tuple[str, str]]:
@@ -175,11 +180,13 @@ def _knowledge(path: Path) -> list[tuple[str, str]]:
     data = load(path)
     if data is None:
         return [("a knowledge file is not readable TOML", "files")]
-    rows = [e for v in data.values() if isinstance(v, list) for e in v if isinstance(e, dict)]
+    rows = [
+        (k, e) for k, v in data.items() if isinstance(v, list) for e in v if isinstance(e, dict)
+    ]
     return [
         ('an entry has neither a dated `source` nor `basis = "expected"`', "source")
-        for e in rows
-        if not _sourced(e)
+        for k, e in rows
+        if not _sourced(e, k)
     ]
 
 
