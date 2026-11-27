@@ -1127,3 +1127,144 @@ def test_1019_an_assign_to_a_slot_with_no_run_log_is_unacted_only_after_75_minut
     assert lines[0].endswith("; no run recorded)")
     new = Pool(monkeypatch, tmp_path / "new", [comment(2, "boss", "Assign: s1 #12", ago(30))])
     assert conductor.unacted_lines(new.root, REPO, datetime.now(UTC)) == []
+
+
+# --- brief #2002 (ADR-0828): an amendment approved at filing is not asked again -----------------
+
+sys.path.insert(0, str(SCRIPTS))
+
+import base64  # noqa: E402
+
+import check_amendments  # noqa: E402
+import conductor  # noqa: E402
+
+AMENDMENT_FILE = (
+    "# Proposed spec amendments 254 (SPEC-0901; REQ-001)\n\nHeader text.\n\n## Items\n\n"
+    '1. **SPEC-0901 rule 2.** Append "x"\n   (amendment 254).\n   Class: behaviour\n\n'
+    "No other rule changes.\n"
+)
+FILED_DIGEST = check_amendments.items_digest(AMENDMENT_FILE)
+ASK_254 = (
+    "Owner needed: amendment 254 changes SPEC-0901.\n\nMaintainer answer: amendment 254 approved\n"
+)
+FILED_REFUSED = (
+    "refused: amendment 254 was approved at filing on brief #9; no ask (setting: Spec fit:)"
+)
+
+
+def filing_approval(
+    digest: str = FILED_DIGEST, login: str = "owner", form: str = "relayed"
+) -> dict:
+    """The steward's relayed form (fix list 7202066567 item 5), `bare` or the approver's `own`."""
+    lines = ["Maintainer answer: amendment 254 approved"]
+    if form == "relayed":
+        lines += ['Owner said (2026-11-26T11:05Z): "Yes, file it with amendment 254"',
+                  'Asked: "file the example brief"']  # fmt: skip
+    lines.append(f"Text: {digest}")
+    lines += ["Who: ProductOwner"] if form == "relayed" else []
+    body = "\n".join(lines) + "\n"
+    return {"id": 5, "user": {"login": login}, "body": body, "created_at": "2026-11-26T11:06:00Z"}
+
+
+@pytest.fixture
+def filed(tmp_path, monkeypatch):
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "reviewers.yaml").write_text(
+        "version: 1\nverdict_authors: [owner]\nspec_approvers: [owner]\n", encoding="utf-8"
+    )
+    (tmp_path / "agk.toml").write_text('review_mode = "solo"\n', encoding="utf-8")
+    state = {"body": "Brief: #9\n", "comments": [filing_approval()], "file": AMENDMENT_FILE}
+    seen: list = []
+
+    def read_one(endpoint: str, what: str) -> dict:
+        seen.append(endpoint)
+        if endpoint == f"repos/{REPO}/pulls/16":
+            return {"body": state["body"], "head": {"sha": SHA}}
+        if endpoint.startswith(f"repos/{REPO}/contents/docs/runs/proposed-spec-amendments-254.md"):
+            assert endpoint.endswith(f"?ref={SHA}")
+            return {"content": base64.b64encode(state["file"].encode()).decode()}
+        raise conductor.CheckError(f"{what} cannot be read")
+
+    def read(endpoint: str, what: str) -> list:
+        seen.append(endpoint)
+        if endpoint == f"repos/{REPO}/issues/9/comments" and state["comments"] is not None:
+            return state["comments"]
+        raise conductor.CheckError(f"{what} cannot be read")
+
+    monkeypatch.setattr(conductor, "read_one", read_one)
+    monkeypatch.setattr(conductor, "read", read)
+    return tmp_path, state, seen
+
+
+def test_req066_2002_an_ask_for_an_amendment_approved_on_its_brief_is_refused(filed):
+    """REQ-066: answer 6, the Measured after: the approval on the brief, whose Text digest equals
+    the items of the file at the head, refuses the `Owner needed:`."""
+    root, _, seen = filed
+    assert conductor.filed_problem(REPO, 16, ASK_254, root) == FILED_REFUSED
+    assert f"repos/{REPO}/issues/9/comments" in seen
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "digest",
+        "login",
+        "no brief",
+        "unreadable brief",
+        "corrected",
+        "edited file",
+        "other ask",
+        "bare in solo",
+        "relayed in team",
+    ],
+)
+def test_req066_2002_the_ask_stays_allowed_when_the_filing_approval_does_not_hold(filed, change):
+    """REQ-066: answers 6 and 10: a different digest, an approval by someone not listed, no
+    `Brief:` line, a brief that cannot be read, a later `Correction:` and an ask for another
+    amendment each leave the ask allowed, as today."""
+    root, state, _ = filed
+    body = ASK_254
+    if change == "digest":
+        state["comments"] = [filing_approval("0" * 16)]
+    elif change == "login":
+        state["comments"] = [filing_approval(login="someone")]
+    elif change == "no brief":
+        state["body"] = "no brief line\n"
+    elif change == "unreadable brief":
+        state["comments"] = None
+    elif change == "corrected":
+        state["comments"] = [
+            filing_approval(),
+            {
+                "id": 6,
+                "user": {"login": "owner"},
+                "body": "Correction: amendment 254 is withdrawn",
+                "created_at": "2026-11-26T12:00:00Z",
+            },
+        ]
+    elif change == "bare in solo":  # fix list 7202066567 item 3: the relayed form is required
+        state["comments"] = [filing_approval(form="bare")]
+    elif change == "relayed in team":
+        (root / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
+    elif change == "edited file":
+        state["file"] = AMENDMENT_FILE.replace('"x"', '"y"')
+    else:
+        body = ASK_254.replace("254", "255")
+    assert conductor.filed_problem(REPO, 16, body, root) is None
+
+
+def test_req066_2002_full_problem_runs_the_filed_check_on_an_owner_ask(filed, monkeypatch):
+    """REQ-066: answer 6: `check-verdict --pr` and the guard reach it through `full_problem`."""
+    root, _, _ = filed
+    monkeypatch.setattr(conductor, "size_ask_problem", lambda *a: None)
+    monkeypatch.setattr(conductor, "closing_problem", lambda *a: None)
+    assert conductor.full_problem(REPO, 16, ASK_254, root) == FILED_REFUSED
+
+
+def test_req066_2002_in_team_mode_only_the_approvers_own_answer_counts(filed):
+    """REQ-066: answer 9 and fix list 7202066567 item 3: in team mode the spec approver's own
+    `Maintainer answer:` with the digest refuses the ask; a relayed one never does."""
+    root, state, _ = filed
+    (root / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
+    state["comments"] = [filing_approval(form="own")]
+    assert conductor.filed_problem(REPO, 16, ASK_254, root) == FILED_REFUSED

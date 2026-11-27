@@ -51,6 +51,7 @@ class GitHub:
             "updated_at": SEEN, "labels": [{"name": "agk-brief"}], **issue,
         }  # fmt: skip
         self.calls, self.comments, self.patched, self.created = [], [], [], []
+        self.filed: list = []
         self.fail_comment = False
 
     @staticmethod
@@ -77,6 +78,9 @@ class GitHub:
             self.patched.append(fields["body"][0])
             self.issue.update(body=fields["body"][0], updated_at=NEWER)
             return dict(self.issue)
+        if method == "POST" and endpoint == f"repos/{REPO}/issues/12/comments":
+            self.filed.append(fields["body"][0])  # brief #2002: the approval on the filed brief
+            return {"id": 2}
         if method == "POST" and endpoint == f"repos/{REPO}/issues":
             made = {"number": 12, "title": fields["title"][0], "body": fields["body"][0],
                     "labels": [{"name": n} for n in fields.get("labels[]", [])]}  # fmt: skip
@@ -560,7 +564,7 @@ def test_req066_the_cli_passes_name_through(root, monkeypatch):
     seen: dict = {}
     monkeypatch.setattr(steward_owner, "repo_root", lambda: base)
     monkeypatch.setattr(
-        steward_owner, "file_brief", lambda *a, name=None: seen.update(name=name) or (0, [])
+        steward_owner, "file_brief", lambda *a, name=None, **k: seen.update(name=name) or (0, [])
     )
     draft = write(base, "draft.md", BODY)
     assert (
@@ -614,3 +618,142 @@ def test_req037_the_steward_prints_the_study_warnings_with_its_lines(root, monke
     monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: "2000-01-01")
     code, lines = file(base, NO_CLASS, said="Yes, go ahead.")
     assert code == 2 and "Class:" in lines[0]
+
+
+# --- brief #2002 (ADR-0828): the owner's filing yes approves the amendment it names ---------------
+
+import check_amendments  # noqa: E402
+
+ITEMS = '> 1. **SPEC-0901 rule 2.** Append "x" (amendment 254).\n> Class: behaviour\n'
+CHANGE = BODY.replace("Reserved: an ADR at take", "Reserved: amendment 254").replace(
+    "\nWho:", "Spec fit: SPEC-0901 rule 2 change by amendment 254\n" + ITEMS + "\nWho:"
+)
+DIGEST = check_amendments.items_digest(ITEMS.replace("> ", ""))
+NOT_AT_FILING = "amendment 254: not approved at filing (setting: Spec fit:)"
+
+
+@pytest.fixture
+def fits(root, monkeypatch):
+    monkeypatch.setattr(check_brief, "spec_fit_problems", lambda *a, **k: ([], []))
+    return root
+
+
+def filing(
+    base: Path, said: str | None, name: str | None = NAME, by: str | None = None, text: str = CHANGE
+):
+    words = write(base, "said.txt", said + "\n") if said is not None else None
+    return steward_owner.file_brief(
+        base, write(base, "draft.md", text), "A person signs in", words, AT, by, NOW, name=name
+    )
+
+
+def record_ask(
+    base: Path, question: str, session: str = "steward-a", at: str = "2026-11-22T07:40Z"
+):
+    """The session's open ask, as `steward_owner.py ask` records it (the asks file)."""
+    steward_owner.save_asks(base, [{"id": "Q-12-1", "question": question, "at": at,
+                                    "open": True, "session": session}])  # fmt: skip
+
+
+def test_req066_2002_a_spec_change_is_never_filed_under_auto_file(fits):
+    """REQ-066: answers 5 and 9: whatever its priority, a change needs the person's yes."""
+    base, _, gh, _ = fits
+    code, lines = filing(base, None, name=None, text=CHANGE.replace("Priority: 1", "Priority: 0"))
+    assert code == 1 and gh.created == []
+    assert (
+        lines[-1] == "not filed: a spec change needs the person's yes (setting: steward.auto_file)"
+    )
+
+
+def test_req066_2002_a_yes_naming_the_amendment_files_and_posts_the_approval_in_solo(fits):
+    """REQ-066: answer 5: the named yes approves the amendment it names; in solo mode one
+    comment on the filed brief in rule 5's form with the digest of the quoted items."""
+    base, _, gh, _ = fits
+    said = f"Yes, file the {NAME} brief with amendment 254"
+    code, lines = filing(base, said)
+    assert code == 0, lines
+    assert len(gh.created) == 1 and len(gh.filed) == 1
+    posted = gh.filed[0].rstrip().splitlines()
+    assert (
+        posted
+        == [  # fix list 7202066567 item 5: `Owner said` second, as the steward guard reads
+            "Maintainer answer: amendment 254 approved",
+            f'Owner said ({AT}): "{said}"',
+            'Asked: "file the A person signs in brief"',
+            f"Text: {DIGEST}",
+            "Who: ProductOwner",
+        ]
+    )
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".claude" / "hooks"))
+    import steward_guard  # noqa: PLC0415
+
+    assert steward_guard.OWNER_SAID.match(posted[1])
+    assert "approved at filing on #12: amendment 254" in lines
+
+
+def test_req066_2002_a_yes_that_names_no_amendment_files_and_approves_nothing(fits):
+    """REQ-066: answer 5: the brief is filed as today and the amendment is asked at merge."""
+    base, _, gh, _ = fits
+    code, lines = filing(base, f"Yes, file the {NAME} brief")
+    assert code == 0 and len(gh.created) == 1 and gh.filed == []
+    assert NOT_AT_FILING in lines
+    code, lines = filing(base, f"Yes, file the {NAME} brief with amendment 999")
+    assert code == 0 and gh.filed == [] and NOT_AT_FILING in lines
+
+
+def test_req066_2002_a_plain_yes_counts_only_for_the_recorded_ask_naming_the_amendment(
+    fits, monkeypatch
+):
+    """REQ-066: answer 5 and fix list 7202066567 item 1: a plain yes approves an amendment only
+    when the session's recorded open ask named it; another session's ask, an ask newer than the
+    yes and an ask naming none approve nothing, and the brief is still filed."""
+    base, _, gh, _ = fits
+    monkeypatch.setenv("AGK_SESSION", "steward-a")
+    ask = "May I file the sign-in work with its rule change, amendment 254? I recommend yes."
+    record_ask(base, ask)
+    code, lines = filing(base, "Yes, go ahead.", name=None)
+    assert code == 0 and len(gh.filed) == 1
+    assert gh.filed[0].splitlines()[2] == f'Asked (2026-11-22T07:40Z): "{ask}"'
+    for other in (
+        dict(question=ask, session="steward-b"),
+        dict(question=ask, at="2026-11-22T07:55Z"),
+        dict(question="May I file the sign-in work? I recommend yes."),
+    ):
+        record_ask(base, **other)
+        code, lines = filing(base, "Yes, go ahead.", name=None)
+        assert code == 0 and len(gh.filed) == 1 and NOT_AT_FILING in lines
+    steward_owner.save_asks(base, [])
+    assert NOT_AT_FILING in filing(base, "Yes, go ahead.", name=None)[1]
+
+
+def test_req066_2002_team_mode_prints_the_approval_for_a_spec_approver(fits):
+    """REQ-066: answer 9: in team mode the steward posts no approval; it prints the two lines."""
+    base, _, gh, _ = fits
+    toml(base, 'review_mode = "team"\n')
+    code, lines = filing(base, f"Yes, file the {NAME} brief with amendment 254", by="boss")
+    assert code == 0 and len(gh.created) == 1 and gh.filed == []
+    at = lines.index("post on #12 as a spec approver:")
+    assert lines[at + 1 : at + 3] == [
+        "Maintainer answer: amendment 254 approved",
+        f"Text: {DIGEST}",
+    ]
+
+
+def test_req066_2002_no_spec_approver_approves_nothing_at_filing(fits):
+    """REQ-066: answer 9: with no `spec_approvers` nothing can approve; the brief is filed."""
+    base, _, gh, _ = fits
+    (base / "config" / "reviewers.yaml").write_text(
+        "version: 1\nverdict_authors: [boss]\nspec_approvers: []\n", encoding="utf-8"
+    )
+    code, lines = filing(base, f"Yes, file the {NAME} brief with amendment 254")
+    assert code == 0 and len(gh.created) == 1 and gh.filed == []
+    assert "amendment 254: not approved at filing (setting: spec_approvers)" in lines
+
+
+def test_req066_2002_personal_mode_prints_the_brief_and_the_approval(fits):
+    """REQ-066: answer 9: `[personal]` prints the brief and the approval lines, posts nothing."""
+    base, _, gh, _ = fits
+    toml(base, SOLO + '[personal]\nforge = "files"\n')
+    code, lines = filing(base, f"Yes, file the {NAME} brief with amendment 254")
+    assert code == 0 and gh.created == [] and gh.filed == []
+    assert "Maintainer answer: amendment 254 approved" in lines and f"Text: {DIGEST}" in lines

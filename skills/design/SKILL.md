@@ -39,7 +39,8 @@ presenter per step) and `README.md`. Every page has a state bar of plain links t
 links to the screens it links to, so it works by clicking, opened from the files, with no build step and no server.
 
 1. Fetch the default branch and make sure the work tree is clean; if it is not, stop and say so. Create the branch from the
-   default branch, and write the version:
+   default branch, and write the version; with `[plan] stage_pulls = "stage"` (ADR-0836) stay instead on the design pull
+   request's branch, which holds the agreed inventory, and write the version there:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" prototype
@@ -150,7 +151,8 @@ names; never add `--no-sandbox` or wrap the browser for them.
 `docs/design/inventory.md`.
 
 1. Fetch the default branch, make sure the work tree is clean (stop and say so if it is not), create the branch from the
-   default branch, and write the skeleton. The script reads `docs/requirements.md` and the `Requirements:` lines of
+   default branch, and write the skeleton; with `[plan] stage_pulls = "stage"` (ADR-0836) this branch is the design pull
+   request's, which the prototype continues. The script reads `docs/requirements.md` and the `Requirements:` lines of
    `docs/specs/`, writes one section per requirement with its specs filled and every other slot empty, refuses when the
    file exists, and never fills a slot. On the path from an idea (no requirement from REQ-101 up yet, an Accepted
    `docs/adr/<n>-project-charter.md`) it also writes one `M<n>` section per charter milestone, whose `- Sources:` line

@@ -1,0 +1,1 @@
+- Planning: with `[plan] stage_pulls = "stage"` the path from an idea takes four pull requests, one per stage (discovery, design, technical design, plan), keeping every approval tied to its own record; absent, it stays one per step, and another value is refused naming `plan.stage_pulls` (brief #2021, ADR-0836)
