@@ -613,8 +613,27 @@ a value; a lock out of form is named by its path class. With nothing in use it p
 `config/packs/<id>/` only after `check_packs.py` passed on it (a symbolic link or a file name outside `[A-Za-z0-9._/-]` is
 refused), writes the lock and prints the `[packs] use` entry for the
 person's `agk.toml` change and its ADR; it never writes `agk.toml`. `update --check` lists each locked pack's newer exact
-tags and changes nothing, reading only an `https` source; a real update is `add` of the new tag. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
+tags and changes nothing, reading only an `https` source; a real update is `add` of the new tag. Each newer tag is one
+line `<id> <locked> -> <tag>: <note>`, the first line of the annotated tag's message (cut to 120 characters, control
+characters dropped; `(no change notes)` for a lightweight tag or a folder source, `(notes withheld: rule 6)` when the
+data guard flags it); a locked tag the source no longer has is `<id> <locked>: withdrawn (verify)`, and a source that
+cannot be read `<id>: cannot check (source: git|folder)` (brief #2045, ADR-0848). A pack in use whose `reviewed` or
+`as_of`, or an item's access date, is over `[packs] stale_months` calendar months old is a `warn packs: <id> ...
+(verify)` line in `doctor.py` and the weekly reports (`metrics.py`, `personal.py report`: else `packs: none stale`, or
+`packs: stale unknown (setting: ...)`), never a failure. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
 a source that cannot be read.
+
+The adoption scans (SPEC-0077 rule 6, brief #2034, ADR-0841), `scripts/agk/pack_scan.py`, a module with no command of
+its own: before `add` writes anything, every file of the staged pack passes the outbound guard (`steward_outbound.py`,
+which carries the data guard's detectors), an instruction scan that names each line asking an agent to approve, merge,
+push, skip or disable a check, reveal a secret, change its role or task, or ignore the rules (session rule 38), the
+licence list (`config/licences.toml`, else the kit's), a size limit of 64 KiB per file and 512 KiB per pack, and the
+content rule (no hook, agent file, workflow, settings file, `.mcp.json`, script outside a `skills/<name>/` folder, binary
+file outside a skill's `assets/` or file outside the kinds' folders). A tier below `[packs] trust` and a `kit` range
+(`>=x.y.z,<a.b.c`) that does not hold the running kit's version are refused at `add` and at `verify`. `add` of a pack at
+the locked version whose files changed is refused and the lock is left as it was. Each refusal is one
+`rule 6: config/packs/<id>: ...` line naming the key, setting or path class and line number, never a value; `add` says
+`gitleaks: not run` (prepush runs gitleaks).
 
 ## The project domain model
 

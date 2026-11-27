@@ -36,7 +36,7 @@ publisher = "Example Org"
 tier = "curated"
 licence = "MIT"
 source = "https://example.com/packs/zz-shop.git"
-kit = ">=0.65"
+kit = ">=0.60.0,<1.0.0"
 as_of = "2026-11-20"
 reviewed = "2026-11-21 by maintainers"
 kinds = ["skills"]
@@ -70,6 +70,13 @@ def locked(tmp_path: Path, use: bool = True) -> Path:
     table = f"[packs]\nuse = [{use_line(tmp_path)}]\n" if use else ""
     (tmp_path / "agk.toml").write_text(f'review_mode = "solo"\n{table}', encoding="utf-8")
     return tmp_path
+
+
+def scannable(root: Path) -> None:
+    """Rule 6 (brief #2034): the outbound guard fails closed without a neutrality list and git."""
+    (root / "config").mkdir(parents=True, exist_ok=True)
+    (root / "config" / "neutrality.txt").write_text("# none\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - no network
 
 
 def said(tmp_path: Path, words: str) -> Path:
@@ -185,6 +192,7 @@ def test_ac3_a_lock_out_of_form_is_named_by_its_path_class(tmp_path, text):
 def test_ac3_add_from_a_folder_on_a_yes_writes_the_folder_and_the_lock(tmp_path, capsys):
     """REQ-084 AC3: SPEC-0077 rule 4 (copied after its checks, the lock written, use printed)."""
     (tmp_path / "agk.toml").write_text('review_mode = "solo"\n', encoding="utf-8")
+    scannable(tmp_path)
     calls = Calls(stub_pack(tmp_path / "outside" / "anything"))
     code, lines = packs.add(
         tmp_path,
@@ -240,9 +248,17 @@ def test_ac3_update_check_lists_newer_tags_and_changes_nothing(tmp_path):
     before = (root / packs.LOCK).read_bytes()
     calls = Calls(tags=["v1.1.0", "1.2.0", "main", "1.10.0", "v1.3.0"])
     code, lines = packs.update_check(
-        root, said(tmp_path, "yes"), "T", tags=calls.list_tags, record=calls.record
+        root,
+        said(tmp_path, "yes"),
+        "T",
+        tags=calls.list_tags,
+        notes=lambda source, tag: None,
+        record=calls.record,
     )
-    assert code == 0 and lines[-1] == f"{PID} 1.2.0: newer 1.3.0, 1.10.0"
+    assert code == 0 and lines[-2:] == [  # brief #2045: one line per tag with its change notes
+        f"{PID} 1.2.0 -> v1.3.0: (no change notes)",
+        f"{PID} 1.2.0 -> 1.10.0: (no change notes)",
+    ]
     assert calls.listed == ["https://example.com/packs/zz-shop.git"]
     assert (root / packs.LOCK).read_bytes() == before
 
@@ -304,6 +320,7 @@ def test_ac3_a_pack_that_fails_its_check_is_never_copied(tmp_path):
 def test_ac3_team_mode_counts_only_a_spec_approvers_yes(tmp_path, monkeypatch):
     """REQ-084 AC3: SPEC-0077 rule 4 (answer 4: `review_mode = "team"`, `--by` an approver)."""
     (tmp_path / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
+    scannable(tmp_path)
     monkeypatch.setattr("reviewers.spec_approvers", lambda r: ["lead"])
     calls = Calls(stub_pack(tmp_path / "outside" / "p"))
     args = (tmp_path, "outside/p", said(tmp_path, "yes"), "T")
@@ -326,6 +343,7 @@ def test_ac3_a_builder_session_adds_no_pack(tmp_path, monkeypatch):
 def test_ac3_personal_mode_records_in_the_sidecar_and_posts_nothing(tmp_path):
     """REQ-084 AC3: SPEC-0077 rule 4 (answer 4: `[personal] forge = "files"`, nothing posted)."""
     (tmp_path / "agk.toml").write_text('review_mode = "solo"\n[personal]\nforge = "files"\n')
+    scannable(tmp_path)
     calls = Calls(stub_pack(tmp_path / "outside" / "p"))
     code, _ = packs.add(tmp_path, "outside/p", said(tmp_path, "yes"), "T", fetch=calls.fetch)
     assert code == 0 and (tmp_path / packs.LOCK).is_file()

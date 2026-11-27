@@ -40,7 +40,7 @@ publisher = "Example Org"
 tier = "curated"
 licence = "MIT"
 source = "https://example.com/packs/zz-shop"
-kit = ">=0.65"
+kit = ">=0.60.0,<1.0.0"
 as_of = "2026-11-20"
 reviewed = "2026-11-21 by maintainers"
 kinds = ["domains", "skills"]
@@ -172,8 +172,13 @@ def test_ac1_a_well_formed_stub_pack_passes(tmp_path):
             "the key is not of the format",
             "permissions.hooks",
         ),
-        ('kit = ">=0.65"\n', "kit = 65\n", "the key has the wrong type", "kit"),
-        ('kit = ">=0.65"\n', 'kit = ">=0.65"\nevals = 1\n', "the key has the wrong type", "evals"),
+        ('kit = ">=0.60.0,<1.0.0"\n', "kit = 65\n", "the key has the wrong type", "kit"),
+        (
+            'kit = ">=0.60.0,<1.0.0"\n',
+            'kit = ">=0.60.0,<1.0.0"\nevals = 1\n',
+            "the key has the wrong type",
+            "evals",
+        ),
     ],
 )
 def test_ac1_a_malformed_manifest_is_refused_naming_rule_pack_and_key(
