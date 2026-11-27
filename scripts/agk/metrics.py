@@ -2157,7 +2157,7 @@ def sums_usd(figures: dict, row: dict | None) -> Decimal | None:
     its split or the row lacks a price of a kind used, never 0 for a missing figure."""
     if row is None or any(figures[kind] is None for kind in SUM_KINDS):
         return None
-    if figures["reported"] < figures["reports"]:
+    if figures["reported"] < figures["reports"] or figures.get("unread"):
         return None
     tokens = {kind: figures[kind] for kind in SUM_KINDS}
     return usd_of("row", tokens, {"row": row})
@@ -2180,7 +2180,11 @@ def coverage_line(src: Any, details: list[dict], start: date | None = None) -> s
 
 
 def missing_of(figures: dict) -> str:
-    return f"{figures['reports'] - figures['reported']} not reported"
+    """The not-reported count, and beside it the pull requests whose comments were unread (the
+    fix list on 714b48e), so a sum is never printed as if complete."""
+    unread = figures.get("unread", 0)
+    lacking = f", {unread} pull requests unread" if unread else ""
+    return f"{figures['reports'] - figures['reported']} not reported{lacking}"
 
 
 def sum_total(figures: dict) -> str:
@@ -2217,6 +2221,8 @@ def report_sums(src: Any, root: Path, document: Any, start: date | None, model: 
         comments = src.get(f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
         if not isinstance(comments, list):
             rows.append([f"#{number}", name] + [UNKNOWN] * (len(head) - 2))
+            for into in (by_brief.setdefault(name, report_figures([])), total):
+                into["unread"] = into.get("unread", 0) + 1
             continue
         lines = report_lines(comments, start)
         if not lines:

@@ -325,6 +325,12 @@ def test_req052_report_sums_say_when_comments_cannot_be_read(tmp_path, monkeypat
     out = sums(capsys, facts, api)
     assert "| #8 | #70 | unknown | unknown |" in out
     assert "usage reported: 2 of 3 reports (1 pull requests unread)" in out
+    # fix list on 714b48e: a line that covers an unread pull request names it beside its number
+    assert "By brief: #70 2684 (0 not reported, 1 pull requests unread), #90 unknown" in out
+    assert "By role: builder 2684 (1 not reported, 1 pull requests unread);" in out
+    assert (
+        "Total: reports 3, reported 2, total 2684 (1 not reported, 1 pull requests unread)" in out
+    )
 
 
 def test_req052_the_weekly_report_says_how_many_reports_carry_a_figure():
