@@ -559,11 +559,10 @@ def test_ac8_in_team_mode_only_a_spec_approver_yes_starts_a_run(stub, monkeypatc
     """REQ-084 AC8: SPEC-0077 rule 9 (answer 6: `review_mode = "team"`, `spec_approvers`)."""
     sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
     import eval_run
-    import reviewers
     import steward_owner
 
     monkeypatch.setattr(steward_owner, "review_mode", lambda root: "team")
-    monkeypatch.setattr(reviewers, "spec_approvers", lambda root: ["approver-a"])
+    monkeypatch.setattr("reviewers.spec_approvers", lambda root: ["approver-a"])
     for key in ("CI", "GITHUB_ACTIONS"):
         monkeypatch.delenv(key, raising=False)
     root = stub["root"]

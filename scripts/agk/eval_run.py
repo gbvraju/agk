@@ -34,6 +34,7 @@ import subprocess  # nosec B404 - the person's own adapter and git, argument lis
 import sys
 import tomllib
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -372,7 +373,8 @@ def median(folder: Path) -> tuple[list[str], list[str]]:
     return fails, report
 
 
-TOKENS = ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN")
+# the GitHub token variables a run removes, by name only
+NO_GITHUB = tuple(f"{x}_TOKEN" for x in ("GH", "GITHUB", "GH_ENTERPRISE", "GITHUB_ENTERPRISE"))
 AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z")
 OPTIONS = ("--product", "--adapter", "--said", "--at", "--out", "--by", "--minutes")
 NOT_PRICED = "not priced (setting: cost.prices)"
@@ -459,7 +461,7 @@ def session(adapter: str, prompt: str, cwd: Path, env: dict, minutes: int) -> bo
 def session_env(scratch: Path, kind: str, agent: str, model: str | None) -> dict[str, str]:
     """The environment of a run's session: no GitHub token, an empty GitHub config folder and
     `AGK_HOME` in the scratch folder, so the session can make no GitHub call."""
-    env = {k: v for k, v in os.environ.items() if k not in TOKENS and k != "AGK_MODEL"}
+    env = {k: v for k, v in os.environ.items() if k not in NO_GITHUB and k != "AGK_MODEL"}
     (scratch / "gh").mkdir(exist_ok=True)
     env.update({"AGK_HOME": str(scratch), "GH_CONFIG_DIR": str(scratch / "gh")})
     env.update({"AGK_KIND": kind, "AGK_TIER": TIER, "AGK_AGENT": agent})
@@ -548,7 +550,8 @@ def cost_of(replies: list[dict], prices: dict) -> dict:
         out["usd"] = NOT_PRICED
         return out
     usd = [metrics.usd_of(r["model"], r["tokens"], prices) for r in replies]
-    out["usd"] = "unknown" if None in usd else round(float(sum(usd)), 4)  # type: ignore[arg-type]
+    known = [u for u in usd if u is not None]
+    out["usd"] = "unknown" if len(known) < len(usd) else round(float(sum(known, Decimal(0))), 4)
     return out
 
 
