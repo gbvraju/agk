@@ -152,6 +152,7 @@ LOCK = "config/packs.lock"
 LOCK_CLASS = f"rule 4: {LOCK}: the lock is not readable or out of form (key: pack)"
 NO_YES = "nothing added or read: the person's yes is not recorded (setting: the recorded yes)"
 TAG = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+NAME = re.compile(r"^[A-Za-z0-9._/-]+$")  # a pack's file names: nothing the lock must escape
 
 
 def lock_entry(folder: Path) -> dict:
@@ -306,16 +307,21 @@ def fetch_source(source: str, tag: str | None, dest: Path) -> bool:
     if tag is None:
         if not Path(source).is_dir():
             return False
-        shutil.copytree(source, dest, ignore=shutil.ignore_patterns(".git"))
+        shutil.copytree(source, dest, symlinks=True, ignore=shutil.ignore_patterns(".git"))
         return True
-    argv = ["git", "clone", "-q", "--depth", "1", "--branch", tag, source, str(dest)]
+    if not source.startswith("https://"):
+        return False
+    argv = ["git", "clone", "-q", "--depth", "1", "--branch", tag, "--", source, str(dest)]
     done = subprocess.run(argv, capture_output=True, check=False)  # nosec B603 - fixed argv, after the yes
     shutil.rmtree(dest / ".git", ignore_errors=True)
     return done.returncode == 0
 
 
 def remote_tags(source: str) -> list[str] | None:
-    argv = ["git", "ls-remote", "--tags", "--refs", source]
+    """The tags at an `https` SOURCE; None for any other source or when it cannot be read."""
+    if not source.startswith("https://"):
+        return None
+    argv = ["git", "ls-remote", "--tags", "--refs", "--", source]
     done = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", check=False)  # nosec B603 - fixed argv, after the yes
     if done.returncode:
         return None
@@ -354,8 +360,13 @@ def add(root, source, said, at, *, by=None, tag=None, fetch=fetch_source, record
         pid = (check_packs.load(got / check_packs.MANIFEST) or {}).get("id")
         if not isinstance(pid, str) or not check_packs.SLUG.match(pid) or pid == check_packs.CORE:
             return 1, [*lines, "rule 3: config/packs/: the pack's id is out of form (key: id)"]
+        if any(
+            p.is_symlink() or not NAME.match(p.relative_to(got).as_posix()) for p in got.rglob("*")
+        ):
+            return 1, [*lines, f"rule 4: {check_packs.FOLDER}/{pid}: the pack holds a symbolic"
+                       " link or a file name out of form (key: files)"]  # fmt: skip
         stage = Path(tmp) / pid
-        shutil.copytree(got, stage)
+        shutil.copytree(got, stage, symlinks=True)
         if found := check_packs.problems(stage):
             return 1, [*lines, *found]
         entry = lock_entry(stage)
@@ -375,6 +386,7 @@ def add(root, source, said, at, *, by=None, tag=None, fetch=fetch_source, record
     return 0, [
         *lines,
         f"added {check_packs.FOLDER}/{pid} and {LOCK}; add it with its ADR, in agk.toml",
+        "protected: `config/` (name them in this change's ADR)",
         f"[packs] use: {use}",
     ]
 
@@ -399,7 +411,11 @@ def update_check(root, said, at, *, by=None, tags=remote_tags, record=record_not
     for e in entries:
         manifest = root / check_packs.FOLDER / e["id"] / check_packs.MANIFEST
         source = (check_packs.load(manifest) or {}).get("source")
-        found = tags(source) if isinstance(source, str) else None
+        if not isinstance(source, str) or not source.startswith("https://"):
+            code = 2
+            lines.append(f"{e['id']}: the source is not a public https URL (source: git)")
+            continue
+        found = tags(source)
         if found is None:
             code = 4
             lines.append(f"{e['id']}: the source cannot be read (source: git)")

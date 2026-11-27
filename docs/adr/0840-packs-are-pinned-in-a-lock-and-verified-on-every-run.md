@@ -33,12 +33,17 @@ a pack. ADR-0171 is the form to copy: a version and a hash, checked on every use
    `Setup` note through `steward.record` (the sidecar's file in personal mode, nothing posted). Only on a yes is the
    source read: a folder, or a public `https` git URL with an exact version tag, cloned at depth 1 (`Q-PC-1`). The
    pack is staged in a temporary folder, `check_packs.problems` runs on it, and only then is it copied to
-   `config/packs/<id>/` and the lock written. It prints the `[packs] use` entry and never writes `agk.toml`: that
+   `config/packs/<id>/` and the lock written. A pack holding a symbolic link or a file name outside
+   `[A-Za-z0-9._/-]` is refused and nothing is copied; copies keep links as links, so no file outside the pack is
+   read, and the lock's TOML strings need no escaping. It prints the `[packs] use` entry and never writes `agk.toml`: that
    line and its ADR are the person's protected change (`Q-PC-2`, `Q-S0077-10`). A builder session is refused
    (`AGK_AGENT` or `AGK_ROLE` `builder`); the steward runs it on the person's yes.
 4. **update --check (on a yes).** It lists each locked pack's newer exact tags at its manifest's `source` and changes
-   nothing; a real update is `add` of the new tag in its own pull request with its ADR (rule 8).
-5. **Wiring.** The `[testing]` map of `packs.py` and `check_packs.py` names `tests/kit/test_packs_lock.py`.
+   nothing; only an `https` source is read (else one line naming `source: git`, exit 2), and both `git` calls put
+   `--` before the source; a real update is `add` of the new tag in its own pull request with its ADR (rule 8).
+5. **Wiring.** The `[testing]` map of `packs.py` and `check_packs.py` names `tests/kit/test_packs_lock.py`;
+   `tests/kit/test_kit_step_governance.py` holds `packs.py::add` as a step that writes `config/` (its `protected:`
+   line names the class).
 
 ## Consequences
 

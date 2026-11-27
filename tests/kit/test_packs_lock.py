@@ -343,3 +343,40 @@ def test_ac3_the_class_stays_closed_only_packs_writes_the_lock():
         or (named.search(text) and writes.search(text) and "copytree" in text)
     )
     assert found == ["packs.py"]
+
+
+def test_ac3_update_check_reads_only_an_https_source(tmp_path):
+    """REQ-084 AC3: SPEC-0077 rule 4 (a manifest `source` shaped as a git option runs nothing)."""
+    root = locked(tmp_path)
+    pwned = tmp_path / "pwned"
+    manifest = root / REL / check_packs.MANIFEST
+    hostile = f"--upload-pack=touch {pwned};"
+    text = manifest.read_text(encoding="utf-8").replace(
+        'source = "https://example.com/packs/zz-shop.git"', f'source = "{hostile}"'
+    )
+    manifest.write_text(text, encoding="utf-8")
+    calls = Calls()
+    code, lines = packs.update_check(root, said(tmp_path, "yes"), "T", record=calls.record)
+    assert code == 2 and lines[-1] == f"{PID}: the source is not a public https URL (source: git)"
+    assert packs.remote_tags(hostile) is None and not packs.fetch_source(
+        hostile, "1.2.0", tmp_path / "x"
+    )
+    assert not pwned.exists() and hostile not in "\n".join(lines)
+
+
+@pytest.mark.parametrize("shape", ["link", "name"])
+def test_ac3_a_pack_with_a_symbolic_link_or_an_odd_name_is_never_copied(tmp_path, shape):
+    """REQ-084 AC3: SPEC-0077 rule 4 (nothing outside the pack is read; the lock stays plain)."""
+    (tmp_path / "agk.toml").write_text('review_mode = "solo"\n', encoding="utf-8")
+    src = stub_pack(tmp_path / "outside" / "p")
+    secret = tmp_path / "elsewhere.txt"
+    secret.write_text("outside the pack\n", encoding="utf-8")
+    if shape == "link":
+        (src / "skills" / "shop" / "more.md").symlink_to(secret)
+    else:
+        (src / "skills" / "shop" / 'a "b".md').write_text("x\n", encoding="utf-8")
+    calls = Calls()
+    code, lines = packs.add(tmp_path, "outside/p", said(tmp_path, "yes"), "T", record=calls.record)
+    want = f"rule 4: {REL}: the pack holds a symbolic link or a file name out of form (key: files)"
+    assert (code, lines[-1]) == (1, want)
+    assert not (tmp_path / "config").exists()

@@ -610,9 +610,10 @@ a value; a lock out of form is named by its path class. With nothing in use it p
 `update --check` read a source only on the person's recorded yes (`--said`, as `steward_owner.py research`; in team mode
 `--by` a spec approver) and never in a builder session; with no yes they record the no, read nothing and write nothing.
 `add` takes a folder, or a public `https` git URL with `--tag` an exact version tag (never a branch), copies the pack to
-`config/packs/<id>/` only after `check_packs.py` passed on it, writes the lock and prints the `[packs] use` entry for the
+`config/packs/<id>/` only after `check_packs.py` passed on it (a symbolic link or a file name outside `[A-Za-z0-9._/-]` is
+refused), writes the lock and prints the `[packs] use` entry for the
 person's `agk.toml` change and its ADR; it never writes `agk.toml`. `update --check` lists each locked pack's newer exact
-tags and changes nothing; a real update is `add` of the new tag. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
+tags and changes nothing, reading only an `https` source; a real update is `add` of the new tag. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
 a source that cannot be read.
 
 ## The project domain model
