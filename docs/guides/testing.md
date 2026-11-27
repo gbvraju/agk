@@ -37,6 +37,12 @@ budget_seconds = 300
   line or the line above it; `check_kit_tests.py` and `doctor.py` refuse one without it, naming the entry's place (SPEC-0055 rule 6
   as amendment 153 proposes, ADR-0393). A changed file that is ordinary code selects its map entries' tests and the tests of
   every file that imports it, one level, and the plan prints `selected: <file> -> <k> tests (<j> by importers)`.
+- `hub_importers`: optional, a whole number of at least 1; without it every changed file expands to its importers as above.
+  A changed code file with more direct importers that are not test files is a hub: it selects its own entries' tests, the
+  tests that name it and the test files that import it, not its importer scripts' map tests, and the plan prints
+  `selected: <file> -> <k> tests (hub: <n> importers, importers not expanded; setting: testing.hub_importers)`. Any other
+  value is refused naming the setting (brief #2055, ADR-0853). Under `balanced` a covered file also selects the tests that
+  name its exact path, never its folder words; a file no entry covers still reads its folder (SPEC-0055 rule 6).
 - `map`: a list of entries. Each names a `code` glob and the `tests` globs of the tests that guard that code.
 - `budget_seconds`: the target time of the full project suite, 300 seconds if unset. It is reported, never enforced: the weekly report
   gives the full suite's median on the default branch against it, the slowest ten test files and the workers' balance, and over

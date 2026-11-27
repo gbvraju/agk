@@ -93,6 +93,25 @@ def test_every_test_glob_of_the_map_names_an_existing_test_file():
     assert stale == []
 
 
+def test_no_covered_script_is_named_exactly_by_half_the_suite():
+    """REQ-051: brief #2055 answer 7 (ADR-0853: the tests a covered script's exact name adds stay
+    below `full_when_share` of the suite, so no word every test holds selects half the suite)."""
+    found, tests = table(), kit_tests()
+    index = impact.name_index(ROOT, "HEAD", tests)
+    limit = impact.full_when_share(ROOT) * len(tests)
+    wide = []
+    for script in sorted(SCRIPTS.glob("*.py")):
+        path = script.relative_to(ROOT).as_posix()
+        if any(impact.matches(path, g) for g in found["always_full"]):
+            continue
+        if not any(impact.matches(path, e["code"]) for e in found["map"]):
+            continue
+        named = impact.covered_naming(path, index)
+        if len(named) >= limit:
+            wide.append(f"{path}: {len(named)} of {len(tests)}")
+    assert wide == []
+
+
 def git(root: Path, *args: str) -> str:
     proc = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True)
     return proc.stdout
