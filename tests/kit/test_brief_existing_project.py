@@ -24,13 +24,16 @@ import check_brief  # noqa: E402
 import kit_root  # noqa: E402
 import packs  # noqa: E402
 import steward_owner  # noqa: E402
-from test_check_brief_study import STUDIED, tree  # noqa: E402
+from test_check_brief_study import EXISTING as STUDIED_EXISTING  # noqa: E402
+from test_check_brief_study import STUDIED as WITH_LINE  # noqa: E402
+from test_check_brief_study import tree  # noqa: E402
 
 DAY = "2026-12-14"
 BEFORE, AFTER = "2026-12-13", "2026-12-15"
+STUDIED = WITH_LINE.replace(STUDIED_EXISTING, "", 1)  # the shared brief without its line
 REPORT = "site/src/report.ts"
 NAMED = STUDIED.replace("1. one\n", "1. one: `weekSection()` builds the week (example.com).\n")
-MISSING = "study: the Existing line"
+MISSING = "study: the Existing line is missing"
 NONE = "Existing: none: `grep -rn weekSection site/` gives 0 matches\n"
 
 
@@ -41,7 +44,7 @@ def with_line(line: str, body: str = STUDIED) -> str:
 def project(tmp_path: Path, day: str | None = DAY, toml: str = "") -> Path:
     root = tree(tmp_path)
     flow = f'[flow]\nbrief_study_fails_from = "{day}"\n' if day else ""
-    (root / "agk.toml").write_text(flow + toml, "utf-8")
+    (root / "agk.toml").write_text(toml + flow, "utf-8")  # top-level keys first
     (root / "site" / "src").mkdir(parents=True)
     (root / REPORT).write_text(
         "// the week\nconst x = 1;\nexport function weekSection() {\n  return x;\n}\n", "utf-8"
@@ -124,7 +127,7 @@ def test_req037_a_function_in_the_projects_source_is_warned_and_naming_it_silenc
     assert want in warnings
     item = f"Existing:\n- `{REPORT}:3` (`weekSection`): the week; not enough: partial.\n\n"
     _, warnings = result(root, with_line(item, NAMED), BEFORE)
-    assert not any("leaves out" in w for w in warnings)
+    assert not any("leaves out" in w and "weekSection" in w for w in warnings)
 
 
 def test_req037_the_check_brief_command_prints_both_warnings(tmp_path):
@@ -137,7 +140,7 @@ def test_req037_the_check_brief_command_prints_both_warnings(tmp_path):
         capture_output=True, text=True, check=False, cwd=tmp_path,
     )  # fmt: skip
     out = run.stdout + run.stderr
-    assert "study: the Existing line" in out
+    assert "warning: study: the Existing line is missing" in out
     assert f"study: Existing leaves out {REPORT}:3, which defines weekSection()" in out
 
 
@@ -200,7 +203,9 @@ def test_req037_eleven_matches_give_ten_warnings_and_one_count_line(tmp_path):
     (root / "site" / "src" / "stubs.ts").write_text(
         "".join(f"export const {n} = 1;\n" for n in names), "utf-8"
     )
-    body = with_line(NONE, STUDIED.replace("1. one\n", "1. " + " ".join(f"`{n}()`" for n in names) + "\n"))
+    body = with_line(
+        NONE, STUDIED.replace("1. one\n", "1. " + " ".join(f"`{n}()`" for n in names) + "\n")
+    )
     _, warnings = result(root, body, BEFORE)
     assert len([w for w in warnings if "leaves out" in w]) == brief_study.CODE_WARNINGS
     assert any("more code matches not warned" in w for w in warnings)

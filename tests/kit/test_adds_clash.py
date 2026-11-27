@@ -20,6 +20,7 @@ STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
 )
 BODY = (
     'Sentence: "A team can run a thing."\n'
+    "Existing:\n- `src/app.py:1`: the app; not enough: x.\n\n"  # brief #2065: a project's line
     "Answers (the maintainers'):\n1. one\n"
     "Size: M\nAdvances: REQ-001\nTouches: src/app.py\n{adds}"
     "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n" + STUDY
@@ -100,7 +101,8 @@ def test_two_adds_lines_name_both_and_the_merged_line(tmp_path):
     out = check(tmp_path, "Adds: a.py, b.py\nAdds: c.py\n", [])
     assert out.returncode == 1
     assert (
-        "line 7 and line 8 are both Adds: lines; use one line Adds: a.py, b.py, c.py" in out.stdout
+        "line 10 and line 11 are both Adds: lines; use one line Adds: a.py, b.py, c.py"
+        in out.stdout
     )
     assert "at most one line Adds" not in out.stdout
 

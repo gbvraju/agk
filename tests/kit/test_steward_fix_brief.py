@@ -30,6 +30,7 @@ FIX_ON = "[steward]\nfix_briefs = true\n"
 BODY = (
     'Sentence: "A person signs in on the login page."\n'
     "Evidence: traced on main at abc1234.\n"
+    "Existing: none: `grep -rn login app/` gives 0 matches\n"  # brief #2065: a project's line
     "Advances: REQ-001\n"
     "Priority: 1\n"
     "Touches: app/login.py\n"

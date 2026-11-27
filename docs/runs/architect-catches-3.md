@@ -9,7 +9,7 @@ The row was read by GET on the project's pull request named in brief #2065 (ADR-
 project). Nothing is added that the record does not support.
 
 Kinds (fixed list): `wrong-assumption`, `false-declaration`, `test-proves-less`, `stale-claim`, `fragile-code`, `security`, `vendored-file-change`, `scope-rule`, `process-order`, `kit-defect`, `cost`,
-`late-discovery`.
+`late-discovery` (a fact found after intake that should have been asked at intake).
 
 ## The catches
 
