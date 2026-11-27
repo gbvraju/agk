@@ -786,13 +786,14 @@ def configured_adapter() -> str | None:
 
 def launch_allowed(words: list[str], cwd: object) -> bool:
     """`python3 scripts/agk/launch.py prompts --plan <scratch file>`, with `--adapter <command>`
-    after it only when that command is the configured `launch_adapter` (brief #331, ADR-0190)."""
-    if len(words) not in (5, 7) or words[0] != "python3" or words[2:4] != ["prompts", "--plan"]:
+    after it only when that command is the configured `launch_adapter` (brief #331, ADR-0190), or
+    the one word `--job` after it: the job text of a start with no adapter (brief #2057)."""
+    if len(words) not in (5, 6, 7) or words[0] != "python3" or words[2:4] != ["prompts", "--plan"]:
         return False
     if not own_script(words[1], cwd, LAUNCH_SCRIPT) or scratch_text(words[4]) is None:
         return False
-    if len(words) == 5:
-        return True
+    if len(words) < 7:
+        return words[5:] in ([], ["--job"])
     adapter = configured_adapter()
     return words[5] == "--adapter" and adapter is not None and words[6] == adapter
 

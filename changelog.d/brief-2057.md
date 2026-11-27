@@ -1,0 +1,1 @@
+- Short jobs: every builder start through an adapter carries its one-short-job line (`launch.BUILD_JOB` or `FIX_JOB`), `launch.py prompts --job` prints it with a `Job:` line for a start with no adapter, and the watchdog waits the hour before the next fix job only after a failed or empty one (SPEC-0064 rules 2, 4 and 9, brief #2057, ADR-0855)
