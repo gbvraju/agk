@@ -68,8 +68,13 @@ def write_pack(root: Path, pid: str, files: dict[str, str], kinds: list[str] | N
 
 
 def use(root: Path, *entries: str, extra: str = "") -> None:
+    """`[packs] use` of ENTRIES, and the lock that `add` would have written for them (rule 4)."""
     text = extra + f"[packs]\nuse = [{', '.join(entries)}]\n"
     (root / "agk.toml").write_text(text, encoding="utf-8")
+    folders = [root / "config" / "packs" / re.search(r'id = "([^"]+)"', e)[1] for e in entries]
+    found = [packs.lock_entry(f) for f in folders if f.is_dir()]
+    (root / packs.LOCK).parent.mkdir(parents=True, exist_ok=True)
+    (root / packs.LOCK).write_text(packs.lock_text(found), encoding="utf-8")
 
 
 def clean(root: Path) -> Path:

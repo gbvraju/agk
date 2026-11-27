@@ -298,6 +298,23 @@ def vision_write(root: Path) -> str:
     return out
 
 
+def pack_add(root: Path) -> str:
+    """Brief #2033 (ADR-0840): `packs.py add` on the person's yes writes the pack and the lock."""
+    import packs
+    import test_packs_lock as lock
+
+    on(root, "pack")
+    src = lock.stub_pack(root.parent / "pack-source" / "zz-shop")
+    words = root.parent / "said.txt"
+    words.write_text("yes", encoding="utf-8")
+    notes = lambda r, text: (0, ["recorded"])  # noqa: E731 - the Setup note, never posted here
+    code, lines = packs.add(root, str(src), words, "2026-11-27T10:00Z", record=notes)
+    out = "\n".join(lines)
+    assert code == 0, out
+    named(root, out)
+    return out
+
+
 # Each kit step that writes into a project: (file::function, how the test runs it, the scratch).
 ADOPTED = {"adopt": True}
 WEB_APP = {"settings": {"[delivery]": 'work_type = "web-app"'}}
@@ -320,6 +337,7 @@ STEPS = {
     "discovery-write": ("scripts/agk/front_door.py::discovery_write", discovery_write, {}),
     "derive-write": ("scripts/agk/front_door.py::derive_write", derive_write, {"layout": "full"}),
     "vision-write with charter": ("scripts/agk/engines.py::cmd_vision_write", vision_write, {}),
+    "pack add": ("scripts/agk/packs.py::add", pack_add, {}),
 }
 
 # Writers of a protected path that are no step of this table, each with where it is held.
