@@ -411,3 +411,25 @@ def test_this_repository_maps_its_data_files(pattern):
         tests = [g for e in table["map"] if impact.matches(path, e["code"]) for g in e["tests"]]
         assert tests, path
         assert any(g in tree or any(impact.matches(t, g) for t in tree) for g in tests), path
+
+
+@pytest.mark.parametrize("word", ["app/billing/", "app/billing"])
+def test_a_covered_file_named_only_by_its_folder_selects_only_its_entry(repo, word):
+    """REQ-051: brief #2055 answer 1 (ADR-0853: a covered file no longer reads its folder words)."""
+    start(repo, files={"tests/test_folder_word.py": f'WHERE = "{word}"\n'})
+    found = change(repo, "app/billing/pay.py")
+    assert found.full is False and picked(found) == ["tests/test_pay.py"]
+
+
+def test_a_covered_file_named_by_a_join_of_literals_selects_that_test(repo):
+    """REQ-051: brief #2055 answer 1 (the exact path in amendment 220's joined form still counts)."""
+    joined = {"tests/test_joined.py": 'P = ROOT / "app" / "billing" / "pay.py"\n'}
+    start(repo, files=joined)
+    assert picked(change(repo, "app/billing/pay.py")) == ["tests/test_joined.py", "tests/test_pay.py"]
+
+
+def test_an_uncovered_file_still_reads_its_folder_words(repo):
+    """REQ-051: brief #2055 answer 1 (SPEC-0055 rule 6 for an uncovered file is unchanged)."""
+    start(repo, files={"tests/test_folder.py": 'WHERE = "data/"\n'})
+    found = change(repo, "data/prices.json")
+    assert picked(found) == ["tests/test_folder.py", "tests/test_prices.py"]
