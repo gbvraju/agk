@@ -613,7 +613,14 @@ a value; a lock out of form is named by its path class. With nothing in use it p
 `config/packs/<id>/` only after `check_packs.py` passed on it (a symbolic link or a file name outside `[A-Za-z0-9._/-]` is
 refused), writes the lock and prints the `[packs] use` entry for the
 person's `agk.toml` change and its ADR; it never writes `agk.toml`. `update --check` lists each locked pack's newer exact
-tags and changes nothing, reading only an `https` source; a real update is `add` of the new tag. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
+tags and changes nothing, reading only an `https` source; a real update is `add` of the new tag. Each newer tag is one
+line `<id> <locked> -> <tag>: <note>`, the first line of the annotated tag's message (cut to 120 characters, control
+characters dropped; `(no change notes)` for a lightweight tag or a folder source, `(notes withheld: rule 6)` when the
+data guard flags it); a locked tag the source no longer has is `<id> <locked>: withdrawn (verify)`, and a source that
+cannot be read `<id>: cannot check (source: git|folder)` (brief #2045, ADR-0848). A pack in use whose `reviewed` or
+`as_of`, or an item's access date, is over `[packs] stale_months` calendar months old is a `warn packs: <id> ...
+(verify)` line in `doctor.py` and the weekly reports (`metrics.py`, `personal.py report`: else `packs: none stale`, or
+`packs: stale unknown (setting: ...)`), never a failure. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
 a source that cannot be read.
 
 ## The project domain model

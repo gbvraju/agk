@@ -57,11 +57,7 @@ def entries(*dates: str | None) -> str:
     """A knowledge file: one `[[rules]]` entry per date (None: `basis = "expected"`)."""
     out = []
     for n, d in enumerate(dates):
-        tail = (
-            f'source = "https://example.com/r{n} (accessed {d})"'
-            if d
-            else 'basis = "expected"'
-        )
+        tail = f'source = "https://example.com/r{n} (accessed {d})"' if d else 'basis = "expected"'
         out.append(f'[[rules]]\nid = "r{n}"\ntext = "Invented rule {n}."\n{tail}\n')
     return "\n".join(out)
 
@@ -139,8 +135,7 @@ def test_ac6_one_old_item_is_named_in_the_singular(tmp_path):
     """REQ-084 AC6: SPEC-0077 rule 8 (one line for the items of a pack, however many)."""
     root = project(tmp_path, [pack(tmp_path, items=("2020-02-02",))])
     assert packs.stale(root, TODAY) == [
-        f"warn packs: {PID} 1 item accessed before [packs] stale_months, oldest 2020-02-02"
-        " (verify)"
+        f"warn packs: {PID} 1 item accessed before [packs] stale_months, oldest 2020-02-02 (verify)"
     ]
 
 
@@ -191,9 +186,7 @@ def test_ac6_a_refused_stale_months_shows_no_line_and_unknown_in_the_report(tmp_
     with pytest.raises(packs.Refused, match=r"\(setting: packs\.stale_months\)"):
         packs.stale(root, TODAY)
     assert doctor.pack_stale_lines(root) == []
-    assert packs.report_lines(root, TODAY) == [
-        "packs: stale unknown (setting: packs.stale_months)"
-    ]
+    assert packs.report_lines(root, TODAY) == ["packs: stale unknown (setting: packs.stale_months)"]
     assert doctor.packs_settings_result(root).status == "fail"
 
 
@@ -259,6 +252,7 @@ def test_ac6_on_a_sidecar_doctor_adds_the_lines_and_keeps_its_exit(tmp_path, mon
     found = doctor.personal_line(root)
     assert found is not None
     code, text = found
+    (tmp_path / "fresh").mkdir()
     fresh = project(tmp_path / "fresh", [], top=top)
     assert code == doctor.personal_line(fresh)[0]
     assert f"warn packs: {PID} reviewed 2020-01-01" in text

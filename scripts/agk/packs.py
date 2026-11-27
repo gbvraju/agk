@@ -146,6 +146,87 @@ def rows(layers: list[tuple[str, list[dict]]], key: str) -> list[dict]:
     return [row for group in out.values() for row in group]
 
 
+# --- stale packs (SPEC-0077 rule 8, brief #2045, ADR-0848) ----------------------------------------
+
+STALE = "is older than [packs] stale_months (verify)"
+NONE_STALE = "packs: none stale"
+SETTING = re.compile(r"\((?:setting|key|source): [^)]*\)$")
+
+
+def _today():
+    import datetime
+
+    return datetime.datetime.now(datetime.UTC).date()
+
+
+def _over(day, today, months: int) -> bool:
+    """`check_domains.stale`'s count: calendar months, the day ignored, over and never at."""
+    return (today.year - day.year) * 12 + today.month - day.month > months
+
+
+def _item_dates(folder: Path) -> list:
+    """The access dates of the entries of a pack's TOML knowledge files (rule 3's `source`)."""
+    import check_packs
+    import playbook_format
+
+    listed = (check_packs.load(folder / check_packs.MANIFEST) or {}).get("files", {})
+    out = []
+    for name in sorted(listed):
+        data = check_packs.load(folder / name) if name.endswith(".toml") else None
+        for value in (data or {}).values():
+            for entry in value if isinstance(value, list) else []:
+                found = isinstance(entry, dict) and playbook_format.source_date(entry.get("source"))
+                if found:
+                    out.append(found)
+    return out
+
+
+def stale(root: Path, today=None) -> list[str]:
+    """Rule 8: a `warn packs:` line for each pack in use whose `reviewed` or `as_of` date, and one
+    for its items when an access date, is over `[packs] stale_months` months before TODAY; the
+    pack id, the key and the date, never a value. Reads files only; raises `Refused`."""
+    import datetime
+
+    import check_packs
+
+    import config
+
+    today = today or _today()
+    try:
+        months = config.packs_settings(Path(root))["stale_months"]
+    except config.PacksSettingError as exc:
+        raise Refused(f"packs: {exc}") from None
+    out = []
+    for pid, folder in used(root):
+        data = check_packs.load(folder / check_packs.MANIFEST) or {}
+        for key in ("reviewed", "as_of"):
+            text = str(data.get(key, ""))[:10]
+            try:
+                day = datetime.date.fromisoformat(text)  # rule 3 checked its form
+            except ValueError:  # a form that names no real day: no age to show
+                continue
+            if _over(day, today, months):
+                out.append(f"warn packs: {pid} {key} {text} {STALE}")
+        old = [d for d in _item_dates(folder) if _over(d, today, months)]
+        if old:
+            noun = "item" if len(old) == 1 else "items"
+            out.append(
+                f"warn packs: {pid} {len(old)} {noun} accessed before [packs] stale_months,"
+                f" oldest {min(old).isoformat()} (verify)"
+            )
+    return out
+
+
+def report_lines(root: Path, today=None) -> list[str]:
+    """The weekly report's lines: the stale lines, `packs: none stale`, or `stale unknown` naming
+    the setting of a refusal, never 0."""
+    try:
+        return stale(root, today) or [NONE_STALE]
+    except (CheckError, OSError, ValueError) as exc:
+        named = SETTING.search(str(exc))
+        return [f"packs: stale unknown {named.group(0) if named else '(setting: packs)'}"]
+
+
 # --- the lock (SPEC-0077 rule 4, brief #2033, ADR-0840) -------------------------------------------
 
 LOCK = "config/packs.lock"
@@ -396,8 +477,56 @@ def _version(text: str) -> tuple[int, ...] | None:
     return tuple(int(x) for x in found.groups()) if found else None
 
 
-def update_check(root, said, at, *, by=None, tags=remote_tags, record=record_note):
-    """Rules 4 and 8: on a recorded yes, the newer exact tags of each locked pack; no write."""
+NO_NOTES = "(no change notes)"
+WITHHELD = "(notes withheld: rule 6)"
+NOTE_CHARS = 120
+
+
+def tag_note(source: str, tag: str) -> str | None:
+    """`Q-PI-1`: the message of the annotated TAG at an `https` SOURCE, fetched with the tag alone
+    into a scratch repository; None for a lightweight tag, another source or a read that fails."""
+    if not source.startswith("https://") or not TAG.match(tag):
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        ref = f"refs/tags/{tag}"
+        steps = (
+            ["git", "init", "-q", "--bare", tmp],
+            ["git", "-C", tmp, "fetch", "-q", "--depth", "1", "--no-tags", "--", source,
+             f"{ref}:{ref}"],
+            ["git", "-C", tmp, "for-each-ref", "--format=%(objecttype)%00%(contents)", ref],
+        )  # fmt: skip
+        for argv in steps:
+            done = subprocess.run(argv, capture_output=True, encoding="utf-8", errors="replace")  # nosec B603 - fixed argv, after the yes
+            if done.returncode:
+                return None
+    kind, _, text = done.stdout.partition("\0")
+    return text if kind == "tag" else None
+
+
+def note_text(raw: str | None) -> str:
+    """Rule 8: a note's first line as data, control characters dropped, cut to 120 characters;
+    `(no change notes)` when none is left, and withheld when the data guard flags it."""
+    from guard import scan_text
+
+    line = (raw or "").splitlines()[0] if (raw or "").strip() else ""
+    line = "".join(c for c in line if c.isprintable())[:NOTE_CHARS].strip()
+    if not line:
+        return NO_NOTES
+    return WITHHELD if scan_text(raw or "") else line
+
+
+def _folder_version(root: Path, source: str) -> str | None:
+    """A folder source's manifest version (an exact one), or None when it cannot be read."""
+    import check_packs
+
+    path = Path(source) if Path(source).is_absolute() else Path(root) / source
+    version = (check_packs.load(path / check_packs.MANIFEST) or {}).get("version")
+    return version if isinstance(version, str) and _version(version) else None
+
+
+def update_check(root, said, at, *, by=None, tags=remote_tags, notes=tag_note, record=record_note):
+    """Rules 4 and 8: on a recorded yes, the newer exact tags of each locked pack with their change
+    notes, a locked tag the source no longer has as `withdrawn`; nothing is written."""
     import check_packs
 
     root = Path(root)
@@ -411,6 +540,19 @@ def update_check(root, said, at, *, by=None, tags=remote_tags, record=record_not
     for e in entries:
         manifest = root / check_packs.FOLDER / e["id"] / check_packs.MANIFEST
         source = (check_packs.load(manifest) or {}).get("source")
+        now = _version(e["version"]) or ()
+        here = f"{e['id']} {e['version']}"
+        folder = isinstance(source, str) and "://" not in source and not source.startswith("-")
+        if folder:
+            version = _folder_version(root, source)
+            if version is None:
+                code = 4
+                lines.append(f"{e['id']}: cannot check (source: folder)")
+            elif (_version(version) or ()) > now:
+                lines.append(f"{here} -> {version}: {NO_NOTES}")
+            else:
+                lines.append(f"{here}: no newer version")
+            continue
         if not isinstance(source, str) or not source.startswith("https://"):
             code = 2
             lines.append(f"{e['id']}: the source is not a public https URL (source: git)")
@@ -418,14 +560,19 @@ def update_check(root, said, at, *, by=None, tags=remote_tags, record=record_not
         found = tags(source)
         if found is None:
             code = 4
-            lines.append(f"{e['id']}: the source cannot be read (source: git)")
+            lines.append(f"{e['id']}: cannot check (source: git)")
             continue
-        now = _version(e["version"]) or ()
-        newer = sorted({v for t in found if (v := _version(t)) and v > now})
-        names = ", ".join(".".join(map(str, v)) for v in newer)
-        lines.append(
-            f"{e['id']} {e['version']}: " + (f"newer {names}" if newer else "no newer tag")
-        )
+        if e["version"] not in found and f"v{e['version']}" not in found:
+            lines.append(f"{here}: withdrawn (verify)")
+        newer: dict[tuple[int, ...], str] = {}
+        for t in sorted(found):
+            v = _version(t)
+            if v and v > now:
+                newer.setdefault(v, t)
+        for v in sorted(newer):
+            lines.append(f"{here} -> {newer[v]}: {note_text(notes(source, newer[v]))}")
+        if not newer and any(t in found for t in (e["version"], f"v{e['version']}")):
+            lines.append(f"{here}: no newer tag")
     return code, lines or ["no pack in the lock"]
 
 

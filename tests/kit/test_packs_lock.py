@@ -240,9 +240,17 @@ def test_ac3_update_check_lists_newer_tags_and_changes_nothing(tmp_path):
     before = (root / packs.LOCK).read_bytes()
     calls = Calls(tags=["v1.1.0", "1.2.0", "main", "1.10.0", "v1.3.0"])
     code, lines = packs.update_check(
-        root, said(tmp_path, "yes"), "T", tags=calls.list_tags, record=calls.record
+        root,
+        said(tmp_path, "yes"),
+        "T",
+        tags=calls.list_tags,
+        notes=lambda source, tag: None,
+        record=calls.record,
     )
-    assert code == 0 and lines[-1] == f"{PID} 1.2.0: newer 1.3.0, 1.10.0"
+    assert code == 0 and lines[-2:] == [  # brief #2045: one line per tag with its change notes
+        f"{PID} 1.2.0 -> v1.3.0: (no change notes)",
+        f"{PID} 1.2.0 -> 1.10.0: (no change notes)",
+    ]
     assert calls.listed == ["https://example.com/packs/zz-shop.git"]
     assert (root / packs.LOCK).read_bytes() == before
 

@@ -595,6 +595,7 @@ tests = [
 code = "scripts/agk/doctor.py"
 tests = [
   "tests/kit/test_domain_settings.py",
+  "tests/kit/test_packs_stale.py",
   "tests/kit/test_personal_lifecycle.py",
   "tests/kit/test_governance_level.py",
   "tests/kit/test_kit_defect_report.py", "tests/kit/test_kit_in_repository.py", "tests/kit/test_kit_repo_local_mode.py",
@@ -848,6 +849,7 @@ tests = [
 code = "scripts/agk/metrics.py"
 tests = [
   "tests/kit/test_usage_split.py",
+  "tests/kit/test_packs_stale.py",
   "tests/kit/test_checklist.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_forge.py",
   "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_measures.py",
   "tests/kit/test_metrics.py", "tests/kit/test_metrics_cost.py", "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_pr_tests_reads.py", "tests/kit/test_metrics_testing.py",
@@ -876,6 +878,7 @@ tests = [
   "tests/kit/test_packs_resolver.py", "tests/kit/test_check_packs.py", "tests/kit/test_standards_stack.py",
   "tests/kit/test_front_door_detect.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit/test_packs_lock.py",
+  "tests/kit/test_packs_stale.py",
 ]
 [[testing.map]]
 code = "scripts/agk/parity.py"
@@ -884,6 +887,7 @@ tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
 code = "scripts/agk/personal.py"
 tests = [
   "tests/kit/test_standard_confirm.py",
+  "tests/kit/test_packs_stale.py",
   "tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",
   "tests/kit/test_personal_gate.py", "tests/kit/test_personal_disclosure.py", "tests/kit/test_personal_change.py",
   "tests/kit/test_personal_lifecycle.py", "tests/kit/test_personal_export.py", "tests/kit/test_personal_guide.py",
