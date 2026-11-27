@@ -19,7 +19,6 @@ import json
 import os
 import re
 import shutil
-import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -34,6 +33,8 @@ RUNTIME = KIT / "kit" / "templates" / "runtime"
 SCRIPTS = KIT / "scripts" / "agk"
 sys.path.insert(0, str(HOOKS))
 sys.path.insert(0, str(SCRIPTS))
+if not (KIT / "kit" / "manifest.json").is_file():  # an install, or a copy of the kit's tests
+    pytest.skip("reads the kit's own files (kit/ is kit-only)", allow_module_level=True)
 
 # The one guide paragraph addressed to a role, by its opening words (answer 1).
 ROLE_PARAGRAPHS = {"conductor": [("docs/guides/getting-started.md", "3. **Start the conductor.**")]}
@@ -45,7 +46,10 @@ FILL = {
     "sha": (SHA, ("<sha>", "<head>", "<that sha>", "<full head>")),
     "session": ("s1", ("<session>", "<session name>", "<id>", "<name>", "<a short name>")),
     "time": (WHEN, ("<last line read>", "<the time of your previous Report:>", "<time>")),
-    "file": ("{file}", ("<file>", "<that file>", "<body file>", "<the scratch file>", "FILE", "<path>")),
+    "file": (
+        "{file}",
+        ("<file>", "<that file>", "<body file>", "<the scratch file>", "FILE", "<path>"),
+    ),
     "dir": ("{dir}", ("<scratch directory>", "<s>", "<scratch>")),
     "text": ("one line", ("<one line>", "<message>")),
     "cap": ("3", ("<used>", "<cap>")),
@@ -57,7 +61,9 @@ FILL = {
 # The scratch folder each guard reads as its own, directly in the system temp folder.
 SCRATCH = {"architect-review": "agk-review-r{pid}", "architect": "agk-review-r{pid}"}
 SPAN = re.compile(r"`([^`]+)`")
-FULL = re.compile(r'^python3?\s+(?:-I\s+)?(?:scripts/agk/|<kit>/|"<plugin>/scripts/agk/)(\w+\.py)"?')
+FULL = re.compile(
+    r'^python3?\s+(?:-I\s+)?(?:scripts/agk/|<kit>/|"<plugin>/scripts/agk/)(\w+\.py)"?'
+)
 SHORT = re.compile(r"^(\w+\.py)\s+[a-z-][^`]*$")
 ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s")
 ELIDED = re.compile(r"\.\.\.|\u2026")
@@ -252,7 +258,10 @@ def rule_of(reason: str) -> str:
 
 @dataclass(frozen=True)
 class Expect:
-    answer: int  # 1: a form its guard refuses; 2: a start without its kind line; 3: an order beside its ban
+    answer: (
+        int  # 1: a form its guard refuses; 2: a start without its kind line; 3: an order beside its
+    )
+    # ban; 5: a form whose decision differs in the plugin layout
     id: str
     role: str
     file: str
@@ -262,21 +271,98 @@ class Expect:
 
 # Answer 4: the known mismatches, each a strict expected failure until P2 or P3 removes it.
 EXPECTED = [
-    Expect(1, "reprove", "conductor", "docs/guides/getting-started.md", "conductor.py reprove", "Q-1163-1"),
-    Expect(1, "check-brief", "conductor", ".claude/agents/conductor.md", "check_brief.py", "Q-P0B-1"),
-    Expect(1, "checklist", "conductor", ".claude/agents/conductor.md", "agk/checklist.py", "Q-P0B-1"),
-    Expect(1, "save-checklist", "conductor", ".claude/agents/conductor.md", "--save-checklist", "Q-P0B-1"),
-    Expect(1, "verdict-status", "conductor", ".claude/agents/conductor.md", "--status --pr", "Q-853-1"),
-    Expect(2, "build-job-line", "builder", "scripts/agk/autopilot.py", "launch.prompt_for(name, number)",
-           "brief #2053 case 2"),  # fmt: skip
-    Expect(2, "launcher-build-line", "builder", "kit/templates/runtime/launcher.txt", "`job: build",
-           "brief #2053 case 2"),  # fmt: skip
-    Expect(2, "adapter-start-line", "builder", "scripts/agk/launch.py",
-           'start_with(opts["--adapter"], found, runs=runs)', "Q-P0B-2"),  # fmt: skip
-    Expect(3, "conductor-watch", "conductor", ".claude/agents/conductor.md", "conductor.py watch",
-           "brief #2053 case 3"),  # fmt: skip
-    Expect(3, "wake-timer", "conductor", ".claude/agents/conductor.md", "wake-up timer", "brief #2053 case 3"),
-    Expect(3, "wake-tool", "conductor", ".claude/agents/conductor.md", "ScheduleWakeup", "brief #2053 case 3"),
+    Expect(
+        1,
+        "reprove",
+        "conductor",
+        "docs/guides/getting-started.md",
+        "conductor.py reprove",
+        "Q-1163-1",
+    ),
+    Expect(
+        1, "check-brief", "conductor", ".claude/agents/conductor.md", "check_brief.py", "Q-P0B-1"
+    ),
+    Expect(
+        1, "checklist", "conductor", ".claude/agents/conductor.md", "agk/checklist.py", "Q-P0B-1"
+    ),
+    Expect(
+        1,
+        "save-checklist",
+        "conductor",
+        ".claude/agents/conductor.md",
+        "--save-checklist",
+        "Q-P0B-1",
+    ),
+    Expect(
+        1, "verdict-status", "conductor", ".claude/agents/conductor.md", "--status --pr", "Q-853-1"
+    ),
+    Expect(
+        2,
+        "build-job-line",
+        "builder",
+        "scripts/agk/autopilot.py",
+        "launch.prompt_for(name, number)",
+        "brief #2053 case 2",
+    ),
+    Expect(
+        2,
+        "launcher-build-line",
+        "builder",
+        "kit/templates/runtime/launcher.txt",
+        "`job: build",
+        "brief #2053 case 2",
+    ),
+    Expect(
+        2,
+        "adapter-start-line",
+        "builder",
+        "scripts/agk/launch.py",
+        'start_with(opts["--adapter"], found, runs=runs)',
+        "Q-P0B-2",
+    ),
+    Expect(
+        3,
+        "conductor-watch",
+        "conductor",
+        ".claude/agents/conductor.md",
+        "conductor.py watch",
+        "brief #2053 case 3",
+    ),
+    Expect(
+        3,
+        "wake-timer",
+        "conductor",
+        ".claude/agents/conductor.md",
+        "wake-up timer",
+        "brief #2053 case 3",
+    ),
+    Expect(
+        5,
+        "plugin-evidence",
+        "conductor",
+        ".claude/agents/conductor.md",
+        "evidence.py check",
+        "Q-2053-1",
+    ),
+    Expect(
+        5, "plugin-route", "conductor", ".claude/agents/conductor.md", "route.py --all", "Q-2053-1"
+    ),
+    Expect(
+        5,
+        "plugin-route-pass",
+        "conductor",
+        "skills/review-pass/SKILL.md",
+        "route.py --all",
+        "Q-2053-1",
+    ),
+    Expect(
+        3,
+        "wake-tool",
+        "conductor",
+        ".claude/agents/conductor.md",
+        "ScheduleWakeup",
+        "brief #2053 case 3",
+    ),
 ]
 # A form a role file names as another actor's, with that actor; never judged as the role's own.
 OTHERS_RUN = {
@@ -311,11 +397,15 @@ LABEL = re.compile(r"^([A-Z][A-Z ]+[A-Z])(?: \([^)]*\))?:")
 
 def expected(answer: int, role: str, file: str, text: str) -> Expect | None:
     wanted = (answer, role, file)
-    return next((e for e in EXPECTED if (e.answer, e.role, e.file) == wanted and e.form in text), None)
+    return next(
+        (e for e in EXPECTED if (e.answer, e.role, e.file) == wanted and e.form in text), None
+    )
 
 
 def others(form: Form) -> str | None:
-    return next((who for (r, f), who in OTHERS_RUN.items() if r == form.role and f in form.text), None)
+    return next(
+        (who for (r, f), who in OTHERS_RUN.items() if r == form.role and f in form.text), None
+    )
 
 
 def key_of(text: str) -> str | None:
@@ -381,13 +471,12 @@ def orders(role: Role) -> list[tuple[str, str, str | None]]:
     for number, line in enumerate(head, 1):
         if line.startswith("tools:") and "ScheduleWakeup" in line:
             out.append(("ScheduleWakeup", f"{rel(role.sources[0])}:{number}", None))
-    labels = {(n, t): label for n, t, _, label in [(f"{a}:{b}", c, c, d) for a, b, c, d in labelled(role)]}
+    labels = {f"{name}:{number}": label for name, number, _, label in labelled(role)}
     for name, number, text, label in labelled(role):
         if "wake-up timer" in text and not BAN.search(text):
             out.append(("wake-up timer", f"{name}:{number}", label))
     for form in judged(role):
-        label = next((lab for (w, _), lab in labels.items() if w == form.where), None)
-        out.append((key_of(form.text), form.where, label))
+        out.append((key_of(form.text), form.where, labels.get(form.where)))
     return out
 
 
@@ -415,7 +504,11 @@ def calls() -> list[tuple[str, str, str, ast.Call, ast.FunctionDef, str]]:
             for node in ast.walk(function):
                 name = getattr(node, "func", None)
                 name = getattr(name, "attr", None) or getattr(name, "id", None)
-                if isinstance(node, ast.Call) and name in ("prompt_for", "resume_for", "start_with"):
+                if isinstance(node, ast.Call) and name in (
+                    "prompt_for",
+                    "resume_for",
+                    "start_with",
+                ):
                     segment = ast.get_source_segment(source, node) or name
                     out.append((rel(path), function.name, name, node, function, segment))
     return out
@@ -423,6 +516,7 @@ def calls() -> list[tuple[str, str, str, ast.Call, ast.FunctionDef, str]]:
 
 def carries(call: ast.Call, function: ast.FunctionDef) -> bool:
     """The prompt the call builds has `FIX_JOB` added: in the same sum, or by `+=` on its name."""
+
     def fix(node: ast.AST) -> bool:
         return any(getattr(n, "attr", getattr(n, "id", None)) == "FIX_JOB" for n in ast.walk(node))
 
@@ -451,19 +545,23 @@ def case(values: tuple, id_: str, entry: Expect | None):
 
 FORM_CASES = [
     case((r.name, f), f"{r.name}-{f.where}-{key_of(f.text)}", expected(1, r.name, f.file, f.text))
-    for r in COMMANDING for f in judged(r)
-]  # fmt: skip
+    for r in COMMANDING
+    for f in judged(r)
+]
 START_CASES = [
-    case((c,), f"{c[0]}:{c[1]}:{c[2]}:{c[3].lineno}", expected(2, "builder", c[0], c[5])) for c in calls()
+    case((c,), f"{c[0]}:{c[1]}:{c[2]}:{c[3].lineno}", expected(2, "builder", c[0], c[5]))
+    for c in calls()
 ]
 STEPS = BUILDER_STEPS.findall((RUNTIME / "launcher.txt").read_text(encoding="utf-8"))
 STEP_CASES = [
-    case((s,), s.split("`")[1], expected(2, "builder", "kit/templates/runtime/launcher.txt", s)) for s in STEPS
+    case((s,), s.split("`")[1], expected(2, "builder", "kit/templates/runtime/launcher.txt", s))
+    for s in STEPS
 ]
 CONFLICT_CASES = [
     case((r.name, key, file, pairs), f"{r.name}-{key}-{file}", expected(3, r.name, file, key))
-    for r in COMMANDING for (key, file), pairs in conflicts(r).items()
-]  # fmt: skip
+    for r in COMMANDING
+    for (key, file), pairs in conflicts(r).items()
+]
 
 
 @pytest.fixture(scope="module")
@@ -483,7 +581,8 @@ def kit_project(monkeypatch):
 @pytest.mark.parametrize(("name", "form"), FORM_CASES)
 def test_every_role_form_is_allowed(name, form, scratch):
     """REQ-071: answer 1, each command a role's files name passes that role's own guard."""
-    assert not refusals(ROLES[name], form, scratch[name]), refusals(ROLES[name], form, scratch[name])
+    found = refusals(ROLES[name], form, scratch[name])
+    assert not found, "; ".join(found)
 
 
 @pytest.mark.parametrize("site", START_CASES)
@@ -492,17 +591,27 @@ def test_every_supervised_start_says_it_is_one_short_job(site):
     file, function, callee, call, body, _ = site
     kind = START_PATHS.get((file, function, callee))
     assert kind, f"{file} {function}: a start of a builder that START_PATHS does not name"
-    if kind == "default" or (callee == "start_with" and (len(call.args) > 2 or any(
-            k.arg == "prompts" for k in call.keywords))):  # fmt: skip
+    if kind == "default" or (
+        callee == "start_with"
+        and (len(call.args) > 2 or any(k.arg == "prompts" for k in call.keywords))
+    ):
         return  # the prompt is judged where it is built
-    said = JOB_LINE in __import__("launch").prompt_for("s1", 7) if callee == "start_with" else carries(call, body)
-    assert said == (kind == "supervised"), f"{file} {function}: a {kind} start, short-job line {said}"
+    said = (
+        JOB_LINE in __import__("launch").prompt_for("s1", 7)
+        if callee == "start_with"
+        else carries(call, body)
+    )
+    assert said == (kind == "supervised"), (
+        f"{file} {function}: a {kind} start, short-job line {said}"
+    )
 
 
 @pytest.mark.parametrize("step", STEP_CASES)
 def test_every_launcher_builder_step_says_it_is_one_short_job(step):
     """REQ-071: answer 2, each `job: build` and `job: fix` step of the launcher says its kind."""
-    assert JOB_WORDS in step, f"kit/templates/runtime/launcher.txt {step.split('`')[1]}: no short-job line"
+    assert JOB_WORDS in step, (
+        f"kit/templates/runtime/launcher.txt {step.split('`')[1]}: no short-job line"
+    )
 
 
 @pytest.mark.parametrize(("name", "key", "file", "pairs"), CONFLICT_CASES)
@@ -515,23 +624,266 @@ def test_every_hook_guard_imports_and_decides():
     """REQ-071: answer 6, a guard that fails to import fails here, naming its hook."""
     for role in COMMANDING:
         if role.guard:
-            assert callable(getattr(importlib.import_module(role.guard), "decide", None)), role.guard
-    assert {r.guard for r in COMMANDING} >= {"conductor_guard", "steward_guard", "architect_guard", None}
+            assert callable(getattr(importlib.import_module(role.guard), "decide", None)), (
+                role.guard
+            )
+    assert {r.guard for r in COMMANDING} >= {
+        "conductor_guard",
+        "steward_guard",
+        "architect_guard",
+        None,
+    }
 
 
 def test_the_hand_lists_are_live():
     """REQ-071: answers 4 and 8, every entry has a reason and still names a case at its file."""
-    ids = [p.id for p in FORM_CASES + START_CASES + STEP_CASES + CONFLICT_CASES if p.marks]
+    ids = [
+        p.id
+        for p in FORM_CASES + START_CASES + STEP_CASES + CONFLICT_CASES + PLUGIN_CASES
+        if p.marks
+    ]
     for entry in EXPECTED:
         assert re.search(r"Q-[A-Z0-9]+-\d+|brief #\d+", entry.why), f"{entry.id}: no Q- id or brief"
         assert entry.form in (KIT / entry.file).read_text(encoding="utf-8"), f"{entry.id}: stale"
-    assert len(ids) == len(EXPECTED) == len({e.id for e in EXPECTED}), "an entry matches no case or two"
+    assert len(ids) == len(EXPECTED) == len({e.id for e in EXPECTED}), (
+        "an entry matches no case or two"
+    )
     for (name, form), who in OTHERS_RUN.items():
         text = " ".join(s.read_text(encoding="utf-8") for s in ROLES[name].sources)
         assert form in text and who, f"OTHERS_RUN {name} {form}: stale"
     for file, pairs in MODE_SPLITS.items():
         text = (KIT / file).read_text(encoding="utf-8")
-        assert all(f"\n{label}" in text for pair in pairs for label in pair), f"MODE_SPLITS {file}: stale"
+        assert all(f"\n{label}" in text for pair in pairs for label in pair), (
+            f"MODE_SPLITS {file}: stale"
+        )
     assert all(guide_paragraphs(r) for r in ROLE_PARAGRAPHS), "ROLE_PARAGRAPHS: a paragraph is gone"
     called = {c[:3] for c in calls()}
     assert set(START_PATHS) <= called, f"START_PATHS: stale {sorted(set(START_PATHS) - called)}"
+
+
+def make_project(
+    tmp_path: Path, toml: str, there: str | None = None, installed: bool = True
+) -> Path:
+    """A project whose checkout holds TOML and whose `origin/main` holds THERE (TOML when None)."""
+    from test_conductor_guard import git_in
+
+    root = tmp_path / f"p{len(list(tmp_path.iterdir()))}" / "project"
+    root.mkdir(parents=True)
+    git_in(root, "init", "-q")
+    git_in(root, "remote", "add", "origin", "https://github.com/example/project.git")
+    for name, text in (("here", toml), ("there", toml if there is None else there)):
+        text = f'default_branch = "main"\n{text}'
+        if name == "here":
+            (root / "agk.toml").write_text(text, encoding="utf-8")
+            continue
+        blob = git_in(root, "hash-object", "-w", "--stdin", text=text)
+        tree = git_in(root, "mktree", text=f"100644 blob {blob}\tagk.toml\n")
+        git_in(
+            root,
+            "update-ref",
+            "refs/remotes/origin/main",
+            git_in(root, "commit-tree", tree, "-m", "m", text=""),
+        )
+    if installed:
+        (root / "scripts" / "agk").mkdir(parents=True)
+        for script in SCRIPTS.glob("*.py"):
+            (root / "scripts" / "agk" / script.name).write_text("print('x')\n", encoding="utf-8")
+    return root
+
+
+def activate(root: Path, monkeypatch) -> None:
+    """Judge at ROOT as its hook would: the project folder, the plugin and no record issue read."""
+    import route
+
+    monkeypatch.setattr(route, "RECORD_OPEN", {})
+    monkeypatch.setattr(route, "record_issues", lambda *_: [])  # the record issue: none, no network
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(KIT))
+    monkeypatch.chdir(root)
+
+
+def decisions(root: Path, monkeypatch, scratch, plugin: bool = False) -> dict[str, bool]:
+    """Every judged form of the guarded roles at ROOT -> allowed, in the plugin form with PLUGIN."""
+    activate(root, monkeypatch)
+    out = {}
+    for role in [r for r in COMMANDING if r.guard]:
+        for form in judged(role):
+            for choice in alternatives(form.text):
+                command = fill(choice, scratch[role.name])
+                if plugin:
+                    command = re.sub(
+                        r"scripts/agk/(\w+\.py)", rf'"{KIT}/scripts/agk/\1"', command, count=1
+                    )
+                out[f"{role.name} {form.where} {choice}"] = judge(role, command, root) is None
+    return out
+
+
+def flow(scratch, merge: str = "true", start: str = "true") -> str:
+    adapter = scratch["conductor"]["adapter"]
+    return (
+        f'[flow]\nauto_merge = {merge}\nauto_merge_method = "squash"\nauto_start = {start}\n'
+        f"launch_adapter = {adapter}\n"
+    )
+
+
+def test_local_mode_forms_follow_the_execution_setting(tmp_path, monkeypatch, scratch):
+    """REQ-071: answer 5, `route.py --all` and `evidence.py check` pass in local mode only, and the
+    refusal names the setting, never a value."""
+    local = decisions(make_project(tmp_path, 'execution = "local"\n'), monkeypatch, scratch)
+    ci = decisions(make_project(tmp_path, 'execution = "ci"\n'), monkeypatch, scratch)
+    named = [k for k in local if "route.py --all" in k or "evidence.py check" in k]
+    assert len(named) >= 2 and all(local[k] and not ci[k] for k in named), named
+    root = make_project(tmp_path, 'execution = "ci"\n')
+    activate(root, monkeypatch)
+    form = next(f for f in judged(ROLES["conductor"]) if "route.py --all" in f.text)
+    reason = judge(ROLES["conductor"], fill(form.text, scratch["conductor"]), root) or ""
+    assert "setting: execution" in reason and '"ci"' not in reason
+
+
+@pytest.mark.parametrize(
+    ("merge", "start", "where"), [("false", "true", "here"), ("true", "false", "there")]
+)
+def test_merge_and_start_forms_need_their_settings_in_both_places(
+    tmp_path, monkeypatch, scratch, merge, start, where
+):
+    """REQ-071: answer 5, the merge and adapter forms pass with `auto_merge`, `auto_start` and
+    `launch_adapter` on in the checkout and at `origin/main`, and are refused with one off."""
+    on = flow(scratch)
+    off = flow(scratch, merge, start)
+    both = decisions(make_project(tmp_path, on), monkeypatch, scratch)
+    one = decisions(
+        make_project(tmp_path, off if where == "here" else on, on if where == "here" else off),
+        monkeypatch,
+        scratch,
+    )
+    word = "merge_cleared.py --pr <n> --sha" if merge == "false" else "--adapter"
+    named = [k for k in both if word in k]
+    assert named and all(both[k] and not one[k] for k in named), named
+
+
+@pytest.fixture(scope="module")
+def layouts(tmp_path_factory, scratch) -> tuple[dict[str, bool], dict[str, bool]]:
+    """The decisions in an installed project and, in the plugin's form, in a clean one."""
+    toml = 'execution = "local"\n' + flow(scratch)
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        installed = decisions(
+            make_project(tmp_path_factory.mktemp("i"), toml), monkeypatch, scratch
+        )
+        clean = make_project(
+            tmp_path_factory.mktemp("c"), '[kit]\nlayout = "plugin"\n' + toml, installed=False
+        )
+        return installed, decisions(clean, monkeypatch, scratch, plugin=True)
+
+
+PLUGIN_CASES = [
+    case((r.name, f), f"{r.name}-{f.where}-{key_of(f.text)}", expected(5, r.name, f.file, f.text))
+    for r in COMMANDING
+    if r.guard
+    for f in judged(r)
+]
+
+
+@pytest.mark.parametrize(("name", "form"), PLUGIN_CASES)
+def test_the_plugin_layout_gives_the_same_decisions(layouts, name, form):
+    """REQ-071: answer 5, `[kit] layout = "plugin"` judges each form in the plugin's form alike."""
+    installed, plugin = layouts
+    keys = [k for k in installed if k.startswith(f"{name} {form.where} ")]
+    assert keys and all(plugin[k] == installed[k] for k in keys), (
+        f"{name} {form.where}: differs in the plugin"
+    )
+
+
+@pytest.mark.parametrize("extra", ['review_mode = "team"\n', '[personal]\nforge = "files"\n'])
+def test_review_mode_and_forge_change_no_decision(tmp_path, monkeypatch, scratch, extra):
+    """REQ-071: answer 5, no form reads `review_mode` or `[personal] forge`."""
+    toml = 'execution = "local"\nreview_mode = "solo"\n' + flow(scratch)
+    same = decisions(make_project(tmp_path, toml), monkeypatch, scratch)
+    assert (
+        decisions(
+            make_project(tmp_path, toml.replace('review_mode = "solo"\n', "") + extra),
+            monkeypatch,
+            scratch,
+        )
+        == same
+    )
+
+
+@pytest.mark.parametrize(
+    "extra", ['[flow]\nbuilder_start = "assign"\n', '[autopilot]\nmode = "on"\n']
+)
+def test_builder_start_and_autopilot_mode_change_no_start_prompt(tmp_path, monkeypatch, extra):
+    """REQ-071: answer 5, the start paths and their prompts are the same under each value."""
+    launch = importlib.import_module("launch")
+    before = (
+        launch.prompt_for("s1", 7),
+        launch.resume_for("s1", 7, None, 9, None),
+        {c[:3] for c in calls()},
+    )
+    monkeypatch.chdir(make_project(tmp_path, extra))
+    assert (
+        launch.prompt_for("s1", 7),
+        launch.resume_for("s1", 7, None, 9, None),
+        {c[:3] for c in calls()},
+    ) == before
+
+
+def invented(tmp_path: Path, name: str, text: str) -> Role:
+    path = tmp_path / name
+    path.write_text(text, encoding="utf-8")
+    return Role("conductor", "conductor_guard", None, ["Bash"], [path])
+
+
+def test_on_invented_files_an_order_its_guard_refuses_fails(tmp_path, monkeypatch, scratch):
+    """REQ-071: answer 7, a refused order and a hedged order not in EXPECTED fail; another actor's
+    form, an elided form and an allowed form pass; a placeholder left fails naming its class."""
+    monkeypatch.setattr(sys.modules[__name__], "ROLE_PARAGRAPHS", {})
+    role = invented(
+        tmp_path,
+        "role.md",
+        (
+            "Run `python3 scripts/agk/conductor.py reprove --pr <n> --apply`.\n\n"
+            "Run `python3 scripts/agk/checklist.py` once your guard allows it.\n\n"
+            "The scheduler runs `python3 scripts/agk/conductor.py watchdog --pass`.\n\n"
+            "Then run `python3 scripts/agk/conductor.py lease ... --show` and\n"
+            "`python3 scripts/agk/conductor.py sweep`.\n\n"
+            "Run `python3 scripts/agk/session.py inbox --session <who>`.\n"
+        ),
+    )
+    forms = judged(role)
+    found = [m for f in forms for m in refusals(role, f, scratch["conductor"])]
+    assert [f.where for f in forms] == ["role.md:1", "role.md:3", "role.md:7", "role.md:10"]
+    assert found[:2] == [
+        "conductor role.md:1: refused by conductor guard rule 6",
+        "conductor role.md:3: refused by conductor guard rule 6",
+    ]
+    assert found[2:] == ["conductor role.md:10: placeholder who has no FILL entry"]
+    assert not any(expected(1, "conductor", "role.md", f.text) for f in forms)
+    assert SHA not in " ".join(found) and scratch["conductor"]["dir"] not in " ".join(found)
+
+
+def test_on_invented_files_a_ban_and_its_order_fail_unless_they_are_two_modes(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(sys.modules[__name__], "ROLE_PARAGRAPHS", {})
+    """REQ-071: answer 7, a ban and its order in one role fail; in two labelled modes they pass."""
+    text = (
+        "SHORT: Never run `session.py watch`; start no loop.\n\n"
+        "LONG: wait with `python3 scripts/agk/session.py watch --pr <n>`.\n"
+    )
+    role = invented(tmp_path, "modes.txt", text)
+    assert list(conflicts(role)) == [("session.py watch", "modes.txt")]
+    monkeypatch.setitem(MODE_SPLITS, "modes.txt", [("SHORT", "LONG")])
+    assert conflicts(role) == {}
+    assert conflicts(
+        invented(
+            tmp_path, "one.md", text.replace("LONG: ", "") + "Watch with `conductor.py watch`.\n"
+        )
+    )
+
+
+def test_an_expected_case_is_a_strict_expected_failure():
+    """REQ-071: answer 4, the day a known case is fixed its entry turns the suite red."""
+    marked = [
+        p for p in FORM_CASES + START_CASES + STEP_CASES + CONFLICT_CASES + PLUGIN_CASES if p.marks
+    ]
+    assert marked and all(m.name == "xfail" and m.kwargs["strict"] for p in marked for m in p.marks)
