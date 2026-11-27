@@ -510,6 +510,20 @@ def code_warnings(body: str, root: Path, matches: list[tuple[str, int, str]]) ->
     return left
 
 
+SIGNAL_NAMED = re.compile(r"\bsignal: (?:none \(.+?\)|[a-z0-9]+(?:-[a-z0-9]+)*\b)", re.I)
+NO_SIGNAL = "study: the Measured line names no signal (signal: <id> or signal: none (<reason>))"
+
+
+def signal_problems(lines: list[str]) -> list[str]:
+    """Brief #2054 answer 5: a `Measured:` line whose after-part (all of it when it names no
+    `after`) names no `signal: <id>` or `signal: none (<reason>)` is warned, never failed."""
+    measured = next((x for x in lines if x.startswith("Measured:")), None)
+    if measured is None:
+        return []
+    after = re.split(r"\bafter\b", measured, maxsplit=1)
+    return [] if SIGNAL_NAMED.search(after[-1]) else [NO_SIGNAL]
+
+
 def held(body: str) -> tuple[bool, bool]:
     """(held to the study at all, held to Impact and Wiring too): a `Priority: 0` brief, the
     router's red-branch brief among them, only to `Class:` and `Prior:` (brief #1815 answer 5)."""
@@ -568,7 +582,7 @@ def study_result(
             f"study: Prior: {len(adrs) - cap} more candidates not warned;"
             " brief_study.py <file> --root . lists them"
         )
-    filled = placeholder_warnings(lines)
+    filled = placeholder_warnings(lines) + signal_problems(lines)
     if is_kit(root):  # brief #2052: the placeholder and the code search, in the kit only
         filled += [
             "study: the Existing line is the render's placeholder"
