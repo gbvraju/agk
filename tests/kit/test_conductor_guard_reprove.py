@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 from test_conductor_guard_queue import RULE, reason, run_hook
-from test_guard_plugin_forms import CLEAN, FLOW_ON, VARIABLE, allowed, decision, denied, make_project
+from test_guard_plugin_forms import CLEAN, FLOW_ON, PLUGIN, allowed, decision, denied, make_project
 
 SCRIPT = "scripts/agk/conductor.py"
 
@@ -99,12 +99,14 @@ def test_req057_the_guard_admits_no_prepush_form(project, command):
 def test_req057_the_plugin_form_of_reprove_is_admitted(tmp_path, args):
     """REQ-057: answer 6 (`[kit] layout = "plugin"`): the plugin's form passes (ADR-0631)."""
     root = make_project(tmp_path, CLEAN + FLOW_ON)
-    found = decision("conductor_guard.py", root, f'python3 {VARIABLE}conductor.py" reprove {args}')
+    found = decision("conductor_guard.py", root, f'python3 {PLUGIN}conductor.py" reprove {args}')
     assert allowed(found), found
 
 
 def test_req057_the_plugin_form_keeps_the_refusals(tmp_path):
     root = make_project(tmp_path, CLEAN + FLOW_ON)
     for args in ("--pr 7 --force", "--apply --pr 7"):
-        found = decision("conductor_guard.py", root, f'python3 {VARIABLE}conductor.py" reprove {args}')
+        found = decision(
+            "conductor_guard.py", root, f'python3 {PLUGIN}conductor.py" reprove {args}'
+        )
         assert denied(found), args

@@ -479,6 +479,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_reprove_by_script.py",
   "tests/kit/test_reprove_accept_carry.py",
   "tests/kit/test_verdict_form_cleared.py",
   "tests/kit/test_route_reprove.py",
@@ -1336,6 +1337,7 @@ tests = ["tests/kit/test_architect_guard.py", "tests/kit/test_guard_plugin_forms
 [[testing.map]]
 code = ".claude/hooks/conductor_guard.py"
 tests = [
+  "tests/kit/test_conductor_guard_reprove.py",
   "tests/kit/test_verdict_form_cleared.py",
   "tests/kit/test_injection_set.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_commands.py",

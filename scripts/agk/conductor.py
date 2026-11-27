@@ -157,7 +157,9 @@ takes the light re-prove: when every re-prove file is a shared index and the mer
 prints `PUT repos/<repo>/pulls/<n>/update-branch expected_head_sha=<head>` (a merge commit, never
 a rebase or a force-push) and, with `--apply`, makes it and posts `Report: <new head> merge of
 main (light re-prove, SPEC-0050 amendment 171)`; any other re-prove file or a conflict prints
-`full re-prove (...)`, exit 3, and changes nothing.
+`full re-prove (...)`, exit 3, and changes nothing. Brief #2056 (ADR-0854): the supervisor's pass
+runs it on each light line, and `reprove --pr N --record [--apply]` records, in local mode, a head
+that lacks only its evidence record.
 
 Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
@@ -346,7 +348,7 @@ USAGE = (
     "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] "
     "[--root DIR] [--open-briefs FILE] | "
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N | "
-    "conductor.py reprove --pr N [--apply] | "
+    "conductor.py reprove --pr N [--apply | --record [--apply]] | "
     "conductor.py watchdog [--session NAME] [--install] [--pass] [--conductor-only] | "
     "conductor.py review --pr N [--start]"
 )
@@ -2102,15 +2104,18 @@ def claim_job(repo: str, job: dict, when: str) -> bool:
     return True
 
 
-def reprove(root, number: int, apply: bool) -> int:
+def reprove(root, number: int, apply: bool, record: bool = False) -> int:
     """SPEC-0050 amendment 171 (brief #1163): the light re-prove of pull request NUMBER. It reads
     the pull request (GET), fetches its base branch and `refs/pull/<n>/head`, and judges with
     `session_plan.reprove_kind`; only `light` goes on: it prints the one update it would make and,
     with APPLY, makes it (`PUT pulls/<n>/update-branch` pinned by `expected_head_sha`), reads the
     new head and posts `Report: <new head> merge of main (light re-prove, ...)`. A full re-prove or
-    a conflict exits 3 and writes nothing; a refused or unreadable step is an error (exit 1)."""
+    a conflict exits 3 and writes nothing; a refused or unreadable step is an error (exit 1).
+    RECORD is brief #2056's evidence-only record (`evidence_record`)."""
     if personal_forge(root):  # brief #1969 answer 5: no pull request in personal mode
         raise CheckError("reprove: personal mode has no pull request (setting: forge)")
+    if record:
+        return evidence_record(root, number, apply)
     repo = session.repo_name(root)
     pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
     head = str((pull.get("head") or {}).get("sha") or "")
@@ -2135,6 +2140,8 @@ def reprove(root, number: int, apply: bool) -> int:
         why = "conflict" if kind == "conflict" else f"{other[0]} is not a shared index"
         print(f"{lead} full re-prove ({why}); the builder merges the default branch")
         return merge_cleared.EXIT_HELD
+    if on_fork(pull):  # brief #2056 edge 7: the branch is not this repository's
+        raise CheckError(f"{lead} the head is on a fork; nothing updated")
     step = f"PUT repos/{repo}/pulls/{number}/update-branch expected_head_sha={head}"
     print(
         f"{lead} light ({', '.join(files)}); the step: {step}"
@@ -2163,7 +2170,7 @@ def reprove(root, number: int, apply: bool) -> int:
         raise CheckError("the branch was updated but its new head cannot be read; no Report posted")
     report, code = f"Report: {new} {REPROVE_REPORT}", 0
     if local:
-        lines, line = reprove_record(root, number, new, str(pull.get("body") or ""))
+        lines, line = reprove_record(root, number, new, str(pull.get("body") or ""), RECORD_NOTE)
         found = session.gh(f"repos/{repo}/pulls/{number}")
         if not isinstance(found, dict):
             print(f"{lead} the pull request cannot be read after the record; nothing posted")
@@ -2186,6 +2193,110 @@ def reprove(root, number: int, apply: bool) -> int:
 
 EXIT_HELD = merge_cleared.EXIT_HELD
 RECORD_NOTE = "(the conductor's light re-prove record)"
+EVIDENCE_NOTE = "(the conductor's evidence record)"  # brief #2056 answer 4 (ADR-0854)
+AUTHOR_EVIDENCE = re.compile(r"Evidence: .*?\bhead ([0-9a-f]{7,40})(?![0-9A-Za-z])")
+
+
+def on_fork(pull: dict) -> bool:
+    """The head's repository differs from the base's, as the pull request names them."""
+    names = [((pull.get(k) or {}).get("repo") or {}).get("full_name") for k in ("head", "base")]
+    return all(names) and names[0] != names[1]
+
+
+def evidence_record(root, number: int, apply: bool) -> int:
+    """Brief #2056 answer 4 (ADR-0854): in local mode, record a head that lacks only its evidence
+    record, with no update-branch: the head is not in the re-prove state, no trusted comment holds
+    an agreeing `Local evidence:` line for it, and (a) its author posted an `Evidence:` line naming
+    it, or (b) its tree equals an earlier evidenced head's. Neither: the builder records it (exit
+    3, `Q-RP-1`). With APPLY the record of ADR-0818 runs on the head and the Report is posted."""
+    repo = session.repo_name(root)
+    pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
+    head = str((pull.get("head") or {}).get("sha") or "")
+    branch = str((pull.get("base") or {}).get("ref") or "")
+    if not re.fullmatch(r"[0-9a-f]{40}", head) or not branch:
+        raise CheckError("the pull request cannot be read")
+    if not reprove_local(root, repo):
+        raise CheckError("reprove: --record runs only in local mode (setting: execution)")
+    lead = f"reprove: #{number} {head[:12]}:"
+    if git_code(root, "fetch", "-q", "origin", branch, f"refs/pull/{number}/head"):
+        raise CheckError("the default branch or the head cannot be fetched")
+    kind, _ = session_plan.reprove_kind(root, f"refs/remotes/origin/{branch}", head)
+    if kind is None:
+        raise CheckError("the re-prove state cannot be read")
+    if kind != "none":
+        print(f"{lead} in the re-prove state ({kind}); not an evidence-only head")
+        return EXIT_HELD
+    comments = session.pages(f"repos/{repo}/issues/{number}/comments")
+    if comments is None:
+        raise CheckError("the comments cannot be read")
+    author = str((pull.get("user") or {}).get("login") or "").lower()
+    trusted = {a.lower() for a in verdict_authors(root)} | ({author} - {""})
+    bodies = [
+        (str((c.get("user") or {}).get("login") or "").lower(), str(c.get("body") or ""))
+        for c in comments
+        if isinstance(c, dict)
+    ]
+    evidenced = {s for who, text in bodies if who in trusted for s in agreeing_shas(text)}
+    if any(head.startswith(s) for s in evidenced):
+        print(f"{lead} nothing to record")
+        return 0
+    case = evidence_case(root, head, author, bodies, evidenced)
+    if case is None:
+        print(f"{lead} the builder records it (rule 4)")
+        return EXIT_HELD
+    print(
+        f"{lead} evidence only ({case}); the step: the head's own quick prepush record and the "
+        "conductor's evidence check" + ("" if apply else "; add --apply to do it")
+    )
+    if not apply:
+        return 0
+    if session.paused_default(root):
+        print("reprove: agk paused; nothing updated")
+        return 0
+    lines, line = reprove_record(root, number, head, str(pull.get("body") or ""), EVIDENCE_NOTE)
+    found = session.gh(f"repos/{repo}/pulls/{number}")
+    if str(((found or {}).get("head") or {}).get("sha") or "") != head:
+        print(f"{lead} head moved after the record; nothing posted")
+        return EXIT_HELD
+    report = f"Report: {head} evidence record {EVIDENCE_NOTE}\n\n{lines}"
+    post(
+        f"repos/{repo}/issues/{number}/comments",
+        "the Report cannot be posted",
+        "-f",
+        "body=" + report,
+    )
+    print(f"{lead} Local evidence: {line}")
+    return 0 if line.startswith(head) else EXIT_HELD
+
+
+def agreeing_shas(text: str) -> set[str]:
+    """The heads TEXT names in a `Local evidence:` line with an agreeing `Evidence check:` line."""
+    agree = {m.group(2) for m in merge_cleared.EVIDENCE.finditer(text) if m.group(1) == "agrees"}
+    named = {
+        m.group(1)
+        for x in text.splitlines()
+        if (m := merge_cleared.LOCAL_EVIDENCE.match(x.strip()))
+    }
+    return {s for s in named if s[:12] in agree}
+
+
+def evidence_case(root, head: str, author: str, bodies: list, evidenced: set[str]) -> str | None:
+    """`a` when the author named HEAD in an `Evidence:` line, `b` when HEAD's tree equals an
+    evidenced earlier head's, else None."""
+    for who, text in bodies:
+        for x in text.splitlines():
+            m = AUTHOR_EVIDENCE.match(x.strip())
+            if who == author and m and head.startswith(m.group(1)):
+                return "a: the author's Evidence line"
+    try:
+        tree = git_text(root, "rev-parse", f"{head}^{{tree}}")
+    except CheckError:
+        return None
+    for sha in sorted(evidenced):
+        with contextlib.suppress(CheckError):
+            if git_text(root, "rev-parse", f"{sha}^{{tree}}") == tree:
+                return f"b: the tree of {sha[:12]}"
+    return None
 
 
 def personal_forge(root) -> bool:
@@ -2233,7 +2344,7 @@ def failed_step(path: Path) -> str:
     return f"prepush step {bad[0]}" if bad and isinstance(bad[0], str) else "prepush"
 
 
-def reprove_record(root, number: int, new: str, body: str) -> tuple[str, str]:
+def reprove_record(root, number: int, new: str, body: str, note: str) -> tuple[str, str]:
     """Brief #1969 answers 1, 2 and 4: (the lines the Report gains, the `Local evidence:` value:
     `<new> <Evidence check line> ...` on a passing record, else `none (<step or reason>)`). Every
     failure after the update, a folder, a write or the kit's resolution included, is a `none`."""
@@ -2252,7 +2363,7 @@ def reprove_record(root, number: int, new: str, body: str) -> tuple[str, str]:
         scratch.with_name(f"reprove-{number}.home"),
     )
     try:
-        return record_in(root, scratch, text, home, shared, number, new, body)
+        return record_in(root, scratch, text, home, shared, (number, new, body, note))
     except OSError:
         return none_line("the scratch folder or the body file cannot be written")
     except (CheckError, kit_root.Refused) as exc:
@@ -2271,10 +2382,12 @@ def setting_of(message: str) -> str:
     return found.group(0) if found else "(setting: layout)"
 
 
-def record_in(root, scratch, text, home, shared, number, new, body) -> tuple[str, str]:
+def record_in(root, scratch, text, home, shared, facts: tuple) -> tuple[str, str]:
     """The record step of answer 1 (review item 1): the head's own `prepush.py` runs in the scratch
     worktree with only `PATH` and a scratch `HOME` (`env -i`, as the bounded governance run), and
-    the check is the conductor's own `evidence.py`, from the checkout of the default branch."""
+    the check is the conductor's own `evidence.py`, from the checkout of the default branch.
+    FACTS: (the pull request's number, the head, its body, the note of its `Local evidence:`)."""
+    number, new, body, note = facts
     scratch.parent.mkdir(parents=True, exist_ok=True)
     git_code(root, "worktree", "remove", "--force", str(scratch))
     fetch = ["fetch", "-q", "origin", f"refs/pull/{number}/head"]
@@ -2298,7 +2411,7 @@ def record_in(root, scratch, text, home, shared, number, new, body) -> tuple[str
     agrees = [x.strip() for x in out.splitlines() if x.startswith(lead)]
     if code != 0 or not agrees or digest(evidence[-1]) != digest(agrees[-1]):
         return none_line("evidence differs")
-    line = f"{new} {agrees[-1]} {RECORD_NOTE}"
+    line = f"{new} {agrees[-1]} {note}"
     data = record.read_text(encoding="utf-8").rstrip("\n")
     return f"{evidence[-1]}\nLocal evidence: {line}\n\n```json\n{data}\n```", line
 
@@ -3421,6 +3534,12 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     last = when(str(state.get("job_at") or ""))
     logged = logged_escalations(root, name, state) if not state.get("log_read") else []
     steward = steward_due(state, sweep_text, now)
+    early = None
+    if light_numbers(sweep_text):  # brief #2056 answer 2: before the `why` test, no model
+        early = stop_reason(root, repo, starts, steward, sweep_text)
+        if early[0] is None:
+            pass_reprove(root, repo, state, sweep_text)
+            keep_state(root, state)
     why = [
         text
         for text, yes in (
@@ -3439,7 +3558,7 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
         print("watchdog: nothing changed; no job started")
         record_health({}, now)
         return 0
-    stop, items = stop_reason(root, repo, starts, steward, sweep_text)
+    stop, items = early or stop_reason(root, repo, starts, steward, sweep_text)
     if stop:  # rule 12: said once, checked again on every pass
         said_before = stop == state.get("quiet")
         print("watchdog: no job started; the stop rule still holds" if said_before
@@ -3475,6 +3594,59 @@ def watchdog_pass(root, name: str, repo: str, adapter: str) -> int:
     keep_state(root, state)
     record_health(started, now)
     return 0
+
+
+LIGHT_LINE = re.compile(r"re-prove: #([1-9]\d*) \S+ \(changed by #[1-9]\d*\) light")
+
+
+def light_numbers(swept: str) -> list[int]:
+    """The pull requests of the sweep's light `re-prove:` lines (SPEC-0050 amendment 171)."""
+    found = {
+        int(m[1]) for x in swept.splitlines() if (m := LIGHT_LINE.fullmatch(AGE.sub("", x).strip()))
+    }
+    return sorted(found)
+
+
+def default_tip(root) -> str:
+    """The last fetched tip of the default branch, or "" when it cannot be read."""
+    try:
+        return git_text(
+            root, "rev-parse", f"refs/remotes/origin/{session.load_config(root)['default_branch']}"
+        )
+    except (CheckError, KeyError, OSError):
+        return ""
+
+
+def pass_reprove(root, repo: str, state: dict, swept: str) -> None:
+    """Brief #2056 answer 2 (ADR-0854): the light re-prove of each light line, once per pull
+    request, head and default branch tip (`state["reprove"]`), unless the kit is paused or the
+    sweep names a red-branch issue. An exit 3 is the re-prove handover's; an error is printed."""
+    if session.paused_default(root):
+        print("watchdog: reprove: agk paused; nothing updated")
+        return
+    if any(x.strip().startswith("red-branch issue:") for x in swept.splitlines()):
+        print("watchdog: reprove: the default branch is red; nothing updated")
+        return
+    kept = state.get("reprove")
+    tried = dict(kept) if isinstance(kept, dict) else {}
+    tip = default_tip(root)
+    for n in light_numbers(swept):
+        pull = session.gh(f"repos/{repo}/pulls/{n}")
+        head = (
+            str(((pull or {}).get("head") or {}).get("sha") or "") if isinstance(pull, dict) else ""
+        )
+        if not head:
+            print(f"watchdog: reprove #{n}: the pull request cannot be read")
+            continue
+        if tried.get(str(n)) == f"{head} {tip}":
+            continue
+        tried[str(n)] = f"{head} {tip}"
+        try:
+            code, said = session.quietly(reprove, root, n, True)
+        except (CheckError, merge_cleared.Held) as exc:
+            code, said = 1, str(exc)
+        print(f"watchdog: reprove #{n}: {said.splitlines()[-1] if said else f'exit {code}'}")
+    state["reprove"] = tried
 
 
 def conductor_job(root, name: str, repo: str, adapter: str, facts: tuple) -> int:
@@ -4263,9 +4435,10 @@ def routine_args(args: list[str]) -> tuple | None:
             return ("lease", args[1], args[2])
     if args[:2] == ["over", "--pr"] and len(args) == 3 and PR_NUMBER.fullmatch(args[2]):
         return ("over", int(args[2]))
-    if args[:2] == ["reprove", "--pr"] and len(args) in (3, 4) and PR_NUMBER.fullmatch(args[2]):
-        if args[3:] in ([], ["--apply"]):
-            return ("reprove", int(args[2]), args[3:] == ["--apply"])
+    if args[:2] == ["reprove", "--pr"] and len(args) in (3, 4, 5) and PR_NUMBER.fullmatch(args[2]):
+        tail = args[3:]  # brief #2056: `--record` and `--record --apply` (ADR-0854)
+        if tail in ([], ["--apply"], ["--record"], ["--record", "--apply"]):
+            return ("reprove", int(args[2]), tail[-1:] == ["--apply"], tail[:1] == ["--record"])
     return None
 
 
@@ -4317,7 +4490,7 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             if routine[0] == "over":
                 return over(root, routine[1])
             if routine[0] == "reprove":
-                return reprove(root, routine[1], routine[2])
+                return reprove(root, routine[1], routine[2], routine[3])
             return lease(root, routine[1], routine[2])
         if guard is not None:
             return watchdog(root, guard[0], guard[2], guard[3])

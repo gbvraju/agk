@@ -105,9 +105,7 @@ def test_req057_a_light_line_is_reproved_once_per_head(monkeypatch, capsys):
     assert run.run() == 0 and len(run.calls) == 3
 
 
-@pytest.mark.parametrize(
-    "case", ["paused", "red", "stop", "full", "unknown", "none"]
-)
+@pytest.mark.parametrize("case", ["paused", "red", "stop", "full", "unknown", "none"])
 def test_req057_the_pass_reproves_nothing_when_a_rule_holds(monkeypatch, case):
     """REQ-057: answer 2: a paused kit, a red-branch issue, a stop rule, a full or unreadable
     line, or no line: nothing is called."""
@@ -229,7 +227,11 @@ def test_req057_case_a_the_authors_evidence_line_is_recorded(tmp_path, monkeypat
     assert body.startswith(f"body=Report: {head} evidence record {NOTE}\n\nEvidence: ")
     assert f"\n{local}\n" in body and f"```json\n{RECORD_TEXT.format(head)}\n```" in body
     assert local in capsys.readouterr().out
-    verdict = {"id": 9, "user": {"login": LISTED[0]}, "body": f"Verdict: cleared {head}\n\n{local}\n"}
+    verdict = {
+        "id": 9,
+        "user": {"login": LISTED[0]},
+        "body": f"Verdict: cleared {head}\n\n{local}\n",
+    }
     merge_cleared.local_evidence(verdict, [verdict], head, [])  # answer 3: it passes rule 4
 
 
@@ -318,7 +320,9 @@ def test_req057_the_settings_of_answer_6(tmp_path, monkeypatch, capsys, case):
     assert runs.argv == []
     if case in ("malformed", "forge"):
         assert code == 1 and hub.posted() == []
-        assert ("(setting: execution in agk.toml)" if case == "malformed" else "(setting: forge)") in err
+        assert (
+            "(setting: execution in agk.toml)" if case == "malformed" else "(setting: forge)"
+        ) in err
     elif case == "paused":
         assert code == 0 and hub.posted() == [] and "reprove: agk paused; nothing updated" in out
     else:
@@ -327,7 +331,9 @@ def test_req057_the_settings_of_answer_6(tmp_path, monkeypatch, capsys, case):
 
 
 def test_req057_a_head_in_the_re_prove_state_is_not_an_evidence_only_head(tmp_path, monkeypatch):
-    root, head, _ = world(tmp_path, {"agk.toml": TOP}, {"agk.toml": BOTTOM + 'execution = "local"\n'})
+    root, head, _ = world(
+        tmp_path, {"agk.toml": TOP}, {"agk.toml": BOTTOM + 'execution = "local"\n'}
+    )
     origin = tmp_path / "origin.git"
     git(tmp_path, "clone", "-q", "--bare", str(root), str(origin))
     git(origin, "update-ref", "refs/pull/7/head", head)
