@@ -89,6 +89,8 @@ def items(text: str) -> list[tuple[int, str]]:
     """The numbered items under `## Items` (the whole text when there is no such heading)."""
     part = text.split("\n## Items", 1)[-1].split("\n## ", 1)[0]
     starts = list(ITEM.finditer(part))
+    if not starts:  # brief #2002: a text with no item, where zip(strict) would raise
+        return []
     ends = [m.start() for m in starts[1:]] + [len(part)]
     return [(int(m.group(1)), part[m.start() : end]) for m, end in zip(starts, ends, strict=True)]
 
@@ -151,6 +153,28 @@ def added_problems(root: Path, added: list[tuple[int, str]]) -> list[str]:
 def digest(text: str) -> str:
     """The short digest of an amendment's text that a settled line records (answer 7)."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def quoted_items(lines: list[str], at: int) -> str:
+    """Brief #2002 answer 1 (ADR-0828): the `> ` lines right under LINES[AT], a brief's `Spec fit:`
+    line, with the `> ` removed: the amendment's items as `items` and `item_class` read a file."""
+    found = []
+    for line in lines[at + 1 :]:
+        if not line.startswith(">"):
+            break
+        found.append(line[2:] if line.startswith("> ") else line[1:])
+    return "\n".join(found) + "\n" if found else ""
+
+
+def items_digest(text: str) -> str | None:
+    """Brief #2002 answers 5 and 6: the digest of the items alone, each whole (to the next item
+    or `## ` heading; fix list on b35375a item 4) with its spaces and line breaks made one space,
+    so a brief's quoted items and the file a builder writes word for word from them have one
+    digest whatever the wrapping; None when TEXT has no item."""
+    listed = items(text)
+    if not listed:
+        return None
+    return digest("\n".join(" ".join(body.split()) for _, body in listed))
 
 
 def settleable(text: str, root: Path) -> bool:
@@ -373,6 +397,36 @@ def approval(
         if (asked or settled) and found is None:
             found = comment_time(c)
     return found
+
+
+OWNER_SAID_LINE = re.compile(r'Owner said \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z\): ".+"')
+RELAYED_WHO = "Who: ProductOwner"
+
+
+def filing_approval(
+    comments: list[dict], answerers: set[str] | list[str], n: int, want: str | None, solo: bool
+) -> datetime | None:
+    """Brief #2002 answer 6 (ADR-0828): `approval` of amendment N on a brief's COMMENTS, counting
+    only an approval whose one `Text:` line is WANT, the digest of the items at the head. In solo
+    mode it must be the relayed form (`Owner said` second, `Who: ProductOwner` last); in team mode
+    a relayed one never counts, only the approver's own (fix list on b35375a item 3)."""
+    if want is None:
+        return None
+
+    def counts(c: dict) -> bool:
+        lines = [x.strip() for x in str(c.get("body") or "").strip().splitlines()]
+        if not lines or not lines[0].startswith("Maintainer answer:"):
+            return True  # a `Correction:` still withdraws
+        relayed = (
+            len(lines) > 2
+            and bool(OWNER_SAID_LINE.fullmatch(lines[1]))
+            and lines[-1] == RELAYED_WHO
+        )
+        text = TEXT_LINE.findall("\n".join(lines)) == [want]
+        return text and (relayed if solo else RELAYED_WHO not in lines)
+
+    kept = [c for c in comments if isinstance(c, dict) and counts(c)]
+    return approval(kept, answerers, n, exact=solo)
 
 
 def comment_records(path: Path) -> list[dict]:

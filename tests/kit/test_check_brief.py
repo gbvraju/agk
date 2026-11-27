@@ -615,3 +615,164 @@ def test_req037_a_brief_naming_the_import_phrase_is_warned_never_failed(tmp_path
         "ok brief",
     ]
     assert check(tmp_path, GOOD).stdout.strip() == "ok brief"
+
+
+# --- brief #2002 (ADR-0828): the Spec fit line of each Approved spec a brief names ----------------
+
+sys.path.insert(0, str(SCRIPTS))
+
+import check_brief  # noqa: E402
+
+FIT_SPEC = (
+    "# SPEC-0901: a test spec\n\n- Status: {status}\n- Date: 2026-11-01\n- Requirements: {req}\n\n"
+    "## Rules\n\n1. **One.** A thing.\n2. **Two.** Send in batches of at most five.\n"
+    "7a. **Lettered.** A lettered rule.\n\n## Tests\n\n1. Not a rule.\n"
+)
+FIT_ITEMS = '> 1. **SPEC-0901 rule 2.** Append "x" (amendment 254).\n> Class: behaviour\n'
+
+
+def fit_root(tmp_path: Path, status: str = "Approved", req: str = "REQ-001", day: str = "") -> Path:
+    root = requirements(tmp_path, "REQ-001", "REQ-002")
+    (root / "docs" / "specs").mkdir()
+    spec = FIT_SPEC.format(status=status, req=req)
+    (root / "docs" / "specs" / "0901-a-test-spec.md").write_text(spec, encoding="utf-8")
+    draft = FIT_SPEC.format(status="Draft", req="REQ-009").replace("0901", "0902")
+    (root / "docs" / "specs" / "0902-a-draft-spec.md").write_text(draft, encoding="utf-8")
+    flow = f'[flow]\nbrief_study_fails_from = "{day}"\n' if day else ""
+    (root / "agk.toml").write_text(flow, encoding="utf-8")
+    return root
+
+
+def fit(body: str, root: Path, filed: str | None = None):
+    return check_brief.spec_fit_problems(body, root, "2026-11-26", filed)
+
+
+def fitted(line: str, extra: str = "") -> str:
+    return GOOD.replace("2. two\n", "2. two, by SPEC-0901 rule 2\n") + line + extra
+
+
+def test_req066_2002_a_fitted_spec_without_a_line_warns_before_the_day_and_fails_after(tmp_path):
+    """REQ-066: answers 2 and 9: an Approved spec whose Requirements names an Advances id needs
+    the line; a warning with no day, a failure for a brief filed on or after it."""
+    want = ["spec fit: SPEC-0901 has no Spec fit: line (setting: Spec fit:)"]
+    assert fit(GOOD, fit_root(tmp_path)) == ([], want)
+    late = fit_root(tmp_path / "late", day="2026-11-20")
+    assert fit(GOOD, late, "2026-11-25T10:00:00Z") == (want, [])
+    assert fit(GOOD, late, "2026-11-19T10:00:00Z") == ([], want)
+
+
+def test_req066_2002_a_line_naming_each_named_rule_passes_and_a_left_out_rule_is_named(tmp_path):
+    """REQ-066: answer 1: every rule the brief names is in the line; the text is never printed."""
+    root = fit_root(tmp_path)
+    assert fit(fitted("Spec fit: SPEC-0901 rules 1 and 2 within\n"), root) == ([], [])
+    body = fitted("Spec fit: SPEC-0901 rule 1 within\n")
+    assert fit(body, root)[1][0] == (
+        "spec fit: the Spec fit: line of SPEC-0901 leaves out rule 2 (setting: Spec fit:)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("Spec fit: SPEC-0901 rule 9 within\n", "names rule 9, which SPEC-0901 does not have"),
+        ("Spec fit: SPEC-0902 rule 1 within\n", "names SPEC-0902, which is not Approved"),
+        ("Spec fit: SPEC-0901 rule 2 fits nicely\n", "a Spec fit: line is malformed"),
+        ("Spec fit: SPEC-0901 rule 2 within\nSpec fit: SPEC-0901 rule 2 within\n", "two Spec fit:"),
+        ("Spec fit: SPEC-0901 rule 2 within; rule 2 change by amendment 254\n" + FIT_ITEMS,
+         "states rule 2 both within and changed"),
+        ("Spec fit: SPEC-0901 rule 2 change by amendment 254\n" + FIT_ITEMS,
+         "changes by amendment 254, which Reserved: does not name"),
+        ("Reserved: amendment 254\nSpec fit: SPEC-0901 rule 2 change by amendment 254\n",
+         "changes by amendment 254 with no quoted items under the line"),
+        ("Reserved: amendment 254\nSpec fit: SPEC-0901 rule 2 change by amendment 254\n"
+         "> 1. **SPEC-0901 rule 2.** Append \"x\".\n", "item 1: no Class line"),
+    ],
+)  # fmt: skip
+def test_req066_2002_each_bad_line_fails_on_any_day(tmp_path, line, message):
+    """REQ-066: answer 2 and edge cases 10: a wrong line fails whatever the day, naming the line,
+    the spec and the rule, never the brief's text."""
+    fails, _ = fit(fitted(line), fit_root(tmp_path))
+    assert any(message in f for f in fails), fails
+    assert all("A team can run" not in f for f in fails)
+
+
+def test_req066_2002_a_change_with_its_reserved_amendment_and_items_passes(tmp_path):
+    """REQ-066: answer 1: the quoted items are read and classed as a file's (ADR-0813)."""
+    body = fitted(
+        "Reserved: amendments 254 and 255\n"
+        "Spec fit: SPEC-0901 rule 1 within; rule 2 change by amendment 254\n" + FIT_ITEMS
+    )
+    assert fit(body, fit_root(tmp_path)) == ([], [])
+    assert check_brief.fit_changes(body) == [254]
+
+
+def test_req066_2002_a_number_limit_stated_otherwise_warns_modelled_on_1954(tmp_path):
+    """REQ-066: answer 2's one heuristic: #1954's "at most 20" against a rule's "at most five"
+    warns naming the rule while the line leaves it out, and never fails."""
+    body = GOOD.replace("2. two\n", "2. two: send at most 20 questions\n")
+    body += "Spec fit: SPEC-0901 rule 1 within\n"
+    assert fit(body, fit_root(tmp_path)) == ([], [
+        "spec fit: SPEC-0901 rule 2 states a number limit the brief states with another number;"
+        " name rule 2 in the Spec fit: line (setting: Spec fit:)"
+    ])  # fmt: skip
+    same = (
+        GOOD.replace("2. two\n", "2. two: send at most five\n")
+        + "Spec fit: SPEC-0901 rule 1 within\n"
+    )
+    assert fit(same, fit_root(tmp_path / "b")) == ([], [])
+
+
+def test_req066_2002_a_draft_spec_or_a_spec_named_only_in_prior_needs_no_line(tmp_path):
+    """REQ-066: edge cases 10: a Draft spec named in the Answers, and a spec named only in Prior
+    or Evidence, need no line; a lettered rule counts as written."""
+    root = fit_root(tmp_path, req="REQ-077")
+    draft = GOOD.replace("2. two\n", "2. two, by SPEC-0902 rule 1\n")
+    assert fit(draft, root) == ([], [])
+    assert fit(GOOD + "Prior: SPEC-0901 rule 2\n", root) == ([], [])
+    named = GOOD.replace("2. two\n", "2. two, by SPEC-0901 rule 7a\n")
+    assert fit(named, root)[1] == ["spec fit: SPEC-0901 has no Spec fit: line (setting: Spec fit:)"]
+    assert fit(named + "Spec fit: SPEC-0901 rule 7a within\n", root) == ([], [])
+
+
+def test_req066_2002_a_priority_0_brief_is_held_only_for_a_change(tmp_path):
+    """REQ-066: answer 9: the router's red-branch brief needs no line, but a change still fails."""
+    root = fit_root(tmp_path, day="2026-11-20")
+    zero = GOOD.replace("Priority: 1", "Priority: 0")
+    assert fit(zero, root, "2026-11-25T10:00:00Z") == ([], [])
+    bad = zero + "Spec fit: SPEC-0901 rule 2 change by amendment 254\n" + FIT_ITEMS
+    assert fit(bad, root)[0]
+
+
+def test_req066_2002_brief_result_runs_the_spec_fit_after_the_study(tmp_path):
+    """REQ-066: answer 12: the one reading every writer reaches carries the check, and no root
+    leaves it out (a kit brief triaged in a project)."""
+    root = fit_root(tmp_path)
+    out = check(tmp_path, GOOD, "--root", str(root))
+    assert out.returncode == 0
+    assert "warning: spec fit: SPEC-0901 has no Spec fit: line (setting: Spec fit:)" in out.stdout
+    bad = GOOD + STUDY + "Spec fit: SPEC-0901 rule 2 change by amendment 254\n" + FIT_ITEMS
+    failed = check(tmp_path, bad, "--root", str(root))
+    assert failed.returncode == 1 and "which Reserved: does not name" in failed.stdout
+    assert "spec fit" not in check(tmp_path, bad).stdout
+
+
+def test_req066_2002_a_spec_without_a_rules_section_has_no_rules_and_never_raises(tmp_path):
+    """REQ-066: CI on baac16a: a spec file with no `## Rules` heading (a sidecar's) read safely."""
+    root = fit_root(tmp_path)
+    (root / "docs" / "specs" / "0903-bare.md").write_text(
+        "# SPEC-0903: bare\n\n- Status: Approved\n- Requirements: REQ-001\n", encoding="utf-8"
+    )
+    assert check_brief.spec_rules(root, "0903") == ("Approved", {})
+    assert fit(fitted("Spec fit: SPEC-0901 rule 2 within\n"), root)[1] == [
+        "spec fit: SPEC-0903 has no Spec fit: line (setting: Spec fit:)"
+    ]
+
+
+def test_req066_2002_the_warnings_stay_after_the_fail_day(tmp_path):
+    """REQ-066: fix list 7202066567 item 2: from `[flow] brief_study_fails_from` the limit warning
+    is still shown beside a passing line (brief #2002's own rule 18 warning stays)."""
+    root = fit_root(tmp_path, day="2026-11-20")
+    body = GOOD.replace("2. two\n", "2. two: send at most 20 questions\n")
+    body += "Spec fit: SPEC-0901 rule 1 within\n"
+    fails, warns = fit(body, root, "2026-11-25T10:00:00Z")
+    assert fails == [] and len(warns) == 1 and "SPEC-0901 rule 2 states a number limit" in warns[0]

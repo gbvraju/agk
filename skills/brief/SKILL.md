@@ -50,6 +50,14 @@ each with why, and never lists records read and found unrelated. The check warns
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/brief_study.py" BRIEF --root .
 ```
 
+Then fit it to its specs (brief #2002, ADR-0828). For each Approved spec its Answers name, or whose `- Requirements:`
+line names a requirement of its `Advances:`, open the spec and read every rule the Answers touch, above all each rule
+with a limit, `only`, `never` or `at most`. Write one line `Spec fit: SPEC-<nnnn> rule(s) <list> within` naming every
+rule of that spec the brief names. Where the brief needs what a rule does not allow, write `rule(s) <list> change by
+amendment <m>` instead of an answer that departs, reserve the amendment in `Reserved:` and quote its items right
+under the line (`> 1. ...`, each with its `> Class:` line); the person's filing yes approves it only when it names it
+(`Yes, file the <NAME> brief with amendment <m>`). The check cannot tell whether a `within` is true: you read it.
+
 Then check each saved brief before it is filed:
 
 ```
