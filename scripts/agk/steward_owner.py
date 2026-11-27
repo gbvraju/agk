@@ -18,6 +18,7 @@ Usage: python3 scripts/agk/steward_owner.py ask --qid Q --on N --file FILE
        python3 scripts/agk/steward_owner.py standard [--playbook SLUG]
        python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]
        python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT
+                                           [--server NAME]
        python3 scripts/agk/steward_owner.py draft --slug SLUG [--layers FILE]
        python3 scripts/agk/steward_owner.py fix-brief --brief N --file FILE --seen UPDATED_AT
        python3 scripts/agk/steward_owner.py file-brief --file FILE --title TEXT
@@ -68,7 +69,8 @@ packs, every gate with its step or reason) in team mode, or, with neither, the w
 only on an explicit yes (in team mode `--by` a spec approver), else `not confirmed: nothing
 applied` (exit 1); `ready` is `not ready` without it while a work type is declared. `research`
 records the web-research permission and, only on a yes, prints `search: <TEXT>` for a generic
-description (exit 2 for anything else). `draft` writes the project playbook (`front_door.py
+description (exit 2 for anything else); with `--server NAME`, one of `packs.servers` (SPEC-0077
+rule 7, brief #2044), the record names it and a yes prints `server: <NAME>` too. `draft` writes the project playbook (`front_door.py
 derive-write`) and its Proposed ADR, never `[delivery] work_type`.
 
 Brief #1690 (SPEC-0062 rules 13, 14 and 16, ADR-0703): `ask --target pr:N --line FILE` pins the
@@ -479,10 +481,29 @@ def generic_problem(root: Path, text: str) -> str | None:
     return None
 
 
-def research(root: Path, words_file: Path, at: str, text: str, gh, search) -> tuple[int, list[str]]:
-    """Rule 8: the permission is recorded; only on a yes, the generic description is searched."""
+SERVER_REFUSED = "refused: the documentation server is not allowed (setting: packs.mcp)"
+
+
+def server_allowed(root: Path, server: str) -> bool:
+    """SPEC-0077 rule 7 (brief #2044, ADR-0845): SERVER is one of `packs.servers`; reads files."""
+    import packs
+
+    try:
+        return server in packs.servers(root)
+    except CheckError:
+        return False
+
+
+def research(
+    root: Path, words_file: Path, at: str, text: str, gh, search, server: str | None = None
+) -> tuple[int, list[str]]:
+    """Rule 8: the permission is recorded; only on a yes, the generic description is searched.
+    With SERVER (SPEC-0077 rule 7), a name outside `packs.servers` is refused before anything is
+    recorded, never named; on a yes `server: <name>` is printed beside `search:`."""
     import steward_voice
 
+    if server is not None and not server_allowed(root, server):
+        return 2, [SERVER_REFUSED]
     code, refusal, words = yes_of(root, words_file, None, team=False)
     if refusal:
         return code, [refusal]
@@ -491,12 +512,17 @@ def research(root: Path, words_file: Path, at: str, text: str, gh, search) -> tu
         return 2, [problem]
     choice = "yes" if yes else "no"
     code, lines = steward.record(
-        root, "Setup", f'web-research: {choice} because the person said "{words}" at {at}', gh
+        root,
+        "Setup",
+        f'web-research: {choice} because the person said "{words}" at {at}'
+        + (f" (server: {server})" if server is not None else ""),
+        gh,
     )
     if code or not yes:
         return code, [*lines, NO_SEARCH]
     search(text.strip())
-    return 0, [*lines, f"search: {text.strip()}"]
+    shown = [f"server: {server}"] if server is not None else []
+    return 0, [*lines, *shown, f"search: {text.strip()}"]
 
 
 # Brief #1827 (ADR-0760): the two records carry what the project's `check_adrs` requires; the
@@ -1630,6 +1656,8 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--said", type=Path, required=True)
         c.add_argument("--at", required=True)
         c.add_argument("--by" if name == "confirm" else "--describe", required=name == "research")
+        if name == "research":
+            c.add_argument("--server")  # SPEC-0077 rule 7 (brief #2044, ADR-0845)
     r = sub.add_parser("draft")
     r.add_argument("--slug", required=True)
     r.add_argument("--layers", type=Path)  # brief #1842: a saved `layers.py --draft`
@@ -1692,7 +1720,9 @@ def main(argv: list[str] | None = None) -> int:
         elif opts.command == "confirm":
             code, lines = confirm(root, opts.said, opts.at, opts.by, steward.gh_api)
         elif opts.command == "research":
-            code, lines = research(root, opts.said, opts.at, opts.describe, steward.gh_api, len)
+            code, lines = research(
+                root, opts.said, opts.at, opts.describe, steward.gh_api, len, opts.server
+            )
         elif opts.command == "draft":
             code, lines = draft(root, opts.slug, opts.layers)
         elif opts.command == "fix-brief":

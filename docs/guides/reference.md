@@ -361,7 +361,7 @@ repository that this check refuses.
     python3 scripts/agk/steward_owner.py reads [--session ID] [--refused]
     python3 scripts/agk/steward_owner.py standard [--playbook SLUG]
     python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]
-    python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT
+    python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT [--server NAME]
     python3 scripts/agk/steward_owner.py draft --slug SLUG
     python3 scripts/agk/launch.py role --role steward|conductor --session ID [--adapter COMMAND]
 
@@ -397,7 +397,10 @@ composed standard of the declared work type, or of `--playbook`: one plain scree
 mode, or the work-type question when there is none. `confirm` records one `Setup: standard: confirmed` entry only on an
 explicit yes (in team mode `--by` a spec approver), else `not confirmed: nothing applied`, exit 1; `ready` is not ready
 without it while a work type is declared. `research` records the web-research permission and, only on a yes, prints
-`search: <TEXT>` for a generic description. `draft` writes the project playbook on `default.toml` and its Proposed ADR,
+`search: <TEXT>` for a generic description; with `--server NAME` (SPEC-0077 rule 7, brief #2044, ADR-0845), a name
+outside `packs.servers` (listed in `[packs] mcp` and declared by a pack in use that `packs.py verify` passes) is refused
+before anything is recorded, `refused: the documentation server is not allowed (setting: packs.mcp)`, exit 2, and on a
+yes the record ends `(server: NAME)` and `server: NAME` is printed beside `search:`. `draft` writes the project playbook on `default.toml` and its Proposed ADR,
 never `[delivery] work_type`.
 
 ## Autopilot status
@@ -620,7 +623,10 @@ data guard flags it); a locked tag the source no longer has is `<id> <locked>: w
 cannot be read `<id>: cannot check (source: git|folder)` (brief #2045, ADR-0848). A pack in use whose `reviewed` or
 `as_of`, or an item's access date, is over `[packs] stale_months` calendar months old is a `warn packs: <id> ...
 (verify)` line in `doctor.py` and the weekly reports (`metrics.py`, `personal.py report`: else `packs: none stale`, or
-`packs: stale unknown (setting: ...)`), never a failure. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
+`packs: stale unknown (setting: ...)`), never a failure. `doctor.py`'s `packs-settings` row ends `servers <n>`, the
+allowed documentation servers, and a `[packs] mcp` name that no verified pack in use declares is one `warn packs: a
+listed documentation server has no verified pack in use (setting: packs.mcp)` line, never the name (brief #2044,
+ADR-0845); no check, gate or verdict role reads a server. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
 a source that cannot be read.
 
 The adoption scans (SPEC-0077 rule 6, brief #2034, ADR-0841), `scripts/agk/pack_scan.py`, a module with no command of

@@ -1794,7 +1794,14 @@ def packs_settings_result(root: Path) -> Result:
         found = models.packs_settings(root)
     except CheckError as exc:
         return Result("fail", message=str(exc))
-    return Result("ok", message=f"({len(found['use'])} packs, trust {found['trust']})")
+    import packs  # noqa: PLC0415 - brief #2044 (ADR-0845): the allowed documentation servers
+
+    try:
+        count = len(packs.servers(root))
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        count = 0
+    message = f"({len(found['use'])} packs, trust {found['trust']}, servers {count})"
+    return Result("ok", message=message)
 
 
 def quality_settings_result(root: Path) -> Result:
@@ -2695,6 +2702,7 @@ def personal_line(root: Path, osname: str | None = None) -> tuple[int, str] | No
         f"disclosure {table['ai_disclosure']}",
         *pinned_lines(root, table.get("plugin_version")),
         *pack_stale_lines(root),
+        *pack_server_lines(root),
     ]
     if (osname or os.name) == "nt":
         lines.append(WINDOWS_PERMISSIONS)
@@ -3255,6 +3263,18 @@ def pack_stale_lines(root: Path) -> list[str]:
         return []
 
 
+def pack_server_lines(root: Path) -> list[str]:
+    """Brief #2044 (ADR-0845, SPEC-0077 rule 7): one warn line per `[packs] mcp` name no verified
+    pack in use declares, never the name; nothing when the table is refused (the `packs-settings`
+    row names it). Never reads or writes the runtime's server settings; no exit code."""
+    import packs  # noqa: PLC0415 - only these lines read the packs
+
+    try:
+        return [packs.SERVER_LEFT_OUT for _ in packs.left_out(root)]
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return []
+
+
 def _count(n: int) -> str:
     return f"{n} problem" if n == 1 else f"{n} problems"
 
@@ -3489,6 +3509,7 @@ def main(argv: list[str] | None = None) -> int:
         skills += held_licence_lines(root.resolve())
         skills += held_floor_lines(root.resolve())
         skills += pack_stale_lines(root.resolve())
+        skills += pack_server_lines(root.resolve())
         design = design_import_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")

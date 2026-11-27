@@ -357,6 +357,61 @@ def check(root: Path) -> list[str]:
     return verify(root, use)
 
 
+# --- the documentation servers (SPEC-0077 rule 7; REQ-084 AC4; brief #2044, ADR-0845) ---------
+
+SERVER_LEFT_OUT = (
+    "warn packs: a listed documentation server has no verified pack in use (setting: packs.mcp)"
+)
+
+
+def declared(root: Path, use: list[dict]) -> dict[str, list[str]]:
+    """Each server name a pack of USE declares in `permissions.mcp`, with the declaring ids."""
+    import check_packs
+
+    out: dict[str, list[str]] = {}
+    for item in use:
+        data = check_packs.load(Path(root) / check_packs.FOLDER / item["id"] / check_packs.MANIFEST)
+        perms = (data or {}).get("permissions")
+        mcp = perms.get("mcp") if isinstance(perms, dict) else None
+        for name in mcp if isinstance(mcp, list) else ():
+            if isinstance(name, str):
+                out.setdefault(name, []).append(item["id"])
+    return out
+
+
+def _split(root: Path) -> tuple[list[str], list[str]]:
+    import check_packs
+
+    import config
+
+    try:
+        found = config.packs_settings(Path(root))
+    except config.PacksSettingError as exc:
+        raise Refused(f"packs: {exc}") from None
+    lines = verify(root, found["use"])
+    failed = {
+        u["id"]
+        for u in found["use"]
+        if any(f"{check_packs.FOLDER}/{u['id']}:" in line for line in lines)
+        or check_packs.problems(Path(root) / check_packs.FOLDER / u["id"])
+    }
+    by_name = declared(root, found["use"])
+    allowed = [n for n in found["mcp"] if set(by_name.get(n, [])) - failed]
+    return allowed, [n for n in found["mcp"] if n not in allowed]
+
+
+def servers(root: Path) -> list[str]:
+    """Rule 7: the names of `[packs] mcp`, in order, each declared by a pack of `[packs] use` that
+    passes `verify` (the lock, the trust and the `kit` range) and its rule 3 check. Reads files
+    only, never a server or a socket; raises `Refused` naming `packs.<key>` on a refused table."""
+    return _split(root)[0]
+
+
+def left_out(root: Path) -> list[str]:
+    """The listed names `servers` leaves out: every declaring pack fails; raises `Refused`."""
+    return _split(root)[1]
+
+
 # --- add and update --check: a source is read only on the person's recorded yes -----------------
 
 

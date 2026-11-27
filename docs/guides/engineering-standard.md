@@ -30,6 +30,11 @@ Before the foundation brief is filed, the steward shows the standard and applies
    address, a link or a number, means no search. Then `steward_owner.py draft --slug SLUG` writes the project's own
    playbook on `default.toml` (every gate kept at its kind) with a Proposed ADR naming the sources. The owner, never
    the steward, names it in `[delivery] work_type`.
+   A pack's read-only documentation server may answer that research too (SPEC-0077 rule 7, brief #2044): list it in
+   `[packs] mcp` (a protected `agk.toml` change with its ADR; a pack in use must declare it in `permissions.mcp`),
+   set it up yourself in the runtime's own settings `(verify: where the runtime reads a project's documentation
+   server setting)`, and add `--server NAME` to `research`; the kit never writes that setting. A yes prints `server:
+   NAME` beside `search:`; a fact from it is pinned only as a dated `- Source:` line naming the publisher's own page.
 2. `python3 scripts/agk/steward_owner.py standard` prints the screen: in solo mode one plain screen with no kit term;
    in team mode the full list of layers, directions, packs and every gate with its step or reason.
 3. `python3 scripts/agk/steward_owner.py confirm --said FILE --at TIME [--by LOGIN]` records one

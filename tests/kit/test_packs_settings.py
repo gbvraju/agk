@@ -198,11 +198,11 @@ def test_ac5_uninstall_removes_the_table_and_keeps_the_packs_folder(tmp_path):
 def test_ac5_doctor_prints_the_packs_settings(tmp_path):
     """REQ-084 AC5: SPEC-0077 rule 12 (`doctor.py` prints the table)."""
     found = doctor.packs_settings_result(tmp_path)
-    assert found.status == "ok" and found.message == "(0 packs, trust curated)"
+    assert found.status == "ok" and found.message == "(0 packs, trust curated, servers 0)"
     digest = pack(tmp_path)
     settings(tmp_path, f'[packs]\nuse = [{entry("zz-shop", digest)}]\ntrust = "official"\n')
     found = doctor.packs_settings_result(tmp_path)
-    assert found.message == "(1 packs, trust official)"
+    assert found.message == "(1 packs, trust official, servers 0)"
     severity, ok_text, fail_text, fix = doctor.CHECKS["packs-settings"]
     assert severity == "warn" and ok_text == "ok " and "agk.toml" in fail_text and fix
 
