@@ -70,7 +70,7 @@ PLAYBOOKS = "config/playbooks/"
 ALLOWED: tuple[tuple[str, ...], ...] = (
     (".claude/hooks/plugin_hooks.py", "project_runs_own", INSTALLED),
     ("scripts/agk/check_domains.py", "folders", OWN),  # a project's own pack, read first (ADR-0804)
-    # run alone, the folder of the root it is given; the playbooks step resolves the kit's (ADR-0858)
+    # run alone: the given root's folder; the playbooks step resolves the kit's (ADR-0858)
     ("scripts/agk/check_parts_catalogue.py", "cmd_check", OWN),
     ("scripts/agk/check_licence_notice.py", "annotated", INSTALLED),
     ("scripts/agk/check_runbooks.py", "cmd_check", INSTALLED),
