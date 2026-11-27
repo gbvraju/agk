@@ -95,7 +95,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-import packs
 import playbook_format
 from guard import scan_text
 from playbook_format import WORK_TYPES
@@ -2040,18 +2039,49 @@ def quoted(path: str) -> str:
     return '"' + "".join('\\"' if c == '"' else c for c in plain) + '"'
 
 
+def _knowledge(kit: Path, root: Path | None, kind: str, rel: str) -> list[tuple[str, Path]]:
+    """SPEC-0077 rule 5 (brief #2032): the kit's file, then each pack's in use by `packs.files`;
+    the repository's own copy is never read (`Q-S0057-2`, `Q-2032-4`). The kit's file alone in a
+    partial copy of the scripts with no resolver. Raises `packs.Refused`, naming the setting."""
+    packs = playbook_format.resolver()
+    if packs is None:
+        return [(CORE, kit / rel)] if (kit / rel).is_file() else []
+    found = packs.files(kit if root is None else root, kind, core=kit / rel)
+    return [(layer, path) for layer, path in found if layer != packs.PROJECT]
+
+
+CORE = "agk-core"  # SPEC-0077 rule 2: the kit's built-in pack
+
+
+def _plain(rows: object, layer: str) -> object:
+    """A pack's rows without their provenance keys (SPEC-0077 rule 3); the kit's as they are."""
+    if layer == CORE or not isinstance(rows, list):
+        return rows
+    return [{k: v for k, v in r.items() if k not in ("source", "basis")} if isinstance(r, dict)
+            else r for r in rows]  # fmt: skip
+
+
+def _by_name(layers: list[tuple[str, list]]) -> list:
+    """`Q-PB-1`: a later layer's rows of a `name` replace every earlier row of it, in place."""
+    out: dict[object, list] = {}
+    for _, rows in layers:
+        mine: dict[object, list] = {}
+        for row in rows:
+            mine.setdefault(row.get("name"), []).append(row)
+        out.update(mine)
+    return [row for group in out.values() for row in group]
+
+
 def _signal_layer(layer: str, path: Path) -> dict:
-    """One layer's table: the kit's whole, as before; a pack's or the project's with the kinds
-    it holds, its rows without their provenance keys (SPEC-0077 rule 3)."""
-    name = packs.label(layer, SIGNALS)
+    """One layer's table: the kit's whole, as before; a pack's with the kinds it holds."""
+    name = SIGNALS if layer == CORE else f"config/packs/{layer}"
     try:
         table = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         raise Refusal([f"detect: {name} cannot be read"]) from None
-    whole = layer == packs.CORE
+    whole = layer == CORE
     for kind in SIGNAL_ROWS if whole else [k for k in SIGNAL_ROWS if k in table]:
-        if isinstance(table.get(kind), list):
-            table[kind] = [packs.plain(r, layer) if isinstance(r, dict) else r for r in table[kind]]
+        table[kind] = _plain(table.get(kind), layer)
         if signal_row_problems(kind, table.get(kind)):
             raise Refusal([f"detect: {name} cannot be read"])
     words = [k for k in ("no_signal", "ignore") if whole or k in table]
@@ -2061,17 +2091,16 @@ def _signal_layer(layer: str, path: Path) -> dict:
 
 
 def signal_table(kit: Path, root: Path | None = None) -> dict:
-    """The table of the kit's own root, then of each pack in use and the project's by
-    `packs.files` (SPEC-0077 rule 5, brief #2032): a later layer's rows of a `name` replace the
-    earlier ones as proposals (`Q-PB-1`), its words are added; `signal_row_problems` also
-    refuses a `pilot` row. Raises `packs.Refused`, naming the setting."""
-    found = packs.files(kit if root is None else root, "stack-signals", core=kit / SIGNALS)
-    if not found or found[0][0] != packs.CORE:
+    """The table of the kit's own root, then of each pack in use by `packs.files` (SPEC-0077
+    rule 5, brief #2032): a later layer's rows of a `name` replace the earlier ones as proposals
+    (`Q-PB-1`), its words are added; `signal_row_problems` also refuses a `pilot` row."""
+    found = _knowledge(kit, root, "stack-signals", SIGNALS)  # packs.files(...), Q-2032-4
+    if not found or found[0][0] != CORE:
         raise Refusal([f"detect: {SIGNALS} cannot be read"])
     layers = [(layer, _signal_layer(layer, path)) for layer, path in found]
     table = dict(layers[0][1])
     for kind in SIGNAL_ROWS:
-        table[kind] = packs.rows([(n, t.get(kind, [])) for n, t in layers], "name")
+        table[kind] = _by_name([(n, t.get(kind, [])) for n, t in layers])
     for key in ("no_signal", "ignore"):
         table[key] = list(dict.fromkeys(w for _, t in layers for w in t.get(key, [])))
     return table
@@ -2170,29 +2199,27 @@ def detect_facts(root: Path, kit: Path) -> dict:
 
 def domain_rows(kit: Path, root: Path | None = None) -> list[dict] | None:
     """SPEC-0074 rule 5 (brief #1937, ADR-0806): the rows of the kit's domain signal table, then
-    of each pack in use and the project's by `packs.files` (SPEC-0077 rule 5, brief #2032), a
-    later row of a `name` replacing the earlier one (`Q-PB-1`); None for a kit copy without it or
-    with a row of another form in any layer (nothing is proposed then)."""
-    found = packs.files(kit if root is None else root, "domain-signals", core=kit / DOMAIN_SIGNALS)
+    of each pack in use by `packs.files` (SPEC-0077 rule 5, brief #2032), a later row of a `name`
+    replacing the earlier one (`Q-PB-1`); None for a kit copy without it or with a row of another
+    form in any layer (nothing is proposed then). The repository's own copy is never read."""
     layers = []
-    for layer, path in found:
+    for layer, path in _knowledge(kit, root, "domain-signals", DOMAIN_SIGNALS):  # packs.files(
         try:
             rows = tomllib.loads(path.read_text(encoding="utf-8")).get("domain")
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
             return None
-        if isinstance(rows, list):
-            rows = [packs.plain(r, layer) if isinstance(r, dict) else r for r in rows]
+        rows = _plain(rows, layer)
         good = isinstance(rows, list) and all(
             isinstance(r, dict) and isinstance(r.get("name"), str)
             and all(is_words(r.get(k)) for k in DOMAIN_ROW[1:])
             for r in rows
         )  # fmt: skip
-        if not good:
+        if not good or not isinstance(rows, list):
             return None
         layers.append((layer, rows))
-    if not layers or layers[0][0] != packs.CORE:
+    if not layers or layers[0][0] != CORE:
         return None
-    return packs.rows(layers, "name")
+    return _by_name(layers)
 
 
 def domain_fact(

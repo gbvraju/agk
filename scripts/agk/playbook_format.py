@@ -94,12 +94,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from types import ModuleType
 
 kit_root: ModuleType | None
-packs: ModuleType | None
 try:
     import kit_root  # standalone, so no cycle (brief #1666)
-    import packs  # SPEC-0077 rule 5 (brief #2032): reads check_packs and config lazily
 except ImportError:  # a partial copy of the scripts (a test's stub project) reads its own folder
-    kit_root = packs = None
+    kit_root = None
 Refused = kit_root.Refused if kit_root is not None else RuntimeError
 
 FORMAT = 1
@@ -563,6 +561,16 @@ def skills(path: Path, root: Path) -> list[str]:
     return [name for name in names if _skill_problem(name, tokens) is None]
 
 
+def resolver() -> ModuleType | None:
+    """`packs` (SPEC-0077 rule 5, brief #2032), imported here so this module's own imports stay
+    those of the standing import ruling (ADR-0824); None in a partial copy of the scripts."""
+    try:
+        import packs
+    except ImportError:
+        return None
+    return packs if kit_root is not None else None
+
+
 def folder(root: Path, name: str | None = None) -> Path:
     """The folder a playbook is read from (brief #1666, ADR-0697): the folder of the last layer of
     `packs.files` (SPEC-0077 rule 5, brief #2032) that holds `<name>.toml`, so the project's
@@ -571,6 +579,7 @@ def folder(root: Path, name: str | None = None) -> Path:
     project's alone in both layouts (brief #1908, ADR-0790, SPEC-0048 rule 22). Raises
     `kit_root.Refused` and `packs.Refused`, whose line names the setting."""
     own = Path(root) / FOLDER
+    packs = resolver()
     if kit_root is None or packs is None or (name and is_derived(name, root)):
         return own
     held = [p.parent for _, p in packs.files(Path(root), "playbooks") if p.stem == name]
@@ -796,6 +805,7 @@ def playbooks(root: Path) -> list[Path]:
     """The playbook files of a repository, sorted, then those of each pack in use (SPEC-0077
     rule 5): the kit's own in a clean project are the plugin's, not the repository's."""
     own = Path(root) / FOLDER
+    packs = resolver()
     if packs is None:
         return sorted(own.glob("*.toml")) if own.is_dir() else []
     found = packs.files(Path(root), "playbooks", core=own)

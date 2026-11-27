@@ -143,11 +143,11 @@ def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], l
     layers, problems = _layers(path, root)
     pairs, refused = check_domains.compose(root, layers)  # brief #1936: the packs come last
     problems += refused
-    named = _beneath(path, root)  # SPEC-0077 rule 5: each pack layer names its pack
-    if named:
+    beneath = _beneath(path, root)  # SPEC-0077 rule 5: each pack layer names its pack
+    if beneath:
         mine = next(layer for layer, p in packs.files(root, "playbooks") if p == path)
         own = f"{playbook_format.FOLDER}/{path.name}"
-        marks = [packs.label(layer, own) for layer, _ in [*named, (mine, path)]]
+        marks = [packs.label(layer, own) for layer, _ in [*beneath, (mine, path)]]
         start = len(layers) - len(marks)
         pairs[start : len(layers)] = [(m, pairs[start + i][1]) for i, m in enumerate(marks)]
     rel = f"{playbook_format.FOLDER}/{path.name}"

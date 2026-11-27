@@ -369,3 +369,14 @@ def test_ac2_no_other_kit_module_opens_a_knowledge_file_by_a_literal_path():
         or '"stack-signals.toml"' in path.read_text(encoding="utf-8")
     }
     assert named <= known, sorted(named - known)
+
+
+def test_ac2_detect_never_reads_the_repositorys_own_signal_tables(tmp_path):
+    """REQ-084 AC2: `Q-S0057-2`, `Q-2032-4` (detect reads the kit's and the packs', never the repository's)."""
+    root = clean(tmp_path)
+    (root / "config").mkdir()
+    (root / front_door.SIGNALS).write_text(signals("zz-planted"), encoding="utf-8")
+    (root / front_door.DOMAIN_SIGNALS).write_text("domain = 1\n", encoding="utf-8")
+    names = [r["name"] for r in front_door.signal_table(KIT_ROOT, root)["stack"]]
+    assert "zz-planted" not in names
+    assert front_door.domain_rows(KIT_ROOT, root) == rows_of(KIT_ROOT / front_door.DOMAIN_SIGNALS, "domain")
