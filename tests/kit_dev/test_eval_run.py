@@ -1,4 +1,6 @@
-"""Tests of the evaluation set and its checks (SPEC-0077 rule 9; REQ-084 AC7, AC8; brief #2042 build (a), ADR-0846).
+"""Tests of the evaluation set and its checks (SPEC-0077 rule 9; REQ-084 AC7, AC8; ADR-0846).
+
+Brief #2042 build (a).
 
 `evals/` holds two invented reference products and the rubric; `eval_run.py check` fails a malformed
 product, rubric or run record naming the file class and the key, never a value; `median DIR` prints
@@ -76,7 +78,10 @@ def test_ac7_the_products_are_invented_and_complete():
         assert data["id"] == name and data["format"] == 1
         assert 3 <= len(data["acceptance"]) <= 12
         found[name] = (data["work_type"], data["domain"])
-    assert found == {"booking-web": ("web-app", "none"), "payments-api": ("api-service", "payments")}
+    assert found == {
+        "booking-web": ("web-app", "none"),
+        "payments-api": ("api-service", "payments"),
+    }
     rubric = tomllib.loads((EVALS / "rubric.toml").read_text("utf-8"))
     assert tuple(layer["name"] for layer in rubric["layer"]) == LAYERS
     assert rubric["tolerance"] == 0 and rubric["scale"] == 6

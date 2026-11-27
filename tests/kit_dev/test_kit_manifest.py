@@ -223,7 +223,7 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         "tests/kit_dev/",
         ".claude-plugin/",
         "skills/",
-        "evals/",  # brief #2042 (ADR-0846): the kit-only evaluation set, its rubric decides promotion
+        "evals/",  # brief #2042 (ADR-0846): the kit-only evaluation set
     ]
 
 

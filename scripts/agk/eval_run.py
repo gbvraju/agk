@@ -10,9 +10,10 @@ Kit-only: `kit/manifest.json` lists it nowhere, and it runs only in the kit's ow
 
 `check` reads `evals/rubric.toml` and each `evals/<id>/product.toml` and prints one line per
 problem, `FAIL evals: <file class>: <rule>: <what> (setting: <key>)`, never a value, exit 1, else
-`ok evals: <n> products, <m> layers`. `median DIR` checks each run record `DIR/<product>/run-<n>.json`
-(n 1 to 3) and prints, per product, the median of each layer over three complete runs and the cost
-per accepted feature, or `<product> incomplete (<k> of 3 runs complete)`, never 0 (`Q-PG-3`).
+`ok evals: <n> products, <m> layers`. `median DIR` checks each run record
+`DIR/<product>/run-<n>.json` (n 1 to 3) and prints, per product, the median of each layer over
+three complete runs and the cost per accepted feature, or
+`<product> incomplete (<k> of 3 runs complete)`, never 0 (`Q-PG-3`).
 Files only: no network, no model, no GitHub call. Build (b) adds `run`.
 """
 
@@ -29,7 +30,16 @@ from typing import Any
 KIT = Path(__file__).resolve().parents[2]
 RUNS = 3  # rule 9: three runs on `strongest`; never a rubric key
 TIER = "strongest"
-LAYERS = ("problem", "scope", "domain-rules", "architecture", "threats", "data", "usability", "code")
+LAYERS = (
+    "problem",
+    "scope",
+    "domain-rules",
+    "architecture",
+    "threats",
+    "data",
+    "usability",
+    "code",
+)
 NUM, INT, STR, STRS, TABLE, ROWS = "number", "int", "str", "strs", "table", "rows"
 PRODUCT = {
     "format": INT,
@@ -131,7 +141,9 @@ def product_problems(data: dict, folder: str, root: Path) -> list:
         out.append((rule, "not 3 to 12 acceptance criteria", "acceptance"))
     ids = [r.get("id") for r in rows]
     for row in rows:
-        out += [(rule, w, f"acceptance.{k}") for _, w, k in keys(row, {"id": STR, "text": STR}, rule)]
+        out += [
+            (rule, w, f"acceptance.{k}") for _, w, k in keys(row, {"id": STR, "text": STR}, rule)
+        ]
     if any(not (isinstance(i, str) and AC.match(i)) for i in ids):
         out.append((rule, "an acceptance id not of the form AC<n>", "acceptance.id"))
     if len(ids) != len(set(map(str, ids))):
@@ -187,7 +199,13 @@ def rubric_problems(data: dict) -> list:
             if _is(src, STR) and not SPEC_RULE.match(src):
                 dated = isinstance(crit.get("accessed"), str) and DATE.fullmatch(crit["accessed"])
                 if not (src.startswith("https://") and dated):
-                    out.append(("rule 9", "a source neither a spec rule nor a dated URL", "criteria.source"))
+                    out.append(
+                        (
+                            "rule 9",
+                            "a source neither a spec rule nor a dated URL",
+                            "criteria.source",
+                        )
+                    )
     return list(dict.fromkeys(out))
 
 
@@ -247,7 +265,9 @@ def record_problems(data: dict, product: str, n: int) -> list:
     if data.get("run") != n and _is(data.get("run"), INT):
         out.append((rule, "a run that is not its file's number", "run"))
     if _is(data.get("kit"), TABLE):
-        out += [(r, w, f"kit.{k}") for r, w, k in keys(data["kit"], {"version": STR, "sha": STR}, rule)]
+        out += [
+            (r, w, f"kit.{k}") for r, w, k in keys(data["kit"], {"version": STR, "sha": STR}, rule)
+        ]
     if _is(data.get("tier"), STR) and data["tier"] != TIER:
         out.append((rule, "a value outside its list", "tier"))
     status = data.get("status")
@@ -268,7 +288,9 @@ def record_problems(data: dict, product: str, n: int) -> list:
         value = cost.get(key)
         if key not in cost:
             out.append((rule, "a missing key", f"cost.{key}"))
-        elif not (_is(value, INT if key != "usd" else NUM) or value in WORDS or _priced(key, value)):
+        elif not (
+            _is(value, INT if key != "usd" else NUM) or value in WORDS or _priced(key, value)
+        ):
             out.append((rule, "a value of the wrong type", f"cost.{key}"))
     out += [(rule, "an unknown key", f"cost.{k}") for k in cost if k not in (*COST, "usd")]
     review: dict = _as(data.get("review"), TABLE, {})
@@ -320,9 +342,11 @@ def median(folder: Path) -> tuple[list[str], list[str]]:
             except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 fails.append(f"FAIL evals: {cls}: rule 9: not JSON (setting: file)")
                 continue
-            found = record_problems(rec, product.name, n) if isinstance(rec, dict) else [
-                ("rule 9", "not a JSON object", "file")
-            ]
+            found = (
+                record_problems(rec, product.name, n)
+                if isinstance(rec, dict)
+                else [("rule 9", "not a JSON object", "file")]
+            )
             fails += [f"FAIL evals: {cls}: {r}: {w} (setting: {k})" for r, w, k in found]
             if not found and rec["status"] == "complete":
                 complete.append(rec)
