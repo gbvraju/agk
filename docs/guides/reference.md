@@ -1317,13 +1317,17 @@ writing nothing; `design.py prototype` fills a new theme the same way.
 
     python3 scripts/agk/eval_run.py check [--root DIR]
     python3 scripts/agk/eval_run.py median DIR
+    python3 scripts/agk/eval_run.py run --product ID --adapter COMMAND --said FILE --at <UTC time> --out DIR [--by LOGIN] [--minutes N]
 
-Two kit-only commands of SPEC-0077 rule 9 (brief #2042, ADR-0846), never run by CI, a check or a governance step, and refused
+Three kit-only commands of SPEC-0077 rule 9 (brief #2042, ADR-0846), never run by CI, a check or a governance step, and refused
 outside the kit's own repository (path class `evals/`). `check` reads `evals/rubric.toml` and the two invented reference products,
 `evals/booking-web/` and `evals/payments-api/`, and prints `ok evals: 2 products, 8 layers` or one `FAIL evals: <file class>: <rule>:
 <what> (setting: <key>)` line per problem, never a value. `median DIR` checks each run record `DIR/<product>/run-<n>.json` and prints
 per product and layer the median of three complete runs and the cost per accepted feature, or `<product> incomplete (<k> of 3 runs
-complete)`, never 0. The run itself is build (b) of the brief.
+complete)`, never 0. `run` (build (b)) starts nothing without the person's plain yes in `--said` (in team mode a
+`spec_approvers` login as `--by`) and is refused under CI (setting `CI`); it then runs the product three times, each over a
+scratch files-forge sidecar with no GitHub token, through the person's own `--adapter` command on `strongest`, and has a fresh
+reviewer session score the bundle only; it writes `OUT/<product>/run-<n>.json`, a failed or unreviewed run `incomplete`, never 0.
 
 ## Design screenshots and comparison
 
