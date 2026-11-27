@@ -463,5 +463,5 @@ def test_req037_rule_38_holds_in_every_mode_and_a_bad_mode_names_its_setting(tmp
 def test_req071_rule_10_names_every_supervised_start_a_short_job():
     """REQ-071: brief #2057 answer 2 (a supervisor or the conductor starts a short job)."""
     ten = flat(numbered()[10])
-    assert ten.startswith("A builder a supervisor or the conductor starts is a short job")
-    assert "`conductor.py watchdog --pass`" in ten and "Any other session" in ten
+    start = "A builder a supervisor (`conductor.py watchdog --pass`) or conductor starts"
+    assert ten.startswith(start + " is a short job") and "Any other session" in ten

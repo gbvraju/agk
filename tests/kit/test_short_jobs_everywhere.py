@@ -20,7 +20,14 @@ from pathlib import Path
 
 import pytest
 from test_autopilot_build_jobs import fix_list
-from test_conductor_guard_launch import allowed, denied, plan_file, project, run_hook, tmp  # noqa: F401
+from test_conductor_guard_launch import (  # noqa: F401
+    allowed,
+    denied,
+    plan_file,
+    project,
+    run_hook,
+    tmp,
+)
 from test_conductor_watchdog import starts, stub, world  # noqa: F401
 from test_session import comment, iso
 from test_watchdog_builders import builder_line, builders, pr_comments, watchdog  # noqa: F401
@@ -37,7 +44,8 @@ RECORDER = (
     "import json, os, sys\n"
     "with open(os.environ['ADAPTER_LOG'], 'a') as f:\n"
     "    f.write(json.dumps({'kind': os.environ.get('AGK_JOB_KIND'),\n"
-    "                        'item': os.environ.get('AGK_ITEM'), 'prompt': sys.stdin.read()}) + '\\n')\n"
+    "                        'item': os.environ.get('AGK_ITEM'),\n"
+    "                        'prompt': sys.stdin.read()}) + '\\n')\n"
 )
 
 
@@ -159,7 +167,9 @@ def test_the_job_option_with_an_adapter_is_refused_naming_it(tmp_path, extra):
 def test_the_guard_allows_the_job_text_of_a_scratch_plan(project, tmp):  # noqa: F811
     """REQ-071 AC2: brief #2057 answer 2 (`prompts --plan <scratch> --job`)."""
     plan = plan_file(tmp)
-    assert allowed(run_hook(f"python3 scripts/agk/launch.py prompts --plan {plan} --job", project, tmp))
+    assert allowed(
+        run_hook(f"python3 scripts/agk/launch.py prompts --plan {plan} --job", project, tmp)
+    )
 
 
 @pytest.mark.parametrize("extra", ["--jobs", "--job --job", "--job x", "--resume --job", "-j"])
@@ -206,7 +216,10 @@ def test_a_first_failure_within_the_hour_is_held(builders, capsys):  # noqa: F81
     watchdog(builders, capsys)
     restarted_ago(builders, 28)
     _, out = watchdog(builders, capsys)
-    assert builder_line(out) == f"watchdog: builder {name} #7 ended -> held (restarted within the hour)"
+    assert (
+        builder_line(out)
+        == f"watchdog: builder {name} #7 ended -> held (restarted within the hour)"
+    )
     assert len(starts(builders)) == 1
 
 
@@ -262,6 +275,11 @@ def function(name: str) -> ast.FunctionDef:
     return next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
 
 
-def test_the_restart_gap_is_read_only_by_gap_holds():
-    """REQ-071 AC2: brief #2057 answer 7 (no second reader of the hour)."""
-    assert functions_naming("RESTART_GAP") == {"conductor.gap_holds"}
+def test_the_restart_gap_of_a_builder_is_read_only_by_gap_holds():
+    """REQ-071 AC2: brief #2057 answers 3 and 7 (no second reader of a builder's hour; the
+    steward's start and the conductor's stop keep theirs unchanged)."""
+    assert functions_naming("RESTART_GAP") == {
+        "conductor.gap_holds",
+        "conductor.steward_due",
+        "conductor.conductor_gate",
+    }

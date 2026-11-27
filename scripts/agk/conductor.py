@@ -3534,6 +3534,16 @@ def builder_state(alive, exited, own, owed, now, quiet: int, has_pr: bool, busy=
     return "idle" if owed is not None and owed > own and now - owed >= wait else "live"
 
 
+def gap_holds(last, now, short: bool, job: dict | None) -> bool:
+    """One restart per hour (SPEC-0064 rule 9's back-off): an idle builder, one with no pull
+    request, an older record with no job and a short job whose last run failed wait out the hour
+    since LAST; a short job after one with progress starts in the pass its event appears (rule 2,
+    brief #2057, ADR-0855)."""
+    if last is None or now - last >= RESTART_GAP:
+        return False
+    return not short or job is None or job.get("fails", 0) >= 1
+
+
 def builder_action(
     state: str, *, final, parked, recent, room, safe, checked=True
 ) -> tuple[str, str | None]:
@@ -3866,19 +3876,19 @@ def watch_builders(root, repo: str, adapter: str, now=None) -> list[str]:
             checks.pop(name, None)
         last = when(str(restarts.get(name) or ""))
         room = (running - (state == "idle") < limit) and memory_line(root)[1]
+        short = state == "ended" and facts["pr"] is not None  # brief #1389: one job per event
+        if short:  # counted first: the hour holds only after a failed job (brief #2057)
+            exit_code = launch.fields_of(worktree / launch.EXIT_FILE).get("exit_code")
+            job_ended(jobs.get(name), facts, exit_code)
         action, why = builder_action(
             state,
             final=facts["final"],
             parked=facts["parked"],
-            recent=last is not None and now - last < RESTART_GAP,
+            recent=gap_holds(last, now, short, jobs.get(name)),
             room=room,
             safe=state != "idle" or worktree_safe(worktree),
             checked=checked,
         )
-        short = state == "ended" and facts["pr"] is not None  # brief #1389: one job per event
-        if short:
-            exit_code = launch.fields_of(worktree / launch.EXIT_FILE).get("exit_code")
-            job_ended(jobs.get(name), facts, exit_code)
         if short and (action == "restart" or why == "restarted within the hour"):
             action, why = job_gate(jobs.get(name), facts, now) or (action, why)
         if action == "restart" and not memory_floor(root):  # brief #1409 answer 5
