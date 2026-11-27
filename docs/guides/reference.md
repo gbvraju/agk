@@ -1435,6 +1435,15 @@ its issue's `created_at`, else by today's UTC date, so a brief filed before the 
 `session.py plan` lists such a brief `MALFORMED` and `session.py next` skips it. A `Priority: 0` brief, the router's
 red-branch brief among them, is held to `Class:` and `Prior:` only. The kit sets its own day; no project template sets
 one. Files only.
+In the kit (where `kit/agk-kit.mk` is; brief #2052, ADR-0850) a brief also has one line `Existing:` before its Answers
+line: `Existing:` alone with items `- ...`, each naming a `<path>:<line>` of a file in the tree and holding `not enough:
+<reason>`, or `Existing: none: <text>` with a backquoted `grep`, `git grep`, `rg` or `brief_study.py` command and a
+`<n> match(es)` count. It is held as the other study lines are (warned before the day, failed from it, not held for
+`Priority: 0`, the placeholder warned only). The study also searches the code for the scripts (`<name>.py`), functions
+(`<module>.<name>`, `<name>(`) and settings (`[<table>] <key>`, `<table>.<key>`) that the `Sentence:`, the Answers and the
+code paths of `Touches:` name, under `scripts/` and `.claude/hooks/`, and warns `study: Existing leaves out
+<path>:<line>, which defines <term>` for at most 10 that the line leaves out, with one line counting the rest; the
+command prints each as `code <path>:<line>: <term>`. A project's briefs are not held to the line and get no code search.
 Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
 publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
 writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.

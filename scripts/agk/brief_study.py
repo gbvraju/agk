@@ -33,6 +33,14 @@ never failed (brief #1813, ADR-0756).
 An open brief the study finds and `Prior:` leaves out is always a warning, and so are the first
 `[flow] brief_prior_warnings` (10 when unset) strong Accepted ADRs it leaves out, with one line
 counting the rest. Reads files and the cache only: no network, no model.
+
+In the kit (`kit/agk-kit.mk` under the root, brief #2052, ADR-0850) a brief also has one line
+`Existing:` before its Answers line: items `- ...` naming `<path>:<line>` with `not enough: <text>`,
+or `Existing: none: <text>` with a backquoted `grep`, `git grep`, `rg` or `brief_study.py` command
+and a `<n> match(es)` count, held as the other study lines are. `code_matches` finds the scripts,
+functions and settings the brief names under `scripts/` and `.claude/hooks/`, and the study warns on
+the first `CODE_WARNINGS` that `Existing:` leaves out; the command prints them as `code ...` lines.
+A project's tree reads no such line and searches no code.
 """
 
 from __future__ import annotations
@@ -45,11 +53,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import kit_root
 import plan_names
 from common import CheckError, run, utf8_output
 from session import touches_of
 
-from config import BRIEF_PRIOR_WARNINGS, brief_prior_warnings, brief_study_fails_from
+from config import BRIEF_PRIOR_WARNINGS, TABLE_KEYS, brief_prior_warnings, brief_study_fails_from
 
 NAME = "brief-study"
 USAGE = "usage: brief_study.py FILE --root DIR [--open-briefs FILE]"
@@ -80,6 +89,17 @@ SPEC_OF = re.compile(r"\bSPEC-(\d{4})\b")
 PRIOR_WARNINGS = BRIEF_PRIOR_WARNINGS
 SECTION = re.compile(r"^## ", re.M)
 DECISION = re.compile(r"^## Decision\b.*$", re.M)
+# Brief #2052 (ADR-0850): only the kit repository has the marker (`check_kit_tests.KIT_MAKE`).
+KIT_MAKE = "kit/agk-kit.mk"
+CONFIG = "scripts/agk/config.py"  # answer 2: a setting's key, when agk.toml does not set it
+CODE_WARNINGS = 10  # answer 2 (Q-P0A-2): the code matches warned at most, with one count line
+EXISTING_REF = re.compile(r"(?<![\w./*-])([\w.-]*[/.][\w./-]*):(\d+)\b")
+EXISTING_SEARCH = re.compile(r"`(?:grep|git grep|rg|brief_study\.py)\b[^`]*`")
+EXISTING_COUNT = re.compile(r"\b\d+ match(?:es)?\b")
+SPAN = re.compile(r"`([^`\n]+)`")
+SCRIPT_TERM = re.compile(r"[\w./-]*\w\.py")
+FUNCTION_TERM = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)|([A-Za-z_]\w*)\(.*")
+SETTING_TERM = re.compile(r"\[(\w+)\]\s+(\w+)|(\w+)\.(\w+)")
 
 
 FILED = re.compile(r"(\d{4}-\d{2}-\d{2})T")
@@ -124,12 +144,16 @@ def impact_problems(lines: list[str]) -> list[str]:
 
 
 def defines(path: Path, name: str) -> bool:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return False
+    return define_line(_read(path), name) is not None
+
+
+def define_line(text: str, name: str) -> int | None:
+    """The first line of TEXT that defines NAME (a `def`, a `class` or a top-level name)."""
     form = rf"^(\s*(async\s+)?def\s+{name}\s*\(|class\s+{name}\b|{name}\s*(:[^=\n]*)?=)"
-    return re.search(form, text, re.M) is not None
+    found = re.search(form, text, re.M)
+    return (
+        text.count("\n", 0, found.end()) + 1 if found else None
+    )  # the leading space may span lines
 
 
 def wiring_entries(text: str) -> list[tuple[str, str]] | None:
@@ -314,6 +338,178 @@ def placeholder_warnings(lines: list[str]) -> list[str]:
     ]
 
 
+def is_kit(root: Path) -> bool:
+    """Brief #2052 answer 3: the Existing line and the code search hold only in the kit."""
+    return (root / KIT_MAKE).is_file()
+
+
+def existing_section(lines: list[str]) -> tuple[list[int], list[str]]:
+    """(the indexes of the `Existing:` lines, the first one's text with its items up to the first
+    blank line)."""
+    heads = [i for i, x in enumerate(lines) if x.startswith("Existing:")]
+    if not heads:
+        return heads, []
+    section = [lines[heads[0]].rstrip()]
+    for line in lines[heads[0] + 1 :]:
+        if not line.strip():
+            break
+        section.append(line.rstrip())
+    return heads, section
+
+
+def _place(path: str) -> str:
+    parent = Path(path).parent.as_posix()
+    return "the root" if parent in (".", "") else f"{parent}/"
+
+
+def existing_problems(lines: list[str], root: Path) -> list[str]:
+    """Brief #2052 answers 1 and 5: what the `Existing:` line breaks, naming the line or a path's
+    class, never the brief's text; nothing outside the kit."""
+    if not is_kit(root):
+        return []
+    heads, section = existing_section(lines)
+    answers = next((i for i, x in enumerate(lines) if x.startswith("Answers")), None)
+    if len(heads) != 1:
+        return ["study: exactly one line Existing: (items, or none: <search>) before Answers"]
+    if answers is not None and heads[0] > answers:
+        return ["study: the Existing line stands after the Answers line"]
+    text = section[0][len("Existing:") :].strip()
+    if text.startswith("none:"):
+        if PLACEHOLDER in text:
+            return []  # the render's placeholder: `placeholder_warnings` names it
+        if EXISTING_SEARCH.search(text) and EXISTING_COUNT.search(text):
+            return []
+        return [
+            "study: the Existing none: form needs a backquoted search command and a match count"
+        ]
+    items = [x for x in section[1:] if x.lstrip().startswith("- ")]
+    if text or not items:
+        return ["study: the Existing line is Existing: alone with items - ..., or Existing: none:"]
+    problems = []
+    for item in items:
+        refs = EXISTING_REF.findall(item)
+        if not refs:
+            problems.append("study: an Existing item names no <path>:<line>")
+        if "not enough:" not in item:
+            problems.append("study: an Existing item holds no not enough: <reason>")
+        for path, number in refs:
+            target = root / path
+            if not target.is_file():
+                problems.append(f"study: an Existing item names no file of {_place(path)}")
+            elif not 1 <= int(number) <= len(_read(target).splitlines()):
+                problems.append(
+                    f"study: an Existing item names a line past a file of {_place(path)}"
+                )
+    return problems
+
+
+def _code_files(root: Path) -> list[Path]:
+    return sorted({*root.glob("scripts/**/*.py"), *root.glob(".claude/hooks/*.py")})
+
+
+def _setting_line(root: Path, table: str, key: str) -> tuple[str, int] | None:
+    current = None
+    for number, line in enumerate(_read(root / "agk.toml").splitlines(), start=1):
+        header = re.fullmatch(r"\s*\[\[?\s*([\w.-]+)\s*\]\]?\s*(#.*)?", line)
+        if header:
+            current = header.group(1)
+        elif current == table and re.match(rf"\s*{re.escape(key)}\s*=", line):
+            return "agk.toml", number
+    try:  # the kit's own file, by the resolver (ADR-0759): the root's copy in the kit
+        config = kit_root.kit_file(root, CONFIG)
+    except kit_root.Refused:
+        return None
+    for number, line in enumerate(_read(config).splitlines(), 1):
+        if f'"{key}"' in line:
+            return CONFIG, number
+    return None
+
+
+def code_terms_named(body: str) -> list[str]:
+    """Answer 2's search terms: the backquoted spans of the `Sentence:` line and the Answers
+    items, then the code paths of `Touches:`; `agk.toml` and `kit/hashes.json` are none."""
+    lines = body.splitlines()
+    text = [x for x in lines if x.startswith("Sentence:")]
+    start = next((i for i, x in enumerate(lines) if x.startswith("Answers")), None)
+    for line in lines[start + 1 :] if start is not None else []:
+        if line.strip() and not (line[:1].isdigit() or line[:1].isspace()):
+            break
+        text.append(line)
+    spans = [s.strip() for s in SPAN.findall("\n".join(text))]
+    paths = [t.strip() for t in touches_of(body)]
+    spans += [t for t in paths if _code(t) and not re.search(r"[*?[]", t)]
+    return [t for t in dict.fromkeys(spans) if t and t not in SHARED]
+
+
+def code_matches(body: str, root: Path) -> list[tuple[str, int, str]]:
+    """Brief #2052 answer 2: (path, line, term) of each script, function and setting the brief
+    names that a file under `scripts/` or `.claude/hooks/` defines; nothing outside the kit. A
+    file that cannot be read is skipped. Files only: no network."""
+    if not is_kit(root):
+        return []
+    files = _code_files(root)
+    texts: dict[Path, str] = {}
+
+    def text(path: Path) -> str:
+        if path not in texts:
+            texts[path] = _read(path)
+        return texts[path]
+
+    def rel(path: Path) -> str:
+        return path.relative_to(root).as_posix()
+
+    found: list[tuple[str, int, str]] = []
+    for term in code_terms_named(body):
+        hits: list[tuple[str, int]] = []
+        setting = SETTING_TERM.fullmatch(term)
+        table, key = (
+            (setting.group(1) or setting.group(3), setting.group(2) or setting.group(4))
+            if setting
+            else ("", "")
+        )
+        function = FUNCTION_TERM.fullmatch(term)
+        if SCRIPT_TERM.fullmatch(term):
+            if "/" in term:
+                hits = [(term, 1)] if (root / term) in files else []
+            else:
+                hits = [(rel(p), 1) for p in files if p.name == term]
+        elif setting and table in TABLE_KEYS:
+            place = _setting_line(root, table, key)
+            hits = [place] if place else []
+        elif function:
+            module, name = function.group(1), function.group(2) or function.group(3)
+            for path in files:
+                if module is not None and path.stem != module:
+                    continue
+                line = define_line(text(path), name)
+                if line is not None:
+                    hits.append((rel(path), line))
+        found += [(path, line, term) for path, line in hits]
+    return found
+
+
+def code_warnings(body: str, root: Path, matches: list[tuple[str, int, str]]) -> list[str]:
+    """Answer 2: a warning for each match the `Existing:` section leaves out (all of them under
+    `none:`), at most `CODE_WARNINGS`, with one line counting the rest."""
+    _, section = existing_section(body.splitlines())
+    named = "\n".join(section)
+    if section and section[0][len("Existing:") :].strip().startswith("none:"):
+        named = ""
+    left = [
+        f"study: Existing leaves out {path}:{line}, which defines {term}"
+        for path, line, term in matches
+        if not _named(named, [path, Path(path).name])
+    ]
+    left = list(dict.fromkeys(left))
+    if len(left) > CODE_WARNINGS:
+        more = len(left) - CODE_WARNINGS
+        left = left[:CODE_WARNINGS] + [
+            f"study: Existing: {more} more code matches not warned;"
+            " brief_study.py <file> --root . lists them"
+        ]
+    return left
+
+
 def held(body: str) -> tuple[bool, bool]:
     """(held to the study at all, held to Impact and Wiring too): a `Priority: 0` brief, the
     router's red-branch brief among them, only to `Class:` and `Prior:` (brief #1815 answer 5)."""
@@ -326,6 +522,7 @@ def study_problems(body: str, root: Path) -> list[str]:
     _, full = held(body)
     lines = body.splitlines()
     problems = (impact_problems(lines) + wiring_problems(lines, root)) if full else []
+    problems += existing_problems(lines, root) if full else []  # brief #2052
     return problems + prior_problems(lines, root) + class_problems(lines)
 
 
@@ -372,6 +569,14 @@ def study_result(
             " brief_study.py <file> --root . lists them"
         )
     filled = placeholder_warnings(lines)
+    if is_kit(root):  # brief #2052: the placeholder and the code search, in the kit only
+        filled += [
+            "study: the Existing line is the render's placeholder"
+            for x in lines
+            if x.startswith("Existing:") and PLACEHOLDER in x
+        ][:1]
+        if held(body)[1]:
+            left += code_warnings(body, root, code_matches(body, root))
     if enforced(root, today, filed):
         return problems, filled + left
     return [], problems + filled + left
@@ -416,6 +621,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{ref} ({detail}): names {why}; {strength}")
         if briefs is None:
             print("briefs: not read (no plan cache)")
+        for path, line, term in code_matches(body, root):  # brief #2052 answer 2
+            print(f"code {path}:{line}: {term}")
         return 0
 
     return run(NAME, act)

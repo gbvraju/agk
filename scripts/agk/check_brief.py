@@ -315,7 +315,7 @@ def protected_warnings(body: str, root: Path | None) -> list[str]:
     return [WARN_4B.format(", ".join(named))] if named else []
 
 
-KIT_MAKE = "kit/agk-kit.mk"  # only the kit has it, as `check_kit_tests.KIT_MAKE` reads
+KIT_MAKE = brief_study.KIT_MAKE  # brief #2052: the kit marker lives in the study, read here
 KIT_SCRIPT = "scripts/agk/*.py"  # one level, as the kit's coverage test globs
 NEW_FILE = (
     "rule 4c: Adds names a new {} of the class {} that no [[testing.map]] entry or always_full "

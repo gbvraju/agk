@@ -35,6 +35,11 @@ Wiring: none: (verify) for the person to state
 Prior: none: (verify) for the person to state; brief_study.py lists the candidates
 Class: (verify) for the person to state; seen 0 (verify)
 
+The kit's line before the Answers (required where `kit/agk-kit.mk` is, optional in a project; brief #2052): what already
+does the job, each item `<path>:<line>` with `not enough: <reason>`, or `none:` with the search run and its count.
+
+Existing: none: (verify) for the person to state
+
 <!-- One example each (each line is `<name>: <text>` or `<name>: none: <reason>`):
 - Impact: e.g. the line alone, followed by the five lines below in this order
 - Speed: e.g. about 10 minutes more per brief for its writer (measured on the next five briefs)
@@ -48,6 +53,8 @@ Class: (verify) for the person to state; seen 0 (verify)
   never the ones read and found unrelated
 - Class: e.g. a check broken by a script that prints before utf8_output; seen 2 times (#1581, #1627);
   seen above 0 needs an Answers item headed **The class stays closed.** naming its guard
+- Existing: e.g. the line alone, then `- scripts/agk/brief_study.py:126 (defines): the name check; not enough:
+  unused for this`, or `Existing: none: \`grep -rn probe scripts/\` gives 0 matches`
 -->
 
 ## Report format
