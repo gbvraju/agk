@@ -233,7 +233,11 @@ SUM_COMMENTS = {
         comment(5, "2026-11-11T09:00:00Z", "Report: bcd1234 ready for review; Usage: 500 tokens"),
         comment(6, "2026-11-12T09:00:00Z", "Report: bce1234 handing over: done"),
     ],
-    9: [comment(7, "2026-11-20T09:00:00Z", "Report: cde1234 ready; Usage: not shown (no-transcript)")],
+    9: [
+        comment(
+            7, "2026-11-20T09:00:00Z", "Report: cde1234 ready; Usage: not shown (no-transcript)"
+        )
+    ],
 }
 
 
@@ -304,7 +308,7 @@ def test_req052_report_sums_are_priced_at_the_cost_prices_table(tmp_path, monkey
 def test_req052_report_sums_refuse_a_bad_price_and_bad_options(tmp_path, monkeypatch, capsys):
     """REQ-052: answer 6, a bad kind or price is refused naming the setting, never the value;
     `[models.prices]` is not read by the sums (Q-2020-1 (a)); bad options print the usage."""
-    facts, api = sums_setup(tmp_path, monkeypatch, '[cost.prices.model-a]\nfresh = 3\n')
+    facts, api = sums_setup(tmp_path, monkeypatch, "[cost.prices.model-a]\nfresh = 3\n")
     with pytest.raises(metrics.CheckError, match=r"setting: cost\.prices\)"):
         metrics.main(["--report-sums", str(facts), "--api-dir", str(api)])
     (tmp_path / "root" / "agk.toml").write_text("[models.prices]\nstrongest = 9\n", "utf-8")

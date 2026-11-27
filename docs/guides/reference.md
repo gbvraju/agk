@@ -174,6 +174,18 @@ adds an estimate in USD; without one it prints tokens only. A figure it cannot r
 bound. `--save`
 writes the day's figures to `docs/runs/cost/<date>.json`. See ADR-0544.
 
+## The sums of the `Report:` lines
+
+    python3 scripts/agk/metrics.py --report-sums FACTS [--after YYYY-MM-DD] [--model ID] [--repo OWNER/REPO] [--api-dir DIR]
+
+Reads the comments of each pull request of a saved facts document (one GET each, or `--api-dir`) and sums the figures
+that end their `Report:` lines: one row per pull request with its brief, the reports with and without a figure, the
+tokens by kind and the total, then the sums by brief and by role (builder; the other roles post no `Report:` line) and
+`usage reported: <k> of <n> reports`. `--after DAY` takes the 7 days from that day. With `--model ID` naming a row of
+the `[cost.prices.<model>]` table above it adds USD; a figure without its split, a missing figure or a missing row is
+`unknown` or `not priced`, never 0. It writes no file and posts nothing. The weekly metrics issue carries the same
+`usage reported:` line. See ADR-0835 and Q-2020-1.
+
 ## Release pack
 
     python3 scripts/agk/release_pack.py check <out>/<tag>

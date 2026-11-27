@@ -41,7 +41,15 @@ leaves them out.
    `caps.PROGRESS_USAGE` (`Progress:` lines). Session rule 17 names the ending (`split or classed`), rule 32 no longer
    restates `Usage: not shown`, and rule 8 takes `usage.py`'s line as printed. `config/rule-budget.txt` is lowered to
    the file's new count (3605). Amendment 263 proposes the same lines for SPEC-0045 rule 8.
-5. `steward.py end` without `--tokens` writes, with its own sub-agents, `tokens <n> (input <a>, ...)` or `tokens not shown (<class>)` from the
+5. The maintainers' answer to `Q-2020-1` was (a), 2026-11-27T04:11Z. The sums of answer 4 are a new read-only option,
+   `metrics.py --report-sums FACTS [--after DAY] [--model ID]`. It reads each pull request's comments and sums the
+   figures that end its `Report:` lines, per pull request, per brief, per role and in total, with `usage reported: <k>
+   of <n> reports`. With `--model` it prices them through ADR-0544's `[cost.prices.<model>]` table, by kind. A figure
+   without its split, a missing figure or a missing row is `unknown` or `not priced`, never 0, and the messages name
+   the setting or the option, never a value. `[models.prices]` and `metrics.py --cost` stay as they are, so there is
+   one price table by kind and `--cost` keeps its one local source (ADR-0544 decision 1). The weekly metrics issue
+   gains the same `usage reported:` line for the pull requests it records (answer 6).
+6. `steward.py end` without `--tokens` writes, with its own sub-agents, `tokens <n> (input <a>, ...)` or `tokens not shown (<class>)` from the
    same reader. A typed `--tokens` is used as before.
 
 ## Consequences
@@ -51,13 +59,13 @@ missing figure says why. Protected path classes changed: `scripts/agk/` (`usage.
 `steward.py`, `caps.py`), `tests/kit/` (`test_usage_split.py`, `test_usage_transcript.py`), `agk.toml` (the new test
 file in the `[[testing.map]]` entries of `usage.py`, `metrics.py`, `session.py` and `steward.py`) and `config/`
 (`config/session-rules.md` rules 17 and 32, `config/rule-budget.txt`) and `kit/` (`kit/templates/runtime/builder.txt`,
-the `Report:` line).
+the `Report:` line). `docs/guides/reference.md` names `--report-sums`.
 
 ## Residual
 
-- 2026-11-26: `Q-2020-1`: answers 3, 4 and 6 of brief #2020 (a price table by kind under `[models.prices]`, the sums
-  by pull request, brief, role and stage, and the weekly coverage line) overlap ADR-0544's `[cost.prices.<model>]`
-  table and `metrics.py --cost`. They wait for the maintainers' ruling and are not built here.
+- 2026-11-27: the sums by steward stage (answer 4) need a stage in the steward's `Ended:` note and a reader of the
+  steward's notes, and the conductor's and steward's figures are not `Report:` lines; `--report-sums` prints their
+  roles as `not read`. Both are left to a follow-up brief.
 - 2026-11-26: a builder that itself runs as a sub-agent finds the parent's file through the parent's session id
   (measured: the runtime gives it no id of its own), so its line holds the parent's own figure, not its own; a way
   for it to find its own file is left open. A steward or builder started as a sub-agent from the prompts that pass
