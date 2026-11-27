@@ -95,6 +95,12 @@ def test_ac1_a_well_formed_stub_pack_passes(tmp_path):
         f'[packs]\nuse = [{{ id = "{PID}", version = "1.2.0", sha256 = "{digest}" }}]\n',
         encoding="utf-8",
     )
+    import packs  # SPEC-0077 rule 4 (brief #2033, ADR-0840): a pack in use is in the lock
+
+    assert check_packs.findings(tmp_path) == [
+        f"rule 4: {REL}: a use entry the lock does not hold (setting: packs.use)"
+    ]
+    (tmp_path / packs.LOCK).write_text(packs.lock_text([packs.lock_entry(base)]), encoding="utf-8")
     assert check_packs.findings(tmp_path) == []
     assert check_packs.in_use(tmp_path) == ["agk-core", PID]
 
