@@ -58,3 +58,10 @@ names only logic copied from a kit file, and checklist item 10 only a workaround
 - One `git ls-files` and at most 2000 file reads per project brief check with `--root`.
 - The project-tree fixtures of the brief tests (`tests/kit/` and one in `tests/kit_dev/`) carry an `Existing:` line,
   and ADR-0850's test that a project reads no line now asserts the kit's reading for a project tree.
+
+## Residual
+
+The signal of use is read by hand on a project after it upgrades (the brief's `Measured:` line): the share of its
+`agk-brief` issues created after the upgrade day that carry an `Existing:` line, and the count of `warning: study:
+Existing` lines in its brief-check comments, reported after its first five briefs (2027-01-31). A module inventory in
+`front_door.detect_facts` and SPEC-0076's builds stay open questions (`Q-P0AP-4`, `Q-P0AP-7`).
