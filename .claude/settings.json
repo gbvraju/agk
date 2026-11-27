@@ -47,6 +47,7 @@
       "Edit(/tests/kit_dev/**)",
       "Edit(/.claude-plugin/**)",
       "Edit(/skills/**)",
+      "Edit(/evals/**)",
       "Bash(python scripts/agk/merge_cleared.py*)",
       "Bash(*conductor.py*merge-queue*)"
     ],

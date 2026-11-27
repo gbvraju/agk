@@ -6,7 +6,7 @@
 - Related: ADR-0837, ADR-0838, ADR-0839, ADR-0430, ADR-0835, ADR-0544, ADR-0052, SPEC-0077, REQ-084, brief #2042, brief #2020, plan #661
 - Requirements: REQ-084
 
-Protected classes: `scripts/agk/`, `tests/kit_dev/`, `config/`, `agk.toml`, `evals/`, `.github/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit_dev/`, `config/`, `agk.toml`, `evals/`, `.github/`, `tests/kit/`, `.claude/`
 
 ## Context
 
@@ -47,7 +47,9 @@ form, `check` and `median`, with no model; build (b) adds `run`. On main at e403
 6. **Protected.** `evals/` joins the kit's `config/protected-paths.txt` and the `protected` class of its
    `config/reviewers.yaml`, not the project templates, so a rubric change carries an ADR (principles 1 and 11,
    `Q-PG-7`). `.github/CODEOWNERS`, rendered from `config/reviewers.yaml` by `reviewers.py --codeowners --write`, gains
-   its one line `/evals/`, which is why this record also names `.github/`; no workflow changes.
+   its one line `/evals/`, which is why this record also names `.github/`; no workflow changes. `.claude/settings.json`
+   asks before an edit under `/evals/**`, as it does for every protected class (`tests/kit_dev/` and `skills/` too), so
+   this record names `.claude/`.
 7. **Wiring.** The `[testing]` map names `tests/kit_dev/test_eval_run.py` for `scripts/agk/eval_run.py` and `evals/**`,
    and the reference guide lists both commands.
 
