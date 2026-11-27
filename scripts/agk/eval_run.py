@@ -32,8 +32,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 KIT = Path(__file__).resolve().parents[2]
 RUNS = 3  # rule 9: three runs on `strongest`; never a rubric key
 TIER = "strongest"
-# rule 9's eight layers in order, one string: no reader of the architecture record matches it
-LAYERS = tuple("problem scope domain-rules architecture threats data usability code".split())
+LAYERS = (  # rule 9's eight layers, in order
+    "problem",
+    "scope",
+    "domain-rules",
+    "architecture",
+    "threats",
+    "data",
+    "usability",
+    "code",
+)
 NUM, INT, STR, STRS, TABLE, ROWS = "number", "int", "str", "strs", "table", "rows"
 PRODUCT = {
     "format": INT,
