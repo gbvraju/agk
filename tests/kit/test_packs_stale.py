@@ -40,7 +40,7 @@ publisher = "Example Org"
 tier = "curated"
 licence = "MIT"
 source = "{source}"
-kit = ">=0.65"
+kit = ">=0.60.0,<1.0.0"
 as_of = "{as_of}"
 reviewed = "{reviewed} by maintainers"
 kinds = ["standards"]
