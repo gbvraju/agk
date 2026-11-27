@@ -1010,19 +1010,17 @@ def packs_settings(root: Path) -> dict:
             raise _refuse_packs("use")
         use.append(chosen)
     import check_packs
+    import packs
+    from guard import scan_text
 
     names = found["mcp"]
     if not isinstance(names, list) or not all(
         isinstance(n, str) and check_packs.NAMES.match(n) for n in names
     ):
         raise _refuse_packs("mcp")
-    declared: set = set()
-    for item in use:
-        path = Path(root) / check_packs.FOLDER / item["id"] / check_packs.MANIFEST
-        perms = (check_packs.load(path) or {}).get("permissions")
-        mcp = perms.get("mcp") if isinstance(perms, dict) else None
-        declared |= {n for n in mcp if isinstance(n, str)} if isinstance(mcp, list) else set()
-    if not set(names) <= declared:
+    if any(scan_text(n, guard_patterns(Path(root))) for n in names):  # brief #2044, answer 6
+        raise _refuse_packs("mcp")
+    if not set(names) <= set(packs.declared(root, use)):
         raise _refuse_packs("mcp")
     return {
         "use": use,

@@ -132,6 +132,8 @@ def _keys(data: dict) -> list[tuple[str, str]]:
             out.append(("the key has the wrong type", f"permissions.{key}"))
         elif key == "network" and value != "research":
             out.append(("the key has the wrong value", "permissions.network"))
+        elif key == "mcp" and not all(NAMES.match(v) for v in value):  # brief #2044 (ADR-0845)
+            out.append(("the key has the wrong value", "permissions.mcp"))
     return out
 
 
