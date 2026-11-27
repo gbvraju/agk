@@ -19,3 +19,5 @@ The sentence (brief #2022), quoted as data: "Intake for market packs and evaluat
    Class: behaviour
 
 No other rule changes.
+
+2026-11-27 (from `date -u`), brief #2035: items 1 and 2 (to rules 1 and 2) applied to `docs/specs/0029-a-product-owner-starts-from-a-brief-idea-the-vision-the-stac.md` word for word, on the maintainer's answer on #2023 (comment 7209601805).

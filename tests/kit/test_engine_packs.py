@@ -197,7 +197,7 @@ def test_ac5_a_playbook_skill_is_present_from_a_locked_pack_only(tmp_path, monke
 
 def _inserts() -> list[str]:
     text = AMENDMENT.read_text(encoding="utf-8")
-    found = re.findall(r'insert "(.*?)"\.\n\s+Class:', text, flags=re.S)
+    found = re.findall(r'insert "(.*?)"\.?\n\s+Class:', text, flags=re.S)
     return [re.sub(r"\s*\n\s*", " ", f) for f in found]
 
 
