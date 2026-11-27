@@ -46,9 +46,7 @@ kinds = ["skills"]
 "skills/shop/SKILL.md" = "{sha}"
 """
 AMENDMENT = KIT_ROOT / "docs" / "runs" / "proposed-spec-amendments-261.md"
-SPEC_0029 = (
-    KIT_ROOT / "docs" / "specs" / "0029-a-product-owner-starts-from-a-brief-idea-the-vision-the-stac.md"
-)
+SPEC_0029 = next((KIT_ROOT / "docs" / "specs").glob("0029-*.md"))
 
 
 @pytest.fixture(autouse=True)
