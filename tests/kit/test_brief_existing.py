@@ -165,9 +165,14 @@ def test_req037_a_named_path_silences_its_warning(tmp_path):
     body = STUDIED.replace(STUDIED.split("Size:")[0], SEARCHED)
     _, warnings = result(root, with_line(EXISTING, body), BEFORE)
     left = [w for w in warnings if "leaves out" in w]
-    assert "study: Existing leaves out scripts/agk/probe.py:4, which defines probe.probe_line" in left
+    assert (
+        "study: Existing leaves out scripts/agk/probe.py:4, which defines probe.probe_line" in left
+    )
     assert not any("tool.py" in w for w in left)
-    named = EXISTING.replace("\n\n", "\n- `scripts/agk/probe.py:1`, `agk.toml:3`, `scripts/agk/config.py:1`; not enough: x\n\n")
+    named = EXISTING.replace(
+        "\n\n",
+        "\n- `scripts/agk/probe.py:1`, `agk.toml:3`, `scripts/agk/config.py:1`; not enough: x\n\n",
+    )
     _, warnings = result(root, with_line(named, body), BEFORE)
     assert [w for w in warnings if "leaves out" in w] == []
 
@@ -176,7 +181,10 @@ def test_req037_under_none_every_match_is_left_out(tmp_path):
     """REQ-037: answer 2 (`none:` names nothing)."""
     body = with_line("Existing: none: `grep -rn tool.py scripts/` gives 0 matches\n")
     _, warnings = result(kit(tmp_path), body, BEFORE)
-    assert "study: Existing leaves out scripts/agk/tool.py:1, which defines scripts/agk/tool.py" in warnings
+    assert (
+        "study: Existing leaves out scripts/agk/tool.py:1, which defines scripts/agk/tool.py"
+        in warnings
+    )
 
 
 def test_req037_eleven_matches_give_ten_warnings_and_one_count_line(tmp_path):
@@ -186,7 +194,9 @@ def test_req037_eleven_matches_give_ten_warnings_and_one_count_line(tmp_path):
     (root / "scripts" / "agk" / "stubs.py").write_text(
         "".join(f"def {n}():\n    return 0\n" for n in names), "utf-8"
     )
-    body = with_line(NONE).replace("1. one\n", "1. " + " ".join(f"`stubs.{n}`" for n in names) + "\n")
+    body = with_line(NONE).replace(
+        "1. one\n", "1. " + " ".join(f"`stubs.{n}`" for n in names) + "\n"
+    )
     _, warnings = result(root, body, BEFORE)
     left = [w for w in warnings if "leaves out" in w]
     assert len(left) == brief_study.CODE_WARNINGS == 10

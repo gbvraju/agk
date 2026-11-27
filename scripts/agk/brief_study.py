@@ -57,7 +57,7 @@ import plan_names
 from common import CheckError, run, utf8_output
 from session import touches_of
 
-from config import TABLE_KEYS, BRIEF_PRIOR_WARNINGS, brief_prior_warnings, brief_study_fails_from
+from config import BRIEF_PRIOR_WARNINGS, TABLE_KEYS, brief_prior_warnings, brief_study_fails_from
 
 NAME = "brief-study"
 USAGE = "usage: brief_study.py FILE --root DIR [--open-briefs FILE]"
@@ -149,7 +149,9 @@ def define_line(text: str, name: str) -> int | None:
     """The first line of TEXT that defines NAME (a `def`, a `class` or a top-level name)."""
     form = rf"^(\s*(async\s+)?def\s+{name}\s*\(|class\s+{name}\b|{name}\s*(:[^=\n]*)?=)"
     found = re.search(form, text, re.M)
-    return text.count("\n", 0, found.end()) + 1 if found else None  # the leading space may span lines
+    return (
+        text.count("\n", 0, found.end()) + 1 if found else None
+    )  # the leading space may span lines
 
 
 def wiring_entries(text: str) -> list[tuple[str, str]] | None:
@@ -375,7 +377,9 @@ def existing_problems(lines: list[str], root: Path) -> list[str]:
             return []  # the render's placeholder: `placeholder_warnings` names it
         if EXISTING_SEARCH.search(text) and EXISTING_COUNT.search(text):
             return []
-        return ["study: the Existing none: form needs a backquoted search command and a match count"]
+        return [
+            "study: the Existing none: form needs a backquoted search command and a match count"
+        ]
     items = [x for x in section[1:] if x.lstrip().startswith("- ")]
     if text or not items:
         return ["study: the Existing line is Existing: alone with items - ..., or Existing: none:"]
@@ -391,7 +395,9 @@ def existing_problems(lines: list[str], root: Path) -> list[str]:
             if not target.is_file():
                 problems.append(f"study: an Existing item names no file of {_place(path)}")
             elif not 1 <= int(number) <= len(_read(target).splitlines()):
-                problems.append(f"study: an Existing item names a line past a file of {_place(path)}")
+                problems.append(
+                    f"study: an Existing item names a line past a file of {_place(path)}"
+                )
     return problems
 
 
@@ -450,7 +456,11 @@ def code_matches(body: str, root: Path) -> list[tuple[str, int, str]]:
     for term in code_terms_named(body):
         hits: list[tuple[str, int]] = []
         setting = SETTING_TERM.fullmatch(term)
-        table, key = (setting.group(1) or setting.group(3), setting.group(2) or setting.group(4)) if setting else ("", "")
+        table, key = (
+            (setting.group(1) or setting.group(3), setting.group(2) or setting.group(4))
+            if setting
+            else ("", "")
+        )
         function = FUNCTION_TERM.fullmatch(term)
         if SCRIPT_TERM.fullmatch(term):
             if "/" in term:
