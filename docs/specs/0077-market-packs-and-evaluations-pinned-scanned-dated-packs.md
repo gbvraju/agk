@@ -1,6 +1,6 @@
 # SPEC-0077: Market packs and evaluations: pinned, scanned, dated packs, promoted by evals
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-084
 
