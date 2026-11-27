@@ -60,6 +60,7 @@ def _expand(path: Path | None, kind: str) -> list[Path]:
 def used(root: Path) -> list[tuple[str, Path]]:
     """Each pack of `[packs] use` in its order with its folder; raises `Refused`."""
     import check_packs  # here: check_packs imports playbook_format, which imports this module
+
     import config
 
     try:

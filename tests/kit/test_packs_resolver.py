@@ -133,7 +133,7 @@ def test_ac2_an_empty_use_is_no_table(tmp_path):
     assert packs.files(root, "stack-signals") == [(packs.CORE, KIT_ROOT / front_door.SIGNALS)]
 
 
-# --- packs in use: one order -----------------------------------------------------------------------
+# --- packs in use: one order ---------------------------------------------------------------------
 
 
 def signals(name: str) -> str:
@@ -187,7 +187,7 @@ def test_ac2_a_pack_file_of_an_undeclared_kind_is_never_read(tmp_path):
     assert "(key: kinds)" in str(caught.value)
 
 
-# --- composition: strengthen, never weaken ---------------------------------------------------------
+# --- composition: strengthen, never weaken -------------------------------------------------------
 
 
 def standard(codes: list[str]) -> str:
@@ -334,7 +334,7 @@ def test_ac2_a_derived_playbook_stays_the_projects_alone(tmp_path):
     assert playbook_format.folder(root, "zz-own") == root / "config/playbooks"
 
 
-# --- the class stays closed --------------------------------------------------------------------------
+# --- the class stays closed ----------------------------------------------------------------------
 
 
 READERS = (
@@ -357,13 +357,12 @@ def test_ac2_each_reader_of_rule_5_reads_through_the_resolver(module, name):
 def test_ac2_no_other_kit_module_opens_a_knowledge_file_by_a_literal_path():
     """REQ-084 AC2: SPEC-0077 rule 16 (a knowledge path is named only where it is known today)."""
     known = {
-        "packs.py", "check_playbooks.py", "front_door.py", "playbook_format.py", "adopt.py",
-        "survey.py", "governance_map.py", "engines.py", "domain_ask.py", "run_gates.py",
-        "check_domains.py",
+        "packs", "check_playbooks", "front_door", "playbook_format", "adopt", "survey",
+        "governance_map", "engines", "domain_ask", "run_gates", "check_domains",
     }  # fmt: skip
     paths = [rel for rel in packs.KIT.values() if rel and rel.endswith(".toml")]
     named = {
-        path.name
+        path.stem
         for path in (KIT_ROOT / "scripts" / "agk").glob("*.py")
         if any(rel in path.read_text(encoding="utf-8") for rel in paths)
         or '"stack-signals.toml"' in path.read_text(encoding="utf-8")
@@ -372,11 +371,13 @@ def test_ac2_no_other_kit_module_opens_a_knowledge_file_by_a_literal_path():
 
 
 def test_ac2_detect_never_reads_the_repositorys_own_signal_tables(tmp_path):
-    """REQ-084 AC2: `Q-S0057-2`, `Q-2032-4` (detect reads the kit's and the packs', never the repository's)."""
+    """REQ-084 AC2: `Q-S0057-2`, `Q-2032-4` (the kit's and the packs', never the repository's)."""
     root = clean(tmp_path)
     (root / "config").mkdir()
     (root / front_door.SIGNALS).write_text(signals("zz-planted"), encoding="utf-8")
     (root / front_door.DOMAIN_SIGNALS).write_text("domain = 1\n", encoding="utf-8")
     names = [r["name"] for r in front_door.signal_table(KIT_ROOT, root)["stack"]]
     assert "zz-planted" not in names
-    assert front_door.domain_rows(KIT_ROOT, root) == rows_of(KIT_ROOT / front_door.DOMAIN_SIGNALS, "domain")
+    assert front_door.domain_rows(KIT_ROOT, root) == rows_of(
+        KIT_ROOT / front_door.DOMAIN_SIGNALS, "domain"
+    )

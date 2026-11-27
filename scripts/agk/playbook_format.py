@@ -585,7 +585,11 @@ def folder(root: Path, name: str | None = None) -> Path:
     held = [p.parent for _, p in packs.files(Path(root), "playbooks") if p.stem == name]
     if held:
         return held[-1]
-    return own if kit_root.layout(Path(root)) != "plugin" else kit_root.plugin_root(Path(root)) / FOLDER
+    return (
+        own
+        if kit_root.layout(Path(root)) != "plugin"
+        else kit_root.plugin_root(Path(root)) / FOLDER
+    )
 
 
 def clean(root: Path) -> bool:
