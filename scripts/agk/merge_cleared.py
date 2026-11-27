@@ -318,6 +318,7 @@ REPROVE_UNKNOWN = "re-prove (unknown)"
 BEHIND_SETTING = "max_behind_merges"
 BEHIND = f"behind the default branch (setting flow.{BEHIND_SETTING})"
 TESTS_FAIL = "the merge with the default branch fails pre-merge tests"  # brief #667
+SHALLOW = "the checkout is a shallow clone (setting: git fetch --unshallow)"  # brief #2058
 FAILED_LINE = re.compile(r"^(?:FAILED|ERROR) (\S+?)(?: - .*)?$")  # pytest's short summary line
 CHECK_PREFIX = "agk-merge-check-"  # the temporary folder of the check before the merge (#610)
 AFTER_PREFIX = "agk-merge-cleared-"  # the temporary folder of the run after the merge (#551)
@@ -2085,9 +2086,25 @@ def in_worktree(
         git_out(root, "worktree", "prune")
 
 
+def full_history(root: Path) -> None:
+    """Make a shallow checkout full before the would-be merge (brief #2058 answer 1, ADR-0856):
+    on `true` from `git rev-parse --is-shallow-repository`, one `git fetch --unshallow` from
+    `origin`, the remote the merge already fetches from, then the flag is read again; a checkout
+    that stays shallow, or a fetch that fails, holds as SHALLOW. A full checkout runs nothing
+    more; a folder git cannot read is left to the fetch, which fails as `fetch`."""
+    code, flag = git_out(root, "rev-parse", "--is-shallow-repository")
+    if code != 0 or flag != "true":
+        return
+    code, _ = git_out(root, "fetch", "-q", "--unshallow", "origin")
+    again, flag = git_out(root, "rev-parse", "--is-shallow-repository")
+    if code != 0 or again != 0 or flag != "false":
+        raise Held(SHALLOW)
+
+
 def fetched_base(root: Path, branch: str, number: int, sha: str) -> str | None:
     """Fetch the default branch and the pull request's head: the default branch's commit, or None
-    when either cannot be read."""
+    when either cannot be read. A shallow checkout is made full first, or held (`full_history`)."""
+    full_history(root)
     code, _ = git_out(root, "fetch", "-q", "origin", branch, f"refs/pull/{number}/head")
     base_code, base = git_out(root, "rev-parse", "--verify", "-q", f"{REMOTE}{branch}^{{commit}}")
     head_code, _ = git_out(root, "cat-file", "-e", f"{sha}^{{commit}}")
@@ -2179,8 +2196,10 @@ def checked_path(root: Path) -> Path | None:
 
 def checked_key(sha: str, base: str, text: str, pre: dict | None, limit: int | None) -> str:
     """What a kept result stands for: the head, the default branch's commit, the body the run
-    reads and the settings of the run."""
-    seen = json.dumps([sha, base, text, pre, limit], sort_keys=True, default=str)
+    reads and the settings of the run, on a full checkout (`"history": "full"`, brief #2058 answer
+    2: a result kept before `full_history`, perhaps by a shallow run, is never read again)."""
+    fields = [sha, base, text, pre, limit, {"history": "full"}]
+    seen = json.dumps(fields, sort_keys=True, default=str)
     return hashlib.sha256(seen.encode("utf-8")).hexdigest()
 
 
@@ -2952,7 +2971,10 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
     if rules.queue:  # the queue tests it with the default branch (brief #853 answer 4)
         return "success", ""
     branch = str(rules.data.get("default_branch", "main"))
-    base = fetched_base(root, branch, number, sha)
+    try:
+        base = fetched_base(root, branch, number, sha)
+    except Held as err:  # a shallow checkout that stays shallow (brief #2058)
+        return "pending", str(err)
     files = None if base is None else session_plan.reprove_files(root, base, sha)
     if files is None:
         return "pending", "re-prove unknown"
