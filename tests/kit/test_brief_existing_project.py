@@ -83,7 +83,7 @@ def test_req037_the_placeholder_warns_on_any_day_and_a_priority_0_brief_is_not_h
 
 def test_req037_an_item_may_name_a_kit_feature_without_a_line(tmp_path):
     """REQ-037: answer 1 (`Q-P0AP-2`: a kit command in backquotes, no file under the root)."""
-    item = "Existing:\n- `session.py watch`: waits for an event; not enough: no week view.\n\n"
+    item = "Existing:\n- `week.py show`: shows the week; not enough: no week view.\n\n"
     failures, _ = result(project(tmp_path), with_line(item), AFTER)
     assert existing(failures) == []
     bare = "Existing:\n- waits for an event; not enough: no week view.\n\n"
