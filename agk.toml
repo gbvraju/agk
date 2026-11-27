@@ -803,6 +803,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/merge_cleared.py"
 tests = [
+  "tests/kit/test_reprove_by_script.py",
   "tests/kit/test_reprove_accept_carry.py",
   "tests/kit/test_verdict_form_cleared.py",
   "tests/kit/test_merge_cleared_settled.py",
