@@ -176,7 +176,7 @@ def test_req037_under_none_every_match_is_left_out(tmp_path):
     """REQ-037: answer 2 (`none:` names nothing)."""
     body = with_line("Existing: none: `grep -rn tool.py scripts/` gives 0 matches\n")
     _, warnings = result(kit(tmp_path), body, BEFORE)
-    assert "study: Existing leaves out scripts/agk/tool.py:1, which defines tool.py" in warnings
+    assert "study: Existing leaves out scripts/agk/tool.py:1, which defines scripts/agk/tool.py" in warnings
 
 
 def test_req037_eleven_matches_give_ten_warnings_and_one_count_line(tmp_path):
