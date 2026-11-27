@@ -7,7 +7,7 @@
   SPEC-0030, SPEC-0076, REQ-037, brief #2052, brief #2065, plan #661
 - Requirements: REQ-037
 
-Protected classes: `scripts/agk/`, `skills/`, `config/`, `.claude/`, `tests/kit/` and `agk.toml`
+Protected classes: `scripts/agk/`, `skills/`, `config/`, `.claude/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`
 
 ## Context
 
@@ -56,3 +56,5 @@ names only logic copied from a kit file, and checklist item 10 only a workaround
 - A project that already set `[flow] brief_study_fails_from` fails a brief filed after it upgrades when the line is
   missing; the changelog line says so.
 - One `git ls-files` and at most 2000 file reads per project brief check with `--root`.
+- The project-tree fixtures of the brief tests (`tests/kit/` and one in `tests/kit_dev/`) carry an `Existing:` line,
+  and ADR-0850's test that a project reads no line now asserts the kit's reading for a project tree.
