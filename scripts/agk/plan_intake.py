@@ -914,6 +914,7 @@ def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
     reqs = {r["key"]: r for r in data["requirements"]}
     title = _one(b["title"])
     out = [f"# {title}", "", f'Sentence: "{title}"', ""]
+    out += [f"Existing: none: {TO_STATE}", ""]  # brief #2052 (ADR-0850): before the Answers
     out.append(
         "Answers (drafted from the sources by plan_intake.py render; the person edits them):"
     )
