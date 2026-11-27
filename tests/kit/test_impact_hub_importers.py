@@ -1,4 +1,6 @@
-"""Tests of `[testing] hub_importers` in scripts/agk/impact.py (brief #2055 answers 2, 4 and 5, ADR-0853).
+"""Tests of `[testing] hub_importers` in scripts/agk/impact.py (brief #2055 answers 2, 4, 5).
+
+ADR-0853.
 
 A changed code file with more direct importers that are not test files than the limit is a hub: it
 selects its own entries' tests, the tests that name it and the test files that import it, and not
@@ -35,8 +37,13 @@ FILES = {
     "tests/test_other.py": "# other\n",
 }
 HUB = "hub_importers must be a whole number of at least 1 (setting: testing.hub_importers)"
-EXPANDED = ["tests/test_a.py", "tests/test_b.py", "tests/test_c.py", "tests/test_core.py",
-            "tests/test_direct.py"]
+EXPANDED = [
+    "tests/test_a.py",
+    "tests/test_b.py",
+    "tests/test_c.py",
+    "tests/test_core.py",
+    "tests/test_direct.py",
+]
 
 
 def start(repo, extra: str = "", profile: str = "balanced", head: str = "") -> None:
@@ -98,14 +105,15 @@ def test_without_the_key_the_plan_is_as_before(repo):
         "  file: tests/test_a.py (src/a.py imports src/core.py)",
         "  file: tests/test_b.py (src/b.py imports src/core.py)",
         "  file: tests/test_c.py (src/c.py imports src/core.py)",
-        "  file: tests/test_core.py (src/core.py matches code src/core.py, tests tests/test_core.py)",
+        "  file: tests/test_core.py (src/core.py matches code src/core.py, tests "
+        "tests/test_core.py)",
         "  file: tests/test_direct.py (imports src/core.py)",
         "selected: src/core.py -> 5 tests (4 by importers)",
     ]
 
 
 def test_a_file_below_the_limit_expands_as_before(repo):
-    """REQ-051: brief #2055 answer 2 (`src/a.py`, imported by nothing, is no hub at a limit of 1)."""
+    """REQ-051: brief #2055 answer 2 (`src/a.py`, which nothing imports, is no hub)."""
     start(repo, "hub_importers = 1\n")
     found = change(repo, "src/a.py")
     assert names(found) == ["tests/test_a.py"]
@@ -132,8 +140,12 @@ def test_the_config_tables_take_the_key():
 
 def test_always_full_wins_over_the_limit(repo):
     """REQ-051: brief #2055 answers 4 and 5 (a hub that matches `always_full` is full)."""
-    toml = BASE + "[testing]\nhub_importers = 1\n" + MAP.replace(
-        '["tests/conftest.py"]', '["tests/conftest.py", "src/core.py"]  # full: invented'
+    toml = (
+        BASE
+        + "[testing]\nhub_importers = 1\n"
+        + MAP.replace(
+            '["tests/conftest.py"]', '["tests/conftest.py", "src/core.py"]  # full: invented'
+        )
     )
     repo.commit({"agk.toml": toml, **FILES}, "base")
     repo.branch("feature")
@@ -165,7 +177,11 @@ PROOF = '[proof]\napp = { dirs = ["tests"], patterns = ["test_*.py"], command = 
 
 def test_a_selected_project_run_uses_the_hub_selection(repo, monkeypatch):
     """REQ-051: brief #2055 answer 4 (`pr_tests = "selected"` on a pull request runs the plan)."""
-    start(repo, 'pr_tests = "selected"\nhub_importers = 2\n', head="project_tests = 'exit 0'\n" + PROOF)
+    start(
+        repo,
+        'pr_tests = "selected"\nhub_importers = 2\n',
+        head="project_tests = 'exit 0'\n" + PROOF,
+    )
     repo.commit({"src/core.py": "# changed\n"}, "change")
     monkeypatch.setenv("EVENT", "pull_request")
     monkeypatch.setenv("AGK_BASE", repo.git("rev-parse", "main").strip())

@@ -98,7 +98,7 @@ def test_no_covered_script_is_named_exactly_by_half_the_suite():
     below `full_when_share` of the suite, so no word every test holds selects half the suite)."""
     found, tests = table(), kit_tests()
     index = impact.name_index(ROOT, "HEAD", tests)
-    limit = found["full_when_share"] * len(tests)
+    limit = impact.full_when_share(ROOT) * len(tests)
     wide = []
     for script in sorted(SCRIPTS.glob("*.py")):
         path = script.relative_to(ROOT).as_posix()

@@ -82,8 +82,14 @@ A changed code file also selects the tests of every file that imports it, one le
 `test_map.importers_of`: an importer's map entries, or the importer itself when it is a test file
 (brief #878, ADR-0393, amendment 153 of SPEC-0055 rule 6). Each file prints `selected: <file> -> <k>
 tests (<j> by importers)`. It only adds tests, under every profile; a full selection reads no
-imports. `always_full` names test infrastructure only (`is_test_infrastructure`, by stack): any
-other entry needs an adjacent `# full: <reason>` comment, on its line or the line above, and
+imports. With `hub_importers` (optional, a whole number of at least 1; brief #2055, ADR-0853) a
+file with more direct importers that are not test files is a hub: its importer scripts' map tests
+are not added, the test files that import it still are, and it prints `selected: <file> -> <k>
+tests (hub: <n> importers, importers not expanded; setting: testing.hub_importers)`; any other
+value is refused naming the setting. Under `balanced` a covered file adds only the tests that name
+its exact path (`covered_naming`), never its folder words (ADR-0853, narrowing ADR-0692).
+`always_full` names test infrastructure only (`is_test_infrastructure`, by stack): any other
+entry needs an adjacent `# full: <reason>` comment, on its line or the line above, and
 `always_full_problems` lists the entries without one by their place, never their value, for
 `check_kit_tests.py` and `doctor.py`.
 
@@ -159,6 +165,7 @@ KEYS = {
     "keep_runs",
     "every_script_tests",  # retired: refused first by name (brief #1814); agrees with TABLE_KEYS
     "whole_tests",
+    "hub_importers",
     "pre_merge_tests",
     "rerun_alone",
     "map_source",
@@ -250,6 +257,8 @@ EVERY_SCRIPT_RETIRED = (
 # The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
 # lean install names no kit test path, so its folder is not written here.
 WHOLE_KEY = "whole_tests"  # amendment 186 rule 6a (brief #1796)
+HUB_KEY = "hub_importers"  # brief #2055 answer 2, ADR-0853
+HUB_REFUSED = "hub_importers must be a whole number of at least 1 (setting: testing.hub_importers)"
 WHOLE = "(whole test)"  # the `code` of a test that `whole_tests` added
 WHOLE_BAD = (
     "whole_tests must be a non-empty list of test files inside the repository, with forward "
@@ -324,6 +333,7 @@ class Impact:
     map_notes: list[str] = field(default_factory=list)  # the generated map could not be used
     tracked: list[str] = field(default_factory=list)  # the head's files, read only for a link
     counts: dict[str, tuple[int, int]] = field(default_factory=dict)  # file -> tests, by importers
+    hubs: dict[str, int] = field(default_factory=dict)  # hub file -> its importers (ADR-0853)
     whole: list[str] = field(default_factory=list)  # the `whole_tests` files added (brief #1796)
 
     def data(self) -> dict:
@@ -477,6 +487,9 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError("keep_runs must be a whole number above 0 (setting: testing.keep_runs)")
     if not isinstance(table.get("rerun_alone", False), bool):
         raise CheckError("rerun_alone must be true or false (setting: testing.rerun_alone)")
+    hubs = table.get(HUB_KEY, 1)
+    if isinstance(hubs, bool) or not isinstance(hubs, int) or hubs < 1:
+        raise CheckError(HUB_REFUSED)
     if PRE_MERGE in table:
         pre_merge_names(table, root)
     source = table.get("map_source", MAP_SOURCES[0])
@@ -491,6 +504,7 @@ def testing_table(root: Path) -> dict | None:
         **({"map_source": source} if "map_source" in table else {}),
         **({WHOLE_KEY: whole} if whole else {}),
         **({"links": links} if links else {}),
+        **({HUB_KEY: hubs} if HUB_KEY in table else {}),
     }
 
 
@@ -1050,6 +1064,12 @@ def tests_naming(path: str, index: dict[str, set[str]]) -> list[str]:
     return sorted(hits)
 
 
+def covered_naming(path: str, index: dict[str, set[str]]) -> list[str]:
+    """The test files that name PATH exactly, its joined-literal forms included: what a covered
+    file adds (brief #2055 answer 1, ADR-0853); its folder words are not read."""
+    return sorted(index.get(path, ()))
+
+
 def uncovered(root: Path, head: str = "HEAD") -> list[str]:
     """The tracked files that would make a `balanced` selection full: no entry covers them, no
     test names them and they are neither documentation, a test file nor `always_full`."""
@@ -1187,14 +1207,25 @@ def select(root: Path, base: str, head: str) -> Impact:
             # Brief #1649, ADR-0692: a covered file also selects the tests that name it, so a
             # test its entry forgot still runs; a test already chosen keeps its reason, and the
             # change's own test files are not added (they run as the pull request's own tests).
+            # Brief #2055, ADR-0853: its exact path only, never its folder words.
             index = name_index(root, head, tests) if index is None else index
-            for test in tests_naming(path, index):
+            for test in covered_naming(path, index):
                 if test not in changed:
                     chosen.setdefault(test, Selected(test, path, NAMED, []))
     stripped_copy(changed, tests, (dirs, patterns), chosen)
     counts: dict[str, tuple[int, int]] = {}
+    hubs: dict[str, int] = {}
     if not hit and profile != "thorough":
-        counts = add_importers(root, head, changed, entries, tests, chosen, (dirs, patterns))
+        counts = add_importers(
+            root,
+            head,
+            changed,
+            entries,
+            tests,
+            chosen,
+            (dirs, patterns),
+            (table.get(HUB_KEY), hubs),
+        )
     whole = [t for t in table.get(WHOLE_KEY, []) if t in tests] if changed else []
     for test in whole:  # brief #1796 answer 2: after every other step; only adds
         chosen.setdefault(test, Selected(test, changed[0], WHOLE, []))
@@ -1211,6 +1242,7 @@ def select(root: Path, base: str, head: str) -> Impact:
     found.whole = sorted(whole)
     found.map_notes = map_notes
     found.counts = counts
+    found.hubs = hubs
     return found
 
 
@@ -1275,9 +1307,12 @@ def add_importers(
     tests: list[str],
     chosen: dict[str, Selected],
     where: tuple[list[str], list[str]],
+    hub: tuple[int | None, dict[str, int]] = (None, {}),
 ) -> dict[str, tuple[int, int]]:
     """Add to CHOSEN the tests of each file that imports a changed code file, one level (brief #878
-    answer 2), and give each such file's (tests, tests by importers). Only adds."""
+    answer 2), and give each such file's (tests, tests by importers). Only adds. With a limit in
+    HUB, a file with more importers that are not test files is a hub: only the test files that
+    import it are added, and it is recorded in HUB's dict with that count (ADR-0853)."""
     from test_map import importers_of  # test_map imports this module at its top
 
     dirs, patterns = where
@@ -1286,10 +1321,16 @@ def add_importers(
         return {}
     found = importers_of(root, head, code)
     counts: dict[str, tuple[int, int]] = {}
+    limit, hubs = hub
     for path in code:
         own = {t for e in entries if matches(path, e["code"]) for t in entry_tests(e, tests)}
         by_importers: set[str] = set()
+        scripts = [i for i in found.get(path, ()) if not is_test_file(i, dirs, patterns)]
+        if limit is not None and len(scripts) > limit:
+            hubs[path] = len(scripts)
         for importer in sorted(found.get(path, ())):
+            if path in hubs and importer in scripts:
+                continue  # a hub: its importer scripts' map tests are not added
             if is_test_file(importer, dirs, patterns):
                 brought = {importer}
                 why = IMPORTER
@@ -1395,7 +1436,13 @@ def text(found: Impact) -> list[str]:
         lines = [f"regression: {count} {noun} selected"]
         lines.extend(file_line(s) for s in found.selected if s.code != WHOLE)
         lines.extend(
-            f"selected: {path} -> {k} tests ({j} by importers)"
+            f"selected: {path} -> {k} tests "
+            + (
+                f"(hub: {found.hubs[path]} importers, importers not expanded; "
+                f"setting: testing.{HUB_KEY})"
+                if path in found.hubs
+                else f"({j} by importers)"
+            )
             for path, (k, j) in sorted(found.counts.items())
             if k
         )

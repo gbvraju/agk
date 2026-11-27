@@ -422,10 +422,13 @@ def test_a_covered_file_named_only_by_its_folder_selects_only_its_entry(repo, wo
 
 
 def test_a_covered_file_named_by_a_join_of_literals_selects_that_test(repo):
-    """REQ-051: brief #2055 answer 1 (the exact path in amendment 220's joined form still counts)."""
+    """REQ-051: brief #2055 answer 1 (amendment 220's joined form of the exact path counts)."""
     joined = {"tests/test_joined.py": 'P = ROOT / "app" / "billing" / "pay.py"\n'}
     start(repo, files=joined)
-    assert picked(change(repo, "app/billing/pay.py")) == ["tests/test_joined.py", "tests/test_pay.py"]
+    assert picked(change(repo, "app/billing/pay.py")) == [
+        "tests/test_joined.py",
+        "tests/test_pay.py",
+    ]
 
 
 def test_an_uncovered_file_still_reads_its_folder_words(repo):

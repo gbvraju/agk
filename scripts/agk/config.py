@@ -1154,6 +1154,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "every_script_tests",
             "excluded",
             "full_when_share",
+            "hub_importers",
             "junit",
             "keep_passed",
             "keep_runs",
