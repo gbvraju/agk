@@ -353,7 +353,23 @@ def findings(root: Path, files: list[Path] | None = None, domains: bool | None =
         import check_packs  # SPEC-0077 rule 3 (brief #2031, ADR-0838): one more line of the step
 
         found += check_packs.findings(root)
+        found += parts_catalogue(root)
     return found
+
+
+def parts_catalogue(root: Path) -> list[str]:
+    """SPEC-0076 rules 4 and 5 (brief #2068, ADR-0858): the needs and stack catalogues of every
+    layer, kit first, in the step. A refused `[packs]` table or plugin root adds nothing: the
+    pack check and the declaration above already name that setting."""
+    import check_parts_catalogue
+    import packs
+
+    try:
+        files = packs.files(root, "parts")
+        stacks = playbook_format.stacks(root)
+    except (packs.Refused, kit_root.Refused):
+        return []
+    return check_parts_catalogue.findings(root, files, stacks)
 
 
 def cmd_check(root: Path) -> int:
