@@ -582,7 +582,13 @@ def folder(root: Path, name: str | None = None) -> Path:
     packs = resolver()
     if kit_root is None or packs is None or (name and is_derived(name, root)):
         return own
-    held = [p.parent for _, p in packs.files(Path(root), "playbooks") if p.stem == name]
+    try:
+        found = packs.files(Path(root), "playbooks")
+    except Refused:  # a clean project with no plugin: its own file still reads, as before
+        if name and (own / f"{name}.toml").is_file():
+            return own
+        raise
+    held = [p.parent for _, p in found if p.stem == name]
     if held:
         return held[-1]
     return (

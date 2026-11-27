@@ -383,3 +383,19 @@ def test_ac2_detect_never_reads_the_repositorys_own_signal_tables(tmp_path):
     assert front_door.domain_rows(KIT_ROOT, root) == rows_of(
         KIT_ROOT / front_door.DOMAIN_SIGNALS, "domain"
     )
+
+
+def test_ac2_a_clean_project_with_no_plugin_still_reads_its_own_playbook(tmp_path, monkeypatch):
+    """REQ-084 AC2: brief #1666 (the project's own `<name>.toml` needs no plugin, as before)."""
+    root = clean(tmp_path)
+    own = root / "config/playbooks"
+    own.mkdir(parents=True)
+    shutil.copy(KIT_ROOT / "config/playbooks/web-app.toml", own / "web-app.toml")
+    monkeypatch.setattr(playbook_format.kit_root, "plugin_root", _no_plugin)
+    assert playbook_format.folder(root, "web-app") == own
+    with pytest.raises(playbook_format.Refused):
+        playbook_format.folder(root, "mobile")
+
+
+def _no_plugin(root, env=None):
+    raise playbook_format.Refused("kit_root: no plugin root (setting: CLAUDE_PLUGIN_ROOT)")
