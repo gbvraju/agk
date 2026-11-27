@@ -377,6 +377,7 @@ repository that this check refuses.
     python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT [--server NAME]
     python3 scripts/agk/steward_owner.py draft --slug SLUG
     python3 scripts/agk/launch.py role --role steward|conductor --session ID [--adapter COMMAND]
+    python3 scripts/agk/launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND | --job]
 
 The owner's question and its relay (SPEC-0059 rules 2, 5, 10 and 14, ADR-0559). `ask` takes one plain business sentence
 with its choices and `I recommend` and no kit term, records it as an `Owner question:` note, prints it for the chat and
@@ -385,7 +386,7 @@ said (<UTC time>): "<words>"` and `Who: ProductOwner`, refuses it without a well
 wait's `agk:parked` and tells the conductor `parked #<n> answered <Q>`. `park` is the steward's pass of the owner wait on
 one pull request. `ready` starts the conductor through `launch.py role` only when the plan check's trace ends `ok plan`,
 no brief is malformed, the scope is locked and no open owner question blocks the first milestone; else `not ready:`
-lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py role` prints a role's prompt or
+lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py prompts --job` prints each builder prompt with its job line and, first, `Job: <kind> #<item>` for a start with no adapter (a cloud runtime), since every adapter start already carries it (SPEC-0064 rule 4, ADR-0855). `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
 
 The one-yes approval (SPEC-0062 rules 13, 14 and 16, brief #1690, ADR-0703). `ask --target pr:<n> --line FILE`

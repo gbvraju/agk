@@ -223,6 +223,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/autopilot.py"
 tests = [
+  "tests/kit/test_short_jobs_everywhere.py",
   "tests/kit/test_role_commands.py",
   "tests/kit/test_entry_points_refuse.py",
   "tests/kit/test_autopilot_status.py",
@@ -490,6 +491,7 @@ tests = [
   "tests/kit/test_route_reprove.py",
   "tests/kit/test_setup_team_roles.py",
   "tests/kit/test_entry_points_refuse.py",
+  "tests/kit/test_short_jobs_everywhere.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_one_conductor_per_machine.py",
   "tests/kit/test_autopilot_supervisor.py",
@@ -776,6 +778,7 @@ tests = [
   "tests/kit/test_injection_set.py",
   "tests/kit/test_agent_named.py",
   "tests/kit/test_autopilot_adapter.py",
+  "tests/kit/test_short_jobs_everywhere.py",
   "tests/kit/test_autopilot_build_jobs.py",
   "tests/kit/test_one_conductor_per_machine.py",
   "tests/kit/test_autopilot_supervisor.py",
@@ -1351,6 +1354,7 @@ tests = ["tests/kit/test_architect_guard.py", "tests/kit/test_guard_plugin_forms
 [[testing.map]]
 code = ".claude/hooks/conductor_guard.py"
 tests = [
+  "tests/kit/test_short_jobs_everywhere.py",
   "tests/kit/test_role_commands.py",
   "tests/kit/test_verdict_form_cleared.py",
   "tests/kit/test_injection_set.py",
