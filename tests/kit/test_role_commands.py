@@ -119,7 +119,7 @@ def roles() -> dict[str, Role]:
 
 
 def rel(path: Path) -> str:
-    return str(path.relative_to(KIT)) if path.is_relative_to(KIT) else path.name
+    return path.relative_to(KIT).as_posix() if path.is_relative_to(KIT) else path.name
 
 
 def runs_commands(role: Role) -> bool:
