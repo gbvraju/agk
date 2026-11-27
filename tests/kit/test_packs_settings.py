@@ -33,7 +33,7 @@ publisher = "Example Org"
 tier = "curated"
 licence = "MIT"
 source = "https://example.com/packs/zz-shop"
-kit = ">=0.65"
+kit = ">=0.60.0,<1.0.0"
 as_of = "2026-11-20"
 reviewed = "2026-11-21 by maintainers"
 kinds = ["skills"]

@@ -616,6 +616,18 @@ person's `agk.toml` change and its ADR; it never writes `agk.toml`. `update --ch
 tags and changes nothing, reading only an `https` source; a real update is `add` of the new tag. Exit 0 ok, 1 a finding or no yes, 2 a refusal or usage, 4
 a source that cannot be read.
 
+The adoption scans (SPEC-0077 rule 6, brief #2034, ADR-0841), `scripts/agk/pack_scan.py`, a module with no command of
+its own: before `add` writes anything, every file of the staged pack passes the outbound guard (`steward_outbound.py`,
+which carries the data guard's detectors), an instruction scan that names each line asking an agent to approve, merge,
+push, skip or disable a check, reveal a secret, change its role or task, or ignore the rules (session rule 38), the
+licence list (`config/licences.toml`, else the kit's), a size limit of 64 KiB per file and 512 KiB per pack, and the
+content rule (no hook, agent file, workflow, settings file, `.mcp.json`, script outside a `skills/<name>/` folder, binary
+file outside a skill's `assets/` or file outside the kinds' folders). A tier below `[packs] trust` and a `kit` range
+(`>=x.y.z,<a.b.c`) that does not hold the running kit's version are refused at `add` and at `verify`. `add` of a pack at
+the locked version whose files changed is refused and the lock is left as it was. Each refusal is one
+`rule 6: config/packs/<id>: ...` line naming the key, setting or path class and line number, never a value; `add` says
+`gitleaks: not run` (prepush runs gitleaks).
+
 ## The project domain model
 
     python3 scripts/agk/domain_model.py [--root DIR] init --area A | rule ... | classify ... | entity ... | regulation ... | confirm --id ID
