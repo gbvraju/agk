@@ -49,5 +49,10 @@ from the lapse path (ADR-0684).
 
 A cleared head on a shallow conductor checkout merges on its first run, or holds naming the fix; a hold always names a
 real failure of the full history. The cost is one fetch of the missing history per clone and at most one more
-conductor job per held head and default-branch commit. Which of the guard or a settings `ask` entry refused the
-conductor's second run on 2026-11-27 is not measured here (`Q-2058-1`); the usage line is a separate brief (`Q-MS-3`).
+conductor job per held head and default-branch commit.
+
+## Residual
+
+Which of the guard or a settings `ask` entry refused the conductor's second run on 2026-11-27 is not measured here: its
+refusals log is on the conductor's machine (`Q-2058-1`). The pass reads the cleared heads only when `change_reads` does
+not call it quiet. The usage line on every report is a separate brief (`Q-MS-3`).
