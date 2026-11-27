@@ -122,7 +122,8 @@ def kit_version(root: Path) -> str | None:
 def admitted(root: Path, data: dict, pack: str, trust: str) -> list[str]:
     """Rule 6: the tier against TRUST and the `kit` range against the running kit's version."""
     out = []
-    if RANK.get(data.get("tier"), len(RANK)) > RANK[trust]:  # type: ignore[arg-type]
+    tier = data.get("tier")
+    if RANK.get(tier if isinstance(tier, str) else "", len(RANK)) > RANK[trust]:
         out.append(f"rule 6: {pack}: the pack's tier is below the trust (setting: packs.trust)")
     if not holds(data.get("kit"), kit_version(root) or ""):
         out.append(f"rule 6: {pack}: the kit range does not hold the running kit (key: kit)")
