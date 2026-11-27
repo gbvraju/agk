@@ -36,7 +36,8 @@ def test_ac1_agk_governance_runs_every_check():
         if script.name == "check_amendments.py":  # brief #1957 (ADR-0813): in the numbers step
             assert "scripts/agk/check_numbers.py" in out
             continue
-        if script.name == "check_domains.py":  # SPEC-0074 rule 2, Q-S0074-8 (ADR-0804)
+        if script.name in ("check_domains.py", "check_packs.py"):  # SPEC-0074 rule 2 (ADR-0804)
+            # and SPEC-0077 rule 3 (Q-S0077-12, ADR-0838)
             assert "scripts/agk/check_playbooks.py" in out  # it runs inside the playbooks step
             continue
         assert f"scripts/agk/{script.name}" in out, script.name

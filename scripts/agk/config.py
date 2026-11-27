@@ -940,6 +940,98 @@ def domain_settings(root: Path) -> dict:
     return {"packs": list(names), "stale_months": months}
 
 
+# --- the [packs] table (SPEC-0077 rule 12, brief #2031, ADR-0838) -------------------------------
+
+PACKS_DEFAULTS: dict = {"use": [], "trust": "curated", "stale_months": 12, "mcp": []}
+PACK_TIERS = ("official", "curated", "community")
+USE_KEYS = frozenset({"id", "version", "sha256"})
+
+
+class PacksSettingError(CheckError):
+    """The `[packs]` table is refused, naming the setting and never the value."""
+
+
+def _refuse_packs(key: str = "") -> PacksSettingError:
+    named = f"packs.{key}" if key else "packs"
+    return PacksSettingError(f"the [packs] table is refused (setting: {named})")
+
+
+def _pack_used(root: Path, item: object, seen: set) -> dict | None:
+    """The `[packs] use` entry ITEM when it is in form: its three keys strings, an exact version,
+    a pack folder whose `agk-pack.toml` hashes to `sha256` and holds that version; else None."""
+    import check_packs  # here: the check imports this module for the table
+
+    if not isinstance(item, dict) or set(item) != USE_KEYS:
+        return None
+    if not all(isinstance(v, str) for v in item.values()) or item["id"] in seen:
+        return None
+    pid, version = item["id"], item["version"]
+    if not check_packs.SLUG.match(pid) or pid == check_packs.CORE:
+        return None
+    path = Path(root) / check_packs.FOLDER / pid / check_packs.MANIFEST
+    if not check_packs.VERSION.match(version) or not path.is_file():
+        return None
+    if check_packs.digest(path) != item["sha256"]:
+        return None
+    if (check_packs.load(path) or {}).get("version") != version:
+        return None
+    seen.add(pid)
+    return dict(item)
+
+
+def packs_settings(root: Path) -> dict:
+    """SPEC-0077 rule 12: `use`, the packs in order, each `{ id, version, sha256 }` with `sha256`
+    the hash of `config/packs/<id>/agk-pack.toml` (`[]`, only `agk-core`, when unset); `trust`, a
+    tier (`curated`); `stale_months`, a whole number from 1 to 60 (12); `mcp`, the documentation
+    servers by name, each declared in a used pack's `permissions.mcp` (`[]`). A `bool` is never
+    taken as a number; a refusal names `packs.<key>`, never a value. The kit has no table."""
+    try:
+        table = config_source(root).get("packs", {})
+    except (OSError, ValueError):
+        raise _refuse_packs() from None
+    if not isinstance(table, dict):
+        raise _refuse_packs()
+    for key in sorted(table):
+        if key not in PACKS_DEFAULTS:
+            raise _refuse_packs(key)
+    found = {**PACKS_DEFAULTS, **table}
+    if found["trust"] not in PACK_TIERS or not isinstance(found["trust"], str):
+        raise _refuse_packs("trust")
+    low, high = STALE_MONTHS
+    if type(found["stale_months"]) is not int or not low <= found["stale_months"] <= high:
+        raise _refuse_packs("stale_months")
+    if not isinstance(found["use"], list):
+        raise _refuse_packs("use")
+    seen: set = set()
+    use: list[dict] = []
+    for item in found["use"]:
+        chosen = _pack_used(root, item, seen)
+        if chosen is None:
+            raise _refuse_packs("use")
+        use.append(chosen)
+    import check_packs
+
+    names = found["mcp"]
+    if not isinstance(names, list) or not all(
+        isinstance(n, str) and check_packs.NAMES.match(n) for n in names
+    ):
+        raise _refuse_packs("mcp")
+    declared: set = set()
+    for item in use:
+        path = Path(root) / check_packs.FOLDER / item["id"] / check_packs.MANIFEST
+        perms = (check_packs.load(path) or {}).get("permissions")
+        mcp = perms.get("mcp") if isinstance(perms, dict) else None
+        declared |= {n for n in mcp if isinstance(n, str)} if isinstance(mcp, list) else set()
+    if not set(names) <= declared:
+        raise _refuse_packs("mcp")
+    return {
+        "use": use,
+        "trust": found["trust"],
+        "stale_months": found["stale_months"],
+        "mcp": list(names),
+    }
+
+
 # --- the [autopilot] table (SPEC-0064 rules 7 and 8, brief #1390, ADR-0587) ---------------------
 
 AUTOPILOT_MODES = ("off", "assist", "on")
@@ -1104,6 +1196,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
     "steward": frozenset(STEWARD_DEFAULTS),
     "quality": frozenset(QUALITY_DEFAULTS),  # brief #1933 (ADR-0801)
     "domain": frozenset(DOMAIN_DEFAULTS),  # brief #1935 (ADR-0804)
+    "packs": frozenset(PACKS_DEFAULTS),  # brief #2031 (ADR-0838)
     "kit": frozenset({"layout", "plugin_version"}),
 }
 TOP_LEVEL = "top level"

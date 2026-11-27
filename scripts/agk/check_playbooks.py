@@ -312,6 +312,9 @@ def findings(root: Path, files: list[Path] | None = None, domains: bool | None =
         import check_domains  # here: a named playbook alone (a derive, a gate run) reads no pack
 
         found += check_domains.findings(root)
+        import check_packs  # SPEC-0077 rule 3 (brief #2031, ADR-0838): one more line of the step
+
+        found += check_packs.findings(root)
     return found
 
 

@@ -580,6 +580,23 @@ problem is one `FAIL domains: rule 2: <file>: <what> (key: <key>)` line, never a
 lines as `FAIL playbooks:`, so the `playbooks` step runs it. An `as_of` older than `[domain] stale_months` is a `warn domains:`
 line and never fails. Prints `ok domains (<n> packs)` or `ok domains (none)`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
 
+## Packs
+
+    python3 scripts/agk/check_packs.py [--root DIR]
+
+Checks each pack, `config/packs/<id>/agk-pack.toml` (SPEC-0077 rules 2, 3 and 12, brief #2031, ADR-0838): the keys and
+their types (`format = 1`, `id`, an exact `version`, `publisher`, `tier`, `licence`, `source`, `kit`, `as_of`, `reviewed`
+as `YYYY-MM-DD by <role or team>`, `kinds`, `files` as path = SHA-256, `permissions`, optional `evals`), each file listed
+with its hash and under a listed kind's folder, a dated `source` or `basis = "expected"` on each entry of a TOML knowledge
+file, and the data guard on every line. Each problem is one `FAIL packs: rule 3: config/packs/<id>: <what> (key: <key>)`
+line, never a value; a pack folder that `[packs] use` does not list, or a refused `[packs]` table, is a `rule 12:` line.
+`check_playbooks.py` prints the same lines as `FAIL playbooks:`, so the `playbooks` step runs it. With no pack it prints
+nothing; else `ok packs (<n> packs)`. The built-in pack `agk-core` is the kit's own files, with no manifest. The optional
+`[packs]` table: `use` (each `{ id, version, sha256 }`, the hash of the pack's `agk-pack.toml`), `trust` (`official`,
+`curated` or `community`, default `curated`), `stale_months` (1 to 60, default 12) and `mcp` (documentation servers that a
+pack in use declares); a refusal is `the [packs] table is refused (setting: packs.<key>)`. Reads files only. Exit 0 ok, 1 a
+problem, 2 usage.
+
 ## The project domain model
 
     python3 scripts/agk/domain_model.py [--root DIR] init --area A | rule ... | classify ... | entity ... | regulation ... | confirm --id ID

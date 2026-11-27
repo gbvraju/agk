@@ -381,10 +381,16 @@ tests = [
   "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_packs.py"
+tests = [
+  "tests/kit/test_check_packs.py", "tests/kit/test_packs_settings.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_playbooks.py"
 tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py", "tests/kit/test_check_domains.py",
-  "tests/kit/test_domain_compose.py", "tests/kit/test_standards_stack.py",
+  "tests/kit/test_domain_compose.py", "tests/kit/test_standards_stack.py", "tests/kit/test_check_packs.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_pr_body.py"

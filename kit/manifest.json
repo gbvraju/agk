@@ -85,6 +85,7 @@
     "scripts/agk/check_licence_notice.py",
     "scripts/agk/check_neutrality.py",
     "scripts/agk/check_numbers.py",
+    "scripts/agk/check_packs.py",
     "scripts/agk/check_plan.py",
     "scripts/agk/check_playbooks.py",
     "scripts/agk/check_pr_body.py",
