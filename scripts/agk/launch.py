@@ -103,7 +103,7 @@ from common import CheckError, available_memory, conductor_refusal, option_pairs
 import config
 
 NAME = "launch"
-USAGE = "usage: launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND]"
+USAGE = "usage: launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND | --job]"
 SEPARATOR = "-" * 72
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
 LOGIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,38}")  # a GitHub login, managed ones too (ADR-0563)
@@ -173,6 +173,27 @@ FIX_JOB = (  # brief #1389 (ADR-0586): the supervisor's next job of a pull reque
     "sections, post your `Report:` and end; never run `session.py watch` and never wait: the "
     "supervisor starts the next job on its event.\n"
 )
+BUILD_JOB = (  # brief #2057 (ADR-0855): every build start the kit makes says it is one job
+    "This is one short job (SPEC-0064 rule 4): take the brief, build it to tests green and ready "
+    "for review, push, refresh the working summary with its fixed sections, post your `Report:` "
+    "and end; never run `session.py watch` and never wait: the supervisor starts the next job on "
+    "its event.\n"
+)
+JOB_TEXTS = {"build": BUILD_JOB, "fix": FIX_JOB}
+
+
+def with_job(prompt: str, kind: str) -> str:
+    """PROMPT with the job line of KIND added once; a kind with no line is left as it is."""
+    text = JOB_TEXTS.get(kind)
+    return prompt if text is None or text in prompt else prompt + text
+
+
+def job_text(prompt: str, kind: str, item: int) -> str:
+    """The `--job` text of a start with no adapter: the job first, as the environment would say."""
+    head = f"Job: {kind} #{item} (AGK_JOB_KIND {kind}, AGK_ITEM #{item})\n"
+    return head + with_job(prompt, kind)
+
+
 CARRY_TAKE = (
     "the brief is already yours, so do not take it again; read it on GitHub, build it from a "
     "fresh origin/<default branch> on its own branch and open one pull request that names it "
@@ -768,7 +789,9 @@ def start_with(
         try:
             done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
                 words,
-                input=prompts[index] if prompts else prompt_for(session, brief, build, run),
+                input=with_job(
+                    prompts[index] if prompts else prompt_for(session, brief, build, run), job_kind
+                ),
                 text=True,
                 encoding="utf-8",
                 env=env,
@@ -888,6 +911,9 @@ def main(argv: list[str] | None = None) -> int:
     resume = args.count("--resume") == 1 and args[:1] == ["prompts"]
     if resume:
         args.remove("--resume")
+    job = args.count("--job") == 1 and args[:1] == ["prompts"]  # brief #2057: no adapter
+    if job:
+        args.remove("--job")
     opts = dict(option_pairs(args[1:], strict=False))
     if (
         args[:1] != ["prompts"]
@@ -898,8 +924,14 @@ def main(argv: list[str] | None = None) -> int:
     ):
         print(USAGE, file=sys.stderr)
         return 2
+    if job and "--adapter" in opts:
+        print(
+            f"{USAGE}\nFAIL {NAME}: an adapter start is always a job (option --job)",
+            file=sys.stderr,
+        )
+        return 2
     if resume:
-        return resume_main(opts)
+        return resume_main(opts, job)
     try:
         plan = read_plan(opts["--plan"])
         found = sessions(plan)
@@ -915,7 +947,9 @@ def main(argv: list[str] | None = None) -> int:
         if "--adapter" in opts:
             code = start_with(opts["--adapter"], found, runs=runs)
         else:
-            texts = (prompt_for(s, b, x, r) for (s, b, x), r in zip(found, runs, strict=True))
+            texts = [prompt_for(s, b, x, r) for (s, b, x), r in zip(found, runs, strict=True)]
+            if job:  # brief #2057: a start with no adapter is told its job as the adapter tells it
+                texts = [job_text(t, "build", b) for t, (_, b, _) in zip(texts, found, strict=True)]
             print((SEPARATOR + "\n").join(texts), end="")
             code = 0
     except CheckError as exc:
@@ -927,7 +961,7 @@ def main(argv: list[str] | None = None) -> int:
     return code
 
 
-def resume_main(opts: dict) -> int:
+def resume_main(opts: dict, job: bool = False) -> int:
     """`prompts --resume`: one resume prompt (or one adapter call) per running session."""
     try:
         plan = read_plan(opts["--plan"])
@@ -944,6 +978,9 @@ def resume_main(opts: dict) -> int:
             jobs = [("fix", item[3]) if item[3] else None for item in found]
             code = start_with(opts["--adapter"], [x[:3] for x in found], prompts, runs, jobs=jobs)
         else:
+            if job:  # brief #2057: a running session with a pull request is a fix job of it
+                kinds = [("fix", x[3]) if x[3] else ("build", x[1]) for x in found]
+                prompts = [job_text(p, k, n) for p, (k, n) in zip(prompts, kinds, strict=True)]
             print((SEPARATOR + "\n").join(prompts), end="")
             code = 0
     except CheckError as exc:

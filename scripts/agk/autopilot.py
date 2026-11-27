@@ -756,6 +756,7 @@ def next_command(root: Path, brief: int | None, now: datetime) -> int:
         number = session.brief_number(next((p for p in pulls if p["number"] == item), {})) or item
         prompt = (launch.prompt_for(name, number) if job["kind"] == "build" else
                   launch.resume_for(name, number, None, item, None) + launch.FIX_JOB)  # fmt: skip
+        prompt = launch.with_job(prompt, job["kind"])  # brief #2057: the note follows the job line
         prompt += PERSONAL_NOTE if personal else ""
         code = launch.start_with(adapter, [(name, number, None)], [prompt], None, root,
                                  [(job["kind"], item)])  # fmt: skip
