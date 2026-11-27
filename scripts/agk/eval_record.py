@@ -178,10 +178,10 @@ def write(root: Path, runs: Path, day: str) -> tuple[int, list[str]]:
     path = root / FOLDER / f"{day}.md"
     if path.exists():
         return 1, [EXISTS]
-    fails = eval_run.median(Path(runs))[0] if Path(runs).is_dir() else ["no run folder"]
+    fails = eval_run.median(Path(runs))[0] if Path(runs).is_dir() else [BAD_RUNS]
     products = _runs(Path(runs)) if not fails else {}
     if fails or not products:
-        return 1, [*fails, BAD_RUNS]
+        return 1, list(dict.fromkeys([*fails, BAD_RUNS]))
     kits = {(r["kit"]["version"], r["kit"]["sha"]) for recs in products.values() for r in recs if r}
     if len(kits) != 1:
         return 1, [ONE_KIT]
@@ -347,13 +347,15 @@ USAGE = (
 
 
 def _options(args: list[str], allowed: tuple[str, ...]) -> dict[str, str]:
-    if (
-        len(args) % 2
-        or any(a not in allowed for a in args[::2])
-        or len(set(args[::2])) != len(args[::2])
-    ):
+    from common import option_pairs
+
+    if len(args) % 2:
         raise ValueError(USAGE)
-    return dict(zip(args[::2], args[1::2], strict=True))
+    pairs = option_pairs(args, strict=True)
+    names = [name for name, _ in pairs]
+    if any(n not in allowed for n in names) or len(set(names)) != len(names):
+        raise ValueError(USAGE)
+    return dict(pairs)
 
 
 def main(argv: list[str] | None = None) -> int:
