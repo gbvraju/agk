@@ -78,7 +78,7 @@ def installed_paths(manifest: dict) -> set[str]:
     return paths
 
 
-# the word `kit-only` on the import's line, as tests/kit/test_installed_imports.py reads it, but
+# the word `kit-only` on the import's line, the mark the kit's installed-imports test reads, but
 # not the list's file name: `(config/kit-only.txt)` alone marks nothing
 KIT_ONLY_MARK = re.compile(r"\bkit-only\b(?!\.txt)")
 
