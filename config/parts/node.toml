@@ -1,0 +1,309 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The node parts catalogue (SPEC-0076 rule 5, brief #2069, ADR-0859): the maintainers' rows, never an agent's. Per need
+# one `recommended` row and at most two `alternative` rows; a source is the public page read on its access date, never
+# copied text; no row holds a version (read at choice time, rule 6). A need with no row (`email`: its usual library's
+# licence is off the kit list) is left to the steward's research. A project's own `config/parts/node.toml` is read first.
+format = 1
+
+[[parts]]
+need = "web-api"
+pick = "recommended"
+name = "express"
+when = "most services: plain routes and a large set of middleware"
+trade_offs = "the most used and documented; slower than newer servers and leaves structure to you"
+licence = "MIT"
+source = "https://registry.npmjs.org/express/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "web-api"
+pick = "alternative"
+name = "fastify"
+when = "a service where request speed or schema-checked routes matter"
+trade_offs = "faster, with schemas on each route; a smaller plugin set than express"
+licence = "MIT"
+source = "https://registry.npmjs.org/fastify/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "http-client"
+pick = "recommended"
+name = "stdlib"
+when = "every Node product: the built-in fetch calls other services"
+trade_offs = "no dependency; retries and time limits are yours to write"
+licence = "MIT"
+source = "https://nodejs.org/api/globals.html (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "validation"
+pick = "recommended"
+name = "zod"
+when = "checking any input from outside, with TypeScript types from the same rules"
+trade_offs = "one place for rules and types; adds a dependency to every check"
+licence = "MIT"
+source = "https://registry.npmjs.org/zod/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "data-access"
+pick = "recommended"
+name = "prisma"
+when = "a relational store read and written through typed queries"
+trade_offs = "typed queries from one schema file; a generate step and its own engine to run"
+licence = "Apache-2.0"
+source = "https://registry.npmjs.org/prisma/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "migrations"
+pick = "recommended"
+name = "prisma"
+when = "a product that already uses prisma for its records"
+trade_offs = "migrations written from the same schema file; tied to the prisma schema"
+licence = "Apache-2.0"
+source = "https://registry.npmjs.org/prisma/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "auth"
+pick = "recommended"
+name = "passport"
+when = "sign-in by password or an outside provider in an express service"
+trade_offs = "many sign-in methods as small strategies; sessions and roles are still yours"
+licence = "MIT"
+source = "https://registry.npmjs.org/passport/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "config"
+pick = "recommended"
+name = "stdlib"
+when = "every Node product: settings from the environment or an env file"
+trade_offs = "no dependency; no checking of the values unless you add it"
+licence = "MIT"
+source = "https://nodejs.org/api/process.html (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "secrets"
+pick = "recommended"
+name = "stdlib"
+when = "keys given to the process by the platform's secret store as environment values"
+trade_offs = "no dependency and nothing kept in the code; the platform must hold the secrets"
+licence = "MIT"
+source = "https://nodejs.org/api/process.html (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "logging"
+pick = "recommended"
+name = "pino"
+when = "a service writing structured log lines"
+trade_offs = "fast lines that tools can read; plain text for people needs another tool"
+licence = "MIT"
+source = "https://registry.npmjs.org/pino/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "telemetry"
+pick = "recommended"
+name = "@opentelemetry/sdk-node"
+when = "measuring requests and timings in a way any monitoring service can read"
+trade_offs = "the open standard, so no lock-in; many packages and some setup"
+licence = "Apache-2.0"
+source = "https://registry.npmjs.org/@opentelemetry/sdk-node/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "jobs"
+pick = "recommended"
+name = "bullmq"
+when = "work run later, retried or on a schedule"
+trade_offs = "dependable queues and retries; needs a Redis server to run"
+licence = "MIT"
+source = "https://registry.npmjs.org/bullmq/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "payments"
+pick = "recommended"
+name = "stripe"
+when = "taking card payments through Stripe"
+trade_offs = "the provider's own client; the service charges per payment and card data goes to it"
+licence = "MIT"
+source = "https://registry.npmjs.org/stripe/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "files"
+pick = "recommended"
+name = "multer"
+when = "accepting uploads in an express service"
+trade_offs = "simple upload handling; where the files are kept is yours to choose"
+licence = "MIT"
+source = "https://registry.npmjs.org/multer/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "cache"
+pick = "recommended"
+name = "quick-lru"
+when = "keeping recent answers in the memory of one process"
+trade_offs = "small and simple; each process has its own copy, lost on restart"
+licence = "MIT"
+source = "https://registry.npmjs.org/quick-lru/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "time"
+pick = "recommended"
+name = "luxon"
+when = "dates and times across time zones"
+trade_offs = "clear time-zone handling; larger than the built-in Date"
+licence = "MIT"
+source = "https://registry.npmjs.org/luxon/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "money"
+pick = "recommended"
+name = "dinero.js"
+when = "amounts with their currency, added and split exactly"
+trade_offs = "exact sums in minor units; amounts must be built through its functions"
+licence = "MIT"
+source = "https://registry.npmjs.org/dinero.js/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "i18n"
+pick = "recommended"
+name = "i18next"
+when = "text in more than one language, with React bindings when there is a front end"
+trade_offs = "widely used with many plugins; translation files to keep in step"
+licence = "MIT"
+source = "https://registry.npmjs.org/i18next/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "ui-components"
+pick = "recommended"
+name = "react"
+when = "screens built from shared parts in the browser"
+trade_offs = "the most used choice with many ready parts; a build step and its own way of working"
+licence = "MIT"
+source = "https://registry.npmjs.org/react/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "routing"
+pick = "recommended"
+name = "react-router"
+when = "moving between the screens of a React product"
+trade_offs = "the usual React choice; its newer versions change how pages load data"
+licence = "MIT"
+source = "https://registry.npmjs.org/react-router/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "state"
+pick = "recommended"
+name = "react"
+when = "screen data that a few related parts share"
+trade_offs = "React's own state and context add nothing; many shared values get hard to follow"
+licence = "MIT"
+source = "https://registry.npmjs.org/react/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "state"
+pick = "alternative"
+name = "zustand"
+when = "data many unrelated screens read and change"
+trade_offs = "one small shared store; one more dependency and pattern to learn"
+licence = "MIT"
+source = "https://registry.npmjs.org/zustand/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "forms"
+pick = "recommended"
+name = "react-hook-form"
+when = "forms in a React product, with zod for the rules"
+trade_offs = "few re-renders and simple checking; its own way of wiring each field"
+licence = "MIT"
+source = "https://registry.npmjs.org/react-hook-form/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "accessibility"
+pick = "recommended"
+name = "eslint-plugin-jsx-a11y"
+when = "finding access problems in React code before it runs"
+trade_offs = "runs with the lint step; finds what code shows, not every problem a person meets"
+licence = "MIT"
+source = "https://registry.npmjs.org/eslint-plugin-jsx-a11y/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "unit-tests"
+pick = "recommended"
+name = "stdlib"
+when = "every Node product: the built-in test runner, run by npm test"
+trade_offs = "no dependency; fewer helpers than a test framework"
+licence = "MIT"
+source = "https://nodejs.org/api/test.html (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "unit-tests"
+pick = "alternative"
+name = "vitest"
+when = "a product built with a bundler or many TypeScript files"
+trade_offs = "fast and runs TypeScript as is; one more dependency"
+licence = "MIT"
+source = "https://registry.npmjs.org/vitest/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "contract-tests"
+pick = "recommended"
+name = "@pact-foundation/pact"
+when = "checking that two services agree on their requests and answers"
+trade_offs = "the usual contract tool; both sides must use it and share the contracts"
+licence = "MIT"
+source = "https://registry.npmjs.org/@pact-foundation/pact/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "e2e-tests"
+pick = "recommended"
+name = "@playwright/test"
+when = "testing the main journeys in real browsers"
+trade_offs = "several browsers and good waiting; downloads browsers and runs slower"
+licence = "Apache-2.0"
+source = "https://registry.npmjs.org/@playwright/test/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "lint"
+pick = "recommended"
+name = "eslint"
+when = "every Node product: the lint step of the standards runs it"
+trade_offs = "the kit's own lint tool; rules need a config file"
+licence = "MIT"
+source = "https://registry.npmjs.org/eslint/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "format"
+pick = "recommended"
+name = "prettier"
+when = "every Node product: the format step of the standards runs it"
+trade_offs = "one layout with almost no choices; it rewrites whole files"
+licence = "MIT"
+source = "https://registry.npmjs.org/prettier/latest (accessed 2026-11-28)"
+reviewed = "2026-11-28"
