@@ -391,7 +391,7 @@ code = "scripts/agk/check_packs.py"
 tests = [
   "tests/kit/test_check_packs.py", "tests/kit/test_packs_settings.py", "tests/kit/test_check_playbooks.py",
   "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_pack_playbook_source.py",
-  "tests/kit/test_packs_lock.py",
+  "tests/kit/test_packs_lock.py", "tests/kit_dev/test_eval_record.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_parts_catalogue.py"
@@ -441,7 +441,7 @@ tests = [
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_flow_texts.py",
   "tests/kit_dev/test_kit_hashes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_merge_ref_base.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_pyproject_installs_as_nothing.py",
-  "tests/kit_dev/test_release_check.py", "tests/kit_dev/test_release_protected.py",
+  "tests/kit_dev/test_release_check.py", "tests/kit_dev/test_release_protected.py", "tests/kit_dev/test_eval_record.py",
   "tests/kit_dev/test_reviewer_wiring.py", "tests/kit_dev/test_route_concurrency_install.py",
   "tests/kit_dev/test_route_finishes_install.py", "tests/kit_dev/test_upgrade.py",
   "tests/kit_dev/test_upgrade_opt_in.py", "tests/kit_dev/test_upgrade_opt_in_several.py",
@@ -650,7 +650,7 @@ tests = ["tests/kit/test_stage_pulls.py",
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_playbook.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_stack_adr_testing.py",
-  "tests/kit_dev/test_start_discovery.py", "tests/kit/test_pins.py",
+  "tests/kit_dev/test_start_discovery.py", "tests/kit/test_pins.py", "tests/kit/test_stack_files_parts.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/python_pack.py"
@@ -663,7 +663,7 @@ code = "scripts/agk/gates/pins.py"
 tests = ["tests/kit/test_pins.py", "tests/kit/test_pins_uv_pnpm.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/parts.py"
-tests = ["tests/kit/test_parts_step.py", "tests/kit/test_parts_review.py", "tests/kit/test_sbom.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_parts_step.py", "tests/kit/test_parts_weekly.py", "tests/kit/test_parts_review.py", "tests/kit/test_sbom.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/licences.py"
 tests = ["tests/kit/test_pins_uv_pnpm.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -876,6 +876,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
+  "tests/kit/test_parts_weekly.py",
   "tests/kit/test_metrics_signals.py",
   "tests/kit/test_usage_split.py",
   "tests/kit/test_packs_stale.py",
@@ -922,6 +923,7 @@ tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/personal.py"
 tests = [
+  "tests/kit/test_parts_weekly.py",
   "tests/kit/test_standard_confirm.py",
   "tests/kit/test_packs_stale.py",
   "tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",
@@ -933,7 +935,13 @@ code = "scripts/agk/personal_adopt.py"
 tests = ["tests/kit/test_personal_adopt.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/eval_run.py"
-tests = ["tests/kit_dev/test_eval_run.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit_dev/test_eval_run.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_eval_record.py"]
+[[testing.map]]
+code = "scripts/agk/eval_record.py"
+tests = [
+  "tests/kit_dev/test_eval_record.py", "tests/kit/test_scorecard_evals.py", "tests/kit_dev/test_eval_run.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "evals/**"
 tests = ["tests/kit_dev/test_eval_run.py"]
@@ -1250,7 +1258,7 @@ code = "scripts/agk/sbom.py"
 tests = ["tests/kit/test_sbom.py", "tests/kit/test_product_deps.py", "tests/kit/test_parts_review.py"]
 [[testing.map]]
 code = "scripts/agk/scorecard.py"
-tests = ["tests/kit/test_scorecard.py", "tests/kit/test_minutes_budget.py"]
+tests = ["tests/kit/test_scorecard.py", "tests/kit/test_minutes_budget.py", "tests/kit/test_scorecard_evals.py"]
 [[testing.map]]
 code = "scripts/agk/common.py"
 tests = [

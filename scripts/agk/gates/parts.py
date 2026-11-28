@@ -250,3 +250,78 @@ def confirmed(root: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+# --- the weekly lines (SPEC-0076 rule 12; brief #2076, ADR-0866) ----------------------------------
+
+DETAIL = 10  # detail lines at most, then `parts: and <k> more`
+NO_SCAN = "flagged unknown (no advisory scan)"  # Q-PI-3: never 0 while no scan result is read
+RELEASE = re.compile(r"\blast release ([^\s;,)]+)")
+GONE = ("deprecated", "archived")
+OLDER = "older than [parts] max_age_months"
+
+
+def _over(day: datetime.date, today: datetime.date, months: int) -> bool:
+    """`packs._over`'s count: calendar months, the day ignored, over and never at."""
+    return (today.year - day.year) * 12 + today.month - day.month > months
+
+
+def _week(name: str, r: dict[str, str], limit: int, today: datetime.date) -> tuple[list, bool]:
+    """((kind, line) of each detail of one row, whether its health is not read)."""
+    cell = r["Health (date)"].strip()
+    part = f"{r['Part']} ({name or 'record'})"
+    if cell.casefold().startswith("not read"):
+        return [], True
+    out = []
+    found = RELEASE.search(cell)
+    if found:
+        try:
+            last = datetime.date.fromisoformat(found.group(1))
+        except ValueError:
+            return [], True  # a date out of form: never old (answer 6)
+        if _over(last, today, limit):
+            out.append(("old", f"parts: old {part} released {last}, {OLDER}"))
+    status = cell.split(";", 1)[0].strip().casefold()
+    if status in GONE:
+        read = READ.search(cell)
+        when = f"read {read.group(1)}" if read else "no read date"
+        out.append(("gone", f"parts: deprecated {part} recorded {status} ({when})"))
+    return out, False
+
+
+def report_lines(root: Path, today: datetime.date | None = None) -> list[str]:
+    """Answer 1: the weekly report's `parts:` lines from the record's rows, in record order: the
+    old, the deprecated or archived, the unread count, then one summary whose flagged count is
+    unknown while no advisory scan runs. Every refusal is one line; files only, never a failure."""
+    root = Path(root)
+    if not pins.applies(root):
+        return [f"parts: not run ({pins.NO_STACK})"]
+    found = settings(root)
+    if isinstance(found, str):
+        named = re.search(r"\(setting: [^)]+\)", found)
+        return [f"parts: unknown {named.group(0) if named else '(setting: parts)'}"]
+    if not (root / RECORD).is_file():
+        return [f"parts: not run ({NO_RECORD})"]
+    try:
+        record = sections((root / RECORD).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        record = None
+    if record is None:
+        return [f"parts: unknown (path class: {RECORD})"]
+    today = today or datetime.datetime.now(datetime.UTC).date()
+    details: list[tuple[str, str]] = []
+    total = unread = 0
+    for name, rows in record[0].items():
+        for r in rows:
+            total += 1
+            got, blank = _week(name, r, found["max_age_months"], today)
+            details += got
+            unread += blank
+    lines = [text for _, text in details]
+    if unread:
+        lines.append(f"parts: health not read {unread} rows")
+    if len(lines) > DETAIL:
+        lines = lines[:DETAIL] + [f"parts: and {len(lines) - DETAIL} more"]
+    old = sum(kind == "old" for kind, _ in details)
+    gone = sum(kind == "gone" for kind, _ in details)
+    return lines + [f"parts: {total} recorded; old {old}; deprecated {gone}; {NO_SCAN}"]

@@ -54,3 +54,10 @@ feature = "ADR-0852"
 since = "2026-11-27"
 kind = "comment"
 pattern = '^Built but unused: '
+
+[[signal]]
+id = "parts-weekly"
+feature = "ADR-0866"
+since = "2026-11-28"
+kind = "none"
+reason = "the kit declares no work type, so the parts lines show only in projects' weekly issues"

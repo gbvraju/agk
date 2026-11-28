@@ -1580,6 +1580,14 @@ def stale_pack_lines(root: Path, today: date) -> list[str]:
     return packs.report_lines(root, today)
 
 
+def parts_report_lines(root: Path, today: date) -> list[str]:
+    """SPEC-0076 rule 12 (brief #2076, ADR-0866): the old, deprecated and unread parts of
+    `docs/parts.md`, then the summary; files only, never a failure."""
+    from gates import parts  # noqa: PLC0415 - only this line reads the parts record
+
+    return parts.report_lines(root, today)
+
+
 # --- the signals of use (brief #2054, ADR-0852) -----------------------------------------------
 
 SIGNALS_FILE = "config/signals.toml"  # read here only (answer 9)
@@ -1954,6 +1962,7 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
         holds_line(ctx.root, start, end),
         coverage_line(ctx.src, details),  # brief #2020 answer 4: the reports that carry a figure
         *stale_pack_lines(ctx.root, today),  # brief #2045: SPEC-0077 rule 8, never failing
+        *parts_report_lines(ctx.root, today),  # brief #2076: SPEC-0076 rule 12, never failing
         *signal_lines(ctx.root, ctx.src, end),  # brief #2054: the signals of use, never failing
     )
     records.sort(key=lambda r: int(r["number"]))
