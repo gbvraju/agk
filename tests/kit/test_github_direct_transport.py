@@ -20,6 +20,7 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 import tracemalloc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,6 +31,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 
 import merge_cleared  # noqa: E402
 import session  # noqa: E402
+import test_github_read_budget as budget  # noqa: E402
 from test_github_read_budget import COMMANDS, World, said  # noqa: E402
 from test_merge_cleared_verdict import ON, cleared, merge_cleared_run, toml  # noqa: E402
 from test_session import REPO, SCRIPTS, clean_env  # noqa: E402
@@ -493,14 +495,34 @@ def timed(out: tuple[int, str]) -> tuple[int, str]:
     return out[0], re.sub(r", \d+(?:\.\d+)? s\b", ", <s>", out[1])  # the plan's seconds
 
 
+def served_now(double, monkeypatch) -> World:
+    """The world served with its ages counted from now, not from when the module loaded: a slow run
+    must not carry a comment across a time window (the sweep's 15 minutes of HELD_MINUTES) between
+    the two transports' runs (brief #2105, the red main of c1162b7)."""
+    monkeypatch.setattr(budget, "NOW", datetime.now(UTC).replace(microsecond=0))
+    world = World()
+    world.serve(double)
+    return world
+
+
+def test_a_world_served_for_a_run_ages_from_that_run(served, monkeypatch):
+    """REQ-050"""
+    _, double = served
+    stale = budget.NOW - timedelta(minutes=11)  # the module loaded eleven minutes before this run
+    monkeypatch.setattr(budget, "NOW", stale)
+    world = served_now(double, monkeypatch)
+    report = session.moment(world.comments[2001][0]["created_at"])
+    assert datetime.now(UTC) - report < timedelta(minutes=6)  # the fixture's 5 minutes, not 16
+
+
 @pytest.mark.parametrize("name", sorted(SWITCHED))
-def test_each_switched_command_prints_the_same_with_either_transport(served, name):
+def test_each_switched_command_prints_the_same_with_either_transport(served, monkeypatch, name):
     """REQ-050"""
     proj, double = served
-    World().serve(double)
     script, *args = SWITCHED[name]
     outs = {}
     for transport in ("gh", "direct"):
+        served_now(double, monkeypatch)  # both runs see the same ages, however slow the suite
         for item in double.cache.glob("*") if double.cache.exists() else []:
             item.unlink()  # each transport starts cold
         (double.dir / "direct.log").unlink(missing_ok=True)

@@ -536,6 +536,28 @@ def acceptance(root: Path, ref: str | None) -> tuple[str, str]:
         return goal_counts(Path(folder))
 
 
+def evals_note(root: Path) -> str | None:
+    """SPEC-0077 rule 10 (brief #2043, ADR-0847, `Q-PH-7`): the last accepted eval record's
+    medians and cost, only where the kit-only `eval_record.py` and `evals/rubric.toml` exist."""
+    try:
+        import eval_record  # noqa: PLC0415 - kit-only, absent from an installed copy
+    except ImportError:
+        return None
+    if not eval_record.applies(root):
+        return None
+    found = eval_record.accepted(root)
+    if found is None:
+        return "evals: no accepted record"
+    day, rec = found
+    medians = ", ".join(
+        f"{p} {layer} {v:g}"
+        for p, rows in rec["medians"].items()
+        for layer, v in rows.items()
+        if v is not None
+    )
+    return f"evals: {day} accepted, medians {medians}; cost per accepted feature {rec['cost']}"
+
+
 def scorecard(root: Path, src: Any, today: date) -> tuple[list[tuple[str, str, str]], list[str]]:
     """(metric, value, line) for every metric, in rule 1's order, and the notes under the table."""
     settings = scorecard_settings(root)
@@ -560,6 +582,8 @@ def scorecard(root: Path, src: Any, today: date) -> tuple[list[tuple[str, str, s
     values.update(freshness(root, src, today, config))
     values[GOALS], information = acceptance(root, default_ref(root, config["default_branch"]))
     notes = [f"pins unknown: {values['pins_unknown']}", information]
+    note = evals_note(root)
+    notes += [note] if note else []
     shown = [(m, values[m], "-" if lines[m] is None else f"{lines[m]:g}") for m in METRICS]
     return shown, notes
 

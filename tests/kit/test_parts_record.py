@@ -488,6 +488,15 @@ def test_only_parts_record_writes_the_record_and_it_imports_no_network_module():
     )
 
 
+def test_a_reader_of_the_record_takes_its_path_from_the_one_writer():
+    """REQ-083 AC2: SPEC-0076 rule 6 (one writer of `docs/parts.md`; brief #2102: a reader such as
+    `engines.py stack-files` names the record by `parts_record.RECORD`, never its own literal)."""
+    assert pr is not None, "scripts/agk/parts_record.py is missing"
+    import engines  # noqa: PLC0415 - the one reader outside gates/ (brief #2072)
+
+    assert engines.PARTS_RECORD is pr.RECORD
+
+
 def test_the_template_holds_the_columns_and_the_last_line():
     """REQ-083 AC2: SPEC-0076 rule 7 (`kit/templates/parts.md`)."""
     assert pr is not None, "scripts/agk/parts_record.py is missing"
