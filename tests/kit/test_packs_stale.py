@@ -282,7 +282,8 @@ def test_ac6_the_sidecar_report_adds_the_lines_before_its_caution(tmp_path, monk
     monkeypatch.setattr(personal, "ungated", lambda clone, sidecar: [])
     lines = personal.report(tmp_path, side, "2026-W48", today=TODAY).splitlines()
     assert lines[-1] == personal.CAUTION
-    assert lines[-2].startswith(f"warn packs: {PID} reviewed 2020-01-01")
+    assert lines[-3].startswith(f"warn packs: {PID} reviewed 2020-01-01")
+    assert lines[-2] == "parts: not run (no stack chosen)"
 
 
 # --- answers 3 and 4: update --check --------------------------------------------------------------

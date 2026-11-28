@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import inspect
+import shutil
 import socket
 import sys
 from pathlib import Path
@@ -59,6 +60,7 @@ def row(part: str, cell: str, need: str = "web-api") -> str:
 
 def tree(tmp: Path, sections: dict[str, str] | None, toml: str = WORK) -> Path:
     (tmp / "docs").mkdir(parents=True, exist_ok=True)
+    shutil.copytree(KIT_ROOT / "config" / "playbooks", tmp / "config" / "playbooks", dirs_exist_ok=True)
     (tmp / "agk.toml").write_text('default_branch = "main"\n' + toml, encoding="utf-8")
     if sections is not None:
         body = "".join(f"## {name}\n\n{HEAD}{rows}\n" for name, rows in sections.items())
