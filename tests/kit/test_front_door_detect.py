@@ -99,12 +99,15 @@ def test_one_signal_gives_its_work_type_and_stack_and_writes_nothing(tmp_path):
     first, second = run(root), run(root)
     assert first.returncode == 0
     assert first.stdout == second.stdout
+    parts = 'parts: 1 direct dependencies in "app/package.json", no parts record'  # brief #2074
     assert first.stdout.splitlines() == [
         FIRST,
         'work type: web-app (proposed) file "app/package.json" signal react-dom',
         'stack: node (proposed) folder "app" file "app/package.json" lock "app/yarn.lock"',
         "tests: no signal",
-        *TAIL,
+        TAIL[0],
+        f"{parts} (proposed: parts.py --harvest)",
+        *TAIL[1:],
     ]
     assert snapshot(root) == before
 
