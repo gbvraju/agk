@@ -25,8 +25,8 @@ import brief_study  # noqa: E402
 import check_brief  # noqa: E402
 import steward_owner  # noqa: E402
 from test_check_brief_study import EXISTING as STUDIED_EXISTING  # noqa: E402
+from test_check_brief_study import FIX, tree  # noqa: E402
 from test_check_brief_study import STUDIED as WITH_LINE  # noqa: E402
-from test_check_brief_study import tree  # noqa: E402
 
 DAY = "2026-12-14"
 BEFORE, AFTER = "2026-12-13", "2026-12-15"
@@ -128,7 +128,7 @@ def test_req037_the_placeholder_warns_on_any_day_and_never_fails(tmp_path):
 
 def test_req037_a_priority_0_brief_is_not_held_to_the_line(tmp_path):
     """REQ-037: answer 1 (`held`)."""
-    body = STUDIED.replace("Priority: 1\n", "Priority: 0\n")
+    body = STUDIED.replace("Priority: 1\n", "Priority: 0\n") + FIX  # brief #2095: its fix lines
     failures, warnings = result(kit(tmp_path), body, AFTER)
     assert failures == [] and [w for w in existing(warnings) if "leaves out" not in w] == []
 

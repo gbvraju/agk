@@ -1316,6 +1316,38 @@ def duplicate(root: Path, title: str, body: str) -> int | None:
     return None
 
 
+RECURRED = re.compile(r"Recurred: \d+ times\b")
+
+
+def recurred_line(count: int, newest: int, now: datetime) -> str:
+    return f"Recurred: {count} times; newest #{newest} ({now:%Y-%m-%d})"
+
+
+def recurrence(root: Path, body: str, newest: int | str, now: datetime) -> list[str]:
+    """Brief #2095 answer 5: a filed `Fix type: patch` counts once on its root-cause brief #n:
+    one `Recurred: <k+1> times` comment, k the `Recurred:` comments already there; #n's body
+    is never edited and no second root-cause brief is filed. Personal mode prints it."""
+    import brief_study
+
+    kind, _, holder = brief_study.fix_of(body)
+    if kind != "patch" or holder is None:
+        return []
+    if personal_table(root) is not None:
+        return [f"personal mode: the developer posts on #{holder}: Recurred: <count + 1> times;"
+                f" newest #{newest} ({now:%Y-%m-%d})"]  # fmt: skip
+    comments = session.pages(f"repos/{session.repo_name(root)}/issues/{holder}/comments")
+    if comments is None:
+        return [f"recurred: #{holder} comments cannot be read; nothing posted (count: unknown)"]
+    seen = sum(
+        1
+        for c in comments
+        if isinstance(c, dict) and RECURRED.match(str(c.get("body") or "").strip())
+    )
+    line = recurred_line(seen + 1, int(newest), now)
+    post_file(root, holder, f"{line}\n\n{STEWARD_WHO}\n")
+    return [f"recurred: #{holder} {line}"]
+
+
 def file_brief(
     root: Path, draft_file: Path, title: str, said: Path | None, at: str | None,
     by: str | None, now: datetime, name: str | None = None,
@@ -1386,7 +1418,8 @@ def file_brief(
     if personal_table(root) is not None:
         printed = [x for _, text in approvals for x in text.splitlines()]
         return 0, ["personal mode: nothing is posted; the developer files this brief:", *draft,
-                   *printed, *approval_lines, *warned]  # fmt: skip
+                   *printed, *approval_lines, *recurrence(root, body, "<new>", now),
+                   *warned]  # fmt: skip
     if (held := duplicate(root, title, body)) is not None:
         return 2, [f"refused: #{held} is an open brief with this title or body; nothing filed"
                    " (setting: --title)"]  # fmt: skip
@@ -1411,8 +1444,9 @@ def file_brief(
             first, *rest = text.splitlines()  # team: the approver's own two lines
             approval_lines += [f"post on #{made['number']} as a spec approver:", first,
                                *[x for x in rest if x.startswith("Text: ")]]  # fmt: skip
+    counted = recurrence(root, body, made["number"], now)  # brief #2095 answer 5
     return code, [f"brief filed: #{made['number']} ({session.LABEL})", *lines, *approval_lines,
-                  *warned]  # fmt: skip
+                  *counted, *warned]  # fmt: skip
 
 
 # --- brief #1757 (ADR-0735, amendment 218): the work type named in discovery, on the owner's yes

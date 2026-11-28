@@ -1,0 +1,1 @@
+- Steward: a fix brief names its root cause and fix type; a redesign goes to the owner as a decision packet advised by stage and release, and each patch is counted on its parked root-cause brief and raised on the daily list (brief #2095, ADR-0870)
