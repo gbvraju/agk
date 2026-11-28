@@ -663,7 +663,11 @@ code = "scripts/agk/gates/pins.py"
 tests = ["tests/kit/test_pins.py", "tests/kit/test_pins_uv_pnpm.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/parts.py"
-tests = ["tests/kit/test_parts_step.py", "tests/kit/test_parts_weekly.py", "tests/kit/test_parts_review.py", "tests/kit/test_sbom.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit/test_parts_step.py", "tests/kit/test_parts_harvest.py", "tests/kit/test_parts_weekly.py",
+  "tests/kit/test_parts_review.py", "tests/kit/test_sbom.py", "tests/kit/test_installed_imports.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "scripts/agk/gates/licences.py"
 tests = ["tests/kit/test_pins_uv_pnpm.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -712,7 +716,8 @@ tests = ["tests/kit/test_forge.py"]
 [[testing.map]]
 code = "scripts/agk/front_door.py"
 tests = [
-  "tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
+  "tests/kit/test_front_door_detect.py", "tests/kit/test_parts_harvest.py",
+  "tests/kit/test_front_door_entry.py", "tests/kit/test_layers_draft.py",
   "tests/kit/test_front_door_derive.py", "tests/kit/test_front_door_quality.py",
   "tests/kit/test_architecture_record.py", "tests/kit/test_stack_designs.py", "tests/kit/test_domain_signals.py",
   "tests/kit/test_domain_grill.py", "tests/kit/test_domain_architecture.py",
@@ -1086,7 +1091,7 @@ tests = [
   "tests/kit/test_python_pack.py", "tests/kit/test_gate_baseline.py", "tests/kit/test_node_pack.py",
   "tests/kit/test_adopt_first_run.py", "tests/kit/test_run_gates_touched.py",
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_stack_choice.py",
-  "tests/kit/test_standards_stack.py", "tests/kit/test_parts_step.py",
+  "tests/kit/test_standards_stack.py", "tests/kit/test_parts_step.py", "tests/kit/test_parts_harvest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/domain_scenarios.py"
@@ -1116,7 +1121,7 @@ tests = ["tests/kit/test_tests_floor.py", "tests/kit/test_run_gates.py", "tests/
 code = "scripts/agk/gates/*.py"
 # every test that runs the gate runner, which loads the steps by name (brief #1750; tests/kit_dev/test_gate_runner_map.py)
 tests = [
-  "tests/kit/test_parts_step.py",
+  "tests/kit/test_parts_step.py", "tests/kit/test_parts_harvest.py",
   "tests/kit/test_architecture_record.py", "tests/kit/test_contracts.py", "tests/kit/test_gate_baseline.py",
   "tests/kit/test_gate_injection_set.py", "tests/kit/test_gate_secrets_settings.py", "tests/kit/test_layers_step.py",
   "tests/kit/test_playbook_plugin.py", "tests/kit/test_product_deps.py", "tests/kit/test_python_pack.py",
@@ -1369,7 +1374,7 @@ code = "scripts/agk/steward_daily.py"
 tests = ["tests/kit/test_metrics_signals.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_evidence.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/steward_onboard.py"
-tests = ["tests/kit/test_steward_onboarding.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_steward_onboarding.py", "tests/kit/test_parts_harvest.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = ".claude/hooks/steward_guard.py"
 tests = [
