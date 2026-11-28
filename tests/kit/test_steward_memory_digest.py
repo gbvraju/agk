@@ -1,5 +1,5 @@
-"""Tests of the steward's memory digest and the lesson's prevention (SPEC-0059 rules 8, 14, 18 and 20,
-SPEC-0063 rule 9; brief #2098, ADR-0873; REQ-066 AC1 and AC7).
+"""Tests of the steward's memory digest and the lesson's prevention (SPEC-0059 rules 8, 14, 18
+and 20, SPEC-0063 rule 9; brief #2098, ADR-0873; REQ-066 AC1 and AC7).
 
 A recorded `gh` double counts each call and answers from an invented in-memory issue store; no
 network, no model, invented data only (example.com).
@@ -20,7 +20,9 @@ sys.path.insert(0, str(KIT / "scripts" / "agk"))
 import steward  # noqa: E402
 
 NOW = datetime(2026, 11, 28, 10, 30, tzinfo=UTC)
-ROUTE = re.compile(r"repos/\{owner\}/\{repo\}/issues(?:/(comments/)?(\d+))?(/comments)?(?:\?(.*))?$")
+ROUTE = re.compile(
+    r"repos/\{owner\}/\{repo\}/issues(?:/(comments/)?(\d+))?(/comments)?(?:\?(.*))?$"
+)
 
 
 def at(minutes: float) -> str:
@@ -115,7 +117,9 @@ def fresh_clone(monkeypatch, tmp_path, name: str) -> None:
 def memory_fixture(gh: GitHub, number: int) -> None:
     """About #1944's shape: run markers, decisions, lessons, drafts of many lines, a daily."""
     for n in range(30):
-        gh.comment(number, f"Decision: Q-9-{n} the export keeps column {n} (evidence: a.md:{n})", 900 - n)
+        gh.comment(
+            number, f"Decision: Q-9-{n} the export keeps column {n} (evidence: a.md:{n})", 900 - n
+        )
     for n in range(5):
         body = f"Draft brief: F-s-{n} A draft of five days ago\n" + "\n".join(
             f"Line {k} of the draft body, carried at every start before." for k in range(48)
@@ -247,14 +251,14 @@ def test_req066_a_roll_over_carries_what_is_in_force_and_links_the_new_issue(roo
     assert text.startswith("Memory in force (schema 1")
     for item in kept:
         assert f"{item['id']} #{old} " in text
-    assert f"Chain: #{old} #{new}" in text
+    assert f"Chain: #{old} and this issue" in text
     assert gh.issues[old]["c"][-1]["body"].startswith(f"Memory continued in #{new}")
     first = gh.issues[new]["c"][0]["body"]
     assert f"#{old}" in first and "Q-7-1" in first
 
 
 def test_req066_review_mode_solo_asks_no_person_question_after_a_roll_over(root):
-    """REQ-066 AC7: brief #2098 answer 8, the start's Person question reads the digest's `Person:`."""
+    """REQ-066 AC7: brief #2098 answer 8, the Person question reads the digest's `Person:`."""
     (root / "agk.toml").write_text('default_branch = "main"\nreview_mode = "solo"\n', "utf-8")
     gh = GitHub()
     old = gh.add_issue()
@@ -321,7 +325,9 @@ def test_req066_a_leading_lesson_word_is_written_once(root):
     """REQ-066 AC7: brief #2098 answer 1, `Lesson: Lesson:` is the kind written twice."""
     gh = GitHub()
     number = started_memory(root, gh)
-    assert steward.record(root, "Lesson", "Lesson: Lesson: a guess\nPrevent: brief #9004", gh)[0] == 0
+    assert (
+        steward.record(root, "Lesson", "Lesson: Lesson: a guess\nPrevent: brief #9004", gh)[0] == 0
+    )
     assert gh.issues[number]["c"][-1]["body"].startswith("Lesson: a guess\n")
 
 
@@ -349,13 +355,15 @@ def test_req066_a_repeat_is_counted_and_never_edits_the_first_note(root, tmp_pat
     assert code == 0, lines
     assert gh.issues[number]["c"][-1]["body"].startswith(f"Lesson: repeat of {first['id']}: ")
     assert first["body"] == original
-    assert gh.issues[brief]["c"][-1]["body"].startswith(f"Lesson repeat: {first['id']} seen 2 times")
+    assert gh.issues[brief]["c"][-1]["body"].startswith(
+        f"Lesson repeat: {first['id']} seen 2 times"
+    )
     steward.end(root, "s1", gh, NOW)
     assert f"{first['id']} #{number} " in body_of(gh, number)
     assert "seen 2" in body_of(gh, number)
     fresh_clone(monkeypatch, tmp_path, "clone-b")
     code, lines = start(root, gh, "s2", NOW + timedelta(minutes=5))
-    assert f"owner: lesson {first['id']} seen 2 times; prevention brief #{brief} open" in lines
+    assert f"owner: lesson {first['id']} seen 2 times; prevention brief #{brief}" in lines
 
 
 def test_req066_a_repeat_of_an_unknown_id_or_a_held_prevention_is_refused(root):
@@ -389,7 +397,9 @@ def test_req066_the_same_prevention_warns_and_prevent_of_covers_an_old_lesson(ro
     code, lines = steward.record(root, "Lesson", "another\nPrevent: brief #9006", gh)
     old_id = gh.issues[number]["c"][0]["id"]
     assert code == 0
-    assert any(line.startswith(f"warning: lesson {old_id} names the same prevention") for line in lines)
+    assert any(
+        line.startswith(f"warning: lesson {old_id} names the same prevention") for line in lines
+    )
     bare = gh.issues[number]["c"][1]["id"]
     steward.end(root, "s1", gh, NOW)
     assert "prevention none" in body_of(gh, number)
@@ -401,7 +411,7 @@ def test_req066_the_same_prevention_warns_and_prevent_of_covers_an_old_lesson(ro
     assert "prevention none" not in body_of(gh, number)
 
 
-# --- answer 4: show and find -------------------------------------------------------------------------
+# --- answer 4: show and find ---------------------------------------------------------------------
 
 
 def test_req066_show_makes_one_get_and_refuses_a_comment_off_the_memory(root):
@@ -490,7 +500,8 @@ def test_req066_an_unwritable_cache_costs_reads_never_a_note(root, tmp_path, mon
     gh = GitHub()
     number = gh.add_issue()
     gh.comment(number, "Term: a widget is a part.", 50)
-    monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "missing" / "\0bad"))
+    (tmp_path / "a-file").write_text("not a folder", encoding="utf-8")
+    monkeypatch.setenv("AGK_STEWARD_CACHE", str(tmp_path / "a-file" / "cache.json"))
     code, lines = start(root, gh)
     assert code == 0 and any("a widget" in line for line in lines)
 

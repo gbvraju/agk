@@ -61,3 +61,10 @@ feature = "ADR-0866"
 since = "2026-11-28"
 kind = "none"
 reason = "the kit declares no work type, so the parts lines show only in projects' weekly issues"
+
+[[signal]]
+id = "lesson-prevent"
+feature = "ADR-0873"
+since = "2026-11-28"
+kind = "comment"
+pattern = '^Prevent: (done|brief|draft|kit-defect) '

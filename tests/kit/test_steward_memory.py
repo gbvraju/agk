@@ -38,6 +38,7 @@ class GitHub:
     def add_issue(self, labels=("agk-steward",), state="open") -> int:
         number = len(self.issues) + 1
         self.issues[number] = {"number": number, "labels": list(labels), "state": state, "c": []}
+        self.issues[number]["body"] = None  # brief #2098: the body holds the digest
         return number
 
     def comment(self, number: int, body: str, minutes: int = 120) -> dict:
@@ -49,7 +50,8 @@ class GitHub:
 
     def view(self, issue: dict) -> dict:
         labels = [{"name": n} for n in issue["labels"]]
-        return {"number": issue["number"], "comments": len(issue["c"]), "labels": labels}
+        found = {"number": issue["number"], "comments": len(issue["c"]), "labels": labels}
+        return found | {"body": issue["body"], "state": issue["state"]}
 
     def __call__(self, method: str, endpoint: str, fields: dict | None = None):
         self.calls.append((method, endpoint))
@@ -62,7 +64,7 @@ class GitHub:
                 for i in self.issues.values()
                 if i["state"] == "open" and "agk-steward" in i["labels"]
             ]
-        if method == "GET":
+        if method == "GET" and comments:
             since = re.search(r"since=([^&]+)", query)
             page = int((re.search(r"(?:^|&)page=(\d+)", query) or [0, 1])[1])
             items = [
@@ -71,12 +73,15 @@ class GitHub:
             return items[(page - 1) * 100 : page * 100]
         if method == "POST" and number is None:
             new = self.add_issue(tuple(fields["labels"]))
+            self.issues[new]["body"] = fields.get("body")
             return self.view(self.issues[new])
         if method == "POST" and comments:
             return self.comment(int(number), fields["body"], minutes=self.clock)
         if method == "PATCH":
-            self.issues[int(number)]["state"] = fields["state"]
+            self.issues[int(number)].update(fields)  # the state, or the digest's body
             return {}
+        if method == "GET" and not comments:
+            return self.view(self.issues[int(number)])
         raise AssertionError((method, endpoint))
 
     def counted(self) -> int:
@@ -587,7 +592,8 @@ def test_req066_brief_1741_a_draft_keeps_its_text_and_a_triage_draft_names_it(ro
 
 def test_req066_brief_1741_a_roll_over_carries_every_unfiled_draft(root):
     """REQ-066 AC7: brief #1741 7(g), the new memory issue carries every `Draft brief:` not yet
-    filed, beside the open owner questions."""
+    filed, beside the open owner questions; since brief #2098 answer 6 (ADR-0873) it carries them
+    in its body, the digest, by id and first line, and posts them no more."""
     gh = Beating()
     old = gh.add_issue()
     gh.comment(old, "Owner question: Q-7-1 Should the report go out on Friday?", minutes=300)
@@ -600,8 +606,9 @@ def test_req066_brief_1741_a_roll_over_carries_every_unfiled_draft(root):
     new = max(gh.issues)
     bodies = [c["body"] for c in gh.issues[new]["c"]]
     assert "Q-7-1" in bodies[0]
-    assert any(b.startswith("Draft brief: F-s-2 Kept one\nSentence: kept.") for b in bodies)
-    assert not any("F-s-1" in b for b in bodies)
+    digest = gh.issues[new]["body"]
+    assert "Draft brief: F-s-2 Kept one" in digest and "Draft brief: F-s-1" not in digest
+    assert not any(b.startswith("Draft brief:") for b in bodies)
     assert bodies[-1].startswith("Started: steward s1")
 
 

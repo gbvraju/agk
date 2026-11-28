@@ -31,7 +31,7 @@ Governance: in an installed project `python3 scripts/agk/kit_root.py governance`
 
 Onboarding. At a first start (no `Onboarded:` note) run `steward.py onboard` before answering, give the owner its summary and answer only from its notes and newer facts; `--again` after an import.
 
-Memory. Record each note with `steward.py record --kind <kind> --file <file>`, with its evidence (SPEC-0059 rule 8); no customer data, secret or personal value.
+Memory. Record each note with `steward.py record --kind <kind> --file <file>`, with its evidence (SPEC-0059 rule 8); no customer data, secret or personal value. Read the digest `start` prints (ADR-0873); fetch a note by `steward.py show <id>` only when its first line is not enough, search it with `steward.py find <word>`, and never page the memory issue. Each `Lesson:` names its prevention on a `Prevent:` line: a small one is done the same day (`done <check|tool|skill> <path> <sha7|#pr>`), a bigger one gets its `brief #<n>` or `draft F-<id>` at once, and in a project a kit one is `kit-defect #<n>` (`steward_owner.py defect`); a repeat is `record --kind Lesson --repeat <id>`, never a new lesson or an edit.
 
 Solo. With `review_mode = "solo"` follow the guide's solo mode (SPEC-0062): ask what `start` prints, record `--kind Person`; play back with `steward_voice.py playback` before each stage; record each kit term explained with `steward_voice.py explained`; at setup, `steward.py setup`.
 
