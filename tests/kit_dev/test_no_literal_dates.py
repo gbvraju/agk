@@ -54,6 +54,23 @@ def pack_date(found: str) -> bool:
     return bool(PACK_DATE.match(line))
 
 
+PARTS_DATE = re.compile(
+    r'^(source = "https?://\S+ \(accessed \d{4}-\d{2}-\d{2}\)"|reviewed = "\d{4}-\d{2}-\d{2}")$'
+)
+
+
+def parts_date(found: str, root: Path = KIT_ROOT) -> bool:
+    """ADR-0861: a stack catalogue's whole `source` line (with its access date) and `reviewed` line are
+    the maintainers' data (SPEC-0076 rule 5); no check compares them with the day it runs (`Q-PB-5`),
+    so they cannot age into a failure. `needs.toml` holds no dated row and gets no exemption."""
+    rel, number = found.rsplit(":", 1)
+    folder, _, name = rel.rpartition("/")
+    if folder != "config/parts" or not name.endswith(".toml") or name == "needs.toml":
+        return False
+    line = (root / rel).read_text(encoding="utf-8").splitlines()[int(number) - 1]
+    return bool(PARTS_DATE.match(line))
+
+
 def test_no_installed_file_holds_a_literal_date():
     """ADR-0112 (brief #185 answer 3): a role file or a guide cannot age into a failure again."""
     found = literal_dates(KIT_ROOT, installed_files())
