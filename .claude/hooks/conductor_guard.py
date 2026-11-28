@@ -100,8 +100,10 @@ both in that order, the dry run always and a run that merges only when `[flow] a
 --release <name>` too, the same regular file. Brief #781 (ADR-0366): exactly `... over --pr <n>`,
 which only reads GitHub. Brief #1248 (ADR-0528): exactly `... review --pr <n>`, which only reads,
 and `... review --pr <n> --start`, which posts one `Review:` line and starts one reviewer through
-the adapter, only when the adapter is configured as for `launch.py --adapter` above. Every other
-form stays denied.
+the adapter, only when the adapter is configured as for `launch.py --adapter` above. Brief #2056
+(ADR-0854, Q-1163-1): exactly `... reprove --pr <n>`, with `--apply`, `--record` or `--record
+--apply` after it; its update-branch `PUT` is the script's own call, never a `gh api` of the
+session. Every other form stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
 SPEC-0039 rule 8, the one exception to principle 2 and session rule 2): exactly
 `python3 scripts/agk/merge_cleared.py --pr <n> --sha <40 lower-case hex>` (or `python`), the
@@ -244,6 +246,7 @@ EVIDENCE_RULE = (  # brief #1281 (ADR-0542): the setting, never a value
 )
 ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MERGE_PR = re.compile(r"[1-9][0-9]{0,9}")
+REPROVE_TAILS = ([], ["--apply"], ["--record"], ["--record", "--apply"])  # ADR-0854
 MERGE_SHA = re.compile(r"[0-9a-f]{40}")
 BATCH = re.compile(r"[1-9][0-9]?")  # `--max-batch` of the merge queue (brief #643 build (b))
 ALLOW_RULE = "conductor guard rule 6: the guarded merge of SPEC-0039 rule 8"
@@ -623,11 +626,14 @@ def routine_allowed(words: list[str], cwd: object) -> bool:
 def routine_form(rest: list[str]) -> bool:
     """The routines of brief #700 (ADR-0330): `rerun --pr <n> [--apply]`, `check-verdict <path>`
     and `lease (--show | --take <name> | --release <name>)`, brief #781's `over --pr <n>`
-    (ADR-0366) and brief #1248's `review --pr <n> [--start]` (ADR-0528), exactly these forms."""
+    (ADR-0366), brief #1248's `review --pr <n> [--start]` (ADR-0528) and brief #2056's
+    `reprove --pr <n> [--apply | --record | --record --apply]` (ADR-0854), exactly these forms."""
     if rest[:2] == ["rerun", "--pr"] and len(rest) in (3, 4) and MERGE_PR.fullmatch(rest[2]):
         return rest[3:] in ([], ["--apply"])
     if rest[:2] == ["over", "--pr"]:
         return len(rest) == 3 and bool(MERGE_PR.fullmatch(rest[2]))
+    if rest[:2] == ["reprove", "--pr"] and len(rest) in (3, 4, 5) and MERGE_PR.fullmatch(rest[2]):
+        return rest[3:] in REPROVE_TAILS  # brief #2056 answer 1 (ADR-0854, Q-1163-1)
     if rest[:2] == ["review", "--pr"] and len(rest) in (3, 4) and MERGE_PR.fullmatch(rest[2]):
         return rest[3:] in ([], ["--start"])  # brief #1248 (ADR-0528)
     if rest[:1] == ["check-verdict"]:
