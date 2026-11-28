@@ -1277,7 +1277,11 @@ Pinned parts (brief #1592, ADR-0672, amendments 200 and 201): in a Proposed stac
 build installs them), and `stack-check` refuses a range, a missing version or a missing licence naming the option and the
 part's place. `engines.py stack-files` writes the chosen stack's build file from `kit/templates/stacks/` (Python:
 `pyproject.toml`; `node`: `package.json`) and never rewrites a project's own; the lock is made by the stack's own tool on
-the builder's machine and committed.
+the builder's machine and committed. With a confirmed parts record (`docs/parts.md`) it writes the record's runtime parts
+as dependencies and its dev parts as dev dependencies (Python: `[project.optional-dependencies] dev`), each at its exact
+recorded version and nothing else, and prints `wrote <file> from docs/parts.md (<r> runtime, <d> dev parts)`; a row with
+an inexact version or another `Kind`, an unreadable record, a refused `[parts]` table and `record = "required"` with no
+confirmed record each refuse before any write (amendment 259, ADR-0862).
 
     python3 scripts/agk/gates/pins.py [--root DIR]
 
