@@ -64,5 +64,5 @@ digest is written, against the issues `steward_daily.py daily` already lists (An
 shows `(open)`, `(closed)` or `(not an issue)`; a number outside that read is checked at a `--repeat`, by one GET
 that reads `pull_request` too, so a pull request is never commented on as a brief. The `Hash:` line is unkeyed: it
 finds a hand edit, not a deliberate one that recomputes it; the comments stay the truth, and the first start of each
-UTC day compares the digest with a full rebuild. Every first `Lesson:` is kept, never capped or trimmed, until
-Q-2098-1 is ruled.
+UTC day compares the digest with a full rebuild. Every first `Lesson:` is kept, never capped or trimmed
+(Maintainer answer to Q-2098-1: "keep every lesson for now"); trimming them is later work.
