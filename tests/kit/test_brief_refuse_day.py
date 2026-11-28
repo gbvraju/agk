@@ -28,7 +28,7 @@ import brief_study  # noqa: E402
 import check_brief  # noqa: E402
 import forge  # noqa: E402
 import session  # noqa: E402
-from test_check_brief_study import CLASS, PRIOR, SHAPE, STUDIED, tree  # noqa: E402
+from test_check_brief_study import CLASS, FIX, PRIOR, SHAPE, STUDIED, tree  # noqa: E402
 
 import config  # noqa: E402
 
@@ -233,8 +233,8 @@ def test_ac4_a_priority_0_brief_is_held_to_class_and_prior_only(tmp_path):
         cut = "\n".join(x for x in red.splitlines() if not x.startswith(line)) + "\n"
         failed, _ = brief_study.study_result(cut, root, today=AFTER)
         assert any(line in f for f in failed), failed
-    zero = SHAPE.replace("Priority: 1", "Priority: 0") + PRIOR + CLASS
-    assert brief_study.study_result(zero, root, today=AFTER) == ([], [])
+    zero = SHAPE.replace("Priority: 1", "Priority: 0") + PRIOR + CLASS + FIX  # brief #2095
+    assert brief_study.study_result(zero, root, today=AFTER, briefs=[]) == ([], [])
 
 
 # --- answer 7: personal mode ----------------------------------------------------------------------

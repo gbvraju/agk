@@ -702,6 +702,102 @@ def signal_problems(lines: list[str]) -> list[str]:
     return [] if SIGNAL_NAMED.search(after[-1]) else [NO_SIGNAL]
 
 
+# Brief #2095 (ADR-0870): a fix brief names its root cause and fix type.
+FIX_TYPES = ("root", "patch", "redesign")
+FIX_LINES = ("Fix type:", "Root cause:", "Root-cause:")
+CAUSE_KEY = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+ROOT_CAUSE = re.compile(r"Root cause: (\S+): \S.*?; before: (\S.*?); removed by: \S.*")
+ROOT_OF = re.compile(r"Root-cause: #(\d+)")
+NO_CAUSE_CACHE = "study: root causes not read (no plan cache)"
+
+
+def fix_brief(lines: list[str]) -> bool:
+    """Q-RC-1: a brief with a fix line, or a `Priority: 0` that is not the router's pair."""
+    bare = [x.rstrip() for x in lines]
+    if any(x.startswith(FIX_LINES) for x in bare):
+        return True
+    return "Priority: 0" in bare and "Advances: none" not in bare
+
+
+def fix_of(body: str) -> tuple[str | None, str | None, int | None]:
+    """(fix type, cause key, `Root-cause:` number) of a body, each None when not one line."""
+    lines = [x.rstrip() for x in body.splitlines()]
+    kind = _one(lines, "Fix type:")
+    cause = _one(lines, "Root cause:")
+    match = ROOT_CAUSE.fullmatch(f"Root cause: {cause}") if cause else None
+    of = [m for x in lines if (m := ROOT_OF.fullmatch(x))]
+    return kind, match.group(1) if match else None, int(of[0][1]) if len(of) == 1 else None
+
+
+def root_cause_problems(lines: list[str], root: Path) -> list[str]:
+    """Answers 1 and 7: the line rules, each naming the line, never its text."""
+    lines = [x.rstrip() for x in lines]
+    if not fix_brief(lines):
+        return []
+    out = []
+    for key in ("Fix type:", "Root cause:"):
+        count = sum(1 for x in lines if x.startswith(key))
+        if count != 1:
+            out.append(f"study: {count} {key} lines, exactly one is needed (setting: {key})")
+    kind, _, _ = fix_of("\n".join(lines))
+    if kind is not None and kind not in FIX_TYPES:
+        out.append("study: the Fix type: line is not root, patch or redesign (setting: Fix type:)")
+    cause = _one(lines, "Root cause:")
+    match = ROOT_CAUSE.fullmatch(f"Root cause: {cause}") if cause else None
+    if cause is not None and (
+        match is None or len(match[1]) > 60 or not CAUSE_KEY.fullmatch(match[1])
+    ):
+        out.append(
+            "study: the Root cause: line is not <cause>: <why>; before: <refs>; removed by:"
+            " <design>, the cause lower-case words joined by - (setting: Root cause:)"
+        )
+    elif match and (refs := REFS[0][0].findall(match[2])):
+        known = {p.name[:4] for p in (root / "docs" / "adr").glob("[0-9][0-9][0-9][0-9]-*.md")}
+        if any(n not in known for n in refs):
+            out.append(
+                "study: the Root cause: line names an ADR not in docs/adr/ (setting: Root cause:)"
+            )
+    named = sum(1 for x in lines if x.startswith("Root-cause:"))
+    if kind == "patch" and (named != 1 or not any(ROOT_OF.fullmatch(x) for x in lines)):
+        out.append("study: a patch names exactly one Root-cause: #n (setting: Root-cause:)")
+    if kind in ("root", "redesign") and named:
+        out.append(f"study: a {kind} brief has no Root-cause: line (setting: Root-cause:)")
+    if kind == "redesign" and not any(x.startswith("Priority:") for x in lines):
+        out.append("study: a redesign brief has a Priority: line (setting: Priority:)")
+    return out
+
+
+def open_causes(briefs: list[dict] | None, number: int | None = None) -> dict[int, str]:
+    """Answer 2: each open `Fix type: redesign` brief's cause key, by number, leaving out NUMBER."""
+    found = {}
+    for issue in briefs or []:
+        kind, cause, _ = fix_of(str(issue.get("body") or ""))
+        if kind == "redesign" and cause and issue.get("number") != number:
+            found[int(issue["number"])] = cause
+    return found
+
+
+def root_cause_open_problems(body: str, briefs: list[dict], number: int | None) -> list[str]:
+    """Answer 2: one root-cause brief per cause, matched exactly (SPEC-0046 rule 9)."""
+    if not fix_brief(body.splitlines()):
+        return []
+    kind, cause, of = fix_of(body)
+    holders = open_causes(briefs, number)
+    held_by = sorted(n for n, key in holders.items() if key == cause)
+    if kind in ("root", "redesign") and held_by:
+        n = held_by[0]
+        return [
+            f"study: the cause has the open root-cause brief #{n}: write Fix type: patch and"
+            f" Root-cause: #{n} (setting: Root cause:)"
+        ]
+    if kind == "patch" and of is not None and holders.get(of) != cause:
+        return [
+            "study: the Root-cause: line names no open redesign brief of this cause"
+            " (setting: Root-cause:)"
+        ]
+    return []
+
+
 def held(body: str) -> tuple[bool, bool]:
     """(held to the study at all, held to Impact and Wiring too): a `Priority: 0` brief, the
     router's red-branch brief among them, only to `Class:` and `Prior:` (brief #1815 answer 5)."""
@@ -715,6 +811,7 @@ def study_problems(body: str, root: Path) -> list[str]:
     lines = body.splitlines()
     problems = (impact_problems(lines) + wiring_problems(lines, root)) if full else []
     problems += existing_problems(lines, root) if full else []  # brief #2052
+    problems += root_cause_problems(lines, root)  # brief #2095, a Priority 0 brief too
     return problems + prior_problems(lines, root) + class_problems(lines)
 
 
@@ -742,7 +839,9 @@ def study_result(
     problems = study_problems(body, root)
     prior = _one(lines, "Prior:") or ""
     if briefs is None:
-        briefs = plan_names.cached_issues(root)
+        briefs = plan_names.cached_issues(root) or None
+    if briefs is not None:  # brief #2095 answer 2: one root-cause brief per cause
+        problems += root_cause_open_problems(body, briefs, number)
     found = candidates(body, root, briefs, number)
     out = [
         (kind, ref, status, why)
@@ -763,6 +862,7 @@ def study_result(
             " brief_study.py <file> --root . lists them"
         )
     filled = placeholder_warnings(lines) + signal_problems(lines)
+    filled += [NO_CAUSE_CACHE] if briefs is None and fix_brief(lines) else []
     if True:  # brief #2052, extended to a project by brief #2065: the placeholder and the search
         filled += [
             "study: the Existing line is the render's placeholder"
@@ -817,6 +917,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{ref} ({detail}): names {why}; {strength}")
         if briefs is None:
             print("briefs: not read (no plan cache)")
+        for number, cause in sorted(open_causes(briefs).items()):  # brief #2095 answer 2
+            print(f"cause {cause} #{number}")
         for path, line, term in code_matches(body, root):  # brief #2052 answer 2
             print(f"code {path}:{line}: {term}")
         for note in [] if is_kit(root) else project_matches(body, root)[1]:  # brief #2065

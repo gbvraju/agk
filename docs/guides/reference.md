@@ -297,6 +297,7 @@ In solo mode (SPEC-0062 rule 4) a start with no `Person:` note prints `ask:` wit
     python3 scripts/agk/steward_evidence.py answer --question FILE --number N [--recheck FILE]
     python3 scripts/agk/steward_evidence.py triage --finding FILE
     python3 scripts/agk/steward_evidence.py skill --step STEP
+    python3 scripts/agk/steward_evidence.py root-cause --brief FILE [--redesign FILE] [--date YYYY-MM-DD] [--triage T]
 
 The steward's evidence rule, answer form and triage (SPEC-0059 rules 2, 3, 4, 6, 7, 12 and 19, ADR-0558). `stage` names
 the stage in the owner's words from the files (`docs/discovery/`, `docs/plan/scope.md`, a `*-stack-options.md` ADR,
@@ -314,7 +315,17 @@ otherwise both answers go to the owner, as does a class the owner overrode twice
 `cause` and `reproduced`; `triage` prints `file`, `draft` (a kit filing from a project, until build (e)) or `ask` and the
 `Triage:` note, or refuses (exit 2) a text without its `Modes:` line, failing the brief shape or the neutrality list, an
 unreproduced cause, or a filing above `[steward] auto_file` without an `Owner said` line. `skill` prints the step's skill
-from the agent file's table, or `no skill:` (exit 3). A failed GitHub call exits 4.
+from the agent file's table, or `no skill:` (exit 3). A finding with `cause` whose brief text has no `Fix type:` and
+`Root cause:` line is refused (`setting: Root cause:`). `root-cause` (brief #2095, ADR-0870) prints the owner's decision
+packet of a redesign (exit 3): `cause:`, `open root-cause brief:`, `stage:`, `release: <milestone> <date>` (the earliest
+open milestone dated on or after the day, among `[plan] active_milestones` when set; `none dated`; `unknown` when the
+milestones cannot be read; in personal mode the `Target:` lines of `docs/plan/milestones.md`, no GET), `recommend:`
+(`redesign now` before build or with no dated release; `patch now; root-cause brief parked until after <milestone>` in
+build with one; `the owner decides` when unknown), `why:`, `cost:` from the drafts' `Expected:` lines, `reversible:` and
+`impact:`. A `root` fix prints `no packet: ...`, an open root-cause brief of the cause `recurrence: #n: ...`, and a kit
+triage in a project `kit defect: ...` (exit 0). Filing a `patch`, `steward_owner.py file-brief` posts one `Recurred:
+<k+1> times; newest #<new> (<day>)` on its root-cause brief (printed in personal mode), and the daily list adds `Root
+cause recurred (<day>): ...`. A failed GitHub call exits 4.
 
 ## Steward daily list
 
@@ -1313,7 +1324,14 @@ version. With no `[delivery] work_type` or no Accepted stack record it prints `p
 With a Python stack it also reads the root `requirements.txt`, each file its `-r` lines name and the files of
 `[tool.setuptools.dynamic]` (brief #1838, ADR-0768); a range, a bare name, a wildcard, a URL reference or an `-e` line
 other than `-e .` there fails as not pinned exactly, held to that file, and an unreadable or outside `-r` file is the
-build file line, held to the file that names it. A `-c` file is not read. It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
+build file line, held to the file that names it. A `-c` file is not read. The committed lock picks the reader (brief
+#2075, ADR-0865): `pyproject.toml` with `uv.lock` alone is read by its uv reader (`[project]` dependencies and optional
+groups, each string of `[dependency-groups]` and `[tool.uv] dev-dependencies`, each exact `==` or not pinned exactly), and
+`package.json` with `pnpm-lock.yaml` alone by its pnpm reader (npm's rules on `package.json`, so a range, `workspace:` or
+`catalog:` spec is not pinned exactly, and a `lockfileVersion: '9.0'` lock only, another version unreadable); with both
+locks of one runtime in its folder, `requirements.lock` or `package-lock.json` is read, as before. `licences`, the bill and
+the `parts` step read the same lock; a uv or pnpm lock states no licence, so each package takes the stack record's or is
+`unknown`. It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
 them), with the runner's interface.
 
 The `parts` step (`scripts/agk/gates/parts.py`; SPEC-0076 rule 8, brief #2071, ADR-0867) runs after `pins` inside
@@ -1546,6 +1564,13 @@ item may name a kit command in backquotes without a line. Its search reads the p
 else the tracked source files less docs, tests, vendored and kit folders, at most 2000), the kit's scripts, this guide,
 the packs in use and the root build files' dependencies (`docs/parts.md` when present), warning `defines`, `declares`
 or `documents`; a layer it cannot read prints one `not run ...` line naming the setting.
+A fix brief (brief #2095, ADR-0870: a `Fix type:`, `Root cause:` or `Root-cause:` line, or a `Priority: 0` that is not
+the router's pair `Advances: none`, `Priority: 0`) has one `Fix type: root|patch|redesign` and one `Root cause: <cause>:
+<why>; before: <refs or none: <search>>; removed by: <design>`, the cause lower-case words joined by `-` (at most 60);
+a `patch` has one `Root-cause: #n`, a `root` or `redesign` none, a `redesign` a `Priority:`. From the open briefs (the
+plan cache or `--open-briefs`) a `root` or `redesign` of an open redesign brief's cause fails naming that `#n`, and a
+`patch` whose `#n` is no open redesign brief of its cause fails; with no cache one warning `study: root causes not
+read (no plan cache)`. The command prints each open cause as `cause <key> #n`. Held as the other study lines.
 Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
 publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
 writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.

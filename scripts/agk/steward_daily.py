@@ -61,6 +61,7 @@ OWNER_WHO = "Who: ProductOwner"  # a relayed owner decision (SPEC-0059 rule 5)
 COMMENTS = "repos/{owner}/{repo}/issues/comments?per_page=100&since={since}&page={page}"
 WEEKLY = re.compile(r"<!-- agk-metrics (\d{4}-W\d{2}) -->")
 UNUSED = re.compile(r"^unused: (\S+) \((.+?)\): ", re.M)
+RECURRED = re.compile(r"^Recurred: (\d+) times; newest #(\d+)")  # brief #2095 (ADR-0870)
 LISTED = "repos/{owner}/{repo}/issues?state=all&per_page=100&since={since}&page={page}"
 
 
@@ -176,6 +177,23 @@ def unused_lines(issues: list[dict] | None) -> list[str]:
     ]
 
 
+def recurred_lines(comments: list[dict] | None, day: str) -> list[str]:
+    """Brief #2095 answer 5: one line per steward `Recurred:` comment of DAY, `none` or
+    `unknown` when the comments could not be read."""
+    if comments is None:
+        return [f"Root cause recurred ({day}): unknown"]
+    found = [
+        (str(c.get("issue_url", "")).rsplit("/", 1)[-1], m)
+        for c in comments
+        if day_of(c) == day and WHO in (c.get("body") or "")
+        if (m := RECURRED.match(first(c.get("body") or "")))
+    ]
+    return [
+        f"Root cause recurred ({day}): #{number} {m[1]} times, newest #{m[2]}"
+        for number, m in found
+    ] or [f"Root cause recurred ({day}): none"]
+
+
 def daily_text(
     today: date,
     days: list[date],
@@ -232,6 +250,7 @@ def daily_text(
         over = [o for o in found if day_of(o) == day] if found is not None else None
         share = "unknown" if over is None or mine is None else f"{len(over)}/{len(mine)}"
         lines.append(f"Override share ({day}): {share}")
+        lines += recurred_lines(comments, day)
     for cls in sorted(warned(memory, datetime.combine(today, datetime.min.time(), UTC))):
         lines.append(
             f"Warning: class {cls} overridden twice in seven days; it goes to the owner until a "
