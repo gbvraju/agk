@@ -404,7 +404,7 @@ def lessons_in(notes: list[dict]) -> dict[int, dict]:
         ref = REPEAT.match(body) or PREVENT_OF.match(body)
         if ref is None:
             seen, last = item.get("seen", 1), item.get("last", item["id"])
-            lesson = {"item": item, "seen": seen, "last": last}
+            lesson = {"item": item, "seen": seen, "last": last, "state": item.get("state")}
             held[item["id"]] = lesson | {"prevent": item.get("prevent") or form_of(item)}
             continue
         if (target := held.get(int(ref[1]))) is None:
@@ -412,8 +412,14 @@ def lessons_in(notes: list[dict]) -> dict[int, dict]:
         if REPEAT.match(body) and item["id"] > target["last"]:
             target["seen"], target["last"] = target["seen"] + 1, item["id"]
         if (found := form_of(item)) and item["id"] >= target.get("formed", 0):
-            target["prevent"], target["formed"] = found, item["id"]
+            target.update({"prevent": found, "formed": item["id"], "state": None})
     return held
+
+
+def brief_state(cache: dict, form: str | None) -> str | None:
+    """Answer 9 (Q-2098-2): a `brief #<n>` prevention's state, from the issues the daily read."""
+    found = re.fullmatch(r"brief #(\d+)", form or "")
+    return (cache.get("issues_read") or {}).get(found[1]) if found else None
 
 
 def recent(item: dict, now: datetime) -> bool:
@@ -462,6 +468,7 @@ def in_force(cache: dict, now: datetime) -> tuple[list[dict], dict]:
             if item.get("id") not in lessons:
                 continue  # a repeat or a prevention: folded into its first note
             item = {**item, **{k: lessons[item["id"]][k] for k in ("seen", "last", "prevent")}}
+            item["state"] = brief_state(cache, item.get("prevent")) or lessons[item["id"]]["state"]
         why = "older"
         if kind == "Decision":
             ids = set(QID.findall(first_line(item)))
@@ -509,6 +516,7 @@ def note_line(item: dict, current: int) -> str:
     if entry_kind(text) == "Lesson":
         tail = f" | seen {item.get('seen', 1)} last {item.get('last', item.get('id'))}"
         tail += f" | prevention {item.get('prevent') or 'none'}"
+        tail += f" ({item['state']})" if item.get("state") else ""
         return f"{head} {text[: WIDTH - len(head) - len(tail) - 1]}{tail}"[:WIDTH]
     return f"{head} {text}"[:WIDTH]
 
@@ -562,6 +570,8 @@ def parse_digest(text: str | None) -> dict | str:
             if len(parts) == 3 and entry_kind(parts[0]) == "Lesson":
                 seen = re.match(r"seen (\d+) last (\d+)", parts[1])
                 form = parts[2].removeprefix("prevention ")
+                if said := re.search(r" \((open|closed|not an issue)\)$", form):
+                    item["state"], form = said[1], form[: said.start()]
                 item |= {"seen": int(seen[1]), "last": int(seen[2])} if seen else {}
                 if form != "none":
                     item |= {"prevent": form, "body": f"{parts[0]}\nPrevent: {form}"}
@@ -674,7 +684,8 @@ def owner_lines(root: Path, notes: list[dict]) -> list[str]:
             where = "; impact: the kit and every project" if kit else ""
             lines.append(
                 f"owner: lesson {note['id']} seen {note['seen']} times; "
-                f"prevention {form or 'none'}{where}"[:WIDTH]
+                f"prevention {form or 'none'}"
+                f"{' (' + note['state'] + ')' if note.get('state') else ''}{where}"[:WIDTH]
             )
     if bare:
         lines.append(
@@ -1057,7 +1068,9 @@ def lesson(
     if repeat:
         was, seen = held[repeat]["prevent"] or "", held[repeat]["seen"] + 1
         brief = re.match(r"brief #(\d+)$", was)
-        state = call(gh, "GET", f"{ISSUES}/{brief[1]}").get("state") if brief else None
+        state = brief_state(load_cache(root), was) if brief else None
+        if brief and state is None:  # outside the daily's read: one GET (Q-2098-2)
+            state = call(gh, "GET", f"{ISSUES}/{brief[1]}").get("state")
         if not form and (was.startswith("done") or state == "closed"):
             return (
                 None,

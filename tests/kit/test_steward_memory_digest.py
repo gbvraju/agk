@@ -542,3 +542,52 @@ def test_req066_the_agent_file_reads_the_digest_and_never_pages_the_memory():
         "never read the memory issue" in text and "`steward.py show <id>` fetches one note" in text
     )
     assert "a `Lesson:` with its `Prevent:`" in text
+
+
+# --- answer 9 (Q-2098-2): a brief prevention is checked from the daily's issue read ---------------
+
+
+def test_req066_the_daily_issue_read_gives_each_brief_prevention_its_state(root):
+    """REQ-066 AC7: brief #2098 answer 9 (Q-2098-2), the issues `steward_daily` already lists
+    mark a `Prevent: brief #<n>` open, closed or not an issue when the digest is written; no call
+    is added, and a repeat of a lesson whose brief that read holds makes no GET of it."""
+    import steward_daily
+
+    gh = GitHub()
+    number = started_memory(
+        root,
+        gh,
+        "Lesson: a guess\nPrevent: brief #9011",
+        "Lesson: a stale read\nPrevent: brief #9012",
+        "Lesson: a wrong path\nPrevent: brief #9013",
+    )
+    gh.add_issue("A brief.", labels=("agk-brief",), number=9011)
+    cache = steward.load_cache(root)
+    listed = [
+        {"number": 9011, "state": "open"},
+        {"number": 9012, "state": "closed"},
+        {"number": 9013, "state": "open", "pull_request": {}},
+    ]
+
+    def daily_gh(method, endpoint, fields=None):
+        if method == "GET" and "issues?state=all" in endpoint:
+            return listed
+        if method == "GET":
+            return []
+        return gh(method, endpoint, fields)
+
+    assert steward_daily.post_daily(cache, daily_gh, NOW)[0] == 0
+    steward.save_cache(root, cache)
+    steward.end(root, "s1", gh, NOW)
+    text = body_of(gh, number)
+    assert "prevention brief #9011 (open)" in text
+    assert "prevention brief #9012 (closed)" in text
+    assert "prevention brief #9013 (not an issue)" in text
+    open_id, closed_id = (c["id"] for c in gh.issues[number]["c"][:2])
+    assert start(root, gh, "s2", NOW + timedelta(minutes=2))[0] == 0
+    gh.calls.clear()
+    code, lines = steward.record(root, "Lesson", "again", gh, repeat=closed_id)
+    assert code == 2 and "the Prevent: line" in lines[0] and gh.calls == []
+    assert steward.record(root, "Lesson", "again", gh, repeat=open_id)[0] == 0
+    assert not any(e.endswith("/issues/9011") for m, e in gh.calls if m == "GET")
+    assert gh.issues[9011]["c"][-1]["body"].startswith(f"Lesson repeat: {open_id} seen 2 times")
