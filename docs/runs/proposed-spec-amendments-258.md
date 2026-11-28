@@ -17,5 +17,6 @@ The sentence (brief #2017), quoted as data: "Intake for the parts list: after th
    names libraries stays valid, and those libraries are harvested into the parts record as `inferred` rows
    (amendment 258)."
    Class: behaviour
+   Applied: 2026-11-28, item 1 word for word to SPEC-0029 rule 5 in pull request #2081, on "Maintainer answer: amendment 258 approved" (#2018, 2026-11-27T20:04:04Z)
 
 No other rule changes.

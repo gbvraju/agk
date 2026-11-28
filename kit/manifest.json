@@ -163,6 +163,7 @@
     "scripts/agk/pack_scan.py",
     "scripts/agk/packs.py",
     "scripts/agk/parity.py",
+    "scripts/agk/parts_record.py",
     "scripts/agk/personal.py",
     "scripts/agk/personal_adopt.py",
     "scripts/agk/plan_ceremony.py",
