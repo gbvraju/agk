@@ -1,0 +1,1 @@
+- Rules: `/agk:ground` measures the rule set with the existing tools, sorts every rule into five classes, plans the cut and applies it only on the owner's yes, then measures again; the steward's table names it for "grounding the rules" (brief #2094, ADR-0875)
