@@ -662,7 +662,10 @@ code = "scripts/agk/gates/pins.py"
 tests = ["tests/kit/test_pins.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/parts.py"
-tests = ["tests/kit/test_parts_step.py", "tests/kit/test_parts_harvest.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit/test_parts_step.py", "tests/kit/test_parts_harvest.py", "tests/kit/test_parts_review.py",
+  "tests/kit/test_sbom.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "scripts/agk/gates/licences.py"
 tests = ["tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1182,7 +1185,7 @@ code = "config/rule-plan.txt"
 tests = ["tests/kit/test_rules_consolidate.py"]
 [[testing.map]]
 code = "scripts/agk/review_bundle.py"
-tests = ["tests/kit/test_review_bundle.py"]
+tests = ["tests/kit/test_review_bundle.py", "tests/kit/test_parts_review.py"]
 [[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [
@@ -1246,7 +1249,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/sbom.py"
-tests = ["tests/kit/test_sbom.py", "tests/kit/test_product_deps.py"]
+tests = ["tests/kit/test_sbom.py", "tests/kit/test_product_deps.py", "tests/kit/test_parts_review.py"]
 [[testing.map]]
 code = "scripts/agk/scorecard.py"
 tests = ["tests/kit/test_scorecard.py", "tests/kit/test_minutes_budget.py"]
