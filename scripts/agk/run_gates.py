@@ -25,8 +25,11 @@ check, so that check's output is unchanged there (the kit's own repository's cas
 `required_checks` is unchanged: it runs inside `governance`.
 
 The product steps (`PRODUCT_STEPS`): `pins` (SPEC-0072 rule 4; brief #1776, ADR-0742) where a
-work type is declared, not run without a chosen stack, then `bom` and `licences` where a lock is
-read.
+work type is declared, not run without a chosen stack, then `parts` (SPEC-0076 rule 8; brief
+#2071, ADR-0867) where a parts record is read, then `bom` and `licences` where a lock is read. A
+step module may hold `notes(root, playbook)`: each line prints `warn <id>: <line>`, and with notes
+and no failure the step prints `<id>: <n> warnings (<its NOTED>)`, never `ok <id>`; notes never
+change the exit code.
 
 The `architecture-quality` step (SPEC-0073 rule 8, amendment 236; brief #1952, ADR-0808) follows
 `architecture-record`: a record with none of its quality sections prints `not run`, never `ok`.
@@ -107,7 +110,8 @@ ARCHITECTURE_STEPS = (
 # brief #1596 (ADR-0676, amendment 206): the product's bill and licence steps, run the same way
 # only where a stack is chosen and its lock is read; a project without one (the kit's) is unchanged.
 # brief #1776 (ADR-0742): `pins` first, where a work type is declared; no stack chosen is not run.
-PRODUCT_STEPS = ("pins", "bom", "licences")
+# brief #2071 (ADR-0867): `parts` after `pins`, SPEC-0076 rule 8, only where a parts record is read.
+PRODUCT_STEPS = ("pins", "parts", "bom", "licences")
 # brief #1951 (ADR-0812): SPEC-0073 rule 8's glossary form check, only where docs/glossary.md exists
 QUALITY_STEPS = ("glossary",)
 PACKS = ("python_pack", "node_pack")  # pack modules of the registry, imported by name
@@ -224,7 +228,7 @@ def ratchet(
 
 def where(cls: str) -> str:
     """A failure's class: a path class, or a playbook key (`key: ...`, brief #1842)."""
-    return f"({cls})" if cls.startswith("key: ") else f"(path class: {cls})"
+    return f"({cls})" if cls.startswith(("key: ", "setting: ")) else f"(path class: {cls})"
 
 
 def results(root: Path, write: bool = False) -> list[Row]:
@@ -264,7 +268,11 @@ def results(root: Path, write: bool = False) -> list[Row]:
             classes = ", ".join(dict.fromkeys(c for _, c in failed))
             held = f"path class: {classes}" if getattr(module, "HELD", 0) else ""
             rows = ratchet(root, gate["id"], module.counts(root, data), rows, write, held)
-        out += rows or [(True, gate["id"])]
+        noted = module.notes(root, data) if hasattr(module, "notes") else []
+        if noted and not rows:  # brief #2071 (ADR-0867): warnings, never `ok`, exit unchanged
+            words = "warning" if len(noted) == 1 else "warnings"
+            rows = [(HELD, f"{gate['id']}: {len(noted)} {words} ({module.NOTED})")]
+        out += [(NOTE, f"warn {gate['id']}: {n}") for n in noted] + (rows or [(True, gate["id"])])
     return out + pack_results(path, root, write) + no_pack_rows(root, path)
 
 

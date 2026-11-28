@@ -75,6 +75,8 @@ None.
 """
 BRIEF = """Sentence: "A customer can empty the cart."
 
+Existing: none: `grep -rn cart src/` gives 0 matches
+
 Answers:
 1. The cart empties.
 

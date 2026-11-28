@@ -50,12 +50,12 @@ The review protocol (SPEC-0023). Follow it in this order, every review:
 1. **Fetch the head** named in the report. The verdict's first line names that sha; a verdict for another sha is void.
 2. **Read the diff** against the base, file by file. The verdict has a `Read:` line: the files you read, or `all`.
 3. **Walk the spec's rules** of the requirement the pull request advances, one by one. Each rule is `holds`, `does not hold (where)` or `not testable here`; no rule is skipped silently.
-4. **Run what can be run** (the checks, the tests, a render) and quote the output. A claim with no run is marked `(verify)`, never stated as fact.
+4. **Run what can be run** (the checks, tests, a render) and quote the output. A claim with no run is marked `(verify)`.
 5. **Say what the tests do not prove**: for each criterion, what a passing test would still allow.
-6. **The fixed lens**, in this order: security (credentials, redirects, origins, permissions, what is logged); honesty (nothing hidden, unknown is never zero, a declaration matches the change); portability (no host or tool leaks into the core); size (over the limit, split); duplication (logic copied from a kit file that will drift).
-7. **Kit or project?** Write every gap as `project:` (a fix in this project) or `kit:` (a residual with its generic wording). A project never carries a workaround for a kit gap.
+6. **The fixed lens**, in this order: security (credentials, redirects, origins, permissions, what is logged); honesty (nothing hidden, unknown is never zero, a declaration matches the change); portability (no host or tool leaks into the core); size (over the limit, split); duplication (logic copied from a kit file, or rebuilt where the project's code, a part or a kit feature already does it).
+7. **Kit or project?** Write every gap as `project:` (a fix in this project) or `kit:` (a generic residual). A project never works around a kit gap.
 8. **The verdict form**: `Verdict: cleared <sha>`, `Verdict: fix list <sha>` with numbered items or `Final:` lines, or `Verdict: rejected <sha>` with the reason. One sentence per finding, each naming a rule or a line, never an opinion without one. Each numbered item of a fix list ends with `(rule: <file> <n>)` or `(rule: none)`, naming the session rule, core rule or checklist item it enforces (brief 647).
-9. **Own the misses.** When the builder or the maintainers correct you with evidence, record the correction in the decisions log.
+9. **Own the misses.** When a builder or maintainer corrects you with evidence, record it in the decisions log.
 <!-- /protocol -->
 
 The file enforces the tool list and the guard hook (`Bash` only for read-only `git`, `git fetch origin`, `gh api` GET, the one `Shadow:` comment POST, `date -u` and the bounded run; `Write` only in a scratch directory). It cannot supply attention, and it cannot tell the `agk-shadow` issue from another issue without a network call: that you post on the labelled issue only is this file's rule. While the conductor and you post from one account, no check can tell your comments from the conductor's, and the blindness above rests on this file (a residual of SPEC-0035).

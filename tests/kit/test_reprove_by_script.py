@@ -64,6 +64,7 @@ class Pass:
             "pass_facts": lambda root: ("fp", False, "dig", swept),
             "logged_escalations": lambda *a: [],
             "steward_due": lambda *a: None,
+            "cleared_due": lambda *a: None,  # main 9b6ab96a (brief #2058): no cleared head here
             "stop_reason": lambda *a: (stop, []),
             "record_health": lambda *a: None,
             "default_tip": lambda root: self.tip,

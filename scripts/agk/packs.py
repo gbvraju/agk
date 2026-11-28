@@ -60,7 +60,7 @@ KIT = {
     "stack-signals": "config/stack-signals.toml",
     "domain-signals": "config/domain-signals.toml",
     "data-patterns": None,
-    "parts": None,
+    "parts": "config/parts",  # SPEC-0076 rules 4 and 5 (brief #2068, ADR-0858)
     "skills": "skills",
 }
 PROVENANCE = ("source", "basis")  # rule 3's keys of a pack's entry, not the reader's format

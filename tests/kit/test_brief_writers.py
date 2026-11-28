@@ -188,9 +188,13 @@ def test_ac4_the_templates_study_block_passes_on_a_past_day(repo, past):
         "Impact", "Speed", "Quality", "GitHub", "Cost", "Tests", "Wiring", "Prior", "Class",
     ]  # fmt: skip
     assert all("(verify)" in x for x in block.splitlines()[1:])
-    failures, warnings = check_brief.brief_result(SHAPE + block, repo)
+    text = (KIT_ROOT / "docs" / "briefs" / "TEMPLATE.md").read_text(encoding="utf-8")
+    existing = next(x for x in text.splitlines() if x.startswith("Existing:"))  # brief #2065
+    body = SHAPE.replace("Answers:\n", existing + "\nAnswers:\n", 1) + block
+    failures, warnings = check_brief.brief_result(body, repo)
     assert failures == [], failures
     assert "study: the Wiring line is the render's placeholder" in warnings
+    assert "study: the Existing line is the render's placeholder" in warnings
 
 
 def test_ac4_the_template_keeps_one_example_each_below_the_block():

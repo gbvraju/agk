@@ -23,8 +23,9 @@ SCRIPT = ROOT / "scripts" / "agk" / "parity.py"
 # The exception list may only shrink: lower this number in the pull request that removes a
 # line. It rose to 10 once, by ADR-0627 (brief #1476): the release snapshot builder serves the
 # kit's own release, as kit_hashes.py does; and to 11 by ADR-0846 (brief #2042): the evaluation set
-# of SPEC-0077 rule 9 is kit-only by that Approved rule.
-KIT_ONLY_CEILING = 11
+# of SPEC-0077 rule 9 is kit-only by that Approved rule; and to 12 by ADR-0852 (brief #2054): the
+# signals registry names the kit's own shipped features, and a project gets none (Q-P0C-4).
+KIT_ONLY_CEILING = 12
 
 
 def write(root: Path, rel: str, text: str) -> None:
