@@ -384,7 +384,8 @@ def test_req_012_the_class_stays_closed():
 
 def test_req_012_the_weekly_report_carries_the_section_after_the_packs(tmp_path):
     text = (KIT / "scripts" / "agk" / "metrics.py").read_text(encoding="utf-8")
-    assert re.search(r"\*stale_pack_lines\(ctx\.root, today\),.*\n(?:\s*\*parts_report_lines\(.*\n)?\s*\*signal_lines\(", text)
+    packs = r"\*stale_pack_lines\(ctx\.root, today\),.*\n"
+    assert re.search(packs + r"(?:\s*\*parts_report_lines\(.*\n)?\s*\*signal_lines\(", text)
 
 
 # --- the command line and the plugin layout -----------------------------------------------------
