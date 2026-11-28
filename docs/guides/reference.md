@@ -672,8 +672,10 @@ against the stack names, and prints `FAIL parts-catalogue:` lines or `ok parts-c
 catalogues)`. The optional `[parts]` table: `record` (`required` or `optional`, default `optional`), `max_age_months` (1 to 60, default 12) and `advisories`
 (`critical-high`, `critical` or `any`, default `critical-high`); a refusal is `the [parts] table is refused (setting:
 parts.<key>)`, and `doctor.py` prints it as `parts-settings`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
-The kit ships one stack catalogue, `config/parts/node.toml` (with React rows; `check_parts_catalogue.SHIPPED`, brief
-#2069, ADR-0859): every source a public page with its access date, every licence on the kit list; `email` has no row.
+The kit ships two stack catalogues, `config/parts/node.toml` (with React rows; ADR-0859) and
+`config/parts/python-pyproject.toml` (ADR-0869), named by `check_parts_catalogue.SHIPPED` (brief #2069): every source a
+public page with its access date, every licence on the kit list; `email` has no node row, and the Python file has no
+screen rows.
 
 ## The project domain model
 
