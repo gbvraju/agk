@@ -302,16 +302,17 @@ def refused_start(session: str, other: tuple[str, datetime]) -> list[str]:
     return lines
 
 
-def open_questions(comments: list[dict]) -> list[str]:
+def open_question_items(comments: list[dict]) -> list[dict]:
+    """Each `Owner question:` whose Q id no `Decision:` or `Maintainer answer:` names."""
     answers = [c["body"] for c in comments if entry_kind(c["body"]) == "Decision"]
     answers += [c["body"] for c in comments if c["body"].lstrip().startswith("Maintainer answer:")]
     decided = {q for body in answers for q in QID.findall(body)}  # brief #1765 answer 2
-    asked = [
-        c["body"].strip().splitlines()[0]
-        for c in comments
-        if entry_kind(c["body"]) == "Owner question"
-    ]
-    return [line for line in asked if not set(QID.findall(line)) & decided]
+    asked = [c for c in comments if entry_kind(c["body"]) == "Owner question"]
+    return [c for c in asked if not set(QID.findall(c["body"].strip().splitlines()[0])) & decided]
+
+
+def open_questions(comments: list[dict]) -> list[str]:
+    return [c["body"].strip().splitlines()[0] for c in open_question_items(comments)]
 
 
 def stamp(now: datetime) -> str:
@@ -358,8 +359,9 @@ WIDTH = 200
 SHOWN = 80
 WINDOW = timedelta(days=14)  # rule 13's window for `Gap:`, `Risk:` and `Override:`
 OVERLAP = timedelta(seconds=120)
-CAPS = {"Decision": 40, "Lesson": 40, "Owner question": 20}
+CAPS = {"Decision": 40, "Lesson": 10**6, "Owner question": 20}  # Q-2098-1: every lesson kept
 CAPS |= dict.fromkeys(("Ranking", "Term", "Persona", "Pattern", "Gap", "Risk", "Override"), 20)
+TRIMMED = tuple(k for k in CAPS if k != "Lesson")  # answer 9's size trim never drops a lesson
 ONE = ("Person", "Onboarded", "Note", "Owner list", "Morning list for the owner", "Daily")
 WINDOWED = ("Gap", "Risk", "Override")
 NOT_KEPT = ("Triage", "Filed")
@@ -443,14 +445,8 @@ def in_force(cache: dict, now: datetime) -> tuple[list[dict], dict]:
     notes = sorted(cache.get("comments") or [], key=order, reverse=True)  # newest first
     live = {run["id"] for run in runs(notes).values()}
     lessons = lessons_in(notes)
-    bodies = [n.get("body") or "" for n in notes]
-    decided = {
-        q
-        for b in bodies
-        if entry_kind(b) == "Decision" or b.lstrip().startswith("Maintainer answer:")
-        for q in QID.findall(b)
-    }
-    filed = {d for b in bodies if entry_kind(b) == "Filed" for d in DRAFT_ID.findall(b)}
+    asked = {c["id"] for c in open_question_items([{"body": "", **n} for n in notes])}
+    unfiled = {c["id"] for c in unfiled_drafts(notes)}
     kept: list[dict] = []
     taken: dict[str, int] = {}
     seen_q: set[str] = set()
@@ -464,7 +460,7 @@ def in_force(cache: dict, now: datetime) -> tuple[list[dict], dict]:
         if kind is None or kind in NOT_KEPT:
             drop(item, kind or "Other", "not kept")
             continue
-        if kind == "Lesson":
+        if kind == "Lesson":  # Q-2098-1: every first lesson is kept, never capped or trimmed
             if item.get("id") not in lessons:
                 continue  # a repeat or a prevention: folded into its first note
             item = {**item, **{k: lessons[item["id"]][k] for k in ("seen", "last", "prevent")}}
@@ -476,15 +472,14 @@ def in_force(cache: dict, now: datetime) -> tuple[list[dict], dict]:
                 drop(item, kind)
                 continue
             seen_q |= ids
-        if kind == "Owner question" and set(QID.findall(first_line(item))) & decided:
+        if kind == "Owner question" and item["id"] not in asked:
             drop(item, kind, "answered")
             continue
         if kind == "Draft brief":
-            draft = DRAFT_ID.search(first_line(item))
-            if draft and draft[0] in filed:
-                drop(item, kind, "filed")
-            else:
+            if item["id"] in unfiled:
                 kept.append(item)
+            else:
+                drop(item, kind, "filed")
             continue
         if kind == "Setup":
             matter = first_line(item).split(":", 2)[1].strip()
@@ -501,7 +496,7 @@ def in_force(cache: dict, now: datetime) -> tuple[list[dict], dict]:
         taken[kind] = taken.get(kind, 0) + 1
         kept.append(item)
     while kept and sum(len(note_line(i, current)) + 1 for i in kept) > DIGEST_LIMIT - 2000:
-        capped = [i for i in kept if entry_kind(i.get("body") or "") in CAPS]
+        capped = [i for i in kept if entry_kind(i.get("body") or "") in TRIMMED]
         if not capped:
             break
         oldest = min(capped, key=order)  # answer 9: the oldest capped line becomes a count
@@ -517,8 +512,8 @@ def note_line(item: dict, current: int) -> str:
         tail = f" | seen {item.get('seen', 1)} last {item.get('last', item.get('id'))}"
         tail += f" | prevention {item.get('prevent') or 'none'}"
         tail += f" ({item['state']})" if item.get("state") else ""
-        return f"{head} {text[: WIDTH - len(head) - len(tail) - 1]}{tail}"[:WIDTH]
-    return f"{head} {text}"[:WIDTH]
+        return f"{head} {text[: WIDTH - len(head) - len(tail) - 1].rstrip()}{tail}"[:WIDTH]
+    return f"{head} {text}"[:WIDTH].rstrip()  # parse_digest strips each line: hash the same text
 
 
 def digest_text(cache: dict, now: datetime) -> tuple[str, list[dict]]:
@@ -535,7 +530,7 @@ def digest_text(cache: dict, now: datetime) -> tuple[str, list[dict]]:
         spread = counts[key]
         where = ", ".join(f"#{n} ({spread[n]})" for n in sorted(spread, key=int))
         rest.append(f"{kind}: {sum(spread.values())} {why}, on {where}")
-    rest += [note_line(i, current) for i in sorted(kept, key=order, reverse=True)]
+    rest += [note_line(i, current).rstrip() for i in sorted(kept, key=order, reverse=True)]
     checked = cache.get("checked") or now.date().isoformat()
     first = f"Memory in force (schema {SCHEMA}, through {through} {at or seconds(now)}"
     first += f", checked {checked})"
@@ -591,7 +586,7 @@ def full_read(gh: Gh, cache: dict, state: dict | str, issue: dict, today: str) -
     """Answer 5: every page of the open issue; the older issues' notes as the digest held them."""
     number = issue["number"]
     pages = comments_of(gh, number, None) if issue.get("comments", 0) else []
-    old = state if isinstance(state, dict) else {"notes": [], "counts": {}, "chain": []}
+    old = state if isinstance(state, dict) else rebuilt_chain(gh, issue)
     carried = [n for n in old["notes"] if n.get("issue") != number]
     base = {k: {i: n for i, n in v.items() if i != str(number)} for k, v in old["counts"].items()}
     counted = {n["id"]: n for n in old["notes"]}
@@ -614,6 +609,24 @@ def full_read(gh: Gh, cache: dict, state: dict | str, issue: dict, today: str) -
             kind = entry_kind(note["body"]) or "Other"
             drift[kind] = drift.get(kind, 0) + 1
     cache["notice"] = [f"digest: drift {k} {n}" for k, n in sorted(drift.items())]
+
+
+def rebuilt_chain(gh: Gh, issue: dict) -> dict:
+    """Answers 5 and 6: a digest that cannot be trusted is rebuilt from every memory issue, the
+    `Chain:` line's when it still reads, else every closed `agk-steward` issue; nothing carried is
+    lost."""
+    lines = (issue.get("body") or "").splitlines()[:3]
+    named = next((line for line in lines if line.startswith("Chain: ")), None)
+    if named is not None:
+        chain = [int(n) for n in re.findall(r"#(\d+)", named)]
+    else:
+        closed = call(
+            gh, "GET", LISTING.replace("state=open&per_page=10", "state=closed&per_page=100")
+        )
+        chain = sorted(i["number"] for i in closed if "pull_request" not in i)
+    chain = [n for n in chain if n != issue["number"]]
+    notes = [{**c, "issue": n} for n in chain for c in comments_of(gh, n, None)]
+    return {"notes": notes, "counts": {}, "chain": chain}
 
 
 def since_read(gh: Gh, cache: dict, issue: dict) -> bool:
@@ -735,7 +748,8 @@ def memory_issue(gh: Gh, root: Path, cache: dict, now: datetime | None = None) -
     listed = [i for i in call(gh, "GET", LISTING) if "pull_request" not in i]
     if not listed:
         body = digest_text({"comments": [], "chain": []}, now or datetime.now(UTC))[0]
-        listed = [call(gh, "POST", ISSUES, {"title": TITLE, "body": body, "labels": [LABEL]})]
+        made = call(gh, "POST", ISSUES, {"title": TITLE, "body": body, "labels": [LABEL]})
+        listed = [{**made, "body": body}]  # the digest it was opened with
     issue = max(listed, key=lambda i: i["number"])
     if cache.get("issue") != issue["number"]:
         cache.clear()
@@ -1063,14 +1077,15 @@ def lesson(
     target = repeat or prevent_of
     flag = "--repeat" if repeat else "--prevent-of"
     if target is not None and target not in held:
-        return None, [f"refused: {flag} names a Lesson the digest holds (setting: {flag})"], None
+        return None, [f"refused: the id is not a Lesson the digest holds (setting: {flag})"], None
     after, said = None, []
     if repeat:
         was, seen = held[repeat]["prevent"] or "", held[repeat]["seen"] + 1
         brief = re.match(r"brief #(\d+)$", was)
         state = brief_state(load_cache(root), was) if brief else None
         if brief and state is None:  # outside the daily's read: one GET (Q-2098-2)
-            state = call(gh, "GET", f"{ISSUES}/{brief[1]}").get("state")
+            got = call(gh, "GET", f"{ISSUES}/{brief[1]}")
+            state = "not an issue" if "pull_request" in got else got.get("state")
         if not form and (was.startswith("done") or state == "closed"):
             return (
                 None,

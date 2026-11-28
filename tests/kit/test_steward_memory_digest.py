@@ -54,7 +54,8 @@ class GitHub:
     def view(self, issue: dict) -> dict:
         labels = [{"name": n} for n in issue["labels"]]
         keys = ("number", "state", "body")
-        return {**{k: issue[k] for k in keys}, "comments": len(issue["c"]), "labels": labels}
+        found = {**{k: issue[k] for k in keys}, "comments": len(issue["c"]), "labels": labels}
+        return found | ({"pull_request": {}} if issue.get("pull_request") else {})
 
     def out(self, item: dict) -> dict:
         url = f"https://api.example.com/repos/o/r/issues/{item['number']}"
@@ -76,7 +77,8 @@ class GitHub:
                 item.update(body=fields["body"], updated_at=at(self.clock))
             return self.out(item)
         if number is None and method == "GET":
-            shown = [i for i in self.issues.values() if i["state"] == "open"]
+            state = re.search(r"state=(\w+)", query)[1]
+            shown = [i for i in self.issues.values() if i["state"] == state]
             return [self.view(i) for i in shown if "agk-steward" in i["labels"]]
         if number is None and method == "POST":
             new = self.add_issue(fields.get("body"), tuple(fields["labels"]))
@@ -383,6 +385,8 @@ def test_req066_a_repeat_of_an_unknown_id_or_a_held_prevention_is_refused(root):
     for target in (term, 1):
         code, lines = steward.record(root, "Lesson", "again", gh, repeat=target)
         assert code == 2 and "--repeat" in lines[0]
+        assert "the id is not a Lesson the digest holds" in lines[0]
+        assert str(target) not in lines[0]  # a refusal names the setting, never the value
     for target in (done, gone):
         code, lines = steward.record(root, "Lesson", "again", gh, repeat=target)
         assert code == 2 and "the Prevent: line" in lines[0]
@@ -525,14 +529,30 @@ def test_req066_the_summary_is_built_from_the_digest_only(root, monkeypatch):
 
 
 def test_req066_no_kit_script_but_steward_writes_the_memory_body():
-    """REQ-066 AC7: brief #2098 answer 11, only `steward.py` PATCHes an issue body."""
-    patch = re.compile(r'"PATCH",\s*f?"\{ISSUES\}/\{[^}]+\}",\s*\{\s*"body"')
-    writers = [
-        path.name
-        for path in sorted((KIT / "scripts" / "agk").glob("*.py"))
-        if patch.search(path.read_text(encoding="utf-8"))
-    ]
-    assert writers == ["steward.py"]
+    """REQ-066 AC7: brief #2098 answer 11, of the scripts that reach the memory issue, only
+    `steward.py` PATCHes an issue that is not a comment, in any spelling of the call; the two
+    others are named with what they edit."""
+    reaches = re.compile(
+        r"agk-steward|steward\.LABEL|import steward\b|from steward import|load_cache"
+    )
+    known = {
+        "steward.py": "the memory issue's body and its close",
+        "steward_owner.py": "fix-brief: an open, untaken `agk-brief` issue's body only",
+        "common.py": "the comment writer: a PATCH of `issues/comments/<id>` only",
+    }
+    found = set()
+    for path in sorted((KIT / "scripts" / "agk").rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if not reaches.search(text):
+            continue
+        for hit in re.finditer(r"[\"']PATCH[\"']", text):
+            begin = text.rfind("\n", 0, hit.start()) + 1
+            line = text[begin : text.find("\n", hit.end())]
+            if line.strip().startswith("method="):  # a keyword of a call that opens above
+                line = text[text.rfind("(\n", 0, begin) : begin] + line
+            if "comments" not in line:
+                found.add(path.name)
+    assert found == set(known), found
 
 
 def test_req066_the_agent_file_reads_the_digest_and_never_pages_the_memory():
@@ -591,3 +611,104 @@ def test_req066_the_daily_issue_read_gives_each_brief_prevention_its_state(root)
     assert steward.record(root, "Lesson", "again", gh, repeat=open_id)[0] == 0
     assert not any(e.endswith("/issues/9011") for m, e in gh.calls if m == "GET")
     assert gh.issues[9011]["c"][-1]["body"].startswith(f"Lesson repeat: {open_id} seen 2 times")
+
+
+# --- the fix list of 3d6f191 (items 1 to 5 and answers 4 and 11) ----------------------------------
+
+
+def test_req066_the_size_trim_never_drops_an_open_lesson(root):
+    """REQ-066 AC7: brief #2098 answer 3 and Q-2098-1, a body at the limit keeps an old lesson."""
+    gh = GitHub()
+    number = gh.add_issue()
+    old = gh.comment(number, "Lesson: the oldest miss\nPrevent: brief #9021", 3000)
+    words = " ".join(["word"] * 40)
+    for kind in ("Decision", "Ranking", "Term", "Persona", "Pattern", "Gap", "Risk", "Override"):
+        for n in range(40):
+            gh.comment(number, f"{kind}: Q-{kind[0]}-{n} {words}", 600 - n)
+    assert start(root, gh)[0] == 0
+    steward.end(root, "s1", gh, NOW)
+    text = body_of(gh, number)
+    assert len(text) <= steward.DIGEST_LIMIT
+    assert f"{old['id']} #{number} " in text
+    assert re.search(r"^(Ranking|Term|Persona|Pattern|Decision): \d+ older", text, re.M)
+
+
+def test_req066_a_note_cut_on_a_space_reads_as_the_same_digest(root, tmp_path, monkeypatch):
+    """REQ-066 AC1: brief #2098 answer 5, the hash covers the text as it is parsed back."""
+    gh = GitHub()
+    number = gh.add_issue()
+    gh.comment(number, "Term: " + "ab " * 90, 40)  # the 200-character cut falls on a space
+    run_once(root, gh, "s1", NOW - timedelta(minutes=30))
+    assert steward.parse_digest(body_of(gh, number)) != "edited"
+    fresh_clone(monkeypatch, tmp_path, "clone-b")
+    gh.calls.clear()
+    code, lines = start(root, gh, "s2")
+    assert code == 0 and not any(line.startswith("digest: rebuilt") for line in lines)
+    assert [m for m, _ in gh.calls] == ["GET", "GET", "POST"]
+
+
+def test_req066_a_rebuild_after_a_roll_over_keeps_the_old_issues_notes(root, tmp_path, monkeypatch):
+    """REQ-066 AC7: brief #2098 answers 5 and 6, a hand-edited body after a roll-over is rebuilt
+    from the chain's issues, so what the old issue carried stays in force."""
+    gh = GitHub()
+    old = gh.add_issue()
+    onboarded = gh.comment(old, "Onboarded: the project on 2026-11-02", 990)
+    decision = gh.comment(old, "Decision: Q-7-2 keep two columns (evidence: a.md:2)", 989)
+    for n in range(498):
+        gh.comment(old, f"Term: word{n} means thing{n}.", 900)
+    run_once(root, gh, "s1", NOW - timedelta(minutes=30))
+    new = max(gh.issues)
+    gh.issues[new]["body"] = body_of(gh, new).replace("keep two columns", "keep three columns")
+    fresh_clone(monkeypatch, tmp_path, "clone-b")
+    code, lines = start(root, gh, "s2")
+    assert code == 0 and "digest: rebuilt (edited)" in lines
+    text = body_of(gh, new)
+    assert f"{onboarded['id']} #{old} " in text and f"{decision['id']} #{old} " in text
+    assert "keep two columns" in text and f"Chain: #{old} and this issue" in text
+
+
+def test_req066_a_rebuild_with_no_chain_line_reads_the_closed_memory_issues(
+    root, tmp_path, monkeypatch
+):
+    """REQ-066 AC7: brief #2098 answer 5, a body with no digest names no chain: the closed
+    `agk-steward` issues are read, so a memory from before this build loses nothing."""
+    gh = GitHub()
+    old = gh.add_issue()
+    onboarded = gh.comment(old, "Onboarded: the project on 2026-11-02", 990)
+    gh.issues[old]["state"] = "closed"
+    new = gh.add_issue(f"Continues #{old}.")
+    gh.comment(new, "Term: a widget is a part.", 50)
+    code, lines = start(root, gh)
+    assert code == 0 and "digest: rebuilt (missing)" in lines
+    assert f"{onboarded['id']} #{old} " in body_of(gh, new)
+    assert not any(line.startswith("ask: ") for line in lines)
+
+
+def test_req066_a_repeat_of_a_brief_that_is_a_pull_request_posts_nothing_on_it(root):
+    """REQ-066 AC7: brief #2098 answer 2 (Q-S4-3), only an open brief is commented on."""
+    gh = GitHub()
+    pull = gh.add_issue("A change.", labels=())
+    number = started_memory(root, gh, f"Lesson: a guess\nPrevent: brief #{pull}")
+    gh.issues[pull]["pull_request"] = True
+    first = gh.issues[number]["c"][0]["id"]
+    assert steward.record(root, "Lesson", "again", gh, repeat=first)[0] == 0
+    assert gh.issues[pull]["c"] == []
+
+
+def test_req066_a_note_folded_on_two_starts_is_counted_once(root, tmp_path, monkeypatch):
+    """REQ-066 AC7: brief #2098 answer 4, the 120-second overlap reads a note again and the
+    capped counts do not move."""
+    gh = GitHub()
+    number = gh.add_issue()
+    for n in range(25):
+        gh.comment(number, f"Term: word{n} means thing{n}.", 300 - n)
+    run_once(root, gh, "s1", NOW - timedelta(minutes=30))
+    counts = [line for line in body_of(gh, number).splitlines() if line.startswith("Term: 5 ")]
+    assert counts == [f"Term: 5 older, on #{number} (5)"]
+    for clone, minutes in (("clone-b", 20), ("clone-c", 10)):
+        fresh_clone(monkeypatch, tmp_path, clone)
+        gh.clock = minutes
+        run_once(root, gh, clone, NOW - timedelta(minutes=minutes))
+        assert [line for line in body_of(gh, number).splitlines() if line.startswith("Term:")] == (
+            counts
+        )

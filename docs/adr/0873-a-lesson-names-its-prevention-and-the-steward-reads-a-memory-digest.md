@@ -30,7 +30,8 @@ Evidence).
    time less 120 seconds and folds them in by id, then prints a summary built from the digest only (at most 80 lines).
    The other readers read the digest's notes from the start's cache, as they read the cache before. A missing,
    unparsable, other-schema or hand-edited digest, and the first start of a UTC day, read every page and rebuild it
-   (`digest: rebuilt (<reason>)`, `digest: drift <kind> <count>`). `start` writes the body when its read folded
+   (`digest: rebuilt (<reason>)`, `digest: drift <kind> <count>`); a digest that cannot be trusted is rebuilt from
+   every memory issue, those its `Chain:` line names, else every closed `agk-steward` issue. `start` writes the body when its read folded
    anything, `end` at every pass; in team mode `end` re-reads the body first and folds its notes by id.
    `steward.py show <id>` prints one note with one GET; `steward.py find <word>` searches the digest with no call.
 3. **Lessons.** `record --kind Lesson` refuses a text with no `Prevent:` line of the forms `done <check|tool|skill>
@@ -58,5 +59,10 @@ one full read to keep the digest true.
 ## Residual
 
 The scheduled steward task that names the closed issue #1515 is the owner's to change (`Q-S4-4`); the
-`Memory continued in` comment points its reader to the open issue. A `Prevent: brief #<n>` is checked against the
-issue only at a repeat.
+`Memory continued in` comment points its reader to the open issue. A `Prevent: brief #<n>` is checked when the
+digest is written, against the issues `steward_daily.py daily` already lists (Answer to Q-2098-2): the lesson's line
+shows `(open)`, `(closed)` or `(not an issue)`; a number outside that read is checked at a `--repeat`, by one GET
+that reads `pull_request` too, so a pull request is never commented on as a brief. The `Hash:` line is unkeyed: it
+finds a hand edit, not a deliberate one that recomputes it; the comments stay the truth, and the first start of each
+UTC day compares the digest with a full rebuild. Every first `Lesson:` is kept, never capped or trimmed, until
+Q-2098-1 is ruled.
