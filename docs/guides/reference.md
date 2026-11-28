@@ -655,6 +655,24 @@ the locked version whose files changed is refused and the lock is left as it was
 `rule 6: config/packs/<id>: ...` line naming the key, setting or path class and line number, never a value; `add` says
 `gitleaks: not run` (prepush runs gitleaks).
 
+## The parts catalogue
+
+    python3 scripts/agk/check_parts_catalogue.py [--root DIR]
+
+Checks the needs catalogue, `config/parts/needs.toml` (`format = 1`, one `[[needs]]` per need with `id`, `text` and
+`signals`), and each stack catalogue, `config/parts/<stack>.toml` (`format = 1`, one `[[parts]]` per row with `need`,
+`name`, `pick` as `recommended` or `alternative`, `when`, `trade_offs`, `licence` as one SPDX id, `source` as
+`<URL> (accessed YYYY-MM-DD)` and `reviewed` as `YYYY-MM-DD`, never a `version`) (SPEC-0076 rules 4 and 5, brief #2068,
+ADR-0858). Per need and file: one `recommended` row, at most two `alternative` rows, each name once; a file name must be
+a stack of `config/stack-signals.toml`; a need id is used once across the kit's, each pack's and the project's needs
+files. Each problem is one `rule 4|5: <path class>: <what> (key: <key>)` line, never a value; `check_playbooks.py` reads
+the kit's folder, then each pack in use's `parts/` files, then the project's own `config/parts/`, and prints the lines as
+`FAIL playbooks:`, so the `playbooks` step runs it. Run alone it reads `DIR/config/parts/` only, checks no file name
+against the stack names, and prints `FAIL parts-catalogue:` lines or `ok parts-catalogue (<n> needs, <m> stack
+catalogues)`. The optional `[parts]` table: `record` (`required` or `optional`, default `optional`), `max_age_months` (1 to 60, default 12) and `advisories`
+(`critical-high`, `critical` or `any`, default `critical-high`); a refusal is `the [parts] table is refused (setting:
+parts.<key>)`, and `doctor.py` prints it as `parts-settings`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
+
 ## The project domain model
 
     python3 scripts/agk/domain_model.py [--root DIR] init --area A | rule ... | classify ... | entity ... | regulation ... | confirm --id ID

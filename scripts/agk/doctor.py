@@ -575,6 +575,14 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "set each [packs] key to a value of its form, or remove it to keep the default (a "
         "change to agk.toml needs an ADR in the same pull request)",
     ),
+    "parts-settings": (  # brief #2068 (ADR-0858): the [parts] table, SPEC-0076 rule 9
+        "warn",
+        "ok ",
+        "agk.toml: ",
+        "set each [parts] key (record, max_age_months, advisories) to a value of its form, or "
+        "remove it to keep the default (a change to agk.toml needs an ADR in the same pull "
+        "request)",
+    ),
     "autopilot-settings": (  # brief #1390 (ADR-0587): read for one release, then [autopilot] only
         "warn",
         "no setting that [autopilot] replaces is set",
@@ -1804,6 +1812,20 @@ def packs_settings_result(root: Path) -> Result:
     return Result("ok", message=message)
 
 
+def parts_settings_result(root: Path) -> Result:
+    """Brief #2068 (ADR-0858): the `[parts]` settings, or the refusal naming the key, never a
+    value."""
+    try:
+        found = models.parts_settings(root)
+    except CheckError as exc:
+        return Result("fail", message=str(exc))
+    return Result(
+        "ok",
+        message=f"(record {found['record']}, max age {found['max_age_months']} months, "
+        f"advisories {found['advisories']})",
+    )
+
+
 def quality_settings_result(root: Path) -> Result:
     """Brief #1933 (ADR-0801): the `[quality]` settings in the kit's own words, or the refusal
     naming the key, never a value."""
@@ -2788,6 +2810,7 @@ def run_checks(
     results["quality-settings"] = quality_settings_result(root)
     results["domain-settings"] = domain_settings_result(root)
     results["packs-settings"] = packs_settings_result(root)
+    results["parts-settings"] = parts_settings_result(root)
     results["local-mode-switch"] = local_switch_result(reads, config)
     results["merger-variable"] = merger_variable_result(root, reads, config)
     report = []
