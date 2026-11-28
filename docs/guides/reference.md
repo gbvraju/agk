@@ -1291,6 +1291,19 @@ other than `-e .` there fails as not pinned exactly, held to that file, and an u
 build file line, held to the file that names it. A `-c` file is not read. It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
 them), with the runner's interface.
 
+The `parts` step (`scripts/agk/gates/parts.py`; SPEC-0076 rule 8, brief #2071, ADR-0867) runs after `pins` inside
+`run_gates.py` and has no command of its own. It holds every direct dependency of the build files `pins` reads to the parts
+record `docs/parts.md`: a dependency that neither the record nor the chosen option's `Parts:` names, a record part missing
+from its build file or at another version than the build file or the lock, a row with an empty `Why`, `Alternatives
+considered`, `Licence`, `Health (date)` or `For the business`, a second part for one need with no `Decision: <need>` line
+and a health `read` date older than `[parts] max_age_months` each name the rule and the component class, never a name or
+a version. With `[parts] record = "required"` they fail, a stale date only in a change that touches the record, a build
+file or a lock; with `optional` (or no `[parts]` table) they print as `warn parts:` lines and one `parts: <n> warnings
+(setting: parts.record)`, never `ok parts`, and the exit code is unchanged. It prints `not run parts:` with `no stack
+chosen`, `no reader for this stack`, `no parts record`, `no foundation yet` or `the build files are not read`. Under
+`required`, `check_plan.py` also holds a plan's `Kind: foundation` brief until the record ends `Confirmed by: <name>
+(<YYYY-MM-DD>)`.
+
     python3 scripts/agk/gates/licences.py [--root DIR] [--names]
 
 The product's own dependencies (brief #1596, ADR-0676, amendment 206): with a chosen stack, `sbom.py make` also lists each
