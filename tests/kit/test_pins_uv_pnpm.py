@@ -98,10 +98,10 @@ def pnpm_files(base: Path, deps: dict | None = None, lock: str = "") -> None:
     (base / "pnpm-lock.yaml").write_text(lock or pnpm_lock(), encoding="utf-8")
 
 
-def pnpm_tree(tmp: Path, toml: str | None = None, **kw: object) -> Path:
+def pnpm_tree(tmp: Path, toml: str | None = None, deps: dict | None = None, lock: str = "") -> Path:
     text = record(a_parts=NODE_PARTS, status="Accepted", chosen="Option A")
     root = project(tmp, text) if toml is None else project(tmp, text, toml=toml)
-    pnpm_files(root, **kw)  # type: ignore[arg-type]
+    pnpm_files(root, deps=deps, lock=lock)
     return root
 
 
