@@ -337,7 +337,7 @@ def test_ac7_the_class_stays_closed():
     """REQ-084 AC7: SPEC-0077 rule 9 (answer 9: no check, gate, workflow or step reads it)."""
     pattern = re.compile(r"\beval_run\b|[\"']evals/")
     for path in (KIT_ROOT / "scripts" / "agk").rglob("*.py"):
-        if path.name != "eval_run.py":
+        if path.name not in ("eval_run.py", "eval_record.py"):  # rule 10's record (ADR-0847)
             assert not pattern.search(path.read_text("utf-8")), path.name
     named = [*(KIT_ROOT / ".github" / "workflows").glob("*.yml"), KIT_ROOT / "agk.mk"]
     for path in named:

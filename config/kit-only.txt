@@ -13,3 +13,4 @@ scripts/agk/shadow_count.py gap: Q-680-5, the shadow record totals are not insta
 scripts/agk/core_audit.py gap: Q-680-6, the audit of which checks fired is not offered to a project
 scripts/agk/eval_run.py the evaluation set of SPEC-0077 rule 9 is run only in the kit (ADR-0846); evals/ is never installed
 config/signals.toml the kit's own signals of use, read by metrics.py's weekly section; a project without it prints `signals: none declared` (ADR-0852, Q-P0C-4)
+scripts/agk/eval_record.py the eval record of SPEC-0077 rule 10 is written and accepted only in the kit (ADR-0847); docs/runs/evals/ is never installed
