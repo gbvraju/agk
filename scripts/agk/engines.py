@@ -116,6 +116,7 @@ from gates.pins import STACKS, option_parts
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
+from parts_record import RECORD as PARTS_RECORD  # the record's one writer names its path
 from playbook_format import (
     BASE,
     WORK_TYPES,
@@ -1211,7 +1212,6 @@ def cmd_stack_files(root: Path) -> int:
 
 
 PART_KINDS = ("runtime", "dev")
-PARTS_RECORD = "docs/parts.md"
 PARTS_UNCONFIRMED = f"not written from {PARTS_RECORD}: not confirmed (setting: parts.record)"
 
 
