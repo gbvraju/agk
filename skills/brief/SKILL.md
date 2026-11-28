@@ -50,12 +50,13 @@ each with why, and never lists records read and found unrelated. The check warns
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/brief_study.py" BRIEF --root .
 ```
 
-In the kit (`kit/agk-kit.mk`; optional in a project), write one line `Existing:` before the Answers (brief #2052,
-ADR-0850): an item `- <path>:<line> (<name>): <what it does>; not enough: <unused, blocked, defeated, partial or why>`
-for each script, function or setting that already does part of the job, or `Existing: none: <the search>` with the
+Write one line `Existing:` before the Answers (brief #2052, ADR-0850; a project's too, brief #2065, ADR-0857), searching
+in this order: the project's own code and tests; its decisions, specs and open briefs; its parts (`docs/parts.md`, else
+the build files' dependencies); the kit features and packs in use. Write an item `- <path>:<line> (<name>): <what it
+does>; not enough: <unused, blocked, defeated, partial or why>` for each script, function or setting that already does part of the job, or `Existing: none: <the search>` with the
 backquoted `grep`, `git grep`, `rg` or `brief_study.py` command and its `<n> matches`. The study prints each script,
 function and setting the brief names as `code <path>:<line>: <term>`, and the check warns on each one `Existing:`
-leaves out.
+leaves out. A kit feature with no file in the project is named by its command in backquotes, without a line.
 
 Then fit it to its specs (brief #2002, ADR-0828). For each Approved spec its Answers name, or whose `- Requirements:`
 line names a requirement of its `Advances:`, open the spec and read every rule the Answers touch, above all each rule

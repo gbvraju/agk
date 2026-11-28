@@ -186,6 +186,19 @@ the `[cost.prices.<model>]` table above it adds USD; a figure without its split,
 `unknown` or `not priced`, never 0. It writes no file and posts nothing. The weekly metrics issue carries the same
 `usage reported:` line. See ADR-0835 and Q-2020-1.
 
+## The signals of use
+
+    python3 scripts/agk/metrics.py --signals [--today YYYY-MM-DD] [--days N] [--repo OWNER/REPO] [--api-dir DIR] [--saved FILE]
+
+Reads `config/signals.toml`, one `[[signal]]` row per shipped feature (`id`, `feature`, `since`, `kind` of `log`,
+`comment`, `run`, `commit` or `none`, optional `setting`), and prints the section the weekly metrics issue carries:
+`signals: <n> declared; used <a>; unused <b>; new <c>; unknown <d> (14 days to <end>)`, one `unused:` line per row with
+no use in the 14 days (ending `; off by <setting>` when that setting is off), one `unknown:` line per row whose reads
+were not all answered, never 0, and the decisions dated on or after `from` that no row names. Reads are GET only, at
+most 20 (`--api-dir` reads saved answers; `--saved FILE`, a `--save-checklist --days 14` file, serves the comment and
+run rows). No file: `signals: none declared`; a broken file: `signals: refused (field: <field>)`. It writes nothing.
+The steward's `Daily:` list carries each unused row as `Built but unused: <id> (<feature>)`. See ADR-0852.
+
 ## Release pack
 
     python3 scripts/agk/release_pack.py check <out>/<tag>
@@ -364,6 +377,7 @@ repository that this check refuses.
     python3 scripts/agk/steward_owner.py research --said FILE --at TIME --describe TEXT [--server NAME]
     python3 scripts/agk/steward_owner.py draft --slug SLUG
     python3 scripts/agk/launch.py role --role steward|conductor --session ID [--adapter COMMAND]
+    python3 scripts/agk/launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND | --job]
 
 The owner's question and its relay (SPEC-0059 rules 2, 5, 10 and 14, ADR-0559). `ask` takes one plain business sentence
 with its choices and `I recommend` and no kit term, records it as an `Owner question:` note, prints it for the chat and
@@ -372,7 +386,7 @@ said (<UTC time>): "<words>"` and `Who: ProductOwner`, refuses it without a well
 wait's `agk:parked` and tells the conductor `parked #<n> answered <Q>`. `park` is the steward's pass of the owner wait on
 one pull request. `ready` starts the conductor through `launch.py role` only when the plan check's trace ends `ok plan`,
 no brief is malformed, the scope is locked and no open owner question blocks the first milestone; else `not ready:`
-lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py role` prints a role's prompt or
+lines, exit 1. In personal mode everything is printed and nothing is parked. `defect` drafts a kit-defect report (kit version, machine, reason codes, redacted refusal lines, what should happen), checks it with the outbound guard and, with `--post`, files it labelled `agk-kit-defect`, which the plan never offers; `defects` lists the open ones one line each; `reads` checks `gh api rate_limit` and, once per session, names the setting that refuses it and the step that restores it (brief #1411, ADR-0594). `launch.py prompts --job` prints each builder prompt with its job line and, first, `Job: <kind> #<item>` for a start with no adapter (a cloud runtime), since every adapter start already carries it (SPEC-0064 rule 4, ADR-0855). `launch.py role` prints a role's prompt or
 calls the adapter once; a refused start prints `stuck: <role> <session> not started (<why>)`, exit 1.
 
 The one-yes approval (SPEC-0062 rules 13, 14 and 16, brief #1690, ADR-0703). `ask --target pr:<n> --line FILE`
@@ -640,6 +654,26 @@ file outside a skill's `assets/` or file outside the kinds' folders). A tier bel
 the locked version whose files changed is refused and the lock is left as it was. Each refusal is one
 `rule 6: config/packs/<id>: ...` line naming the key, setting or path class and line number, never a value; `add` says
 `gitleaks: not run` (prepush runs gitleaks).
+
+## The parts catalogue
+
+    python3 scripts/agk/check_parts_catalogue.py [--root DIR]
+
+Checks the needs catalogue, `config/parts/needs.toml` (`format = 1`, one `[[needs]]` per need with `id`, `text` and
+`signals`), and each stack catalogue, `config/parts/<stack>.toml` (`format = 1`, one `[[parts]]` per row with `need`,
+`name`, `pick` as `recommended` or `alternative`, `when`, `trade_offs`, `licence` as one SPDX id, `source` as
+`<URL> (accessed YYYY-MM-DD)` and `reviewed` as `YYYY-MM-DD`, never a `version`) (SPEC-0076 rules 4 and 5, brief #2068,
+ADR-0858). Per need and file: one `recommended` row, at most two `alternative` rows, each name once; a file name must be
+a stack of `config/stack-signals.toml`; a need id is used once across the kit's, each pack's and the project's needs
+files. Each problem is one `rule 4|5: <path class>: <what> (key: <key>)` line, never a value; `check_playbooks.py` reads
+the kit's folder, then each pack in use's `parts/` files, then the project's own `config/parts/`, and prints the lines as
+`FAIL playbooks:`, so the `playbooks` step runs it. Run alone it reads `DIR/config/parts/` only, checks no file name
+against the stack names, and prints `FAIL parts-catalogue:` lines or `ok parts-catalogue (<n> needs, <m> stack
+catalogues)`. The optional `[parts]` table: `record` (`required` or `optional`, default `optional`), `max_age_months` (1 to 60, default 12) and `advisories`
+(`critical-high`, `critical` or `any`, default `critical-high`); a refusal is `the [parts] table is refused (setting:
+parts.<key>)`, and `doctor.py` prints it as `parts-settings`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
+The kit ships one stack catalogue, `config/parts/node.toml` (with React rows; `check_parts_catalogue.SHIPPED`, brief
+#2069, ADR-0859): every source a public page with its access date, every licence on the kit list; `email` has no row.
 
 ## The project domain model
 
@@ -1257,6 +1291,19 @@ other than `-e .` there fails as not pinned exactly, held to that file, and an u
 build file line, held to the file that names it. A `-c` file is not read. It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
 them), with the runner's interface.
 
+The `parts` step (`scripts/agk/gates/parts.py`; SPEC-0076 rule 8, brief #2071, ADR-0867) runs after `pins` inside
+`run_gates.py` and has no command of its own. It holds every direct dependency of the build files `pins` reads to the parts
+record `docs/parts.md`: a dependency that neither the record nor the chosen option's `Parts:` names, a record part missing
+from its build file or at another version than the build file or the lock, a row with an empty `Why`, `Alternatives
+considered`, `Licence`, `Health (date)` or `For the business`, a second part for one need with no `Decision: <need>` line
+and a health `read` date older than `[parts] max_age_months` each name the rule and the component class, never a name or
+a version. With `[parts] record = "required"` they fail, a stale date only in a change that touches the record, a build
+file or a lock; with `optional` (or no `[parts]` table) they print as `warn parts:` lines and one `parts: <n> warnings
+(setting: parts.record)`, never `ok parts`, and the exit code is unchanged. It prints `not run parts:` with `no stack
+chosen`, `no reader for this stack`, `no parts record`, `no foundation yet` or `the build files are not read`. Under
+`required`, `check_plan.py` also holds a plan's `Kind: foundation` brief until the record ends `Confirmed by: <name>
+(<YYYY-MM-DD>)`.
+
     python3 scripts/agk/gates/licences.py [--root DIR] [--names]
 
 The product's own dependencies (brief #1596, ADR-0676, amendment 206): with a chosen stack, `sbom.py make` also lists each
@@ -1414,7 +1461,8 @@ there`. A missing scope prints
 
     python3 scripts/agk/design_import.py source --version i<n> --slug <slug> [--root DIR]
     python3 scripts/agk/design_import.py source --version v<n> --slug <slug> [--root DIR]
-    python3 scripts/agk/plan_sources.py vision|architecture [--root DIR]
+    python3 scripts/agk/plan_sources.py vision|architecture|parts [--root DIR]
+    python3 scripts/agk/parts_record.py draft --proposal FILE [--root DIR] [--today YYYY-MM-DD]
     python3 scripts/agk/check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]
 
 `design_import.py source` writes once `docs/sources/<slug>-prototype-i<n>.md`, a `Kind: design` source with one
@@ -1424,7 +1472,16 @@ there`. A missing scope prints
 version that is not signed off with the digest its folder has now (brief #1216, ADR-0515). `plan_sources.py vision`
 writes once `docs/sources/vision.md` (`Kind: charter`) from `constitution/vision.md` and the Accepted charter ADR, and
 `plan_sources.py architecture` writes once `docs/sources/architecture.md` (`Kind: other`) from the Accepted stack ADR,
-each text unchanged; each refuses an ADR that is not Accepted, a missing file and an existing target. `check_plan.py` is a governance check: the
+each text unchanged; each refuses an ADR that is not Accepted, a missing file and an existing target. `plan_sources.py
+parts` writes once `docs/sources/parts.md` (`Kind: other`) from `docs/parts.md`, refusing a record whose last `Confirmed
+by:` is missing or `none yet`. `parts_record.py draft` writes `docs/parts.md` once from `kit/templates/parts.md` and the
+steward's TOML proposal (outside `docs/`): one section per runtime of the Accepted stack record, one row per need citing a
+`REQ-…` or `engineering`, `stdlib` with no version, `catalogue: none` with no stack catalogue, and the first candidate
+that meets the floor (the licence list, `[parts]` `max_age_months` and `advisories`, neither deprecated nor archived);
+it records `Setup: parts: drafted ...` and prints `question: <sentence>` for a paid licence, a licence off the list, an
+outside service that costs money or sends data out, and a need with no healthy part. It refuses, exit 1 naming the rule
+and the key, never a value, a health value with no recorded research yes and any proposal out of form (SPEC-0076 rules
+3, 6 and 7, brief #2070, ADR-0860). `check_plan.py` is a governance check: the
 source headers and design links (rules 1 and 2), the plan's checks (rule 10) and the coverage line `ok plan: <a> of <b> ...`
 (rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
 (rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.
@@ -1458,7 +1515,12 @@ line: `Existing:` alone with items `- ...`, each naming a `<path>:<line>` of a f
 (`<module>.<name>`, `<name>(`) and settings (`[<table>] <key>`, `<table>.<key>`) that the `Sentence:`, the Answers and the
 code paths of `Touches:` name, under `scripts/` and `.claude/hooks/`, and warns `study: Existing leaves out
 <path>:<line>, which defines <term>` for at most 10 that the line leaves out, with one line counting the rest; the
-command prints each as `code <path>:<line>: <term>`. A project's briefs are not held to the line and get no code search.
+command prints each as `code <path>:<line>: <term>`. A project's brief (no `kit/agk-kit.mk`; brief #2065, ADR-0857) is
+held to the same line, failing only from the project's own `[flow] brief_study_fails_from` (the template sets none); an
+item may name a kit command in backquotes without a line. Its search reads the project's source (`project_lint_paths`,
+else the tracked source files less docs, tests, vendored and kit folders, at most 2000), the kit's scripts, this guide,
+the packs in use and the root build files' dependencies (`docs/parts.md` when present), warning `defines`, `declares`
+or `documents`; a layer it cannot read prints one `not run ...` line naming the setting.
 Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
 publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
 writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.

@@ -56,7 +56,8 @@ records. On main at 6aad1e8 neither `docs/runs/evals/` nor a reader of it existe
    function-level import whose line carries the word `kit-only` (not the file name `config/kit-only.txt` alone), the
    mark `tests/kit/test_installed_imports.py` already reads: such an import is guarded and absent from an installed
    copy, so it reaches no project. `scripts/agk/eval_record.py` joins `config/kit-only.txt`, and the ceiling in
-   `tests/kit/test_parity.py` rises from 11 to 12, as ADR-0846 raised it: rule 10 makes the record kit-only.
+   `tests/kit/test_parity.py` rises from 12 (ADR-0852) to 13, as ADR-0846 raised it: rule 10 makes the record
+   kit-only.
 7. **Wiring.** A `[[testing.map]]` entry for `eval_record.py`; the entries of `check_release.py`, `check_packs.py`,
    `scorecard.py` and `eval_run.py` gain the new tests; the reference guide lists both commands.
 

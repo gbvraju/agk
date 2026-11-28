@@ -1,0 +1,149 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The needs catalogue (SPEC-0076 rule 4, brief #2068, ADR-0858): the technical needs a product may have, each with
+# `id`, `text` (one plain line) and `signals` (the business words that point to it). It names no library and no
+# version; the parts for a need are in `config/parts/<stack>.toml`. A pack's or the project's own `needs.toml` adds
+# ids; an id used twice fails. `check_parts_catalogue.py` checks the form inside the `playbooks` step.
+format = 1
+
+[[needs]]
+id = "web-api"
+text = "Serve requests from other programs over HTTP"
+signals = ["an app others call", "a mobile app talks to it", "a public interface"]
+
+[[needs]]
+id = "http-client"
+text = "Call other services over HTTP"
+signals = ["talks to a partner", "fetches from another service", "a webhook it sends"]
+
+[[needs]]
+id = "validation"
+text = "Check that input has the right shape before it is used"
+signals = ["a form people fill in", "data from outside", "rules on what is allowed"]
+
+[[needs]]
+id = "data-access"
+text = "Read and write the product's stored records"
+signals = ["keeps customer records", "a list people search", "saved orders"]
+
+[[needs]]
+id = "migrations"
+text = "Change the shape of stored records safely over time"
+signals = ["records change shape", "a new field on saved data", "an upgrade keeps old data"]
+
+[[needs]]
+id = "auth"
+text = "Know who a person is and what they may do"
+signals = ["people sign in", "accounts", "only staff can see it"]
+
+[[needs]]
+id = "config"
+text = "Read settings that differ between places it runs"
+signals = ["test and live settings", "a setting per customer", "switch a feature on"]
+
+[[needs]]
+id = "secrets"
+text = "Keep passwords and keys out of the code"
+signals = ["a payment key", "a password to another service", "private keys"]
+
+[[needs]]
+id = "logging"
+text = "Write a record of what happened, for people fixing problems"
+signals = ["find out what went wrong", "an audit of actions", "support asks what happened"]
+
+[[needs]]
+id = "telemetry"
+text = "Measure how the running product behaves"
+signals = ["how fast it is", "how many people use it", "alerts when it is slow"]
+
+[[needs]]
+id = "jobs"
+text = "Run work later or on a schedule"
+signals = ["a nightly report", "send reminders", "work that takes a while"]
+
+[[needs]]
+id = "email"
+text = "Send messages to people by email"
+signals = ["a receipt by email", "a password reset", "a newsletter"]
+
+[[needs]]
+id = "payments"
+text = "Take money from people"
+signals = ["people pay", "a subscription", "refunds"]
+
+[[needs]]
+id = "files"
+text = "Accept, keep and serve files people upload"
+signals = ["upload a photo", "attach a document", "download a report"]
+
+[[needs]]
+id = "cache"
+text = "Keep a recent answer to save repeating slow work"
+signals = ["it must be fast", "the same page for many people", "a slow partner"]
+
+[[needs]]
+id = "time"
+text = "Handle dates, times and time zones correctly"
+signals = ["bookings", "opening hours", "people in other countries"]
+
+[[needs]]
+id = "money"
+text = "Keep amounts of money exact, with their currency"
+signals = ["prices", "totals and tax", "more than one currency"]
+
+[[needs]]
+id = "i18n"
+text = "Show the product in more than one language"
+signals = ["people in other countries", "translated pages", "local date formats"]
+
+[[needs]]
+id = "ui-components"
+text = "Build the screens people see from shared parts"
+signals = ["a web page people use", "a dashboard", "buttons and menus"]
+
+[[needs]]
+id = "routing"
+text = "Move between the screens of the product"
+signals = ["several pages", "a link to one item", "back and forward"]
+
+[[needs]]
+id = "state"
+text = "Keep what a screen shows in step with the data"
+signals = ["a basket that updates", "live numbers", "many screens share data"]
+
+[[needs]]
+id = "forms"
+text = "Let people fill in and send information"
+signals = ["a sign-up page", "a checkout", "a booking form"]
+
+[[needs]]
+id = "accessibility"
+text = "Let everyone use the product, including with a screen reader"
+signals = ["public users", "a law on access", "keyboard only use"]
+
+[[needs]]
+id = "unit-tests"
+text = "Test small pieces of the code on their own"
+signals = ["engineering"]
+
+[[needs]]
+id = "contract-tests"
+text = "Test that two services agree on how they talk"
+signals = ["a partner calls it", "two teams' services", "a public interface"]
+
+[[needs]]
+id = "e2e-tests"
+text = "Test the product the way a person uses it"
+signals = ["the main journey must work", "a checkout", "sign up and sign in"]
+
+[[needs]]
+id = "lint"
+text = "Find mistakes and risky code before it runs"
+signals = ["engineering"]
+
+[[needs]]
+id = "format"
+text = "Lay out code the same way everywhere"
+signals = ["engineering"]

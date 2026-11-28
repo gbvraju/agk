@@ -164,14 +164,21 @@ again. Absent, the setting is `"step"`: each step is its own pull request, as be
    off with `Approve: design v<n> <full head ID>`, and its `design` row is appended to `docs/design/signoffs.md`.
 4. **Stack and architect.** `/agk:stack` writes the stack ADR `docs/adr/<n>-stack-options.md` with its options; the
    architect accepts one option, which sets the ADR `Accepted`.
+4a. **The parts list.** The steward asks your research permission (`steward_owner.py research`), reads each
+   candidate library's health on a yes, and runs `python3 scripts/agk/parts_record.py draft --proposal <file outside
+   docs/>`, which writes `docs/parts.md` once: one row per need with its reason, the alternatives, the licence and the
+   dated health, only candidates that meet the `[parts]` floor kept. You are asked only about a paid licence, a
+   licence off your list, an outside service that costs money or sends data out, and a need with no healthy part;
+   the architect reviews the rest and sets `Confirmed by: <who> (<date>)` (SPEC-0076 rules 3 and 7).
 5. **The design source.** `python3 scripts/agk/design_import.py source --version v<n> --slug <slug>` writes once
    `docs/sources/<slug>-prototype-v<n>.md`, one `## <screen>/<state>` heading per page `<screen>--<state>.html` with its
    visible text. It refuses a version that is not signed off with the digest its folder has now.
 6. **The vision and architecture sources.** `python3 scripts/agk/plan_sources.py vision` writes once
    `docs/sources/vision.md` (`Kind: charter`) from the vision and the Accepted charter ADR, and
    `python3 scripts/agk/plan_sources.py architecture` writes once `docs/sources/architecture.md` (`Kind: other`) from
-   the Accepted stack ADR, each text unchanged with every heading kept. Each refuses an ADR that is not Accepted and an
-   existing file. Commit the three sources in one pull request (with `"stage"`, the technical design pull request).
+   the Accepted stack ADR, each text unchanged with every heading kept, and `python3 scripts/agk/plan_sources.py parts`
+   writes once `docs/sources/parts.md` from the confirmed parts record. Each refuses an ADR that is not Accepted, a
+   parts record not confirmed, and an existing file. Commit the three sources in one pull request (with `"stage"`, the technical design pull request).
 7. **Draft the proposals.** `/agk:plan-intake <path outside docs/>`, as in step 4 of the path above.
 8. **Validate.** `python3 scripts/agk/plan_intake.py validate --proposals FILE`, as in step 5.
 9. **Render.** `python3 scripts/agk/plan_intake.py render --proposals FILE`, as in step 6.

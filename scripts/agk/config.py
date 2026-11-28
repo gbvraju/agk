@@ -1030,6 +1030,48 @@ def packs_settings(root: Path) -> dict:
     }
 
 
+# --- the [parts] table (SPEC-0076 rule 9, brief #2068, ADR-0858) --------------------------------
+
+PARTS_DEFAULTS: dict = {"record": "optional", "max_age_months": 12, "advisories": "critical-high"}
+PARTS_RECORD = ("required", "optional")
+PARTS_ADVISORIES = ("critical-high", "critical", "any")
+
+
+class PartsSettingError(CheckError):
+    """The `[parts]` table is refused, naming the setting and never the value."""
+
+
+def _refuse_parts(key: str = "") -> PartsSettingError:
+    named = f"parts.{key}" if key else "parts"
+    return PartsSettingError(f"the [parts] table is refused (setting: {named})")
+
+
+def parts_settings(root: Path) -> dict:
+    """SPEC-0076 rule 9: `record` (`required` or `optional`, `optional`), `max_age_months` (a
+    whole number from 1 to 60, 12) and `advisories` (`critical-high`, `critical` or `any`,
+    `critical-high`). A `bool` is never a number or a word; a refusal names `parts.<key>`, never
+    a value. Read and printed here; builds (c) and (d) act on them (ADR-0858 Residual)."""
+    try:
+        table = config_source(root).get("parts", {})
+    except (OSError, ValueError):
+        raise _refuse_parts() from None
+    if not isinstance(table, dict):
+        raise _refuse_parts()
+    for key in sorted(table):
+        if key not in PARTS_DEFAULTS:
+            raise _refuse_parts(key)
+    found = {**PARTS_DEFAULTS, **table}
+    if not isinstance(found["record"], str) or found["record"] not in PARTS_RECORD:
+        raise _refuse_parts("record")
+    low, high = STALE_MONTHS
+    months = found["max_age_months"]
+    if type(months) is not int or not low <= months <= high:
+        raise _refuse_parts("max_age_months")
+    if not isinstance(found["advisories"], str) or found["advisories"] not in PARTS_ADVISORIES:
+        raise _refuse_parts("advisories")
+    return found
+
+
 # --- the [autopilot] table (SPEC-0064 rules 7 and 8, brief #1390, ADR-0587) ---------------------
 
 AUTOPILOT_MODES = ("off", "assist", "on")
@@ -1196,6 +1238,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
     "quality": frozenset(QUALITY_DEFAULTS),  # brief #1933 (ADR-0801)
     "domain": frozenset(DOMAIN_DEFAULTS),  # brief #1935 (ADR-0804)
     "packs": frozenset(PACKS_DEFAULTS),  # brief #2031 (ADR-0838)
+    "parts": frozenset(PARTS_DEFAULTS),  # brief #2068 (ADR-0858)
     "kit": frozenset({"layout", "plugin_version"}),
 }
 TOP_LEVEL = "top level"

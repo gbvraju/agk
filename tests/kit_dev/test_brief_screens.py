@@ -44,6 +44,8 @@ def brief(touches: str, screens: str | None = None) -> str:
         "",
         'Sentence: "A reader sees the list of books."',
         "",
+        "Existing: none: `grep -rn books src/` gives 0 matches",  # brief #2065
+        "",
         "Answers:",
         "1. The list shows the books.",
         "",
