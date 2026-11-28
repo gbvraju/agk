@@ -153,7 +153,8 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "adopt": {"adopt", "history_scan"},  # the one whole-history scan, brief #1835
         "doctor": {"doctor"},
         "grill": {"grill"},  # brief #1934
-        "ground": {"rules", "metrics", "steward_owner", "steward_evidence", "steward"},  # brief #2094
+        # brief #2094
+        "ground": {"rules", "metrics", "steward_owner", "steward_evidence", "steward"},
         "upgrade": {"upgrade", "kit_root"},  # the resolver's gate, brief #1759
         "uninstall": {"uninstall"},
         "spec": {"new_spec", "intake"},

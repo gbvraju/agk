@@ -1,11 +1,11 @@
 """`/agk:ground`: the rule set grounded by the existing tools (brief #2094, ADR-0875; REQ-037).
 
-The skill builds no measure and no cutter: it names `rules.py`, `core_audit.py`, `metrics.py`, the
-drift audit and the steward's commands, sorts every rule into five classes and cuts only by a plan the
-owner said yes to, applied by `rules.py consolidate --apply`. These tests hold its front matter, the
-commands it names, the steward's guard on every form of them, its row of the steward's table, a plan
-written as it says on an invented tree, the kit-finding split in a project and its signal of use.
-Invented data only (example.com); no network, no model.
+The skill builds no measure and no cutter: it names `rules.py`, `core_audit.py`, `metrics.py`,
+the drift audit and the steward's commands, sorts every rule into five classes and cuts only by a
+plan the owner said yes to, applied by `rules.py consolidate --apply`. These tests hold its front
+matter, the commands it names, the steward's guard on every form of them, its row of the steward's
+table, a plan written as it says on an invented tree, the kit-finding split in a project and its
+signal of use. Invented data only (example.com); no network, no model.
 """
 
 from __future__ import annotations
@@ -104,13 +104,15 @@ def test_req037_the_stewards_table_names_the_skill_for_the_step():
 
 
 def test_req037_a_plan_written_as_the_skill_says_lowers_the_counts(tmp_path):
-    """Steps 3 and 5: the rows in the plan's own format, `--plan` twice gives one hash, `--apply`."""
+    """Steps 3 and 5: rows in the plan's own format; `--plan` twice gives one hash; `--apply`."""
     plan = "# grounding 2026-11-28\nconfig/session-rules.md 2 retire scripts/agk/check_x.py\n"
     root = rules_project(tmp_path, plan=plan)
     first, second = run(root, "--plan"), run(root, "--plan")
     assert first.returncode == 0, first.stdout + first.stderr
     assert plan_hash(first.stdout) == plan_hash(second.stdout)
-    counts = {x.split(":")[0]: x for x in first.stdout.splitlines() if x[:7] in ("before:", "after: ")}
+    counts = {
+        x.split(":")[0]: x for x in first.stdout.splitlines() if x[:7] in ("before:", "after: ")
+    }
     words = {k: int(re.search(r"(\d+) words", v)[1]) for k, v in counts.items()}
     assert words["after"] < words["before"]
     applied = run(root, "--apply", "--hash", plan_hash(first.stdout))
@@ -167,4 +169,3 @@ def test_req037_no_kit_script_but_rules_py_writes_the_plan():
         if "rule-plan.txt" in p.read_text(encoding="utf-8")
     )
     assert namers == ["scripts/agk/rules.py"]
-
