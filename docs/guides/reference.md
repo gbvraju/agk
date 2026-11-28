@@ -680,8 +680,10 @@ unknown (no advisory scan)`; or one `parts: not run (...)` or `parts: unknown (s
 failure. Renovate and Dependabot can propose version bumps. The kit writes neither configuration (a file under
 `.github/` and an outside service). A bump they propose is a build-file change that needs its record row's new version,
 health and date.
-The kit ships one stack catalogue, `config/parts/node.toml` (with React rows; `check_parts_catalogue.SHIPPED`, brief
-#2069, ADR-0859): every source a public page with its access date, every licence on the kit list; `email` has no row.
+The kit ships two stack catalogues, `config/parts/node.toml` (with React rows; ADR-0859) and
+`config/parts/python-pyproject.toml` (ADR-0869), named by `check_parts_catalogue.SHIPPED` (brief #2069): every source a
+public page with its access date, every licence on the kit list; `email` has no node row, and the Python file has no
+screen rows.
 
 ## The project domain model
 

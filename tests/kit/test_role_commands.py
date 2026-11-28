@@ -272,14 +272,6 @@ class Expect:
 # Answer 4: the known mismatches, each a strict expected failure until P2 or P3 removes it.
 EXPECTED = [
     Expect(
-        1,
-        "reprove",
-        "conductor",
-        "docs/guides/getting-started.md",
-        "conductor.py reprove",
-        "Q-1163-1",
-    ),
-    Expect(
         1, "check-brief", "conductor", ".claude/agents/conductor.md", "check_brief.py", "Q-P0B-1"
     ),
     Expect(
@@ -841,7 +833,7 @@ def test_on_invented_files_an_order_its_guard_refuses_fails(tmp_path, monkeypatc
         tmp_path,
         "role.md",
         (
-            "Run `python3 scripts/agk/conductor.py reprove --pr <n> --apply`.\n\n"
+            "Run `python3 scripts/agk/conductor.py reprove --pr <n> --force`.\n\n"
             "Run `python3 scripts/agk/checklist.py` once your guard allows it.\n\n"
             "The scheduler runs `python3 scripts/agk/conductor.py watchdog --pass`.\n\n"
             "Then run `python3 scripts/agk/conductor.py lease ... --show` and\n"

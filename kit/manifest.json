@@ -43,6 +43,7 @@
     "config/domains/payments.toml",
     "config/parts/needs.toml",
     "config/parts/node.toml",
+    "config/parts/python-pyproject.toml",
     "config/playbooks/api-service.toml",
     "config/playbooks/cloud-migration.toml",
     "config/playbooks/data-pipeline.toml",

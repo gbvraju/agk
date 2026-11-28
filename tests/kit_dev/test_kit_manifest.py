@@ -71,6 +71,7 @@ SINGLES = {
     "config/core-rules.md",
     "config/parts/needs.toml",  # brief #2068 (ADR-0858)
     "config/parts/node.toml",  # brief #2069 (ADR-0859)
+    "config/parts/python-pyproject.toml",  # brief #2069 build (b2) (ADR-0869)
     "config/playbooks/api-service.toml",
     "config/playbooks/cloud-migration.toml",
     "config/playbooks/data-pipeline.toml",
