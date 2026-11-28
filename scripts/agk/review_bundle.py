@@ -109,9 +109,10 @@ def check_lines(runs: list) -> list[str]:
     return [f"- {name}: {state}" for name, state in named] or ["- none reported"]
 
 
-def entries(reader: str, text: str | None) -> dict[str, tuple[str, str]]:
-    """name -> (version or `unpinned`, group) of each direct dependency (`pins.direct`, one group
-    at a time for npm so that a move between groups shows); empty for an absent file."""
+def entries(reader: str, build: str, text: str | None) -> dict[str, tuple[str, str]]:
+    """name -> (version or `unpinned`, group) of each direct dependency of the build file
+    (`pins.direct`, one group at a time for npm so that a move between groups shows; a root
+    `requirements.txt` through `pins.requirement_lines`); empty for an absent file."""
     if text is None:
         return {}
     out: dict[str, tuple[str, str]] = {}
@@ -122,8 +123,9 @@ def entries(reader: str, text: str | None) -> dict[str, tuple[str, str]]:
             for name, version in pins.direct(reader, one):
                 out.setdefault(name, (version or "unpinned", group))
         return out
-    for name, version in pins.direct(reader, text):
-        out.setdefault(name, (version or "unpinned", ""))
+    found = pins.requirement_lines(text)[0] if build.endswith(".txt") else pins.direct(reader, text)
+    for name, version in found:
+        out.setdefault(pins.norm(name), (version or "unpinned", ""))
     return out
 
 
@@ -160,8 +162,10 @@ def parts_lines(root: Path, base: str | None) -> list[str]:
         raise CheckError("no base ref resolves; pass --base")
     mb = merge_base(root, resolved)
     changed = changed_files(root, mb)
-    path = root / RECORD
-    now = record_rows(path.read_text(encoding="utf-8") if path.is_file() else None)
+    try:
+        now = record_rows((root / RECORD).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        now = None  # absent or not UTF-8: each line ends `no parts record`
     before = record_rows(show(root, mb, RECORD)) or {}
     many = len(stack) > 1
     out: list[str] = []
@@ -174,7 +178,8 @@ def parts_lines(root: Path, base: str | None) -> list[str]:
         try:
             at = root / build
             new_text = at.read_text(encoding="utf-8") if at.is_file() else None
-            old, new = entries(reader, show(root, mb, build)), entries(reader, new_text)
+            old = entries(reader, build, show(root, mb, build))
+            new = entries(reader, build, new_text)
         except (ValueError, AttributeError, TypeError, UnicodeDecodeError):
             out.append(f"- {build}: cannot be read")
             continue
@@ -189,7 +194,8 @@ def parts_lines(root: Path, base: str | None) -> list[str]:
                 out.append(f"{line}: no parts record")
                 continue
             named = [r for r in mine if pins.norm(r["Part"]) == name]
-            shown.update((key, name) for _ in named)
+            if named:
+                shown.add((key, name))
             out += [line, *([x for r in named for x in row_text(r)] or [f"- no row in {RECORD}"])]
     for one in stack:
         key = next(k for k, v in pins.STACKS.items() if v == one.row)
