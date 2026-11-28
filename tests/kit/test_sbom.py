@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 from pathlib import Path
 
@@ -785,3 +786,126 @@ def test_req079_ac5_the_bill_holds_both_locks(repo, tmp_path: Path) -> None:
     assert doc["metadata"]["component"]["name"] == "shop"
     assert by_ref(doc, "python:examplelib@1.2.3")["licenses"] == [{"expression": "MIT"}]
     assert len([c for c in doc["components"] if c["bom-ref"] == "python:examplelib@1.2.3"]) == 1
+
+
+# Amendment 260 (SPEC-0054 rules 2 and 3; brief #2073, ADR-0863; REQ-083): the bill names the
+# need each component serves, from a row of the parts record only.
+
+PARTS_HEAD = (
+    "| Need | Part | Version | Kind | Why | Alternatives considered | Licence | Health (date) "
+    "| For the business |\n|---|---|---|---|---|---|---|---|---|\n"
+)
+
+
+def parts_row(need: str, part: str, version: str) -> str:
+    cells = (need, part, version, "runtime", "REQ-001", "none", "MIT", "read 2026-11-20", "Serves.")
+    return "| " + " | ".join(cells) + " |\n"
+
+
+PARTS = (
+    "# Parts\n\n## node\n\n" + PARTS_HEAD + parts_row("text-format", "tiny-util", "2.1.0")
+    + "| time | stdlib | - | runtime | REQ-001 | none | MIT | read 2026-11-20 | Serves. |\n"
+    + "\n## python\n\n" + PARTS_HEAD + parts_row("retries", "examplelib", "1.2.3")
+    + parts_row("http-client", "ExampleLib", "1.2.3")
+    + "\nDecision: retries: the client's own retries are too coarse.\n"
+    + "\nConfirmed by: architect (2026-11-21)\n"
+)  # fmt: skip
+
+
+def two_runtimes(repo, parts: str | None = PARTS) -> None:
+    repo.commit(
+        {
+            "agk.toml": 'version = "1.2.0"\n\n[delivery]\nwork_type = "web-app"\n',
+            "pyproject.toml": None,
+            "package.json": json.dumps({"name": "shop", "private": True}),
+            "package-lock.json": TWO_LOCK,
+            "service/requirements.txt": "examplelib==1.2.3\n",
+            "service/requirements.lock": "examplelib==1.2.3\nexample-other==0.1.0\n",
+            "docs/adr/0003-stack-options.md": TWO_RECORD,
+            **({} if parts is None else {"docs/parts.md": parts}),
+        }
+    )
+
+
+def purposes_of(component: dict) -> list[str]:
+    return [p["value"] for p in component["properties"] if p["name"] == "agk:purpose"]
+
+
+def test_req083_a_named_component_carries_its_need(repo, tmp_path: Path, capsys) -> None:
+    two_runtimes(repo)
+    doc, out = bill(tmp_path)
+    assert purposes_of(by_ref(doc, "node:tiny-util@2.1.0")) == ["text-format"]
+    # two rows name one part (with its Decision: line): two properties, sorted (Q-PF-3)
+    assert purposes_of(by_ref(doc, "python:examplelib@1.2.3")) == ["http-client", "retries"]
+    assert purposes_of(by_ref(doc, "python:example-other@0.1.0")) == []  # never guessed
+    names = [p["name"] for p in by_ref(doc, "node:tiny-util@2.1.0")["properties"]]
+    assert names == ["agk:class", "agk:purpose"]
+    capsys.readouterr()
+    assert sbom.main(["check", str(out)]) == 0
+    assert capsys.readouterr().out == "ok bom\n"
+
+
+def test_req083_each_runtime_reads_its_own_section(repo, tmp_path: Path) -> None:
+    two_runtimes(repo, PARTS.replace("| text-format | tiny-util", "| text-format | examplelib"))
+    doc, _ = bill(tmp_path)
+    assert purposes_of(by_ref(doc, "node:tiny-util@2.1.0")) == []
+    assert purposes_of(by_ref(doc, "python:examplelib@1.2.3")) == ["http-client", "retries"]
+
+
+def test_req083_no_record_gives_todays_bill(repo, tmp_path: Path) -> None:
+    two_runtimes(repo, parts=None)
+    _, out = bill(tmp_path)
+    assert "agk:purpose" not in out.read_text(encoding="utf-8")
+    first = out.read_bytes()
+    _, again = bill(tmp_path)
+    assert again.read_bytes() == first
+
+
+def test_req083_a_record_with_no_table_refuses_the_bill(repo, tmp_path: Path, capsys) -> None:
+    two_runtimes(repo, parts="# Parts\n\nnothing here\n")
+    capsys.readouterr()
+    code, out = make(tmp_path)
+    text = capsys.readouterr().out
+    assert code == 1 and not out.exists()
+    assert "docs/parts.md cannot be parsed at the commit (rule 2)" in text
+    assert "nothing here" not in text
+
+
+def test_req083_without_a_stack_the_python_components_read_the_record(
+    repo, tmp_path: Path
+) -> None:
+    """The kit's own form (no work type): the `pyproject.toml` requirements are `python`."""
+    repo.commit({"docs/parts.md": "# Parts\n\n" + PARTS_HEAD + parts_row("maths", "delta", "4.0")})
+    doc, _ = bill(tmp_path)
+    assert purposes_of(by_ref(doc, "python:delta@4.0")) == ["maths"]
+    assert purposes_of(by_ref(doc, "python:gamma@0.1")) == []
+
+
+@pytest.mark.parametrize("name", ["agk:other", "agk:purposes"])
+def test_req083_check_refuses_any_other_property_name(
+    repo, tmp_path: Path, capsys, name: str
+) -> None:
+    """`agk:purpose` is allowed beside `agk:class` and `agk:pin` (the true bill above passes);
+    any other name is still not of rule 3's form."""
+    two_runtimes(repo)
+    doc, out = bill(tmp_path)
+    for p in by_ref(doc, "node:tiny-util@2.1.0")["properties"]:
+        if p["name"] == "agk:purpose":
+            p["name"] = name
+    out.write_text(json.dumps(doc), encoding="utf-8")
+    capsys.readouterr()
+    assert sbom.main(["check", str(out)]) == 1
+    assert "FAIL bom: node component field not of rule 3's form (rule 4)" in capsys.readouterr().out
+
+
+def test_req083_spec_0054_carries_amendment_260_word_for_word() -> None:
+    kit = Path(__file__).resolve().parents[2]
+    amendment = (kit / "docs/runs/proposed-spec-amendments-260.md").read_text(encoding="utf-8")
+    name = "0054-every-dependency-is-scanned-and-listed-in-a-standard-bill-of-materials.md"
+    spec = (kit / "docs" / "specs" / name).read_text(encoding="utf-8")
+    items = " ".join(amendment.split("## Items", 1)[1].split("No other rule changes.")[0].split())
+    after, inserted = re.search(r'After "(.+?)" insert: "(.+?)"', items).groups()
+    old, new = re.search(r'Replace "(.+?)" with "(.+?)"', items).groups()
+    flat = " ".join(spec.split())
+    assert f"{after} {inserted}" in flat
+    assert new in flat and old not in flat
