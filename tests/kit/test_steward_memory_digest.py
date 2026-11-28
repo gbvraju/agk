@@ -538,5 +538,7 @@ def test_req066_no_kit_script_but_steward_writes_the_memory_body():
 def test_req066_the_agent_file_reads_the_digest_and_never_pages_the_memory():
     """REQ-066 AC7: brief #2098 answer 4, the role file's reading rule."""
     text = (KIT / ".claude" / "agents" / "steward.md").read_text(encoding="utf-8")
-    assert "steward.py show <id>" in text and "never page the memory issue" in text
-    assert "Prevent:" in text
+    assert (
+        "never read the memory issue" in text and "`steward.py show <id>` fetches one note" in text
+    )
+    assert "a `Lesson:` with its `Prevent:`" in text
