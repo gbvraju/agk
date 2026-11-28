@@ -60,9 +60,9 @@ PARTS_DATE = re.compile(
 
 
 def parts_date(found: str, root: Path = KIT_ROOT) -> bool:
-    """ADR-0861: a stack catalogue's whole `source` line (with its access date) and `reviewed` line are
-    the maintainers' data (SPEC-0076 rule 5); no check compares them with the day it runs (`Q-PB-5`),
-    so they cannot age into a failure. `needs.toml` holds no dated row and gets no exemption."""
+    """ADR-0861: a stack catalogue's whole `source` line (with its access date) and `reviewed`
+    line are the maintainers' data (SPEC-0076 rule 5); no check compares them with the day it
+    runs (`Q-PB-5`), so they cannot age into a failure. `needs.toml` holds no dated row."""
     rel, number = found.rsplit(":", 1)
     folder, _, name = rel.rpartition("/")
     if folder != "config/parts" or not name.endswith(".toml") or name == "needs.toml":
@@ -91,8 +91,8 @@ def test_the_conductor_role_keeps_its_documentation_address():
 
 
 def test_a_parts_date_is_only_a_source_or_reviewed_line_of_a_stack_catalogue(tmp_path):
-    """ADR-0861 (brief #2082): a stack catalogue's whole `source` (with its access date) and `reviewed`
-    lines are the maintainers' data (SPEC-0076 rule 5); any other date there, or elsewhere, still fails."""
+    """ADR-0861 (brief #2082): a stack catalogue's whole `source` (with its access date) and
+    `reviewed` lines are the maintainers' data (SPEC-0076 rule 5); any other date still fails."""
     rows = tmp_path / "config" / "parts"
     rows.mkdir(parents=True)
     (rows / "node.toml").write_text(
