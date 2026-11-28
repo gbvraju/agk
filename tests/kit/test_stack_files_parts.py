@@ -39,7 +39,9 @@ OPTIONAL = NO_TABLE + '\n[parts]\nrecord = "optional"\n'
 NODE_ROWS = ("example-web", "4.21.1", "runtime"), ("example-lint", "2.0.0", "dev")
 PY_ROWS = ("examplelib", "1.2.3", "runtime"), ("example-test", "8.0.0", "dev")
 AMENDMENT = KIT_ROOT / "docs" / "runs" / "proposed-spec-amendments-259.md"
-SPEC = next((KIT_ROOT / "docs" / "specs").glob("0072-*.md"))
+SPEC = KIT_ROOT / "docs" / "specs" / (
+    "0072-each-work-type-playbook-carries-its-architecture-a-stack-sta.md"
+)
 
 
 @pytest.fixture(autouse=True)
