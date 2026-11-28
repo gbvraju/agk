@@ -28,6 +28,8 @@ from gates import licences, node_pack  # noqa: E402
 FOLDER = KIT_ROOT / "config" / "parts"
 # Answer 1: the needs a stack's product has; a Python service has no browser front end.
 FRONT_END = {"ui-components", "routing", "state", "forms", "e2e-tests", "accessibility"}
+# Answer 6: a need whose usual library's licence is off the kit list has no row (ADR-0859 names it).
+NO_ROW = {"node": {"email"}}
 
 
 def load(path: Path) -> dict:
@@ -98,7 +100,7 @@ def test_ac1_each_source_is_dated_and_each_row_reviewed(stack):
 def test_ac1_each_need_has_one_recommended_row(stack):
     """REQ-083 AC1: SPEC-0076 rules 4 and 5 (answer 1: every need the stack's product has)."""
     ids = need_ids()
-    wanted = set(ids) if stack == "node" else set(ids) - FRONT_END
+    wanted = (set(ids) if stack == "node" else set(ids) - FRONT_END) - NO_ROW.get(stack, set())
     picks = [r["need"] for r in rows(stack) if r["pick"] == "recommended"]
     assert sorted(picks) == sorted(wanted)
     assert {r["need"] for r in rows(stack)} <= set(ids)
