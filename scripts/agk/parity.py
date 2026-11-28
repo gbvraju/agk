@@ -78,13 +78,33 @@ def installed_paths(manifest: dict) -> set[str]:
     return paths
 
 
+# the word `kit-only` on the import's line, as tests/kit/test_installed_imports.py reads it, but
+# not the list's file name: `(config/kit-only.txt)` alone marks nothing
+KIT_ONLY_MARK = re.compile(r"\bkit-only\b(?!\.txt)")
+
+
 def imports_of(path: Path) -> set[str]:
+    """The modules PATH imports. A function-level import whose line says `kit-only` is skipped:
+    it is guarded and absent from an installed copy, so it reaches no project (brief #2043,
+    ADR-0847, Q-2043-1)."""
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        tree = ast.parse(text)
     except (OSError, SyntaxError, ValueError):
         return set()
+    lines = text.splitlines()
+    guarded = {
+        id(inner)
+        for fn in ast.walk(tree)
+        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
+        for inner in ast.walk(fn)
+        if isinstance(inner, (ast.Import, ast.ImportFrom))
+        and KIT_ONLY_MARK.search(lines[inner.lineno - 1])
+    }
     names: set[str] = set()
     for node in ast.walk(tree):
+        if id(node) in guarded:
+            continue
         if isinstance(node, ast.Import):
             names |= {alias.name.split(".")[0] for alias in node.names}
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:

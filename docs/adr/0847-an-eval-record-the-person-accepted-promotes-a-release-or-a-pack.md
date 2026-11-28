@@ -6,7 +6,7 @@
 - Related: ADR-0837, ADR-0846, ADR-0096, ADR-0430, SPEC-0077, SPEC-0028, SPEC-0047, SPEC-0048, SPEC-0062, REQ-084, brief #2043, brief #2042, plan #661
 - Requirements: REQ-084
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`, `config/`
 
 ## Context
 
@@ -52,7 +52,12 @@ records. On main at 6aad1e8 neither `docs/runs/evals/` nor a reader of it existe
    `evals/`). Its importers mark the function-level import `kit-only`. A test asserts no other kit script names
    `docs/runs/evals` or writes `Status: accepted`, and that the three readers call `eval_record.accepted(`. The class test
    of build (g) (`test_eval_run.py`) now also exempts `eval_record.py`, rule 10's reader of `evals/`.
-6. **Wiring.** A `[[testing.map]]` entry for `eval_record.py`; the entries of `check_release.py`, `check_packs.py`,
+6. **Parity** (`Q-2043-1`, the maintainers' answer "a and b" on #2078, 2026-11-28). `parity.imports_of` skips a
+   function-level import whose line carries the word `kit-only` (not the file name `config/kit-only.txt` alone), the
+   mark `tests/kit/test_installed_imports.py` already reads: such an import is guarded and absent from an installed
+   copy, so it reaches no project. `scripts/agk/eval_record.py` joins `config/kit-only.txt`, and the ceiling in
+   `tests/kit/test_parity.py` rises from 11 to 12, as ADR-0846 raised it: rule 10 makes the record kit-only.
+7. **Wiring.** A `[[testing.map]]` entry for `eval_record.py`; the entries of `check_release.py`, `check_packs.py`,
    `scorecard.py` and `eval_run.py` gain the new tests; the reference guide lists both commands.
 
 ## Consequences

@@ -12,3 +12,4 @@ docs/runs/conductor-catches-*.md gap: Q-680-4, the conductor's catch log is not 
 scripts/agk/shadow_count.py gap: Q-680-5, the shadow record totals are not installed with the shadow agent
 scripts/agk/core_audit.py gap: Q-680-6, the audit of which checks fired is not offered to a project
 scripts/agk/eval_run.py the evaluation set of SPEC-0077 rule 9 is run only in the kit (ADR-0846); evals/ is never installed
+scripts/agk/eval_record.py the eval record of SPEC-0077 rule 10 is written and accepted only in the kit (ADR-0847); docs/runs/evals/ is never installed
