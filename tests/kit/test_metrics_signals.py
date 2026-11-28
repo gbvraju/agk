@@ -114,16 +114,17 @@ def test_req_012_the_mixed_fixture_reads_two_used_three_unused_one_unknown(tmp_p
     src = Recorder(MIXED)
     out = lines(project(tmp_path), src)
     assert (
-        out[0] == "signals: 7 declared; used 2; unused 3; new 0; unknown 1; no runtime use 1 "
+        out[0] == "signals: 8 declared; used 2; unused 4; new 0; unknown 1; no runtime use 1 "
         "(14 days to 2026-12-28)"
     )
-    assert out[1:4] == [
+    assert out[1:5] == [
         "unused: short-jobs (ADR-0586): 0 in 14 days (comment)",
         "unused: merge-queue (ADR-0417): 0 in 14 days (run); off by flow.merge_queue",
         "unused: unused-on-owner-list (ADR-0852): 0 in 14 days (comment)",
+        "unused: ground-run (ADR-0875): 0 in 14 days (comment)",
     ]
-    assert out[4] == "unknown: tests-selected (ADR-0348): unknown (refused) (log)"
-    assert out[5] == "signals: decisions since 2026-11-27 with no row: none"
+    assert out[5] == "unknown: tests-selected (ADR-0348): unknown (refused) (log)"
+    assert out[6] == "signals: decisions since 2026-11-27 with no row: none"
     counted = [c for c in src.calls if c != "rate_limit"]
     assert len(counted) <= metrics.SIGNAL_CALLS
     assert counted == [
@@ -145,7 +146,7 @@ def test_req_012_a_matching_log_and_a_counted_run_are_used(tmp_path):
         },
     )
     out = lines(project(tmp_path, toml="[flow]\nmerge_queue = true\n"), Recorder(path))
-    assert out[0].startswith("signals: 7 declared; used 4; unused 2; new 0; unknown 0; ")
+    assert out[0].startswith("signals: 8 declared; used 4; unused 3; new 0; unknown 0; ")
     assert not any("merge-queue" in x or "tests-selected" in x for x in out)
 
 
@@ -406,7 +407,7 @@ def test_req_012_signals_runs_from_the_plugin_on_the_projects_registry(tmp_path)
     git(root, "init", "-q", "-b", "main")
     proc = cli(root, "--signals", "--today", "2026-12-28", "--api-dir", str(MIXED))
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout.startswith("signals: 7 declared; used 2; unused 3; new 0; unknown 1;")
+    assert proc.stdout.startswith("signals: 8 declared; used 2; unused 4; new 0; unknown 1;")
     assert not list(root.rglob("*.json"))
 
 
