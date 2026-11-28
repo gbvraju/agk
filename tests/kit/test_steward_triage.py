@@ -48,6 +48,11 @@ def project(tmp_path):
     return tmp_path
 
 
+FIX = (
+    "Fix type: root\nRoot cause: a-missing-export: none; before: none: searched; removed by: one\n"
+)
+
+
 def finding(triage="project brief", priority=0, text=None, **more) -> dict:
     return {
         "id": "F-1",
@@ -114,6 +119,8 @@ def test_req066_a_cause_is_reproduced_on_the_default_branch_before_it_is_filed(p
     found = ev.triage(finding(cause=True), project)
     assert found["action"] == "refused" and "reproduced" in found["lines"][0]
     done = finding(cause=True, reproduced="make export: 1 failed")
+    assert ev.triage(done, project)["action"] == "refused"  # brief #2095: no root-cause lines
+    done["text"] += FIX
     assert ev.triage(done, project)["action"] == "file"
 
 
@@ -177,7 +184,7 @@ def test_req037_triage_refuses_a_brief_without_class_once_the_day_is_past(
     import brief_study  # noqa: PLC0415
 
     root = kit_tree(project) if choice == "kit brief" else project
-    whole = BRIEF.format(priority=0) + STUDY
+    whole = BRIEF.format(priority=0) + STUDY + FIX  # brief #2095: a Priority 0 fix brief
     no_class = "\n".join(x for x in whole.splitlines() if not x.startswith("Class:")) + "\n"
     monkeypatch.setattr(brief_study, "brief_study_fails_from", lambda _root: None)
     found = ev.triage(finding(choice, text=no_class), root)

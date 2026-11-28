@@ -14,5 +14,5 @@ config/session-rules.md 3605 38
 .claude/agents/personal-reviewer.md 484 0
 .claude/agents/reviewer.md 579 12
 .claude/agents/shadow.md 1343 15
-.claude/agents/steward.md 1061 0
+.claude/agents/steward.md 1060 0
 config/review-checklist.md 306 12

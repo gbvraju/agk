@@ -10,6 +10,8 @@ Usage: python3 scripts/agk/steward_evidence.py stage [--date YYYY-MM-DD]
        python3 scripts/agk/steward_evidence.py answer --question FILE --number N [--recheck FILE]
        python3 scripts/agk/steward_evidence.py triage --finding FILE
        python3 scripts/agk/steward_evidence.py skill --step STEP
+       python3 scripts/agk/steward_evidence.py root-cause --brief FILE [--redesign FILE]
+                                              [--date YYYY-MM-DD] [--triage TRIAGE]
 
 The steward reads the sources; this script applies the rule to what it read. A question file is
 JSON: `id` (Q-...), `class` (one of CLASSES), optional `changes` (of scope, date, cost, signoff),
@@ -25,7 +27,10 @@ class the owner overrode twice in seven days (`steward_daily.py`). `triage` judg
 (JSON: `id`, `triage`, `why`, `text`, optional `cause` and `reproduced`): exit 0 with `file`,
 `draft` or `ask` and its `Triage:` entry, 2 when refused, naming the setting or list, never the
 value. `skill` prints the step's skill from the agent file's table, or `no skill:` and one kit brief
-to file (exit 3). Exit 4: GitHub unread.
+to file (exit 3). `root-cause` (brief #2095, ADR-0870) prints the owner's decision packet of a
+redesign (exit 3): the cause, the stage, the release (the earliest open milestone dated on or
+after the day), the recommendation by stage, the cost, reversibility and impact; `no packet`,
+`recurrence: #n` or `kit defect:` otherwise (exit 0). Exit 4: GitHub unread.
 """
 
 from __future__ import annotations
@@ -253,6 +258,13 @@ def triage(item: dict, root: Path) -> dict:
         )
     if item.get("cause") and not str(item.get("reproduced", "")).strip():
         return refused("the cause is not reproduced on the default branch (rule 7)")
+    lines = [x.rstrip() for x in text.splitlines()]
+    if (
+        item.get("cause")
+        and choice.endswith("brief")
+        and not all(any(x.startswith(k) for x in lines) for k in ("Fix type:", "Root cause:"))
+    ):  # brief #2095 answer 6
+        return refused("a fix brief names its root cause (rule 7; setting: Root cause:)")
     kit = choice.startswith("kit")
     warnings: list[str] = []
     if choice.endswith("brief"):
@@ -282,6 +294,100 @@ def triage(item: dict, root: Path) -> dict:
         "lines": [f"file: {choice} (skill: `brief` or `issue`)", *warned],
         "entry": entry,
     }
+
+
+MILESTONES = "repos/{owner}/{repo}/milestones?state=open&per_page=100"
+EXPECTED = re.compile(r"^Expected: (\S.*)$", re.M)
+REVERSIBLE = (
+    "reversible: a parked brief is unparked by removing its Parked: line or label;"
+    " the redesign removes the patch"
+)
+
+
+def release_of(root: Path, gh, today: date) -> str | None:
+    """Answer 3: `<milestone> <date>` of the earliest open milestone dated on or after TODAY,
+    among `[plan] active_milestones` when set; None when none is dated; `unknown` unread.
+    In personal mode the `Target:` lines of `docs/plan/milestones.md`, with no GET."""
+    from common import plan_settings
+
+    active = plan_settings(root).get("active_milestones")
+    if personal_table(root) is not None:
+        from plan_intake import plan_milestones
+
+        try:
+            text = (root / "docs" / "plan" / "milestones.md").read_text("utf-8")
+        except (OSError, UnicodeDecodeError):
+            text = ""
+        dated = [(m["target"], m["title"]) for m in plan_milestones(text) if m["target"]]
+    else:
+        listed = gh("GET", MILESTONES)
+        if listed is None:
+            return "unknown"
+        dated = [
+            (str(m["due_on"])[:10], str(m.get("title")))
+            for m in listed
+            if isinstance(m, dict) and m.get("due_on")
+        ]
+    dated = [d for d in dated if d[0] >= today.isoformat() and (not active or d[1] in active)]
+    return f"{min(dated)[1]} {min(dated)[0]}" if dated else None
+
+
+def recommend(stage: str, release: str | None) -> tuple[str, str]:
+    """Answer 4 (Q-RC-2): before build or with no dated release, the redesign; in build with a
+    dated release, the patch with the root-cause brief parked; milestones unread, the owner."""
+    if release == "unknown":
+        return "the owner decides", "the milestones cannot be read: redesign now or patch now"
+    if not building(stage):
+        return "redesign now", f"before go-live the redesign costs least (stage: {stage})"
+    if release is None:
+        return "redesign now", "no release is dated"
+    milestone = release.rsplit(" ", 1)[0]
+    return (
+        f"patch now; root-cause brief parked until after {milestone}",
+        f"a release is planned ({release}); the redesign follows it",
+    )
+
+
+def root_cause(
+    root: Path, body: str, redesign: str | None, gh, today: date, briefs: list, choice=None
+) -> tuple[int, list[str]]:
+    """Answer 3: the packet of a redesign for the owner (exit 3), else one line (exit 0)."""
+    from brief_study import fix_of, is_kit, open_causes
+
+    kind, cause, _ = fix_of(body)
+    kit = is_kit(root)
+    if str(choice or "").startswith("kit") and not kit:
+        return 0, ["kit defect: the cause is the kit's (steward_owner.py defect)"]
+    if kind == "root":
+        return 0, ["no packet: the root-cause fix fits one brief"]
+    held = sorted(n for n, key in open_causes(briefs).items() if key == cause)
+    if held:
+        return 0, [f"recurrence: #{held[0]}: file the patch with Root-cause: #{held[0]}"]
+    stage = stage_of(root, today, conductor_open(root, gh))
+    release = release_of(root, gh, today)
+    advice, why = recommend(stage, release)
+    redesign = redesign if redesign is not None else body if kind == "redesign" else None
+    patch = body if kind == "patch" else None
+    cost = [
+        f"{name} {m[1].strip() if (m := EXPECTED.search(text or '')) else 'not stated'}"
+        for name, text in (("patch", patch), ("redesign", redesign))
+    ]
+    impact = (
+        "impact: kit the kit's own scripts and rules; projects each project at its next kit update"
+        if kit
+        else "impact: this project only; the kit is unchanged"
+    )
+    return 3, [
+        f"cause: {cause or 'not stated'}",
+        "open root-cause brief: none",
+        f"stage: {stage}",
+        f"release: {release or 'none dated'}",
+        f"recommend: {advice}",
+        f"why: {why}",
+        f"cost: {'; '.join(cost)}",
+        REVERSIBLE,
+        impact,
+    ]
 
 
 def agent_text(root: Path, env: dict | None = None) -> str:
@@ -342,6 +448,11 @@ def main(argv: list[str] | None = None) -> int:
     answer_p.add_argument("--recheck", type=Path)
     sub.add_parser("triage").add_argument("--finding", type=Path, required=True)
     sub.add_parser("skill").add_argument("--step", required=True)
+    cause_p = sub.add_parser("root-cause")
+    cause_p.add_argument("--brief", type=Path, required=True)
+    cause_p.add_argument("--redesign", type=Path)
+    cause_p.add_argument("--date")
+    cause_p.add_argument("--triage", choices=TRIAGES)
     opts = parser.parse_args(argv)
     from kit_root import Refused
     from steward import Unreadable, gh_api
@@ -362,6 +473,17 @@ def main(argv: list[str] | None = None) -> int:
             stage = stage_of(root, when, conductor_open(root, gh_api))
             print(f"stage: {stage}\n{pull_line(root, stage)}")
             return 0
+        if opts.command == "root-cause":
+            from plan_names import cached_issues
+
+            when = date.fromisoformat(opts.date) if opts.date else today
+            redesign = opts.redesign.read_text("utf-8") if opts.redesign else None
+            code, lines = root_cause(
+                root, opts.brief.read_text("utf-8"), redesign, gh_api, when,
+                cached_issues(root), opts.triage,
+            )  # fmt: skip
+            print("\n".join(lines))
+            return code
         if opts.command == "triage":
             found = triage(json.loads(opts.finding.read_text(encoding="utf-8")), root)
             print(

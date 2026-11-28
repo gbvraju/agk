@@ -27,6 +27,10 @@ IMPACT = (
 WIRING = "Wiring: scripts/agk/tool.py:main called by skills/brief/SKILL.md\n"
 PRIOR = "Prior: none: searched docs/adr and docs/specs for tool.py\n"
 CLASS = "Class: a missed earlier decision; seen 0 (searched docs/adr)\n"
+FIX = (  # brief #2095: a Priority 0 brief that is not the router's names its root cause
+    "Fix type: root\nRoot cause: a-red-check: a test broke; before: none: searched briefs;"
+    " removed by: the fix\n"
+)
 # Brief #2065 (ADR-0857): a project brief carries the Existing line too, before its Answers.
 EXISTING = "Existing:\n- `scripts/agk/tool.py:1` (`main`): the tool; not enough: partial.\n\n"
 SHAPE = SHAPE.replace("Answers:\n", EXISTING + "Answers:\n", 1)
@@ -194,9 +198,9 @@ def test_ac4_prior_leaving_out_an_accepted_adr_that_names_a_touched_path_warns(t
 def test_ac4_a_red_branch_brief_is_held_only_to_class_and_prior(tmp_path):
     """REQ-037 AC4"""
     root = tree(tmp_path)
-    zero = SHAPE.replace("Priority: 1", "Priority: 0") + PRIOR + CLASS
-    assert result(zero, root) == ([], [])
-    failed, _ = result(SHAPE.replace("Priority: 1", "Priority: 0"), root)
+    zero = SHAPE.replace("Priority: 1", "Priority: 0") + PRIOR + CLASS + FIX  # brief #2095
+    assert result(zero, root) == ([], ["study: root causes not read (no plan cache)"])
+    failed, _ = result(SHAPE.replace("Priority: 1", "Priority: 0") + FIX, root)
     assert len(failed) == 2
 
 
