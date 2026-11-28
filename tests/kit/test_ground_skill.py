@@ -79,6 +79,9 @@ def test_req037_the_skill_names_each_existing_command_and_the_five_classes():
     # core_audit.py is kit-only (config/kit-only.txt, Q-680-6): no plugin form reaches a project
     assert "${CLAUDE_PLUGIN_ROOT}/scripts/agk/core_audit.py" not in body
     assert "cannot-check (kit-only: core_audit)" in body
+    filing = [args.split() for script, args in calls() if args.startswith("file-brief")]
+    assert len(filing) == 1 and {"--said", "--at", "--name"} <= set(filing[0])  # above auto_file
+    assert 'execution = "local"' in body and "unknown (setting: execution)" in body
     for script, _ in calls() + [(m[1], "") for m in KIT_CALL.finditer(body)]:
         assert (ROOT / "scripts" / "agk" / script).is_file(), script
 

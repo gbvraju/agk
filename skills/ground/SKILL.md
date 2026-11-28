@@ -42,6 +42,8 @@ python3 scripts/agk/core_audit.py --since YYYY-MM-DD
 (when a `core_audit --write` page of today exists, read it instead), the newest `agk-drift-audit` issue, the `EXPECTED`
 table of `tests/kit/test_role_commands.py`, and the method of `docs/runs/core-overlap-1.md` for duplicates. In a
 project `core_audit` is `cannot-check (kit-only: core_audit)` and the before figure is `rules.py budget` alone.
+With `execution = "local"`, `core_audit`'s check counts are `cannot-check` and the signals' log and run rows
+`unknown (setting: execution)`, so none of them makes a rule unused.
 
 ## 2. Sort
 
@@ -93,11 +95,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/steward_owner.py" park --pr N
 
 ## 5. Apply
 
-On the owner's yes, file one brief titled `Grounding: <date>` with the `Owner said` line (above `[steward] auto_file`
-the guard needs it):
+On the owner's yes, file one brief titled `Grounding: <date>` under the short name you offered, with the owner's
+recorded words (`--said`, the file of their yes, and `--at`, its UTC time; add `--by LOGIN` in team mode), so it
+carries the `Owner said` line that a `Priority:` above `[steward] auto_file` needs:
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/steward_owner.py" file-brief --file BRIEF.md --title "Grounding: YYYY-MM-DD"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/steward_owner.py" file-brief --file BRIEF.md --title "Grounding: YYYY-MM-DD" --said SAID.txt --at YYYY-MM-DDTHH:MM:SSZ --name NAME
 ```
 
 Its builder writes the plan, runs `--plan` (the same hash) and the apply, makes the listed hand edits and opens one
