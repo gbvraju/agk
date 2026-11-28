@@ -411,7 +411,8 @@ def harvest(root: Path, at: str) -> tuple[int, list[str]]:
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
-    opts = dict(zip(args[1::2], args[2::2], strict=False))
+    pairs = [(args[n], args[n + 1]) for n in range(1, len(args) - 1, 2)]
+    opts = dict(pairs)
     ok = args[:1] == ["--harvest"] and len(args) % 2 == 1 and set(opts) <= {"--at", "--root"}
     try:
         ok = (
