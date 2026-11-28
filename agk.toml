@@ -663,7 +663,7 @@ code = "scripts/agk/gates/pins.py"
 tests = ["tests/kit/test_pins.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/parts.py"
-tests = ["tests/kit/test_parts_step.py", "tests/kit/test_parts_review.py", "tests/kit/test_sbom.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_parts_step.py", "tests/kit/test_parts_weekly.py", "tests/kit/test_parts_review.py", "tests/kit/test_sbom.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/licences.py"
 tests = ["tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -876,6 +876,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
+  "tests/kit/test_parts_weekly.py",
   "tests/kit/test_metrics_signals.py",
   "tests/kit/test_usage_split.py",
   "tests/kit/test_packs_stale.py",
@@ -922,6 +923,7 @@ tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/personal.py"
 tests = [
+  "tests/kit/test_parts_weekly.py",
   "tests/kit/test_standard_confirm.py",
   "tests/kit/test_packs_stale.py",
   "tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_personal_confirm.py",

@@ -450,8 +450,10 @@ def descends(clone: Path, old: str, new: str) -> bool:
 
 def report(clone: Path, sidecar: Path, week: str | None, today=None) -> str:
     """Rule 23, first measure: defects caught before push by the floor, for one ISO week; then the
-    sidecar's stale packs (SPEC-0077 rule 8, brief #2045, ADR-0848), never failing."""
+    sidecar's stale packs (SPEC-0077 rule 8, brief #2045, ADR-0848) and its parts (SPEC-0076
+    rule 12, brief #2076, ADR-0866), never failing."""
     import packs  # noqa: PLC0415 - only this line reads the packs
+    from gates import parts  # noqa: PLC0415 - only this line reads the parts record
 
     year, number = week_of(week)
     events, skipped = read_events(sidecar)
@@ -476,6 +478,7 @@ def report(clone: Path, sidecar: Path, week: str | None, today=None) -> str:
     lines.append("report: baseline: unknown (the attach time is not recorded)")
     lines.extend(f"report: pushed without a gate: {name}" for name in ungated(clone, sidecar))
     lines.extend(packs.report_lines(sidecar, today))
+    lines.extend(parts.report_lines(sidecar, today))
     lines.append(CAUTION)
     return "\n".join(lines)
 

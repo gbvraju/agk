@@ -672,6 +672,14 @@ against the stack names, and prints `FAIL parts-catalogue:` lines or `ok parts-c
 catalogues)`. The optional `[parts]` table: `record` (`required` or `optional`, default `optional`), `max_age_months` (1 to 60, default 12) and `advisories`
 (`critical-high`, `critical` or `any`, default `critical-high`); a refusal is `the [parts] table is refused (setting:
 parts.<key>)`, and `doctor.py` prints it as `parts-settings`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
+The weekly reports (`metrics.py`, `personal.py report`) carry, after the `packs:` lines, the `parts:` lines of
+`gates/parts.py` `report_lines` (SPEC-0076 rule 12, brief #2076, ADR-0866): each part whose recorded last release is over
+`max_age_months` calendar months before `--today`, each recorded `deprecated` or `archived`, the rows whose health is
+`not read`, at most 10 lines then `parts: and <k> more`, and one `parts: <n> recorded; old <a>; deprecated <b>; flagged
+unknown (no advisory scan)`; or one `parts: not run (...)` or `parts: unknown (setting: parts.<key>)` line; never a
+failure. Renovate and Dependabot can propose version bumps. The kit writes neither configuration (a file under
+`.github/` and an outside service). A bump they propose is a build-file change that needs its record row's new version,
+health and date.
 The kit ships two stack catalogues, `config/parts/node.toml` (with React rows; ADR-0859) and
 `config/parts/python-pyproject.toml` (ADR-0869), named by `check_parts_catalogue.SHIPPED` (brief #2069): every source a
 public page with its access date, every licence on the kit list; `email` has no node row, and the Python file has no
