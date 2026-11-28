@@ -40,7 +40,10 @@ or `Existing: none: <text>` with a backquoted `grep`, `git grep`, `rg` or `brief
 and a `<n> match(es)` count, held as the other study lines are. `code_matches` finds the scripts,
 functions and settings the brief names under `scripts/` and `.claude/hooks/`, and the study warns on
 the first `CODE_WARNINGS` that `Existing:` leaves out; the command prints them as `code ...` lines.
-A project's tree reads no such line and searches no code.
+A project's tree (brief #2065, ADR-0857) is held to the same line, failing only from its own day;
+an item there may name a kit command or kit path in backquotes without a line. `project_matches`
+searches `project_source` (the project's own code), the kit's scripts and reference guide, the packs
+in use and the build files' dependencies, warning as `defines`, `declares` or `documents`.
 """
 
 from __future__ import annotations
@@ -100,6 +103,12 @@ SPAN = re.compile(r"`([^`\n]+)`")
 SCRIPT_TERM = re.compile(r"[\w./-]*\w\.py")
 FUNCTION_TERM = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)|([A-Za-z_]\w*)\(.*")
 SETTING_TERM = re.compile(r"\[(\w+)\]\s+(\w+)|(\w+)\.(\w+)")
+# Brief #2065 (ADR-0857): a project's source, read at most `SOURCE_FILES` files.
+SOURCE_FILES = 2000
+NOT_SOURCE = ("config/", "constitution/", ".github/")
+REFERENCE = "docs/guides/reference.md"
+DECLARES = r"^\s*(?:export\s+)?(?:default\s+)?(?:pub\s+)?(?:async\s+)?"
+DECLARE_WORDS = "function|class|const|let|var|func|fn|interface|type|export"
 
 
 FILED = re.compile(r"(\d{4}-\d{2}-\d{2})T")
@@ -365,10 +374,10 @@ def _place(path: str) -> str:
 def existing_problems(lines: list[str], root: Path) -> list[str]:
     """Brief #2052 answers 1 and 5: what the `Existing:` line breaks, naming the line or a path's
     class, never the brief's text; nothing outside the kit."""
-    if not is_kit(root):
-        return []
     heads, section = existing_section(lines)
     answers = next((i for i, x in enumerate(lines) if x.startswith("Answers")), None)
+    if not heads:
+        return ["study: the Existing line is missing: Existing: (items, or none: <search>)"]
     if len(heads) != 1:
         return ["study: exactly one line Existing: (items, or none: <search>) before Answers"]
     if answers is not None and heads[0] > answers:
@@ -388,7 +397,8 @@ def existing_problems(lines: list[str], root: Path) -> list[str]:
     problems = []
     for item in items:
         refs = EXISTING_REF.findall(item)
-        if not refs:
+        feature = any(not re.search(r":\d+$", x) for x in SPAN.findall(item))
+        if not refs and (is_kit(root) or not feature):  # Q-P0AP-2: a kit command, no line
             problems.append("study: an Existing item names no <path>:<line>")
         if "not enough:" not in item:
             problems.append("study: an Existing item holds no not enough: <reason>")
@@ -443,10 +453,10 @@ def code_terms_named(body: str) -> list[str]:
 
 def code_matches(body: str, root: Path) -> list[tuple[str, int, str]]:
     """Brief #2052 answer 2: (path, line, term) of each script, function and setting the brief
-    names that a file under `scripts/` or `.claude/hooks/` defines; nothing outside the kit. A
-    file that cannot be read is skipped. Files only: no network."""
+    names that a file under `scripts/` or `.claude/hooks/` defines; in a project, the matches of
+    `project_matches` (brief #2065). A file that cannot be read is skipped. Files only."""
     if not is_kit(root):
-        return []
+        return [match[:3] for match in project_matches(body, root)[0]]
     files = _code_files(root)
     texts: dict[Path, str] = {}
 
@@ -488,7 +498,163 @@ def code_matches(body: str, root: Path) -> list[tuple[str, int, str]]:
     return found
 
 
-def code_warnings(body: str, root: Path, matches: list[tuple[str, int, str]]) -> list[str]:
+def declare_line(text: str, name: str, ext: str) -> int | None:
+    """Brief #2065 answer 3: the first line of TEXT that declares NAME, by `define_line` in a
+    `.py` file, else a whole-word `function`, `class`, `const`, ... or `export` declaration."""
+    if ext == ".py":
+        return define_line(text, name)
+    form = rf"{DECLARES}(?:{DECLARE_WORDS})\s+\*?{re.escape(name)}\b"
+    found = re.search(form, text, re.M)
+    return text.count("\n", 0, found.end()) + 1 if found else None
+
+
+def declares(path: Path, name: str) -> bool:
+    return declare_line(_read(path), name, path.suffix) is not None
+
+
+def project_source(root: Path) -> tuple[list[str], int]:
+    """Brief #2065 answer 2: (the project's source files read, sorted, the count left unread): the
+    files `project_lint_paths` names, else the tracked source files less the docs, tests, vendored
+    folders and the kit's folders; at most `SOURCE_FILES` under `survey.TOO_LARGE` bytes. Raises
+    `CheckError` naming the setting when `project_lint_paths` is refused."""
+    import tomllib  # noqa: PLC0415 - only a project's search needs these
+
+    import survey
+    from check_licence_notice import KIT_FOLDERS
+    from common import test_dirs
+    from gates import pins
+
+    import config
+
+    files = pins.tracked(root)
+    globs = config.project_lint_paths(root)
+    if globs is not None:
+        found = [f for f in files if any(fnmatch.fnmatchcase(f, g) for g in globs)]
+    else:
+        try:
+            with open(Path(survey.__file__).resolve().parents[2] / survey.SIGNALS, "rb") as handle:
+                ignore = set(tomllib.load(handle).get("ignore", []))
+        except (OSError, tomllib.TOMLDecodeError):
+            ignore = set()
+        try:
+            tests = tuple(f"{str(d).strip('/')}/" for d in test_dirs(root))
+        except (CheckError, OSError, ValueError):
+            tests = ()
+        out = (*NOT_CODE, *tests, *KIT_FOLDERS, *NOT_SOURCE)
+        found = [
+            f
+            for f in files
+            if Path(f).suffix in survey.LANGUAGES
+            and not f.startswith(out)
+            and not set(f.split("/")[:-1]) & ignore
+        ]
+        named = {row["path"] for row in survey.detect_test_files(found)}
+        found = [f for f in found if f not in named]
+    sized = []
+    for rel in sorted(found):
+        try:
+            if (root / rel).stat().st_size <= survey.TOO_LARGE:
+                sized.append(rel)
+        except OSError:
+            continue
+    return sized[:SOURCE_FILES], max(0, len(sized) - SOURCE_FILES)
+
+
+def _first_line(text: str, needle: str) -> int | None:
+    return next((n for n, x in enumerate(text.splitlines(), 1) if needle in x), None)
+
+
+def _parts(root: Path, notes: list[str]) -> list[tuple[str, str, str]]:
+    """(name, file, needle) of each part: the `Part` column of `docs/parts.md` when it has one,
+    else the direct dependencies of each `pins.STACKS` build file at the root; then each pack id
+    of `packs.used`."""
+    import packs
+    from gates import pins  # noqa: PLC0415
+
+    out: list[tuple[str, str, str]] = []
+    from parts_record import RECORD as PARTS  # noqa: PLC0415 - the record's one name (SPEC-0076)
+
+    rows = [x.strip().strip("|").split("|") for x in _read(root / PARTS).splitlines()]
+    rows = [[c.strip() for c in r] for r in rows if len(r) > 1]
+    if rows and "Part" in rows[0]:
+        at = rows[0].index("Part")
+        out = [(r[at].strip("`"), PARTS, r[at]) for r in rows[2:] if len(r) > at and r[at]]
+    else:
+        for _pack, build, _lock, reader in pins.STACKS.values():
+            if (root / build).is_file():
+                try:
+                    out += [
+                        (n, build, f'"{n}"') for n, _v, _f in pins.declared(root, reader, build)
+                    ]
+                except (OSError, ValueError, KeyError, TypeError, CheckError):
+                    continue
+    try:
+        out += [(pid, "agk.toml", pid) for pid, _ in packs.used(root)]
+    except (packs.Refused, CheckError):
+        notes.append("not run pack search (setting: packs)")
+    return out
+
+
+def project_matches(body: str, root: Path) -> tuple[list[tuple[str, int, str, str]], list[str]]:
+    """Brief #2065 answer 3: ((path, line, term, verb) of each match, the `not run` and count
+    lines) in a project: its source, then the kit's scripts, the kit's reference guide and the
+    parts. A layer that cannot be read is left out with one line naming the setting."""
+    notes: list[str] = []
+    try:
+        source, unread = project_source(root)
+    except CheckError as exc:
+        return [], [f"not run code search: {exc}"]
+    if unread:
+        notes.append(f"code search: {unread} files not read")
+    kit: Path | None = None
+    reference: Path | None = None
+    try:
+        kit, reference = kit_root.kit_dir(root), kit_root.kit_file(root, REFERENCE)
+    except kit_root.Refused as exc:  # the resolver's refusal names its setting (ADR-0759)
+        named = re.search(r"\(setting: ([^)]+)\)", str(exc))
+        notes.append(
+            f"not run kit search: no kit copy (setting: {named.group(1) if named else 'layout'})"
+        )
+    scripts = sorted(kit.glob("*.py")) if kit is not None and kit.is_dir() else []
+    parts = _parts(root, notes)
+    guide = _read(reference) if reference is not None else ""
+
+    def rel(path: Path) -> str:
+        try:
+            return path.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            return f"scripts/agk/{path.name}"
+
+    found: list[tuple[str, int, str, str]] = []
+    for term in code_terms_named(body):
+        function = FUNCTION_TERM.fullmatch(term)
+        name = (function.group(2) or function.group(3)) if function else None
+        module = function.group(1) if function else None
+        hits = [(f, 1) for f in source if f == term or ("/" not in term and Path(f).name == term)]
+        for rel_path in source if not hits else []:
+            if name is not None and (module is None or Path(rel_path).stem == module):
+                line = declare_line(_read(root / rel_path), name, Path(rel_path).suffix)
+                hits += [(rel_path, line)] if line else []
+        for path in scripts if not hits else []:
+            if SCRIPT_TERM.fullmatch(term) and path.name == Path(term).name:
+                hits.append((rel(path), 1))
+            elif name and (module is None or path.stem == module):
+                line = define_line(_read(path), name)
+                hits += [(rel(path), line)] if line else []
+        found += [(p, n, term, "defines") for p, n in hits]
+        if not hits:
+            for part, file, needle in parts:
+                if term == part:
+                    line = _first_line(_read(root / file), needle) or 1
+                    found.append((file, line, term, "declares"))
+        if not hits and guide:
+            line = _first_line(guide, f"`{term}")
+            if line:
+                found.append((REFERENCE, line, term, "documents"))
+    return list(dict.fromkeys(found)), notes
+
+
+def code_warnings(body: str, root: Path, matches: list[tuple]) -> list[str]:
     """Answer 2: a warning for each match the `Existing:` section leaves out (all of them under
     `none:`), at most `CODE_WARNINGS`, with one line counting the rest."""
     _, section = existing_section(body.splitlines())
@@ -496,9 +662,9 @@ def code_warnings(body: str, root: Path, matches: list[tuple[str, int, str]]) ->
     if section and section[0][len("Existing:") :].strip().startswith("none:"):
         named = ""
     left = [
-        f"study: Existing leaves out {path}:{line}, which defines {term}"
-        for path, line, term in matches
-        if not _named(named, [path, Path(path).name])
+        f"study: Existing leaves out {m[0]}:{m[1]}, which {(*m, 'defines')[3]} {m[2]}"
+        for m in matches
+        if not _named(named, [m[0], Path(m[0]).name])
     ]
     left = list(dict.fromkeys(left))
     if len(left) > CODE_WARNINGS:
@@ -583,14 +749,16 @@ def study_result(
             " brief_study.py <file> --root . lists them"
         )
     filled = placeholder_warnings(lines) + signal_problems(lines)
-    if is_kit(root):  # brief #2052: the placeholder and the code search, in the kit only
+    if True:  # brief #2052, extended to a project by brief #2065: the placeholder and the search
         filled += [
             "study: the Existing line is the render's placeholder"
             for x in lines
             if x.startswith("Existing:") and PLACEHOLDER in x
         ][:1]
         if held(body)[1]:
-            left += code_warnings(body, root, code_matches(body, root))
+            kit = is_kit(root)
+            found = code_matches(body, root) if kit else project_matches(body, root)[0]
+            left += code_warnings(body, root, found)
     if enforced(root, today, filed):
         return problems, filled + left
     return [], problems + filled + left
@@ -637,6 +805,8 @@ def main(argv: list[str] | None = None) -> int:
             print("briefs: not read (no plan cache)")
         for path, line, term in code_matches(body, root):  # brief #2052 answer 2
             print(f"code {path}:{line}: {term}")
+        for note in [] if is_kit(root) else project_matches(body, root)[1]:  # brief #2065
+            print(note)
         return 0
 
     return run(NAME, act)

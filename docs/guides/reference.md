@@ -1490,7 +1490,12 @@ line: `Existing:` alone with items `- ...`, each naming a `<path>:<line>` of a f
 (`<module>.<name>`, `<name>(`) and settings (`[<table>] <key>`, `<table>.<key>`) that the `Sentence:`, the Answers and the
 code paths of `Touches:` name, under `scripts/` and `.claude/hooks/`, and warns `study: Existing leaves out
 <path>:<line>, which defines <term>` for at most 10 that the line leaves out, with one line counting the rest; the
-command prints each as `code <path>:<line>: <term>`. A project's briefs are not held to the line and get no code search.
+command prints each as `code <path>:<line>: <term>`. A project's brief (no `kit/agk-kit.mk`; brief #2065, ADR-0857) is
+held to the same line, failing only from the project's own `[flow] brief_study_fails_from` (the template sets none); an
+item may name a kit command in backquotes without a line. Its search reads the project's source (`project_lint_paths`,
+else the tracked source files less docs, tests, vendored and kit folders, at most 2000), the kit's scripts, this guide,
+the packs in use and the root build files' dependencies (`docs/parts.md` when present), warning `defines`, `declares`
+or `documents`; a layer it cannot read prints one `not run ...` line naming the setting.
 Every writer of a brief runs that same check, `check_brief.brief_result` (brief #1813, ADR-0756): `plan_intake.py
 publish` in both modes, the steward's filing, fixing and triage, and the conductor's guard. `plan_intake.py render`
 writes the study lines with the placeholder `(verify) for the person to state`, which warns on any day and never fails.

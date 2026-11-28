@@ -5,7 +5,7 @@ Answers line, as items naming `<path>:<line>` with `not enough: <text>`, or `Exi
 backquoted search command and a match count; each break is a study problem, warned before
 `[flow] brief_study_fails_from` and failed from it. Answer 2: `brief_study.code_matches` finds the
 scripts, functions and settings the brief names, and the study warns on each one `Existing:` leaves
-out. Answer 3: a tree without the marker reads no line and searches no code. Each case is a stub
+out. Answer 3: a tree without the marker is held too (ADR-0857, brief #2065). Each case is a stub
 root in `tmp_path`, the day fixed by the test. Invented data only (example.com); no network.
 """
 
@@ -24,7 +24,9 @@ sys.path.insert(0, str(SCRIPTS))
 import brief_study  # noqa: E402
 import check_brief  # noqa: E402
 import steward_owner  # noqa: E402
-from test_check_brief_study import STUDIED, tree  # noqa: E402
+from test_check_brief_study import EXISTING as STUDIED_EXISTING  # noqa: E402
+from test_check_brief_study import STUDIED as WITH_LINE  # noqa: E402
+from test_check_brief_study import tree  # noqa: E402
 
 DAY = "2026-12-14"
 BEFORE, AFTER = "2026-12-13", "2026-12-15"
@@ -32,6 +34,7 @@ ITEM = "- `scripts/agk/tool.py:1` (`main`): the tool; not enough: partial, it re
 EXISTING = "Existing:\n" + ITEM + "\n"
 NONE = "Existing: none: `grep -rn probe scripts/` gives 0 matches\n"
 PLACEHOLDER = "Existing: none: (verify) for the person to state\n"
+STUDIED = WITH_LINE.replace(STUDIED_EXISTING, "", 1)  # the shared brief without its line
 
 
 def with_line(line: str, body: str = STUDIED) -> str:
@@ -130,14 +133,12 @@ def test_req037_a_priority_0_brief_is_not_held_to_the_line(tmp_path):
     assert failures == [] and [w for w in existing(warnings) if "leaves out" not in w] == []
 
 
-@pytest.mark.parametrize("body", [STUDIED, *BREAKS.values(), with_line(PLACEHOLDER)])
-def test_req037_a_project_tree_reads_no_line_and_searches_no_code(tmp_path, body):
-    """REQ-037: answer 3 (no kit marker: no Existing line at all)."""
-    root = kit(tmp_path, marker=False)
-    for today in (BEFORE, AFTER):
-        failures, warnings = result(root, body, today)
-        assert existing(failures + warnings) == []
-    assert brief_study.code_matches(body, root) == []
+@pytest.mark.parametrize("name", sorted(BREAKS))
+def test_req037_a_project_tree_is_held_to_the_line_from_its_own_day(tmp_path, name):
+    """REQ-037: answer 3, extended by ADR-0857 (brief #2065): no kit marker, the same problem."""
+    kit_failures, _ = result(kit(tmp_path / "kit"), BREAKS[name], AFTER)
+    failures, _ = result(kit(tmp_path / "project", marker=False), BREAKS[name], AFTER)
+    assert existing(failures) == existing(kit_failures)
 
 
 SEARCHED = (

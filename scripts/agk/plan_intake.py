@@ -138,6 +138,11 @@ LAYOUT_SETTING = "[kit] layout"
 MEASURABLE = re.compile(r"\d|\b(?:all|every|none|zero)\b", re.IGNORECASE)
 VERIFY = "(verify)"
 TO_STATE = f"{VERIFY} for the person to state"  # brief_study.PLACEHOLDER (brief #1813 answer 3)
+# Brief #2065 answer 1 (ADR-0857): the four layers the Existing line searches, in this order.
+EXISTING_LAYERS = (
+    "search the project's code and tests, its decisions and open briefs, its parts, the kit"
+    " features"
+)
 SCOPE = ("in", "out", "assumptions", "constraints", "open_questions")
 TOP = ("schema", "scope", "personas", "milestones", "requirements", "areas", "briefs", "conflicts")
 COMPONENTS = "components"  # build (r): optional, an empty list when absent (`Q-1092-1`)
@@ -914,7 +919,7 @@ def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
     reqs = {r["key"]: r for r in data["requirements"]}
     title = _one(b["title"])
     out = [f"# {title}", "", f'Sentence: "{title}"', ""]
-    out += [f"Existing: none: {TO_STATE}", ""]  # brief #2052 (ADR-0850): before the Answers
+    out += [f"Existing: none: {TO_STATE}; {EXISTING_LAYERS}", ""]  # brief #2052: before the Answers
     out.append(
         "Answers (drafted from the sources by plan_intake.py render; the person edits them):"
     )
