@@ -1313,7 +1313,14 @@ version. With no `[delivery] work_type` or no Accepted stack record it prints `p
 With a Python stack it also reads the root `requirements.txt`, each file its `-r` lines name and the files of
 `[tool.setuptools.dynamic]` (brief #1838, ADR-0768); a range, a bare name, a wildcard, a URL reference or an `-e` line
 other than `-e .` there fails as not pinned exactly, held to that file, and an unreadable or outside `-r` file is the
-build file line, held to the file that names it. A `-c` file is not read. It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
+build file line, held to the file that names it. A `-c` file is not read. The committed lock picks the reader (brief
+#2075, ADR-0865): `pyproject.toml` with `uv.lock` alone is read by its uv reader (`[project]` dependencies and optional
+groups, each string of `[dependency-groups]` and `[tool.uv] dev-dependencies`, each exact `==` or not pinned exactly), and
+`package.json` with `pnpm-lock.yaml` alone by its pnpm reader (npm's rules on `package.json`, so a range, `workspace:` or
+`catalog:` spec is not pinned exactly, and a `lockfileVersion: '9.0'` lock only, another version unreadable); with both
+locks of one runtime in its folder, `requirements.lock` or `package-lock.json` is read, as before. `licences`, the bill and
+the `parts` step read the same lock; a uv or pnpm lock states no licence, so each package takes the stack record's or is
+`unknown`. It is one module of the step registry `scripts/agk/gates/` (`__init__.py`, the registry's helpers, as brief #1586 names
 them), with the runner's interface.
 
 The `parts` step (`scripts/agk/gates/parts.py`; SPEC-0076 rule 8, brief #2071, ADR-0867) runs after `pins` inside
