@@ -18,3 +18,5 @@ The sentence (brief #2017), quoted as data: "Intake for the parts list: after th
    Class: behaviour
 
 No other rule changes.
+
+2026-11-28 (from `date -u`), brief #2072: item 1 (to rule 4) applied to `docs/specs/0072-each-work-type-playbook-carries-its-architecture-a-stack-sta.md` word for word, on the maintainer's answer on #2018 (comment 7227144062).

@@ -1163,7 +1163,8 @@ def cmd_stack_files(root: Path) -> int:
     """Brief #1592 answer 2 (amendment 201): the foundation writes the chosen stack's build file
     from `kit/templates/stacks/<folder>/`, over the untouched file `init` wrote of the same name
     only; any other (an adopted project's own) is kept, never rewritten. The lock is the stack's
-    own tool's, made on the builder's machine."""
+    own tool's, made on the builder's machine. Brief #2072 (amendment 259, ADR-0862): with a
+    confirmed parts record the dependencies are its rows, every refusal before any write."""
     from gates.pins import chosen  # noqa: PLC0415 - the step's own reading of the record
     from init import render, slug  # noqa: PLC0415 - the same rendering as init
 
@@ -1171,7 +1172,12 @@ def cmd_stack_files(root: Path) -> int:
     if found is None:
         print("stack-files: not run: no stack chosen")
         return 0
-    (folder, name, lock, _), _ = found
+    (folder, name, lock, reader), _ = found
+    try:
+        rows = record_parts(root, next(k for k, v in STACKS.items() if v[1] == name), reader)
+    except CheckError as exc:
+        print(f"FAIL engines: {exc}")
+        return 1
     listed = root / "config" / "licences.toml"  # brief #1596 answer 2: written once, never over
     wrote = [] if listed.exists() else [listed.relative_to(root).as_posix()]
     if wrote:
@@ -1188,9 +1194,86 @@ def cmd_stack_files(root: Path) -> int:
             print(f"kept {name}")
             return wrote_line(root, wrote)
     source = TEMPLATES / "stacks" / folder / name
-    target.write_text(render(source.read_text(encoding="utf-8"), variables, name), "utf-8")
-    print(f"wrote {name}; make {lock} with the stack's own tool and commit both")
+    text = render(source.read_text(encoding="utf-8"), variables, name)
+    if isinstance(rows, str):
+        target.write_text(text, "utf-8")
+        print(f"wrote {name}; make {lock} with the stack's own tool and commit both")
+        if rows:
+            print(rows)
+        return wrote_line(root, [*wrote, name])
+    target.write_text(filled(text, reader, rows), "utf-8")
+    runtime, dev = (sum(k == kind for _, _, k in rows) for kind in PART_KINDS)
+    print(
+        f"wrote {name} from {PARTS_RECORD} ({runtime} runtime, {dev} dev parts); "
+        f"make {lock} with the stack's own tool and commit both"
+    )
     return wrote_line(root, [*wrote, name])
+
+
+PART_KINDS = ("runtime", "dev")
+PARTS_RECORD = "docs/parts.md"
+PARTS_UNCONFIRMED = f"not written from {PARTS_RECORD}: not confirmed (setting: parts.record)"
+
+
+def record_parts(root: Path, key: str, reader: str) -> list[tuple[str, str, str]] | str:
+    """Brief #2072 answers 1, 2 and 4: (name, version, kind) of each non-`stdlib` row of the chosen
+    runtime in a confirmed record, sorted by name; with none confirmed the line to print ('' with
+    no record). Raises `CheckError` naming the rule and the class or setting, never a value."""
+    from gates import parts  # noqa: PLC0415 - build (d)'s one reader of the record
+    from gates.pins import EXACT_NPM, EXACT_PY, RUNTIME_NAMES, norm  # noqa: PLC0415
+
+    found = parts.settings(root)
+    if isinstance(found, str):
+        raise CheckError(found)
+    if not parts.confirmed(root):
+        if found["record"] == "required":
+            raise CheckError(
+                "SPEC-0076 rule 3: the build file waits for a confirmed parts record "
+                "(setting: parts.record)"
+            )
+        return PARTS_UNCONFIRMED if (root / PARTS_RECORD).is_file() else ""
+    try:
+        record = parts.sections((root / PARTS_RECORD).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        record = None
+    if record is None:
+        raise CheckError(
+            f"SPEC-0076 rule 8: the parts record cannot be read (path class: {PARTS_RECORD})"
+        )
+    mine = [
+        r
+        for section, rows in record[0].items()
+        if RUNTIME_NAMES.get(section.casefold(), key) == key  # another runtime's: not read
+        for r in rows
+        if r["Part"].casefold() != parts.STDLIB
+    ]
+    out = []
+    for r in mine:
+        kind, version = r["Kind"].strip().casefold(), r["Version"].strip()
+        exact = EXACT_NPM.match(version) if reader == "npm" else EXACT_PY.match(f"=={version}")
+        if kind not in PART_KINDS or not exact or "*" in version:
+            raise CheckError(
+                "SPEC-0076 rule 8: a record part cannot be written (component class: record part)"
+            )
+        out.append((r["Part"].strip(), version, kind))
+    return sorted(out, key=lambda p: (norm(p[0]), p[0]))
+
+
+def filled(text: str, reader: str, rows: list[tuple[str, str, str]]) -> str:
+    """The rendered template with the record's parts as its dependencies (amendment 259):
+    `package.json`'s two groups, or `pyproject.toml`'s one `dependencies = []` line and a
+    `[project.optional-dependencies] dev` group when a dev part is named (`Q-PE-2`)."""
+    runtime = [(n, v) for n, v, k in rows if k == PART_KINDS[0]]
+    dev = [(n, v) for n, v, k in rows if k == PART_KINDS[1]]
+    if reader == "npm":
+        data = json.loads(text)
+        data["dependencies"], data["devDependencies"] = dict(runtime), dict(dev)
+        return json.dumps(data, indent=2) + "\n"
+    line = f"dependencies = {json.dumps([f'{n}=={v}' for n, v in runtime])}\n"
+    if dev:
+        group = json.dumps([f"{n}=={v}" for n, v in dev])
+        line += f"\n[project.optional-dependencies]\ndev = {group}\n"
+    return text.replace("\ndependencies = []\n", f"\n{line}", 1)
 
 
 def wrote_line(root: Path, wrote: list[str]) -> int:
