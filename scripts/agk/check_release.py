@@ -335,8 +335,33 @@ def check(
             else "rule 5: the lines of Unreleased were not moved unchanged under the new version"
         )
         raise CheckError(problem)
+    eval_gate(root, mb)
     print(f"ok {NAME}")
     return 0
+
+
+RELEASE_DAY = re.compile(r"## \d+(?:\.\d+)* \((\d{4}-\d{2}-\d{2})\)")
+
+
+def eval_gate(root: Path, mb: str) -> None:
+    """SPEC-0077 rule 10 (brief #2043, ADR-0847, `Q-PH-1`): where the base holds the kit's
+    `evals/`, a release needs an accepted eval record on the base dated on or after the base's
+    newest release heading; with no `evals/` on the base it checks nothing."""
+    import eval_record  # noqa: PLC0415 - kit-only, absent from an installed copy
+
+    if not eval_record.applies(root, mb):
+        return
+    days = RELEASE_DAY.findall(show(root, mb, "CHANGELOG.md") or "")
+    if not days:
+        raise CheckError(
+            "SPEC-0077 rule 10: the last release heading cannot be read (path class CHANGELOG.md)"
+        )
+    found = eval_record.accepted(root, ref=mb)
+    if found is None or found[0] < max(days):
+        raise CheckError(
+            "SPEC-0077 rule 10: a release pull request needs an accepted eval record"
+            f" (path class {eval_record.FOLDER}/)"
+        )
 
 
 def valid_release(

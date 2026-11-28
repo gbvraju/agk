@@ -229,8 +229,9 @@ def _files(data: dict, folder: Path) -> list[tuple[str, str]]:
     return out
 
 
-def problems(folder: Path) -> list[str]:
-    """Rule 3: the problems of one pack folder, each naming the rule, the pack and the key."""
+def problems(folder: Path, root: Path | None = None) -> list[str]:
+    """Rule 3: the problems of one pack folder, each naming the rule, the pack and the key; with
+    ROOT, rule 10's curated line too."""
     label = _label(folder)
     manifest = folder / MANIFEST
     if not manifest.is_file():
@@ -239,7 +240,23 @@ def problems(folder: Path) -> list[str]:
     if data is None:
         return [f"rule 3: {label}: the manifest is not readable TOML (key: format)"]
     found = _keys(data) + _values(data, folder) + _files(data, folder) + _guarded(manifest)
-    return [f"rule 3: {label}: {what} (key: {key})" for what, key in found]
+    out = [f"rule 3: {label}: {what} (key: {key})" for what, key in found]
+    if root is not None and data.get("tier") == "curated" and not _evaluated(root, data):
+        out.append(f"rule 10: {label}: a curated pack needs an accepted eval record (key: evals)")
+    return out
+
+
+def _evaluated(root: Path, data: dict) -> bool:
+    """SPEC-0077 rule 10 (brief #2043, ADR-0847, `Q-PH-5`): only where `evals/rubric.toml`
+    exists (the kit), a curated pack's `evals` names an accepted record; elsewhere as today."""
+    try:
+        import eval_record  # noqa: PLC0415 - kit-only, absent from an installed copy
+    except ImportError:  # a project: the kit-only script is absent
+        return True
+    if not eval_record.applies(root):
+        return True
+    named = data.get("evals")
+    return isinstance(named, str) and eval_record.accepted(root, path=named) is not None
 
 
 def _settings(root: Path) -> dict:
@@ -267,7 +284,7 @@ def findings(root: Path) -> list[str]:
         out.append(f"rule 12: {exc}")
         used = None
     for folder in folders(root):
-        out += problems(folder)
+        out += problems(folder, root)
         readable = load(folder / MANIFEST) is not None  # else its one line above names it
         if readable and used is not None and folder.name not in used:
             out.append(
