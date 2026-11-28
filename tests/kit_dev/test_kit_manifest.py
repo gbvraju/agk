@@ -69,6 +69,7 @@ SINGLES = {
     "config/domains/field-service.toml",  # brief #1935 (ADR-0804)
     "config/domains/payments.toml",
     "config/core-rules.md",
+    "config/parts/needs.toml",  # brief #2068 (ADR-0858)
     "config/playbooks/api-service.toml",
     "config/playbooks/cloud-migration.toml",
     "config/playbooks/data-pipeline.toml",

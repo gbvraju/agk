@@ -394,10 +394,17 @@ tests = [
   "tests/kit/test_packs_lock.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_parts_catalogue.py"
+tests = [
+  "tests/kit/test_check_parts_catalogue.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_installed_imports.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_playbooks.py"
 tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py", "tests/kit/test_check_domains.py",
   "tests/kit/test_domain_compose.py", "tests/kit/test_standards_stack.py", "tests/kit/test_check_packs.py",
+  "tests/kit/test_check_parts_catalogue.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_pr_body.py"
@@ -512,6 +519,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = ["tests/kit/test_stage_pulls.py",
+  "tests/kit/test_parts_settings.py",
   "tests/kit/test_domain_settings.py",
   "tests/kit_dev/test_uninstall_settings.py",
   "tests/kit/test_brief_refuse_day.py",
@@ -603,6 +611,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/doctor.py"
 tests = [
+  "tests/kit/test_parts_settings.py",
   "tests/kit/test_domain_settings.py",
   "tests/kit/test_packs_stale.py",
   "tests/kit/test_personal_lifecycle.py",
@@ -890,6 +899,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/packs.py"
 tests = [
+  "tests/kit/test_check_parts_catalogue.py",
   "tests/kit/test_packs_resolver.py", "tests/kit/test_check_packs.py", "tests/kit/test_standards_stack.py",
   "tests/kit/test_front_door_detect.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit/test_packs_lock.py", "tests/kit/test_pack_scan.py",
