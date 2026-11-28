@@ -57,7 +57,7 @@ def pack_date(found: str) -> bool:
 def test_no_installed_file_holds_a_literal_date():
     """ADR-0112 (brief #185 answer 3): a role file or a guide cannot age into a failure again."""
     found = literal_dates(KIT_ROOT, installed_files())
-    assert [f for f in found if not pack_date(f)] == []
+    assert [f for f in found if not pack_date(f) and not parts_date(f)] == []
 
 
 def test_a_pack_date_is_only_an_as_of_line(tmp_path):
@@ -71,3 +71,33 @@ def test_the_conductor_role_keeps_its_documentation_address():
     """ADR-0112 (brief #185 answer 1): the date goes, the address stays."""
     text = (KIT_ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     assert "code.claude.com/docs/en/sub-agents" in text
+
+
+def test_a_parts_date_is_only_a_source_or_reviewed_line_of_a_stack_catalogue(tmp_path):
+    """ADR-0861 (brief #2082): a stack catalogue's whole `source` (with its access date) and `reviewed`
+    lines are the maintainers' data (SPEC-0076 rule 5); any other date there, or elsewhere, still fails."""
+    rows = tmp_path / "config" / "parts"
+    rows.mkdir(parents=True)
+    (rows / "node.toml").write_text(
+        'format = 1\n'
+        'source = "https://example.com/a (accessed 2026-11-28)"\n'
+        'reviewed = "2026-11-28"\n'
+        'when = "after 2026-11-28"\n'
+        'reviewed = "2026-11-28" # note\n',
+        encoding="utf-8",
+    )
+    (rows / "needs.toml").write_text('reviewed = "2026-11-28"\n', encoding="utf-8")
+    (tmp_path / "config" / "other.toml").write_text('reviewed = "2026-11-28"\n', encoding="utf-8")
+    assert parts_date("config/parts/node.toml:2", tmp_path)
+    assert parts_date("config/parts/node.toml:3", tmp_path)
+    assert not parts_date("config/parts/node.toml:4", tmp_path)
+    assert not parts_date("config/parts/node.toml:5", tmp_path)
+    assert not parts_date("config/parts/needs.toml:1", tmp_path)
+    assert not parts_date("config/other.toml:1", tmp_path)
+
+
+def test_the_shipped_stack_catalogue_dates_are_all_parts_dates():
+    """ADR-0861: every date the shipped node catalogue holds sits on a source or reviewed line."""
+    found = [f for f in literal_dates(KIT_ROOT, installed_files()) if f.startswith("config/parts/")]
+    assert found
+    assert [f for f in found if not parts_date(f)] == []
