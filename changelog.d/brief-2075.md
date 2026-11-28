@@ -1,0 +1,1 @@
+- Parts: a project that uses `uv` (`pyproject.toml` with `uv.lock`) or `pnpm` (`package.json` with `pnpm-lock.yaml`) is now read by its own lock in the `pins`, `licences`, bill and `parts` steps, instead of failing on a missing `requirements.lock` or `package-lock.json` (brief #2075, ADR-0865)

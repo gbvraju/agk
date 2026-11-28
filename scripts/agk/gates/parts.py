@@ -133,7 +133,7 @@ def _stale(health: str, limit: int, today: datetime.date) -> bool:
 
 
 def _key(one: pins.Runtime) -> str:
-    return next(k for k, v in pins.STACKS.items() if v == one.row)
+    return next(k for k, v in pins.STACKS.items() if v[0] == one.row[0])  # brief #2075: any lock
 
 
 def runtime(root: Path, one: pins.Runtime, found: tuple, limit: int, today: datetime.date):

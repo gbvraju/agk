@@ -25,8 +25,11 @@ files of `[tool.setuptools.dynamic]` and each file a `-r` line names, each read 
 held to the file it is in. With two runtimes in the chosen option (brief #1932, ADR-0800,
 amendment 247), `runtimes` gives each its own folder, the one tracked folder that holds its build
 file (the root wins), and the step reads each runtime's build file and lock there, each finding
-held to its path from the root; `pick` and `chosen` still read one runtime only. Installed; it
-imports only installed modules.
+held to its path from the root; `pick` and `chosen` still read one runtime only. The committed
+lock picks the reader (brief #2075, ADR-0865, SPEC-0076 rule 11): `LOCKS` lists per runtime its
+lock files in order, the first present in the runtime's folder gives the row, so `pyproject.toml`
+with `uv.lock` is read by `uv` and `package.json` with `pnpm-lock.yaml` by `pnpm`; with none, the
+`STACKS` row. Installed; it imports only installed modules.
 """
 
 from __future__ import annotations
@@ -53,6 +56,15 @@ STACKS = {
     "python": ("python-pyproject", "pyproject.toml", "requirements.lock", "requirements"),
     "node": ("node", "package.json", "package-lock.json", "npm"),
 }
+# brief #2075 answer 1 (ADR-0865): per runtime its lock files in order with their readers; the
+# first is the `STACKS` row's, so a folder with two locks reads today's (Q-PH-3).
+LOCKS = {
+    "python": (("requirements.lock", "requirements"), ("uv.lock", "uv")),
+    "node": (("package-lock.json", "npm"), ("pnpm-lock.yaml", "pnpm")),
+}
+JS_READERS = ("npm", "pnpm")  # a `package.json` build file, read as npm's
+# brief #2075 answer 3: pnpm 9's lock form only (verify: the version pnpm 9 and 10 write).
+PNPM_VERSION = re.compile(r"""^lockfileVersion:\s*(['"]?)9\.0\1\s*$""")
 # brief #1843 (ADR-0771): the one table of a runtime's common spellings, case-folded -> its key.
 RUNTIME_NAMES = {
     "node": "node",
@@ -203,17 +215,31 @@ def place(key: str, files: list[str]) -> tuple[str, str, bool]:
     return "", STACKS[key][1], False
 
 
+def row_of(key: str, folder: str, build: str, listed: list[str]) -> tuple[str, str, str, str]:
+    """Brief #2075 answer 1: the row of the first lock of `LOCKS` in the folder; a later reader
+    needs the runtime's own build file (`pyproject.toml` for uv). With none, the `STACKS` row."""
+    have = set(listed)
+    for lock, reader in LOCKS[key]:
+        if (f"{folder}/{lock}" if folder else lock) in have:
+            if reader == STACKS[key][3] or build == STACKS[key][1]:
+                return (STACKS[key][0], STACKS[key][1], lock, reader)
+            break
+    return STACKS[key]
+
+
 def runtimes(texts: list[str], files: Callable[[], list[str]]) -> list[Runtime] | None:
     """Brief #1932 answer 1: one entry per runtime part of the chosen option, in the record's
     order, each part held to the runtime it follows; one runtime keeps the root and every part.
-    `files` (the tracked paths) is read only for two runtimes. None exactly as `pick` gives None
-    for any reason but two runtimes."""
+    `files` (the tracked paths) is read for every runtime, its lock choosing the row (brief
+    #2075). None exactly as `pick` gives None for any reason but two runtimes."""
     parts = chosen_parts(texts)
     keys = list(dict.fromkeys(p[0] for p in parts or [] if p[0] in STACKS))
     if not keys or parts is None:
         return None
     if len(keys) == 1:
-        return [Runtime(STACKS[keys[0]], "", STACKS[keys[0]][1], parts, False, parts)]
+        build = STACKS[keys[0]][1]
+        row = row_of(keys[0], "", build, files())
+        return [Runtime(row, "", build, parts, False, parts)]
     groups: dict[str, list[tuple[str, str, str]]] = {k: [] for k in keys}
     owner = keys[0]
     for part in parts:
@@ -223,7 +249,9 @@ def runtimes(texts: list[str], files: Callable[[], list[str]]) -> list[Runtime] 
     out = []
     for key in keys:
         folder, build, split = place(key, listed)
-        out.append(Runtime(STACKS[key], folder, build, groups[key], split, parts))
+        out.append(
+            Runtime(row_of(key, folder, build, listed), folder, build, groups[key], split, parts)
+        )
     return out
 
 
@@ -235,7 +263,7 @@ def runtimes_of(root: Path) -> list[Runtime] | None:
 def direct(reader: str, text: str) -> list[tuple[str, str | None]]:
     """(name, exact version or None) of each direct dependency of the build file."""
     out: list[tuple[str, str | None]] = []
-    if reader == "npm":
+    if reader in JS_READERS:
         data = json.loads(text)
         for group in NPM_GROUPS:
             for name, spec in (data.get(group) or {}).items():
@@ -246,6 +274,11 @@ def direct(reader: str, text: str) -> list[tuple[str, str | None]]:
     specs = list(project.get("dependencies", []))
     for group in (project.get("optional-dependencies") or {}).values():
         specs += list(group)
+    if reader == "uv":  # brief #2075 answer 2 (Q-PH-5): uv installs its groups too (verify)
+        data = tomllib.loads(text)
+        for group in (data.get("dependency-groups") or {}).values():
+            specs += [s for s in group if isinstance(s, str)]  # an `include-group` is skipped
+        specs += list(((data.get("tool") or {}).get("uv") or {}).get("dev-dependencies") or [])
     return [r for spec in specs if (r := requirement(spec)) is not None]
 
 
@@ -336,12 +369,15 @@ def python_files(root: Path, build: str = STACKS["python"][1]) -> list[tuple[str
 def declared(root: Path, reader: str, build_file: str) -> list[tuple[str, str | None, str]]:
     """(name, exact version or None, the file it is in) of each direct dependency: a name floating
     in any file is one row, held to the first such file (brief #1838 answer 6); else one row per
-    distinct version."""
-    if reader == "npm":
+    distinct version. The uv reader reads `pyproject.toml` alone (brief #2075 answer 2)."""
+    if reader in JS_READERS:
         text = (Path(root) / build_file).read_text(encoding="utf-8")
         return [(n, v, build_file) for n, v in direct(reader, text)]
     rows: list[tuple[str, str | None, str]] = []
-    for rel, text in python_files(root, build_file):
+    if reader == "uv":
+        text = (Path(root) / build_file).read_text(encoding="utf-8")
+        rows = [(n, v, build_file) for n, v in direct(reader, text)]
+    for rel, text in python_files(root, build_file) if reader != "uv" else []:
         toml = rel == build_file != REQUIREMENTS
         found = direct(reader, text) if toml else requirement_lines(text)[0]
         rows += [(n, v, rel) for n, v in found]
@@ -368,7 +404,48 @@ def locked(reader: str, text: str) -> dict[str, str]:
             if isinstance(v, dict):
                 out.setdefault(norm(name), str(v.get("version")))
         return out
+    if reader == "uv":  # brief #2075 answer 2: each `[[package]]`'s name and version
+        packages = tomllib.loads(text).get("package")
+        if not isinstance(packages, list):
+            raise ValueError("no package list")
+        return {
+            norm(p["name"]): str(p["version"])
+            for p in packages
+            if isinstance(p, dict) and isinstance(p.get("name"), str) and "version" in p
+        }
+    if reader == "pnpm":
+        return pnpm_locked(text)
     return {norm(m.group(1)): m.group(2) for ln in text.split("\n") if (m := LOCKED_PY.match(ln))}
+
+
+def pnpm_locked(text: str) -> dict[str, str]:
+    """Brief #2075 answer 3: name -> version of each key two spaces in under the top-level
+    `packages:` of a `lockfileVersion: '9.0'` lock, `<name>@<version>:`, quotes and a peer
+    suffix from `(` removed, split at the last `@` after the first character. Another version,
+    or no `packages:`, raises ValueError (the lock is unreadable)."""
+    lines = text.split("\n")
+    top = [ln for ln in lines if ln and not ln.startswith((" ", "#"))]
+    if not top or not PNPM_VERSION.match(top[0].rstrip()):
+        raise ValueError("not a pnpm 9 lock")
+    out: dict[str, str] = {}
+    inside = seen = False
+    for ln in lines:
+        if ln and not ln.startswith((" ", "#")):
+            inside = ln.rstrip() == "packages:"
+            seen = seen or inside
+        elif (
+            inside
+            and ln.startswith("  ")
+            and ln[2:3] not in (" ", "#", "")
+            and ln.rstrip().endswith(":")
+        ):
+            key = ln.strip()[:-1].strip("'\"").split("(", 1)[0]
+            at = key.rfind("@")
+            if at > 0:
+                out.setdefault(norm(key[:at]), key[at + 1 :])
+    if not seen:
+        raise ValueError("no packages")
+    return out
 
 
 def waiting(root: Path) -> bool:

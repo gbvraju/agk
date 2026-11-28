@@ -53,7 +53,7 @@ DEFAULT = frozenset(
 )
 NOT_RUN = "not run: no lock"
 USAGE = "usage: python3 scripts/agk/gates/licences.py [--root DIR] [--names]"
-CLASSES = {"requirements": "python", "npm": "node"}
+CLASSES = {"requirements": "python", "npm": "node", "uv": "python", "pnpm": "node"}  # brief #2075
 
 
 def components(reader: str, text: str, parts: list[tuple[str, str, str]]) -> list[tuple[str, ...]]:
