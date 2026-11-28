@@ -252,7 +252,9 @@ def test_req083_ac4_a_missing_lock_compares_the_build_file_only(tmp_path: Path) 
 
 
 def git(root: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)  # nosec B603 B607
+    subprocess.run(  # nosec B603 B607 - fixed git arguments, no shell
+        ["git", *args], cwd=root, check=True, capture_output=True
+    )
 
 
 def history(root: Path) -> Path:

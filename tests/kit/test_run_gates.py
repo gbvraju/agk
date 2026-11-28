@@ -169,7 +169,8 @@ def test_the_playbook_check_runs_the_gates_and_nothing_else_changes(
     count = len(WORK_TYPES) + 1
     gates = NOT_FOUNDED + "ok secrets\nok environment-settings\nok cut-over-order\n"
     gates += "not run pins: no stack chosen\n"  # brief #1776: a work type, no stack chosen
-    gates += "ok gates (5 check gates; not run: tests-first, pins)\n"  # brief #1590
+    gates += "not run parts: no stack chosen\n"  # brief #2071 (ADR-0867): the same reading
+    gates += "ok gates (6 check gates; not run: tests-first, pins, parts)\n"  # brief #1590
     assert f"ok playbooks ({count} playbooks)\n{gates}" in out
     path = root / "config" / "playbooks" / "cloud-migration.toml"
     text = path.read_text(encoding="utf-8")

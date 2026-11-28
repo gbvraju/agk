@@ -29,13 +29,12 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # isolated mode (-I) leaves it off
 
 from common import CheckError  # noqa: E402
-from parts_record import COLUMNS  # noqa: E402
+from parts_record import COLUMNS, RECORD  # noqa: E402
 
 import config  # noqa: E402
 from gates import glossary, pins  # noqa: E402
 
 RULE = "SPEC-0076 rule 8: the build files and the parts record are not in step"
-RECORD = "docs/parts.md"
 NOTED = "setting: parts.record"
 NO_RECORD = "no parts record"
 NO_READER = "no reader for this stack"
