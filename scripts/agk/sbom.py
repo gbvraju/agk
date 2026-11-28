@@ -36,8 +36,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from ci_tools import LINE as CI_TOOL_LINE
 from ci_tools import PIN_FILE
 from common import CheckError, git, repo_root, utf8_output
-from gates import licences, pins
+from gates import licences, parts, pins
 from kit_root import LAYOUTS
+from parts_record import RECORD
 
 NAME = "bom"
 USAGE = (
@@ -122,8 +123,10 @@ def entry(
     purl: str | None = None,
     digest: str | None = None,
     licence: str | None = None,
+    purpose: tuple[str, ...] = (),
 ) -> dict:
-    """One component; a component with no version is unpinned, except a file, which has none."""
+    """One component; a component with no version is unpinned, except a file, which has none.
+    Each need of PURPOSE is one `agk:purpose` (amendment 260), sorted, after the other two."""
     label = pin or version
     item: dict = {
         "bom-ref": f"{kind}:{name}" + (f"@{label}" if label else ""),
@@ -135,6 +138,7 @@ def entry(
         item["version"] = version
     elif kind != "kit-file":
         properties.append({"name": "agk:pin", "value": "unpinned"})
+    properties += [{"name": "agk:purpose", "value": need} for need in sorted(set(purpose))]
     if purl:
         item["purl"] = purl
     if digest:
@@ -149,23 +153,52 @@ def canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def requirement(text: object) -> dict:
+def requirement(text: object, needs: dict[str, tuple[str, ...]] | None = None) -> dict:
     """The `python` component of one requirement; a version only for one exact `==` pin."""
     found = REQUIREMENT.fullmatch(text) if isinstance(text, str) else None
     if found is None:
         raise not_parsed(PYPROJECT)
     name = canonical(found.group(1))
+    purpose = (needs or {}).get(name, ())
     spec = found.group(3).split(";", 1)[0].strip().strip("()").strip()
     if not spec or spec.startswith("@"):
-        return entry("python", name)
+        return entry("python", name, purpose=purpose)
     if exact := EXACT.fullmatch(spec):
-        return entry("python", name, exact.group(1), purl=f"pkg:pypi/{name}@{exact.group(1)}")
+        pinned = exact.group(1)
+        return entry("python", name, pinned, purl=f"pkg:pypi/{name}@{pinned}", purpose=purpose)
     if SPECIFIERS.fullmatch(spec) is None:
         raise not_parsed(PYPROJECT)
-    return entry("python", name)
+    return entry("python", name, purpose=purpose)
 
 
-def python_components(data: dict) -> list[dict]:
+def purposes(root: Path, commit: str, stack: list | None) -> dict[str, dict[str, tuple[str, ...]]]:
+    """Amendment 260 (rule 2): class -> name -> the need ids of the parts record's rows at the
+    commit that name it (build (d)'s reader, `parts.sections`; names after `pins.norm`; `stdlib`
+    rows name no component). With two runtimes each class reads its own `## <runtime>` section;
+    with one, every row is that runtime's; with no stack, the `python` class's. No record: {}."""
+    data = show(root, commit, RECORD)
+    if data is None:
+        return {}
+    try:
+        found = parts.sections(data.decode("utf-8"))
+    except UnicodeDecodeError:
+        found = None
+    if found is None:
+        raise not_parsed(RECORD)
+    keys = [k for one in stack or [] for k, v in pins.STACKS.items() if v == one.row] or ["python"]
+    out: dict[str, dict[str, tuple[str, ...]]] = {}
+    for section, rows in found[0].items():
+        named = pins.RUNTIME_NAMES.get(section.casefold())
+        for kind in keys if len(keys) == 1 else [k for k in keys if k == named]:
+            mine = out.setdefault(kind, {})
+            for row in rows:
+                if row["Part"].casefold() != parts.STDLIB and row["Need"]:
+                    name = pins.norm(row["Part"])
+                    mine[name] = (*mine.get(name, ()), row["Need"])
+    return out
+
+
+def python_components(data: dict, needs: dict[str, tuple[str, ...]] | None = None) -> list[dict]:
     try:
         project = data["project"]
         groups = [
@@ -179,7 +212,7 @@ def python_components(data: dict) -> list[dict]:
         items = [i for g in groups for i in g if not (isinstance(i, dict) and "include-group" in i)]
     except (AttributeError, KeyError, TypeError):
         raise not_parsed(PYPROJECT) from None
-    return [requirement(item) for item in items]
+    return [requirement(item, needs) for item in items]
 
 
 def ci_tool_components(text: str) -> list[dict]:
@@ -292,9 +325,12 @@ def chosen_at(root: Path, commit: str, config: dict) -> list | None:
     return pins.runtimes(texts, tree)
 
 
-def lock_components(root: Path, commit: str, found: list | None) -> list[dict]:
+def lock_components(
+    root: Path, commit: str, found: list | None, needs: dict | None = None
+) -> list[dict]:
     """Amendment 206 (rule 2): with a declared work type and one Accepted stack record, each
-    package of each chosen runtime's committed lock, with its licence (`licences.components`)."""
+    package of each chosen runtime's committed lock, with its licence (`licences.components`)
+    and, amendment 260, the needs of the record's rows that name it."""
     items = []
     for one in found or []:
         data = None if one.split else show(root, commit, one.at(one.row[2]))
@@ -309,7 +345,8 @@ def lock_components(root: Path, commit: str, found: list | None) -> list[dict]:
         purl = (
             f"pkg:{'pypi' if kind == 'python' else 'npm'}/{name.replace('@', '%40', 1)}@{version}"
         )
-        out.append(entry(kind, name, version, purl=purl, licence=licence or None))
+        purpose = (needs or {}).get(kind, {}).get(pins.norm(name), ())
+        out.append(entry(kind, name, version, purl=purl, licence=licence or None, purpose=purpose))
     return out
 
 
@@ -368,8 +405,9 @@ def build(root: Path, commit: str) -> dict:
     if show(root, commit, PYPROJECT) is not None:
         build_file = PYPROJECT  # present, it is read as today (amendment 232)
     pyproject, name = NAMERS[build_file](root, commit)
+    needs = purposes(root, commit, stack)
     found = [
-        *([] if pyproject is None else python_components(pyproject)),
+        *([] if pyproject is None else python_components(pyproject, needs.get("python"))),
         *([] if product_only else ci_tool_components(read_text(root, commit, PIN_FILE))),
         *workflow_components(root, commit),
         *([] if product_only else kit_file_components(root, commit)),
@@ -378,7 +416,7 @@ def build(root: Path, commit: str) -> dict:
     for item in found:
         if unique.setdefault(item["bom-ref"], item) != item:
             raise not_parsed(WORKFLOWS)
-    unique.update((item["bom-ref"], item) for item in lock_components(root, commit, stack))
+    unique.update((i["bom-ref"], i) for i in lock_components(root, commit, stack, needs))
     moment = datetime.fromtimestamp(int(git(root, "show", "-s", "--format=%ct", commit)), UTC)
     return {
         "bomFormat": "CycloneDX",
@@ -418,7 +456,7 @@ def well_formed(item: dict) -> bool:
         and all(isinstance(h, dict) and set(h) == {"alg", "content"} for h in hashes)
         and isinstance(properties, list)
         and all(isinstance(p, dict) and set(p) == {"name", "value"} for p in properties)
-        and all(p["name"] in ("agk:class", "agk:pin") for p in properties)
+        and all(p["name"] in ("agk:class", "agk:pin", "agk:purpose") for p in properties)
     )
 
 
