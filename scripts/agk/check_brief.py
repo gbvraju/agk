@@ -715,12 +715,14 @@ def brief_result(
     opened: dict | None = None,
     today: str | None = None,
     filed: object = None,
+    commands: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Brief #1813 (ADR-0756): the one reading of a brief for every writer, (failures, warnings):
     `body_problems`, then, when it passes, the study of `brief_study.study_result` with the
     protected-path warnings. A writer never reads a brief with a part of this file alone. FILED
     is the issue's `created_at`; TODAY, the caller's day, is `common.utc_day()` when not given
-    (brief #1815 answer 2)."""
+    (brief #1815 answer 2). COMMANDS false, for a caller that runs no command (plan publish,
+    SPEC-0043 rule 25), leaves the study's project source search out (brief #2086, ADR-0868)."""
     problems = body_problems(body, root, waves, opened)
     if problems:
         return problems, []
@@ -731,6 +733,7 @@ def brief_result(
         number if isinstance(number, int) else None,
         today=today or utc_day(),
         filed=filed,
+        commands=commands,
     )
     if problems:
         return problems, []

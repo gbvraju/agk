@@ -1341,7 +1341,9 @@ def brief_check(
                 " its hidden block (amendment 169)"
             )
             continue
-        problems, warnings = check_brief.brief_result(issue_body(b, numbers), root)
+        problems, warnings = check_brief.brief_result(
+            issue_body(b, numbers), root, commands=False
+        )  # publish runs no command (SPEC-0043 rule 25, brief #2086)
         if problems:
             out.append(f"rule 25: briefs {b['key']}: check_brief.py fails: " + "; ".join(problems))
         if warned is not None:

@@ -1,0 +1,1 @@
+- Plan: `plan_intake.py publish` runs no command again: its brief check leaves out the project source search, which lists files with git, and says so in one line; every other brief check is unchanged (brief #2086, ADR-0868)

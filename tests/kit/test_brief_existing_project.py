@@ -236,6 +236,50 @@ def test_req037_every_writer_reports_the_same_existing_problem_in_a_project(tmp_
     assert problem[0] in (steward_owner.brief_refusal(root, body, None) or "")
 
 
+NO_COMMAND = "not run code search: the caller runs no command (SPEC-0043 rule 25)"
+
+
+def no_command(monkeypatch) -> None:
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("runs no command")
+
+    for name in ("run", "Popen", "call", "check_call", "check_output"):
+        monkeypatch.setattr(subprocess, name, refuse)
+
+
+def test_req037_a_search_that_runs_no_command_leaves_only_the_source_out(tmp_path, monkeypatch):
+    """REQ-037, brief #2086 (ADR-0868): with `commands=False` (plan publish, SPEC-0043 rule 25)
+    the project's source, which `pins.tracked` lists with git, is not searched and one line says
+    so; the parts are still searched, and no command runs."""
+    root = project(tmp_path)
+    (root / "package.json").write_text(
+        '{\n  "name": "site",\n  "dependencies": {\n    "left-pad": "1.3.0"\n  }\n}\n', "utf-8"
+    )
+    body = NAMED.replace("1. one:", "1. one uses `left-pad`:")
+    found, _ = brief_study.project_matches(body, root)
+    assert any(m[0] == REPORT for m in found)
+    no_command(monkeypatch)
+    matches, notes = brief_study.project_matches(body, root, commands=False)
+    assert not any(m[0] == REPORT for m in matches)
+    assert ("package.json", 4, "left-pad", "declares") in matches
+    assert NO_COMMAND in notes
+
+
+def test_req037_the_study_and_the_brief_check_pass_no_command_on(tmp_path, monkeypatch):
+    """REQ-037, brief #2086 (ADR-0868): `study_result` and `check_brief.brief_result` take
+    `commands=False` to the project search; the default still searches the source."""
+    root = project(tmp_path)
+    want = f"study: Existing leaves out {REPORT}:3, which defines weekSection()"
+    body = with_line(NONE, NAMED)
+    assert want in result(root, body, BEFORE)[1]
+    no_command(monkeypatch)
+    _, warnings = brief_study.study_result(body, root, today=BEFORE, briefs=[], commands=False)
+    assert want not in warnings
+    monkeypatch.setattr(brief_study.plan_names, "cached_issues", lambda _root: [])
+    failures, warnings = check_brief.brief_result(body, root, today=BEFORE, commands=False)
+    assert want not in warnings
+
+
 @pytest.mark.parametrize("ext", sorted({".py", ".ts", ".go", ".rs", ".java"}))
 def test_req037_declares_reads_a_declaration_in_each_language(ext):
     """REQ-037: answer 3 (`declares` beside `defines`)."""
