@@ -17,15 +17,18 @@ import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "agk" / "parity.py"
 
 # The exception list may only shrink: lower this number in the pull request that removes a
 # line. It rose to 10 once, by ADR-0627 (brief #1476): the release snapshot builder serves the
 # kit's own release, as kit_hashes.py does; and to 11 by ADR-0846 (brief #2042): the evaluation set
-# of SPEC-0077 rule 9 is kit-only by that Approved rule; and to 12 by ADR-0852 (brief #2054): the
-# signals registry names the kit's own shipped features, and a project gets none (Q-P0C-4).
-KIT_ONLY_CEILING = 12
+# of SPEC-0077 rule 9 is kit-only by that Approved rule; to 12 by ADR-0852 (brief #2054): the
+# signals registry names the kit's own shipped features, and a project gets none (Q-P0C-4); and to
+# 13 by ADR-0847 (brief #2043, Q-2043-1): the eval record of SPEC-0077 rule 10 is kit-only.
+KIT_ONLY_CEILING = 13
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -53,8 +56,7 @@ def kit(tmp_path: Path, kit_only: str = "") -> Path:
     write(
         tmp_path,
         ".claude/agents/a.md",
-        "Keep `docs/runs/log.md`, `docs/runs/catches-N.md` and "
-        "`docs/runs/amend-<n>.md`.\n",
+        "Keep `docs/runs/log.md`, `docs/runs/catches-N.md` and `docs/runs/amend-<n>.md`.\n",
     )
     write(tmp_path, "config/rules.md", "1. One.\n")
     write(tmp_path, "config/list.txt", "x\n")
@@ -158,6 +160,26 @@ def test_req020_this_repository_passes_the_check():
     """REQ-020: brief #680 answer 1: every discipline of this kit reaches a project or is listed."""
     proc = run(ROOT, "check")
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+@pytest.mark.parametrize(
+    ("line", "code"),
+    [
+        ("    import release  # noqa: PLC0415 - kit-only, absent from an installed copy\n", 0),
+        ("    import release\n", 1),
+        ("    import release  # noqa: PLC0415 - kit and plugin (config/kit-only.txt)\n", 1),
+    ],
+)
+def test_req020_a_marked_function_level_kit_only_import_reaches_no_project(tmp_path, line, code):
+    """REQ-020: ADR-0847 (Q-2043-1): a guarded import marked `kit-only` stays kit-only."""
+    root = kit(tmp_path, FULL)
+    write(
+        root, "scripts/agk/run.py", f"import helper\nfrom common import thing\n\n\ndef f():\n{line}"
+    )
+    proc = run(root, "check")
+    assert proc.returncode == code, proc.stdout + proc.stderr
+    if code:
+        assert "scripts/agk/release.py reaches a project through the plugin" in proc.stdout
 
 
 def test_req020_the_exception_list_may_only_shrink():

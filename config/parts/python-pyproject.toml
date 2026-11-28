@@ -1,0 +1,299 @@
+# SPDX-FileCopyrightText: 2026 Balavardhi Raju Gangula
+# SPDX-License-Identifier: LicenseRef-AGK-Proprietary
+# AGK is built and owned by Balavardhi Raju Gangula. Use only in the repository named in the owner's
+# written grant; no use in any other repository without the owner's permission. See LICENSE-AGK.
+# The python-pyproject parts catalogue (SPEC-0076 rule 5, brief #2069 build (b2), ADR-0869): the maintainers' rows,
+# never an agent's. Per need one `recommended` row and at most two `alternative` rows; a source is the public page read
+# on its access date, never copied text; no row holds a version (read at choice time, rule 6). A Python service has no
+# browser front end, so the screen needs have no row. A project's own `config/parts/python-pyproject.toml` is read first.
+format = 1
+
+[[parts]]
+need = "web-api"
+pick = "recommended"
+name = "fastapi"
+when = "most services: typed routes with request checks and an API description built in"
+trade_offs = "quick to write, with checked input and generated API pages; newer than flask, and its own status says beta"
+licence = "MIT"
+source = "https://pypi.org/pypi/fastapi/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "web-api"
+pick = "alternative"
+name = "flask"
+when = "a small service or one that serves pages from the server"
+trade_offs = "simple and long used, with many extensions; input checks and async work are yours to add"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/pypi/flask/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "http-client"
+pick = "recommended"
+name = "stdlib"
+when = "most Python products: urllib.request calls other services"
+trade_offs = "no dependency; retries, time limits and connection reuse are yours to write"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/urllib.request.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "http-client"
+pick = "alternative"
+name = "httpx"
+when = "many calls to other services, or async calls"
+trade_offs = "connection reuse, time limits and async built in; one more dependency, and its own status says beta"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/pypi/httpx/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "validation"
+pick = "recommended"
+name = "pydantic"
+when = "checking the shape of input and settings with type hints"
+trade_offs = "widely used and fast; a large dependency with its own compiled core"
+licence = "MIT"
+source = "https://pypi.org/pypi/pydantic/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "data-access"
+pick = "recommended"
+name = "sqlalchemy"
+when = "a product that keeps its records in a SQL database"
+trade_offs = "works with most databases and lets you write plain SQL too; a lot to learn"
+licence = "MIT"
+source = "https://pypi.org/pypi/sqlalchemy/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "migrations"
+pick = "recommended"
+name = "alembic"
+when = "changing tables kept through sqlalchemy"
+trade_offs = "made by the sqlalchemy authors; each change is a script you review, and some changes need hand edits"
+licence = "MIT"
+source = "https://pypi.org/pypi/alembic/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "auth"
+pick = "recommended"
+name = "authlib"
+when = "signing people in through another provider (OAuth or OpenID Connect)"
+trade_offs = "covers the sign-in standards for clients and servers; what each person may do is still yours to write"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/pypi/authlib/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "auth"
+pick = "alternative"
+name = "pyjwt"
+when = "checking signed tokens that another service issues"
+trade_offs = "small and focused on tokens; sign-in itself and token storage are yours to build"
+licence = "MIT"
+source = "https://pypi.org/pypi/pyjwt/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "config"
+pick = "recommended"
+name = "stdlib"
+when = "every Python product: os.environ and tomllib read settings"
+trade_offs = "no dependency; checking each setting's type is yours to write"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/tomllib.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "config"
+pick = "alternative"
+name = "pydantic-settings"
+when = "many settings that must be checked when the product starts"
+trade_offs = "typed settings from the environment with clear errors; adds pydantic"
+licence = "MIT"
+source = "https://pypi.org/pypi/pydantic-settings/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "secrets"
+pick = "recommended"
+name = "stdlib"
+when = "every Python product: keys come from os.environ, set by the place it runs"
+trade_offs = "no dependency; keeping the values out of logs and files is yours to do"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/os.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "logging"
+pick = "recommended"
+name = "stdlib"
+when = "every Python product: the logging module"
+trade_offs = "no dependency and understood by most tools; structured output takes some setup"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/logging.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "telemetry"
+pick = "recommended"
+name = "opentelemetry-sdk"
+when = "measuring speed and use, sent to a monitoring service"
+trade_offs = "an open standard most services accept; needs a collector or a service to send to, which may cost money"
+licence = "Apache-2.0"
+source = "https://pypi.org/pypi/opentelemetry-sdk/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "jobs"
+pick = "recommended"
+name = "celery"
+when = "work later or on a schedule, across several workers"
+trade_offs = "long used, with retries and schedules; needs a broker server (Redis or RabbitMQ) and has many settings"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/pypi/celery/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "jobs"
+pick = "alternative"
+name = "rq"
+when = "a few kinds of background work in a small service"
+trade_offs = "simple to run and read; needs a Redis server and has fewer features than celery"
+licence = "BSD-2-Clause"
+source = "https://pypi.org/pypi/rq/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "email"
+pick = "recommended"
+name = "stdlib"
+when = "sending mail: smtplib talks to a mail server"
+trade_offs = "no dependency; mail goes through a mail server the project runs or pays for, and it sends people's addresses out"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/smtplib.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "payments"
+pick = "recommended"
+name = "stripe"
+when = "taking card payments through Stripe"
+trade_offs = "the provider's own library; the service charges a fee per payment and receives card data, so it needs a contract"
+licence = "MIT"
+source = "https://pypi.org/pypi/stripe/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "files"
+pick = "recommended"
+name = "python-multipart"
+when = "accepting uploaded files in a fastapi service"
+trade_offs = "the upload reader fastapi uses; storing and scanning the files is yours to do"
+licence = "Apache-2.0"
+source = "https://pypi.org/pypi/python-multipart/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "cache"
+pick = "recommended"
+name = "stdlib"
+when = "keeping recent answers inside one process: functools.lru_cache"
+trade_offs = "no dependency; the cache is lost on restart and has no time limit"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/functools.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "cache"
+pick = "alternative"
+name = "cachetools"
+when = "answers that must expire after a set time"
+trade_offs = "small, with time limits; still inside one process"
+licence = "MIT"
+source = "https://pypi.org/pypi/cachetools/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "time"
+pick = "recommended"
+name = "stdlib"
+when = "every Python product: datetime with zoneinfo"
+trade_offs = "no dependency; time zone data comes from the system or the tzdata package"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/zoneinfo.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "money"
+pick = "recommended"
+name = "stdlib"
+when = "every amount of money: decimal keeps it exact"
+trade_offs = "no dependency; the currency is yours to keep beside each amount"
+licence = "PSF-2.0"
+source = "https://raw.githubusercontent.com/python/cpython/main/Doc/library/decimal.rst (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "i18n"
+pick = "recommended"
+name = "babel"
+when = "translated text and local dates, numbers and money formats"
+trade_offs = "the long-used standard for Python; translations are files you keep up to date"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/pypi/babel/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "unit-tests"
+pick = "recommended"
+name = "pytest"
+when = "every Python product: the stack template runs it"
+trade_offs = "the most used test runner, with plain asserts and fixtures; one dev dependency"
+licence = "MIT"
+source = "https://pypi.org/pypi/pytest/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "contract-tests"
+pick = "recommended"
+name = "pact-python"
+when = "two services that must agree on how they talk"
+trade_offs = "each side checks the shared contract; both teams must keep the contracts up to date"
+licence = "MIT"
+source = "https://pypi.org/pypi/pact-python/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "contract-tests"
+pick = "alternative"
+name = "schemathesis"
+when = "a service with an OpenAPI description"
+trade_offs = "tests the running service against its description without a second team; finds less about what callers rely on"
+licence = "MIT"
+source = "https://pypi.org/pypi/schemathesis/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "lint"
+pick = "recommended"
+name = "ruff"
+when = "every Python product: the kit's standards step runs it"
+trade_offs = "fast and covers many rule sets in one tool"
+licence = "MIT"
+source = "https://pypi.org/pypi/ruff/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"
+
+[[parts]]
+need = "format"
+pick = "recommended"
+name = "ruff"
+when = "every Python product: the kit's pack runs ruff format"
+trade_offs = "the same tool as lint, so one dependency; its layout is close to black's"
+licence = "MIT"
+source = "https://pypi.org/pypi/ruff/json (accessed 2026-11-28)"
+reviewed = "2026-11-28"

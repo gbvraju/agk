@@ -672,8 +672,18 @@ against the stack names, and prints `FAIL parts-catalogue:` lines or `ok parts-c
 catalogues)`. The optional `[parts]` table: `record` (`required` or `optional`, default `optional`), `max_age_months` (1 to 60, default 12) and `advisories`
 (`critical-high`, `critical` or `any`, default `critical-high`); a refusal is `the [parts] table is refused (setting:
 parts.<key>)`, and `doctor.py` prints it as `parts-settings`. Reads files only. Exit 0 ok, 1 a problem, 2 usage.
-The kit ships one stack catalogue, `config/parts/node.toml` (with React rows; `check_parts_catalogue.SHIPPED`, brief
-#2069, ADR-0859): every source a public page with its access date, every licence on the kit list; `email` has no row.
+The weekly reports (`metrics.py`, `personal.py report`) carry, after the `packs:` lines, the `parts:` lines of
+`gates/parts.py` `report_lines` (SPEC-0076 rule 12, brief #2076, ADR-0866): each part whose recorded last release is over
+`max_age_months` calendar months before `--today`, each recorded `deprecated` or `archived`, the rows whose health is
+`not read`, at most 10 lines then `parts: and <k> more`, and one `parts: <n> recorded; old <a>; deprecated <b>; flagged
+unknown (no advisory scan)`; or one `parts: not run (...)` or `parts: unknown (setting: parts.<key>)` line; never a
+failure. Renovate and Dependabot can propose version bumps. The kit writes neither configuration (a file under
+`.github/` and an outside service). A bump they propose is a build-file change that needs its record row's new version,
+health and date.
+The kit ships two stack catalogues, `config/parts/node.toml` (with React rows; ADR-0859) and
+`config/parts/python-pyproject.toml` (ADR-0869), named by `check_parts_catalogue.SHIPPED` (brief #2069): every source a
+public page with its access date, every licence on the kit list; `email` has no node row, and the Python file has no
+screen rows.
 
     python3 scripts/agk/gates/parts.py --harvest --at YYYY-MM-DD [--root DIR]
 
@@ -1288,7 +1298,11 @@ Pinned parts (brief #1592, ADR-0672, amendments 200 and 201): in a Proposed stac
 build installs them), and `stack-check` refuses a range, a missing version or a missing licence naming the option and the
 part's place. `engines.py stack-files` writes the chosen stack's build file from `kit/templates/stacks/` (Python:
 `pyproject.toml`; `node`: `package.json`) and never rewrites a project's own; the lock is made by the stack's own tool on
-the builder's machine and committed.
+the builder's machine and committed. With a confirmed parts record (`docs/parts.md`) it writes the record's runtime parts
+as dependencies and its dev parts as dev dependencies (Python: `[project.optional-dependencies] dev`), each at its exact
+recorded version and nothing else, and prints `wrote <file> from docs/parts.md (<r> runtime, <d> dev parts)`; a row with
+an inexact version or another `Kind`, an unreadable record, a refused `[parts]` table and `record = "required"` with no
+confirmed record each refuse before any write (amendment 259, ADR-0862).
 
     python3 scripts/agk/gates/pins.py [--root DIR]
 
@@ -1368,6 +1382,18 @@ complete)`, never 0. `run` (build (b)) starts nothing without the person's plain
 `spec_approvers` login as `--by`) and is refused under CI (setting `CI`); it then runs the product three times, each over a
 scratch files-forge sidecar with no GitHub token, through the person's own `--adapter` command on `strongest`, and has a fresh
 reviewer session score the bundle only; it writes `OUT/<product>/run-<n>.json`, a failed or unreviewed run `incomplete`, never 0.
+
+    python3 scripts/agk/eval_record.py write --runs DIR [--date YYYY-MM-DD]
+    python3 scripts/agk/eval_record.py accept <date> --said FILE --at <UTC time> [--by LOGIN]
+
+Two kit-only commands of SPEC-0077 rule 10 (brief #2043, ADR-0847), never run by CI or a check. `write` turns the run records under
+`DIR` into `docs/runs/evals/<date>.md` (`- Status: proposed`): the kit and the rubric's hash, `tolerance`, one table row per product and
+layer with the three runs and the median (an incomplete run shown with its stage, never 0), the cost per accepted feature, and
+`- Regressions:` naming each median below the last accepted record's by more than `tolerance`; it never overwrites. `accept` sets
+`- Status: accepted` only on the person's plain yes in `--said` (in team mode a `spec_approvers` login as `--by`) and records one
+`Setup` entry; any other reply changes no file, and a record with a regression is never accepted. Where `evals/rubric.toml` is on the
+base, a release pull request needs an accepted record dated on or after the last release, and a `curated` pack an accepted record
+named in its `evals`; the scorecard prints one `evals:` note.
 
 ## Design screenshots and comparison
 

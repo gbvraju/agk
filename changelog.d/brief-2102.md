@@ -1,0 +1,1 @@
+- Parts: `engines.py stack-files` names the parts record by the path its one writer holds, so the kit's one-writer test passes again and the default branch is green (brief #2102, ADR-0876)
