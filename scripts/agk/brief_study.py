@@ -595,15 +595,27 @@ def _parts(root: Path, notes: list[str]) -> list[tuple[str, str, str]]:
     return out
 
 
-def project_matches(body: str, root: Path) -> tuple[list[tuple[str, int, str, str]], list[str]]:
+NO_COMMAND = "not run code search: the caller runs no command (SPEC-0043 rule 25)"
+
+
+def project_matches(
+    body: str, root: Path, commands: bool = True
+) -> tuple[list[tuple[str, int, str, str]], list[str]]:
     """Brief #2065 answer 3: ((path, line, term, verb) of each match, the `not run` and count
     lines) in a project: its source, then the kit's scripts, the kit's reference guide and the
-    parts. A layer that cannot be read is left out with one line naming the setting."""
+    parts. A layer that cannot be read is left out with one line naming the setting. With
+    COMMANDS false (plan publish, SPEC-0043 rule 25; brief #2086, ADR-0868) the source, which
+    `pins.tracked` lists with git, is left out with `NO_COMMAND` and the other layers are read."""
     notes: list[str] = []
-    try:
-        source, unread = project_source(root)
-    except CheckError as exc:
-        return [], [f"not run code search: {exc}"]
+    source: list[str] = []
+    unread = 0
+    if not commands:
+        notes.append(NO_COMMAND)
+    else:
+        try:
+            source, unread = project_source(root)
+        except CheckError as exc:
+            return [], [f"not run code search: {exc}"]
     if unread:
         notes.append(f"code search: {unread} files not read")
     kit: Path | None = None
@@ -719,9 +731,11 @@ def study_result(
     today: str | None = None,
     briefs: list[dict] | None = None,
     filed: object = None,
+    commands: bool = True,
 ) -> tuple[list[str], list[str]]:
     """(failures, warnings) of the study lines; nothing without a root (answer 5). FILED is the
-    issue's `created_at`, TODAY the caller's day (brief #1815 answer 2)."""
+    issue's `created_at`, TODAY the caller's day (brief #1815 answer 2). COMMANDS false goes to
+    `project_matches` (brief #2086, ADR-0868)."""
     if root is None:
         return [], []
     lines = body.splitlines()
@@ -757,7 +771,7 @@ def study_result(
         ][:1]
         if held(body)[1]:
             kit = is_kit(root)
-            found = code_matches(body, root) if kit else project_matches(body, root)[0]
+            found = code_matches(body, root) if kit else project_matches(body, root, commands)[0]
             left += code_warnings(body, root, found)
     if enforced(root, today, filed):
         return problems, filled + left
