@@ -27,6 +27,9 @@ IMPACT = (
 WIRING = "Wiring: scripts/agk/tool.py:main called by skills/brief/SKILL.md\n"
 PRIOR = "Prior: none: searched docs/adr and docs/specs for tool.py\n"
 CLASS = "Class: a missed earlier decision; seen 0 (searched docs/adr)\n"
+# Brief #2065 (ADR-0857): a project brief carries the Existing line too, before its Answers.
+EXISTING = "Existing:\n- `scripts/agk/tool.py:1` (`main`): the tool; not enough: partial.\n\n"
+SHAPE = SHAPE.replace("Answers:\n", EXISTING + "Answers:\n", 1)
 STUDIED = SHAPE + IMPACT + WIRING + PRIOR + CLASS
 BEFORE = "2026-11-24"
 AFTER = "2099-01-01"

@@ -24,6 +24,8 @@ BRIEF = """Brief: a project's conductor can file the briefs it writes
 
 Sentence: "A conductor session files the briefs it writes."
 
+Existing: none: `grep -rn conductor_guard .claude/` gives 0 matches
+
 Answers:
 1. The guard allows the issue creation.
 2. Nothing else widens.

@@ -52,7 +52,6 @@ M4 = (
 )
 M5 = "rule 4b: Touches names agk.toml and the Reserved line's path classes leave it out"
 TOUCHES = "Touches: scripts/agk/tool.py, docs/x.md\n"
-EXISTING = "Existing: none: `grep -rn probe scripts/` gives 0 matches\n"
 KIT_TESTING = (
     '[testing]\nalways_full = ["scripts/agk/full_*.py"]\n'
     'whole_tests = ["tests/kit/test_whole.py"]\n'
@@ -87,7 +86,6 @@ def root_of(
 def body(adds: str, touches: str = "", answer: str = "", reserved: str = "") -> str:
     entries = ", ".join(x for x in ("scripts/agk/tool.py, docs/x.md", touches, adds) if x)
     text = STUDIED.replace(TOUCHES, f"Touches: {entries}\nAdds: {adds or 'none'}\n{reserved}")
-    text = text.replace("Answers:\n", EXISTING + "Answers:\n", 1)  # brief #2052: the kit's line
     return text.replace("2. two\n", f"2. two\n3. {answer}\n") if answer else text
 
 

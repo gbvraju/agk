@@ -78,7 +78,8 @@ def test_ac4_the_study_prints_nothing_for_a_tree_with_no_record(tmp_path):
     """REQ-037 AC4"""
     out = study(tmp_path, tree(tmp_path))
     assert out.returncode == 0
-    assert [x for x in out.stdout.splitlines() if not x.startswith("briefs: ")] == []
+    records = [x for x in out.stdout.splitlines() if not x.startswith(("briefs: ", "code "))]
+    assert records == []  # a `code` line is the project's search (brief #2065), not a record
 
 
 def test_ac4_the_study_prints_an_overlapping_open_brief_from_a_saved_list(tmp_path):

@@ -21,12 +21,15 @@ STUDY = (  # brief #1800: a passing --root brief shows its study (ADR-0752)
     "Cost: none: a test brief\nTests: none: a test brief\nWiring: none: a test brief\n"
     "Prior: none: a test brief\nClass: a test brief; seen 0 (searched nothing)\n"
 )
+EXISTING = "Existing: none: `grep -rn thing scripts/` gives 0 matches\n"
 
 
 def check(tmp_path: Path, body: str | None, *extra: str):
     args = [str(tmp_path / "brief.md")] if body is not None else [str(tmp_path / "none.md")]
     if body is not None and "--root" in extra and "Impact:" not in body:
         body += STUDY
+    if body is not None and "--root" in extra and "Existing:" not in body:
+        body = body.replace("Answers", EXISTING + "Answers", 1)  # brief #2065: a project's line
     if body is not None:
         (tmp_path / "brief.md").write_text(body, encoding="utf-8")
     return subprocess.run(  # nosec B603 - fixed argument list, no shell

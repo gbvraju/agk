@@ -35,8 +35,10 @@ Wiring: none: (verify) for the person to state
 Prior: none: (verify) for the person to state; brief_study.py lists the candidates
 Class: (verify) for the person to state; seen 0 (verify)
 
-The kit's line before the Answers (required where `kit/agk-kit.mk` is, optional in a project; brief #2052): what already
-does the job, each item `<path>:<line>` with `not enough: <reason>`, or `none:` with the search run and its count.
+The line before the Answers (brief #2052; a project's too, brief #2065): what already does the job, searched in this
+order: the project's own code and tests; its decisions, specs and open briefs; its parts (`docs/parts.md`, else the
+build files' dependencies); the kit features and packs in use. Each item `<path>:<line>` with `not enough: <reason>` (a
+kit feature: its command in backquotes), or `none:` with the search run and its count.
 
 Existing: none: (verify) for the person to state
 
