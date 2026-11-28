@@ -38,6 +38,7 @@ from common import repo_root, run, utf8_output
 NAME = "parts-catalogue"
 FOLDER = "config/parts"
 NEEDS = "needs.toml"
+SHIPPED = ("node",)  # the kit's stack catalogues (brief #2069, ADR-0859), held to the manifest
 OWN_LAYERS = ("agk-core", "project")  # `packs.CORE` and `packs.PROJECT`; any other is a pack id
 SLUG = re.compile(r"^[a-z][a-z0-9-]*$")
 SOURCE = re.compile(r"^https?://\S+ \(accessed (\d{4}-\d{2}-\d{2})\)$")  # playbook_format's
