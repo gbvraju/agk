@@ -108,7 +108,7 @@ def test_ac1_each_need_has_one_recommended_row(stack):
 
 @pytest.mark.parametrize("stack", cpc.SHIPPED)
 def test_ac1_the_catalogue_agrees_with_the_tools_the_kit_runs(stack):
-    """REQ-083 AC1: SPEC-0072 rule 6 (answer 2: lint, format and unit tests name the kit's tools)."""
+    """REQ-083 AC1: SPEC-0072 rule 6 (answer 2: the kit's own tools)."""
     found = {r["need"]: r["name"] for r in rows(stack) if r["pick"] == "recommended"}
     for need, name in expected(stack).items():
         assert found[need] == name, need
