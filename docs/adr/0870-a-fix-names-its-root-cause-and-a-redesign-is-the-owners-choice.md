@@ -7,7 +7,7 @@
   ADR-0852, SPEC-0032, SPEC-0046, SPEC-0059, REQ-037, REQ-066, brief #2095
 - Requirements: REQ-037, REQ-066
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`, `kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`, `kit/`, `agk.toml`, `config/`
 
 ## Context
 
@@ -51,8 +51,8 @@ recurrence is counted on one parked root-cause brief, never filed twice.
 A cause has one root-cause brief and each patch is counted on it and raised on the owner's daily list. The study
 grows by one rule set read from the brief and the cache; the packet adds at most two GETs per redesign. No workflow,
 label, ruleset, required check or `governance_map.CHECKS` change. The `[[testing.map]]` entries of the four scripts
-in `agk.toml` gain `tests/kit/test_root_cause.py`; `.claude/agents/steward.md` gains one sentence; `kit/hashes.json`
-is regenerated.
+in `agk.toml` gain `tests/kit/test_root_cause.py`; `.claude/agents/steward.md` gains one sentence and loses the relay form that
+`steward_owner.py relay` already checks, so `config/rule-budget.txt` lowers its line; `kit/hashes.json`, a release file, is left to the release.
 
 ## Residual
 

@@ -55,6 +55,12 @@ Existing: none: (verify) for the person to state
   never the ones read and found unrelated
 - Class: e.g. a check broken by a script that prints before utf8_output; seen 2 times (#1581, #1627);
   seen above 0 needs an Answers item headed **The class stays closed.** naming its guard
+- Fix type: (a brief that fixes something, brief #2095) e.g. `Fix type: patch` (root: the cause removed in this
+  brief; patch: a fix now, its cause on an open redesign brief; redesign: the root-cause brief, with its Priority:)
+- Root cause: e.g. `Root cause: time-from-a-guess: a time was guessed, not read; before: #1581, ADR-0757;
+  removed by: one clock read`; the cause a key of lower-case words joined by -, the open ones that
+  brief_study.py prints as `cause <key> #n`
+- Root-cause: e.g. `Root-cause: #2101` (a patch only: the open redesign brief of the same cause)
 - Existing: e.g. the line alone, then `- scripts/agk/brief_study.py:126 (defines): the name check; not enough:
   unused for this`, or `Existing: none: \`grep -rn probe scripts/\` gives 0 matches`
 -->

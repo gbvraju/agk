@@ -308,6 +308,7 @@ tests = [
   "tests/kit/test_brief_existing_project.py",
   "tests/kit/test_brief_study.py", "tests/kit/test_check_brief_study.py", "tests/kit/test_check_brief.py",
   "tests/kit/test_installed_imports.py", "tests/kit_dev/test_reference_commands.py",
+  "tests/kit/test_root_cause.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_build_state.py"
@@ -1358,7 +1359,7 @@ code = "scripts/agk/day_zero.py"
 tests = ["tests/kit/test_day_zero.py", "tests/kit/test_first_open.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/steward_daily.py"
-tests = ["tests/kit/test_metrics_signals.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_evidence.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = ["tests/kit/test_metrics_signals.py", "tests/kit/test_steward_daily.py", "tests/kit/test_steward_evidence.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_root_cause.py"]
 [[testing.map]]
 code = "scripts/agk/steward_onboard.py"
 tests = ["tests/kit/test_steward_onboarding.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1401,7 +1402,7 @@ code = "scripts/agk/steward_outbound.py"
 tests = ["tests/kit/test_steward_outbound_guard.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/steward_evidence.py"
-tests = ["tests/kit/test_stage_pulls.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py", "tests/kit/test_steward_daily.py"]
+tests = ["tests/kit/test_stage_pulls.py", "tests/kit/test_steward_evidence.py", "tests/kit/test_steward_triage.py", "tests/kit/test_steward_daily.py", "tests/kit/test_root_cause.py"]
 [[testing.map]]
 code = "scripts/agk/steward_owner.py"
 tests = [
@@ -1410,7 +1411,7 @@ tests = [
   "tests/kit/test_steward_owner_question.py", "tests/kit/test_steward_starts.py",
   "tests/kit/test_autopilot_supervisor.py", "tests/kit/test_kit_defect_report.py",
   "tests/kit/test_steward_fix_brief.py", "tests/kit/test_layers_draft.py", "tests/kit/test_domain_grill.py",
-  "tests/kit/test_packs_mcp.py",
+  "tests/kit/test_packs_mcp.py", "tests/kit/test_root_cause.py",
 ]
 [[testing.map]]
 code = "scripts/agk/steward_voice.py"
