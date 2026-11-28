@@ -1,5 +1,5 @@
 """Tests of the kit's shipped parts catalogues (SPEC-0076 rules 4, 5 and 11; REQ-083 AC1; brief
-#2069, ADR-0859).
+#2069, ADR-0859; build (b2), ADR-0869).
 
 The kit ships one stack catalogue per stack that has a reader, `config/parts/<stack>.toml`, each
 row with a dated public source, a licence on the kit's allowed list and the maintainers' `reviewed`
@@ -30,6 +30,9 @@ FOLDER = KIT_ROOT / "config" / "parts"
 FRONT_END = {"ui-components", "routing", "state", "forms", "e2e-tests", "accessibility"}
 # Answer 6: a need whose usual library's licence is off the kit list has no row (ADR-0859 names it).
 NO_ROW = {"node": {"email"}}
+# Build (b2), ADR-0869: the stacks with a reader (rule 11), each runtime's licence (answer 3).
+STACKS = ("node", "python-pyproject")
+RUNTIME_LICENCE = {"node": "MIT", "python-pyproject": "PSF-2.0"}
 
 
 def load(path: Path) -> dict:
@@ -57,7 +60,7 @@ def expected(stack: str) -> dict[str, str]:
         return {"lint": standard("node")["rules"]["tool"], "format": fmt}
     tool = standard(stack)["rules"]["tool"]
     template = load(KIT_ROOT / "kit/templates/stacks" / stack / "pyproject.toml")
-    runner = next(iter(template["tool"].keys() - {"setuptools"}))
+    runner = next(k for k in template["tool"] if k not in {"setuptools", tool})  # pytest
     return {"lint": tool, "format": tool, "unit-tests": runner}
 
 
@@ -119,6 +122,7 @@ def test_ac1_a_stdlib_row_adds_no_dependency(stack):
     """REQ-083 AC1: SPEC-0076 rule 4 (answer 3: the runtime's own part is recommended only)."""
     stdlib = [r for r in rows(stack) if r["name"] == "stdlib"]
     assert stdlib and all(r["pick"] == "recommended" for r in stdlib)
+    assert {r["licence"] for r in stdlib} == {RUNTIME_LICENCE[stack]}  # ADR-0869
 
 
 def test_ac1_the_shipped_catalogues_are_the_manifests():
@@ -130,7 +134,7 @@ def test_ac1_the_shipped_catalogues_are_the_manifests():
         if p.startswith("config/parts/") and Path(p).name != cpc.NEEDS
     }
     present = {p.stem for p in FOLDER.glob("*.toml") if p.name != cpc.NEEDS}
-    assert set(cpc.SHIPPED) == listed == present
+    assert set(cpc.SHIPPED) == listed == present == set(STACKS)  # build (b2), ADR-0869
 
 
 def test_ac1_the_check_opens_no_socket(monkeypatch):
