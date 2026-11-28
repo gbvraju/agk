@@ -84,6 +84,7 @@ from __future__ import annotations
 import datetime
 import fnmatch
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -2170,6 +2171,7 @@ def detect_facts(root: Path, kit: Path) -> dict:
     }
     domain = domain_fact(kit, tree, named, table["ignore"], root)  # brief #1937 (ADR-0806)
     return {
+        "parts": parts_fact(root, stacks),
         **({"domain": domain} if domain is not None else {}),
         "not_detectable": sorted(table["no_signal"]),
         "notes": sorted(notes),
@@ -2183,6 +2185,60 @@ def detect_facts(root: Path, kit: Path) -> dict:
             "state": "mixed" if len(kinds) > 1 else "proposed" if kinds else "default",
         },
     }
+
+
+# brief #2074 (ADR-0864): the detected stacks whose build files `pins.STACKS` reads
+PARTS_STACKS = {"node": "node", "python-pyproject": "python", "python-pip": "python"}
+
+
+def parts_runtimes(rows: list[dict], pins: Any) -> tuple[list[tuple[str, str, str]], int]:
+    """(stack key, folder, build file from the root) per detected runtime and folder that `pins`
+    reads, `pins.PLACES`' first name first; and the number of detected stacks with no reader."""
+    found: dict[tuple[str, str], str] = {}
+    other = 0
+    for row in rows:
+        key, name = PARTS_STACKS.get(str(row["name"])), base_of(str(row["file"]))
+        if key is None or name not in pins.PLACES[key]:
+            other += 1
+            continue
+        folder = "" if row["folder"] == "." else str(row["folder"])
+        had = found.get((key, folder))
+        if had is None or pins.PLACES[key].index(name) < pins.PLACES[key].index(base_of(had)):
+            found[(key, folder)] = str(row["file"])
+    return [(k, f, p) for (k, f), p in found.items()], other
+
+
+def parts_fact(root: Path, stacks: list[dict]) -> list[dict] | None:
+    """Brief #2074 answer 4: per runtime `pins` reads, its build file, its direct dependencies
+    (None when unreadable) and whether `docs/parts.md` exists; None with no kit copy of `pins`."""
+    try:
+        pins = importlib.import_module("gates.pins")
+        record = importlib.import_module("parts_record").RECORD
+    except ImportError:
+        return None
+    out = []
+    for key, folder, build in parts_runtimes(stacks, pins)[0]:
+        try:
+            n = len(pins.declared(root / folder, pins.STACKS[key][3], base_of(build)))
+        except (pins.Unreadable, OSError, UnicodeDecodeError, ValueError, AttributeError):
+            n = None
+        out.append({"build": build, "count": n, "record": (root / record).is_file()})
+    return out
+
+
+def parts_lines(facts: list[dict] | None) -> list[str]:
+    if facts is None:
+        return ["parts: not read (no kit copy)"]
+    out = []
+    for one in facts:
+        if one["record"]:
+            out.append("parts: record present")
+        elif one["count"] is None:
+            out.append(f"parts: not read ({quoted(one['build'])} cannot be read)")
+        else:
+            found = f"{one['count']} direct dependencies in {quoted(one['build'])}"
+            out.append(f"parts: {found}, no parts record (proposed: parts.py --harvest)")
+    return list(dict.fromkeys(out))
 
 
 def domain_rows(kit: Path, root: Path | None = None) -> list[dict] | None:
@@ -2292,6 +2348,7 @@ def detect_lines(facts: dict) -> list[str]:
         out += [f"domain candidate: {domain_line(hit)}" for hit in domain["candidates"]]
     else:
         out += [f"domain: {domain_line(hit)}" for hit in domain["candidates"]]
+    out += parts_lines(facts.get("parts", []))
     out += [f"not detectable from files: {name}" for name in facts["not_detectable"]]
     return out + [f"note: {note}" for note in facts["notes"]]
 

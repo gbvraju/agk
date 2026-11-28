@@ -269,9 +269,10 @@ def results(root: Path, write: bool = False) -> list[Row]:
             held = f"path class: {classes}" if getattr(module, "HELD", 0) else ""
             rows = ratchet(root, gate["id"], module.counts(root, data), rows, write, held)
         noted = module.notes(root, data) if hasattr(module, "notes") else []
-        if noted and not rows:  # brief #2071 (ADR-0867): warnings, never `ok`, exit unchanged
+        kept = [r for r in rows if r[0] is not True]  # brief #2074: a baseline's pass keeps them
+        if noted and all(r[0] == NOTE for r in kept):  # brief #2071 (ADR-0867): never `ok`
             words = "warning" if len(noted) == 1 else "warnings"
-            rows = [(HELD, f"{gate['id']}: {len(noted)} {words} ({module.NOTED})")]
+            rows = [(HELD, f"{gate['id']}: {len(noted)} {words} ({module.NOTED})"), *kept]
         out += [(NOTE, f"warn {gate['id']}: {n}") for n in noted] + (rows or [(True, gate["id"])])
     return out + pack_results(path, root, write) + no_pack_rows(root, path)
 
