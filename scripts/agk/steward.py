@@ -548,8 +548,8 @@ def parse_digest(text: str | None) -> dict | str:
     if lines[1] != "Hash: " + hashlib.sha256("\n".join(lines[2:]).encode()).hexdigest()[:16]:
         return "edited"
     chain = [int(n) for n in re.findall(r"#(\d+)", lines[2])]
-    state = {"through": int(head[2]), "through_at": head[3], "checked": head[4], "chain": chain}
-    state |= {"counts": {}, "notes": []}
+    state: dict = {"through": int(head[2]), "through_at": head[3], "checked": head[4]}
+    state |= {"chain": chain, "counts": {}, "notes": []}
     for line in lines[3:]:
         if count := COUNT_LINE.match(line):
             state["counts"][f"{count[1]}|{count[3]}"] = {
@@ -595,12 +595,12 @@ def full_read(gh: Gh, cache: dict, state: dict | str, issue: dict, today: str) -
     if isinstance(state, str):
         cache["notice"] = [f"digest: rebuilt ({state})"]
         return
-    was = {n["id"]: n for n in state["notes"] if n.get("issue") == number}
+    held = {n["id"]: n for n in state["notes"] if n.get("issue") == number}
     now_is = {c["id"]: c for c in pages}
     drift: dict[str, int] = {}
-    for cid, note in was.items():
-        item = now_is.get(cid)
-        if item is None or not same(note, item):
+    for cid, note in held.items():
+        found = now_is.get(cid)
+        if found is None or not same(note, found):
             kind = entry_kind(note["body"]) or "Other"
             drift[kind] = drift.get(kind, 0) + 1
     cache["notice"] = [f"digest: drift {k} {n}" for k, n in sorted(drift.items())]
@@ -731,7 +731,7 @@ def memory_issue(gh: Gh, root: Path, cache: dict, now: datetime | None = None) -
         cache.update({"issue": issue["number"], "comments": []})
     state = parse_digest(issue.get("body"))
     fresh = isinstance(state, dict) and state["checked"] >= today
-    if not cache.get("read") and fresh:
+    if not cache.get("read") and isinstance(state, dict) and fresh:
         seed(cache, state)
     elif not fresh and cache.get("checked") != today:
         full_read(gh, cache, state, issue, today)
@@ -1057,7 +1057,7 @@ def lesson(
     if repeat:
         was, seen = held[repeat]["prevent"] or "", held[repeat]["seen"] + 1
         brief = re.match(r"brief #(\d+)$", was)
-        state = call(gh, "GET", f"{ISSUES}/{brief[1]}").get("state") if brief and gh else None
+        state = call(gh, "GET", f"{ISSUES}/{brief[1]}").get("state") if brief else None
         if not form and (was.startswith("done") or state == "closed"):
             return (
                 None,
@@ -1092,11 +1092,13 @@ def record(
     repeat: int | None = None,
     prevent_of: int | None = None,
 ) -> tuple[int, list[str]]:
-    warnings, after = [], None
+    warnings: list[str] = []
+    after = None
     if kind == "Lesson":
-        text, warnings, after = lesson(root, text, gh, repeat, prevent_of)
-        if text is None:
+        said, warnings, after = lesson(root, text, gh, repeat, prevent_of)
+        if said is None:
             return 2, warnings
+        text = said
     elif repeat or prevent_of:
         return 2, ["refused: --repeat and --prevent-of take a Lesson (setting: --kind)"]
     if kind not in KINDS:
