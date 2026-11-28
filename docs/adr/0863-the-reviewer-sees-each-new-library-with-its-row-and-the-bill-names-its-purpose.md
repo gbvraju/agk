@@ -41,8 +41,8 @@ and `grep -c agk:purpose scripts/agk/sbom.py` gives `0`. Build (d) (ADR-0867) ga
 3. **The amendment.** Amendment 260's two items are applied to SPEC-0054 rules 2 and 3 word for word, and
    `docs/runs/proposed-spec-amendments-260.md` records it, on the maintainer's answer on #2018.
 4. **The checklist stays.** No catch-log row records a library added without its reason (searched by GET, `Q-PF-2`),
-   so `config/review-checklist.md` item 8 is unchanged (SPEC-0023 rule 5) and the maintainers are asked whether
-   SPEC-0076 rule 8 is the record that allows the wording (`Q-2073-1`).
+   so `config/review-checklist.md` item 8 is unchanged (SPEC-0023 rule 5). `Q-2073-1` is answered on #2089 (comment
+   7234429030): a spec rule naming the wording is not that record; the wording waits for a catch-log row.
 
 ## Consequences
 
@@ -52,5 +52,5 @@ no baseline of `config/rule-budget.txt` rises.
 
 ## Residual
 
-Checklist item 8's wording waits for the maintainers' answer to `Q-2073-1` (2026-11-28). Other stacks wait for
-build (h).
+Checklist item 8's wording waits for a catch-log row of a library added without its reason, then goes in its own
+change (`Q-2073-1`, 2026-11-28). Other stacks wait for build (h).
