@@ -10,6 +10,7 @@ line; it is cut at `review_other_cap`; the same tree gives the same bytes. No ne
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 import sys
 from pathlib import Path
@@ -63,8 +64,14 @@ def package(deps: dict[str, str], dev: dict[str, str] | None = None) -> str:
     return json.dumps(data, indent=2) + "\n"
 
 
+def playbooks(repo) -> None:
+    """The work type's playbook, which `pins.records` reads, as `test_pins.project` copies it."""
+    shutil.copytree(KIT_ROOT / "config" / "playbooks", repo.root / "config" / "playbooks")
+
+
 def node_repo(repo, head: dict[str, str | None], base_extra: dict[str, str] | None = None):
     """main holds a chosen `node` stack and `example-web`; the branch makes HEAD's change."""
+    playbooks(repo)
     repo.commit(
         {
             "agk.toml": TOML,
@@ -183,12 +190,13 @@ def test_req083_a_deleted_build_file_lists_each_dependency_as_none(repo) -> None
 
 
 def test_req083_the_section_is_cut_at_review_other_cap(repo) -> None:
-    many = package({f"example-p{i}": "1.0.0" for i in range(9)})
-    root = node_repo(repo, {"package.json": many, "agk.toml": TOML + "review_other_cap = 3\n"})
+    many = package({f"example-p{i}": "1.0.0" for i in range(9)})  # and example-web removed
+    root = node_repo(repo, {"package.json": many, "agk.toml": "review_other_cap = 3\n" + TOML})
     out = lines(root)
     body = out[2:-1]
-    assert body[:3] == [f"- package.json: example-p{i} none -> 1.0.0: no parts record" for i in (0, 1, 2)]
-    assert body[3] == "[truncated: 6 lines omitted]"
+    added = "none -> 1.0.0: no parts record"
+    assert body[:3] == [f"- package.json: example-p{i} {added}" for i in (0, 1, 2)]
+    assert body[3] == "[truncated: 7 lines omitted]"
 
 
 def test_req083_the_same_tree_gives_the_same_bytes(repo) -> None:
@@ -207,6 +215,7 @@ def test_req083_every_stack_build_file_yields_a_parts_line(repo, stack: str) -> 
         base = '[project]\nname = "s"\nversion = "0"\ndependencies = []\n'
         head = base.replace("[]", '["left-pad-example==1.0.0"]')
         parts = PY_PARTS
+    playbooks(repo)
     repo.commit(
         {"agk.toml": TOML, STACK: record(a_parts=parts, status="Accepted", chosen="Option A"),
          build: base},
@@ -217,10 +226,10 @@ def test_req083_every_stack_build_file_yields_a_parts_line(repo, stack: str) -> 
     assert f"- {build}: left-pad-example none -> 1.0.0: no parts record" in lines(repo.root)
 
 
-def test_req083_the_bundle_puts_parts_after_the_context_and_before_the_brief(world) -> None:
+def test_req083_the_bundle_puts_parts_after_the_context_and_before_the_brief(request) -> None:
     """The bundle is the gating reviewer's only document (ADR-0430 decision 2)."""
-    proj, stub, sha = world
-    out = run_bundle(proj, stub, sha)
+    proj_, stub_, sha = request.getfixturevalue("world")
+    out = run_bundle(proj_, stub_, sha)
     assert out.returncode == 0, out.stdout + out.stderr
     text = out.stdout
     at = text.index("## Parts\n\n- not run parts: no stack chosen\n")

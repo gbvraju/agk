@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 from pathlib import Path
 
@@ -805,7 +806,7 @@ PARTS = (
     "# Parts\n\n## node\n\n" + PARTS_HEAD + parts_row("text-format", "tiny-util", "2.1.0")
     + "| time | stdlib | - | runtime | REQ-001 | none | MIT | read 2026-11-20 | Serves. |\n"
     + "\n## python\n\n" + PARTS_HEAD + parts_row("retries", "examplelib", "1.2.3")
-    + parts_row("http-client", "Example_Lib", "1.2.3")
+    + parts_row("http-client", "ExampleLib", "1.2.3")
     + "\nDecision: retries: the client's own retries are too coarse.\n"
     + "\nConfirmed by: architect (2026-11-21)\n"
 )  # fmt: skip
@@ -880,27 +881,31 @@ def test_req083_without_a_stack_the_python_components_read_the_record(
     assert purposes_of(by_ref(doc, "python:gamma@0.1")) == []
 
 
-@pytest.mark.parametrize(("name", "code"), [("agk:purpose", 0), ("agk:other", 1)])
-def test_req083_check_allows_the_purpose_and_no_other_name(
-    repo, tmp_path: Path, capsys, name: str, code: int
+@pytest.mark.parametrize("name", ["agk:other", "agk:purposes"])
+def test_req083_check_refuses_any_other_property_name(
+    repo, tmp_path: Path, capsys, name: str
 ) -> None:
+    """`agk:purpose` is allowed beside `agk:class` and `agk:pin` (the true bill above passes);
+    any other name is still not of rule 3's form."""
+    two_runtimes(repo)
     doc, out = bill(tmp_path)
-    by_ref(doc, "python:delta@4.0")["properties"].append({"name": name, "value": "maths"})
+    for p in by_ref(doc, "node:tiny-util@2.1.0")["properties"]:
+        if p["name"] == "agk:purpose":
+            p["name"] = name
     out.write_text(json.dumps(doc), encoding="utf-8")
     capsys.readouterr()
-    assert sbom.main(["check", str(out)]) == code
+    assert sbom.main(["check", str(out)]) == 1
+    assert "FAIL bom: node component field not of rule 3's form (rule 4)" in capsys.readouterr().out
 
 
 def test_req083_spec_0054_carries_amendment_260_word_for_word() -> None:
     kit = Path(__file__).resolve().parents[2]
     amendment = (kit / "docs/runs/proposed-spec-amendments-260.md").read_text(encoding="utf-8")
-    spec = (
-        kit / "docs/specs/0054-every-dependency-is-scanned-and-listed-in-a-standard-bill-of-materials.md"
-    ).read_text(encoding="utf-8")
-    flat = " ".join(amendment.split())
-    quoted = [q for q in flat.split('"') if "amendment 260" in q or "amendment 232)." in q]
-    inserted, old, new = quoted[1], quoted[2], quoted[3]
-    flat_spec = " ".join(spec.split())
-    assert quoted[0] in flat_spec and inserted in flat_spec
-    assert flat_spec.index(quoted[0]) < flat_spec.index(inserted)
-    assert new in flat_spec and old not in flat_spec
+    name = "0054-every-dependency-is-scanned-and-listed-in-a-standard-bill-of-materials.md"
+    spec = (kit / "docs" / "specs" / name).read_text(encoding="utf-8")
+    items = " ".join(amendment.split("## Items", 1)[1].split("No other rule changes.")[0].split())
+    after, inserted = re.search(r'After "(.+?)" insert: "(.+?)"', items).groups()
+    old, new = re.search(r'Replace "(.+?)" with "(.+?)"', items).groups()
+    flat = " ".join(spec.split())
+    assert f"{after} {inserted}" in flat
+    assert new in flat and old not in flat
