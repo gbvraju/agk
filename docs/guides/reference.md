@@ -250,10 +250,20 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
 
     python3 scripts/agk/steward.py start --session ID
     python3 scripts/agk/steward.py refresh --session ID [--since UTC-TIME]
-    python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE)
+    python3 scripts/agk/steward.py record --kind KIND (--text TEXT | --file FILE) [--repeat ID | --prevent-of ID]
+    python3 scripts/agk/steward.py show ID
+    python3 scripts/agk/steward.py find WORD
     python3 scripts/agk/steward.py end --session ID [--calls N] [--tokens N]
     python3 scripts/agk/steward.py setup [--adopted] [--detect FILE] [--answer TEXT]
     python3 scripts/agk/steward.py first-run [--folder DIR]
+
+The memory in force is a digest kept as the memory issue's body (ADR-0873): `start` reads it from the listing and one
+`since` page, and prints a summary of at most 80 lines; a missing or hand-edited digest, and a UTC day's first start, read
+every page and rebuild it (`digest: rebuilt (<reason>)`, `digest: drift <kind> <count>`); `end` writes it. `show ID`
+prints one note in full with one GET, `find WORD` searches the digest with no call. `record --kind Lesson` needs a
+`Prevent:` line (`done <check|tool|skill> <path> <sha7|#pr>`, `brief #<n>`, `draft F-<id>`, in a project `kit-defect #<n>`);
+`--repeat ID` counts a lesson seen again and `--prevent-of ID` names an older lesson's prevention. In personal mode the
+digest is `docs/runs/steward/memory-digest.md` of the sidecar.
 
 Outside a git repository each command of `steward.py`, `steward_daily.py`, `steward_evidence.py`, `steward_onboard.py`
 and `steward_owner.py` prints `outside: no project here`, exit 3, and writes nothing (SPEC-0066 rule 8, ADR-0663).

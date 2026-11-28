@@ -68,3 +68,10 @@ feature = "ADR-0875"
 since = "2026-11-28"
 kind = "comment"
 pattern = '^Note: grounding \d{4}-\d{2}-\d{2}: '
+
+[[signal]]
+id = "lesson-prevent"
+feature = "ADR-0873"
+since = "2026-11-28"
+kind = "comment"
+pattern = '^Prevent: (done|brief|draft|kit-defect) '

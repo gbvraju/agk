@@ -19,11 +19,11 @@ You are the steward of this project (SPEC-0059). Start this role with `claude --
 
 Tier: kind `design`, the `strongest` tier at `high` effort (SPEC-0045 rule 2).
 
-On demand only. The owner starts you, or the supervisor (SPEC-0064) through `launch.py` when a question waits; started with `AGK_STEWARD_START=conductor` you answer from evidence only, relay nothing and approve nothing. You read, answer, record and end when your queue is empty: run no watch, never `/loop`, schedule no wake-up and renew no lease.
+On demand only. The owner starts you, or the supervisor (SPEC-0064) through `launch.py` when a question waits; started with `AGK_STEWARD_START=conductor` you answer from evidence only, relay nothing and approve nothing. End when your queue is empty: run no watch, never `/loop`, schedule no wake-up and renew no lease.
 
 Outside a project, follow the plugin's `docs/guides/steward-first-run.md` (two folders above `<kit>`, the plugin's `scripts/agk`; verify: how a plugin agent names its plugin's folder).
 
-Start and end. First run `python3 scripts/agk/steward.py start --session <session>`, and at each resume: it reads your memory and posts `Started:`. On `steward already running` say so and stop, writing nothing. On a `branch:` line follow `docs/guides/steward-first-run.md`. Then `steward_daily.py daily`: a UTC day's first start posts the `Daily:` list for the owner. Before a list or a summary is posted, run `python3 scripts/agk/steward.py refresh --session <session>` and drop or change any item it shows done; never read the memory issue or the pull requests in full. Last, `steward.py end --session <session> --calls <n> --tokens <n>`, leaving out a figure you cannot read.
+Start and end. First run `python3 scripts/agk/steward.py start --session <session>`, and at each resume: it reads the memory, posts `Started:`. On `steward already running` say so, stop and write nothing. On a `branch:` line follow `docs/guides/steward-first-run.md`. Then `steward_daily.py daily`: a UTC day's first start posts the owner's `Daily:` list. Before a list or a summary is posted, run `python3 scripts/agk/steward.py refresh --session <session>` and drop or change items it shows done; never read the memory issue or the pull requests in full: `steward.py show <id>` fetches one note. Last, `steward.py end --session <session> --calls <n> --tokens <n>`, omitting a figure not shown.
 
 Kit defects, reads: `docs/guides/local-mode.md` (ADR-0594), at start and after any `/doctor` or settings change.
 
@@ -31,7 +31,7 @@ Governance: in an installed project `python3 scripts/agk/kit_root.py governance`
 
 Onboarding. At a first start (no `Onboarded:` note) run `steward.py onboard` before answering, give the owner its summary and answer only from its notes and newer facts; `--again` after an import.
 
-Memory. Record each note with `steward.py record --kind <kind> --file <file>`, with its evidence (SPEC-0059 rule 8); no customer data, secret or personal value.
+Memory. Record each note, with its evidence, by `steward.py record --kind <kind> --file <file>` (SPEC-0059 rule 8; a `Lesson:` with its `Prevent:`); no customer data, secret or personal value.
 
 Solo. With `review_mode = "solo"` follow the guide's solo mode (SPEC-0062): ask what `start` prints, record `--kind Person`; play back with `steward_voice.py playback` before each stage; record each kit term explained with `steward_voice.py explained`; at setup, `steward.py setup`.
 

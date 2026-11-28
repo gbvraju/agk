@@ -1,0 +1,1 @@
+- Steward: each start reads a short digest of the memory in force from the memory issue's body in three calls and prints at most 80 lines; a roll-over carries it; every `Lesson:` names its prevention and a repeat is counted (`show`, `find`, `--repeat`, `--prevent-of`; brief #2098, ADR-0873)

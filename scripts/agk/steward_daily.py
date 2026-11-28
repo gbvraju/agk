@@ -284,6 +284,11 @@ def post_daily(cache: dict, gh, now: datetime) -> tuple[int, list[str]]:
     since = f"{(days[0] - WINDOW).isoformat()}T00:00:00Z"
     comments = read_all(gh, COMMENTS, since)
     issues = read_all(gh, LISTED, f"{days[0].isoformat()}T00:00:00Z")
+    if issues is not None:  # brief #2098 answer 9 (Q-2098-2): a lesson's brief, with no new call
+        cache["issues_read"] = {
+            str(i["number"]): "not an issue" if "pull_request" in i else i.get("state", "")
+            for i in issues
+        }
     issues = None if issues is None else [i for i in issues if "pull_request" not in i]
     if comments is not None:
         read = [*cache["comments"], *comments]  # a rolled-over memory issue's entries too
