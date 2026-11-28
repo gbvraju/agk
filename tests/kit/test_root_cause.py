@@ -310,8 +310,8 @@ def test_req066_recurred_is_written_only_by_file_brief():
     text = (SCRIPTS / "steward_owner.py").read_text(encoding="utf-8")
     body = text[text.index("def file_brief(") :]
     body = body[: body.index("\ndef ", 1)]
-    assert "recurrence(" in body  # the one caller of the helper that posts it
-    assert text.count("recurrence(") == 2  # its def and that call
+    assert body.count("recurrence(") == 2  # filed, and printed in personal mode
+    assert text.count("recurrence(") == 3  # its def and those two calls
 
 
 class Posted:
