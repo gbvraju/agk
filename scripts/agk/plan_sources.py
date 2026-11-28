@@ -8,6 +8,7 @@ item 2 proposes; REQ-050; brief #1216, ADR-0515). Installed: `kit/manifest.json`
 
     python3 plan_sources.py vision [--root DIR]
     python3 plan_sources.py architecture [--root DIR]
+    python3 plan_sources.py parts [--root DIR]
 
 `vision` writes once, as a new file only, `docs/sources/vision.md`: rule 1's header
 (`Source: vision and project charter ADR-<n>`, `Kind: charter`, `Version: ADR-<n> <digest>`, the
@@ -16,11 +17,14 @@ clock in UTC) and one blank line, then the text of `constitution/vision.md` and 
 charter ADR `docs/adr/<n>-project-charter.md`, both unchanged, so every heading is kept.
 `architecture` writes once `docs/sources/architecture.md` (`Source: stack ADR-<n>`, `Kind: other`,
 `Version: ADR-<n> <digest>`, `Date:`) with the text of the stack ADR `docs/adr/<n>-stack-options.md`
-unchanged. The ADR read is the highest-numbered file of that name. Each refuses with exit 1, naming
-the rule and the file and writing nothing, an ADR whose first `- Status:` line is not `Accepted`, a
-missing ADR or vision, and an existing target file; a malformed command exits 2 with the usage.
-`vision_text(root)` and `architecture_text(root)` return the text and write nothing. Files only: no
-network, no model.
+unchanged. `parts` (SPEC-0076 rule 3, brief #2070, ADR-0860) writes once `docs/sources/parts.md`
+(`Source: parts record`, `Kind: other`, `Version: parts <digest>`, `Date:`) with the text of
+`docs/parts.md` unchanged, refusing a missing record and one whose last `Confirmed by:` line is
+missing or `none yet`. The ADR read is the highest-numbered file of that name. Each refuses with
+exit 1, naming the rule and the file and writing nothing, an ADR whose first `- Status:` line is
+not `Accepted`, a missing ADR or vision, and an existing target file; a malformed command exits 2
+with the usage. `vision_text(root)`, `architecture_text(root)` and `parts_text(root)` return the
+text and write nothing. Files only: no network, no model.
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_signoff
+import parts_record
 from common import STATUS_LINE, CheckError, utf8_output
 
 SOURCES = "docs/sources"
@@ -40,9 +45,10 @@ ADR = "docs/adr"
 VISION = "constitution/vision.md"
 VISION_SOURCE = f"{SOURCES}/vision.md"
 ARCH_SOURCE = f"{SOURCES}/architecture.md"
+PARTS_SOURCE = f"{SOURCES}/parts.md"
 CHARTER = re.compile(r"^(\d{4})-project-charter\.md$")
 STACK = re.compile(r"^(\d{4})-stack-options\.md$")
-USAGE = "usage: plan_sources.py vision|architecture [--root DIR]"
+USAGE = "usage: plan_sources.py vision|architecture|parts [--root DIR]"
 
 
 def _read(path: Path, rel: str) -> str:
@@ -102,6 +108,23 @@ def architecture_text(root: Path, today: str | None = None) -> str:
     return "\n".join(head) + "\n" + _body(stack)
 
 
+def parts_text(root: Path, today: str | None = None) -> str:
+    """The parts source: the confirmed parts record, unchanged."""
+    rel = parts_record.RECORD
+    if not (root / rel).is_file():
+        raise CheckError(
+            f"SPEC-0076 rule 3: {rel}: the parts record does not exist; nothing is written"
+        )
+    text = _read(root / rel, rel)
+    said = [ln for ln in text.splitlines() if ln.startswith("Confirmed by:")]
+    if not said or said[-1].removeprefix("Confirmed by:").strip() in ("", "none yet"):
+        raise CheckError(
+            f"SPEC-0076 rule 3: {rel}: the parts record is not confirmed; nothing is written"
+        )
+    head = _header("parts record", "other", f"parts {design_signoff.digest(root, [rel])}", today)
+    return "\n".join(head) + "\n" + _body(text)
+
+
 def write_once(root: Path, rel: str, text_of) -> Path:
     """Write REL once from TEXT_OF(root), never over an existing file."""
     path = root / rel
@@ -118,6 +141,7 @@ def write_once(root: Path, rel: str, text_of) -> Path:
 COMMANDS = {
     "vision": (VISION_SOURCE, vision_text),
     "architecture": (ARCH_SOURCE, architecture_text),
+    "parts": (PARTS_SOURCE, parts_text),
 }
 
 

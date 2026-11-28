@@ -358,3 +358,53 @@ def test_states_asks_for_a_yes_state_the_kit_version_does_not_draw(tmp_path):
     states = run(str(PLAN_INTAKE), "states", "--root", str(root))
     assert states.returncode == 0, states.stdout + states.stderr
     assert states.stdout.splitlines() == [f"{KIT_SOURCE}#orders/default error (verify)"]
+
+
+# --- the parts source (SPEC-0076 rule 3; REQ-083 AC2; brief #2070, ADR-0860) ----------------------
+
+PARTS = "docs/parts.md"
+PARTS_SOURCE = "docs/sources/parts.md"
+PARTS_TEXT = """# Parts
+
+## node
+
+| Need | Part | Version | Kind | Why | Alternatives | Licence | Health | For the business |
+|---|---|---|---|---|---|---|---|---|
+| web-api | fastify | 5.1.0 | runtime | REQ-001 | express | MIT | maintained | Books a time. |
+
+Confirmed by: {who}
+"""
+
+
+def test_req083_the_parts_source_is_written_once_from_the_confirmed_record(tmp_path):
+    """REQ-083 AC2: SPEC-0076 rule 3 (`plan_sources.py parts`, in the form of `architecture`)."""
+    root = project(tmp_path)
+    write(root, PARTS, PARTS_TEXT.format(who="an architect (2026-11-28)"))
+    proc = sources(root, "parts")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = (root / PARTS_SOURCE).read_text(encoding="utf-8")
+    lines = text.splitlines()
+    assert lines[:3] == [
+        "Source: parts record",
+        "Kind: other",
+        f"Version: parts {ds.digest(root, [PARTS])}",
+    ]
+    assert lines[3].startswith("Date: ") and lines[4] == ""
+    assert text.endswith(PARTS_TEXT.format(who="an architect (2026-11-28)"))
+    assert check_plan.source_problems(root) == []
+    again = sources(root, "parts")
+    assert again.returncode == 1 and PARTS_SOURCE in again.stdout
+
+
+@pytest.mark.parametrize("who", ["none yet", None])
+def test_req083_an_unconfirmed_or_missing_parts_record_is_refused(tmp_path, who):
+    """REQ-083 AC2: SPEC-0076 rules 3 and 7 (only a confirmed record is a source)."""
+    root = project(tmp_path)
+    if who is not None:
+        write(root, PARTS, PARTS_TEXT.format(who=who))
+    proc = sources(root, "parts")
+    assert proc.returncode == 1 and PARTS in proc.stdout and "rule 3" in proc.stdout
+    assert not (root / PARTS_SOURCE).exists()
+    write(root, PARTS, PARTS_TEXT.replace("Confirmed by: {who}\n", ""))
+    proc = sources(root, "parts")
+    assert proc.returncode == 1 and not (root / PARTS_SOURCE).exists()
