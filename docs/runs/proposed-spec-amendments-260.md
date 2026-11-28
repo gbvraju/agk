@@ -21,3 +21,5 @@ The sentence (brief #2017), quoted as data: "Intake for the parts list: after th
    Class: behaviour
 
 No other rule changes.
+
+2026-11-28 (from `date -u`), brief #2073: items 1 and 2 (to rules 2 and 3) applied to `docs/specs/0054-every-dependency-is-scanned-and-listed-in-a-standard-bill-of-materials.md` word for word, on the maintainer's answer on #2018 (comment 7227145482).
