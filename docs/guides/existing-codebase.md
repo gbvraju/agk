@@ -60,6 +60,11 @@ not from what your documentation promises, cites the lines it read (`path:start-
 [personal mode](personal-mode.md)), carries a `Source: observed in code at <citation>` line, and is never `done` until a test
 asserts it (SPEC-0041 rule 29). The code shows what happens, not what was meant, so read each one as a question for its owner.
 
+Your libraries get the same treatment. Once a stack is recorded, `python3 scripts/agk/gates/parts.py --harvest --at
+$(date -u +%F)` drafts `docs/parts.md` from your build files and locks, one row per library, each marked `inferred` with
+no reason yet. The first governance run writes `config/agk-baseline/parts.txt`, so it starts green; from then on a new
+library needs its full row, and an existing one gains its reason when you next change it (SPEC-0076 rule 10).
+
 ## Step 3. Add tests that assert today's behaviour
 
 For each criterion add a test that passes on the unchanged code and assert what it does now. Mark each test with its requirement and

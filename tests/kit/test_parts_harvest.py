@@ -12,6 +12,7 @@ its row and a touched inferred row fail; completing a row lowers the line. Onboa
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 import subprocess  # nosec B404 - the test drives git with fixed argument lists
 import sys
@@ -89,6 +90,7 @@ def node40(tmp: Path, toml: str = ADOPT, lock: bool = True) -> Path:
     """The brief's fixture: 30 `dependencies` and 10 `devDependencies`, with a lock."""
     text = record(a_parts=NODE_PARTS, status="Accepted", chosen="Option A")
     root = project(tmp, text, toml=toml)
+    shutil.copytree(KIT_ROOT / "config" / "parts", root / "config" / "parts")  # installed layout
     write_node(root, *deps40(), lock=lock)
     return commit(root)
 
@@ -122,7 +124,9 @@ def add_row(root: Path, name: str, version: str) -> None:
     path = root / parts.RECORD
     lines = path.read_text(encoding="utf-8").splitlines()
     last = max(i for i, ln in enumerate(lines) if ln.startswith("|"))
-    lines.insert(last + 1, FULL.format(name=name, version=version, today=parts.datetime.date.today()))
+    lines.insert(
+        last + 1, FULL.format(name=name, version=version, today=parts.datetime.date.today())
+    )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -219,9 +223,7 @@ def test_req083_optional_dependency_groups_are_dev(tmp_path: Path, capsys) -> No
     assert by["examplelib"]["Why"] == "inferred: not recorded"  # no stack record here
 
 
-def test_req083_an_unreadable_build_file_and_a_stack_with_no_reader(
-    tmp_path: Path, capsys
-) -> None:
+def test_req083_an_unreadable_build_file_and_a_stack_with_no_reader(tmp_path: Path, capsys) -> None:
     root = project(tmp_path, None, toml=ADOPT)
     (root / "web").mkdir()
     (root / "web" / "package.json").write_text("not json", encoding="utf-8")
@@ -263,7 +265,10 @@ def test_req083_two_runtimes_in_two_folders_are_two_sections(tmp_path: Path, cap
 def test_req083_the_first_adopt_run_writes_the_baseline_held(tmp_path: Path, capsys) -> None:
     root = harvested(tmp_path, capsys)
     assert parts.counts(root, {}) == {"docs/parts.md": 40}  # no build-file finding (answer 8)
-    assert rows_of(root) == [HELD_40, (run_gates.NOTE, "baseline parts: written (path class: config/agk-baseline/)")]
+    assert rows_of(root) == [
+        HELD_40,
+        (run_gates.NOTE, "baseline parts: written (path class: config/agk-baseline/)"),
+    ]
     assert (root / BASE_FILE).read_text(encoding="utf-8") == "docs/parts.md 40\n"
     assert rows_of(root) == [HELD_40]
 
@@ -292,7 +297,13 @@ def test_req083_a_touched_inferred_row_needs_its_full_row(tmp_path: Path, capsys
     assert parts.counts(root, {}) == {"docs/parts.md": 40, "package.json": 1}
     assert (False, f"parts: {baseline.RULE} (path class: {baseline.CLASS})") in rows_of(root)
     complete(root, "example-lib-03", "1.0.99")
-    assert rows_of(root) == [(run_gates.HELD, "parts (baseline): 39 held (path class: docs/parts.md)"), (run_gates.NOTE, "baseline parts: a count fell in 1 file (path class: config/agk-baseline/)")]
+    assert rows_of(root) == [
+        (run_gates.HELD, "parts (baseline): 39 held (path class: docs/parts.md)"),
+        (
+            run_gates.NOTE,
+            "baseline parts: a count fell in 1 file (path class: config/agk-baseline/)",
+        ),
+    ]
 
 
 def test_req083_completing_a_row_and_baseline_lowers_the_line(tmp_path: Path, capsys) -> None:
@@ -391,11 +402,14 @@ def test_req083_detect_names_the_parts_record(tmp_path: Path, capsys) -> None:
     root = node40(tmp_path)
     facts = front_door.detect_facts(root, KIT_ROOT)
     assert facts["parts"] == [{"build": "package.json", "count": 40, "record": False}]
-    want = "parts: 40 direct dependencies in package.json, no parts record (proposed: parts.py --harvest)"
+    want = 'parts: 40 direct dependencies in "package.json", no parts record'
+    want += " (proposed: parts.py --harvest)"
     assert want in front_door.detect_lines(facts)
     harvest(root, capsys)
     commit(root, "harvest")
-    assert "parts: record present" in front_door.detect_lines(front_door.detect_facts(root, KIT_ROOT))
+    assert "parts: record present" in front_door.detect_lines(
+        front_door.detect_facts(root, KIT_ROOT)
+    )
 
 
 def test_req083_detect_with_no_kit_copy_of_pins(tmp_path: Path, monkeypatch) -> None:
