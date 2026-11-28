@@ -107,7 +107,6 @@ SETTING_TERM = re.compile(r"\[(\w+)\]\s+(\w+)|(\w+)\.(\w+)")
 SOURCE_FILES = 2000
 NOT_SOURCE = ("config/", "constitution/", ".github/")
 REFERENCE = "docs/guides/reference.md"
-PARTS = "docs/parts.md"
 DECLARES = r"^\s*(?:export\s+)?(?:default\s+)?(?:pub\s+)?(?:async\s+)?"
 DECLARE_WORDS = "function|class|const|let|var|func|fn|interface|type|export"
 
@@ -573,6 +572,8 @@ def _parts(root: Path, notes: list[str]) -> list[tuple[str, str, str]]:
     from gates import pins  # noqa: PLC0415
 
     out: list[tuple[str, str, str]] = []
+    from parts_record import RECORD as PARTS  # noqa: PLC0415 - the record's one name (SPEC-0076)
+
     rows = [x.strip().strip("|").split("|") for x in _read(root / PARTS).splitlines()]
     rows = [[c.strip() for c in r] for r in rows if len(r) > 1]
     if rows and "Part" in rows[0]:
