@@ -26,8 +26,8 @@ from test_pins import (
     TWO_PARTS,
     check,
     gate_rows,
-    node_files,
     no_values,
+    node_files,
     project,
     record,
 )
