@@ -103,7 +103,8 @@ def test_ac1_the_shipped_needs_catalogue_passes_and_holds_the_spec_ids():
     assert set(SPEC_IDS) <= set(ids) and len(ids) == len(set(ids))
     assert all(set(n) == {"id", "text", "signals"} and n["signals"] for n in data["needs"])
     assert cpc.findings(KIT_ROOT, [(packs.CORE, path)], STACKS) == []
-    assert packs.files(KIT_ROOT, "parts") == [(packs.CORE, path)]
+    shipped = [(packs.CORE, path.with_name(f"{s}.toml")) for s in cpc.SHIPPED]  # brief #2069
+    assert sorted(packs.files(KIT_ROOT, "parts")) == sorted([(packs.CORE, path)] + shipped)
 
 
 def test_ac1_the_kit_tree_passes_the_playbooks_step():
