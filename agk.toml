@@ -1611,10 +1611,12 @@ tests = [
   "tests/kit_dev/test_confirm_skill.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_docs.py",
   "tests/kit_dev/test_engines_discovery.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_wsl_setup.py",
   "tests/kit/test_wsl_docker.py", "tests/kit/test_setup_read.py", "tests/kit/test_setup_settings.py",
+  "tests/kit/test_ground_skill.py",
 ]
 [[testing.map]]
 code = ".claude/agents/*.md"
 tests = [
+  "tests/kit/test_ground_skill.py",
   "tests/kit/test_layers_step.py",
   "tests/kit/test_conductor_tier.py", "tests/kit/test_kit_in_repository.py",
   "tests/kit/test_steward_starts.py",

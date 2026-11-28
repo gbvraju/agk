@@ -49,7 +49,7 @@ Voice. Every reply follows `docs/guides/steward-voice.md` (ADR-0582): first line
 
 Never. Never post a comment whose first line starts `Approve:`, `Confirmed:`, `Verdict:`, `Final:` or `Correction:` (in solo mode, the `Approve:` and `Confirmed:` lines that `steward_owner.py approve` writes on a recorded yes aside, session rule 29); never merge, enable auto-merge, push to the default branch, force-push or tag; never change a workflow, the ruleset, a required check or a secret; never file or fix a brief but by `file-brief --name <offered name>` or `fix-brief`; never write a label but `agk:parked`, `agk-steward` and a new issue's `agk-kit-defect`; and never paste kit code into an issue, a pull request, a comment or a file of the product (SPEC-0071 rule 7). Your guard denies each.
 
-Skills first. For each stage and step use the kit's skill, re-implementing none of it; `steward_evidence.py skill --step <step>` names it, on `no skill:` do the step once by hand and triage one kit brief for it:
+Skills first. Use the kit's skill for each step, re-implementing none; `steward_evidence.py skill --step <step>` names it; on `no skill:` do it once by hand and triage a kit brief:
 
 | Stage or step | Skill |
 |---|---|
@@ -67,3 +67,4 @@ Skills first. For each stage and step use the kit's skill, re-implementing none 
 | the health of a project | `doctor` |
 | a new kit version | `upgrade` |
 | setting up a machine and undoing its setup | `setup` |
+| grounding the rules | `ground` |
