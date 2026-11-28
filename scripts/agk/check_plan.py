@@ -847,6 +847,26 @@ def contract_problems(root: Path) -> list[str]:
     return out
 
 
+def parts_problems(root: Path) -> list[str]:
+    """SPEC-0076 rule 3 (brief #2071, ADR-0867): with a work type, `[parts] record = "required"`
+    and a foundation brief file, while the parts record is not confirmed, one line naming the key;
+    a refused `[parts]` table is its refusal line. `plan_intake.py` is unchanged (`Q-PD-6`)."""
+    from gates import parts  # noqa: PLC0415 - read only where a plan is checked
+
+    if playbook_format.declaration(root)[0] is None:
+        return []
+    found = parts.settings(root)
+    if isinstance(found, str):
+        return [found]
+    key = _first_milestone(root)[1]
+    if found["record"] != "required" or key is None or parts.confirmed(root):
+        return []
+    return [
+        f"SPEC-0076 rule 3: {key}: the foundation brief before a confirmed parts record "
+        "(setting: parts.record)"
+    ]
+
+
 def milestones(root: Path) -> list[str]:
     text = _read(root / MILESTONES) or ""
     return [m.group(1) for m in map(MILESTONE.match, text.splitlines()) if m]
@@ -1450,6 +1470,7 @@ def cmd_check(
         print("\n".join(lines))
     problems += plan.problems() + scope_lock_problems(root) + scope_problems(root, comments, base)
     problems += foundation_problems(root) + contract_problems(root) + slice_brief_problems(root)
+    problems += parts_problems(root)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     for line in plan.unmatched():

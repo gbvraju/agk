@@ -39,6 +39,7 @@ HEAD = (
 )
 QUIET = ("example-web", "example-extra", "example-clock", "examplelib", "4.21.1", "1.0.0", "2.0.0")
 PY_PARTS = "Parts: python 3.12.7 PSF-2.0 (verify)."
+EMPTY_PY = '[project]\nname = "s"\nversion = "0"\n'
 REQUIRED = '[delivery]\nwork_type = "web-app"\n\n[parts]\nrecord = "required"\n'
 
 
@@ -53,12 +54,17 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
-def row(part: str, version: str, need: str = "web-api", health: str = "", why: str = "REQ-001") -> str:
+def row(
+    part: str, version: str, need: str = "web-api", health: str = "", why: str = "REQ-001"
+) -> str:
     health = health or f"maintained (read {TODAY}, https://example.com/registry)"
-    return f"| {need} | {part} | {version} | runtime | {why} | none | MIT | {health} | Serves example.com. |\n"
+    cells = (need, part, version, "runtime", why, "none", "MIT", health, "Serves example.com.")
+    return "| " + " | ".join(cells) + " |\n"
 
 
-def write_record(root: Path, sections: dict[str, str], confirmed: str = "architect (2026-11-21)") -> None:
+def write_record(
+    root: Path, sections: dict[str, str], confirmed: str = "architect (2026-11-21)"
+) -> None:
     body = "".join(f"## {name}\n\n{HEAD}{rows}\n" for name, rows in sections.items())
     text = f"# Parts\n\n{body}Questions for the person:\n\nConfirmed by: {confirmed}\n"
     (root / "docs" / "parts.md").write_text(text, encoding="utf-8")
@@ -75,7 +81,9 @@ def node_tree(tmp: Path, toml: str = REQUIRED, rows: str | None = None, extra: b
     packages.update({f"node_modules/{n}": {"version": v} for n, v in deps.items()})
     lock = {"lockfileVersion": 3, "packages": packages}
     (root / "package-lock.json").write_text(json.dumps(lock), encoding="utf-8")
-    write_record(root, {"node": rows if rows is not None else row("example-clock", "2.0.0", "time")})
+    write_record(
+        root, {"node": rows if rows is not None else row("example-clock", "2.0.0", "time")}
+    )
     return root
 
 
@@ -104,10 +112,16 @@ def quiet(text: str) -> None:
 def test_req083_ac4_the_measured_tree_is_red_under_required(tmp_path: Path) -> None:
     rows = rows_of(node_tree(tmp_path))
     assert rows == [
-        (False, f"parts: {parts.RULE}: a direct dependency the record does not name "
-         "(component class: dependency) (path class: package.json)"),
-        (False, f"parts: {parts.RULE}: a record part is missing from its build file "
-         "(component class: record part) (path class: docs/parts.md)"),
+        (
+            False,
+            f"parts: {parts.RULE}: a direct dependency the record does not name "
+            "(component class: dependency) (path class: package.json)",
+        ),
+        (
+            False,
+            f"parts: {parts.RULE}: a record part is missing from its build file "
+            "(component class: record part) (path class: docs/parts.md)",
+        ),
     ]
     quiet(repr(rows))
 
@@ -115,10 +129,16 @@ def test_req083_ac4_the_measured_tree_is_red_under_required(tmp_path: Path) -> N
 def test_req083_ac4_the_measured_tree_warns_with_no_parts_table(tmp_path: Path, capsys) -> None:
     root = node_tree(tmp_path, toml='[delivery]\nwork_type = "web-app"\n')
     assert rows_of(root) == [
-        (run_gates.NOTE, f"warn parts: {parts.RULE}: a direct dependency the record does not name "
-         "(component class: dependency) (path class: package.json)"),
-        (run_gates.NOTE, f"warn parts: {parts.RULE}: a record part is missing from its build file "
-         "(component class: record part) (path class: docs/parts.md)"),
+        (
+            run_gates.NOTE,
+            f"warn parts: {parts.RULE}: a direct dependency the record does not name "
+            "(component class: dependency) (path class: package.json)",
+        ),
+        (
+            run_gates.NOTE,
+            f"warn parts: {parts.RULE}: a record part is missing from its build file "
+            "(component class: record part) (path class: docs/parts.md)",
+        ),
         (run_gates.HELD, "parts: 2 warnings (setting: parts.record)"),
     ]
     run_gates.cmd_check(root)
@@ -150,21 +170,27 @@ def test_req083_ac4_an_empty_required_column_fails(tmp_path: Path, cell: int) ->
     cells = row("example-extra", "1.0.0", "http-client").strip().strip("|").split("|")
     cells[cell] = " "
     write_record(root, {"node": "|" + "|".join(cells) + "|\n"})
-    assert found(root) == [("a record row is empty in a required column", "record row", parts.RECORD)]
+    assert found(root) == [
+        ("a record row is empty in a required column", "record row", parts.RECORD)
+    ]
 
 
 def test_req083_ac4_a_second_part_for_one_need_needs_a_decision(tmp_path: Path) -> None:
     root = named_tree(tmp_path)
     two = row("example-extra", "1.0.0", "http-client") + row("stdlib", "none", "http-client")
     write_record(root, {"node": two})
-    assert found(root) == [("a second part for one need has no Decision: line", "record row", parts.RECORD)]
+    assert found(root) == [
+        ("a second part for one need has no Decision: line", "record row", parts.RECORD)
+    ]
     write_record(root, {"node": two + "\nDecision: http-client: the runtime's own for one call\n"})
     assert found(root) == []
 
 
 def test_req083_ac4_a_stdlib_part_needs_no_dependency(tmp_path: Path) -> None:
     root = named_tree(tmp_path)
-    write_record(root, {"node": row("example-extra", "1.0.0", "http-client") + row("stdlib", "none", "time")})
+    write_record(
+        root, {"node": row("example-extra", "1.0.0", "http-client") + row("stdlib", "none", "time")}
+    )
     assert found(root) == []
 
 
@@ -172,19 +198,28 @@ def test_req083_ac4_a_record_that_cannot_be_read_names_no_text(tmp_path: Path) -
     root = named_tree(tmp_path)
     (root / "docs" / "parts.md").write_bytes(b"# Parts\n\xff\xfe\n")
     assert found(root) == [("the parts record cannot be read", "record", parts.RECORD)]
-    (root / "docs" / "parts.md").write_text("# Parts\n\n| Need | Part |\n|---|---|\n", encoding="utf-8")
+    (root / "docs" / "parts.md").write_text(
+        "# Parts\n\n| Need | Part |\n|---|---|\n", encoding="utf-8"
+    )
     assert found(root) == [("the parts record cannot be read", "record", parts.RECORD)]
 
 
 def test_req083_ac4_python_files_and_their_r_files_are_read(tmp_path: Path) -> None:
-    root = project(tmp_path, record(a_parts=PY_PARTS, status="Accepted", chosen="Option A"), toml=REQUIRED)
+    root = project(
+        tmp_path, record(a_parts=PY_PARTS, status="Accepted", chosen="Option A"), toml=REQUIRED
+    )
+    (root / "pyproject.toml").write_text(EMPTY_PY, encoding="utf-8")
     (root / "requirements.txt").write_text("examplelib==1.2.3\n-r extra.txt\n", encoding="utf-8")
     (root / "extra.txt").write_text("example_Extra==1.0.0\n", encoding="utf-8")
     lock = f"examplelib==1.2.3 \\\n    {HASH}\nexample-extra==1.0.0 \\\n    {HASH}\n"
     (root / "requirements.lock").write_text(lock, encoding="utf-8")
     write_record(root, {"python": row("examplelib", "1.2.3")})
-    assert found(root) == [("a direct dependency the record does not name", "dependency", "extra.txt")]
-    write_record(root, {"python": row("examplelib", "1.2.3") + row("Example.Extra", "1.0.0", "time")})
+    assert found(root) == [
+        ("a direct dependency the record does not name", "dependency", "extra.txt")
+    ]
+    write_record(
+        root, {"python": row("examplelib", "1.2.3") + row("Example.Extra", "1.0.0", "time")}
+    )
     assert found(root) == []
 
 
@@ -192,8 +227,11 @@ def test_req083_ac4_two_runtimes_read_their_own_sections(tmp_path: Path) -> None
     text = record(a_parts=TWO_PARTS, status="Accepted", chosen="Option A")
     root = project(tmp_path, text, toml=REQUIRED)
     node_files(root, extra=None)
-    py_files(root / "service", req="examplelib==1.2.3\nexample-extra==1.0.0\n",
-             lock=f"examplelib==1.2.3 \\\n    {HASH}\nexample-extra==1.0.0 \\\n    {HASH}\n")
+    py_files(
+        root / "service",
+        req="examplelib==1.2.3\nexample-extra==1.0.0\n",
+        lock=f"examplelib==1.2.3 \\\n    {HASH}\nexample-extra==1.0.0 \\\n    {HASH}\n",
+    )
     write_record(root, {"Node.js": "", "Python": row("example-extra", "1.0.0", "time")})
     assert found(root) == []
     write_record(root, {"node": row("example-extra", "1.0.0", "time"), "python": ""})
@@ -230,7 +268,10 @@ def history(root: Path) -> Path:
 
 def stale_tree(tmp: Path) -> Path:
     root = named_tree(tmp)
-    write_record(root, {"node": row("example-extra", "1.0.0", "http-client", health=f"maintained (read {OLD})")})
+    write_record(
+        root,
+        {"node": row("example-extra", "1.0.0", "http-client", health=f"maintained (read {OLD})")},
+    )
     return root
 
 
@@ -245,14 +286,18 @@ def test_req083_ac4_a_stale_date_warns_on_an_untouched_record(tmp_path: Path) ->
 
 
 @pytest.mark.parametrize("rel", ["docs/parts.md", "package.json", "package-lock.json"])
-def test_req083_ac4_a_stale_date_fails_a_change_that_touches_the_record(tmp_path: Path, rel: str) -> None:
+def test_req083_ac4_a_stale_date_fails_a_change_that_touches_the_record(
+    tmp_path: Path, rel: str
+) -> None:
     root = history(stale_tree(tmp_path))
     path = root / rel
     path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     assert parts.evaluate(root) == ([STALE], [])
 
 
-def test_req083_ac4_a_stale_date_with_no_git_or_no_base_in_ci_warns(tmp_path: Path, monkeypatch) -> None:
+def test_req083_ac4_a_stale_date_with_no_git_or_no_base_in_ci_warns(
+    tmp_path: Path, monkeypatch
+) -> None:
     root = stale_tree(tmp_path)
     assert parts.evaluate(root) == ([], [STALE])
     history(root)
@@ -264,7 +309,9 @@ def test_req083_ac4_a_stale_date_with_no_git_or_no_base_in_ci_warns(tmp_path: Pa
 def test_req083_ac4_the_health_limit_is_the_setting(tmp_path: Path) -> None:
     root = named_tree(tmp_path, toml=REQUIRED + "max_age_months = 2\n")
     month = (datetime.datetime.now(datetime.UTC).date() - datetime.timedelta(days=95)).isoformat()
-    write_record(root, {"node": row("example-extra", "1.0.0", "http-client", health=f"ok (read {month})")})
+    write_record(
+        root, {"node": row("example-extra", "1.0.0", "http-client", health=f"ok (read {month})")}
+    )
     assert parts.evaluate(root) == ([], [STALE])
     (root / "agk.toml").write_text('default_branch = "main"\n' + REQUIRED + "max_age_months = 6\n")
     assert parts.evaluate(root) == ([], [])
@@ -293,7 +340,9 @@ def test_req083_ac4_no_parts_record_is_not_run(tmp_path: Path) -> None:
 
 
 def test_req083_ac4_no_foundation_yet_is_not_run(tmp_path: Path) -> None:
-    root = project(tmp_path, record(a_parts=NODE_PARTS, status="Accepted", chosen="Option A"), toml=REQUIRED)
+    root = project(
+        tmp_path, record(a_parts=NODE_PARTS, status="Accepted", chosen="Option A"), toml=REQUIRED
+    )
     write_record(root, {"node": row("example-clock", "2.0.0", "time")})
     assert rows_of(root) == [(None, "parts: no foundation yet")]
 
@@ -319,7 +368,9 @@ def test_req083_ac4_a_build_file_pins_cannot_read_is_left_to_pins(tmp_path: Path
         ("max_age_months = 0", "max_age_months"),
     ],
 )
-def test_req083_ac6_a_refused_table_is_one_failure_naming_the_setting(tmp_path: Path, table: str, key: str) -> None:
+def test_req083_ac6_a_refused_table_is_one_failure_naming_the_setting(
+    tmp_path: Path, table: str, key: str
+) -> None:
     root = node_tree(tmp_path, toml=f'[delivery]\nwork_type = "web-app"\n\n[parts]\n{table}\n')
     line = f"the [parts] table is refused (setting: parts.{key})"
     assert rows_of(root) == [(False, f"parts: {line}")]
@@ -363,11 +414,18 @@ def plan(root: Path) -> None:
     (folder / "B1.md").write_text("# B1\n\nMilestone: M1\nKind: foundation\n", encoding="utf-8")
 
 
-HOLD = "SPEC-0076 rule 3: B1: the foundation brief before a confirmed parts record (setting: parts.record)"
+HOLD = (
+    "SPEC-0076 rule 3: B1: the foundation brief before a confirmed parts record "
+    "(setting: parts.record)"
+)
 
 
-@pytest.mark.parametrize("said", ["none yet", "TODO(person) (2026-11-21)", "architect (2026-13-40)", "architect"])
-def test_req083_ac5_the_foundation_brief_waits_for_a_confirmed_record(tmp_path: Path, said: str) -> None:
+@pytest.mark.parametrize(
+    "said", ["none yet", "TODO(person) (2026-11-21)", "architect (2026-13-40)", "architect"]
+)
+def test_req083_ac5_the_foundation_brief_waits_for_a_confirmed_record(
+    tmp_path: Path, said: str
+) -> None:
     root = named_tree(tmp_path)
     write_record(root, {"node": row("example-extra", "1.0.0", "http-client")}, confirmed=said)
     plan(root)
@@ -376,7 +434,9 @@ def test_req083_ac5_the_foundation_brief_waits_for_a_confirmed_record(tmp_path: 
     assert check_plan.parts_problems(root) == [HOLD]
 
 
-def test_req083_ac5_a_confirmed_record_optional_or_no_foundation_holds_nothing(tmp_path: Path) -> None:
+def test_req083_ac5_a_confirmed_record_optional_or_no_foundation_holds_nothing(
+    tmp_path: Path,
+) -> None:
     root = named_tree(tmp_path)
     plan(root)
     assert parts.confirmed(root)
@@ -409,20 +469,31 @@ BUILD_FILES = {
 
 
 def test_req083_ac4_every_build_file_pins_reads_is_checked(tmp_path: Path) -> None:
-    names = {n for places in pins.PLACES.values() for n in places} | {s[1] for s in pins.STACKS.values()}
+    names = {n for places in pins.PLACES.values() for n in places} | {
+        s[1] for s in pins.STACKS.values()
+    }
     assert names == set(BUILD_FILES)
     for name, (runtime, line) in BUILD_FILES.items():
-        root = project(tmp_path / name, record(a_parts=line, status="Accepted", chosen="Option A"), toml=REQUIRED)
+        root = project(
+            tmp_path / name,
+            record(a_parts=line, status="Accepted", chosen="Option A"),
+            toml=REQUIRED,
+        )
         if name == "package.json":
-            text = json.dumps({"name": "s", "version": "0.0.0", "devDependencies": {"example-extra": "1.0.0"}})
+            text = json.dumps(
+                {"name": "s", "version": "0.0.0", "devDependencies": {"example-extra": "1.0.0"}}
+            )
         elif name == "pyproject.toml":
             text = '[project]\nname = "s"\nversion = "0"\ndependencies = ["example-extra==1.0.0"]\n'
         else:
             text = "example-extra==1.0.0\n"
+            (root / "pyproject.toml").write_text(EMPTY_PY, encoding="utf-8")
         (root / name).write_text(text, encoding="utf-8")
         (root / "docs" / "architecture.md").write_text("# Architecture\n", encoding="utf-8")
         write_record(root, {runtime: ""})
-        assert parts.evaluate(root)[0] == [("a direct dependency the record does not name", "dependency", name)]
+        assert parts.evaluate(root)[0] == [
+            ("a direct dependency the record does not name", "dependency", name)
+        ]
 
 
 def test_req083_ac4_the_step_is_installed_and_after_pins() -> None:

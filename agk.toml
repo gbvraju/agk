@@ -383,7 +383,7 @@ code = "scripts/agk/check_plan.py"
 tests = [
   "tests/kit/test_contracts.py", "tests/kit/test_skeleton_basics.py", "tests/kit/test_agk_mk.py", "tests/kit/test_check_plan_kit_requirements.py", "tests/kit/test_check_plan_scope.py",
   "tests/kit/test_check_plan_sources.py", "tests/kit/test_check_plan_uncited.py", "tests/kit/test_workflow.py",
-  "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_kit_manifest.py", "tests/kit/test_parts_step.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_packs.py"
@@ -659,6 +659,9 @@ tests = ["tests/kit/test_node_pack.py", "tests/kit/test_adopt_first_run.py", "te
 [[testing.map]]
 code = "scripts/agk/gates/pins.py"
 tests = ["tests/kit/test_pins.py", "tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/gates/parts.py"
+tests = ["tests/kit/test_parts_step.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/gates/licences.py"
 tests = ["tests/kit/test_product_deps.py", "tests/kit/test_installed_imports.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -1071,7 +1074,7 @@ tests = [
   "tests/kit/test_python_pack.py", "tests/kit/test_gate_baseline.py", "tests/kit/test_node_pack.py",
   "tests/kit/test_adopt_first_run.py", "tests/kit/test_run_gates_touched.py",
   "tests/kit/test_kit_step_governance.py", "tests/kit/test_stack_choice.py",
-  "tests/kit/test_standards_stack.py",
+  "tests/kit/test_standards_stack.py", "tests/kit/test_parts_step.py",
 ]
 [[testing.map]]
 code = "scripts/agk/gates/domain_scenarios.py"
