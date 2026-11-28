@@ -219,7 +219,7 @@ def row_of(key: str, folder: str, build: str, listed: list[str]) -> tuple[str, s
     """Brief #2075 answer 1: the row of the first lock of `LOCKS` in the folder; a later reader
     needs the runtime's own build file (`pyproject.toml` for uv). With none, the `STACKS` row."""
     have = set(listed)
-    for lock, reader in LOCKS[key]:
+    for lock, reader in LOCKS.get(key, ()):  # a runtime with no LOCKS entry keeps its row
         if (f"{folder}/{lock}" if folder else lock) in have:
             if reader == STACKS[key][3] or build == STACKS[key][1]:
                 return (STACKS[key][0], STACKS[key][1], lock, reader)
