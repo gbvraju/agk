@@ -52,3 +52,9 @@ parts.
 An adopted project gets a draft parts record and a green baseline on its first run, and each library gains its reason
 as it is touched; the baseline only falls. The step is still not run with no Accepted stack record (`no stack
 chosen`, ADR-0867). No workflow, ruleset, required check, `agk.mk` or `governance_map.CHECKS` changes.
+
+## Residual
+
+The harvest reads no health (rule 6: the network only on the person's research yes, `Q-PG-3`); the steward's research
+fills it. Stacks other than `node` and `python` print `no reader for this stack` until build (h). Python rows follow
+`pins.declared`'s order (floating pins first), not the build file's line order.
