@@ -1,0 +1,1 @@
+- Parts: `parts.py --harvest` drafts an adopted project's parts record from its build files and locks, every row inferred; the parts step holds its findings to a baseline that only falls, and onboarding and `detect` name the record (brief #2074, ADR-0864)

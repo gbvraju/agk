@@ -685,6 +685,17 @@ The kit ships two stack catalogues, `config/parts/node.toml` (with React rows; A
 public page with its access date, every licence on the kit list; `email` has no node row, and the Python file has no
 screen rows.
 
+    python3 scripts/agk/gates/parts.py --harvest --at YYYY-MM-DD [--root DIR]
+
+An adopted project's parts record (SPEC-0076 rule 10; brief #2074, ADR-0864): `--harvest` writes `docs/parts.md` once,
+from the build files and locks `front_door.py detect` finds (`node` and `python`), one row per direct dependency, every
+row `inferred: not recorded` (`inferred: from the stack record` for a part the Accepted stack record names), its need the
+catalogue's or `unassigned`, its health `not read (<date>)`, and prints `parts: harvested <n> rows (...)`. It refuses an
+existing record and reads no network. The `parts` step then holds its findings per file to
+`config/agk-baseline/parts.txt` (written on the first run in `mode = "adopt"`, also under `record = "optional"`), printing
+`parts (baseline): <n> held`; a new dependency without its full row, or a changed version on an `inferred` row, fails.
+Exit 0 written, 1 refused, 2 usage.
+
 ## The project domain model
 
     python3 scripts/agk/domain_model.py [--root DIR] init --area A | rule ... | classify ... | entity ... | regulation ... | confirm --id ID

@@ -225,6 +225,30 @@ def from_domain(root: Path, gaps: list) -> tuple[list, list]:
     return decisions, owner
 
 
+def from_parts(root: Path, gaps: list) -> list:
+    """SPEC-0076 rule 10 (brief #2074, ADR-0864): with a parts record one decision counting its
+    rows, confirmed and inferred; with none and a build file `pins` reads, one gap naming the
+    harvest; an unreadable record is a gap naming its path. Never an owner question (rule 7)."""
+    import parts_record
+    from gates import parts
+
+    path = root / parts.RECORD
+    if path.exists():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            gaps.append(f"{parts.RECORD} cannot be read")
+            return []
+        rows = [r for found in parts_record.rows(text).values() for r in found]
+        guessed = sum(r["Why"].startswith("inferred") for r in rows)
+        counted = f"{len(rows)} parts, {len(rows) - guessed} confirmed, {guessed} inferred"
+        return [f"{parts.RECORD}: {counted} (source: {parts.RECORD})"]
+    found = parts.harvestable(root)[0]
+    if found:
+        gaps.append(f"no parts record: parts.py --harvest drafts one (source: {found[0][2]})")
+    return []
+
+
 def harvest(root: Path, gh) -> dict:
     """Rule 20's one read of the facts, by list pages only."""
     gaps: list = []
@@ -252,6 +276,7 @@ def harvest(root: Path, gh) -> dict:
     domain_decisions, domain_owner = from_domain(root, gaps)
     decisions += domain_decisions
     owner += domain_owner
+    decisions += from_parts(root, gaps)
     return {"Decision": decisions, "Owner question": owner, "Risk": risks, "Gap": gaps}
 
 
