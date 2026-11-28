@@ -40,7 +40,7 @@ needs catalogue and the reading order `packs.files(root, "parts")`.
    money or sends data out (`service`), and a need with no healthy candidate. The steward asks each with `ask`.
 4. **Refusals.** Exit 1, writing and recording nothing, naming the rule and the key, never a value: a refused
    `[parts]` table, no work type (`delivery.work_type`), no Accepted stack record, an existing record, a proposal that
-   is not TOML or is under `docs/`, a health value with no recorded `Setup: web-research: yes` (`Q-2070-1`), an unknown
+   is not TOML or is under `docs/`, a health value with no recorded `Setup: web-research: yes` (`Q-PRC-3`), an unknown
    need, a cite that is neither, a missing, unknown or wrong key, a date after `--today`, and a second part for one
    need with no `decision`.
 5. **The planning source.** `plan_sources.py parts` writes once `docs/sources/parts.md` (`Source: parts record`,

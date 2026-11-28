@@ -1434,7 +1434,8 @@ there`. A missing scope prints
 
     python3 scripts/agk/design_import.py source --version i<n> --slug <slug> [--root DIR]
     python3 scripts/agk/design_import.py source --version v<n> --slug <slug> [--root DIR]
-    python3 scripts/agk/plan_sources.py vision|architecture [--root DIR]
+    python3 scripts/agk/plan_sources.py vision|architecture|parts [--root DIR]
+    python3 scripts/agk/parts_record.py draft --proposal FILE [--root DIR] [--today YYYY-MM-DD]
     python3 scripts/agk/check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]
 
 `design_import.py source` writes once `docs/sources/<slug>-prototype-i<n>.md`, a `Kind: design` source with one
@@ -1444,7 +1445,16 @@ there`. A missing scope prints
 version that is not signed off with the digest its folder has now (brief #1216, ADR-0515). `plan_sources.py vision`
 writes once `docs/sources/vision.md` (`Kind: charter`) from `constitution/vision.md` and the Accepted charter ADR, and
 `plan_sources.py architecture` writes once `docs/sources/architecture.md` (`Kind: other`) from the Accepted stack ADR,
-each text unchanged; each refuses an ADR that is not Accepted, a missing file and an existing target. `check_plan.py` is a governance check: the
+each text unchanged; each refuses an ADR that is not Accepted, a missing file and an existing target. `plan_sources.py
+parts` writes once `docs/sources/parts.md` (`Kind: other`) from `docs/parts.md`, refusing a record whose last `Confirmed
+by:` is missing or `none yet`. `parts_record.py draft` writes `docs/parts.md` once from `kit/templates/parts.md` and the
+steward's TOML proposal (outside `docs/`): one section per runtime of the Accepted stack record, one row per need citing a
+`REQ-…` or `engineering`, `stdlib` with no version, `catalogue: none` with no stack catalogue, and the first candidate
+that meets the floor (the licence list, `[parts]` `max_age_months` and `advisories`, neither deprecated nor archived);
+it records `Setup: parts: drafted ...` and prints `question: <sentence>` for a paid licence, a licence off the list, an
+outside service that costs money or sends data out, and a need with no healthy part. It refuses, exit 1 naming the rule
+and the key, never a value, a health value with no recorded research yes and any proposal out of form (SPEC-0076 rules
+3, 6 and 7, brief #2070, ADR-0860). `check_plan.py` is a governance check: the
 source headers and design links (rules 1 and 2), the plan's checks (rule 10) and the coverage line `ok plan: <a> of <b> ...`
 (rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
 (rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.

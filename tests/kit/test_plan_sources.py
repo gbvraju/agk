@@ -368,9 +368,9 @@ PARTS_TEXT = """# Parts
 
 ## node
 
-| Need | Part | Version | Kind | Why | Alternatives considered | Licence | Health (date) | For the business |
+| Need | Part | Version | Kind | Why | Alternatives | Licence | Health | For the business |
 |---|---|---|---|---|---|---|---|---|
-| web-api | fastify | 5.1.0 | runtime | REQ-001 | express | MIT | maintained (2026-11-27) | Books a time. |
+| web-api | fastify | 5.1.0 | runtime | REQ-001 | express | MIT | maintained | Books a time. |
 
 Confirmed by: {who}
 """
@@ -384,7 +384,11 @@ def test_req083_the_parts_source_is_written_once_from_the_confirmed_record(tmp_p
     assert proc.returncode == 0, proc.stdout + proc.stderr
     text = (root / PARTS_SOURCE).read_text(encoding="utf-8")
     lines = text.splitlines()
-    assert lines[:3] == ["Source: parts record", "Kind: other", f"Version: parts {ds.digest(root, [PARTS])}"]
+    assert lines[:3] == [
+        "Source: parts record",
+        "Kind: other",
+        f"Version: parts {ds.digest(root, [PARTS])}",
+    ]
     assert lines[3].startswith("Date: ") and lines[4] == ""
     assert text.endswith(PARTS_TEXT.format(who="an architect (2026-11-28)"))
     assert check_plan.source_problems(root) == []

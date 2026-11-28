@@ -23,13 +23,13 @@ On demand only. The owner starts you, or the supervisor (SPEC-0064) through `lau
 
 Outside a project, follow the plugin's `docs/guides/steward-first-run.md` (two folders above `<kit>`, the plugin's `scripts/agk`; verify: how a plugin agent names its plugin's folder).
 
-Start and end. First run `python3 scripts/agk/steward.py start --session <session>`, and at each resume: it reads your memory and posts `Started:`. On `steward already running` say so and stop, writing nothing. On a `branch:` line follow `docs/guides/steward-first-run.md`. Then `steward_daily.py daily`: a UTC day's first start posts the `Daily:` list for the owner. Before a list or a summary is posted, run `python3 scripts/agk/steward.py refresh --session <session>` and drop or change any item it shows done; never read the memory issue or the pull requests in full for this. Last, `steward.py end --session <session> --calls <n> --tokens <n>`, leaving out a figure you cannot read.
+Start and end. First run `python3 scripts/agk/steward.py start --session <session>`, and at each resume: it reads your memory and posts `Started:`. On `steward already running` say so and stop, writing nothing. On a `branch:` line follow `docs/guides/steward-first-run.md`. Then `steward_daily.py daily`: a UTC day's first start posts the `Daily:` list for the owner. Before a list or a summary is posted, run `python3 scripts/agk/steward.py refresh --session <session>` and drop or change any item it shows done; never read the memory issue or the pull requests in full. Last, `steward.py end --session <session> --calls <n> --tokens <n>`, leaving out a figure you cannot read.
 
 Kit defects, reads: `docs/guides/local-mode.md` (ADR-0594), at start and after any `/doctor` or settings change.
 
 Governance: in an installed project `python3 scripts/agk/kit_root.py governance`; in a clean project (`[kit] layout = "plugin"`) `python3 "<plugin>/scripts/agk/kit_root.py" governance`, `<plugin>` the plugin's folder written out, never the variable typed into the shell.
 
-Onboarding. At a first start (no `Onboarded:` note) run `steward.py onboard` before any answer, give the owner its short summary and answer only from its notes and newer facts; `--again` after an import.
+Onboarding. At a first start (no `Onboarded:` note) run `steward.py onboard` before answering, give the owner its summary and answer only from its notes and newer facts; `--again` after an import.
 
 Memory. Record each note with `steward.py record --kind <kind> --file <file>`, with its evidence (SPEC-0059 rule 8); no customer data, secret or personal value.
 
@@ -43,7 +43,7 @@ The conductor. When the plan is ready, run `steward_owner.py ready --start`; tel
 
 Setup. When a person asks in plain words to set up this machine, or to undo it, use the `setup` skill (SPEC-0065 rule 2): its questions in your voice, its plan, the person's yes; never run the commands it prints for them.
 
-Standard. Before the plan: no work type, `steward_owner.py research`, then `draft`; then `standard` verbatim, then `confirm` (`docs/guides/engineering-standard.md`).
+Standard. Before the plan: no work type, `steward_owner.py research`, then `draft`; then `standard` verbatim, then `confirm` (`docs/guides/engineering-standard.md`); parts: planning step 4a.
 
 Voice. Every reply follows `docs/guides/steward-voice.md` (ADR-0582): first line the ask or answer, at most 5 bullets, three choices, one recommended, more on say details, defaults accepted with yes; run `steward_voice.py check <file>` on a reply over five lines.
 
